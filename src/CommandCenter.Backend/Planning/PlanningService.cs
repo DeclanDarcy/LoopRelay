@@ -1,21 +1,39 @@
+using CommandCenter.Backend.Artifacts;
 using CommandCenter.Backend.Repositories;
 
 namespace CommandCenter.Backend.Planning;
 
-public sealed class PlanningService : IPlanningService
+public sealed class PlanningService(IArtifactStore artifactStore) : IPlanningService
 {
-    public Task<bool> HasPlanAsync(Repository repository)
+    public async Task<bool> HasPlanAsync(Repository repository)
     {
-        return Task.FromResult(false);
+        return await artifactStore.ExistsAsync(ArtifactPath.ResolveRepositoryPath(repository, ".agents/plan.md"));
     }
 
-    public Task<IReadOnlyList<Milestone>> GetMilestonesAsync(Repository repository)
+    public async Task<IReadOnlyList<Milestone>> GetMilestonesAsync(Repository repository)
     {
-        return Task.FromResult<IReadOnlyList<Milestone>>(Array.Empty<Milestone>());
+        var milestonesPath = ArtifactPath.ResolveRepositoryPath(repository, ".agents/milestones");
+        var files = await artifactStore.ListAsync(milestonesPath, "*.md");
+
+        return files
+            .Select(file => new Milestone
+            {
+                Name = Path.GetFileName(file),
+                RelativePath = ArtifactPath.ToRepositoryRelativePath(repository, file)
+            })
+            .OrderBy(milestone => milestone.RelativePath, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
     }
 
-    public Task<ExecutionReadiness> DetermineReadinessAsync(Repository repository)
+    public async Task<ExecutionReadiness> DetermineReadinessAsync(Repository repository)
     {
-        return Task.FromResult(ExecutionReadiness.MissingPlan);
+        if (!await HasPlanAsync(repository))
+        {
+            return ExecutionReadiness.MissingPlan;
+        }
+
+        return (await GetMilestonesAsync(repository)).Count > 0
+            ? ExecutionReadiness.Ready
+            : ExecutionReadiness.MissingMilestones;
     }
 }

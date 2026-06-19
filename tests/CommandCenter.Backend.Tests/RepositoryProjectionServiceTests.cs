@@ -95,6 +95,46 @@ public sealed class RepositoryProjectionServiceTests
         Assert.NotNull(workspace.ArtifactInventory.CurrentDecisions);
     }
 
+    [Fact]
+    public async Task DashboardAndWorkspaceProjectPlanningReadiness()
+    {
+        var repositoryPath = CreateGitRepositoryDirectory();
+        var repositoryService = CreateRepositoryService();
+        var repository = await repositoryService.RegisterAsync(repositoryPath);
+        await WriteAsync(repository, ".agents/plan.md", "plan");
+        await WriteAsync(repository, ".agents/milestones/m1.md", "# M1");
+        var projectionService = CreateProjectionService(repositoryService);
+
+        var dashboard = await projectionService.GetDashboardAsync();
+        var workspace = await projectionService.GetWorkspaceAsync(repository.Id);
+
+        var dashboardProjection = Assert.Single(dashboard);
+        Assert.Equal(ExecutionReadiness.Ready, dashboardProjection.Readiness);
+        Assert.Equal(1, dashboardProjection.MilestoneCount);
+        Assert.Equal(ExecutionReadiness.Ready, workspace.Readiness);
+        Assert.True(workspace.HasPlan);
+        Assert.Equal(1, workspace.MilestoneCount);
+    }
+
+    [Fact]
+    public async Task RefreshAfterAddingMilestoneUpdatesReadiness()
+    {
+        var repositoryPath = CreateGitRepositoryDirectory();
+        var repositoryService = CreateRepositoryService();
+        var repository = await repositoryService.RegisterAsync(repositoryPath);
+        await WriteAsync(repository, ".agents/plan.md", "plan");
+        var projectionService = CreateProjectionService(repositoryService);
+
+        var beforeRefresh = await projectionService.GetWorkspaceAsync(repository.Id);
+        await WriteAsync(repository, ".agents/milestones/m1.md", "# M1");
+        var afterRefresh = await projectionService.RefreshWorkspaceAsync(repository.Id);
+
+        Assert.Equal(ExecutionReadiness.MissingMilestones, beforeRefresh.Readiness);
+        Assert.Equal(0, beforeRefresh.MilestoneCount);
+        Assert.Equal(ExecutionReadiness.Ready, afterRefresh.Readiness);
+        Assert.Equal(1, afterRefresh.MilestoneCount);
+    }
+
     private static RepositoryService CreateRepositoryService()
     {
         return new RepositoryService(new ApplicationConfigurationStore(Path.Combine(CreateTemporaryDirectory(), "configuration.json")));
@@ -105,7 +145,7 @@ public sealed class RepositoryProjectionServiceTests
         return new RepositoryProjectionService(
             repositoryService,
             new ArtifactService(new FileSystemArtifactStore()),
-            new PlanningService());
+            new PlanningService(new FileSystemArtifactStore()));
     }
 
     private static async Task WriteAsync(Repository repository, string relativePath, string content)

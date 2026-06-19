@@ -22,43 +22,43 @@ Milestone contents are not interpreted during Epic 1.
 
 ## Backend Tasks
 
-- [ ] Implement `Milestone`.
-- [ ] Implement `ExecutionReadiness`.
-- [ ] Implement `IPlanningService`.
-- [ ] Detect plan presence.
-- [ ] Enumerate milestone markdown files.
-- [ ] Determine readiness from plan and milestone existence.
-- [ ] Add planning projection endpoint.
-- [ ] Include readiness in repository dashboard projection.
-- [ ] Include plan status, milestone count, and readiness in `RepositoryWorkspaceProjection`.
+- [x] Implement `Milestone`.
+- [x] Implement `ExecutionReadiness`.
+- [x] Implement `IPlanningService`.
+- [x] Detect plan presence.
+- [x] Enumerate milestone markdown files.
+- [x] Determine readiness from plan and milestone existence.
+- [x] Add planning projection endpoint.
+- [x] Include readiness in repository dashboard projection.
+- [x] Include plan status, milestone count, and readiness in `RepositoryWorkspaceProjection`.
 
 ## UI Tasks
 
-- [ ] Show readiness on repository dashboard.
-- [ ] Show plan status in repository workspace.
-- [ ] Show milestone count in repository workspace.
-- [ ] Show readiness in repository workspace.
-- [ ] Add milestone inventory view.
-- [ ] Update refresh to recompute artifacts, plan status, milestones, and readiness.
+- [x] Show readiness on repository dashboard.
+- [x] Show plan status in repository workspace.
+- [x] Show milestone count in repository workspace.
+- [x] Show readiness in repository workspace.
+- [x] Add milestone inventory view.
+- [x] Update refresh to recompute artifacts, plan status, milestones, and readiness.
 
 ## Tests
 
-- [ ] Plan present returns plan present.
-- [ ] Missing plan returns missing plan.
-- [ ] Milestone files are discovered.
-- [ ] Missing milestone directory returns zero milestones.
-- [ ] Empty milestone directory returns zero milestones.
-- [ ] Corrupt or arbitrary markdown content still counts as a milestone.
-- [ ] Missing plan returns `MissingPlan`.
-- [ ] Plan without milestones returns `MissingMilestones`.
-- [ ] Plan with at least one milestone returns `Ready`.
-- [ ] Refresh after adding a milestone updates readiness.
+- [x] Plan present returns plan present.
+- [x] Missing plan returns missing plan.
+- [x] Milestone files are discovered.
+- [x] Missing milestone directory returns zero milestones.
+- [x] Empty milestone directory returns zero milestones.
+- [x] Corrupt or arbitrary markdown content still counts as a milestone.
+- [x] Missing plan returns `MissingPlan`.
+- [x] Plan without milestones returns `MissingMilestones`.
+- [x] Plan with at least one milestone returns `Ready`.
+- [x] Refresh after adding a milestone updates readiness.
 
 ## Acceptance Criteria
 
-- [ ] Plan detection works.
-- [ ] Milestone detection works.
-- [ ] All readiness states are derived correctly.
-- [ ] Dashboard shows readiness.
-- [ ] Workspace shows plan status, milestone count, and readiness.
-- [ ] No execution behavior is introduced.
+- [x] Plan detection works.
+- [x] Milestone detection works.
+- [x] All readiness states are derived correctly.
+- [x] Dashboard shows readiness.
+- [x] Workspace shows plan status, milestone count, and readiness.
+- [x] No execution behavior is introduced.

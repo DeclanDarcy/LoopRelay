@@ -185,6 +185,27 @@ public static class Program
                 return Results.Conflict(new { error = exception.Message });
             }
         });
+        app.MapGet("/api/repositories/{repositoryId:guid}/planning", async (
+            Guid repositoryId,
+            IRepositoryService repositoryService,
+            IPlanningService planningService) =>
+        {
+            try
+            {
+                var repository = await GetRepositoryAsync(repositoryService, repositoryId);
+                var milestones = await planningService.GetMilestonesAsync(repository);
+                return Results.Ok(new PlanningProjection
+                {
+                    HasPlan = await planningService.HasPlanAsync(repository),
+                    Milestones = milestones,
+                    Readiness = await planningService.DetermineReadinessAsync(repository)
+                });
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+        });
         app.MapPost("/api/repositories/{repositoryId:guid}/refresh", async (
             Guid repositoryId,
             IRepositoryProjectionService projectionService) =>
