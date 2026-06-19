@@ -2,24 +2,20 @@
 
 ## Newly Authorized Decisions
 
-- The M2 discovery/load/save slice is accepted as architecturally aligned because artifact resolution remains backend-owned.
-- UI-facing artifact operations must continue to use repository-relative paths only; backend services must resolve those paths through registered repository roots before filesystem access.
-- Repository-root safety tests are considered high-value certification coverage and should remain part of the artifact infrastructure test suite.
-- Early current/historical classification through `ArtifactVersionKind` is accepted as architectural convergence, not M3 milestone leakage.
-- M3 should build on the existing current/historical classification and focus on rotation, current resolution, and historical resolution.
-- The narrow `.gitignore` unignore for `src/CommandCenter.Backend/Artifacts/` is accepted as the correct fix; the backend `Artifacts` domain directory should not be renamed to satisfy tooling.
-- M2 status is approximately 50% complete: discovery, classification, load, save, and repository-root safety are complete; projection integration, workspace endpoints, refresh pipeline, and UI artifact experience remain incomplete.
-- `ArtifactInventory` must be the single authoritative artifact projection for M2 and downstream milestones.
-- Workspace, explorer, summary, and dashboard behavior must derive from `ArtifactInventory` instead of rediscovering artifacts independently.
-- `RepositoryWorkspaceProjection` should be implemented before UI artifact work so it becomes the contract for the rest of Epic 1.
-- The next backend slice should add workspace and refresh endpoints, especially `GET /workspace` and `POST /refresh`.
-- Refresh must reconstruct state from disk according to the filesystem-authority principle; memory cache remains performance-only.
-- Refresh tests should certify both externally added files appearing after refresh and externally deleted files disappearing after refresh.
-- Avoid introducing multiple independent inventory DTO shapes such as separate explorer, summary, or dashboard DTOs that rediscover artifacts differently.
+- `ArtifactInventory` is the correct authority for artifact state and should remain the single source feeding `RepositoryWorkspaceProjection`.
+- The canonical application boundary for workspace page state is `RepositoryWorkspaceProjection`, not raw service or endpoint composition in React.
+- Restart should rebuild the artifact inventory cache from the filesystem, and explicit refresh should replace the cache from the filesystem rather than mutating it incrementally.
+- `RepositoryWorkspaceProjection.Readiness` is structurally present but semantically provisional until `PlanningService` becomes authoritative in M4.
+- M2 is approximately 80-85% complete: backend discovery, classification, load, save, root-safe resolution, artifact inventory, workspace projection, and refresh are complete; workspace UI, artifact editor UI, and manual certification remain.
+- Next M2 work should be split into focused slices: Tauri command bridge first, workspace projection rendering second, read-only artifact viewer third, and editing/saving fourth.
+- `GET /workspace` should remain the primary workspace endpoint for page composition.
+- `GET /artifacts` should be minimized for UI page composition and treated mainly as support for content loading, saving, future rotation operations, or narrower artifact-specific workflows.
+- The React workspace must consume projections faithfully and must not accumulate independent artifact-state logic that competes with `RepositoryWorkspaceProjection`.
+- Early current/historical classification and centralized inventory generation are accepted as M3 risk reduction because they shrink M3 to current resolution, rotation, and historical numbering rather than inventory redesign.
 
 ## Current Epic Status
 
-- M0 architecture ratification is certified.
-- M1 repository management is ready for certification after desktop validation.
-- M2 artifact infrastructure has completed discovery/load/save/root-safety foundations and should proceed to projection integration next.
-- The next meaningful certification risk is projection and refresh fidelity to filesystem authority.
+- M0 is certified.
+- M1 is functionally complete and awaiting full desktop certification.
+- M2 backend is complete or nearly complete, with UI integration still remaining.
+- Epic 1 is tracking cleanly; the largest current M2 risk is preserving projection authority during React workspace implementation.

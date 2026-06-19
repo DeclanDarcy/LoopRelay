@@ -44,9 +44,9 @@ At M2, artifacts are markdown files with metadata. Do not derive execution meani
 - [x] Implement artifact load by relative path.
 - [x] Implement artifact save by relative path.
 - [x] Ensure all file operations are repository-root safe.
-- [ ] Add refresh operation that rediscovers artifacts from disk.
-- [ ] Cache artifact inventories in memory for responsiveness.
-- [ ] Rebuild cache from filesystem on refresh or restart.
+- [x] Add refresh operation that rediscovers artifacts from disk.
+- [x] Cache artifact inventories in memory for responsiveness.
+- [x] Rebuild cache from filesystem on refresh or restart.
 - [ ] Keep refresh manual; do not add `FileSystemWatcher` or background polling.
 
 ## UI Tasks
@@ -76,7 +76,7 @@ At M2, artifacts are markdown files with metadata. Do not derive execution meani
 - [x] Missing directories do not fail discovery.
 - [x] Artifact content loads correctly.
 - [x] Artifact save persists to disk.
-- [ ] Refresh discovers newly added files.
+- [x] Refresh discovers newly added files.
 - [x] Relative path traversal attempts are rejected.
 
 ## Acceptance Criteria

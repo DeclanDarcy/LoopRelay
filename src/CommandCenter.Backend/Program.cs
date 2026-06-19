@@ -60,8 +60,101 @@ public static class Program
             await repositoryService.RemoveAsync(repositoryId);
             return Results.NoContent();
         });
+        app.MapGet("/api/repositories/{repositoryId:guid}/workspace", async (
+            Guid repositoryId,
+            IRepositoryProjectionService projectionService) =>
+        {
+            try
+            {
+                return Results.Ok(await projectionService.GetWorkspaceAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+        });
+        app.MapGet("/api/repositories/{repositoryId:guid}/artifacts", async (
+            Guid repositoryId,
+            IRepositoryProjectionService projectionService) =>
+        {
+            try
+            {
+                var workspace = await projectionService.GetWorkspaceAsync(repositoryId);
+                return Results.Ok(workspace.ArtifactInventory);
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+        });
+        app.MapGet("/api/repositories/{repositoryId:guid}/artifacts/content", async (
+            Guid repositoryId,
+            string relativePath,
+            IRepositoryService repositoryService,
+            IArtifactService artifactService) =>
+        {
+            try
+            {
+                var repository = await GetRepositoryAsync(repositoryService, repositoryId);
+                return Results.Text(await artifactService.LoadAsync(repository, relativePath), "text/markdown");
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (FileNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+        app.MapPut("/api/repositories/{repositoryId:guid}/artifacts/content", async (
+            Guid repositoryId,
+            SaveArtifactContentRequest request,
+            IRepositoryService repositoryService,
+            IArtifactService artifactService,
+            IRepositoryProjectionService projectionService) =>
+        {
+            try
+            {
+                var repository = await GetRepositoryAsync(repositoryService, repositoryId);
+                await artifactService.SaveAsync(repository, request.RelativePath, request.Content);
+                await projectionService.RefreshWorkspaceAsync(repositoryId);
+                return Results.NoContent();
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+        app.MapPost("/api/repositories/{repositoryId:guid}/refresh", async (
+            Guid repositoryId,
+            IRepositoryProjectionService projectionService) =>
+        {
+            try
+            {
+                return Results.Ok(await projectionService.RefreshWorkspaceAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+        });
 
         return app;
+    }
+
+    private static async Task<Repository> GetRepositoryAsync(IRepositoryService repositoryService, Guid repositoryId)
+    {
+        var repository = (await repositoryService.GetAllAsync()).FirstOrDefault(repository => repository.Id == repositoryId);
+        return repository ?? throw new KeyNotFoundException($"Repository was not found: {repositoryId}");
     }
 
     public static void Main(string[] args)

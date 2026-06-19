@@ -2,21 +2,23 @@
 
 ## New State This Slice
 
-- M2 artifact infrastructure slice 1 started.
-- `ArtifactService` now discovers `.agents/plan.md`, `.agents/operational_context.md`, `.agents/milestones/*.md`, `.agents/handoffs/*.md`, and `.agents/decisions/*.md`.
-- Artifact metadata now returns repository-relative normalized paths, names, types, families, and current/historical version kind for handoff and decision files.
-- Artifact load, save, and exists operations now resolve through the backend-owned repository root and reject path traversal.
-- Current handoff and current decisions resolution now targets only `.agents/handoffs/handoff.md` and `.agents/decisions/decisions.md`.
-- Added backend tests for discovery, missing artifact tolerance, load/save persistence, current artifact resolution, and path traversal rejection.
-- `.agents/milestones/m2-artifact-infrastructure.md` now marks the completed backend discovery/load/save tasks and related tests.
-- `.gitignore` now explicitly unignores `src/CommandCenter.Backend/Artifacts/`, because the generic `artifacts/` build-output rule was hiding backend source on this Windows worktree.
-- Previous handoff was archived as `.agents/handoffs/handoff.0004.md`.
+- Continued M2 artifact infrastructure with backend projection integration.
+- `RepositoryProjectionService` now composes `RepositoryWorkspaceProjection` from registered repositories, artifact discovery, planning readiness, availability, and a cached `ArtifactInventory`.
+- Workspace inventory cache is rebuilt from disk on first access after process start and replaced by explicit workspace refresh.
+- `GET /api/repositories/{repositoryId}/workspace`, `GET /api/repositories/{repositoryId}/artifacts`, `GET /api/repositories/{repositoryId}/artifacts/content`, `PUT /api/repositories/{repositoryId}/artifacts/content`, and `POST /api/repositories/{repositoryId}/refresh` are now mapped in the backend.
+- Artifact content save refreshes the workspace projection cache after writing.
+- Added `SaveArtifactContentRequest` for artifact content writes.
+- Added backend projection tests for workspace inventory composition, externally added files appearing after refresh, and externally deleted files disappearing after refresh.
+- `.agents/milestones/m2-artifact-infrastructure.md` now marks refresh, cache, cache rebuild, and refresh-added-file test coverage complete.
+- Previous handoff was archived as `.agents/handoffs/handoff.0005.md`.
 
 ## Verification
 
-- `dotnet test CommandCenter.slnx` passes: 23 tests.
+- `dotnet test CommandCenter.slnx` passes: 26 tests.
 
 ## Immediate Gaps
 
-- Repository workspace refresh, artifact inventory projection caching, backend artifact endpoints, and UI artifact explorer/viewer/editor remain incomplete.
-- M2 changes are not staged or committed yet; this includes newly visible artifact source files under `src/CommandCenter.Backend/Artifacts/`.
+- UI artifact explorer/viewer/editor remains incomplete.
+- Tauri shell commands still expose only repository list/register/remove; workspace, refresh, and artifact content commands still need to be bridged from React through Rust to the backend.
+- Planning service still returns placeholder readiness; full readiness implementation remains M4.
+- M2 backend does not yet have endpoint-level tests for the new artifact routes.

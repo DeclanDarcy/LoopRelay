@@ -1,34 +1,120 @@
+using CommandCenter.Backend.Artifacts;
 using CommandCenter.Backend.Planning;
 using CommandCenter.Backend.Repositories;
+using System.Collections.Concurrent;
 
 namespace CommandCenter.Backend.Projections;
 
-public sealed class RepositoryProjectionService(IRepositoryService repositoryService) : IRepositoryProjectionService
+public sealed class RepositoryProjectionService(
+    IRepositoryService repositoryService,
+    IArtifactService artifactService,
+    IPlanningService planningService) : IRepositoryProjectionService
 {
+    private readonly ConcurrentDictionary<Guid, ArtifactInventory> inventoryCache = new();
+
     public async Task<IReadOnlyList<RepositoryDashboardProjection>> GetDashboardAsync()
     {
         var repositories = await repositoryService.GetAllAsync();
-        return repositories
-            .Select(repository => new RepositoryDashboardProjection
+        var projections = new List<RepositoryDashboardProjection>();
+
+        foreach (var repository in repositories)
+        {
+            var inventory = await GetOrBuildInventoryAsync(repository);
+            projections.Add(new RepositoryDashboardProjection
             {
                 Repository = repository,
                 Availability = DetermineAvailability(repository),
-                Readiness = ExecutionReadiness.MissingPlan,
-                MilestoneCount = 0,
-                HasCurrentHandoff = false,
-                HasCurrentDecisions = false
-            })
-            .ToArray();
+                Readiness = await planningService.DetermineReadinessAsync(repository),
+                MilestoneCount = inventory.Milestones.Count,
+                HasCurrentHandoff = inventory.CurrentHandoff is not null,
+                HasCurrentDecisions = inventory.CurrentDecisions is not null
+            });
+        }
+
+        return projections;
     }
 
-    public Task<RepositoryWorkspaceProjection> GetWorkspaceAsync(Guid repositoryId)
+    public async Task<RepositoryWorkspaceProjection> GetWorkspaceAsync(Guid repositoryId)
     {
-        throw new NotImplementedException("Workspace projections are implemented in later milestones.");
+        var repository = await GetRepositoryAsync(repositoryId);
+        return await BuildWorkspaceProjectionAsync(repository, await GetOrBuildInventoryAsync(repository));
     }
 
-    public Task<RepositoryWorkspaceProjection> RefreshWorkspaceAsync(Guid repositoryId)
+    public async Task<RepositoryWorkspaceProjection> RefreshWorkspaceAsync(Guid repositoryId)
     {
-        throw new NotImplementedException("Workspace refresh is implemented in later milestones.");
+        var repository = await GetRepositoryAsync(repositoryId);
+        var inventory = await BuildInventoryAsync(repository);
+        inventoryCache[repository.Id] = inventory;
+        return await BuildWorkspaceProjectionAsync(repository, inventory);
+    }
+
+    private async Task<Repository> GetRepositoryAsync(Guid repositoryId)
+    {
+        var repository = (await repositoryService.GetAllAsync()).FirstOrDefault(repository => repository.Id == repositoryId);
+        return repository ?? throw new KeyNotFoundException($"Repository was not found: {repositoryId}");
+    }
+
+    private async Task<RepositoryWorkspaceProjection> BuildWorkspaceProjectionAsync(
+        Repository repository,
+        ArtifactInventory inventory)
+    {
+        return new RepositoryWorkspaceProjection
+        {
+            Repository = repository,
+            Availability = DetermineAvailability(repository),
+            Readiness = await planningService.DetermineReadinessAsync(repository),
+            ArtifactInventory = inventory,
+            MilestoneCount = inventory.Milestones.Count,
+            HasPlan = inventory.Plan is not null,
+            HasOperationalContext = inventory.OperationalContext is not null,
+            HasCurrentHandoff = inventory.CurrentHandoff is not null,
+            HasCurrentDecisions = inventory.CurrentDecisions is not null
+        };
+    }
+
+    private async Task<ArtifactInventory> GetOrBuildInventoryAsync(Repository repository)
+    {
+        if (inventoryCache.TryGetValue(repository.Id, out var inventory))
+        {
+            return inventory;
+        }
+
+        inventory = await BuildInventoryAsync(repository);
+        inventoryCache[repository.Id] = inventory;
+        return inventory;
+    }
+
+    private async Task<ArtifactInventory> BuildInventoryAsync(Repository repository)
+    {
+        var artifacts = await artifactService.DiscoverAsync(repository);
+
+        return new ArtifactInventory
+        {
+            Plan = artifacts.SingleOrDefault(artifact => artifact.Type == ArtifactType.Plan),
+            OperationalContext = artifacts.SingleOrDefault(artifact => artifact.Type == ArtifactType.OperationalContext),
+            Milestones = artifacts
+                .Where(artifact => artifact.Type == ArtifactType.Milestone)
+                .OrderBy(artifact => artifact.RelativePath, StringComparer.OrdinalIgnoreCase)
+                .ToArray(),
+            CurrentHandoff = artifacts.SingleOrDefault(artifact =>
+                artifact.Family == ArtifactFamily.Handoff &&
+                artifact.VersionKind == ArtifactVersionKind.Current),
+            HistoricalHandoffs = artifacts
+                .Where(artifact =>
+                    artifact.Family == ArtifactFamily.Handoff &&
+                    artifact.VersionKind == ArtifactVersionKind.Historical)
+                .OrderBy(artifact => artifact.RelativePath, StringComparer.OrdinalIgnoreCase)
+                .ToArray(),
+            CurrentDecisions = artifacts.SingleOrDefault(artifact =>
+                artifact.Family == ArtifactFamily.Decision &&
+                artifact.VersionKind == ArtifactVersionKind.Current),
+            HistoricalDecisions = artifacts
+                .Where(artifact =>
+                    artifact.Family == ArtifactFamily.Decision &&
+                    artifact.VersionKind == ArtifactVersionKind.Historical)
+                .OrderBy(artifact => artifact.RelativePath, StringComparer.OrdinalIgnoreCase)
+                .ToArray()
+        };
     }
 
     private static RepositoryAvailability DetermineAvailability(Repository repository)
