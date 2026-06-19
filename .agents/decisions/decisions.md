@@ -2,22 +2,26 @@
 
 ## Newly Authorized Decisions
 
-- M1 backend slice is accepted as complete.
-- `GET /api/repositories` returning `RepositoryDashboardProjection[]` is the correct architectural boundary and should be preserved.
-- Repository identity remains `Repository.Id`; repository uniqueness is determined by normalized absolute path.
-- `RepositoryProjectionService` owns dashboard projection composition so the UI does not derive availability or combine backend state.
-- Current milestone sequencing remains M0 foundation, M1 repository lifecycle, M2 artifact infrastructure, M3 artifact lifecycle, M4 planning, and M5 workspace composition.
-- Automated M1 certification should cover `Available` and `Missing` repository availability; `AccessDenied` should remain a manual certification case unless filesystem permission failure becomes injectable later.
-- M1 UI completion should proceed in this order: Tauri directory picker, add repository flow, repository dashboard, repository details view, remove repository flow.
-- The Tauri directory picker should return only the absolute repository path and should not perform validation in the shell.
-- Repository validation messages should come directly from backend responses.
-- Repository dashboard should stay simple during M1 and display name, availability, and path.
-- Repository details view should display name, path, and availability only; artifact-related workspace concerns remain out of M1.
-- Decisions rotation is now established alongside handoff rotation.
+- M1 implementation is accepted as architecturally consistent, with manual desktop certification remaining as the final certification step.
+- The React/Tauri/backend boundary should remain:
+  - React renders projections and invokes commands.
+  - Tauri picks directories and proxies requests.
+  - Backend validates repositories, manages registrations, derives availability, and composes projections.
+- Repository validation must remain backend-owned; UI and Tauri should display or transport backend results rather than duplicate validation rules.
+- `GET /api/repositories -> RepositoryDashboardProjection[]` remains the correct dashboard contract and should continue as readiness, milestones, artifact inventories, current handoff status, and current decisions status expand.
+- API enum serialization as names such as `Available` is accepted as the correct desktop-app contract.
+- M1 can be considered complete if manual certification passes for native directory picking, repository registration, dashboard refresh, repository selection, details view, repository removal, `.agents` creation, and non-destructive removal.
+- M2 should begin after M1 manual certification.
+- M2 should proceed in focused slices:
+  - Slice 1: artifact domain models and discovery only.
+  - Slice 2: artifact inventory projection.
+  - Slice 3: read-only artifact content loading and viewer support.
+  - Slice 4: artifact content saving.
+  - Slice 5: manual refresh pipeline and cache rebuilding.
+- Artifact discovery should classify artifacts around `ArtifactFamily` immediately so M3 lifecycle behavior does not require retrofitting.
 
-## Current Milestone Status
+## Current Epic Status
 
-- M0 is certified.
-- M1 backend is complete.
-- M1 UI is in progress.
-- M1 overall is approximately 70-75% complete.
+- M0 architecture ratification is certified.
+- M1 repository management implementation is complete and pending manual certification.
+- M2 artifact infrastructure is ready to start after M1 certification.

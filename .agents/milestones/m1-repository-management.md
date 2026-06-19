@@ -53,15 +53,15 @@ milestones/
 
 ## UI Tasks
 
-- [ ] Add repository dashboard.
-- [ ] Add `Add Repository` action.
-- [ ] Use native directory picker through Tauri.
-- [ ] Show validation errors clearly.
-- [ ] Display registered repositories with name and path.
-- [ ] Add repository open/select behavior.
-- [ ] Add repository details view showing name and path.
-- [ ] Add remove action with confirmation.
-- [ ] Show repository availability status when a registered repository is available, missing, or access denied.
+- [x] Add repository dashboard.
+- [x] Add `Add Repository` action.
+- [x] Use native directory picker through Tauri.
+- [x] Show validation errors clearly.
+- [x] Display registered repositories with name and path.
+- [x] Add repository open/select behavior.
+- [x] Add repository details view showing name and path.
+- [x] Add remove action with confirmation.
+- [x] Show repository availability status when a registered repository is available, missing, or access denied.
 
 ## Backend Tasks
 
@@ -88,9 +88,11 @@ milestones/
 
 ## Acceptance Criteria
 
-- [ ] Repositories can be added through the UI.
-- [ ] Invalid repositories are rejected with clear errors.
-- [ ] Repository registrations survive application restart.
-- [ ] Registered repositories appear on the dashboard.
-- [ ] Repository details view opens.
-- [ ] Removing a repository registration leaves repository files untouched.
+- [x] Repositories can be added through the UI.
+- [x] Invalid repositories are rejected with clear errors.
+- [x] Repository registrations survive application restart.
+- [x] Registered repositories appear on the dashboard.
+- [x] Repository details view opens.
+- [x] Removing a repository registration leaves repository files untouched.
+
+Implementation note: M1 automated checks pass, and shell/UI/backend compilation passes. Full desktop click-through certification remains a manual verification step because the native directory picker requires interactive app execution.

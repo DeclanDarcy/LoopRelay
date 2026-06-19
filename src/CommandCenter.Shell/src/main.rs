@@ -6,12 +6,43 @@ use std::{
     thread,
     time::Duration,
 };
+use serde::{Deserialize, Serialize};
 use tauri::Manager;
 
 const BACKEND_URL: &str = "http://127.0.0.1:5000";
 
 struct BackendProcess {
     child: Mutex<Option<Child>>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Repository {
+    id: String,
+    name: String,
+    path: String,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RepositoryDashboardProjection {
+    repository: Repository,
+    availability: String,
+    readiness: String,
+    milestone_count: i32,
+    has_current_handoff: bool,
+    has_current_decisions: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RegisterRepositoryRequest {
+    path: String,
+}
+
+#[derive(Deserialize)]
+struct ErrorResponse {
+    error: String,
 }
 
 impl BackendProcess {
@@ -37,6 +68,59 @@ fn ping_backend() -> Result<String, String> {
         .map_err(|error| error.to_string())?
         .text()
         .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn select_repository_directory() -> Option<String> {
+    rfd::FileDialog::new()
+        .set_title("Select Repository")
+        .pick_folder()
+        .map(|path| path.display().to_string())
+}
+
+#[tauri::command]
+fn list_repositories() -> Result<Vec<RepositoryDashboardProjection>, String> {
+    reqwest::blocking::get(format!("{BACKEND_URL}/api/repositories"))
+        .map_err(|error| error.to_string())?
+        .error_for_status()
+        .map_err(|error| error.to_string())?
+        .json()
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn register_repository(path: String) -> Result<(), String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!("{BACKEND_URL}/api/repositories"))
+        .json(&RegisterRepositoryRequest { path })
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return Ok(());
+    }
+
+    let status = response.status();
+    let message = response
+        .json::<ErrorResponse>()
+        .map(|response| response.error)
+        .unwrap_or_else(|_| format!("repository registration failed with status {status}"));
+
+    Err(message)
+}
+
+#[tauri::command]
+fn remove_repository(repository_id: String) -> Result<(), String> {
+    let client = reqwest::blocking::Client::new();
+    client
+        .delete(format!("{BACKEND_URL}/api/repositories/{repository_id}"))
+        .send()
+        .map_err(|error| error.to_string())?
+        .error_for_status()
+        .map_err(|error| error.to_string())?;
+
+    Ok(())
 }
 
 fn backend_executable_path() -> Result<PathBuf, String> {
@@ -142,7 +226,13 @@ fn main() {
                 window.state::<BackendProcess>().stop();
             }
         })
-        .invoke_handler(tauri::generate_handler![ping_backend])
+        .invoke_handler(tauri::generate_handler![
+            ping_backend,
+            select_repository_directory,
+            list_repositories,
+            register_repository,
+            remove_repository
+        ])
         .run(tauri::generate_context!())
         .expect("failed to run Command Center shell");
 }

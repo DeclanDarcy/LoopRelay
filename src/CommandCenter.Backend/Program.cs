@@ -3,6 +3,7 @@ using CommandCenter.Backend.Configuration;
 using CommandCenter.Backend.Planning;
 using CommandCenter.Backend.Projections;
 using CommandCenter.Backend.Repositories;
+using System.Text.Json.Serialization;
 
 namespace CommandCenter.Backend;
 
@@ -18,6 +19,8 @@ public static class Program
         builder.Services.AddSingleton<IArtifactService, ArtifactService>();
         builder.Services.AddSingleton<IRepositoryProjectionService, RepositoryProjectionService>();
         builder.Services.AddSingleton<IPlanningService, PlanningService>();
+        builder.Services.ConfigureHttpJsonOptions(options =>
+            options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
         var app = builder.Build();
 
