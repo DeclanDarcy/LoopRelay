@@ -412,9 +412,17 @@ button:focus-visible {
   min-width: 0;
   display: flex;
   justify-content: space-between;
+  align-items: start;
   gap: 12px;
   padding: 14px;
   border-bottom: 1px solid #edf0f2;
+}
+
+.artifact-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: end;
+  gap: 8px;
 }
 
 .artifact-panel-header > div {
@@ -522,7 +530,8 @@ button:focus-visible {
 @media (max-width: 560px) {
   .repository-item,
   .summary-grid,
-  .artifact-panel-header {
+  .artifact-panel-header,
+  .artifact-panel-actions {
     grid-template-columns: 1fr;
     display: grid;
   }

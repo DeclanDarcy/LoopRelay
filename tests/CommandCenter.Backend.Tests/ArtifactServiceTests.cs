@@ -14,8 +14,12 @@ public sealed class ArtifactServiceTests
         await WriteAsync(repository, ".agents/milestones/m1.md", "milestone");
         await WriteAsync(repository, ".agents/handoffs/handoff.md", "handoff");
         await WriteAsync(repository, ".agents/handoffs/handoff.0001.md", "historical handoff");
+        await WriteAsync(repository, ".agents/handoffs/notes.md", "not a handoff artifact");
+        await WriteAsync(repository, ".agents/handoffs/handoff.0000.md", "invalid historical handoff");
+        await WriteAsync(repository, ".agents/handoffs/handoff.001.md", "invalid historical handoff");
         await WriteAsync(repository, ".agents/decisions/decisions.md", "decisions");
         await WriteAsync(repository, ".agents/decisions/decisions.0001.md", "historical decisions");
+        await WriteAsync(repository, ".agents/decisions/notes.md", "not a decision artifact");
         var service = new ArtifactService(new FileSystemArtifactStore());
 
         var artifacts = await service.DiscoverAsync(repository);
@@ -27,6 +31,10 @@ public sealed class ArtifactServiceTests
         Assert.Contains(artifacts, artifact => artifact.RelativePath == ".agents/handoffs/handoff.0001.md" && artifact.VersionKind == ArtifactVersionKind.Historical);
         Assert.Contains(artifacts, artifact => artifact.RelativePath == ".agents/decisions/decisions.md" && artifact.VersionKind == ArtifactVersionKind.Current);
         Assert.Contains(artifacts, artifact => artifact.RelativePath == ".agents/decisions/decisions.0001.md" && artifact.VersionKind == ArtifactVersionKind.Historical);
+        Assert.DoesNotContain(artifacts, artifact => artifact.RelativePath == ".agents/handoffs/notes.md");
+        Assert.DoesNotContain(artifacts, artifact => artifact.RelativePath == ".agents/handoffs/handoff.0000.md");
+        Assert.DoesNotContain(artifacts, artifact => artifact.RelativePath == ".agents/handoffs/handoff.001.md");
+        Assert.DoesNotContain(artifacts, artifact => artifact.RelativePath == ".agents/decisions/notes.md");
     }
 
     [Fact]

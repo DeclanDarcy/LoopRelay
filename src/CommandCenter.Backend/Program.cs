@@ -17,6 +17,7 @@ public static class Program
         builder.Services.AddSingleton<IArtifactStore, FileSystemArtifactStore>();
         builder.Services.AddSingleton<IRepositoryService, RepositoryService>();
         builder.Services.AddSingleton<IArtifactService, ArtifactService>();
+        builder.Services.AddSingleton<IArtifactRotationService, ArtifactRotationService>();
         builder.Services.AddSingleton<IRepositoryProjectionService, RepositoryProjectionService>();
         builder.Services.AddSingleton<IPlanningService, PlanningService>();
         builder.Services.ConfigureHttpJsonOptions(options =>
@@ -132,6 +133,56 @@ public static class Program
             catch (ArgumentException exception)
             {
                 return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+        app.MapPost("/api/repositories/{repositoryId:guid}/artifacts/rotate-current-handoff", async (
+            Guid repositoryId,
+            IRepositoryService repositoryService,
+            IArtifactRotationService rotationService,
+            IRepositoryProjectionService projectionService) =>
+        {
+            try
+            {
+                var repository = await GetRepositoryAsync(repositoryService, repositoryId);
+                await rotationService.RotateCurrentHandoffAsync(repository);
+                return Results.Ok(await projectionService.RefreshWorkspaceAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (FileNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (IOException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+        app.MapPost("/api/repositories/{repositoryId:guid}/artifacts/rotate-current-decisions", async (
+            Guid repositoryId,
+            IRepositoryService repositoryService,
+            IArtifactRotationService rotationService,
+            IRepositoryProjectionService projectionService) =>
+        {
+            try
+            {
+                var repository = await GetRepositoryAsync(repositoryService, repositoryId);
+                await rotationService.RotateCurrentDecisionsAsync(repository);
+                return Results.Ok(await projectionService.RefreshWorkspaceAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (FileNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (IOException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
             }
         });
         app.MapPost("/api/repositories/{repositoryId:guid}/refresh", async (

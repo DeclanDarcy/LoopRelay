@@ -93,20 +93,24 @@ function getArtifactCategories(inventory: ArtifactInventory): ArtifactCategory[]
       artifacts: inventory.milestones,
     },
     {
-      label: 'Handoffs',
-      missingLabel: 'No handoff files found.',
-      artifacts: [
-        ...(inventory.currentHandoff ? [inventory.currentHandoff] : []),
-        ...inventory.historicalHandoffs,
-      ],
+      label: 'Current Handoff',
+      missingLabel: 'handoff.md is missing.',
+      artifacts: inventory.currentHandoff ? [inventory.currentHandoff] : [],
     },
     {
-      label: 'Decisions',
-      missingLabel: 'No decision files found.',
-      artifacts: [
-        ...(inventory.currentDecisions ? [inventory.currentDecisions] : []),
-        ...inventory.historicalDecisions,
-      ],
+      label: 'Historical Handoffs',
+      missingLabel: 'No historical handoffs found.',
+      artifacts: inventory.historicalHandoffs,
+    },
+    {
+      label: 'Current Decisions',
+      missingLabel: 'decisions.md is missing.',
+      artifacts: inventory.currentDecisions ? [inventory.currentDecisions] : [],
+    },
+    {
+      label: 'Historical Decisions',
+      missingLabel: 'No historical decisions found.',
+      artifacts: inventory.historicalDecisions,
     },
   ]
 }
@@ -205,6 +209,7 @@ function App() {
   const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(false)
   const [isArtifactLoading, setIsArtifactLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isRotating, setIsRotating] = useState(false)
   const [isAdding, setIsAdding] = useState(false)
   const [removingRepositoryId, setRemovingRepositoryId] = useState<string | null>(null)
 
@@ -229,6 +234,9 @@ function App() {
   }, [selectedArtifactPath, workspace])
 
   const hasDraftChanges = artifactContent !== draftContent
+  const canRotateSelectedArtifact =
+    selectedArtifact?.versionKind === 'Current' &&
+    (selectedArtifact.family === 'Handoff' || selectedArtifact.family === 'Decision')
 
   const loadWorkspace = useCallback(async (repositoryId: string) => {
     setIsWorkspaceLoading(true)
@@ -379,6 +387,39 @@ function App() {
       setError(formatError(saveError))
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  async function rotateSelectedArtifact() {
+    if (!selectedRepository || !selectedArtifact || !canRotateSelectedArtifact) {
+      return
+    }
+
+    const artifactLabel = selectedArtifact.family === 'Handoff' ? 'current handoff' : 'current decisions'
+    const confirmed = window.confirm(`Rotate ${artifactLabel}?`)
+
+    if (!confirmed) {
+      return
+    }
+
+    setIsRotating(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const command =
+        selectedArtifact.family === 'Handoff'
+          ? 'rotate_current_handoff'
+          : 'rotate_current_decisions'
+      const nextWorkspace = await invoke<RepositoryWorkspaceProjection>(command, {
+        repositoryId: selectedRepository.repository.id,
+      })
+      setWorkspace(nextWorkspace)
+      setMessage('Artifact rotated.')
+      await loadRepositories()
+    } catch (rotateError) {
+      setError(formatError(rotateError))
+    } finally {
+      setIsRotating(false)
     }
   }
 
@@ -599,14 +640,36 @@ function App() {
                             <h4>{selectedArtifact.name}</h4>
                             <span>{selectedArtifact.relativePath}</span>
                           </div>
-                          <button
-                            type="button"
-                            className="primary-action"
-                            onClick={() => void saveArtifact()}
-                            disabled={isSaving || isArtifactLoading || !hasDraftChanges}
-                          >
-                            {isSaving ? 'Saving...' : 'Save'}
-                          </button>
+                          <div className="artifact-panel-actions">
+                            {canRotateSelectedArtifact ? (
+                              <button
+                                type="button"
+                                className="secondary-action"
+                                onClick={() => void rotateSelectedArtifact()}
+                                disabled={
+                                  isRotating ||
+                                  isArtifactLoading ||
+                                  isSaving ||
+                                  hasDraftChanges
+                                }
+                                title={
+                                  hasDraftChanges
+                                    ? 'Save changes before rotating.'
+                                    : 'Archive the current artifact to the next historical file.'
+                                }
+                              >
+                                {isRotating ? 'Rotating...' : 'Rotate'}
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              className="primary-action"
+                              onClick={() => void saveArtifact()}
+                              disabled={isSaving || isArtifactLoading || !hasDraftChanges}
+                            >
+                              {isSaving ? 'Saving...' : 'Save'}
+                            </button>
+                          </div>
                         </div>
                         <textarea
                           className="artifact-editor"

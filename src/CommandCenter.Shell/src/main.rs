@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::{
     env,
     path::PathBuf,
@@ -6,7 +7,6 @@ use std::{
     thread,
     time::Duration,
 };
-use serde::{Deserialize, Serialize};
 use tauri::Manager;
 
 const BACKEND_URL: &str = "http://127.0.0.1:5000";
@@ -178,7 +178,9 @@ fn get_repository_workspace(repository_id: String) -> Result<RepositoryWorkspace
 }
 
 #[tauri::command]
-fn refresh_repository_workspace(repository_id: String) -> Result<RepositoryWorkspaceProjection, String> {
+fn refresh_repository_workspace(
+    repository_id: String,
+) -> Result<RepositoryWorkspaceProjection, String> {
     let client = reqwest::blocking::Client::new();
     client
         .post(format!("{BACKEND_URL}/api/repositories/{repository_id}/refresh"))
@@ -194,7 +196,9 @@ fn refresh_repository_workspace(repository_id: String) -> Result<RepositoryWorks
 fn load_artifact_content(repository_id: String, relative_path: String) -> Result<String, String> {
     let client = reqwest::blocking::Client::new();
     client
-        .get(format!("{BACKEND_URL}/api/repositories/{repository_id}/artifacts/content"))
+        .get(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/artifacts/content"
+        ))
         .query(&[("relativePath", relative_path)])
         .send()
         .map_err(|error| error.to_string())?
@@ -212,7 +216,9 @@ fn save_artifact_content(
 ) -> Result<(), String> {
     let client = reqwest::blocking::Client::new();
     client
-        .put(format!("{BACKEND_URL}/api/repositories/{repository_id}/artifacts/content"))
+        .put(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/artifacts/content"
+        ))
         .json(&SaveArtifactContentRequest {
             relative_path,
             content,
@@ -223,6 +229,41 @@ fn save_artifact_content(
         .map_err(|error| error.to_string())?;
 
     Ok(())
+}
+
+#[tauri::command]
+fn rotate_current_handoff(repository_id: String) -> Result<RepositoryWorkspaceProjection, String> {
+    rotate_artifact(repository_id, "rotate-current-handoff")
+}
+
+#[tauri::command]
+fn rotate_current_decisions(repository_id: String) -> Result<RepositoryWorkspaceProjection, String> {
+    rotate_artifact(repository_id, "rotate-current-decisions")
+}
+
+fn rotate_artifact(
+    repository_id: String,
+    operation: &str,
+) -> Result<RepositoryWorkspaceProjection, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/artifacts/{operation}"
+        ))
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    let status = response.status();
+    let message = response
+        .json::<ErrorResponse>()
+        .map(|response| response.error)
+        .unwrap_or_else(|_| format!("artifact rotation failed with status {status}"));
+
+    Err(message)
 }
 
 fn backend_executable_path() -> Result<PathBuf, String> {
@@ -337,7 +378,9 @@ fn main() {
             get_repository_workspace,
             refresh_repository_workspace,
             load_artifact_content,
-            save_artifact_content
+            save_artifact_content,
+            rotate_current_handoff,
+            rotate_current_decisions
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Command Center shell");

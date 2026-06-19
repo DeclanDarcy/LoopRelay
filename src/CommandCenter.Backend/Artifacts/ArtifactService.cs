@@ -23,7 +23,7 @@ public sealed class ArtifactService(IArtifactStore artifactStore) : IArtifactSer
     {
         const string relativePath = ".agents/handoffs/handoff.md";
         return await ExistsAsync(repository, relativePath)
-            ? CreateArtifact(repository, ResolveRepositoryPath(repository, relativePath), ArtifactType.Handoff, ArtifactFamily.Handoff)
+            ? CreateArtifact(repository, ArtifactPath.ResolveRepositoryPath(repository, relativePath), ArtifactType.Handoff, ArtifactFamily.Handoff)
             : null;
     }
 
@@ -31,24 +31,24 @@ public sealed class ArtifactService(IArtifactStore artifactStore) : IArtifactSer
     {
         const string relativePath = ".agents/decisions/decisions.md";
         return await ExistsAsync(repository, relativePath)
-            ? CreateArtifact(repository, ResolveRepositoryPath(repository, relativePath), ArtifactType.Decision, ArtifactFamily.Decision)
+            ? CreateArtifact(repository, ArtifactPath.ResolveRepositoryPath(repository, relativePath), ArtifactType.Decision, ArtifactFamily.Decision)
             : null;
     }
 
     public async Task<bool> ExistsAsync(Repository repository, string relativePath)
     {
-        return await artifactStore.ExistsAsync(ResolveRepositoryPath(repository, relativePath));
+        return await artifactStore.ExistsAsync(ArtifactPath.ResolveRepositoryPath(repository, relativePath));
     }
 
     public async Task<string> LoadAsync(Repository repository, string relativePath)
     {
-        var content = await artifactStore.ReadAsync(ResolveRepositoryPath(repository, relativePath));
+        var content = await artifactStore.ReadAsync(ArtifactPath.ResolveRepositoryPath(repository, relativePath));
         return content ?? throw new FileNotFoundException("Artifact was not found.", relativePath);
     }
 
     public Task SaveAsync(Repository repository, string relativePath, string content)
     {
-        return artifactStore.WriteAsync(ResolveRepositoryPath(repository, relativePath), content);
+        return artifactStore.WriteAsync(ArtifactPath.ResolveRepositoryPath(repository, relativePath), content);
     }
 
     private async Task AddStaticArtifactAsync(
@@ -58,8 +58,8 @@ public sealed class ArtifactService(IArtifactStore artifactStore) : IArtifactSer
         ArtifactType type,
         ArtifactFamily family)
     {
-        var relativePath = CombineRelative(AgentsDirectory, fileName);
-        var fullPath = ResolveRepositoryPath(repository, relativePath);
+        var relativePath = ArtifactPath.CombineRelative(AgentsDirectory, fileName);
+        var fullPath = ArtifactPath.ResolveRepositoryPath(repository, relativePath);
         if (await artifactStore.ExistsAsync(fullPath))
         {
             artifacts.Add(CreateArtifact(repository, fullPath, type, family));
@@ -73,20 +73,32 @@ public sealed class ArtifactService(IArtifactStore artifactStore) : IArtifactSer
         ArtifactType type,
         ArtifactFamily family)
     {
-        var directoryPath = ResolveRepositoryPath(repository, CombineRelative(AgentsDirectory, directoryName));
+        var directoryPath = ArtifactPath.ResolveRepositoryPath(repository, ArtifactPath.CombineRelative(AgentsDirectory, directoryName));
         var files = await artifactStore.ListAsync(directoryPath, "*.md");
-        artifacts.AddRange(files.Select(file => CreateArtifact(repository, file, type, family)));
+        artifacts.AddRange(files
+            .Where(file => ShouldIncludeDirectoryArtifact(family, Path.GetFileName(file)))
+            .Select(file => CreateArtifact(repository, file, type, family)));
     }
 
     private static Artifact CreateArtifact(Repository repository, string fullPath, ArtifactType type, ArtifactFamily family)
     {
         return new Artifact
         {
-            RelativePath = ToRepositoryRelativePath(repository, fullPath),
+            RelativePath = ArtifactPath.ToRepositoryRelativePath(repository, fullPath),
             Name = Path.GetFileName(fullPath),
             Type = type,
             Family = family,
             VersionKind = DetermineVersionKind(family, Path.GetFileName(fullPath))
+        };
+    }
+
+    private static bool ShouldIncludeDirectoryArtifact(ArtifactFamily family, string fileName)
+    {
+        return family switch
+        {
+            ArtifactFamily.Handoff => IsCurrentOrHistorical(fileName, "handoff"),
+            ArtifactFamily.Decision => IsCurrentOrHistorical(fileName, "decisions"),
+            _ => true
         };
     }
 
@@ -109,35 +121,26 @@ public sealed class ArtifactService(IArtifactStore artifactStore) : IArtifactSer
         return ArtifactVersionKind.Current;
     }
 
-    private static string ResolveRepositoryPath(Repository repository, string relativePath)
+    private static bool IsCurrentOrHistorical(string fileName, string baseName)
     {
-        if (Path.IsPathRooted(relativePath))
+        if (string.Equals(fileName, $"{baseName}.md", StringComparison.OrdinalIgnoreCase))
         {
-            throw new ArgumentException("Artifact path must be repository-relative.", nameof(relativePath));
+            return true;
         }
 
-        var repositoryRoot = Path.GetFullPath(repository.Path);
-        var resolvedPath = Path.GetFullPath(Path.Combine(repositoryRoot, relativePath));
-        var rootWithSeparator = repositoryRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var prefix = $"{baseName}.";
+        const string suffix = ".md";
 
-        if (!resolvedPath.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(resolvedPath, repositoryRoot, StringComparison.OrdinalIgnoreCase))
+        if (!fileName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
+            !fileName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
         {
-            throw new ArgumentException("Artifact path must stay within the repository root.", nameof(relativePath));
+            return false;
         }
 
-        return resolvedPath;
-    }
-
-    private static string ToRepositoryRelativePath(Repository repository, string fullPath)
-    {
-        return Path.GetRelativePath(Path.GetFullPath(repository.Path), Path.GetFullPath(fullPath))
-            .Replace(Path.DirectorySeparatorChar, '/')
-            .Replace(Path.AltDirectorySeparatorChar, '/');
-    }
-
-    private static string CombineRelative(params string[] parts)
-    {
-        return string.Join('/', parts);
+        var sequenceText = fileName[prefix.Length..^suffix.Length];
+        return sequenceText.Length == 4 &&
+            sequenceText.All(char.IsDigit) &&
+            int.TryParse(sequenceText, out var sequence) &&
+            sequence > 0;
     }
 }

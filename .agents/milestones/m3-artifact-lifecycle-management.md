@@ -88,51 +88,51 @@ Epic 1 rotation does not replace, truncate, clear, or rewrite the current artifa
 
 ## Backend Tasks
 
-- [ ] Extend artifact discovery to classify `Current` and `Historical`.
-- [ ] Implement `GetCurrentHandoffAsync`.
-- [ ] Implement `GetCurrentDecisionsAsync`.
-- [ ] Implement `IArtifactRotationService`.
-- [ ] Add backend rotation endpoints for current handoff and current decisions.
-- [ ] Preserve historical file identity.
-- [ ] Reject unsupported rotation requests.
-- [ ] Reject overwrite attempts.
-- [ ] Refresh repository artifact inventory after rotation.
+- [x] Extend artifact discovery to classify `Current` and `Historical`.
+- [x] Implement `GetCurrentHandoffAsync`.
+- [x] Implement `GetCurrentDecisionsAsync`.
+- [x] Implement `IArtifactRotationService`.
+- [x] Add backend rotation endpoints for current handoff and current decisions.
+- [x] Preserve historical file identity.
+- [x] Reject unsupported rotation requests.
+- [x] Reject overwrite attempts.
+- [x] Refresh repository artifact inventory after rotation.
 
 ## UI Tasks
 
-- [ ] Split handoffs into:
-   - [ ] Current Handoff
-   - [ ] Historical Handoffs
-- [ ] Split decisions into:
-   - [ ] Current Decisions
-   - [ ] Historical Decisions
-- [ ] Prominently show current handoff and current decisions status.
-- [ ] Allow browsing historical handoffs and decisions.
-- [ ] Add rotate action for current handoff and current decisions only.
-- [ ] Refresh explorer and viewer state after rotation.
+- [x] Split handoffs into:
+   - [x] Current Handoff
+   - [x] Historical Handoffs
+- [x] Split decisions into:
+   - [x] Current Decisions
+   - [x] Historical Decisions
+- [x] Prominently show current handoff and current decisions status.
+- [x] Allow browsing historical handoffs and decisions.
+- [x] Add rotate action for current handoff and current decisions only.
+- [x] Refresh explorer and viewer state after rotation.
 
 ## Tests
 
-- [ ] `handoff.md` classifies as current.
-- [ ] `handoff.0001.md` classifies as historical.
-- [ ] `decisions.md` classifies as current.
-- [ ] `decisions.0001.md` classifies as historical.
-- [ ] Current handoff API returns `handoff.md` when present.
-- [ ] Current decisions API returns `decisions.md` when present.
-- [ ] First handoff rotation creates `handoff.0001.md`.
-- [ ] Second handoff rotation creates `handoff.0002.md`.
-- [ ] First decision rotation creates `decisions.0001.md`.
-- [ ] Second decision rotation creates `decisions.0002.md`.
-- [ ] Existing historical files remain unchanged.
-- [ ] Rotation fails when target exists.
-- [ ] Rotation fails for unsupported artifact families.
-- [ ] Refresh after rotation updates artifact inventory.
+- [x] `handoff.md` classifies as current.
+- [x] `handoff.0001.md` classifies as historical.
+- [x] `decisions.md` classifies as current.
+- [x] `decisions.0001.md` classifies as historical.
+- [x] Current handoff API returns `handoff.md` when present.
+- [x] Current decisions API returns `decisions.md` when present.
+- [x] First handoff rotation creates `handoff.0001.md`.
+- [x] Second handoff rotation creates `handoff.0002.md`.
+- [x] First decision rotation creates `decisions.0001.md`.
+- [x] Second decision rotation creates `decisions.0002.md`.
+- [x] Existing historical files remain unchanged.
+- [x] Rotation fails when target exists.
+- [x] Rotation fails for unsupported artifact families.
+- [x] Refresh after rotation updates artifact inventory.
 
 ## Acceptance Criteria
 
-- [ ] Current handoff and current decisions resolve consistently.
-- [ ] Historical handoffs and decisions are browsable.
-- [ ] Handoff rotation preserves historical files.
-- [ ] Decision rotation preserves historical files.
-- [ ] Historical numbering remains stable.
-- [ ] Rotation tests pass.
+- [x] Current handoff and current decisions resolve consistently.
+- [x] Historical handoffs and decisions are browsable.
+- [x] Handoff rotation preserves historical files.
+- [x] Decision rotation preserves historical files.
+- [x] Historical numbering remains stable.
+- [x] Rotation tests pass.
