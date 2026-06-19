@@ -6,39 +6,39 @@ Establish application skeleton, service boundaries, persistence abstractions, IP
 
 ## Implementation Tasks
 
-- [ ] Create solution layout:
-   - [ ] `src/CommandCenter.UI`
-   - [ ] `src/CommandCenter.Shell`
-   - [ ] `src/CommandCenter.Backend`
-   - [ ] `tests/CommandCenter.Backend.Tests`
-   - [ ] `docs/architecture.md`
-- [ ] Scaffold React/TypeScript UI.
-- [ ] Scaffold Tauri shell and wire React to Tauri invoke calls.
-- [ ] Scaffold .NET backend sidecar.
-- [ ] Add backend dependency injection and service registration.
-- [ ] Define `IRepositoryService`, `IArtifactService`, `IArtifactStore`, `IRepositoryProjectionService`, and `IApplicationConfigurationStore`.
-- [ ] Implement `MemoryArtifactStore`.
-- [ ] Implement `FileSystemArtifactStore`.
-- [ ] Implement application configuration load/save with empty repository list support.
-- [ ] Add backend ping endpoint returning `Pong`.
-- [ ] Add Tauri command that calls backend ping.
-- [ ] Add UI button labeled `Ping Backend` and display the returned `Pong`.
-- [ ] Document architecture boundaries, service ownership, persistence strategy, artifact store philosophy, manual refresh policy, and the deferred repository snapshot boundary in `docs/architecture.md`.
+- [x] Create solution layout:
+   - [x] `src/CommandCenter.UI`
+   - [x] `src/CommandCenter.Shell`
+   - [x] `src/CommandCenter.Backend`
+   - [x] `tests/CommandCenter.Backend.Tests`
+   - [x] `docs/architecture.md`
+- [x] Scaffold React/TypeScript UI.
+- [x] Scaffold Tauri shell and wire React to Tauri invoke calls.
+- [x] Scaffold .NET backend sidecar.
+- [x] Add backend dependency injection and service registration.
+- [x] Define `IRepositoryService`, `IArtifactService`, `IArtifactStore`, `IRepositoryProjectionService`, and `IApplicationConfigurationStore`.
+- [x] Implement `MemoryArtifactStore`.
+- [x] Implement `FileSystemArtifactStore`.
+- [x] Implement application configuration load/save with empty repository list support.
+- [x] Add backend ping endpoint returning `Pong`.
+- [x] Add Tauri command that calls backend ping.
+- [x] Add UI button labeled `Ping Backend` and display the returned `Pong`.
+- [x] Document architecture boundaries, service ownership, persistence strategy, artifact store philosophy, manual refresh policy, and the deferred repository snapshot boundary in `docs/architecture.md`.
 
 ## Tests
 
-- [ ] Memory store write, read, exists, delete.
-- [ ] Filesystem store write, read, exists, delete.
-- [ ] Filesystem store persistence after new store instance.
-- [ ] Configuration write, reload, and read.
-- [ ] Ping endpoint returns `Pong`.
+- [x] Memory store write, read, exists, delete.
+- [x] Filesystem store write, read, exists, delete.
+- [x] Filesystem store persistence after new store instance.
+- [x] Configuration write, reload, and read.
+- [x] Ping endpoint returns `Pong`.
 
 ## Acceptance Criteria
 
 - [ ] Application launches.
 - [ ] React can call Tauri.
-- [ ] Tauri can call .NET backend.
+- [x] Tauri can call .NET backend.
 - [ ] UI displays `Pong` from the backend.
-- [ ] Artifact stores pass tests.
-- [ ] Configuration persistence passes tests.
-- [ ] Architecture documentation exists.
+- [x] Artifact stores pass tests.
+- [x] Configuration persistence passes tests.
+- [x] Architecture documentation exists.

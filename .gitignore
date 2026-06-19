@@ -296,6 +296,10 @@ FakesAssemblies/
 node_modules/
 dist/
 
+# Rust/Tauri generated output
+src/CommandCenter.Shell/target/
+src/CommandCenter.Shell/gen/
+
 # Compass TypeScript monorepo packages are source, not NuGet restore packages.
 !/packages/
 !/packages/**

@@ -1,0 +1,78 @@
+.shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background: #f5f7f9;
+  color: #1f2933;
+}
+
+.workspace {
+  width: min(560px, 100%);
+  display: grid;
+  gap: 24px;
+  padding: 32px;
+  border: 1px solid #d7dee6;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 12px 32px rgba(31, 41, 51, 0.08);
+}
+
+.workspace header {
+  display: grid;
+  gap: 4px;
+}
+
+.workspace p {
+  margin: 0;
+  color: #52616f;
+  font-size: 0.875rem;
+}
+
+.workspace h1 {
+  margin: 0;
+  font-size: 1.75rem;
+  line-height: 1.2;
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid #e1e7ee;
+  border-radius: 6px;
+  background: #f9fbfc;
+}
+
+.status-row span {
+  color: #52616f;
+}
+
+.status-row strong {
+  min-width: 96px;
+  text-align: right;
+}
+
+.primary-action {
+  justify-self: start;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid #1f2933;
+  border-radius: 6px;
+  color: #ffffff;
+  background: #1f2933;
+  font: inherit;
+  cursor: pointer;
+}
+
+.primary-action:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.primary-action:focus-visible {
+  outline: 3px solid #9cc9ff;
+  outline-offset: 2px;
+}

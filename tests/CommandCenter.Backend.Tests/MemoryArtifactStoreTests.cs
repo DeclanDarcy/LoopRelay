@@ -1,0 +1,23 @@
+using CommandCenter.Backend.Artifacts;
+
+namespace CommandCenter.Backend.Tests;
+
+public sealed class MemoryArtifactStoreTests
+{
+    [Fact]
+    public async Task WriteReadExistsAndDelete()
+    {
+        var store = new MemoryArtifactStore();
+        var path = Path.Combine("repo", ".agents", "plan.md");
+
+        await store.WriteAsync(path, "plan");
+
+        Assert.True(await store.ExistsAsync(path));
+        Assert.Equal("plan", await store.ReadAsync(path));
+
+        await store.DeleteAsync(path);
+
+        Assert.False(await store.ExistsAsync(path));
+        Assert.Null(await store.ReadAsync(path));
+    }
+}

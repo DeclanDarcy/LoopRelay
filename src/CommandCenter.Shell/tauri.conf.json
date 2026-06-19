@@ -1,0 +1,28 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Command Center",
+  "version": "0.1.0",
+  "identifier": "com.kernritsu.commandcenter",
+  "build": {
+    "beforeDevCommand": "npm --prefix ../CommandCenter.UI run dev",
+    "beforeBuildCommand": "npm --prefix ../CommandCenter.UI run build",
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../CommandCenter.UI/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Command Center",
+        "width": 1200,
+        "height": 800
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": false,
+    "targets": "all"
+  }
+}
