@@ -36,14 +36,14 @@ At M2, artifacts are markdown files with metadata. Do not derive execution meani
 
 ## Backend Tasks
 
-- [ ] Implement `ArtifactType`.
-- [ ] Implement `ArtifactFamily`.
-- [ ] Implement `ArtifactVersionKind`.
-- [ ] Implement `Artifact` with `RelativePath`.
-- [ ] Implement artifact discovery by category.
-- [ ] Implement artifact load by relative path.
-- [ ] Implement artifact save by relative path.
-- [ ] Ensure all file operations are repository-root safe.
+- [x] Implement `ArtifactType`.
+- [x] Implement `ArtifactFamily`.
+- [x] Implement `ArtifactVersionKind`.
+- [x] Implement `Artifact` with `RelativePath`.
+- [x] Implement artifact discovery by category.
+- [x] Implement artifact load by relative path.
+- [x] Implement artifact save by relative path.
+- [x] Ensure all file operations are repository-root safe.
 - [ ] Add refresh operation that rediscovers artifacts from disk.
 - [ ] Cache artifact inventories in memory for responsiveness.
 - [ ] Rebuild cache from filesystem on refresh or restart.
@@ -67,17 +67,17 @@ At M2, artifacts are markdown files with metadata. Do not derive execution meani
 
 ## Tests
 
-- [ ] Plan discovery.
-- [ ] Operational context discovery.
-- [ ] Milestone discovery.
-- [ ] Handoff discovery.
-- [ ] Decision discovery.
-- [ ] Missing artifacts do not fail discovery.
-- [ ] Missing directories do not fail discovery.
-- [ ] Artifact content loads correctly.
-- [ ] Artifact save persists to disk.
+- [x] Plan discovery.
+- [x] Operational context discovery.
+- [x] Milestone discovery.
+- [x] Handoff discovery.
+- [x] Decision discovery.
+- [x] Missing artifacts do not fail discovery.
+- [x] Missing directories do not fail discovery.
+- [x] Artifact content loads correctly.
+- [x] Artifact save persists to disk.
 - [ ] Refresh discovers newly added files.
-- [ ] Relative path traversal attempts are rejected.
+- [x] Relative path traversal attempts are rejected.
 
 ## Acceptance Criteria
 

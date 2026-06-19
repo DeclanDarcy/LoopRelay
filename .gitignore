@@ -76,6 +76,8 @@ project.fragment.lock.json
 artifacts/
 !schemas/artifacts/
 !schemas/artifacts/**
+!src/CommandCenter.Backend/Artifacts/
+!src/CommandCenter.Backend/Artifacts/**
 **/debugging/
 **/performance-results/
 **/reports/
