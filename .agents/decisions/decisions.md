@@ -2,20 +2,19 @@
 
 ## Newly Authorized Decisions
 
-- `ArtifactInventory` is the correct authority for artifact state and should remain the single source feeding `RepositoryWorkspaceProjection`.
-- The canonical application boundary for workspace page state is `RepositoryWorkspaceProjection`, not raw service or endpoint composition in React.
-- Restart should rebuild the artifact inventory cache from the filesystem, and explicit refresh should replace the cache from the filesystem rather than mutating it incrementally.
-- `RepositoryWorkspaceProjection.Readiness` is structurally present but semantically provisional until `PlanningService` becomes authoritative in M4.
-- M2 is approximately 80-85% complete: backend discovery, classification, load, save, root-safe resolution, artifact inventory, workspace projection, and refresh are complete; workspace UI, artifact editor UI, and manual certification remain.
-- Next M2 work should be split into focused slices: Tauri command bridge first, workspace projection rendering second, read-only artifact viewer third, and editing/saving fourth.
-- `GET /workspace` should remain the primary workspace endpoint for page composition.
-- `GET /artifacts` should be minimized for UI page composition and treated mainly as support for content loading, saving, future rotation operations, or narrower artifact-specific workflows.
-- The React workspace must consume projections faithfully and must not accumulate independent artifact-state logic that competes with `RepositoryWorkspaceProjection`.
-- Early current/historical classification and centralized inventory generation are accepted as M3 risk reduction because they shrink M3 to current resolution, rotation, and historical numbering rather than inventory redesign.
-
-## Current Epic Status
-
-- M0 is certified.
-- M1 is functionally complete and awaiting full desktop certification.
-- M2 backend is complete or nearly complete, with UI integration still remaining.
-- Epic 1 is tracking cleanly; the largest current M2 risk is preserving projection authority during React workspace implementation.
+- M2 implementation scope is complete.
+- M2 automated verification is complete.
+- M2 manual certification remains pending.
+- `RepositoryWorkspaceProjection` remains the correct UI page contract for repository workspace state.
+- The enforced architecture remains: filesystem authority, `ArtifactService`, `ArtifactInventory`, `RepositoryWorkspaceProjection`, Tauri bridge, then React.
+- React must continue not owning artifact discovery, artifact classification, availability derivation, readiness derivation, or path resolution.
+- Lightweight markdown previewing is sufficient for Epic 1 because the milestone objective is repository artifact management, not a rich markdown authoring platform.
+- Future support for tables, task lists, syntax highlighting, or embedded diagrams should be handled independently if requirements emerge.
+- Manual refresh should continue rebuilding state from the filesystem into projections instead of mutating existing UI state.
+- M2 certification should verify desktop launch, repository registration, workspace opening, artifact viewing, artifact editing, artifact saving, refresh, and externally added or modified artifacts.
+- M3 is ready to start.
+- M3 should be sliced as backend rotation service first, rotation endpoints second, inventory refresh integration third, and UI rotation actions last.
+- M3 rotation must reuse `ArtifactInventory` as the only source for current and historical handoff and decision classification.
+- Rotation should update filesystem state and then rebuild inventory rather than adding a second rotation-specific discovery path.
+- Current epic status is M0 certified, M1 awaiting manual certification, M2 awaiting manual certification, and M3 ready to start.
+- The largest remaining Epic 1 architectural risk is preserving the `ArtifactInventory` to `RepositoryWorkspaceProjection` single-source-of-truth model as rotation, planning, and readiness are added.

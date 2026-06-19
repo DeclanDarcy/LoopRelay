@@ -1,14 +1,35 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import './App.css'
 
 type RepositoryAvailability = 'Available' | 'Missing' | 'AccessDenied'
 type ExecutionReadiness = 'MissingPlan' | 'MissingMilestones' | 'Ready'
+type ArtifactType = 'Plan' | 'OperationalContext' | 'Milestone' | 'Handoff' | 'Decision'
+type ArtifactFamily = ArtifactType
+type ArtifactVersionKind = 'Current' | 'Historical'
 
 type Repository = {
   id: string
   name: string
   path: string
+}
+
+type Artifact = {
+  relativePath: string
+  name: string
+  type: ArtifactType
+  family: ArtifactFamily
+  versionKind: ArtifactVersionKind
+}
+
+type ArtifactInventory = {
+  plan: Artifact | null
+  operationalContext: Artifact | null
+  milestones: Artifact[]
+  currentHandoff: Artifact | null
+  historicalHandoffs: Artifact[]
+  currentDecisions: Artifact | null
+  historicalDecisions: Artifact[]
 }
 
 type RepositoryDashboardProjection = {
@@ -20,22 +41,170 @@ type RepositoryDashboardProjection = {
   hasCurrentDecisions: boolean
 }
 
+type RepositoryWorkspaceProjection = {
+  repository: Repository
+  availability: RepositoryAvailability
+  readiness: ExecutionReadiness
+  artifactInventory: ArtifactInventory
+  milestoneCount: number
+  hasPlan: boolean
+  hasOperationalContext: boolean
+  hasCurrentHandoff: boolean
+  hasCurrentDecisions: boolean
+}
+
+type ArtifactCategory = {
+  label: string
+  missingLabel: string
+  artifacts: Artifact[]
+}
+
 const availabilityLabels: Record<RepositoryAvailability, string> = {
   Available: 'Available',
   Missing: 'Missing',
   AccessDenied: 'Access denied',
 }
 
+const readinessLabels: Record<ExecutionReadiness, string> = {
+  MissingPlan: 'Missing plan',
+  MissingMilestones: 'Missing milestones',
+  Ready: 'Ready',
+}
+
 function formatError(error: unknown) {
   return error instanceof Error ? error.message : String(error)
+}
+
+function getArtifactCategories(inventory: ArtifactInventory): ArtifactCategory[] {
+  return [
+    {
+      label: 'Plan',
+      missingLabel: 'plan.md is missing.',
+      artifacts: inventory.plan ? [inventory.plan] : [],
+    },
+    {
+      label: 'Operational Context',
+      missingLabel: 'operational_context.md is missing.',
+      artifacts: inventory.operationalContext ? [inventory.operationalContext] : [],
+    },
+    {
+      label: 'Milestones',
+      missingLabel: 'No milestone files found.',
+      artifacts: inventory.milestones,
+    },
+    {
+      label: 'Handoffs',
+      missingLabel: 'No handoff files found.',
+      artifacts: [
+        ...(inventory.currentHandoff ? [inventory.currentHandoff] : []),
+        ...inventory.historicalHandoffs,
+      ],
+    },
+    {
+      label: 'Decisions',
+      missingLabel: 'No decision files found.',
+      artifacts: [
+        ...(inventory.currentDecisions ? [inventory.currentDecisions] : []),
+        ...inventory.historicalDecisions,
+      ],
+    },
+  ]
+}
+
+function renderMarkdown(content: string) {
+  const nodes: ReactNode[] = []
+  const lines = content.split(/\r?\n/)
+  let codeLines: string[] = []
+  let listItems: string[] = []
+  let inCode = false
+
+  function flushList(keyPrefix: string) {
+    if (listItems.length === 0) {
+      return
+    }
+
+    nodes.push(
+      <ul key={`${keyPrefix}-list-${nodes.length}`}>
+        {listItems.map((item, index) => (
+          <li key={`${keyPrefix}-item-${index}`}>{item}</li>
+        ))}
+      </ul>,
+    )
+    listItems = []
+  }
+
+  lines.forEach((line, index) => {
+    if (line.trim().startsWith('```')) {
+      if (inCode) {
+        nodes.push(
+          <pre key={`code-${index}`}>
+            <code>{codeLines.join('\n')}</code>
+          </pre>,
+        )
+        codeLines = []
+        inCode = false
+      } else {
+        flushList(`before-code-${index}`)
+        inCode = true
+      }
+      return
+    }
+
+    if (inCode) {
+      codeLines.push(line)
+      return
+    }
+
+    const trimmed = line.trim()
+
+    if (!trimmed) {
+      flushList(`blank-${index}`)
+      return
+    }
+
+    if (trimmed.startsWith('- ')) {
+      listItems.push(trimmed.slice(2))
+      return
+    }
+
+    flushList(`line-${index}`)
+
+    if (trimmed.startsWith('### ')) {
+      nodes.push(<h4 key={`h4-${index}`}>{trimmed.slice(4)}</h4>)
+    } else if (trimmed.startsWith('## ')) {
+      nodes.push(<h3 key={`h3-${index}`}>{trimmed.slice(3)}</h3>)
+    } else if (trimmed.startsWith('# ')) {
+      nodes.push(<h2 key={`h2-${index}`}>{trimmed.slice(2)}</h2>)
+    } else {
+      nodes.push(<p key={`p-${index}`}>{trimmed}</p>)
+    }
+  })
+
+  if (inCode) {
+    nodes.push(
+      <pre key="code-tail">
+        <code>{codeLines.join('\n')}</code>
+      </pre>,
+    )
+  }
+
+  flushList('tail')
+  return nodes
 }
 
 function App() {
   const [repositories, setRepositories] = useState<RepositoryDashboardProjection[]>([])
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<string | null>(null)
+  const [workspace, setWorkspace] = useState<RepositoryWorkspaceProjection | null>(null)
+  const [selectedArtifactPath, setSelectedArtifactPath] = useState<string | null>(null)
+  const [artifactContent, setArtifactContent] = useState('')
+  const [draftContent, setDraftContent] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(false)
+  const [isArtifactLoading, setIsArtifactLoading] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const [isAdding, setIsAdding] = useState(false)
   const [removingRepositoryId, setRemovingRepositoryId] = useState<string | null>(null)
 
@@ -46,6 +215,49 @@ function App() {
       null,
     [repositories, selectedRepositoryId],
   )
+
+  const selectedArtifact = useMemo(() => {
+    if (!workspace || !selectedArtifactPath) {
+      return null
+    }
+
+    return (
+      getArtifactCategories(workspace.artifactInventory)
+        .flatMap((category) => category.artifacts)
+        .find((artifact) => artifact.relativePath === selectedArtifactPath) ?? null
+    )
+  }, [selectedArtifactPath, workspace])
+
+  const hasDraftChanges = artifactContent !== draftContent
+
+  const loadWorkspace = useCallback(async (repositoryId: string) => {
+    setIsWorkspaceLoading(true)
+    setError(null)
+    try {
+      const nextWorkspace = await invoke<RepositoryWorkspaceProjection>(
+        'get_repository_workspace',
+        { repositoryId },
+      )
+      setWorkspace(nextWorkspace)
+      setSelectedArtifactPath((currentPath) => {
+        const artifacts = getArtifactCategories(nextWorkspace.artifactInventory).flatMap(
+          (category) => category.artifacts,
+        )
+
+        if (currentPath && artifacts.some((artifact) => artifact.relativePath === currentPath)) {
+          return currentPath
+        }
+
+        return artifacts[0]?.relativePath ?? null
+      })
+    } catch (loadError) {
+      setWorkspace(null)
+      setSelectedArtifactPath(null)
+      setError(formatError(loadError))
+    } finally {
+      setIsWorkspaceLoading(false)
+    }
+  }, [])
 
   const loadRepositories = useCallback(async () => {
     setIsLoading(true)
@@ -112,11 +324,61 @@ function App() {
     try {
       await invoke('remove_repository', { repositoryId: repository.id })
       setMessage('Repository registration removed.')
+      setWorkspace(null)
+      setSelectedArtifactPath(null)
       await loadRepositories()
     } catch (removeError) {
       setError(formatError(removeError))
     } finally {
       setRemovingRepositoryId(null)
+    }
+  }
+
+  async function refreshWorkspace() {
+    if (!selectedRepository) {
+      return
+    }
+
+    setIsWorkspaceLoading(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const nextWorkspace = await invoke<RepositoryWorkspaceProjection>(
+        'refresh_repository_workspace',
+        { repositoryId: selectedRepository.repository.id },
+      )
+      setWorkspace(nextWorkspace)
+      setMessage('Workspace refreshed.')
+      await loadRepositories()
+    } catch (refreshError) {
+      setError(formatError(refreshError))
+    } finally {
+      setIsWorkspaceLoading(false)
+    }
+  }
+
+  async function saveArtifact() {
+    if (!selectedRepository || !selectedArtifact) {
+      return
+    }
+
+    setIsSaving(true)
+    setError(null)
+    setMessage(null)
+    try {
+      await invoke('save_artifact_content', {
+        repositoryId: selectedRepository.repository.id,
+        relativePath: selectedArtifact.relativePath,
+        content: draftContent,
+      })
+      setArtifactContent(draftContent)
+      setMessage('Artifact saved.')
+      await loadWorkspace(selectedRepository.repository.id)
+      await loadRepositories()
+    } catch (saveError) {
+      setError(formatError(saveError))
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -127,6 +389,58 @@ function App() {
 
     return () => window.clearTimeout(timeoutId)
   }, [loadRepositories])
+
+  useEffect(() => {
+    if (!selectedRepository) {
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void loadWorkspace(selectedRepository.repository.id)
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [loadWorkspace, selectedRepository])
+
+  useEffect(() => {
+    if (!selectedRepository || !selectedArtifactPath) {
+      return
+    }
+
+    let isCurrent = true
+    const timeoutId = window.setTimeout(() => {
+      setIsArtifactLoading(true)
+      setError(null)
+
+      invoke<string>('load_artifact_content', {
+        repositoryId: selectedRepository.repository.id,
+        relativePath: selectedArtifactPath,
+      })
+        .then((content) => {
+          if (!isCurrent) {
+            return
+          }
+
+          setArtifactContent(content)
+          setDraftContent(content)
+        })
+        .catch((loadError) => {
+          if (isCurrent) {
+            setError(formatError(loadError))
+          }
+        })
+        .finally(() => {
+          if (isCurrent) {
+            setIsArtifactLoading(false)
+          }
+        })
+    }, 0)
+
+    return () => {
+      isCurrent = false
+      window.clearTimeout(timeoutId)
+    }
+  }, [selectedArtifactPath, selectedRepository])
 
   return (
     <main className="app-shell">
@@ -183,6 +497,9 @@ function App() {
                     >
                       {availabilityLabels[entry.availability]}
                     </span>
+                    <span className={`readiness readiness-${entry.readiness.toLowerCase()}`}>
+                      {readinessLabels[entry.readiness]}
+                    </span>
                   </button>
                 )
               })}
@@ -192,7 +509,17 @@ function App() {
 
         <section className="repository-details" aria-label="Repository details">
           <div className="section-heading">
-            <h2>Details</h2>
+            <h2>Workspace</h2>
+            <div className="section-actions">
+              <button
+                type="button"
+                className="secondary-action"
+                onClick={() => void refreshWorkspace()}
+                disabled={!selectedRepository || isWorkspaceLoading}
+              >
+                {isWorkspaceLoading ? 'Refreshing...' : 'Refresh Workspace'}
+              </button>
+            </div>
           </div>
 
           {selectedRepository ? (
@@ -211,18 +538,101 @@ function App() {
 
               <dl className="details-list">
                 <div>
-                  <dt>Name</dt>
-                  <dd>{selectedRepository.repository.name}</dd>
-                </div>
-                <div>
                   <dt>Path</dt>
                   <dd>{selectedRepository.repository.path}</dd>
                 </div>
                 <div>
-                  <dt>Availability</dt>
-                  <dd>{availabilityLabels[selectedRepository.availability]}</dd>
+                  <dt>Readiness</dt>
+                  <dd>{readinessLabels[workspace?.readiness ?? selectedRepository.readiness]}</dd>
+                </div>
+                <div>
+                  <dt>Milestones</dt>
+                  <dd>{workspace?.milestoneCount ?? selectedRepository.milestoneCount}</dd>
                 </div>
               </dl>
+
+              <div className="summary-grid">
+                <span>Plan: {workspace?.hasPlan ? 'Present' : 'Missing'}</span>
+                <span>
+                  Operational context:{' '}
+                  {workspace?.hasOperationalContext ? 'Present' : 'Missing'}
+                </span>
+                <span>Handoff: {workspace?.hasCurrentHandoff ? 'Present' : 'Missing'}</span>
+                <span>Decisions: {workspace?.hasCurrentDecisions ? 'Present' : 'Missing'}</span>
+              </div>
+
+              {workspace ? (
+                <div className="artifact-workspace">
+                  <section className="artifact-explorer" aria-label="Artifact explorer">
+                    {getArtifactCategories(workspace.artifactInventory).map((category) => (
+                      <div className="artifact-category" key={category.label}>
+                        <h4>{category.label}</h4>
+                        {category.artifacts.length === 0 ? (
+                          <p className="missing-artifact">{category.missingLabel}</p>
+                        ) : (
+                          <div className="artifact-list">
+                            {category.artifacts.map((artifact) => (
+                              <button
+                                type="button"
+                                key={artifact.relativePath}
+                                className={`artifact-item${
+                                  artifact.relativePath === selectedArtifactPath ? ' selected' : ''
+                                }`}
+                                onClick={() => setSelectedArtifactPath(artifact.relativePath)}
+                              >
+                                <span>{artifact.name}</span>
+                                <span>{artifact.versionKind}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </section>
+
+                  <section className="artifact-panel" aria-label="Artifact content">
+                    {selectedArtifact ? (
+                      <>
+                        <div className="artifact-panel-header">
+                          <div>
+                            <p className="eyebrow">{selectedArtifact.family}</p>
+                            <h4>{selectedArtifact.name}</h4>
+                            <span>{selectedArtifact.relativePath}</span>
+                          </div>
+                          <button
+                            type="button"
+                            className="primary-action"
+                            onClick={() => void saveArtifact()}
+                            disabled={isSaving || isArtifactLoading || !hasDraftChanges}
+                          >
+                            {isSaving ? 'Saving...' : 'Save'}
+                          </button>
+                        </div>
+                        <textarea
+                          className="artifact-editor"
+                          value={draftContent}
+                          onChange={(event) => setDraftContent(event.target.value)}
+                          spellCheck={false}
+                          disabled={isArtifactLoading}
+                        />
+                        <div className="markdown-preview">
+                          {isArtifactLoading ? (
+                            <p>Loading artifact...</p>
+                          ) : draftContent.trim() ? (
+                            renderMarkdown(draftContent)
+                          ) : (
+                            <p>Empty artifact.</p>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <p className="empty-state">No artifact selected.</p>
+                    )}
+                  </section>
+                </div>
+              ) : (
+                <p className="empty-state">Loading workspace...</p>
+              )}
 
               <div className="details-actions">
                 <button

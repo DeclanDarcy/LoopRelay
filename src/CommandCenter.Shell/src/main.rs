@@ -34,10 +34,54 @@ struct RepositoryDashboardProjection {
     has_current_decisions: bool,
 }
 
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Artifact {
+    relative_path: String,
+    name: String,
+    #[serde(rename = "type")]
+    artifact_type: String,
+    family: String,
+    version_kind: String,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ArtifactInventory {
+    plan: Option<Artifact>,
+    operational_context: Option<Artifact>,
+    milestones: Vec<Artifact>,
+    current_handoff: Option<Artifact>,
+    historical_handoffs: Vec<Artifact>,
+    current_decisions: Option<Artifact>,
+    historical_decisions: Vec<Artifact>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RepositoryWorkspaceProjection {
+    repository: Repository,
+    availability: String,
+    readiness: String,
+    artifact_inventory: ArtifactInventory,
+    milestone_count: i32,
+    has_plan: bool,
+    has_operational_context: bool,
+    has_current_handoff: bool,
+    has_current_decisions: bool,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct RegisterRepositoryRequest {
     path: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SaveArtifactContentRequest {
+    relative_path: String,
+    content: String,
 }
 
 #[derive(Deserialize)]
@@ -115,6 +159,64 @@ fn remove_repository(repository_id: String) -> Result<(), String> {
     let client = reqwest::blocking::Client::new();
     client
         .delete(format!("{BACKEND_URL}/api/repositories/{repository_id}"))
+        .send()
+        .map_err(|error| error.to_string())?
+        .error_for_status()
+        .map_err(|error| error.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+fn get_repository_workspace(repository_id: String) -> Result<RepositoryWorkspaceProjection, String> {
+    reqwest::blocking::get(format!("{BACKEND_URL}/api/repositories/{repository_id}/workspace"))
+        .map_err(|error| error.to_string())?
+        .error_for_status()
+        .map_err(|error| error.to_string())?
+        .json()
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn refresh_repository_workspace(repository_id: String) -> Result<RepositoryWorkspaceProjection, String> {
+    let client = reqwest::blocking::Client::new();
+    client
+        .post(format!("{BACKEND_URL}/api/repositories/{repository_id}/refresh"))
+        .send()
+        .map_err(|error| error.to_string())?
+        .error_for_status()
+        .map_err(|error| error.to_string())?
+        .json()
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn load_artifact_content(repository_id: String, relative_path: String) -> Result<String, String> {
+    let client = reqwest::blocking::Client::new();
+    client
+        .get(format!("{BACKEND_URL}/api/repositories/{repository_id}/artifacts/content"))
+        .query(&[("relativePath", relative_path)])
+        .send()
+        .map_err(|error| error.to_string())?
+        .error_for_status()
+        .map_err(|error| error.to_string())?
+        .text()
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn save_artifact_content(
+    repository_id: String,
+    relative_path: String,
+    content: String,
+) -> Result<(), String> {
+    let client = reqwest::blocking::Client::new();
+    client
+        .put(format!("{BACKEND_URL}/api/repositories/{repository_id}/artifacts/content"))
+        .json(&SaveArtifactContentRequest {
+            relative_path,
+            content,
+        })
         .send()
         .map_err(|error| error.to_string())?
         .error_for_status()
@@ -231,7 +333,11 @@ fn main() {
             select_repository_directory,
             list_repositories,
             register_repository,
-            remove_repository
+            remove_repository,
+            get_repository_workspace,
+            refresh_repository_workspace,
+            load_artifact_content,
+            save_artifact_content
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Command Center shell");

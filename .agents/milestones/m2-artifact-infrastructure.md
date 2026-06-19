@@ -47,23 +47,23 @@ At M2, artifacts are markdown files with metadata. Do not derive execution meani
 - [x] Add refresh operation that rediscovers artifacts from disk.
 - [x] Cache artifact inventories in memory for responsiveness.
 - [x] Rebuild cache from filesystem on refresh or restart.
-- [ ] Keep refresh manual; do not add `FileSystemWatcher` or background polling.
+- [x] Keep refresh manual; do not add `FileSystemWatcher` or background polling.
 
 ## UI Tasks
 
-- [ ] Add artifact explorer to repository workspace.
-- [ ] Display categories:
-   - [ ] Plan
-   - [ ] Operational Context
-   - [ ] Milestones
-   - [ ] Handoffs
-   - [ ] Decisions
-- [ ] Display missing static artifacts explicitly.
-- [ ] Display empty dynamic categories explicitly.
-- [ ] Load selected artifact content.
-- [ ] Render markdown content.
-- [ ] Add direct edit and save flow for markdown content.
-- [ ] Add refresh action.
+- [x] Add artifact explorer to repository workspace.
+- [x] Display categories:
+   - [x] Plan
+   - [x] Operational Context
+   - [x] Milestones
+   - [x] Handoffs
+   - [x] Decisions
+- [x] Display missing static artifacts explicitly.
+- [x] Display empty dynamic categories explicitly.
+- [x] Load selected artifact content.
+- [x] Render markdown content.
+- [x] Add direct edit and save flow for markdown content.
+- [x] Add refresh action.
 
 ## Tests
 
@@ -81,9 +81,9 @@ At M2, artifacts are markdown files with metadata. Do not derive execution meani
 
 ## Acceptance Criteria
 
-- [ ] Repository artifacts are automatically discovered.
-- [ ] Artifact inventory is displayed in the repository workspace.
-- [ ] Artifact markdown content is viewable.
-- [ ] Artifact markdown content is editable and saveable.
-- [ ] Saved changes persist after reload.
-- [ ] Refresh updates artifact inventory without application restart.
+- [x] Repository artifacts are automatically discovered.
+- [x] Artifact inventory is displayed in the repository workspace.
+- [x] Artifact markdown content is viewable.
+- [x] Artifact markdown content is editable and saveable.
+- [x] Saved changes persist after reload.
+- [x] Refresh updates artifact inventory without application restart.
