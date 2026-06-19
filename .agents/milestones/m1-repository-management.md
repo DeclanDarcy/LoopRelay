@@ -65,25 +65,25 @@ milestones/
 
 ## Backend Tasks
 
-- [ ] Implement `Repository` model.
-- [ ] Implement `IRepositoryService`.
-- [ ] Persist repositories in application configuration.
-- [ ] Normalize paths for duplicate detection.
-- [ ] Create `.agents/` on successful registration when absent.
-- [ ] Remove registrations without deleting repository files or `.agents`.
-- [ ] Return `RepositoryAvailability` in repository projections.
+- [x] Implement `Repository` model.
+- [x] Implement `IRepositoryService`.
+- [x] Persist repositories in application configuration.
+- [x] Normalize paths for duplicate detection.
+- [x] Create `.agents/` on successful registration when absent.
+- [x] Remove registrations without deleting repository files or `.agents`.
+- [x] Return `RepositoryAvailability` in repository projections.
 
 ## Tests
 
-- [ ] Valid repository registers successfully.
-- [ ] Invalid non-directory path fails.
-- [ ] Directory without `.git` fails.
-- [ ] Duplicate registration fails.
-- [ ] `.agents/` is created when missing.
-- [ ] Existing `.agents/` is not modified.
-- [ ] Registered repositories survive configuration reload.
-- [ ] Removing a repository updates configuration and does not modify repository contents.
-- [ ] Missing registered repository reports `Missing`.
+- [x] Valid repository registers successfully.
+- [x] Invalid non-directory path fails.
+- [x] Directory without `.git` fails.
+- [x] Duplicate registration fails.
+- [x] `.agents/` is created when missing.
+- [x] Existing `.agents/` is not modified.
+- [x] Registered repositories survive configuration reload.
+- [x] Removing a repository updates configuration and does not modify repository contents.
+- [x] Missing registered repository reports `Missing`.
 - [ ] Inaccessible registered repository reports `AccessDenied` when the environment allows that condition to be simulated.
 
 ## Acceptance Criteria

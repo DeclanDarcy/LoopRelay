@@ -2,24 +2,24 @@
 
 ## New State This Slice
 
-- M0 desktop runtime certification is complete.
-- `src/CommandCenter.Shell/src/main.rs` now starts the .NET backend sidecar during Tauri setup, waits for `/api/ping`, exposes `ping_backend`, and stops the backend when the desktop window closes.
-- `src/CommandCenter.Shell/tauri.conf.json` now builds `CommandCenter.Backend` before Tauri dev/build frontend commands so the debug backend executable exists for shell launch.
-- `docs/architecture.md` now states the M0 shell-owned backend start/stop behavior.
-- `.agents/milestones/m0-architecture-ratification.md` now has all acceptance criteria checked.
-- Previous handoff was archived as `.agents/handoffs/handoff.0001.md`.
+- M1 backend repository-management slice is implemented.
+- `RepositoryService` now registers valid Git repositories, normalizes absolute paths, rejects duplicate paths, creates `.agents/` when missing, persists registrations through `ApplicationConfigurationStore`, and removes registrations without deleting repository files.
+- `RegisterRepositoryRequest` was added for backend API registration requests.
+- Backend API now exposes:
+  - `GET /api/repositories`
+  - `POST /api/repositories`
+  - `DELETE /api/repositories/{repositoryId}`
+- `RepositoryProjectionService.GetDashboardAsync()` now returns registered repositories with `RepositoryAvailability` projected as `Available`, `Missing`, or `AccessDenied` where the filesystem allows that classification.
+- `.agents/milestones/m1-repository-management.md` now marks completed backend tasks and completed repository-management tests.
+- Previous handoff was archived as `.agents/handoffs/handoff.0002.md`.
 
 ## Verification
 
-- `dotnet test CommandCenter.slnx` passes: 6 tests.
-- `npm --prefix src/CommandCenter.UI run build` passes.
-- `cargo build` passes in `src/CommandCenter.Shell`.
-- Runtime certification used Vite plus the compiled debug shell executable because `cargo tauri dev` is not installed in this environment.
-- Desktop app launched, React rendered, clicking `Ping Backend` displayed `Pong`.
-- Shell startup spawned `CommandCenter.Backend`; closing the desktop window terminated both shell and backend processes.
+- `dotnet test CommandCenter.slnx` passes: 18 tests.
+- New tests cover successful registration, invalid paths, non-Git directories, duplicate normalized paths, case-difference duplicates, mixed-separator duplicates, `.agents/` creation, preserving existing `.agents/` contents, reload persistence, removal without filesystem deletion, dashboard `Available`, and dashboard `Missing`.
 
 ## Immediate Gaps
 
-- No commit or push was performed in this slice.
-- `cargo tauri dev` remains unavailable unless the Tauri CLI is installed or invoked through another project script.
-- M1 can now start; M0 is no longer the blocker.
+- M1 UI work has not started.
+- `AccessDenied` projection logic exists, but the access-denied test remains unchecked because this environment has not provided a reliable permission-denied directory simulation.
+- Repository workspace/details UI and native directory picker are still open.
