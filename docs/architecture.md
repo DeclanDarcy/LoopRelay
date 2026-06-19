@@ -1,6 +1,6 @@
 # Command Center Architecture
 
-Command Center is split into a React UI, a thin Tauri shell, and a .NET backend sidecar. The backend owns repository and artifact business logic; React owns presentation state; Tauri owns desktop windowing, native dialogs, sidecar lifecycle, and IPC bridging.
+Command Center is split into a React UI, a thin Tauri shell, and a .NET backend sidecar. The backend owns repository and artifact business logic; React owns presentation state; Tauri owns desktop windowing, native dialogs, sidecar lifecycle, and IPC bridging. During M0, the shell starts the backend sidecar on application launch and stops it when the desktop window closes.
 
 ## Filesystem Authority
 

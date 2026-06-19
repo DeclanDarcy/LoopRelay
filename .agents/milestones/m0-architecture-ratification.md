@@ -35,10 +35,10 @@ Establish application skeleton, service boundaries, persistence abstractions, IP
 
 ## Acceptance Criteria
 
-- [ ] Application launches.
-- [ ] React can call Tauri.
+- [x] Application launches.
+- [x] React can call Tauri.
 - [x] Tauri can call .NET backend.
-- [ ] UI displays `Pong` from the backend.
+- [x] UI displays `Pong` from the backend.
 - [x] Artifact stores pass tests.
 - [x] Configuration persistence passes tests.
 - [x] Architecture documentation exists.
