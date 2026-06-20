@@ -36,17 +36,17 @@ Cycle 3:
 
 Verify after each cycle:
 
-- [ ] Architecture remains present.
-- [ ] Constraints remain present.
-- [ ] Stable decisions remain present.
-- [ ] Decision rationale remains present.
-- [ ] Unresolved questions remain visible.
-- [ ] Resolved questions compress appropriately.
-- [ ] Active risks remain visible.
-- [ ] Retired risks do not accumulate indefinitely.
-- [ ] Context size remains bounded relative to inputs.
-- [ ] Semantic changes correspond to input changes.
-- [ ] Restart and service recreation preserve proposals, reviews, current context, and history.
+- [x] Architecture remains present.
+- [x] Constraints remain present.
+- [x] Stable decisions remain present.
+- [x] Decision rationale remains present.
+- [x] Unresolved questions remain visible.
+- [x] Resolved questions compress appropriately.
+- [x] Active risks remain visible.
+- [x] Retired risks do not accumulate indefinitely.
+- [x] Context size remains bounded relative to inputs.
+- [x] Semantic changes correspond to input changes.
+- [x] Restart and service recreation preserve proposals, reviews, current context, and history.
 
 ## Context Reconstruction Test
 
@@ -60,32 +60,35 @@ Operational Context
 
 without reading handoff archives, decision archives, execution events, or session history.
 
+- [x] Fresh participant reconstruction is covered from plan, selected milestone, and current operational context.
+- [x] Historical handoff, decision, and operational-context archives are not required for reconstruction.
+
 ## Drift Detection Test
 
 Verify diagnostics flag understanding changes that have no corresponding input evidence:
 
-- [ ] Constraint disappears without decision or context evidence.
-- [ ] Architecture changes without handoff or decision evidence.
-- [ ] Open question disappears without resolution evidence.
-- [ ] Decision rationale disappears while decision remains.
+- [x] Constraint disappears without decision or context evidence.
+- [x] Architecture changes without handoff or decision evidence.
+- [x] Open question disappears without resolution evidence.
+- [x] Decision rationale disappears while decision remains.
 
 ## Workspace Certification
 
 Verify the workspace remains usable after multiple revisions:
 
-- [ ] Current understanding remains concise.
-- [ ] Open questions are visible.
-- [ ] Stable decisions are visible.
-- [ ] Active risks are visible.
-- [ ] Recent changes are visible.
-- [ ] Dashboard summary remains scannable.
+- [x] Current understanding remains concise.
+- [x] Open questions are visible.
+- [x] Stable decisions are visible.
+- [x] Active risks are visible.
+- [x] Recent changes are visible.
+- [x] Dashboard summary remains scannable.
 
 ## Certification Exit
 
 Long-horizon continuity is certified when repeated cycles preserve understanding and avoid:
 
-- [ ] Knowledge erosion.
-- [ ] Historical accretion.
-- [ ] Decision amnesia.
-- [ ] Open question loss.
-- [ ] Understanding drift.
+- [x] Knowledge erosion.
+- [x] Historical accretion.
+- [x] Decision amnesia.
+- [x] Open question loss.
+- [x] Understanding drift.

@@ -487,6 +487,314 @@ public sealed class OperationalContextGenerationTests
     }
 
     [Fact]
+    public async Task LongHorizonCertificationPreservesBoundedReviewableUnderstandingAcrossCyclesAndRestart()
+    {
+        var harness = await CreateHarnessAsync();
+        await WriteAsync(harness.Repository, ".agents/plan.md", """
+            # Plan
+
+            Preserve project understanding through repository-owned artifacts.
+            """);
+        await WriteAsync(harness.Repository, ".agents/milestones/m8-long-horizon-certification.md", """
+            # M8
+
+            Certify repeated operational-context update cycles.
+            """);
+        await WriteAsync(harness.Repository, ".agents/operational_context.md", """
+            # Operational Context
+
+            ## Current Mental Model
+
+            - Command Center treats repository `.agents` files as continuity authority.
+
+            ## Architecture
+
+            - Backend continuity services generate proposals while lifecycle services promote accepted content.
+
+            ## Authority Boundaries
+
+            - Execution sessions are disposable and cannot become project memory.
+
+            ## Constraints
+
+            - Operational context changes require human review before promotion.
+
+            ## Stable Decisions
+
+            - Repository artifacts remain authoritative across restarts.
+
+            ## Decision Rationale
+
+            - Rationale for `Repository artifacts remain authoritative across restarts.`: artifact state survives provider replacement and process lifetime.
+
+            ## Open Questions
+
+            - Should completed proposals remain pending after promotion?
+            - Should dashboard diagnostics include continuity trends?
+
+            ## Active Risks
+
+            - Provider output may be mistaken for project memory.
+            - Context growth can hide important constraints.
+            """);
+
+        var previousLength = (await ReadAsync(harness.Repository, ".agents/operational_context.md")).Length;
+        OperationalContextProposal? latestProposal = null;
+        for (var cycle = 1; cycle <= 3; cycle++)
+        {
+            await WriteAsync(harness.Repository, ".agents/handoffs/handoff.md", BuildCycleHandoff(cycle));
+            await WriteAsync(harness.Repository, ".agents/decisions/decisions.md", $"""
+                # Decisions
+
+                - Cycle {cycle} keeps backend continuity services artifact-mediated because process memory is not authoritative.
+                - M8 cycle {cycle} build passed.
+                """);
+            harness.ExecutionSessionService.SetHistory(
+            [
+                new ExecutionSessionSummary
+                {
+                    SessionId = Guid.NewGuid(),
+                    State = ExecutionSessionState.Completed,
+                    RepositoryState = RepositoryExecutionState.Ready,
+                    MilestonePath = ".agents/milestones/m8-long-horizon-certification.md",
+                    StartedAt = DateTimeOffset.UtcNow.AddMinutes(-cycle),
+                    CompletedAt = DateTimeOffset.UtcNow,
+                    ProviderName = "fake"
+                }
+            ]);
+
+            var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+            Assert.Contains(proposal.SemanticChanges, change =>
+                change.Description.Contains($"Cycle {cycle}", StringComparison.OrdinalIgnoreCase));
+
+            var accepted = await harness.ReviewService.AcceptAsync(
+                harness.Repository.Id,
+                proposal.ProposalId,
+                $"Cycle {cycle} review accepted.");
+            latestProposal = await harness.LifecycleService.PromoteAsync(harness.Repository.Id, accepted.ProposalId);
+
+            var currentContent = await ReadAsync(harness.Repository, ".agents/operational_context.md");
+            var current = new MarkdownOperationalContextParser().Parse(currentContent);
+
+            Assert.Contains(current.Architecture, item =>
+                item.Text.Contains("Backend continuity services generate proposals", StringComparison.Ordinal));
+            Assert.Contains(current.Constraints, item =>
+                item.Text.Contains("human review", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(current.StableDecisions, item =>
+                item.Text.Contains("Repository artifacts remain authoritative", StringComparison.Ordinal) ||
+                item.Text.Contains("artifact-mediated", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(current.DecisionRationale, item =>
+                item.Text.Contains("process memory is not authoritative", StringComparison.OrdinalIgnoreCase) ||
+                item.Text.Contains("survives provider replacement", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(current.OpenQuestions, item =>
+                item.Text.Contains("continuity trends", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(current.ActiveRisks, item =>
+                item.Text.Contains("Context growth", StringComparison.Ordinal));
+            if (cycle >= 2)
+            {
+                Assert.DoesNotContain(current.OpenQuestions, item =>
+                    item.Text.Contains("completed proposals remain pending", StringComparison.OrdinalIgnoreCase));
+                Assert.DoesNotContain(current.ActiveRisks, item =>
+                    item.Text.Contains("Provider output may be mistaken", StringComparison.OrdinalIgnoreCase));
+            }
+
+            Assert.True(current.RecentUnderstandingChanges.Count <= 12);
+            Assert.True(currentContent.Length <= previousLength + 2000);
+            previousLength = currentContent.Length;
+        }
+
+        Assert.NotNull(latestProposal);
+        var restarted = await RecreateHarnessAsync(harness);
+        var reloadedProposal = await restarted.ProposalStore.GetAsync(
+            restarted.Repository,
+            latestProposal.ProposalId,
+            includeContent: true);
+        var projectionService = CreateProjectionService(restarted);
+        var workspace = await projectionService.GetWorkspaceAsync(restarted.Repository.Id);
+
+        Assert.Equal(OperationalContextProposalStatus.Promoted, reloadedProposal?.Status);
+        Assert.NotNull(reloadedProposal?.Promotion.PromotedAt);
+        Assert.True(Directory.GetFiles(restarted.Repository.Path, "operational_context.*.md", SearchOption.AllDirectories).Length >= 3);
+        Assert.True(workspace.OperationalContext.Exists);
+        Assert.Equal(4, workspace.OperationalContext.CurrentRevisionNumber);
+        Assert.Contains(workspace.OperationalContext.StableDecisions, item =>
+            item.Text.Contains("artifact-mediated", StringComparison.OrdinalIgnoreCase) ||
+            item.Text.Contains("Repository artifacts remain authoritative", StringComparison.Ordinal));
+        Assert.Contains(workspace.OperationalContext.OpenQuestions, item =>
+            item.Text.Contains("continuity trends", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(workspace.OperationalContext.ActiveRisks, item =>
+            item.Text.Contains("Context growth", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task FreshParticipantCanReconstructMentalModelWithoutHistoricalArchives()
+    {
+        var harness = await CreateHarnessAsync();
+        await WriteAsync(harness.Repository, ".agents/plan.md", """
+            # Plan
+
+            Command Center preserves current understanding in operational context.
+            """);
+        await WriteAsync(harness.Repository, ".agents/milestones/m8-long-horizon-certification.md", """
+            # M8
+
+            Certify archive-independent orientation.
+            """);
+        await WriteAsync(harness.Repository, ".agents/operational_context.0001.md", """
+            # Operational Context
+
+            ## Architecture
+
+            - Obsolete historical architecture that must not be required for orientation.
+            """);
+        await WriteAsync(harness.Repository, ".agents/handoffs/handoff.0001.md", "# Old Handoff\n\n- Historical detail.");
+        await WriteAsync(harness.Repository, ".agents/decisions/decisions.0001.md", "# Old Decisions\n\n- Historical detail.");
+        await WriteAsync(harness.Repository, ".agents/operational_context.md", """
+            # Operational Context
+
+            ## Current Mental Model
+
+            - Current understanding is reconstructed from plan, selected milestone, and operational context.
+
+            ## Architecture
+
+            - Backend projections expose understanding from repository artifacts.
+
+            ## Constraints
+
+            - Review is mandatory before current understanding changes.
+
+            ## Stable Decisions
+
+            - Operational context is the authoritative current understanding artifact.
+
+            ## Decision Rationale
+
+            - Rationale for `Operational context is the authoritative current understanding artifact.`: current context avoids replaying archives for orientation.
+
+            ## Open Questions
+
+            - Which long-horizon diagnostics should be reported first?
+
+            ## Active Risks
+
+            - Drift could hide a missing constraint.
+            """);
+
+        var plan = await ReadAsync(harness.Repository, ".agents/plan.md");
+        var milestone = await ReadAsync(harness.Repository, ".agents/milestones/m8-long-horizon-certification.md");
+        var currentContext = await ReadAsync(harness.Repository, ".agents/operational_context.md");
+        var reconstructionInput = $"{plan}\n{milestone}\n{currentContext}";
+
+        Assert.Contains("Backend projections expose understanding", reconstructionInput);
+        Assert.Contains("Review is mandatory", reconstructionInput);
+        Assert.Contains("authoritative current understanding", reconstructionInput);
+        Assert.Contains("avoids replaying archives", reconstructionInput);
+        Assert.Contains("long-horizon diagnostics", reconstructionInput);
+        Assert.Contains("Drift could hide", reconstructionInput);
+        Assert.DoesNotContain("Obsolete historical architecture", reconstructionInput);
+        Assert.DoesNotContain("Historical detail", reconstructionInput);
+    }
+
+    [Fact]
+    public void DriftDetectionFlagsStableUnderstandingLossWithoutInputEvidence()
+    {
+        var parser = new MarkdownOperationalContextParser();
+        var compression = new UnderstandingCompressionService();
+        var current = parser.Parse("""
+            # Operational Context
+
+            ## Architecture
+
+            - Backend services own operational-context promotion.
+
+            ## Constraints
+
+            - Promotion requires accepted review metadata.
+
+            ## Stable Decisions
+
+            - Proposal artifacts survive process restart.
+
+            ## Decision Rationale
+
+            - Rationale for `Proposal artifacts survive process restart.`: proposal metadata is repository-owned.
+
+            ## Open Questions
+
+            - Should reports include drift trends?
+            """);
+        var proposed = parser.Parse("""
+            # Operational Context
+
+            ## Stable Decisions
+
+            - Proposal artifacts survive process restart.
+            """);
+
+        var result = compression.Compress(current, proposed);
+
+        Assert.Contains(result.Summary.StableUnderstandingRetentionWarnings, warning =>
+            warning.Contains("Architecture disappeared", StringComparison.Ordinal));
+        Assert.Contains(result.Summary.StableUnderstandingRetentionWarnings, warning =>
+            warning.Contains("Constraint disappeared", StringComparison.Ordinal));
+        Assert.Contains(result.Summary.StableUnderstandingRetentionWarnings, warning =>
+            warning.Contains("Open question disappeared", StringComparison.Ordinal));
+        Assert.Contains(result.Summary.StableUnderstandingRetentionWarnings, warning =>
+            warning.Contains("Decision rationale disappeared", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task WorkspaceAndDashboardRemainScannableAfterMultipleRevisions()
+    {
+        var harness = await CreateHarnessAsync();
+        await WriteAsync(harness.Repository, ".agents/operational_context.md", """
+            # Operational Context
+
+            ## Current Mental Model
+
+            - The workspace shows current understanding without client-side authority.
+
+            ## Stable Decisions
+
+            - Backend projections are the continuity read model.
+
+            ## Open Questions
+
+            - Should dashboard continuity counts include stale proposals?
+
+            ## Active Risks
+
+            - Review warnings could be missed if summaries grow too large.
+            """);
+
+        for (var cycle = 1; cycle <= 3; cycle++)
+        {
+            await WriteAsync(harness.Repository, ".agents/handoffs/handoff.md", $"""
+                # Handoff
+
+                - Workspace certification cycle {cycle} preserved the existing read model.
+                """);
+            var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+            var accepted = await harness.ReviewService.AcceptAsync(harness.Repository.Id, proposal.ProposalId, null);
+            await harness.LifecycleService.PromoteAsync(harness.Repository.Id, accepted.ProposalId);
+        }
+
+        var projectionService = CreateProjectionService(harness);
+        var workspace = await projectionService.GetWorkspaceAsync(harness.Repository.Id);
+        var dashboard = Assert.Single(await projectionService.GetDashboardAsync());
+
+        Assert.True(workspace.OperationalContext.CurrentUnderstandingSummary.Count <= 3);
+        Assert.NotEmpty(workspace.OperationalContext.StableDecisions);
+        Assert.NotEmpty(workspace.OperationalContext.OpenQuestions);
+        Assert.NotEmpty(workspace.OperationalContext.ActiveRisks);
+        Assert.NotEmpty(workspace.OperationalContext.RecentUnderstandingChanges);
+        Assert.Equal(4, dashboard.ContinuitySummary.OperationalContextRevisionCount);
+        Assert.Equal(workspace.OperationalContext.OpenQuestions.Count, dashboard.ContinuitySummary.OpenQuestionCount);
+        Assert.Equal(workspace.OperationalContext.ActiveRisks.Count, dashboard.ContinuitySummary.ActiveRiskCount);
+    }
+
+    [Fact]
     public void ResolvedQuestionsCompressOnlyWithExplicitResolutionEvidence()
     {
         var parser = new MarkdownOperationalContextParser();
@@ -1006,12 +1314,39 @@ public sealed class OperationalContextGenerationTests
         IArtifactStore? artifactStore = null)
     {
         var repositoryPath = CreateGitRepositoryDirectory();
-        var repositoryService = new RepositoryService(
-            new ApplicationConfigurationStore(Path.Combine(CreateTemporaryDirectory(), "configuration.json")));
+        var configurationPath = Path.Combine(CreateTemporaryDirectory(), "configuration.json");
+        var repositoryService = new RepositoryService(new ApplicationConfigurationStore(configurationPath));
         var repository = await repositoryService.RegisterAsync(repositoryPath);
         artifactStore ??= new FileSystemArtifactStore();
+        return CreateHarness(
+            repository,
+            repositoryService,
+            configurationPath,
+            executionHistory ?? [],
+            artifactStore);
+    }
+
+    private static async Task<Harness> RecreateHarnessAsync(Harness harness)
+    {
+        var repositoryService = new RepositoryService(new ApplicationConfigurationStore(harness.ConfigurationPath));
+        var repository = (await repositoryService.GetAllAsync()).Single(repository => repository.Id == harness.Repository.Id);
+        return CreateHarness(
+            repository,
+            repositoryService,
+            harness.ConfigurationPath,
+            [],
+            new FileSystemArtifactStore());
+    }
+
+    private static Harness CreateHarness(
+        Repository repository,
+        RepositoryService repositoryService,
+        string configurationPath,
+        IReadOnlyList<ExecutionSessionSummary> executionHistory,
+        IArtifactStore artifactStore)
+    {
         var artifactService = new ArtifactService(artifactStore);
-        var executionSessionService = new StaticExecutionSessionService(executionHistory ?? []);
+        var executionSessionService = new StaticExecutionSessionService(executionHistory);
         var proposalStore = new FileSystemOperationalContextProposalStore(artifactStore);
         var parser = new MarkdownOperationalContextParser();
         var compressionService = new UnderstandingCompressionService();
@@ -1040,12 +1375,46 @@ public sealed class OperationalContextGenerationTests
 
         return new Harness(
             repository,
+            configurationPath,
             repositoryService,
             executionSessionService,
             proposalStore,
             generationService,
             reviewService,
             lifecycleService);
+    }
+
+    private static RepositoryProjectionService CreateProjectionService(Harness harness)
+    {
+        return new RepositoryProjectionService(
+            harness.RepositoryService,
+            new ArtifactService(new FileSystemArtifactStore()),
+            new PlanningService(new FileSystemArtifactStore()),
+            harness.ExecutionSessionService,
+            harness.ProposalStore,
+            new MarkdownOperationalContextParser(),
+            new FileSystemArtifactStore());
+    }
+
+    private static string BuildCycleHandoff(int cycle)
+    {
+        var outcomeEvidence = cycle switch
+        {
+            1 => "- Cycle 1 preserved backend workflow authority.",
+            2 => """
+                - Resolved question: completed proposals remain pending after promotion because promoted proposals are marked promoted.
+                - Retired risk: provider output may be mistaken for project memory because proposals remain reviewable artifacts.
+                """,
+            _ => "- Cycle 3 confirmed repeated reviews without historical accretion."
+        };
+
+        return $"""
+            # Handoff
+
+            - Cycle {cycle} completed operational-context review and promotion.
+            {outcomeEvidence}
+            - Recent execution for `.agents/milestones/m8-long-horizon-certification.md` is recorded with state `Completed`.
+            """;
     }
 
     private static async Task WriteAsync(Repository repository, string relativePath, string content)
@@ -1082,6 +1451,7 @@ public sealed class OperationalContextGenerationTests
 
     private sealed record Harness(
         Repository Repository,
+        string ConfigurationPath,
         RepositoryService RepositoryService,
         StaticExecutionSessionService ExecutionSessionService,
         FileSystemOperationalContextProposalStore ProposalStore,
@@ -1129,9 +1499,16 @@ public sealed class OperationalContextGenerationTests
         }
     }
 
-    private sealed class StaticExecutionSessionService(IReadOnlyList<ExecutionSessionSummary> history)
+    private sealed class StaticExecutionSessionService(IReadOnlyList<ExecutionSessionSummary> initialHistory)
         : IExecutionSessionService
     {
+        private IReadOnlyList<ExecutionSessionSummary> history = initialHistory;
+
+        public void SetHistory(IReadOnlyList<ExecutionSessionSummary> nextHistory)
+        {
+            history = nextHistory;
+        }
+
         public Task RecoverAsync()
         {
             return Task.CompletedTask;

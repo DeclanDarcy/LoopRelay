@@ -2,17 +2,17 @@
 
 ## Newly Authorized Decisions
 
-- M7 Understanding Workspace is complete; its purpose was observability of existing continuity, not a richer continuity workflow.
-- Current Understanding and Execution Participation must remain independently visible because understanding existence and understanding influence on execution are separate observable states.
-- The read-only workspace boundary remains authoritative: operational context flows through backend projection into UI, and the UI must not become an operational-context authority.
-- The expanded understanding surface should include architecture, authority boundaries, constraints, and rationale because those are high-value orientation and preservation-failure signals.
-- Operational-context last-updated visibility is required continuity context because current understanding is temporal and should show how recently it was validated.
-- M8 should be proof-focused rather than capability-focused; the primary remaining risk is continuity drift over repeated cycles.
-- M8 certification should evaluate long sequences of generate, review, promote, reload, repeated multiple times, rather than only isolated operation success.
-- Fresh participant certification should prove that plan, selected milestone, and current operational context are sufficient to recover architecture, constraints, stable decisions, open questions, and active risks without historical handoffs, proposal archives, or decision archives.
-- Restart and recovery certification should cover promotion, review, and pending proposal states across process restart because continuity must not depend on process lifetime.
-- Archive independence should be explicit in M8: historical operational-context archives may exist, but reconstruction/orientation must not require consulting them.
+- M8 was correctly executed by placing proof in backend tests that exercise real continuity services rather than a synthetic certification layer or separate continuity harness.
+- Certification must remain attached to the actual implementation path: generation, review, promotion, compression, and decision continuity.
+- Archive-independent reconstruction is the core continuity hypothesis: plan, selected milestone, and current operational context should be sufficient for orientation without historical replay.
+- M8 validated that continuity can survive repeated cycles, not merely that continuity features can be built.
+- Drift detection must remain advisory through retention, compression, and decision warnings rather than becoming workflow authority.
+- M9 must remain read-only and observational throughout.
+- M9 instrumentation should measure understanding evolution rather than process compliance.
+- M9 should instrument revision count, compression trends, retention warnings, decision retention, rationale retention, open question lifecycle, and active risk lifecycle.
+- Add an observational understanding-density signal that tracks counts of stable decisions, constraints, open questions, active risks, and architecture elements across revisions; sudden change is interesting, but more is not inherently better.
+- Do not introduce a continuity score, understanding score, project health score, continuity gate, promotion blocker, or instrumentation-driven governance workflow.
 
 ## Recommended Next Slice
 
-- Start M8 by formalizing the fresh-participant certification statement and implementing backend fixtures/tests for repeated continuity cycles, restart recovery, and archive-independent orientation from plan, milestone, and current operational context.
+Start M9 Continuity Instrumentation by implementing read-only diagnostics/reporting for observable continuity facts, including understanding-density deltas, while preserving the boundary that metrics never govern workflow.

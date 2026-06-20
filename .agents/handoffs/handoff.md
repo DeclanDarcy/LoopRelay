@@ -2,21 +2,22 @@
 
 ## Slice Summary
 
-Completed the remaining M7 Understanding Workspace visibility items by making continuity state scannable in the dashboard, surfacing execution-context participation for operational context, and expanding the read-only workspace understanding surface to cover rationale and execution-guiding context.
+Completed M8 Long-Horizon Certification by adding backend certification tests for repeated operational-context update cycles, restart recovery, archive-independent reconstruction, drift warnings, and workspace/dashboard scannability.
 
 ## New State
 
-- Dashboard repository rows now show operational-context last-updated time in addition to presence, revision count, open questions, and active risks.
-- The Current Understanding surface now reports whether `.agents/operational_context.md` is included in the current execution-context preview, missing as an optional artifact, stale relative to the selected milestone, or not yet previewed.
-- The execution context preview summary now explicitly shows operational-context inclusion status.
-- The Current Understanding surface now shows decision rationale, architecture, authority boundaries, and constraints from backend projections, alongside the existing current model, stable decisions, open questions, active risks, recent changes, warnings, revision metadata, and review state.
-- Proposal state remains read-only in the workspace surface and is displayed from backend proposal summary/review projection for none, pending, accepted, and stale combinations.
-- Updated `.agents/milestones/m7-understanding-workspace.md` to mark M7 workspace visibility and certification checks complete.
+- `OperationalContextGenerationTests` now includes a three-cycle certification harness covering execution summary input, handoff update, decision update, proposal generation, review acceptance, and promotion.
+- The repeated-cycle test verifies durable architecture, constraints, stable decisions, rationale, unresolved questions, active risks, explicit question resolution, explicit risk retirement, bounded recent changes, semantic changes, and service recreation over persisted proposal/current-context state.
+- Added archive-independent fresh participant reconstruction coverage from only plan, selected milestone, and current operational context.
+- Added drift-warning coverage for architecture, constraint, open-question, and decision-rationale loss without corresponding input evidence.
+- Added workspace/dashboard certification after multiple revisions to ensure current understanding remains concise and visible through backend projections.
+- Updated `.agents/milestones/m8-long-horizon-certification.md` to mark M8 certification checks complete.
 
 ## Verification
 
-- `npm run build --prefix src/CommandCenter.UI` passed.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter OperationalContextGenerationTests` passed.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed.
 
 ## Next Slice
 
-Start M8 Long-Horizon Certification by adding focused backend fixtures/tests that simulate repeated operational-context proposal, review, promotion, and reload cycles, verifying that current understanding can orient a fresh participant without relying on historical archives.
+Start M9 Continuity Instrumentation by implementing read-only continuity diagnostics/reporting over existing operational-context revision, retention, compression, decision, question, and risk signals without giving metrics workflow authority.
