@@ -2,24 +2,22 @@
 
 ## Newly Authorized Decisions
 
-- M0-M4 are architecturally certified.
-- M0-M4 are functionally certified except for native picker repository registration.
-- M0-M4 remain awaiting final desktop certification signoff until the actual user path through the native folder picker is manually verified once.
-- The only remaining uncertified workflow is:
-  - click `Add Repository`.
-  - select a repository through the native folder picker.
-  - receive the selected path from the picker.
-  - register the repository.
-  - update the dashboard.
-  - open the repository workspace.
-- The remaining risk is localized to platform UI integration, not repository, artifact, planning, lifecycle, projection, or React-to-Tauri-to-backend behavior.
-- The previous rendered UI certification slice counts as evidence collection, not an architecture change.
-- Do not record final M0-M4 certification authorization until native picker repository registration succeeds through one manual desktop pass.
-- If the native picker pass succeeds, M0-M4 certification may be considered complete without requiring additional certification work before proceeding to M5.
-- After successful native picker verification, the next authorized workflow is:
-  - rotate `decisions.md`.
-  - record M0-M4 certification authorization.
-  - stage.
-  - commit.
-  - push.
-  - begin M5.
+- Epic 1 M0-M4 certification is authorized and closed.
+- M0 Architecture Ratification is certified.
+- M1 Repository Management is certified.
+- M2 Artifact Infrastructure is certified.
+- M3 Artifact Lifecycle Management is certified.
+- M4 Planning and Readiness Infrastructure is certified.
+- The final previously uncertified workflow is accepted as verified through the actual rendered Tauri desktop application:
+  - rendered `Add Repository`
+  - native folder picker
+  - folder selection
+  - repository registration
+  - dashboard projection update
+  - workspace open
+  - repository state rendered correctly
+  - registration removal
+  - repository files preserved
+- Certification basis includes automated backend tests, API behavior, filesystem behavior, sidecar lifecycle, restart recovery, projection rebuilds, artifact editing, artifact rotation, planning/readiness, and native desktop workflows.
+- There are no remaining M0-M4 certification blockers.
+- M5 Repository Workspace Experience is authorized to begin.
