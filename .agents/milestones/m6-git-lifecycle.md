@@ -8,10 +8,10 @@ Replace manual status inspection, commit message drafting, commit, and push flow
 
 - [ ] Implement full `GitService`.
 - [x] Add Git status endpoint.
-- [ ] Add commit preparation endpoint that generates a deterministic proposed commit message.
-- [ ] Include pre-execution dirty snapshot comparison in commit preparation.
-- [ ] Build a selectable `CommitScopeItem` for every displayed changed path.
-- [ ] Assign a Git status snapshot id to the prepared commit scope.
+- [x] Add commit preparation endpoint that generates a deterministic proposed commit message.
+- [x] Include pre-execution dirty snapshot comparison in commit preparation.
+- [x] Build a selectable `CommitScopeItem` for every displayed changed path.
+- [x] Assign a Git status snapshot id to the prepared commit scope.
 - [ ] Add commit endpoint:
   - [ ] Validate session is `Accepted` or `AwaitingCommit`.
   - [ ] Refresh Git status.
@@ -31,11 +31,11 @@ Replace manual status inspection, commit message drafting, commit, and push flow
 ## UI Work
 
 - [x] Display Git status grouped by modified, added, deleted, renamed, untracked, and staged.
-- [ ] Mark paths that were already dirty before execution when known.
-- [ ] Render each changed file with an individual selection control.
-- [ ] Provide `Select All` and `Select None`.
-- [ ] Show editable deterministic proposed commit message.
-- [ ] Show the exact commit scope that will be staged.
+- [x] Mark paths that were already dirty before execution when known.
+- [x] Render each changed file with an individual selection control.
+- [x] Provide `Select All` and `Select None`.
+- [x] Show editable deterministic proposed commit message.
+- [x] Show the exact commit scope that will be staged.
 - [ ] Add commit action.
 - [ ] Show commit sha after success.
 - [ ] Add push action.
@@ -45,9 +45,9 @@ Replace manual status inspection, commit message drafting, commit, and push flow
 ## Tests
 
 - [x] Status parser handles modified, added, deleted, renamed, untracked, and staged paths.
-- [ ] Commit message generation is deterministic and limited to milestone name plus changed-file count.
-- [ ] Commit preparation identifies pre-existing dirty paths when known.
-- [ ] Commit preparation returns one selectable item per changed path.
+- [x] Commit message generation is deterministic and limited to milestone name plus changed-file count.
+- [x] Commit preparation identifies pre-existing dirty paths when known.
+- [x] Commit preparation returns one selectable item per changed path.
 - [ ] Commit action stages only selected paths.
 - [ ] Unselected paths are not staged.
 - [ ] Empty selected path set is rejected unless the workflow is explicitly marking a clean execution ready without commit.

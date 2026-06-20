@@ -454,5 +454,10 @@ public sealed class ExecutionMonitoringEndpointTests
                 CapturedAt = DateTimeOffset.UtcNow
             });
         }
+
+        public Task<CommitPreparation> PrepareCommitAsync(Repository repository, ExecutionSession session)
+        {
+            throw new NotSupportedException();
+        }
     }
 }

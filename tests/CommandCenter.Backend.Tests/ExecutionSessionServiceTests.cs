@@ -835,6 +835,41 @@ public sealed class ExecutionSessionServiceTests
                 CapturedAt = DateTimeOffset.UtcNow
             });
         }
+
+        public Task<CommitPreparation> PrepareCommitAsync(Repository repository, ExecutionSession session)
+        {
+            if (failure is not null)
+            {
+                throw new InvalidOperationException(failure);
+            }
+
+            return Task.FromResult(new CommitPreparation
+            {
+                Id = Guid.NewGuid(),
+                SessionId = session.Id,
+                RepositoryId = session.RepositoryId,
+                RepositoryPath = session.RepositoryPath,
+                ProposedMessage = $"{Path.GetFileNameWithoutExtension(session.MilestonePath)}\n\n- 1 file changed",
+                ScopeItems =
+                [
+                    new CommitScopeItem
+                    {
+                        Path = "src/changed.cs",
+                        ChangeType = CommitChangeType.Modified,
+                        Origin = CommitChangeOrigin.ExecutionGenerated,
+                        IsSelected = true
+                    }
+                ],
+                StatusSnapshot = new CommitStatusSnapshot
+                {
+                    Id = "snapshot",
+                    Branch = "main",
+                    DirtyState = dirtyState ?? new RepositoryDirtyState(),
+                    CapturedAt = DateTimeOffset.UtcNow
+                },
+                GeneratedAt = DateTimeOffset.UtcNow
+            });
+        }
     }
 
     private sealed class MetadataExecutionProvider : IExecutionProvider

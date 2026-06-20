@@ -280,6 +280,36 @@ public sealed class ExecutionSessionService(
         }
     }
 
+    public async Task<CommitPreparation> PrepareCommitAsync(Guid sessionId)
+    {
+        await gate.WaitAsync();
+        try
+        {
+            var sessions = (await sessionStore.LoadAsync()).ToList();
+            var session = sessions.FirstOrDefault(session => session.Id == sessionId)
+                ?? throw new KeyNotFoundException($"Execution session was not found: {sessionId}");
+            if (session.RepositoryState != RepositoryExecutionState.AwaitingCommit)
+            {
+                throw new InvalidOperationException("Commit can only be prepared while awaiting commit.");
+            }
+
+            var repository = new Repository
+            {
+                Id = session.RepositoryId,
+                Name = Path.GetFileName(session.RepositoryPath),
+                Path = session.RepositoryPath
+            };
+            var preparation = await gitService.PrepareCommitAsync(repository, session);
+            var preparedSession = session.WithCommitPreparation(preparation, DateTimeOffset.UtcNow);
+            await ReplaceSessionAsync(sessions, preparedSession);
+            return preparation;
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
     private static bool IsActiveRepositoryState(RepositoryExecutionState state)
     {
         return state == RepositoryExecutionState.Executing;
@@ -340,6 +370,7 @@ file static class ExecutionSessionMutation
             ProviderStartedAt = providerStartedAt ?? session.ProviderStartedAt,
             PromptMetadata = promptMetadata ?? session.PromptMetadata,
             RepositorySnapshot = session.RepositorySnapshot,
+            CommitPreparation = session.CommitPreparation,
             PreviousHandoffContent = session.PreviousHandoffContent,
             PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,
             HandoffPath = session.HandoffPath,
@@ -377,6 +408,41 @@ file static class ExecutionSessionMutation
             ProviderStartedAt = session.ProviderStartedAt,
             PromptMetadata = session.PromptMetadata,
             RepositorySnapshot = repositorySnapshot ?? session.RepositorySnapshot,
+            CommitPreparation = session.CommitPreparation,
+            PreviousHandoffContent = session.PreviousHandoffContent,
+            PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,
+            HandoffPath = session.HandoffPath,
+            FailureReason = session.FailureReason,
+            Events = session.Events
+        };
+    }
+
+    public static ExecutionSession WithCommitPreparation(
+        this ExecutionSession session,
+        CommitPreparation commitPreparation,
+        DateTimeOffset lastActivityAt)
+    {
+        return new ExecutionSession
+        {
+            Id = session.Id,
+            RepositoryId = session.RepositoryId,
+            RepositoryPath = session.RepositoryPath,
+            MilestonePath = session.MilestonePath,
+            StartedAt = session.StartedAt,
+            CompletedAt = session.CompletedAt,
+            AcceptedAt = session.AcceptedAt,
+            RejectedAt = session.RejectedAt,
+            DecisionNote = session.DecisionNote,
+            LastActivityAt = lastActivityAt,
+            State = session.State,
+            RepositoryState = session.RepositoryState,
+            ProviderName = session.ProviderName,
+            ProviderExecutablePath = session.ProviderExecutablePath,
+            ProviderProcessId = session.ProviderProcessId,
+            ProviderStartedAt = session.ProviderStartedAt,
+            PromptMetadata = session.PromptMetadata,
+            RepositorySnapshot = session.RepositorySnapshot,
+            CommitPreparation = commitPreparation,
             PreviousHandoffContent = session.PreviousHandoffContent,
             PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,
             HandoffPath = session.HandoffPath,

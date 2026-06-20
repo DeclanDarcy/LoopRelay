@@ -2,30 +2,52 @@
 
 ## Slice Summary
 
-- Executed Epic 2 M6.1 read-only Git status and repository inspection.
-- Added `RepositoryGitStatus` and expanded `RepositoryDirtyState` with `AddedPaths`.
-- Extended `IGitService` and `GitService` with `GetStatusAsync`.
-- `GitService` now parses `git status --porcelain=v1 --branch -z` for branch, ahead/behind counts, and staged/modified/added/deleted/renamed/untracked buckets.
-- Added backend endpoint `GET /api/repositories/{repositoryId}/git/status`.
-- Added Tauri command `get_git_status` as a thin HTTP bridge.
-- Added React Git workflow status panel for `Ready`, `AwaitingCommit`, and `AwaitingPush`.
-- Updated the dev Tauri mock so mock acceptance into `AwaitingCommit` shows dirty Git status.
-- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0019.md`.
+- Executed Epic 2 M6.2 commit preparation.
+- Added commit preparation domain models:
+  - `CommitPreparation`
+  - `CommitStatusSnapshot`
+  - `CommitScopeItem`
+  - `CommitChangeType`
+  - `CommitChangeOrigin`
+- Extended `IGitService` and `GitService` with `PrepareCommitAsync`.
+- Commit preparation now:
+  - refreshes Git status;
+  - generates a deterministic proposed message from the milestone filename and changed path count;
+  - builds one selected scope item per current changed path;
+  - classifies scope item origin as `PreExisting` when the path existed in the pre-execution dirty snapshot;
+  - assigns a SHA-256 status snapshot id derived from canonical status content.
+- Added `CommitPreparation` persistence on `ExecutionSession`.
+- Extended `IExecutionSessionService` and `ExecutionSessionService` with `PrepareCommitAsync`.
+- Added backend endpoint `POST /api/execution-sessions/{sessionId}/git/prepare-commit`.
+- Added Tauri command `prepare_commit` as a thin HTTP bridge.
+- Updated React Git workflow:
+  - `AwaitingCommit` now loads commit preparation instead of raw status buckets;
+  - displays snapshot metadata, pre-existing-change presence, editable proposed message, selected count, and exact scope items;
+  - renders per-path checkboxes plus `Select All` and `Select None`.
+- Updated the dev Tauri mock to return commit preparation after accepting a mock handoff.
+- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0020.md`.
 
 ## Files Changed
 
 - `.agents/milestones/m6-git-lifecycle.md`
-- `.agents/handoffs/handoff.0019.md`
+- `.agents/handoffs/handoff.0020.md`
 - `.agents/handoffs/handoff.md`
+- `src/CommandCenter.Backend/Execution/CommitChangeOrigin.cs`
+- `src/CommandCenter.Backend/Execution/CommitChangeType.cs`
+- `src/CommandCenter.Backend/Execution/CommitPreparation.cs`
+- `src/CommandCenter.Backend/Execution/CommitScopeItem.cs`
+- `src/CommandCenter.Backend/Execution/CommitStatusSnapshot.cs`
+- `src/CommandCenter.Backend/Execution/ExecutionSession.cs`
+- `src/CommandCenter.Backend/Execution/ExecutionSessionService.cs`
 - `src/CommandCenter.Backend/Execution/GitService.cs`
 - `src/CommandCenter.Backend/Execution/IGitService.cs`
-- `src/CommandCenter.Backend/Execution/RepositoryDirtyState.cs`
-- `src/CommandCenter.Backend/Execution/RepositoryGitStatus.cs`
+- `src/CommandCenter.Backend/Execution/IExecutionSessionService.cs`
 - `src/CommandCenter.Backend/Program.cs`
 - `src/CommandCenter.Shell/src/main.rs`
 - `src/CommandCenter.UI/src/App.css`
 - `src/CommandCenter.UI/src/App.tsx`
 - `src/CommandCenter.UI/src/devTauriMock.ts`
+- `tests/CommandCenter.Backend.Tests/ArtifactRotationServiceTests.cs`
 - `tests/CommandCenter.Backend.Tests/ExecutionContextServiceTests.cs`
 - `tests/CommandCenter.Backend.Tests/ExecutionMonitoringEndpointTests.cs`
 - `tests/CommandCenter.Backend.Tests/ExecutionSessionServiceTests.cs`
@@ -33,27 +55,22 @@
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 119 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 121 tests.
 - `npm run build --prefix src/CommandCenter.UI` passed.
 - `cargo build --manifest-path src/CommandCenter.Shell/Cargo.toml` passed.
 - `dotnet build CommandCenter.slnx` passed.
-- Browser smoke test with `http://127.0.0.1:5173/?mock=workspace-certification` verified:
-  - Git workflow panel is visible in `Ready`;
-  - mock acceptance transitions to `AwaitingCommit`;
-  - Git workflow panel remains visible in `AwaitingCommit`;
-  - modified and untracked mock paths are displayed.
 
 ## New State
 
-- M6.1 read-only Git status is implemented and verified.
-- M6 checklist now marks Git status endpoint, UI grouped status display, and parser bucket coverage complete.
-- Commit preparation, selectable commit scope, commit mutation, push mutation, stale-scope rejection, and push/commit retry UI remain unimplemented.
-- Pre-existing dirty-path marking is not implemented in this slice because the current UI summary does not carry the pre-execution snapshot; this should be returned explicitly by commit preparation scope items.
-- Current worktree has M6.1 implementation, milestone checklist, and handoff rotation changes unstaged.
+- M6.2 commit preparation is implemented and verified.
+- M6 checklist now marks commit preparation endpoint, deterministic message, dirty snapshot comparison, scope item generation, status snapshot id, pre-existing marking, path selection controls, message editing, and commit scope display complete.
+- Latest commit preparation is stored on the execution session for later stale-scope validation.
+- No staging, commit mutation, push mutation, stale-scope rejection, commit failure retry, or push failure retry was implemented in this slice.
 
 ## Recommended Next Slice
 
-- Execute M6.2 commit preparation.
-- Add backend commit-preparation models with deterministic message, status snapshot id, selectable `CommitScopeItem`s, and pre-execution dirty comparison.
-- Add `prepare_commit` endpoint and Tauri bridge.
-- Replace the read-only Git status panel in `AwaitingCommit` with selectable commit review controls, but do not implement commit mutation until preparation and stale-scope validation are certified.
+- Execute M6.3 commit mutation.
+- Add commit request models with reviewed message, selected paths, and reviewed status snapshot id.
+- Validate session state, selected paths, empty selections, repository-relative path safety, and stale snapshot id before staging.
+- Stage only selected paths and commit through `IGitService`/`IProcessRunner`.
+- Persist commit sha and transition successful commits to `AwaitingPush`.

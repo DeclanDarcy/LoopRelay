@@ -40,6 +40,8 @@ public sealed class ExecutionSession
 
     public ExecutionRepositorySnapshot? RepositorySnapshot { get; init; }
 
+    public CommitPreparation? CommitPreparation { get; init; }
+
     public string? PreviousHandoffContent { get; init; }
 
     public DateTimeOffset? PreviousHandoffCapturedAt { get; init; }

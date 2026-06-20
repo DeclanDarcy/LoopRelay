@@ -142,6 +142,25 @@ type RepositoryGitStatus = {
   capturedAt: string
 }
 
+type CommitPreparation = {
+  id: string
+  sessionId: string
+  repositoryId: string
+  repositoryPath: string
+  proposedMessage: string
+  scopeItems: Array<{
+    path: string
+    changeType: string
+    origin: string
+    isSelected: boolean
+  }>
+  statusSnapshot: RepositoryGitStatus & {
+    id: string
+  }
+  generatedAt: string
+  hasPreExistingChanges: boolean
+}
+
 type MockState = {
   repositories: Repository[]
   workspaces: Record<string, Workspace>
@@ -387,6 +406,46 @@ function createGitStatus(state: MockState, repositoryId: string): RepositoryGitS
   }
 }
 
+function createCommitPreparation(state: MockState, sessionId: string): CommitPreparation {
+  const session = state.sessions[sessionId]
+  if (!session) {
+    throw new Error('Execution session was not found.')
+  }
+
+  if (session.repositoryState !== 'AwaitingCommit') {
+    throw new Error('Commit can only be prepared while awaiting commit.')
+  }
+
+  const status = createGitStatus(state, session.repositoryId)
+  return {
+    id: `prep-${sessionId}`,
+    sessionId,
+    repositoryId: session.repositoryId,
+    repositoryPath: session.repositoryPath,
+    proposedMessage: 'm5\n\n- 2 files changed',
+    scopeItems: [
+      {
+        path: 'src/CommandCenter.UI/src/App.tsx',
+        changeType: 'Modified',
+        origin: 'ExecutionGenerated',
+        isSelected: true,
+      },
+      {
+        path: '.agents/handoffs/handoff.md',
+        changeType: 'Untracked',
+        origin: 'ExecutionGenerated',
+        isSelected: true,
+      },
+    ],
+    statusSnapshot: {
+      ...status,
+      id: `snapshot-${sessionId}`,
+    },
+    generatedAt: new Date().toISOString(),
+    hasPreExistingChanges: false,
+  }
+}
+
 function clone<T>(value: T): T {
   return structuredClone(value)
 }
@@ -568,6 +627,8 @@ export function installDevTauriMock() {
         }
         case 'get_git_status':
           return clone(createGitStatus(state, getStringArg(args, 'repositoryId')))
+        case 'prepare_commit':
+          return clone(createCommitPreparation(state, getStringArg(args, 'sessionId')))
         case 'get_execution_session': {
           const session = state.sessions[getStringArg(args, 'sessionId')]
           if (!session) {

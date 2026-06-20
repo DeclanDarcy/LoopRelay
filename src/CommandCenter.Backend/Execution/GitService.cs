@@ -1,4 +1,6 @@
 using CommandCenter.Backend.Repositories;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace CommandCenter.Backend.Execution;
 
@@ -44,6 +46,35 @@ public sealed class GitService(IProcessRunner processRunner) : IGitService
             BehindCount = parsedStatus.BehindCount,
             DirtyState = parsedStatus.DirtyState,
             CapturedAt = DateTimeOffset.UtcNow
+        };
+    }
+
+    public async Task<CommitPreparation> PrepareCommitAsync(Repository repository, ExecutionSession session)
+    {
+        var status = await GetStatusAsync(repository);
+        var preExistingPaths = GetAllDirtyPaths(session.RepositorySnapshot?.DirtyState);
+        var scopeItems = BuildScopeItems(status.DirtyState, preExistingPaths);
+        var snapshot = new CommitStatusSnapshot
+        {
+            Id = BuildSnapshotId(status),
+            Branch = status.Branch,
+            AheadCount = status.AheadCount,
+            BehindCount = status.BehindCount,
+            DirtyState = status.DirtyState,
+            CapturedAt = status.CapturedAt
+        };
+
+        return new CommitPreparation
+        {
+            Id = Guid.NewGuid(),
+            SessionId = session.Id,
+            RepositoryId = session.RepositoryId,
+            RepositoryPath = session.RepositoryPath,
+            ProposedMessage = BuildProposedCommitMessage(session.MilestonePath, scopeItems.Count),
+            ScopeItems = scopeItems,
+            StatusSnapshot = snapshot,
+            GeneratedAt = DateTimeOffset.UtcNow,
+            HasPreExistingChanges = scopeItems.Any(item => item.Origin == CommitChangeOrigin.PreExisting)
         };
     }
 
@@ -192,6 +223,106 @@ public sealed class GitService(IProcessRunner processRunner) : IGitService
     private static string NormalizeGitPath(string path)
     {
         return path.Replace('\\', '/');
+    }
+
+    private static IReadOnlyList<CommitScopeItem> BuildScopeItems(
+        RepositoryDirtyState dirtyState,
+        ISet<string> preExistingPaths)
+    {
+        var items = new Dictionary<string, CommitScopeItem>(StringComparer.OrdinalIgnoreCase);
+        AddScopeItems(items, dirtyState.StagedPaths, CommitChangeType.Staged, preExistingPaths);
+        AddScopeItems(items, dirtyState.ModifiedPaths, CommitChangeType.Modified, preExistingPaths);
+        AddScopeItems(items, dirtyState.AddedPaths, CommitChangeType.Added, preExistingPaths);
+        AddScopeItems(items, dirtyState.DeletedPaths, CommitChangeType.Deleted, preExistingPaths);
+        AddScopeItems(items, dirtyState.RenamedPaths, CommitChangeType.Renamed, preExistingPaths);
+        AddScopeItems(items, dirtyState.UntrackedPaths, CommitChangeType.Untracked, preExistingPaths);
+
+        return items.Values.OrderBy(item => item.Path, StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    private static void AddScopeItems(
+        IDictionary<string, CommitScopeItem> items,
+        IEnumerable<string> paths,
+        CommitChangeType changeType,
+        ISet<string> preExistingPaths)
+    {
+        foreach (var path in paths.Select(NormalizeGitPath))
+        {
+            if (items.ContainsKey(path))
+            {
+                continue;
+            }
+
+            items[path] = new CommitScopeItem
+            {
+                Path = path,
+                ChangeType = changeType,
+                Origin = preExistingPaths.Contains(path)
+                    ? CommitChangeOrigin.PreExisting
+                    : CommitChangeOrigin.ExecutionGenerated,
+                IsSelected = true
+            };
+        }
+    }
+
+    private static ISet<string> GetAllDirtyPaths(RepositoryDirtyState? dirtyState)
+    {
+        var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (dirtyState is null)
+        {
+            return paths;
+        }
+
+        foreach (var path in dirtyState.StagedPaths
+            .Concat(dirtyState.ModifiedPaths)
+            .Concat(dirtyState.AddedPaths)
+            .Concat(dirtyState.DeletedPaths)
+            .Concat(dirtyState.RenamedPaths)
+            .Concat(dirtyState.UntrackedPaths))
+        {
+            paths.Add(NormalizeGitPath(path));
+        }
+
+        return paths;
+    }
+
+    private static string BuildProposedCommitMessage(string milestonePath, int changedFileCount)
+    {
+        var milestoneName = Path.GetFileNameWithoutExtension(milestonePath);
+        if (string.IsNullOrWhiteSpace(milestoneName))
+        {
+            milestoneName = "Execute selected milestone";
+        }
+
+        var fileLabel = changedFileCount == 1 ? "file" : "files";
+        return $"{milestoneName}\n\n- {changedFileCount} {fileLabel} changed";
+    }
+
+    private static string BuildSnapshotId(RepositoryGitStatus status)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine(status.Branch);
+        builder.AppendLine(status.AheadCount.ToString());
+        builder.AppendLine(status.BehindCount.ToString());
+        AppendPaths(builder, "staged", status.DirtyState.StagedPaths);
+        AppendPaths(builder, "modified", status.DirtyState.ModifiedPaths);
+        AppendPaths(builder, "added", status.DirtyState.AddedPaths);
+        AppendPaths(builder, "deleted", status.DirtyState.DeletedPaths);
+        AppendPaths(builder, "renamed", status.DirtyState.RenamedPaths);
+        AppendPaths(builder, "untracked", status.DirtyState.UntrackedPaths);
+
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(builder.ToString()));
+        return Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
+    private static void AppendPaths(StringBuilder builder, string label, IEnumerable<string> paths)
+    {
+        foreach (var path in paths.Select(NormalizeGitPath).OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+        {
+            builder.Append(label);
+            builder.Append(':');
+            builder.AppendLine(path);
+        }
     }
 
     private sealed class ParsedGitStatus

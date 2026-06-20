@@ -133,6 +133,37 @@ type RepositoryGitStatus = {
   capturedAt: string
 }
 
+type CommitChangeType = 'Staged' | 'Modified' | 'Added' | 'Deleted' | 'Renamed' | 'Untracked'
+type CommitChangeOrigin = 'PreExisting' | 'ExecutionGenerated'
+
+type CommitScopeItem = {
+  path: string
+  changeType: CommitChangeType
+  origin: CommitChangeOrigin
+  isSelected: boolean
+}
+
+type CommitStatusSnapshot = {
+  id: string
+  branch: string
+  aheadCount: number
+  behindCount: number
+  dirtyState: RepositoryDirtyState
+  capturedAt: string
+}
+
+type CommitPreparation = {
+  id: string
+  sessionId: string
+  repositoryId: string
+  repositoryPath: string
+  proposedMessage: string
+  scopeItems: CommitScopeItem[]
+  statusSnapshot: CommitStatusSnapshot
+  generatedAt: string
+  hasPreExistingChanges: boolean
+}
+
 type ExecutionContextDiagnostics = {
   totalBytes: number
   totalCharacters: number
@@ -401,6 +432,9 @@ function App() {
   const [executionStatusesBySession, setExecutionStatusesBySession] = useState<Record<string, ExecutionStatus>>({})
   const [executionEventsBySession, setExecutionEventsBySession] = useState<Record<string, ExecutionEvent[]>>({})
   const [gitStatus, setGitStatus] = useState<RepositoryGitStatus | null>(null)
+  const [commitPreparation, setCommitPreparation] = useState<CommitPreparation | null>(null)
+  const [selectedCommitPaths, setSelectedCommitPaths] = useState<Set<string>>(new Set())
+  const [commitMessage, setCommitMessage] = useState('')
   const selectedArtifactPathsByRepository = useRef<Record<string, string>>({})
   const refreshedCompletedSessionIds = useRef<Set<string>>(new Set())
   const [artifactContent, setArtifactContent] = useState('')
@@ -419,6 +453,7 @@ function App() {
   const [isAcceptingHandoff, setIsAcceptingHandoff] = useState(false)
   const [isRejectingHandoff, setIsRejectingHandoff] = useState(false)
   const [isGitStatusLoading, setIsGitStatusLoading] = useState(false)
+  const [isCommitPreparationLoading, setIsCommitPreparationLoading] = useState(false)
   const [isAdding, setIsAdding] = useState(false)
   const [removingRepositoryId, setRemovingRepositoryId] = useState<string | null>(null)
 
@@ -510,6 +545,11 @@ function App() {
     currentExecutionState === 'AwaitingCommit' ||
     currentExecutionState === 'AwaitingPush'
   const gitStatusPathCount = countDirtyPaths(gitStatus?.dirtyState ?? null)
+  const selectedCommitScopeItems =
+    commitPreparation?.scopeItems.filter((item) => selectedCommitPaths.has(item.path)) ?? []
+  const isCommitPreparationCurrent =
+    commitPreparation?.sessionId === executionSessionId &&
+    currentExecutionState === 'AwaitingCommit'
 
   const startExecutionBlockedReason = useMemo(() => {
     if (!workspace) {
@@ -619,6 +659,50 @@ function App() {
       setIsGitStatusLoading(false)
     }
   }, [])
+
+  const loadCommitPreparation = useCallback(async (sessionId: string) => {
+    setIsCommitPreparationLoading(true)
+    try {
+      const preparation = await invoke<CommitPreparation>('prepare_commit', { sessionId })
+      setCommitPreparation(preparation)
+      setCommitMessage(preparation.proposedMessage)
+      setSelectedCommitPaths(
+        new Set(
+          preparation.scopeItems
+            .filter((item) => item.isSelected)
+            .map((item) => item.path),
+        ),
+      )
+    } catch (prepareError) {
+      setCommitPreparation(null)
+      setSelectedCommitPaths(new Set())
+      setCommitMessage('')
+      setError(formatError(prepareError))
+    } finally {
+      setIsCommitPreparationLoading(false)
+    }
+  }, [])
+
+  function setCommitPathSelection(path: string, isSelected: boolean) {
+    setSelectedCommitPaths((currentPaths) => {
+      const nextPaths = new Set(currentPaths)
+      if (isSelected) {
+        nextPaths.add(path)
+      } else {
+        nextPaths.delete(path)
+      }
+
+      return nextPaths
+    })
+  }
+
+  function selectAllCommitPaths() {
+    setSelectedCommitPaths(new Set(commitPreparation?.scopeItems.map((item) => item.path) ?? []))
+  }
+
+  function selectNoCommitPaths() {
+    setSelectedCommitPaths(new Set())
+  }
 
   const loadRepositories = useCallback(async () => {
     setIsLoading(true)
@@ -1149,15 +1233,34 @@ function App() {
   useEffect(() => {
     if (!selectedRepository || !shouldShowGitWorkflow) {
       setGitStatus(null)
+      setCommitPreparation(null)
+      setSelectedCommitPaths(new Set())
+      setCommitMessage('')
       return
     }
 
     const timeoutId = window.setTimeout(() => {
+      if (currentExecutionState === 'AwaitingCommit' && executionSessionId) {
+        setGitStatus(null)
+        void loadCommitPreparation(executionSessionId)
+        return
+      }
+
+      setCommitPreparation(null)
+      setSelectedCommitPaths(new Set())
+      setCommitMessage('')
       void loadGitStatus(selectedRepository.repository.id)
     }, 0)
 
     return () => window.clearTimeout(timeoutId)
-  }, [loadGitStatus, selectedRepository, shouldShowGitWorkflow])
+  }, [
+    currentExecutionState,
+    executionSessionId,
+    loadCommitPreparation,
+    loadGitStatus,
+    selectedRepository,
+    shouldShowGitWorkflow,
+  ])
 
   useEffect(() => {
     if (!selectedRepository || !selectedArtifactPath) {
@@ -1620,16 +1723,96 @@ function App() {
                       type="button"
                       className="secondary-action"
                       onClick={() =>
-                        selectedRepository
+                        currentExecutionState === 'AwaitingCommit' && executionSessionId
+                          ? void loadCommitPreparation(executionSessionId)
+                          : selectedRepository
                           ? void loadGitStatus(selectedRepository.repository.id)
                           : undefined
                       }
-                      disabled={!selectedRepository || isGitStatusLoading}
+                      disabled={
+                        (!selectedRepository && !executionSessionId) ||
+                        isGitStatusLoading ||
+                        isCommitPreparationLoading
+                      }
                     >
-                      {isGitStatusLoading ? 'Refreshing...' : 'Refresh Status'}
+                      {isGitStatusLoading || isCommitPreparationLoading ? 'Refreshing...' : 'Refresh'}
                     </button>
                   </div>
-                  {gitStatus ? (
+                  {currentExecutionState === 'AwaitingCommit' ? (
+                    isCommitPreparationCurrent && commitPreparation ? (
+                      <div className="commit-review-panel">
+                        <div className="context-summary">
+                          <span>Preparation: {commitPreparation.id}</span>
+                          <span>Snapshot: {commitPreparation.statusSnapshot.id}</span>
+                          <span>Branch: {commitPreparation.statusSnapshot.branch || '(detached)'}</span>
+                          <span>Generated: {formatDateTime(commitPreparation.generatedAt)}</span>
+                          <span>Changed paths: {commitPreparation.scopeItems.length}</span>
+                          <span>Selected: {selectedCommitScopeItems.length}</span>
+                          <span>
+                            Pre-existing:{' '}
+                            {commitPreparation.hasPreExistingChanges ? 'Present' : 'None detected'}
+                          </span>
+                          <span>Captured: {formatDateTime(commitPreparation.statusSnapshot.capturedAt)}</span>
+                        </div>
+                        <label className="commit-message-editor">
+                          <span>Commit message</span>
+                          <textarea
+                            value={commitMessage}
+                            onChange={(event) => setCommitMessage(event.target.value)}
+                            spellCheck={false}
+                          />
+                        </label>
+                        <div className="commit-scope-toolbar">
+                          <button
+                            type="button"
+                            className="secondary-action"
+                            onClick={selectAllCommitPaths}
+                            disabled={commitPreparation.scopeItems.length === 0}
+                          >
+                            Select All
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary-action"
+                            onClick={selectNoCommitPaths}
+                            disabled={commitPreparation.scopeItems.length === 0}
+                          >
+                            Select None
+                          </button>
+                        </div>
+                        {commitPreparation.scopeItems.length === 0 ? (
+                          <p className="empty-state">No changed paths are available for commit.</p>
+                        ) : (
+                          <div className="commit-scope-list" aria-label="Commit scope">
+                            {commitPreparation.scopeItems.map((item) => (
+                              <label className="commit-scope-item" key={item.path}>
+                                <input
+                                  type="checkbox"
+                                  checked={selectedCommitPaths.has(item.path)}
+                                  onChange={(event) =>
+                                    setCommitPathSelection(item.path, event.currentTarget.checked)
+                                  }
+                                />
+                                <span>{item.path}</span>
+                                <small>{item.changeType}</small>
+                                <small>
+                                  {item.origin === 'PreExisting'
+                                    ? 'Pre-existing'
+                                    : 'Execution generated'}
+                                </small>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="empty-state">
+                        {isCommitPreparationLoading
+                          ? 'Preparing commit review...'
+                          : 'Commit preparation is not loaded.'}
+                      </p>
+                    )
+                  ) : gitStatus ? (
                     <>
                       <div className="context-summary">
                         <span>Branch: {gitStatus.branch || '(detached)'}</span>

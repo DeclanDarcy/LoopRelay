@@ -455,6 +455,65 @@ button:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.commit-review-panel,
+.commit-message-editor,
+.commit-scope-list {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.commit-message-editor span {
+  color: #3d4650;
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.commit-message-editor textarea {
+  min-height: 88px;
+  resize: vertical;
+  border: 1px solid #c8d0d8;
+  border-radius: 6px;
+  padding: 10px;
+  color: #1d252c;
+  background: #ffffff;
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+  overflow-wrap: anywhere;
+}
+
+.commit-scope-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.commit-scope-item {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid #d9e0e6;
+  border-radius: 6px;
+  background: #fafbfc;
+}
+
+.commit-scope-item span {
+  overflow-wrap: anywhere;
+  color: #1d252c;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.commit-scope-item small {
+  color: #5d6873;
+  font-size: 0.78rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
 .diagnostic-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -794,6 +853,14 @@ button:focus-visible {
 
   .handoff-review-actions {
     justify-content: start;
+  }
+
+  .commit-scope-item {
+    grid-template-columns: 18px minmax(0, 1fr);
+  }
+
+  .commit-scope-item small {
+    grid-column: 2;
   }
 
   .header-actions {

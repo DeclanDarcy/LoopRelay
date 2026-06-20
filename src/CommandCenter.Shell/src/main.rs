@@ -84,6 +84,40 @@ struct RepositoryGitStatus {
 
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct CommitScopeItem {
+    path: String,
+    change_type: String,
+    origin: String,
+    is_selected: bool,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CommitStatusSnapshot {
+    id: String,
+    branch: String,
+    ahead_count: i32,
+    behind_count: i32,
+    dirty_state: RepositoryDirtyState,
+    captured_at: String,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CommitPreparation {
+    id: String,
+    session_id: String,
+    repository_id: String,
+    repository_path: String,
+    proposed_message: String,
+    scope_items: Vec<CommitScopeItem>,
+    status_snapshot: CommitStatusSnapshot,
+    generated_at: String,
+    has_pre_existing_changes: bool,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct Artifact {
     relative_path: String,
     name: String,
@@ -374,6 +408,23 @@ fn get_git_status(repository_id: String) -> Result<RepositoryGitStatus, String> 
 }
 
 #[tauri::command]
+fn prepare_commit(session_id: String) -> Result<CommitPreparation, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/execution-sessions/{session_id}/git/prepare-commit"
+        ))
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "commit preparation failed")
+}
+
+#[tauri::command]
 fn get_execution_session(session_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/execution-sessions/{session_id}"
@@ -574,6 +625,7 @@ fn main() {
             start_execution,
             get_active_execution,
             get_git_status,
+            prepare_commit,
             get_execution_session,
             accept_execution_handoff,
             reject_execution_handoff

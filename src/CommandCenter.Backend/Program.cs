@@ -301,6 +301,23 @@ public static class Program
                 return Results.BadRequest(new { error = exception.Message });
             }
         });
+        app.MapPost("/api/execution-sessions/{sessionId:guid}/git/prepare-commit", async (
+            Guid sessionId,
+            IExecutionSessionService executionSessionService) =>
+        {
+            try
+            {
+                return Results.Ok(await executionSessionService.PrepareCommitAsync(sessionId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
         app.MapGet("/api/execution-sessions/{sessionId:guid}", async (
             Guid sessionId,
             IExecutionSessionService executionSessionService) =>

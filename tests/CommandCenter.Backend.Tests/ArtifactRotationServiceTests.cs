@@ -239,5 +239,10 @@ public sealed class ArtifactRotationServiceTests
         {
             throw new NotSupportedException();
         }
+
+        public Task<CommitPreparation> PrepareCommitAsync(Guid sessionId)
+        {
+            throw new NotSupportedException();
+        }
     }
 }
