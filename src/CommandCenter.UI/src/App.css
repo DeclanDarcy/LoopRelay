@@ -195,6 +195,14 @@ button:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.repository-metadata {
+  min-width: 0;
+  color: #3d4650;
+  font-size: 0.78rem;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
 .availability {
   align-self: start;
   white-space: nowrap;

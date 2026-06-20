@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import './App.css'
 
@@ -196,11 +196,18 @@ function renderMarkdown(content: string) {
   return nodes
 }
 
+function getAvailableArtifactPaths(inventory: ArtifactInventory) {
+  return getArtifactCategories(inventory)
+    .flatMap((category) => category.artifacts)
+    .map((artifact) => artifact.relativePath)
+}
+
 function App() {
   const [repositories, setRepositories] = useState<RepositoryDashboardProjection[]>([])
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<string | null>(null)
   const [workspace, setWorkspace] = useState<RepositoryWorkspaceProjection | null>(null)
   const [selectedArtifactPath, setSelectedArtifactPath] = useState<string | null>(null)
+  const selectedArtifactPathsByRepository = useRef<Record<string, string>>({})
   const [artifactContent, setArtifactContent] = useState('')
   const [draftContent, setDraftContent] = useState('')
   const [message, setMessage] = useState<string | null>(null)
@@ -238,6 +245,37 @@ function App() {
     selectedArtifact?.versionKind === 'Current' &&
     (selectedArtifact.family === 'Handoff' || selectedArtifact.family === 'Decision')
 
+  const selectRepository = useCallback((repositoryId: string) => {
+    setSelectedRepositoryId(repositoryId)
+    setSelectedArtifactPath(selectedArtifactPathsByRepository.current[repositoryId] ?? null)
+  }, [])
+
+  const selectArtifact = useCallback((repositoryId: string, relativePath: string) => {
+    selectedArtifactPathsByRepository.current[repositoryId] = relativePath
+    setSelectedArtifactPath(relativePath)
+  }, [])
+
+  const reconcileSelectedArtifact = useCallback(
+    (repositoryId: string, nextWorkspace: RepositoryWorkspaceProjection) => {
+      const artifactPaths = getAvailableArtifactPaths(nextWorkspace.artifactInventory)
+      const rememberedPath = selectedArtifactPathsByRepository.current[repositoryId]
+
+      if (rememberedPath && artifactPaths.includes(rememberedPath)) {
+        setSelectedArtifactPath(rememberedPath)
+        return
+      }
+
+      const nextPath = artifactPaths[0] ?? null
+      setSelectedArtifactPath(nextPath)
+      if (nextPath) {
+        selectedArtifactPathsByRepository.current[repositoryId] = nextPath
+      } else {
+        delete selectedArtifactPathsByRepository.current[repositoryId]
+      }
+    },
+    [],
+  )
+
   const loadWorkspace = useCallback(async (repositoryId: string) => {
     setIsWorkspaceLoading(true)
     setError(null)
@@ -247,17 +285,7 @@ function App() {
         { repositoryId },
       )
       setWorkspace(nextWorkspace)
-      setSelectedArtifactPath((currentPath) => {
-        const artifacts = getArtifactCategories(nextWorkspace.artifactInventory).flatMap(
-          (category) => category.artifacts,
-        )
-
-        if (currentPath && artifacts.some((artifact) => artifact.relativePath === currentPath)) {
-          return currentPath
-        }
-
-        return artifacts[0]?.relativePath ?? null
-      })
+      reconcileSelectedArtifact(repositoryId, nextWorkspace)
     } catch (loadError) {
       setWorkspace(null)
       setSelectedArtifactPath(null)
@@ -265,7 +293,7 @@ function App() {
     } finally {
       setIsWorkspaceLoading(false)
     }
-  }, [])
+  }, [reconcileSelectedArtifact])
 
   const loadRepositories = useCallback(async () => {
     setIsLoading(true)
@@ -356,6 +384,7 @@ function App() {
         { repositoryId: selectedRepository.repository.id },
       )
       setWorkspace(nextWorkspace)
+      reconcileSelectedArtifact(selectedRepository.repository.id, nextWorkspace)
       setMessage('Workspace refreshed.')
       await loadRepositories()
     } catch (refreshError) {
@@ -414,6 +443,7 @@ function App() {
         repositoryId: selectedRepository.repository.id,
       })
       setWorkspace(nextWorkspace)
+      reconcileSelectedArtifact(selectedRepository.repository.id, nextWorkspace)
       setMessage('Artifact rotated.')
       await loadRepositories()
     } catch (rotateError) {
@@ -445,6 +475,8 @@ function App() {
 
   useEffect(() => {
     if (!selectedRepository || !selectedArtifactPath) {
+      setArtifactContent('')
+      setDraftContent('')
       return
     }
 
@@ -529,7 +561,7 @@ function App() {
                     type="button"
                     key={entry.repository.id}
                     className={`repository-item${isSelected ? ' selected' : ''}`}
-                    onClick={() => setSelectedRepositoryId(entry.repository.id)}
+                    onClick={() => selectRepository(entry.repository.id)}
                   >
                     <span className="repository-name">{entry.repository.name}</span>
                     <span className="repository-path">{entry.repository.path}</span>
@@ -540,6 +572,15 @@ function App() {
                     </span>
                     <span className={`readiness readiness-${entry.readiness.toLowerCase()}`}>
                       {readinessLabels[entry.readiness]}
+                    </span>
+                    <span className="repository-metadata">
+                      {entry.milestoneCount} milestones
+                    </span>
+                    <span className="repository-metadata">
+                      Handoff {entry.hasCurrentHandoff ? 'present' : 'missing'}
+                    </span>
+                    <span className="repository-metadata">
+                      Decisions {entry.hasCurrentDecisions ? 'present' : 'missing'}
                     </span>
                   </button>
                 )
@@ -619,7 +660,12 @@ function App() {
                                 className={`artifact-item${
                                   artifact.relativePath === selectedArtifactPath ? ' selected' : ''
                                 }`}
-                                onClick={() => setSelectedArtifactPath(artifact.relativePath)}
+                                onClick={() =>
+                                  selectArtifact(
+                                    selectedRepository.repository.id,
+                                    artifact.relativePath,
+                                  )
+                                }
                               >
                                 <span>{artifact.name}</span>
                                 <span>{artifact.versionKind}</span>

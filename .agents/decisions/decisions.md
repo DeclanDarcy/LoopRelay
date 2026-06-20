@@ -2,22 +2,24 @@
 
 ## Newly Authorized Decisions
 
-- Epic 1 M0-M4 certification is authorized and closed.
-- M0 Architecture Ratification is certified.
-- M1 Repository Management is certified.
-- M2 Artifact Infrastructure is certified.
-- M3 Artifact Lifecycle Management is certified.
-- M4 Planning and Readiness Infrastructure is certified.
-- The final previously uncertified workflow is accepted as verified through the actual rendered Tauri desktop application:
-  - rendered `Add Repository`
-  - native folder picker
-  - folder selection
-  - repository registration
-  - dashboard projection update
-  - workspace open
-  - repository state rendered correctly
-  - registration removal
-  - repository files preserved
-- Certification basis includes automated backend tests, API behavior, filesystem behavior, sidecar lifecycle, restart recovery, projection rebuilds, artifact editing, artifact rotation, planning/readiness, and native desktop workflows.
-- There are no remaining M0-M4 certification blockers.
-- M5 Repository Workspace Experience is authorized to begin.
+- M5 work should remain within workspace experience scope and avoid introducing new backend concepts unless a later gap requires it.
+- Current M5 implementation direction is accepted as aligned with:
+  - projection consumption
+  - repository-scoped selection state
+  - workspace UX
+  - state reconciliation
+- Artifact selection memory is authorized as repository-scoped UI state, not backend or repository state.
+- Selection reconciliation after repository state changes is accepted as high-value M5 behavior.
+- Empty-state cleanup is required so editor and preview state never display stale artifact content from another repository or prior projection.
+- The projection authority invariant remains active for M5:
+  - filesystem state flows into `ArtifactInventory`
+  - `ArtifactInventory` flows into `RepositoryWorkspaceProjection`
+  - React consumes the projection rather than deriving repository state
+- The next M5 slice is authorized to focus on rendered workspace certification before adding more features.
+- M5 certification should explicitly cover:
+  - repository switching with artifact selection restoration
+  - artifact edit/save persistence across repository switches
+  - external filesystem mutation followed by refresh
+  - handoff and decision rotation selection reconciliation
+  - empty artifact states without stale preview/editor content
+  - removing a selected repository while another repository remains
