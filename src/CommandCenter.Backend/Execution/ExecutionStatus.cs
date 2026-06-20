@@ -22,6 +22,8 @@ public sealed class ExecutionStatus
 
     public DateTimeOffset? ProviderStartedAt { get; init; }
 
+    public string? HandoffPath { get; init; }
+
     public string? FailureReason { get; init; }
 
     public IReadOnlyList<ExecutionEvent> RecentEvents { get; init; } = [];

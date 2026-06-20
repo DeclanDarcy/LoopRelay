@@ -1,15 +1,37 @@
 namespace CommandCenter.Backend.Execution;
 
-using System.Runtime.CompilerServices;
 using System.Threading.Channels;
+using System.Runtime.CompilerServices;
 
-public sealed class ExecutionMonitoringService(
-    IExecutionSessionStore sessionStore,
-    ExecutionEventRetentionPolicy? retentionPolicy = null) : IExecutionMonitoringService
+public sealed class ExecutionMonitoringService : IExecutionMonitoringService
 {
+    private readonly IExecutionSessionStore sessionStore;
+    private readonly IHandoffService? handoffService;
     private readonly SemaphoreSlim gate = new(1, 1);
-    private readonly ExecutionEventRetentionPolicy retentionPolicy = retentionPolicy ?? new ExecutionEventRetentionPolicy();
+    private readonly ExecutionEventRetentionPolicy retentionPolicy;
     private readonly Dictionary<Guid, List<Channel<ExecutionEvent>>> subscribers = [];
+
+    public ExecutionMonitoringService(IExecutionSessionStore sessionStore)
+        : this(sessionStore, null, null)
+    {
+    }
+
+    public ExecutionMonitoringService(
+        IExecutionSessionStore sessionStore,
+        ExecutionEventRetentionPolicy? retentionPolicy)
+        : this(sessionStore, null, retentionPolicy)
+    {
+    }
+
+    public ExecutionMonitoringService(
+        IExecutionSessionStore sessionStore,
+        IHandoffService? handoffService,
+        ExecutionEventRetentionPolicy? retentionPolicy = null)
+    {
+        this.sessionStore = sessionStore;
+        this.handoffService = handoffService;
+        this.retentionPolicy = retentionPolicy ?? new ExecutionEventRetentionPolicy();
+    }
 
     public IExecutionProviderObserver CreateProviderObserver(Guid sessionId)
     {
@@ -169,7 +191,12 @@ public sealed class ExecutionMonitoringService(
                     failureReason: message));
         }
 
-        return AppendEventAsync(
+        return RecordSuccessfulProviderExitAsync(sessionId, message);
+    }
+
+    private async Task RecordSuccessfulProviderExitAsync(Guid sessionId, string message)
+    {
+        await AppendEventAsync(
             sessionId,
             ExecutionEventType.ProviderExited,
             message,
@@ -178,6 +205,11 @@ public sealed class ExecutionMonitoringService(
                 session,
                 state: ExecutionSessionState.Completed,
                 completedAt: DateTimeOffset.UtcNow));
+
+        if (handoffService is not null)
+        {
+            await handoffService.ProcessProviderCompletionAsync(sessionId);
+        }
     }
 
     private async Task AppendEventAsync(
@@ -273,6 +305,7 @@ public sealed class ExecutionMonitoringService(
             ProviderExecutablePath = session.ProviderExecutablePath,
             ProviderProcessId = session.ProviderProcessId,
             ProviderStartedAt = session.ProviderStartedAt,
+            HandoffPath = session.HandoffPath,
             FailureReason = session.FailureReason,
             RecentEvents = session.Events
         };
@@ -306,6 +339,7 @@ public sealed class ExecutionMonitoringService(
             RepositorySnapshot = session.RepositorySnapshot,
             PreviousHandoffContent = session.PreviousHandoffContent,
             PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,
+            HandoffPath = session.HandoffPath,
             FailureReason = failureReason ?? session.FailureReason,
             Events = events ?? session.Events
         };

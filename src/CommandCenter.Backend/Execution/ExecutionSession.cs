@@ -36,6 +36,8 @@ public sealed class ExecutionSession
 
     public DateTimeOffset? PreviousHandoffCapturedAt { get; init; }
 
+    public string? HandoffPath { get; init; }
+
     public string? FailureReason { get; init; }
 
     public IReadOnlyList<ExecutionEvent> Events { get; init; } = [];
@@ -55,6 +57,7 @@ public sealed class ExecutionSession
             ProviderExecutablePath = ProviderExecutablePath,
             ProviderProcessId = ProviderProcessId,
             ProviderStartedAt = ProviderStartedAt,
+            HandoffPath = HandoffPath,
             FailureReason = FailureReason
         };
     }

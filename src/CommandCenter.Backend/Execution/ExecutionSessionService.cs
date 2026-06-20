@@ -263,6 +263,7 @@ file static class ExecutionSessionMutation
             RepositorySnapshot = session.RepositorySnapshot,
             PreviousHandoffContent = session.PreviousHandoffContent,
             PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,
+            HandoffPath = session.HandoffPath,
             FailureReason = failureReason ?? session.FailureReason,
             Events = session.Events
         };

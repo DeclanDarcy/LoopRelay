@@ -6,16 +6,16 @@ Complete execution only when a handoff exists, rotate the previous handoff, and 
 
 ## Backend Work
 
-- [ ] Implement `HandoffService`.
-- [ ] Detect provider completion.
-- [ ] Validate `.agents/handoffs/handoff.md` exists.
+- [x] Implement `HandoffService`.
+- [x] Detect provider completion.
+- [x] Validate `.agents/handoffs/handoff.md` exists.
 - [ ] Archive previous handoff snapshot to next `.agents/handoffs/handoff.NNNN.md` when appropriate.
-- [ ] Associate current handoff with the session.
+- [x] Associate current handoff with the session.
 - [ ] Add completed time and duration to session metadata.
-- [ ] Transition from `Executing` to `AwaitingAcceptance` when validation succeeds.
-- [ ] Transition to `Failed` when handoff validation or historical archive fails.
+- [x] Transition from `Executing` to `AwaitingAcceptance` when validation succeeds.
+- [x] Transition to `Failed` when handoff validation or historical archive fails.
 - [ ] Refresh repository projections after completion processing.
-- [ ] Restore `AwaitingAcceptance` state after restart.
+- [x] Restore `AwaitingAcceptance` state after restart.
 
 ## UI Work
 
@@ -26,15 +26,15 @@ Complete execution only when a handoff exists, rotate the previous handoff, and 
 
 ## Tests
 
-- [ ] Provider completion plus handoff exists transitions to `AwaitingAcceptance`.
-- [ ] Provider completion without handoff transitions to `Failed`.
+- [x] Provider completion plus handoff exists transitions to `AwaitingAcceptance`.
+- [x] Provider completion without handoff transitions to `Failed`.
 - [ ] Previous handoff snapshot is archived with next sequence number.
 - [ ] No historical handoff is created when no previous handoff existed.
 - [ ] Rotation/archive failure transitions to `Failed`.
-- [ ] Awaiting acceptance state survives store reload.
+- [x] Awaiting acceptance state survives store reload.
 
 ## Exit Criteria
 
-- [ ] Execution cannot complete successfully without a current handoff.
+- [x] Execution cannot complete successfully without a current handoff.
 - [ ] Generated handoff is visible for review.
 - [ ] Prior current handoff is preserved historically.

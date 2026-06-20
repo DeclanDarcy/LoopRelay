@@ -24,5 +24,7 @@ public sealed class ExecutionSessionSummary
 
     public DateTimeOffset? ProviderStartedAt { get; init; }
 
+    public string? HandoffPath { get; init; }
+
     public string? FailureReason { get; init; }
 }
