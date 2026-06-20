@@ -17,6 +17,7 @@ Observe active execution sessions and display live output.
 - [ ] Reconnect monitoring only when provider reattach succeeds.
 - [x] Mark unrecoverable active sessions failed rather than leaving them executing.
 - [x] Reflect provider failure in session and repository execution state.
+- [x] Certify JSON status and retained-events endpoints before SSE transport work.
 
 ## UI Work
 
@@ -30,7 +31,10 @@ Observe active execution sessions and display live output.
 - [x] Output events are emitted in order.
 - [x] `LastActivityAt` updates when output arrives.
 - [x] Failure state is projected to session and repository.
+- [x] Completed provider-exit state is projected without implying acceptance or readiness.
 - [ ] Cancellation state is projected to session and repository.
+- [x] JSON status and events endpoints return persisted event history after store reload.
+- [x] JSON status and events endpoints return not found for unknown sessions.
 - [ ] SSE endpoint streams events.
 - [ ] Restart restores active session metadata and resumes monitoring when reattach succeeds.
 - [x] Restart marks unrecoverable active sessions failed with explicit orphaned-process reason.

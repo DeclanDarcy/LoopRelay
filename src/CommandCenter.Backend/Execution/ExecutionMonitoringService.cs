@@ -81,7 +81,15 @@ public sealed class ExecutionMonitoringService(
                     failureReason: message));
         }
 
-        return AppendEventAsync(sessionId, ExecutionEventType.ProviderExited, message, DateTimeOffset.UtcNow);
+        return AppendEventAsync(
+            sessionId,
+            ExecutionEventType.ProviderExited,
+            message,
+            activityAt: DateTimeOffset.UtcNow,
+            mutateSession: session => CopySession(
+                session,
+                state: ExecutionSessionState.Completed,
+                completedAt: DateTimeOffset.UtcNow));
     }
 
     private async Task AppendEventAsync(

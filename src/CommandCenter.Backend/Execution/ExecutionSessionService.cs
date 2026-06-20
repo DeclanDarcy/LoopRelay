@@ -26,7 +26,8 @@ public sealed class ExecutionSessionService(
             for (var index = 0; index < sessions.Count; index++)
             {
                 var session = sessions[index];
-                if (session.RepositoryState != RepositoryExecutionState.Executing)
+                if (session.RepositoryState != RepositoryExecutionState.Executing ||
+                    session.State != ExecutionSessionState.Executing)
                 {
                     continue;
                 }
