@@ -8,30 +8,30 @@ M6 completes the decision-aware portion of compression. After M6, compression ca
 
 ## Backend Changes
 
-- [ ] Add `IDecisionAnalysisService`.
-- [ ] Parse current decisions and bounded relevant historical decision artifacts through `ArtifactService`.
-- [ ] Introduce decision taxonomy:
-  - [ ] `ArchitecturalDecision`.
-  - [ ] `StrategicDecision`.
-  - [ ] `TacticalDecision`.
-  - [ ] `HistoricalDecision`.
-- [ ] Analyze decisions for:
-  - [ ] Decision statement.
-  - [ ] Rationale.
-  - [ ] Constraints introduced.
-  - [ ] Consequences.
-  - [ ] Open decision questions.
-  - [ ] Superseded or retired decisions.
-- [ ] Generation must assimilate:
-  - [ ] Architectural decisions.
-  - [ ] Strategic decisions.
-  - [ ] Decision rationale that explains durable constraints.
-  - [ ] Open decisions as open questions.
-- [ ] Generation must not assimilate:
-  - [ ] One-time approvals.
-  - [ ] Temporary workarounds with no future relevance.
-  - [ ] Execution detail.
-  - [ ] Closed investigations without current consequence.
+- [x] Add `IDecisionAnalysisService`.
+- [x] Parse current decisions and bounded relevant historical decision artifacts through `ArtifactService`.
+- [x] Introduce decision taxonomy:
+  - [x] `ArchitecturalDecision`.
+  - [x] `StrategicDecision`.
+  - [x] `TacticalDecision`.
+  - [x] `HistoricalDecision`.
+- [x] Analyze decisions for:
+  - [x] Decision statement.
+  - [x] Rationale.
+  - [x] Constraints introduced.
+  - [x] Consequences.
+  - [x] Open decision questions.
+  - [x] Superseded or retired decisions.
+- [x] Generation must assimilate:
+  - [x] Architectural decisions.
+  - [x] Strategic decisions.
+  - [x] Decision rationale that explains durable constraints.
+  - [x] Open decisions as open questions.
+- [x] Generation must not assimilate:
+  - [x] One-time approvals.
+  - [x] Temporary workarounds with no future relevance.
+  - [x] Execution detail.
+  - [x] Closed investigations without current consequence.
 - [ ] Extend semantic changes with decision-specific change types:
   - [ ] Important decision introduced.
   - [ ] Decision retired.
@@ -39,11 +39,11 @@ M6 completes the decision-aware portion of compression. After M6, compression ca
   - [ ] Rationale lost warning.
   - [ ] Open decision preserved.
   - [ ] Open decision resolved.
-- [ ] Extend compression and review warnings for:
-  - [ ] Lost decision rationale.
-  - [ ] Tactical decision accumulation.
-  - [ ] Historical decision replay.
-  - [ ] Contradictory decision preservation.
+- [x] Extend compression and review warnings for:
+  - [x] Lost decision rationale.
+  - [x] Tactical decision accumulation.
+  - [x] Historical decision replay.
+  - [x] Contradictory decision preservation.
 
 ## UI Changes
 
@@ -59,13 +59,13 @@ M6 completes the decision-aware portion of compression. After M6, compression ca
 
 Add backend tests:
 
-- [ ] Architectural decisions survive proposals and promotions.
+- [x] Architectural decisions survive proposals and promotions.
 - [ ] Strategic decisions survive while relevant.
-- [ ] Tactical decisions remain in decisions history without bloating operational context.
-- [ ] Rationale survives for assimilated decisions.
-- [ ] Open decisions appear as open questions.
-- [ ] Duplicate contradictory decisions are flagged.
-- [ ] Decision rationale loss is surfaced as a warning.
+- [x] Tactical decisions remain in decisions history without bloating operational context.
+- [x] Rationale survives for assimilated decisions.
+- [x] Open decisions appear as open questions.
+- [x] Duplicate contradictory decisions are flagged.
+- [x] Decision rationale loss is surfaced as a warning.
 
 ## Certification
 

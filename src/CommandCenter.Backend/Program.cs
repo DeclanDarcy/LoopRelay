@@ -26,6 +26,7 @@ public static class Program
         builder.Services.AddSingleton<IOperationalContextParser, MarkdownOperationalContextParser>();
         builder.Services.AddSingleton<IUnderstandingDiffService, UnderstandingDiffService>();
         builder.Services.AddSingleton<IUnderstandingCompressionService, UnderstandingCompressionService>();
+        builder.Services.AddSingleton<IDecisionAnalysisService, DecisionAnalysisService>();
         builder.Services.AddSingleton<IOperationalContextProposalStore, FileSystemOperationalContextProposalStore>();
         builder.Services.AddSingleton<IOperationalContextGenerationService, OperationalContextGenerationService>();
         builder.Services.AddSingleton<IOperationalContextReviewService, OperationalContextReviewService>();

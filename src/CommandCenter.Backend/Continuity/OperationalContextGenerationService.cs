@@ -15,6 +15,7 @@ public sealed class OperationalContextGenerationService(
     IOperationalContextParser parser,
     IUnderstandingDiffService diffService,
     IUnderstandingCompressionService compressionService,
+    IDecisionAnalysisService decisionAnalysisService,
     IOperationalContextProposalStore proposalStore) : IOperationalContextGenerationService
 {
     private const string CurrentOperationalContextPath = ".agents/operational_context.md";
@@ -26,11 +27,13 @@ public sealed class OperationalContextGenerationService(
         var repository = await GetRepositoryAsync(repositoryId);
         var inputSet = await BuildInputSetAsync(repository);
         var currentDocument = parser.Parse(inputSet.CurrentOperationalContext ?? string.Empty);
-        var proposedDocument = BuildProposedDocument(inputSet, currentDocument);
+        var decisionAnalysis = decisionAnalysisService.Analyze(inputSet.DecisionArtifacts);
+        var proposedDocument = BuildProposedDocument(inputSet, currentDocument, decisionAnalysis);
         var compression = compressionService.Compress(currentDocument, proposedDocument);
         var generatedContent = parser.Render(compression.Document);
         var generatedDocument = parser.Parse(generatedContent);
         var generatedContentHash = HashContent(generatedContent);
+        var compressionSummary = AppendDecisionWarnings(compression.Summary, decisionAnalysis.Warnings);
 
         await proposalStore.SupersedePendingAsync(repository);
 
@@ -44,7 +47,7 @@ public sealed class OperationalContextGenerationService(
             BaselineCurrentContextHash = HashOptionalContent(inputSet.CurrentOperationalContext),
             GeneratedContentHash = generatedContentHash,
             SemanticChanges = diffService.Compare(currentDocument, generatedDocument),
-            CompressionSummary = compression.Summary
+            CompressionSummary = compressionSummary
         };
 
         return await proposalStore.SaveAsync(repository, proposal, generatedContent);
@@ -59,12 +62,14 @@ public sealed class OperationalContextGenerationService(
     private async Task<OperationalContextInputSet> BuildInputSetAsync(Repository repository)
     {
         var artifacts = await artifactService.DiscoverAsync(repository);
+        var decisionArtifacts = await ReadDecisionArtifactsAsync(repository, artifacts);
         return new OperationalContextInputSet
         {
             Repository = repository,
             CurrentOperationalContext = await ReadOptionalAsync(repository, CurrentOperationalContextPath),
             CurrentHandoff = await ReadOptionalAsync(repository, CurrentHandoffPath),
             CurrentDecisions = await ReadOptionalAsync(repository, CurrentDecisionsPath),
+            DecisionArtifacts = decisionArtifacts,
             ExecutionHistory = await executionSessionService.GetRepositorySessionHistoryAsync(repository.Id, 5),
             MilestonePaths = artifacts
                 .Where(artifact => artifact.Type == ArtifactType.Milestone)
@@ -83,9 +88,35 @@ public sealed class OperationalContextGenerationService(
             : null;
     }
 
+    private async Task<IReadOnlyList<DecisionArtifactInput>> ReadDecisionArtifactsAsync(
+        Repository repository,
+        IReadOnlyList<Artifact> artifacts)
+    {
+        var selectedArtifacts = artifacts
+            .Where(artifact => artifact.Type == ArtifactType.Decision)
+            .OrderByDescending(artifact => artifact.VersionKind == ArtifactVersionKind.Current)
+            .ThenByDescending(artifact => artifact.RelativePath, StringComparer.OrdinalIgnoreCase)
+            .Take(4)
+            .ToArray();
+
+        var decisionArtifacts = new List<DecisionArtifactInput>();
+        foreach (var artifact in selectedArtifacts)
+        {
+            decisionArtifacts.Add(new DecisionArtifactInput
+            {
+                RelativePath = artifact.RelativePath,
+                Content = await artifactService.LoadAsync(repository, artifact.RelativePath),
+                IsCurrent = artifact.VersionKind == ArtifactVersionKind.Current
+            });
+        }
+
+        return decisionArtifacts;
+    }
+
     private static OperationalContextDocument BuildProposedDocument(
         OperationalContextInputSet inputSet,
-        OperationalContextDocument current)
+        OperationalContextDocument current,
+        DecisionAnalysisResult decisionAnalysis)
     {
         var currentMentalModel = current.CurrentMentalModel.ToList();
         AddUnique(
@@ -102,9 +133,32 @@ public sealed class OperationalContextGenerationService(
             ".agents/plan.md");
 
         var stableDecisions = current.StableDecisions.ToList();
-        foreach (var decision in ExtractDecisionBullets(inputSet.CurrentDecisions).Take(8))
+        var decisionRationale = current.DecisionRationale.ToList();
+        var constraints = current.Constraints.ToList();
+        var openQuestions = current.OpenQuestions.ToList();
+
+        foreach (var decision in decisionAnalysis.Signals.Where(IsAssimilatedDecision).Take(8))
         {
-            AddUnique(stableDecisions, OperationalContextItemKind.StableDecision, decision, CurrentDecisionsPath);
+            AddUnique(stableDecisions, OperationalContextItemKind.StableDecision, $"Decision: {decision.Statement}", decision.SourceRelativePath);
+
+            if (!string.IsNullOrWhiteSpace(decision.Rationale))
+            {
+                AddUnique(
+                    decisionRationale,
+                    OperationalContextItemKind.DecisionRationale,
+                    $"Rationale for `{decision.Statement}`: {decision.Rationale}",
+                    decision.SourceRelativePath);
+            }
+
+            foreach (var constraint in decision.ConstraintsIntroduced.Take(3))
+            {
+                AddUnique(constraints, OperationalContextItemKind.Constraint, constraint, decision.SourceRelativePath);
+            }
+
+            foreach (var openQuestion in decision.OpenQuestions.Take(3))
+            {
+                AddUnique(openQuestions, OperationalContextItemKind.OpenQuestion, $"Open decision: {openQuestion}", decision.SourceRelativePath);
+            }
         }
 
         var recentChanges = current.RecentUnderstandingChanges.ToList();
@@ -130,21 +184,20 @@ public sealed class OperationalContextGenerationService(
             CurrentMentalModel = currentMentalModel,
             Architecture = current.Architecture,
             AuthorityBoundaries = current.AuthorityBoundaries,
-            Constraints = current.Constraints,
+            Constraints = constraints,
             StableDecisions = stableDecisions,
-            DecisionRationale = current.DecisionRationale,
-            OpenQuestions = current.OpenQuestions,
+            DecisionRationale = decisionRationale,
+            OpenQuestions = openQuestions,
             ActiveRisks = current.ActiveRisks,
             RecentUnderstandingChanges = recentChanges,
             AdditionalSections = current.AdditionalSections
         };
     }
 
-    private static IEnumerable<string> ExtractDecisionBullets(string? decisionsMarkdown)
+    private static bool IsAssimilatedDecision(DecisionSignal signal)
     {
-        return ExtractBullets(decisionsMarkdown)
-            .Where(line => !line.Contains("next-slice", StringComparison.OrdinalIgnoreCase))
-            .Select(line => $"Decision signal: {line}");
+        return !signal.IsSupersededOrRetired &&
+            signal.Taxonomy is DecisionTaxonomy.ArchitecturalDecision or DecisionTaxonomy.StrategicDecision;
     }
 
     private static IEnumerable<string> ExtractHandoffSignals(string? handoffMarkdown)
@@ -232,6 +285,47 @@ public sealed class OperationalContextGenerationService(
             Hash = HashContent(normalizedContent),
             CharacterCount = normalizedContent.Length,
             ByteCount = bytes
+        };
+    }
+
+    private static OperationalContextCompressionSummary AppendDecisionWarnings(
+        OperationalContextCompressionSummary summary,
+        IReadOnlyList<string> decisionWarnings)
+    {
+        if (decisionWarnings.Count == 0)
+        {
+            return summary;
+        }
+
+        var warnings = summary.Warnings.Concat(decisionWarnings.Select(warning => $"Decision analysis warning: {warning}")).ToArray();
+        var stableWarnings = summary.StableUnderstandingRetentionWarnings
+            .Concat(decisionWarnings
+                .Where(warning => warning.Contains("rationale", StringComparison.OrdinalIgnoreCase) ||
+                    warning.Contains("Contradictory", StringComparison.OrdinalIgnoreCase))
+                .Select(warning => $"Decision analysis warning: {warning}"))
+            .ToArray();
+        var revisionSummary = summary.RevisionSummary
+            .Concat([$"{decisionWarnings.Count} decision-continuity warning(s) require review."])
+            .ToArray();
+
+        return new OperationalContextCompressionSummary
+        {
+            PreservedItemCount = summary.PreservedItemCount,
+            AddedItemCount = summary.AddedItemCount,
+            ModifiedItemCount = summary.ModifiedItemCount,
+            RemovedItemCount = summary.RemovedItemCount,
+            CompressedItemCount = summary.CompressedItemCount,
+            PermanentUnderstandingItemCount = summary.PermanentUnderstandingItemCount,
+            ActiveUnderstandingItemCount = summary.ActiveUnderstandingItemCount,
+            HistoricalUnderstandingItemCount = summary.HistoricalUnderstandingItemCount,
+            HistoricalNoiseItemCount = summary.HistoricalNoiseItemCount,
+            ResolvedQuestionCount = summary.ResolvedQuestionCount,
+            RetiredRiskCount = summary.RetiredRiskCount,
+            WarningCount = warnings.Length,
+            Warnings = warnings,
+            RevisionSummary = revisionSummary,
+            NoiseRemovedIndicators = summary.NoiseRemovedIndicators,
+            StableUnderstandingRetentionWarnings = stableWarnings
         };
     }
 

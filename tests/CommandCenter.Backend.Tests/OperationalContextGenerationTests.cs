@@ -172,6 +172,75 @@ public sealed class OperationalContextGenerationTests
     }
 
     [Fact]
+    public async Task ArchitecturalDecisionAndRationaleAreAssimilated()
+    {
+        var harness = await CreateHarnessAsync();
+        await WriteAsync(harness.Repository, ".agents/decisions/decisions.md", """
+            # Decisions
+
+            - Backend service boundaries must own workflow authority because client state cannot be authoritative.
+            """);
+
+        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+
+        Assert.Contains("Decision: Backend service boundaries must own workflow authority", proposal.GeneratedContent);
+        Assert.Contains("Rationale for `Backend service boundaries must own workflow authority because client state cannot be authoritative.`: client state cannot be authoritative", proposal.GeneratedContent);
+        Assert.Contains("Backend service boundaries must own workflow authority because client state cannot be authoritative.", proposal.GeneratedContent);
+    }
+
+    [Fact]
+    public async Task TacticalDecisionsDoNotBloatOperationalContext()
+    {
+        var harness = await CreateHarnessAsync();
+        await WriteAsync(harness.Repository, ".agents/decisions/decisions.md", """
+            # Decisions
+
+            - M5 build passed.
+            - Stage and commit the current slice.
+            - Temporary workaround was approved for this slice.
+            """);
+
+        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+
+        Assert.DoesNotContain("M5 build passed.", proposal.GeneratedContent);
+        Assert.DoesNotContain("Stage and commit the current slice.", proposal.GeneratedContent);
+        Assert.Contains(proposal.CompressionSummary.Warnings, warning =>
+            warning.Contains("tactical decision", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task OpenDecisionAppearsAsOpenQuestion()
+    {
+        var harness = await CreateHarnessAsync();
+        await WriteAsync(harness.Repository, ".agents/decisions/decisions.md", """
+            # Decisions
+
+            - Should operational context diagnostics include decision retention trends?
+            """);
+
+        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+
+        Assert.Contains("Open decision: Should operational context diagnostics include decision retention trends?", proposal.GeneratedContent);
+    }
+
+    [Fact]
+    public async Task ContradictoryDurableDecisionsAreFlagged()
+    {
+        var harness = await CreateHarnessAsync();
+        await WriteAsync(harness.Repository, ".agents/decisions/decisions.md", """
+            # Decisions
+
+            - Operational context generation must mutate current context.
+            - Operational context generation must not mutate current context.
+            """);
+
+        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+
+        Assert.Contains(proposal.CompressionSummary.Warnings, warning =>
+            warning.Contains("Contradictory decision signals", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task CompressionPreservesDurableUnderstandingAndReportsTiers()
     {
         var harness = await CreateHarnessAsync();
@@ -830,6 +899,7 @@ public sealed class OperationalContextGenerationTests
             parser,
             new UnderstandingDiffService(),
             compressionService,
+            new DecisionAnalysisService(),
             proposalStore);
         var reviewService = new OperationalContextReviewService(
             repositoryService,

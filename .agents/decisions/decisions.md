@@ -2,19 +2,18 @@
 
 ## Newly Authorized Decisions
 
-- M5 is complete in the roadmap-intended shape because compression now separates preserved, compressed, explicitly resolved, and explicitly retired understanding.
-- Absence of evidence is not evidence of resolution for open questions or active risks; explicit positive evidence is required.
-- Multi-revision certification is a core continuity durability guardrail and should inform M6 and M8 work.
-- Revision summary visibility is part of the review surface because reviewers need to assess understanding evolution, not only raw text changes.
-- M6 must avoid semantic authority creep.
-- Decision history remains owned by `.agents/decisions/decisions.md`; operational context should contain only current consequences of important decisions, not the full decision record.
-- Decision analysis must not become decision resolution. It may identify stable decisions, conflicting decisions, decision signals, and missing rationale, but must not choose which decision is authoritative.
-- Decision assimilation must remain proposal-review-promotion mediated and must not directly mutate operational context.
-- Contradictory decision warnings in M6 should start with obvious deterministic cases and avoid broad semantic contradiction detection.
-- M6 should continue the deterministic, explainable, reviewable pattern established by prior milestones.
+- The first half of M6 is accepted as correctly aligned because it implements deterministic decision analysis and durable consequence assimilation without turning operational context into a second decision archive.
+- M6 should continue preserving the boundary between decision history and current understanding: decision artifacts remain the record, while operational context receives only durable consequences.
+- Tactical decisions should continue to surface as reviewer warnings rather than being silently discarded or promoted into operational context.
+- Deterministic, auditable, reviewable classification remains preferred over early decision-intelligence or automatic semantic authority.
+- Rationale preservation is a core M6 value because durable rationale often survives architecture evolution better than literal decision wording.
+- Contradictory durable decisions must remain warnings only; the system must identify apparent conflicts but never decide which decision wins.
+- The next M6 slice should make stable decisions, open decisions, decision rationale, decision warnings, and decision contradictions first-class review concepts.
+- Reviewers should be able to evaluate decision-derived understanding without opening `decisions.md` or inspecting raw proposal metadata.
+- Before closing M6, add an explicit certification rule that decision assimilation must preserve separation between decision history and current understanding.
+- Add repeated-revision certification coverage proving a large decision archive does not cause operational context to accumulate historical decisions over repeated proposal cycles.
 
 ## Recommended Next Slice
 
-- Start M6 decision continuity by adding conservative decision analysis over current decisions artifacts.
-- Classify architectural, strategic, and tactical decision signals without treating operational context as a decision archive.
-- Preserve rationale and surface missing-rationale or obvious-conflict warnings in proposal metadata and review UI.
+- Extend decision-specific semantic changes and the review/workspace UI so decision-derived understanding is visible as reviewable concepts.
+- Add decision archive creep certification before marking M6 complete.

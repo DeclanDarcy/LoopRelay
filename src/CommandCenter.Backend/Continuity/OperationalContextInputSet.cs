@@ -13,6 +13,8 @@ public sealed class OperationalContextInputSet
 
     public string? CurrentDecisions { get; init; }
 
+    public IReadOnlyList<DecisionArtifactInput> DecisionArtifacts { get; init; } = [];
+
     public IReadOnlyList<ExecutionSessionSummary> ExecutionHistory { get; init; } = [];
 
     public IReadOnlyList<string> MilestonePaths { get; init; } = [];
