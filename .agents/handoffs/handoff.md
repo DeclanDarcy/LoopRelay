@@ -2,22 +2,28 @@
 
 ## New State This Slice
 
-- Began M5 Repository Workspace Experience after M0-M4 certification was accepted as closed.
-- Updated the repository dashboard UI to display all available backend dashboard projection status:
-  - milestone count
-  - current handoff present/missing
-  - current decisions present/missing
-- Added per-repository artifact selection memory in the React workspace.
-- Added artifact selection reconciliation after workspace load, refresh, and rotation:
-  - remembered artifact selection is restored when it still exists
-  - missing remembered artifacts fall back to the first available artifact
-  - repositories with no artifacts clear the selected artifact and editor content
-- Added compact dashboard metadata styling for the new projected repository status fields.
-- Verified frontend production build with `npm run build` from `src\CommandCenter.UI`.
-- Verified backend regression suite with `dotnet test CommandCenter.slnx`; all 42 tests passed.
+- Continued M5 Repository Workspace Experience with a focus on rendered workspace certification.
+- Added a Vite-development-only Tauri invoke mock harness:
+  - file: `src/CommandCenter.UI/src/devTauriMock.ts`
+  - activation: `http://127.0.0.1:5173/?mock=workspace-certification`
+  - production behavior remains on the real Tauri `invoke` path because the harness is gated by `import.meta.env.DEV`.
+- Wired the dev mock from `src/CommandCenter.UI/src/main.tsx`.
+- Fixed the artifact loading effect in `src/CommandCenter.UI/src/App.tsx` so empty artifact state clears editor and preview content asynchronously instead of tripping `react-hooks/set-state-in-effect`.
+- Ran rendered browser certification against the mock harness and verified:
+  - dashboard projection display for populated and empty repositories
+  - repository-scoped artifact selection restoration
+  - artifact save persistence across repository switches
+  - empty repository selection clears stale editor and preview content
+  - current handoff rotation keeps current selected and adds next historical entry
+  - current decisions rotation keeps current selected and adds next historical entry
+  - removing a selected repository selects the remaining repository
+- Verified:
+  - `npm run lint` from `src\CommandCenter.UI`
+  - `npm run build` from `src\CommandCenter.UI`
+  - `dotnet test CommandCenter.slnx` with all 42 backend tests passing
 
 ## Immediate Gaps
 
-- M5 is partially advanced, not complete.
-- No rendered-browser or desktop certification was run for this UI slice.
-- Remaining M5 work should focus on manual/rendered verification of workspace flows and any missing acceptance behavior found there.
+- M5 rendered browser certification is now covered through a deterministic dev mock harness.
+- Native Tauri desktop certification has not been run in this slice.
+- Remaining M5 work should decide whether the dev mock harness is sufficient as an ongoing certification aid or whether it should be converted into formal automated UI tests.

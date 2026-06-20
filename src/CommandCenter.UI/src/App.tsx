@@ -475,9 +475,12 @@ function App() {
 
   useEffect(() => {
     if (!selectedRepository || !selectedArtifactPath) {
-      setArtifactContent('')
-      setDraftContent('')
-      return
+      const timeoutId = window.setTimeout(() => {
+        setArtifactContent('')
+        setDraftContent('')
+      }, 0)
+
+      return () => window.clearTimeout(timeoutId)
     }
 
     let isCurrent = true
