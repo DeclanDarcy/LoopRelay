@@ -26,6 +26,7 @@ public static class Program
         builder.Services.AddSingleton<IExecutionPromptBuilder, ExecutionPromptBuilder>();
         builder.Services.AddSingleton<IExecutionSessionStore, FileSystemExecutionSessionStore>();
         builder.Services.AddSingleton<IExecutionSessionService, ExecutionSessionService>();
+        builder.Services.AddHostedService<ExecutionSessionRecoveryHostedService>();
         builder.Services.AddSingleton<IExecutionMonitoringService, ExecutionMonitoringService>();
         builder.Services.AddSingleton<IHandoffService, HandoffService>();
         builder.Services.AddSingleton<ICodexExecutableResolver, CodexExecutableResolver>();

@@ -8,7 +8,47 @@ public sealed class ExecutionSessionService(
     IExecutionProvider executionProvider,
     IExecutionPromptBuilder promptBuilder) : IExecutionSessionService
 {
+    public const string OrphanedProviderFailureReason =
+        "Active provider process could not be reattached after backend restart.";
+
     private readonly SemaphoreSlim gate = new(1, 1);
+
+    public async Task RecoverAsync()
+    {
+        await gate.WaitAsync();
+        try
+        {
+            var sessions = (await sessionStore.LoadAsync()).ToList();
+            var recoveredAt = DateTimeOffset.UtcNow;
+            var changed = false;
+
+            for (var index = 0; index < sessions.Count; index++)
+            {
+                var session = sessions[index];
+                if (session.RepositoryState != RepositoryExecutionState.Executing)
+                {
+                    continue;
+                }
+
+                sessions[index] = session.WithState(
+                    ExecutionSessionState.Failed,
+                    RepositoryExecutionState.Failed,
+                    completedAt: recoveredAt,
+                    lastActivityAt: recoveredAt,
+                    failureReason: OrphanedProviderFailureReason);
+                changed = true;
+            }
+
+            if (changed)
+            {
+                await sessionStore.SaveAsync(sessions);
+            }
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
 
     public async Task<RepositoryExecutionState> GetRepositoryStateAsync(Guid repositoryId)
     {

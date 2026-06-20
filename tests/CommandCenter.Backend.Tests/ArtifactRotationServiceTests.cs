@@ -200,6 +200,11 @@ public sealed class ArtifactRotationServiceTests
 
     private sealed class ReadyExecutionSessionService : IExecutionSessionService
     {
+        public Task RecoverAsync()
+        {
+            return Task.CompletedTask;
+        }
+
         public Task<RepositoryExecutionState> GetRepositoryStateAsync(Guid repositoryId)
         {
             return Task.FromResult(RepositoryExecutionState.Ready);

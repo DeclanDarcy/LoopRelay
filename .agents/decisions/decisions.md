@@ -2,36 +2,54 @@
 
 ## Newly Authorized Decisions
 
-- M2B.2 provider-launch boundary is accepted as correctly scoped.
-- The launch path may be real without treating launch as execution completion.
-- The next authorized slice is M2B.3: restart and orphan recovery.
-- Backend startup must load persisted `Executing` sessions.
-- Codex reattach is unsupported for this phase.
-- An unrecoverable persisted `Executing` Codex session must be marked `Failed`.
-- The repository execution state for that session must become `Failed`.
-- The failure reason must be explicit and stable: `Active provider process could not be reattached after backend restart.`
-- Unrecoverable sessions must not remain `Executing`.
-- Unrecoverable sessions must not be silently converted to `Completed` or `Ready`.
-- Non-executing sessions must restore without recovery mutation.
-- Existing session metadata, including provider path, PID, and prompt metadata, must remain preserved during recovery mutation.
+- M2 is functionally complete from an infrastructure standpoint after M2B.3 restart/orphan recovery.
+- M2 must receive one final closeout slice before M3 begins.
+- The next authorized slice is M2C: failure projection and recovery visibility.
+- M2C must add UI visibility for launch and recovery failures.
+- M2C must not add new backend lifecycle work.
+- M2C must not add monitoring.
+- M2C must not add streaming.
+- M2C must not add completion detection.
+- Dashboard must surface repository execution state: `Failed`, `Cancelled`, `Executing`, and `Ready`.
+- Dashboard must surface a failure summary when one is present.
+- Orphan recovery failure must be visible directly from the dashboard without drill-down.
+- Workspace must surface session id, provider, PID, provider executable, started time, and failure reason when available.
+- Workspace is the operational debugging view for execution-session metadata.
+- M2 can be formally closed after M2C failure visibility is complete.
+- M3 must not begin until M2 is formally closed.
 
 ## Certification Required
 
-- Startup reload finds a persisted `Executing` Codex session.
-- Unsupported reattach marks the session `Failed`.
-- Repository execution state becomes `Failed`.
-- Failure reason is explicit and stable.
-- Non-executing sessions restore without recovery mutation.
-- Provider path, PID, and prompt metadata remain preserved.
+- Provider start failure UI test:
+  - Launch.
+  - Executable missing.
+  - Session failed.
+  - Repository ready.
+  - Failure visible.
+- Orphan recovery UI test:
+  - Executing session exists.
+  - Backend restart occurs.
+  - Recovery runs.
+  - Session and repository become failed.
+  - Failure visible.
+- Metadata preservation UI test:
+  - PID is displayed after recovery failure.
+  - Provider path is displayed after recovery failure.
+  - Provider name is displayed after recovery failure.
+  - Prompt metadata is displayed after recovery failure.
 
 ## Explicitly Deferred
 
-- Do not begin M3 monitoring or output capture during M2B.3.
-- Do not add stdout or stderr event capture.
-- Do not add SSE.
+- Do not start M3 during M2C.
+- Do not add `ExecutionEvent`.
+- Do not add `ExecutionStatus`.
+- Do not add monitoring infrastructure.
+- Do not add stdout capture.
+- Do not add stderr capture.
+- Do not add SSE streaming.
+- Do not add event retention.
 - Do not add completion detection.
-- Do not add handoff validation.
 
 ## Next Authorized Slice
 
-- Proceed with M2B.3 restart/orphan recovery, then close M2 as launch infrastructure complete.
+- Proceed with M2C failure projection and recovery visibility, then mark M2 closed.

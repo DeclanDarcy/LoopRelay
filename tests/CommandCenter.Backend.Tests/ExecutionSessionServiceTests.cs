@@ -155,9 +155,10 @@ public sealed class ExecutionSessionServiceTests
     }
 
     [Fact]
-    public async Task ActiveSessionRestoresAfterStoreReload()
+    public async Task StartupRecoveryFailsPersistedExecutingSessionAfterStoreReload()
     {
-        var harness = await CreateHarnessAsync();
+        var provider = new MetadataExecutionProvider();
+        var harness = await CreateHarnessAsync(provider: provider);
         await WriteReadyArtifactsAsync(harness.Repository);
         var summary = await harness.SessionService.StartAsync(
             harness.Repository.Id,
@@ -169,19 +170,28 @@ public sealed class ExecutionSessionServiceTests
             new FakeExecutionProvider(),
             new ExecutionPromptBuilder());
 
+        await reloadedService.RecoverAsync();
         var active = await reloadedService.GetActiveSessionAsync(harness.Repository.Id);
+        var recoveredSession = await reloadedService.GetSessionAsync(summary.SessionId);
 
-        Assert.NotNull(active);
-        Assert.Equal(summary.SessionId, active.SessionId);
-        Assert.Equal(RepositoryExecutionState.Executing, await reloadedService.GetRepositoryStateAsync(harness.Repository.Id));
+        Assert.Null(active);
+        Assert.NotNull(recoveredSession);
+        Assert.Equal(ExecutionSessionState.Failed, recoveredSession.State);
+        Assert.Equal(RepositoryExecutionState.Failed, recoveredSession.RepositoryState);
+        Assert.Equal(RepositoryExecutionState.Failed, await reloadedService.GetRepositoryStateAsync(harness.Repository.Id));
+        Assert.Equal(ExecutionSessionService.OrphanedProviderFailureReason, recoveredSession.FailureReason);
+        Assert.Equal("C:\\tools\\codex.exe", recoveredSession.ProviderExecutablePath);
+        Assert.Equal(7890, recoveredSession.ProviderProcessId);
+        Assert.NotNull(recoveredSession.ProviderStartedAt);
+        Assert.NotNull(recoveredSession.PromptMetadata);
     }
 
     [Fact]
-    public async Task DashboardProjectionRestoresActiveSessionAfterStoreReload()
+    public async Task DashboardProjectionShowsRecoveredFailedStateAfterStoreReload()
     {
         var harness = await CreateHarnessAsync();
         await WriteReadyArtifactsAsync(harness.Repository);
-        var summary = await harness.SessionService.StartAsync(
+        await harness.SessionService.StartAsync(
             harness.Repository.Id,
             new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
         var reloadedService = new ExecutionSessionService(
@@ -189,6 +199,7 @@ public sealed class ExecutionSessionServiceTests
             new FileSystemExecutionSessionStore(harness.StorePath),
             new FakeExecutionProvider(),
             new ExecutionPromptBuilder());
+        await reloadedService.RecoverAsync();
         var artifactStore = new FileSystemArtifactStore();
         var projectionService = new RepositoryProjectionService(
             harness.RepositoryService,
@@ -200,12 +211,52 @@ public sealed class ExecutionSessionServiceTests
         var workspace = await projectionService.GetWorkspaceAsync(harness.Repository.Id);
 
         var dashboardProjection = Assert.Single(dashboard);
-        Assert.Equal(RepositoryExecutionState.Executing, dashboardProjection.ExecutionState);
-        Assert.NotNull(dashboardProjection.ActiveExecutionSession);
-        Assert.Equal(summary.SessionId, dashboardProjection.ActiveExecutionSession.SessionId);
-        Assert.Equal(RepositoryExecutionState.Executing, workspace.ExecutionState);
-        Assert.NotNull(workspace.ExecutionSummary);
-        Assert.Equal(summary.SessionId, workspace.ExecutionSummary.SessionId);
+        Assert.Equal(RepositoryExecutionState.Failed, dashboardProjection.ExecutionState);
+        Assert.Null(dashboardProjection.ActiveExecutionSession);
+        Assert.Equal(RepositoryExecutionState.Failed, workspace.ExecutionState);
+        Assert.Null(workspace.ExecutionSummary);
+    }
+
+    [Fact]
+    public async Task StartupRecoveryDoesNotMutateNonExecutingSessions()
+    {
+        var harness = await CreateHarnessAsync();
+        var startedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
+        var failedSession = new ExecutionSession
+        {
+            Id = Guid.NewGuid(),
+            RepositoryId = harness.Repository.Id,
+            RepositoryPath = harness.Repository.Path,
+            MilestonePath = ".agents/milestones/m2.md",
+            StartedAt = startedAt,
+            CompletedAt = startedAt.AddMinutes(1),
+            LastActivityAt = startedAt.AddMinutes(1),
+            State = ExecutionSessionState.Failed,
+            RepositoryState = RepositoryExecutionState.Failed,
+            ProviderName = "codex",
+            ProviderExecutablePath = "C:\\tools\\codex.exe",
+            ProviderProcessId = 7890,
+            ProviderStartedAt = startedAt,
+            PromptMetadata = new ExecutionPromptMetadata
+            {
+                RepositoryPath = harness.Repository.Path,
+                MilestonePath = ".agents/milestones/m2.md",
+                IncludedArtifactPaths = [".agents/plan.md"]
+            },
+            FailureReason = "Existing failure."
+        };
+        await harness.Store.SaveAsync([failedSession]);
+
+        await harness.SessionService.RecoverAsync();
+        var recoveredSession = (await harness.Store.LoadAsync()).Single();
+
+        Assert.Equal(ExecutionSessionState.Failed, recoveredSession.State);
+        Assert.Equal(RepositoryExecutionState.Failed, recoveredSession.RepositoryState);
+        Assert.Equal("Existing failure.", recoveredSession.FailureReason);
+        Assert.Equal(failedSession.CompletedAt, recoveredSession.CompletedAt);
+        Assert.Equal("C:\\tools\\codex.exe", recoveredSession.ProviderExecutablePath);
+        Assert.Equal(7890, recoveredSession.ProviderProcessId);
+        Assert.NotNull(recoveredSession.PromptMetadata);
     }
 
     [Fact]
@@ -303,6 +354,78 @@ public sealed class ExecutionSessionServiceTests
             });
             Assert.NotNull(summary);
             Assert.Equal(ExecutionSessionState.Executing, summary.State);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("COMMAND_CENTER_CONFIGURATION_PATH", previousConfigurationPath);
+            Environment.SetEnvironmentVariable("COMMAND_CENTER_EXECUTION_SESSIONS_PATH", previousStorePath);
+        }
+    }
+
+    [Fact]
+    public async Task AppStartupRunsExecutionRecovery()
+    {
+        var configurationPath = Path.Combine(CreateTemporaryDirectory(), "configuration.json");
+        var storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");
+        var previousConfigurationPath = Environment.GetEnvironmentVariable("COMMAND_CENTER_CONFIGURATION_PATH");
+        var previousStorePath = Environment.GetEnvironmentVariable("COMMAND_CENTER_EXECUTION_SESSIONS_PATH");
+        Environment.SetEnvironmentVariable("COMMAND_CENTER_CONFIGURATION_PATH", configurationPath);
+        Environment.SetEnvironmentVariable("COMMAND_CENTER_EXECUTION_SESSIONS_PATH", storePath);
+
+        try
+        {
+            var repositoryPath = CreateGitRepositoryDirectory();
+            var repositoryService = new RepositoryService(new ApplicationConfigurationStore(configurationPath));
+            var repository = await repositoryService.RegisterAsync(repositoryPath);
+            var session = new ExecutionSession
+            {
+                Id = Guid.NewGuid(),
+                RepositoryId = repository.Id,
+                RepositoryPath = repository.Path,
+                MilestonePath = ".agents/milestones/m2.md",
+                StartedAt = DateTimeOffset.UtcNow.AddMinutes(-1),
+                LastActivityAt = DateTimeOffset.UtcNow.AddMinutes(-1),
+                State = ExecutionSessionState.Executing,
+                RepositoryState = RepositoryExecutionState.Executing,
+                ProviderName = "codex",
+                ProviderExecutablePath = "C:\\tools\\codex.exe",
+                ProviderProcessId = 7890,
+                ProviderStartedAt = DateTimeOffset.UtcNow.AddMinutes(-1),
+                PromptMetadata = new ExecutionPromptMetadata
+                {
+                    RepositoryPath = repository.Path,
+                    MilestonePath = ".agents/milestones/m2.md",
+                    IncludedArtifactPaths = [".agents/plan.md", ".agents/milestones/m2.md"]
+                }
+            };
+            await new FileSystemExecutionSessionStore(storePath).SaveAsync([session]);
+
+            await using var app = Program.CreateApp(
+                [],
+                services =>
+                {
+                    services.AddSingleton<IGitService>(new FakeGitService(null, null));
+                    services.AddSingleton<IExecutionProvider>(new FakeExecutionProvider());
+                    services.AddSingleton<IExecutionSessionStore>(new FileSystemExecutionSessionStore(storePath));
+                });
+            app.Urls.Add("http://127.0.0.1:0");
+            await app.StartAsync();
+
+            using var client = new HttpClient();
+            var response = await client.GetAsync(app.Urls.Single() + $"/api/execution-sessions/{session.Id}");
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var recoveredSession = await response.Content.ReadFromJsonAsync<ExecutionSession>(new JsonSerializerOptions(JsonSerializerDefaults.Web)
+            {
+                Converters = { new JsonStringEnumConverter() }
+            });
+            Assert.NotNull(recoveredSession);
+            Assert.Equal(ExecutionSessionState.Failed, recoveredSession.State);
+            Assert.Equal(RepositoryExecutionState.Failed, recoveredSession.RepositoryState);
+            Assert.Equal(ExecutionSessionService.OrphanedProviderFailureReason, recoveredSession.FailureReason);
+            Assert.Equal("C:\\tools\\codex.exe", recoveredSession.ProviderExecutablePath);
+            Assert.Equal(7890, recoveredSession.ProviderProcessId);
+            Assert.NotNull(recoveredSession.PromptMetadata);
         }
         finally
         {

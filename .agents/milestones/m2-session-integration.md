@@ -63,9 +63,9 @@ Implement M2 in two internal phases so session persistence is stable before real
 - [x] Capture provider process id when available.
 - [x] Persist prompt metadata without persisting secrets or full process environment.
 - [x] Handle provider executable missing, process start failure, and immediate provider exit.
-- [ ] Implement startup recovery semantics for active persisted sessions:
-  - [ ] Best-effort reattach when the provider process is alive and reattach is supported.
-  - [ ] Otherwise mark the session and repository `Failed` with an explicit orphaned-process reason.
+- [x] Implement startup recovery semantics for active persisted sessions:
+  - [x] Treat Codex reattach as unsupported for this phase.
+  - [x] Mark unrecoverable active sessions and repositories `Failed` with an explicit orphaned-process reason.
 
 ### UI Work
 
@@ -78,12 +78,13 @@ Implement M2 in two internal phases so session persistence is stable before real
 - [x] Missing Codex executable fails with structured provider error.
 - [x] Provider start failure leaves repository ready and records failure details.
 - [x] Immediate provider exit records failure.
-- [ ] Restart with reattachable provider process keeps session executing.
-- [ ] Restart with missing or unrecoverable provider process marks session and repository failed.
+- [x] Startup reload marks unrecoverable active provider sessions and repositories failed.
+- [x] Startup recovery leaves non-executing sessions unchanged.
+- [x] Startup recovery preserves provider path, PID, and prompt metadata.
 
 ### Exit Criteria
 
 - [x] Command Center can create a fresh Codex-backed execution session.
 - [x] Prompt construction is backend-owned and deterministic.
-- [ ] Process launch failure and orphaned restart recovery are explicit.
+- [x] Process launch failure and orphaned restart recovery are explicit.
 - [ ] Live monitoring output is still completed in M3.
