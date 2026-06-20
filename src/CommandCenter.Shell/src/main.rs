@@ -62,6 +62,28 @@ struct ExecutionSessionSummary {
 
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct RepositoryDirtyState {
+    staged_paths: Vec<String>,
+    modified_paths: Vec<String>,
+    added_paths: Vec<String>,
+    deleted_paths: Vec<String>,
+    renamed_paths: Vec<String>,
+    untracked_paths: Vec<String>,
+    is_clean: bool,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RepositoryGitStatus {
+    branch: String,
+    ahead_count: i32,
+    behind_count: i32,
+    dirty_state: RepositoryDirtyState,
+    captured_at: String,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct Artifact {
     relative_path: String,
     name: String,
@@ -338,6 +360,20 @@ fn get_active_execution(repository_id: String) -> Result<ExecutionSessionSummary
 }
 
 #[tauri::command]
+fn get_git_status(repository_id: String) -> Result<RepositoryGitStatus, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/git/status"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "git status lookup failed")
+}
+
+#[tauri::command]
 fn get_execution_session(session_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/execution-sessions/{session_id}"
@@ -537,6 +573,7 @@ fn main() {
             preview_execution_context,
             start_execution,
             get_active_execution,
+            get_git_status,
             get_execution_session,
             accept_execution_handoff,
             reject_execution_handoff

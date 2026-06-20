@@ -282,6 +282,25 @@ public static class Program
             var session = await executionSessionService.GetActiveSessionAsync(repositoryId);
             return session is null ? Results.NotFound(new { error = "No active execution session." }) : Results.Ok(session);
         });
+        app.MapGet("/api/repositories/{repositoryId:guid}/git/status", async (
+            Guid repositoryId,
+            IRepositoryService repositoryService,
+            IGitService gitService) =>
+        {
+            try
+            {
+                var repository = await GetRepositoryAsync(repositoryService, repositoryId);
+                return Results.Ok(await gitService.GetStatusAsync(repository));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
         app.MapGet("/api/execution-sessions/{sessionId:guid}", async (
             Guid sessionId,
             IExecutionSessionService executionSessionService) =>

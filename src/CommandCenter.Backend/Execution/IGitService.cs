@@ -5,4 +5,6 @@ using CommandCenter.Backend.Repositories;
 public interface IGitService
 {
     Task<ExecutionRepositorySnapshot> GetSnapshotAsync(Repository repository);
+
+    Task<RepositoryGitStatus> GetStatusAsync(Repository repository);
 }

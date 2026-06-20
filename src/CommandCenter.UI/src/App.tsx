@@ -112,6 +112,7 @@ type ExecutionContextArtifactDiagnostic = {
 type RepositoryDirtyState = {
   stagedPaths: string[]
   modifiedPaths: string[]
+  addedPaths: string[]
   deletedPaths: string[]
   renamedPaths: string[]
   untrackedPaths: string[]
@@ -120,6 +121,14 @@ type RepositoryDirtyState = {
 
 type ExecutionRepositorySnapshot = {
   branch: string
+  dirtyState: RepositoryDirtyState
+  capturedAt: string
+}
+
+type RepositoryGitStatus = {
+  branch: string
+  aheadCount: number
+  behindCount: number
   dirtyState: RepositoryDirtyState
   capturedAt: string
 }
@@ -366,6 +375,21 @@ function renderPathBucket(label: string, paths: string[]) {
   )
 }
 
+function countDirtyPaths(dirtyState: RepositoryDirtyState | null) {
+  if (!dirtyState) {
+    return 0
+  }
+
+  return (
+    dirtyState.stagedPaths.length +
+    dirtyState.modifiedPaths.length +
+    dirtyState.addedPaths.length +
+    dirtyState.deletedPaths.length +
+    dirtyState.renamedPaths.length +
+    dirtyState.untrackedPaths.length
+  )
+}
+
 function App() {
   const [repositories, setRepositories] = useState<RepositoryDashboardProjection[]>([])
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<string | null>(null)
@@ -376,6 +400,7 @@ function App() {
   const [backendUrl, setBackendUrl] = useState<string | null>(null)
   const [executionStatusesBySession, setExecutionStatusesBySession] = useState<Record<string, ExecutionStatus>>({})
   const [executionEventsBySession, setExecutionEventsBySession] = useState<Record<string, ExecutionEvent[]>>({})
+  const [gitStatus, setGitStatus] = useState<RepositoryGitStatus | null>(null)
   const selectedArtifactPathsByRepository = useRef<Record<string, string>>({})
   const refreshedCompletedSessionIds = useRef<Set<string>>(new Set())
   const [artifactContent, setArtifactContent] = useState('')
@@ -393,6 +418,7 @@ function App() {
   const [isGeneratedHandoffLoading, setIsGeneratedHandoffLoading] = useState(false)
   const [isAcceptingHandoff, setIsAcceptingHandoff] = useState(false)
   const [isRejectingHandoff, setIsRejectingHandoff] = useState(false)
+  const [isGitStatusLoading, setIsGitStatusLoading] = useState(false)
   const [isAdding, setIsAdding] = useState(false)
   const [removingRepositoryId, setRemovingRepositoryId] = useState<string | null>(null)
 
@@ -479,6 +505,11 @@ function App() {
     Boolean(executionDisplay.handoffPath)
   const isHandoffDecisionPending =
     canReviewGeneratedHandoff && !isAcceptingHandoff && !isRejectingHandoff
+  const shouldShowGitWorkflow =
+    currentExecutionState === 'Ready' ||
+    currentExecutionState === 'AwaitingCommit' ||
+    currentExecutionState === 'AwaitingPush'
+  const gitStatusPathCount = countDirtyPaths(gitStatus?.dirtyState ?? null)
 
   const startExecutionBlockedReason = useMemo(() => {
     if (!workspace) {
@@ -575,6 +606,19 @@ function App() {
       setIsWorkspaceLoading(false)
     }
   }, [reconcileSelectedArtifact])
+
+  const loadGitStatus = useCallback(async (repositoryId: string) => {
+    setIsGitStatusLoading(true)
+    try {
+      const status = await invoke<RepositoryGitStatus>('get_git_status', { repositoryId })
+      setGitStatus(status)
+    } catch (statusError) {
+      setGitStatus(null)
+      setError(formatError(statusError))
+    } finally {
+      setIsGitStatusLoading(false)
+    }
+  }, [])
 
   const loadRepositories = useCallback(async () => {
     setIsLoading(true)
@@ -1091,6 +1135,7 @@ function App() {
 
   useEffect(() => {
     if (!selectedRepository) {
+      setGitStatus(null)
       return
     }
 
@@ -1100,6 +1145,19 @@ function App() {
 
     return () => window.clearTimeout(timeoutId)
   }, [loadWorkspace, selectedRepository])
+
+  useEffect(() => {
+    if (!selectedRepository || !shouldShowGitWorkflow) {
+      setGitStatus(null)
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void loadGitStatus(selectedRepository.repository.id)
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [loadGitStatus, selectedRepository, shouldShowGitWorkflow])
 
   useEffect(() => {
     if (!selectedRepository || !selectedArtifactPath) {
@@ -1522,6 +1580,7 @@ function App() {
                         <div className="context-columns">
                           {renderPathBucket('Staged', executionContext.repositorySnapshot.dirtyState.stagedPaths)}
                           {renderPathBucket('Modified', executionContext.repositorySnapshot.dirtyState.modifiedPaths)}
+                          {renderPathBucket('Added', executionContext.repositorySnapshot.dirtyState.addedPaths)}
                           {renderPathBucket('Deleted', executionContext.repositorySnapshot.dirtyState.deletedPaths)}
                           {renderPathBucket('Renamed', executionContext.repositorySnapshot.dirtyState.renamedPaths)}
                           {renderPathBucket('Untracked', executionContext.repositorySnapshot.dirtyState.untrackedPaths)}
@@ -1549,6 +1608,55 @@ function App() {
                   <p className="empty-state">Build a context preview for a selected milestone.</p>
                 )}
               </section>
+
+              {shouldShowGitWorkflow ? (
+                <section className="git-status-panel" aria-label="Git status">
+                  <div className="git-status-header">
+                    <div>
+                      <p className="eyebrow">Git Workflow</p>
+                      <h4>{executionStateLabels[currentExecutionState]}</h4>
+                    </div>
+                    <button
+                      type="button"
+                      className="secondary-action"
+                      onClick={() =>
+                        selectedRepository
+                          ? void loadGitStatus(selectedRepository.repository.id)
+                          : undefined
+                      }
+                      disabled={!selectedRepository || isGitStatusLoading}
+                    >
+                      {isGitStatusLoading ? 'Refreshing...' : 'Refresh Status'}
+                    </button>
+                  </div>
+                  {gitStatus ? (
+                    <>
+                      <div className="context-summary">
+                        <span>Branch: {gitStatus.branch || '(detached)'}</span>
+                        <span>
+                          State: {gitStatus.dirtyState.isClean ? 'Clean' : 'Dirty'}
+                        </span>
+                        <span>Ahead: {gitStatus.aheadCount}</span>
+                        <span>Behind: {gitStatus.behindCount}</span>
+                        <span>Changed paths: {gitStatusPathCount}</span>
+                        <span>Captured: {formatDateTime(gitStatus.capturedAt)}</span>
+                      </div>
+                      <div className="context-columns">
+                        {renderPathBucket('Staged', gitStatus.dirtyState.stagedPaths)}
+                        {renderPathBucket('Modified', gitStatus.dirtyState.modifiedPaths)}
+                        {renderPathBucket('Added', gitStatus.dirtyState.addedPaths)}
+                        {renderPathBucket('Deleted', gitStatus.dirtyState.deletedPaths)}
+                        {renderPathBucket('Renamed', gitStatus.dirtyState.renamedPaths)}
+                        {renderPathBucket('Untracked', gitStatus.dirtyState.untrackedPaths)}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="empty-state">
+                      {isGitStatusLoading ? 'Loading Git status...' : 'Git status is not loaded.'}
+                    </p>
+                  )}
+                </section>
+              ) : null}
 
               {executionDisplay ? (
                 <section className="execution-session-panel" aria-label="Execution session">

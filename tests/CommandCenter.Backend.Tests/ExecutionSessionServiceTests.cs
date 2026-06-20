@@ -820,6 +820,21 @@ public sealed class ExecutionSessionServiceTests
                 CapturedAt = DateTimeOffset.UtcNow
             });
         }
+
+        public Task<RepositoryGitStatus> GetStatusAsync(Repository repository)
+        {
+            if (failure is not null)
+            {
+                throw new InvalidOperationException(failure);
+            }
+
+            return Task.FromResult(new RepositoryGitStatus
+            {
+                Branch = "main",
+                DirtyState = dirtyState ?? new RepositoryDirtyState(),
+                CapturedAt = DateTimeOffset.UtcNow
+            });
+        }
     }
 
     private sealed class MetadataExecutionProvider : IExecutionProvider

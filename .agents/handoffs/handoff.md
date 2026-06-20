@@ -2,49 +2,58 @@
 
 ## Slice Summary
 
-- Executed Epic 2 M5A.2 UI Accept/Reject Controls.
-- Added Tauri commands `accept_execution_handoff` and `reject_execution_handoff` as thin HTTP bridges to the backend accept/reject endpoints.
-- Extended Tauri and React execution summary/status models to carry `AcceptedAt`, `RejectedAt`, and `DecisionNote`.
-- Added React `Accept Handoff` and `Reject Handoff` controls in the generated handoff review panel.
-- Acceptance controls are shown only when the repository workflow state is `AwaitingAcceptance` and a generated handoff path is available.
-- Accept action calls the backend, then reloads dashboard and workspace projections instead of manually duplicating workflow transitions.
-- Reject action requires `window.confirm` before calling the backend, then reloads dashboard and workspace projections.
-- Execution details now display accepted/rejected timestamps and decision note when available.
-- Updated the dev Tauri mock so execution can complete into `AwaitingAcceptance` with generated handoff content for UI certification.
-- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0018.md`.
+- Executed Epic 2 M6.1 read-only Git status and repository inspection.
+- Added `RepositoryGitStatus` and expanded `RepositoryDirtyState` with `AddedPaths`.
+- Extended `IGitService` and `GitService` with `GetStatusAsync`.
+- `GitService` now parses `git status --porcelain=v1 --branch -z` for branch, ahead/behind counts, and staged/modified/added/deleted/renamed/untracked buckets.
+- Added backend endpoint `GET /api/repositories/{repositoryId}/git/status`.
+- Added Tauri command `get_git_status` as a thin HTTP bridge.
+- Added React Git workflow status panel for `Ready`, `AwaitingCommit`, and `AwaitingPush`.
+- Updated the dev Tauri mock so mock acceptance into `AwaitingCommit` shows dirty Git status.
+- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0019.md`.
 
 ## Files Changed
 
-- `.agents/milestones/m5-acceptance-workflow.md`
-- `.agents/handoffs/handoff.0018.md`
+- `.agents/milestones/m6-git-lifecycle.md`
+- `.agents/handoffs/handoff.0019.md`
 - `.agents/handoffs/handoff.md`
+- `src/CommandCenter.Backend/Execution/GitService.cs`
+- `src/CommandCenter.Backend/Execution/IGitService.cs`
+- `src/CommandCenter.Backend/Execution/RepositoryDirtyState.cs`
+- `src/CommandCenter.Backend/Execution/RepositoryGitStatus.cs`
+- `src/CommandCenter.Backend/Program.cs`
 - `src/CommandCenter.Shell/src/main.rs`
 - `src/CommandCenter.UI/src/App.css`
 - `src/CommandCenter.UI/src/App.tsx`
 - `src/CommandCenter.UI/src/devTauriMock.ts`
+- `tests/CommandCenter.Backend.Tests/ExecutionContextServiceTests.cs`
+- `tests/CommandCenter.Backend.Tests/ExecutionMonitoringEndpointTests.cs`
+- `tests/CommandCenter.Backend.Tests/ExecutionSessionServiceTests.cs`
+- `tests/CommandCenter.Backend.Tests/GitServiceTests.cs`
 
 ## Verification
 
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 119 tests.
 - `npm run build --prefix src/CommandCenter.UI` passed.
 - `cargo build --manifest-path src/CommandCenter.Shell/Cargo.toml` passed.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 117 tests.
 - `dotnet build CommandCenter.slnx` passed.
 - Browser smoke test with `http://127.0.0.1:5173/?mock=workspace-certification` verified:
-  - generated handoff review content is visible in `AwaitingAcceptance`;
-  - `Accept Handoff` and `Reject Handoff` controls are visible in `AwaitingAcceptance`;
-  - accepting transitions mock projection to `AwaitingCommit`;
-  - accept/reject controls disappear after acceptance;
-  - accepted metadata remains visible.
-- `cargo fmt --manifest-path src/CommandCenter.Shell/Cargo.toml --check` could not run because `rustfmt` is not installed for `stable-x86_64-pc-windows-msvc`.
+  - Git workflow panel is visible in `Ready`;
+  - mock acceptance transitions to `AwaitingCommit`;
+  - Git workflow panel remains visible in `AwaitingCommit`;
+  - modified and untracked mock paths are displayed.
 
 ## New State
 
-- M5A.2 is implemented and verified at build plus browser smoke-test level.
-- M5 still has Git preparation UI unchecked because current decisions defer commit scope, commit, push, and Git lifecycle UI to M6.
-- Current worktree has M5A.2 implementation, milestone checklist, and handoff rotation changes unstaged.
+- M6.1 read-only Git status is implemented and verified.
+- M6 checklist now marks Git status endpoint, UI grouped status display, and parser bucket coverage complete.
+- Commit preparation, selectable commit scope, commit mutation, push mutation, stale-scope rejection, and push/commit retry UI remain unimplemented.
+- Pre-existing dirty-path marking is not implemented in this slice because the current UI summary does not carry the pre-execution snapshot; this should be returned explicitly by commit preparation scope items.
+- Current worktree has M6.1 implementation, milestone checklist, and handoff rotation changes unstaged.
 
 ## Recommended Next Slice
 
-- Execute M6 Git Lifecycle Automation.
-- Start with backend `IGitService` status and commit preparation endpoints, including explicit selectable changed-path scope and stale-scope rejection.
-- Then add the Tauri bridge and React Git workflow panel for `AwaitingCommit` / `AwaitingPush`.
+- Execute M6.2 commit preparation.
+- Add backend commit-preparation models with deterministic message, status snapshot id, selectable `CommitScopeItem`s, and pre-execution dirty comparison.
+- Add `prepare_commit` endpoint and Tauri bridge.
+- Replace the read-only Git status panel in `AwaitingCommit` with selectable commit review controls, but do not implement commit mutation until preparation and stale-scope validation are certified.

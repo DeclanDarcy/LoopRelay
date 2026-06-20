@@ -2,28 +2,24 @@
 
 ## Newly Authorized Decisions
 
-- M5 is complete and certified.
-- Missing `rustfmt` is not architecturally significant and does not block M5 closure.
-- M6 is the first milestone that mutates repository state after acceptance.
-- M6 must establish `IGitService` as the sole authoritative Git abstraction boundary.
-- Avoid exposing raw Git commands throughout the system.
-- Retain existing repository workflow states for M6: `Accepted`, `AwaitingCommit`, `AwaitingPush`, and `Ready`.
-- Do not introduce `Committing`, `Pushing`, `CommitFailed`, or `PushFailed` states unless asynchronous operations require them.
-- Git operation progress must not redefine `RepositoryExecutionState`.
-- Start M6 with four backend operations: status, commit preparation, commit, and push.
-- `GetStatus(repositoryId)` returns modified files, added files, deleted files, renamed files, current branch, ahead/behind counts, and dirty flag.
-- `PrepareCommit(repositoryId)` is a pure projection with no mutation.
-- Commit preparation returns candidate files, diff statistics, and a suggested commit message.
-- `Commit(repositoryId, selectedFiles, commitMessage)` transitions `AwaitingCommit` to `AwaitingPush`.
-- `Push(repositoryId)` transitions `AwaitingPush` to `Ready`.
-- Acceptance approves the repository state produced by execution.
-- Commit preparation may allow file-level exclusions, but exclusions are exceptional and do not redefine what acceptance means.
-- M6.1 is authorized as Git Status & Repository Inspection.
-- M6.1 must implement `IGitService`, repository status model, backend endpoints, persistence integration, Tauri bridge, and a read-only React workflow surface.
-- M6.1 must not perform commit mutation.
-- Certify that `Ready`, `AwaitingCommit`, and `AwaitingPush` correctly project repository Git state before implementing commit mutation.
+- M6.1 is accepted as well-scoped and architecturally clean.
+- Preserve the Git inspection ownership chain: Git, `IGitService`, `RepositoryGitStatus`, backend API, Tauri bridge, React projection.
+- Do not allow React or Tauri to execute or own raw Git commands.
+- M6.1 is certified as observational Git inspection only.
+- M6.2 is authorized as commit preparation, not commit mutation.
+- Introduce a distinct `CommitPreparation` aggregate for M6.2.
+- Keep `RepositoryGitStatus` and `CommitPreparation` separate; `RepositoryGitStatus` answers what exists, while `CommitPreparation` answers what is proposed for commit.
+- `CommitPreparation` should include preparation identity, repository identity, proposed message, scope items, status snapshot, generation timestamp, and whether pre-existing changes are present.
+- Commit preparation must use snapshot identity so later commit execution can detect drift between reviewed status and current repository state.
+- M6.2 must compare the pre-execution dirty snapshot with current repository state to classify change origin.
+- Commit scope items should include path, change type, and origin.
+- Initial origin values are `PreExisting` and `ExecutionGenerated`.
+- Proposed commit messages must be deterministic and derived from milestone context and execution metadata, not AI-generated narrative.
+- M6.2 exit criteria are prepare commit, generate preparation, display scope, display origins, display proposed message, and persist snapshot identity.
 
 ## Explicitly Deferred
 
-- Do not implement commit mutation in M6.1.
-- Do not add asynchronous Git workflow states unless a later implementation requires asynchronous operations.
+- No staging in M6.2.
+- No commit execution in M6.2.
+- No push execution in M6.2.
+- Richer AI-written commit message generation remains deferred.

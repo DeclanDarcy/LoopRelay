@@ -352,6 +352,7 @@ button:focus-visible {
 
 .execution-context-panel,
 .execution-session-panel,
+.git-status-panel,
 .handoff-review-panel {
   min-width: 0;
   display: grid;
@@ -363,7 +364,8 @@ button:focus-visible {
 }
 
 .context-toolbar,
-.context-controls {
+.context-controls,
+.git-status-header {
   min-width: 0;
   display: flex;
   align-items: center;
@@ -374,6 +376,7 @@ button:focus-visible {
 .context-toolbar h4,
 .context-preview h5,
 .execution-session-panel h4,
+.git-status-panel h4,
 .handoff-review-header h4 {
   margin: 4px 0 0;
   color: #121820;

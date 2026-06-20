@@ -444,5 +444,15 @@ public sealed class ExecutionMonitoringEndpointTests
                 CapturedAt = DateTimeOffset.UtcNow
             });
         }
+
+        public Task<RepositoryGitStatus> GetStatusAsync(Repository repository)
+        {
+            return Task.FromResult(new RepositoryGitStatus
+            {
+                Branch = "main",
+                DirtyState = new RepositoryDirtyState(),
+                CapturedAt = DateTimeOffset.UtcNow
+            });
+        }
     }
 }

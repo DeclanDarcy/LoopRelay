@@ -95,6 +95,7 @@ type ExecutionContextPreview = {
     dirtyState: {
       stagedPaths: string[]
       modifiedPaths: string[]
+      addedPaths: string[]
       deletedPaths: string[]
       renamedPaths: string[]
       untrackedPaths: string[]
@@ -123,6 +124,22 @@ type ExecutionContextPreview = {
     missingOptionalArtifacts: string[]
     launchBlocked: boolean
   }
+}
+
+type RepositoryGitStatus = {
+  branch: string
+  aheadCount: number
+  behindCount: number
+  dirtyState: {
+    stagedPaths: string[]
+    modifiedPaths: string[]
+    addedPaths: string[]
+    deletedPaths: string[]
+    renamedPaths: string[]
+    untrackedPaths: string[]
+    isClean: boolean
+  }
+  capturedAt: string
 }
 
 type MockState = {
@@ -315,6 +332,7 @@ function createContextPreview(state: MockState, repositoryId: string, milestoneP
       dirtyState: {
         stagedPaths: [],
         modifiedPaths: [],
+        addedPaths: [],
         deletedPaths: [],
         renamedPaths: [],
         untrackedPaths: [],
@@ -346,6 +364,26 @@ function createContextPreview(state: MockState, repositoryId: string, milestoneP
       ].filter((path): path is string => path !== null),
       launchBlocked: workspace.readiness !== 'Ready',
     },
+  }
+}
+
+function createGitStatus(state: MockState, repositoryId: string): RepositoryGitStatus {
+  const workspace = state.workspaces[repositoryId]
+  const hasAcceptedWork = workspace.executionState === 'AwaitingCommit'
+  return {
+    branch: 'main',
+    aheadCount: workspace.executionState === 'AwaitingPush' ? 1 : 0,
+    behindCount: 0,
+    dirtyState: {
+      stagedPaths: [],
+      modifiedPaths: hasAcceptedWork ? ['src/CommandCenter.UI/src/App.tsx'] : [],
+      addedPaths: [],
+      deletedPaths: [],
+      renamedPaths: [],
+      untrackedPaths: hasAcceptedWork ? ['.agents/handoffs/handoff.md'] : [],
+      isClean: !hasAcceptedWork,
+    },
+    capturedAt: new Date().toISOString(),
   }
 }
 
@@ -528,6 +566,8 @@ export function installDevTauriMock() {
 
           return clone(workspace.executionSummary)
         }
+        case 'get_git_status':
+          return clone(createGitStatus(state, getStringArg(args, 'repositoryId')))
         case 'get_execution_session': {
           const session = state.sessions[getStringArg(args, 'sessionId')]
           if (!session) {

@@ -7,7 +7,7 @@ Replace manual status inspection, commit message drafting, commit, and push flow
 ## Backend Work
 
 - [ ] Implement full `GitService`.
-- [ ] Add Git status endpoint.
+- [x] Add Git status endpoint.
 - [ ] Add commit preparation endpoint that generates a deterministic proposed commit message.
 - [ ] Include pre-execution dirty snapshot comparison in commit preparation.
 - [ ] Build a selectable `CommitScopeItem` for every displayed changed path.
@@ -30,7 +30,7 @@ Replace manual status inspection, commit message drafting, commit, and push flow
 
 ## UI Work
 
-- [ ] Display Git status grouped by modified, added, deleted, renamed, untracked, and staged.
+- [x] Display Git status grouped by modified, added, deleted, renamed, untracked, and staged.
 - [ ] Mark paths that were already dirty before execution when known.
 - [ ] Render each changed file with an individual selection control.
 - [ ] Provide `Select All` and `Select None`.
@@ -44,7 +44,7 @@ Replace manual status inspection, commit message drafting, commit, and push flow
 
 ## Tests
 
-- [ ] Status parser handles modified, added, deleted, renamed, untracked, and staged paths.
+- [x] Status parser handles modified, added, deleted, renamed, untracked, and staged paths.
 - [ ] Commit message generation is deterministic and limited to milestone name plus changed-file count.
 - [ ] Commit preparation identifies pre-existing dirty paths when known.
 - [ ] Commit preparation returns one selectable item per changed path.
