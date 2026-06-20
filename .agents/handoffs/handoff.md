@@ -2,30 +2,29 @@
 
 ## Slice Summary
 
-Completed M2 operational-context proposal generation end to end.
+Completed M3 operational-context proposal review without promotion.
 
 ## New State
 
-- Added backend `Continuity` models for `OperationalContextDocument`, items, sections, proposal metadata, input fingerprints, semantic changes, compression summary, and proposal summaries.
-- Added `MarkdownOperationalContextParser` with canonical section mapping, stable rendering, and preservation of unknown hand-written sections.
-- Added deterministic coarse `UnderstandingDiffService`.
-- Added repository-owned proposal persistence under `.agents/operational_context/proposals/<proposal-id>/` with `metadata.json` and `proposed.md`.
-- Added deterministic operational-context proposal generation from current operational context, current handoff, current decisions, bounded execution summaries, planning state, milestone inventory, and repository identity.
-- Proposal regeneration now supersedes previous pending proposals.
-- Added backend endpoints to generate, list, and load operational-context proposals.
-- Extended workspace projection with latest proposal summary.
-- Added Tauri bridge commands for generating, listing, and loading proposals.
-- Added UI workspace proposal panel with manual generation, latest proposal loading, proposal summary, semantic changes, and proposed-content preview.
-- Development Tauri mock now supports proposal summaries and proposal commands.
-- `.agents/milestones/m2-context-generation.md` is marked complete.
+- Added `OperationalContextReview`, review states, review request models, and `IOperationalContextReviewService` / `OperationalContextReviewService`.
+- Proposal metadata now includes review state plus optional edited content path/content.
+- Proposal store can persist reviewer edits to `.agents/operational_context/proposals/<proposal-id>/edited.md` and update metadata without rewriting generated content.
+- Superseding pending proposals now marks review metadata stale for audit clarity.
+- Added edit, accept, and reject backend endpoints with projection refresh.
+- Accept requires a reviewable latest proposal and unchanged current operational-context baseline; stale proposals are blocked and recorded as stale.
+- Accept and reject mutate proposal review metadata only; `.agents/operational_context.md` remains unchanged.
+- Added Tauri bridge commands for edit, accept, and reject proposal review operations.
+- UI proposal panel now supports markdown editing, review notes, accept/reject controls, stale-state blocking, semantic changes, and current/candidate side-by-side previews.
+- Development Tauri mock supports proposal editing and review transitions.
+- `.agents/milestones/m3-context-review.md` is marked complete.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 147 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 153 tests.
 - `dotnet build CommandCenter.slnx` passed with 0 warnings and 0 errors.
 - `npm run build --prefix src/CommandCenter.UI` passed.
 - `cargo build --manifest-path src/CommandCenter.Shell/Cargo.toml` passed.
 
 ## Next Slice
 
-Start M3: implement proposal review state, edited proposal content, accept/reject endpoints, stale-state checks for review transitions, and UI controls for edit/accept/reject without promotion.
+Start M4: implement operational-context lifecycle promotion, including accepted-proposal promotion, archive-before-replace behavior, `.agents/operational_context.NNNN.md` rotation using highest existing sequence plus one, stale promotion protection, and lifecycle UI controls.

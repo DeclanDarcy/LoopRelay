@@ -27,6 +27,7 @@ public static class Program
         builder.Services.AddSingleton<IUnderstandingDiffService, UnderstandingDiffService>();
         builder.Services.AddSingleton<IOperationalContextProposalStore, FileSystemOperationalContextProposalStore>();
         builder.Services.AddSingleton<IOperationalContextGenerationService, OperationalContextGenerationService>();
+        builder.Services.AddSingleton<IOperationalContextReviewService, OperationalContextReviewService>();
         builder.Services.AddSingleton<IPlanningService, PlanningService>();
         builder.Services.AddSingleton<IExecutionContextService, ExecutionContextService>();
         builder.Services.AddSingleton<IExecutionPromptBuilder, ExecutionPromptBuilder>();
@@ -322,6 +323,84 @@ public static class Program
             catch (ArgumentException exception)
             {
                 return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+        app.MapPut("/api/repositories/{repositoryId:guid}/operational-context/proposals/{proposalId}/content", async (
+            Guid repositoryId,
+            string proposalId,
+            OperationalContextProposalContentRequest request,
+            IOperationalContextReviewService reviewService,
+            IRepositoryProjectionService projectionService) =>
+        {
+            try
+            {
+                var proposal = await reviewService.EditAsync(repositoryId, proposalId, request.Content);
+                await projectionService.RefreshWorkspaceAsync(repositoryId);
+                return Results.Ok(proposal);
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+        app.MapPost("/api/repositories/{repositoryId:guid}/operational-context/proposals/{proposalId}/accept", async (
+            Guid repositoryId,
+            string proposalId,
+            OperationalContextProposalReviewRequest request,
+            IOperationalContextReviewService reviewService,
+            IRepositoryProjectionService projectionService) =>
+        {
+            try
+            {
+                var proposal = await reviewService.AcceptAsync(repositoryId, proposalId, request.ReviewNote);
+                await projectionService.RefreshWorkspaceAsync(repositoryId);
+                return Results.Ok(proposal);
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+        app.MapPost("/api/repositories/{repositoryId:guid}/operational-context/proposals/{proposalId}/reject", async (
+            Guid repositoryId,
+            string proposalId,
+            OperationalContextProposalReviewRequest request,
+            IOperationalContextReviewService reviewService,
+            IRepositoryProjectionService projectionService) =>
+        {
+            try
+            {
+                var proposal = await reviewService.RejectAsync(repositoryId, proposalId, request.ReviewNote);
+                await projectionService.RefreshWorkspaceAsync(repositoryId);
+                return Results.Ok(proposal);
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
             }
         });
         app.MapPost("/api/repositories/{repositoryId:guid}/execution/start", async (

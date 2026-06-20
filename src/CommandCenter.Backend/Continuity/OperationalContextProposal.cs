@@ -24,5 +24,9 @@ public sealed class OperationalContextProposal
 
     public OperationalContextCompressionSummary CompressionSummary { get; init; } = new();
 
+    public OperationalContextReview Review { get; init; } = new();
+
     public string? GeneratedContent { get; init; }
+
+    public string? EditedContent { get; init; }
 }

@@ -206,6 +206,18 @@ struct SaveArtifactContentRequest {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+struct OperationalContextProposalContentRequest {
+    content: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct OperationalContextProposalReviewRequest {
+    review_note: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ExecutionStartRequest {
     milestone_path: String,
 }
@@ -440,6 +452,72 @@ fn get_operational_context_proposal(
     }
 
     response_error(response, "operational-context proposal lookup failed")
+}
+
+#[tauri::command]
+fn edit_operational_context_proposal(
+    repository_id: String,
+    proposal_id: String,
+    content: String,
+) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .put(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/operational-context/proposals/{proposal_id}/content"
+        ))
+        .json(&OperationalContextProposalContentRequest { content })
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "operational-context proposal edit failed")
+}
+
+#[tauri::command]
+fn accept_operational_context_proposal(
+    repository_id: String,
+    proposal_id: String,
+    review_note: Option<String>,
+) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/operational-context/proposals/{proposal_id}/accept"
+        ))
+        .json(&OperationalContextProposalReviewRequest { review_note })
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "operational-context proposal accept failed")
+}
+
+#[tauri::command]
+fn reject_operational_context_proposal(
+    repository_id: String,
+    proposal_id: String,
+    review_note: Option<String>,
+) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/operational-context/proposals/{proposal_id}/reject"
+        ))
+        .json(&OperationalContextProposalReviewRequest { review_note })
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "operational-context proposal reject failed")
 }
 
 #[tauri::command]
@@ -754,6 +832,9 @@ fn main() {
             generate_operational_context_proposal,
             list_operational_context_proposals,
             get_operational_context_proposal,
+            edit_operational_context_proposal,
+            accept_operational_context_proposal,
+            reject_operational_context_proposal,
             start_execution,
             get_active_execution,
             get_git_status,

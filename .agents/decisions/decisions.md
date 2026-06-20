@@ -2,14 +2,14 @@
 
 ## Newly Authorized Decisions
 
-- M3 must preserve the distinction between review and lifecycle: edit, accept, and reject proposal review state without promoting or mutating `.agents/operational_context.md`.
-- M3 review state should use explicit vocabulary for `Pending`, `Edited`, `Accepted`, `Rejected`, and `Superseded` so stale proposal handling remains unambiguous.
-- Proposal identity must be stable enough to support generate, review, edit, accept, reject, stale detection, and later promotion without deriving authority indirectly from filesystem state.
-- Add a reproducibility certification expectation: same proposal inputs should produce equivalent generated understanding output, apart from proposal identity and timestamps.
-- Unknown operational-context Markdown preservation remains a high-risk invariant and must be tested through current context, proposal generation, and proposal persistence.
+- M4 must preserve the M3 architectural boundary: review acceptance is not promotion, and accepted proposals remain non-authoritative until an explicit promotion operation succeeds.
+- Only accepted operational-context proposals may be promoted into `.agents/operational_context.md`.
+- M4 promotion must behave atomically from the user's perspective: validation, archive, promote, and finalize must not leave the repository in a partially promoted or partially archived state.
+- Promotion must preserve review provenance sufficient to answer which proposal produced the promoted understanding, whether `edited.md` or `proposed.md` was promoted, and when the proposal was accepted.
+- M4 should keep accepted and promoted states distinct so lifecycle state remains understandable across proposal review, promotion, certification, and later audit work.
 
 ## Next-Slice Constraints
 
-- Do not merge M3 review with M4 lifecycle.
-- Do not make acceptance update authoritative operational context.
-- Do not introduce lifecycle automation while implementing review state.
+- Do not let acceptance mutate current operational context.
+- Do not promote superseded, rejected, pending, edited-but-unaccepted, or stale proposals.
+- Do not overwrite current operational context without preserving the prior current context as a numbered historical artifact.

@@ -11,6 +11,7 @@ public sealed class FileSystemOperationalContextProposalStore(IArtifactStore art
     private const string ProposalsRelativePath = ".agents/operational_context/proposals";
     private const string MetadataFileName = "metadata.json";
     private const string ProposedFileName = "proposed.md";
+    private const string EditedFileName = "edited.md";
 
     private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
 
@@ -41,7 +42,10 @@ public sealed class FileSystemOperationalContextProposalStore(IArtifactStore art
             GeneratedContentRelativePath = generatedRelativePath,
             EditedContentRelativePath = proposal.EditedContentRelativePath,
             SemanticChanges = proposal.SemanticChanges,
-            CompressionSummary = proposal.CompressionSummary
+            CompressionSummary = proposal.CompressionSummary,
+            Review = proposal.Review.ProposalId.Length == 0
+                ? CreatePendingReview(proposalId, proposal.BaselineCurrentContextHash)
+                : proposal.Review
         };
 
         await artifactStore.WriteAsync(ArtifactPath.ResolveRepositoryPath(repository, generatedRelativePath), generatedContent);
@@ -49,7 +53,7 @@ public sealed class FileSystemOperationalContextProposalStore(IArtifactStore art
             ArtifactPath.ResolveRepositoryPath(repository, metadataRelativePath),
             JsonSerializer.Serialize(storedProposal, JsonOptions));
 
-        return storedProposal.WithContent(generatedContent);
+        return storedProposal.WithContent(generatedContent, editedContent: null);
     }
 
     public async Task<IReadOnlyList<OperationalContextProposal>> ListAsync(
@@ -103,7 +107,55 @@ public sealed class FileSystemOperationalContextProposalStore(IArtifactStore art
 
         var content = await artifactStore.ReadAsync(
             ArtifactPath.ResolveRepositoryPath(repository, proposal.GeneratedContentRelativePath));
-        return proposal.WithContent(content);
+        string? editedContent = null;
+        if (!string.IsNullOrWhiteSpace(proposal.EditedContentRelativePath))
+        {
+            editedContent = await artifactStore.ReadAsync(
+                ArtifactPath.ResolveRepositoryPath(repository, proposal.EditedContentRelativePath));
+        }
+
+        return proposal.WithContent(content, editedContent);
+    }
+
+    public async Task<OperationalContextProposal> UpdateAsync(
+        Repository repository,
+        OperationalContextProposal proposal,
+        string? editedContent = null,
+        bool includeContent = false)
+    {
+        var proposalId = NormalizeProposalId(proposal.ProposalId);
+        var editedRelativePath = proposal.EditedContentRelativePath;
+        if (editedContent is not null)
+        {
+            editedRelativePath = ArtifactPath.CombineRelative(
+                ProposalsRelativePath,
+                proposalId,
+                EditedFileName);
+            await artifactStore.WriteAsync(
+                ArtifactPath.ResolveRepositoryPath(repository, editedRelativePath),
+                editedContent);
+        }
+
+        var storedProposal = new OperationalContextProposal
+        {
+            ProposalId = proposalId,
+            RepositoryId = proposal.RepositoryId,
+            GeneratedAt = proposal.GeneratedAt,
+            Status = proposal.Status,
+            InputFingerprints = proposal.InputFingerprints,
+            BaselineCurrentContextHash = proposal.BaselineCurrentContextHash,
+            GeneratedContentHash = proposal.GeneratedContentHash,
+            GeneratedContentRelativePath = proposal.GeneratedContentRelativePath,
+            EditedContentRelativePath = editedRelativePath,
+            SemanticChanges = proposal.SemanticChanges,
+            CompressionSummary = proposal.CompressionSummary,
+            Review = proposal.Review
+        };
+
+        await WriteMetadataAsync(repository, storedProposal);
+        return includeContent
+            ? (await GetAsync(repository, proposalId, includeContent: true)) ?? storedProposal
+            : storedProposal;
     }
 
     public async Task SupersedePendingAsync(Repository repository)
@@ -123,7 +175,17 @@ public sealed class FileSystemOperationalContextProposalStore(IArtifactStore art
                 GeneratedContentRelativePath = proposal.GeneratedContentRelativePath,
                 EditedContentRelativePath = proposal.EditedContentRelativePath,
                 SemanticChanges = proposal.SemanticChanges,
-                CompressionSummary = proposal.CompressionSummary
+                CompressionSummary = proposal.CompressionSummary,
+                Review = new OperationalContextReview
+                {
+                    ProposalId = proposal.ProposalId,
+                    ReviewState = OperationalContextReviewState.Stale,
+                    BaselineCurrentContextHash = proposal.BaselineCurrentContextHash,
+                    ReviewedContentHash = proposal.Review.ReviewedContentHash,
+                    ReviewedAt = DateTimeOffset.UtcNow,
+                    ReviewNote = proposal.Review.ReviewNote,
+                    StaleReason = "Proposal was superseded by a newer generated proposal."
+                }
             });
         }
     }
@@ -159,11 +221,24 @@ public sealed class FileSystemOperationalContextProposalStore(IArtifactStore art
         options.Converters.Add(new JsonStringEnumConverter());
         return options;
     }
+
+    private static OperationalContextReview CreatePendingReview(string proposalId, string baselineHash)
+    {
+        return new OperationalContextReview
+        {
+            ProposalId = proposalId,
+            ReviewState = OperationalContextReviewState.PendingReview,
+            BaselineCurrentContextHash = baselineHash
+        };
+    }
 }
 
 file static class OperationalContextProposalContentMutation
 {
-    public static OperationalContextProposal WithContent(this OperationalContextProposal proposal, string? generatedContent)
+    public static OperationalContextProposal WithContent(
+        this OperationalContextProposal proposal,
+        string? generatedContent,
+        string? editedContent)
     {
         return new OperationalContextProposal
         {
@@ -178,7 +253,9 @@ file static class OperationalContextProposalContentMutation
             EditedContentRelativePath = proposal.EditedContentRelativePath,
             SemanticChanges = proposal.SemanticChanges,
             CompressionSummary = proposal.CompressionSummary,
-            GeneratedContent = generatedContent
+            Review = proposal.Review,
+            GeneratedContent = generatedContent,
+            EditedContent = editedContent
         };
     }
 }

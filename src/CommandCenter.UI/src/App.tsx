@@ -17,7 +17,15 @@ type ExecutionSessionState = 'Created' | 'Executing' | 'Completed' | 'Failed' | 
 type ArtifactType = 'Plan' | 'OperationalContext' | 'Milestone' | 'Handoff' | 'Decision'
 type ArtifactFamily = ArtifactType
 type ArtifactVersionKind = 'Current' | 'Historical'
-type OperationalContextProposalStatus = 'Pending' | 'Superseded' | 'Accepted' | 'Rejected' | 'Promoted'
+type OperationalContextProposalStatus =
+  | 'Pending'
+  | 'Edited'
+  | 'Superseded'
+  | 'Accepted'
+  | 'Rejected'
+  | 'Promoted'
+
+type OperationalContextReviewState = 'PendingReview' | 'Edited' | 'Accepted' | 'Rejected' | 'Stale'
 
 type Repository = {
   id: string
@@ -251,8 +259,19 @@ type OperationalContextProposal = {
   status: OperationalContextProposalStatus
   generatedContentRelativePath: string
   generatedContentHash: string
+  editedContentRelativePath: string | null
   semanticChanges: OperationalContextSemanticChange[]
+  review: {
+    proposalId: string
+    reviewState: OperationalContextReviewState
+    baselineCurrentContextHash: string
+    reviewedContentHash: string | null
+    reviewedAt: string | null
+    reviewNote: string | null
+    staleReason: string | null
+  }
   generatedContent: string | null
+  editedContent: string | null
 }
 
 type ArtifactCategory = {
@@ -600,6 +619,9 @@ function App() {
   const [generatedHandoffContent, setGeneratedHandoffContent] = useState('')
   const [operationalContextProposal, setOperationalContextProposal] =
     useState<OperationalContextProposal | null>(null)
+  const [operationalContextCurrentContent, setOperationalContextCurrentContent] = useState('')
+  const [operationalContextProposalDraft, setOperationalContextProposalDraft] = useState('')
+  const [operationalContextReviewNote, setOperationalContextReviewNote] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -609,6 +631,8 @@ function App() {
   const [isRotating, setIsRotating] = useState(false)
   const [isContextLoading, setIsContextLoading] = useState(false)
   const [isOperationalContextProposalLoading, setIsOperationalContextProposalLoading] =
+    useState(false)
+  const [isOperationalContextProposalSaving, setIsOperationalContextProposalSaving] =
     useState(false)
   const [isStartingExecution, setIsStartingExecution] = useState(false)
   const [isGeneratedHandoffLoading, setIsGeneratedHandoffLoading] = useState(false)
@@ -645,6 +669,20 @@ function App() {
   const canRotateSelectedArtifact =
     selectedArtifact?.versionKind === 'Current' &&
     (selectedArtifact.family === 'Handoff' || selectedArtifact.family === 'Decision')
+  const operationalContextCandidateContent =
+    operationalContextProposal?.editedContent ??
+    operationalContextProposal?.generatedContent ??
+    ''
+  const isOperationalContextProposalReviewable =
+    operationalContextProposal?.status === 'Pending' ||
+    operationalContextProposal?.status === 'Edited'
+  const isOperationalContextReviewBlocked =
+    !operationalContextProposal ||
+    !isOperationalContextProposalReviewable ||
+    operationalContextProposal.review.reviewState === 'Stale'
+  const hasOperationalContextProposalDraftChanges =
+    operationalContextProposal !== null &&
+    operationalContextProposalDraft !== operationalContextCandidateContent
   const milestoneOptions = workspace?.artifactInventory.milestones ?? []
   const executionSummary =
     workspace?.executionSummary ??
@@ -790,6 +828,9 @@ function App() {
     setSelectedRepositoryId(repositoryId)
     setSelectedArtifactPath(selectedArtifactPathsByRepository.current[repositoryId] ?? null)
     setOperationalContextProposal(null)
+    setOperationalContextCurrentContent('')
+    setOperationalContextProposalDraft('')
+    setOperationalContextReviewNote('')
   }, [])
 
   const selectArtifact = useCallback((repositoryId: string, relativePath: string) => {
@@ -1082,7 +1123,7 @@ function App() {
         'generate_operational_context_proposal',
         { repositoryId: selectedRepository.repository.id },
       )
-      setOperationalContextProposal(proposal)
+      await setLoadedOperationalContextProposal(proposal)
       const nextWorkspace = await invoke<RepositoryWorkspaceProjection>(
         'refresh_repository_workspace',
         { repositoryId: selectedRepository.repository.id },
@@ -1099,6 +1140,29 @@ function App() {
     }
   }
 
+  async function loadOperationalContextCurrentContent(repositoryId: string) {
+    const currentContext = workspace?.artifactInventory.operationalContext
+    if (!currentContext) {
+      setOperationalContextCurrentContent('')
+      return
+    }
+
+    const content = await invoke<string>('load_artifact_content', {
+      repositoryId,
+      relativePath: currentContext.relativePath,
+    })
+    setOperationalContextCurrentContent(content)
+  }
+
+  async function setLoadedOperationalContextProposal(proposal: OperationalContextProposal) {
+    setOperationalContextProposal(proposal)
+    setOperationalContextProposalDraft(proposal.editedContent ?? proposal.generatedContent ?? '')
+    setOperationalContextReviewNote(proposal.review.reviewNote ?? '')
+    if (selectedRepository) {
+      await loadOperationalContextCurrentContent(selectedRepository.repository.id)
+    }
+  }
+
   async function loadLatestOperationalContextProposal() {
     if (!selectedRepository || !workspace?.operationalContextProposalSummary.latestProposalId) {
       return
@@ -1112,12 +1176,99 @@ function App() {
         repositoryId: selectedRepository.repository.id,
         proposalId: workspace.operationalContextProposalSummary.latestProposalId,
       })
-      setOperationalContextProposal(proposal)
+      await setLoadedOperationalContextProposal(proposal)
       setMessage('Operational-context proposal loaded.')
     } catch (proposalError) {
       setError(formatError(proposalError))
     } finally {
       setIsOperationalContextProposalLoading(false)
+    }
+  }
+
+  async function saveOperationalContextProposalEdit() {
+    if (!selectedRepository || !operationalContextProposal) {
+      return
+    }
+
+    setIsOperationalContextProposalSaving(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const proposal = await invoke<OperationalContextProposal>('edit_operational_context_proposal', {
+        repositoryId: selectedRepository.repository.id,
+        proposalId: operationalContextProposal.proposalId,
+        content: operationalContextProposalDraft,
+      })
+      await setLoadedOperationalContextProposal(proposal)
+      const nextWorkspace = await invoke<RepositoryWorkspaceProjection>(
+        'refresh_repository_workspace',
+        { repositoryId: selectedRepository.repository.id },
+      )
+      setWorkspace(nextWorkspace)
+      setMessage('Operational-context proposal edits saved.')
+      await loadRepositories()
+    } catch (proposalError) {
+      setError(formatError(proposalError))
+    } finally {
+      setIsOperationalContextProposalSaving(false)
+    }
+  }
+
+  async function acceptOperationalContextProposal() {
+    if (!selectedRepository || !operationalContextProposal) {
+      return
+    }
+
+    setIsOperationalContextProposalSaving(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const proposal = await invoke<OperationalContextProposal>('accept_operational_context_proposal', {
+        repositoryId: selectedRepository.repository.id,
+        proposalId: operationalContextProposal.proposalId,
+        reviewNote: operationalContextReviewNote || null,
+      })
+      await setLoadedOperationalContextProposal(proposal)
+      const nextWorkspace = await invoke<RepositoryWorkspaceProjection>(
+        'refresh_repository_workspace',
+        { repositoryId: selectedRepository.repository.id },
+      )
+      setWorkspace(nextWorkspace)
+      setMessage('Operational-context proposal accepted for later promotion.')
+      await loadRepositories()
+    } catch (proposalError) {
+      setError(formatError(proposalError))
+    } finally {
+      setIsOperationalContextProposalSaving(false)
+    }
+  }
+
+  async function rejectOperationalContextProposal() {
+    if (!selectedRepository || !operationalContextProposal) {
+      return
+    }
+
+    setIsOperationalContextProposalSaving(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const proposal = await invoke<OperationalContextProposal>('reject_operational_context_proposal', {
+        repositoryId: selectedRepository.repository.id,
+        proposalId: operationalContextProposal.proposalId,
+        reviewNote: operationalContextReviewNote || null,
+      })
+      await setLoadedOperationalContextProposal(proposal)
+      const nextWorkspace = await invoke<RepositoryWorkspaceProjection>(
+        'refresh_repository_workspace',
+        { repositoryId: selectedRepository.repository.id },
+      )
+      setWorkspace(nextWorkspace)
+      setMessage('Operational-context proposal rejected.')
+      await loadRepositories()
+    } catch (proposalError) {
+      setError(formatError(proposalError))
+    } finally {
+      setIsOperationalContextProposalSaving(false)
     }
   }
 
@@ -1935,6 +2086,66 @@ function App() {
 
                 {operationalContextProposal ? (
                   <div className="context-artifact-previews">
+                    <div className="context-summary-grid">
+                      <span>Proposal: {operationalContextProposal.proposalId}</span>
+                      <span>Status: {operationalContextProposal.status}</span>
+                      <span>Review: {operationalContextProposal.review.reviewState}</span>
+                      <span>
+                        Reviewed: {formatDateTime(operationalContextProposal.review.reviewedAt)}
+                      </span>
+                    </div>
+                    {operationalContextProposal.review.staleReason ? (
+                      <p className="empty-state">
+                        Review blocked: {operationalContextProposal.review.staleReason}
+                      </p>
+                    ) : null}
+                    <div className="proposal-review-toolbar">
+                      <button
+                        type="button"
+                        className="secondary-action"
+                        onClick={() => void saveOperationalContextProposalEdit()}
+                        disabled={
+                          isOperationalContextReviewBlocked ||
+                          !hasOperationalContextProposalDraftChanges ||
+                          isOperationalContextProposalSaving
+                        }
+                      >
+                        {isOperationalContextProposalSaving ? 'Saving...' : 'Save Edits'}
+                      </button>
+                      <button
+                        type="button"
+                        className="primary-action"
+                        onClick={() => void acceptOperationalContextProposal()}
+                        disabled={isOperationalContextReviewBlocked || isOperationalContextProposalSaving}
+                      >
+                        Accept
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-action"
+                        onClick={() => void rejectOperationalContextProposal()}
+                        disabled={isOperationalContextReviewBlocked || isOperationalContextProposalSaving}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                    <label className="commit-message-editor">
+                      <span>Review note</span>
+                      <textarea
+                        value={operationalContextReviewNote}
+                        onChange={(event) => setOperationalContextReviewNote(event.target.value)}
+                        spellCheck={false}
+                      />
+                    </label>
+                    <label className="proposal-editor">
+                      <span>Proposed markdown</span>
+                      <textarea
+                        value={operationalContextProposalDraft}
+                        onChange={(event) => setOperationalContextProposalDraft(event.target.value)}
+                        disabled={isOperationalContextReviewBlocked}
+                        spellCheck={false}
+                      />
+                    </label>
                     <h5>Semantic Changes</h5>
                     {operationalContextProposal.semanticChanges.length === 0 ? (
                       <p>No coarse semantic changes detected.</p>
@@ -1947,17 +2158,24 @@ function App() {
                         ))}
                       </ul>
                     )}
-                    <details>
-                      <summary>
-                        Proposed content ({operationalContextProposal.generatedContent?.length ?? 0}{' '}
-                        characters)
-                      </summary>
-                      <div className="markdown-preview context-artifact-content">
-                        {operationalContextProposal.generatedContent?.trim()
-                          ? renderMarkdown(operationalContextProposal.generatedContent)
-                          : <p>Empty proposal.</p>}
+                    <div className="proposal-comparison-grid">
+                      <div>
+                        <h5>Current Understanding</h5>
+                        <div className="markdown-preview context-artifact-content">
+                          {operationalContextCurrentContent.trim()
+                            ? renderMarkdown(operationalContextCurrentContent)
+                            : <p>No current operational context.</p>}
+                        </div>
                       </div>
-                    </details>
+                      <div>
+                        <h5>Review Candidate</h5>
+                        <div className="markdown-preview context-artifact-content">
+                          {operationalContextProposalDraft.trim()
+                            ? renderMarkdown(operationalContextProposalDraft)
+                            : <p>Empty proposal.</p>}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ) : null}
               </section>

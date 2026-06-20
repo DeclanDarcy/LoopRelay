@@ -57,13 +57,24 @@ type OperationalContextProposal = {
   status: string
   generatedContentRelativePath: string
   generatedContentHash: string
+  editedContentRelativePath: string | null
   semanticChanges: Array<{
     type: string
     section: string
     description: string
     itemId: string | null
   }>
+  review: {
+    proposalId: string
+    reviewState: string
+    baselineCurrentContextHash: string
+    reviewedContentHash: string | null
+    reviewedAt: string | null
+    reviewNote: string | null
+    staleReason: string | null
+  }
   generatedContent: string
+  editedContent: string | null
 }
 
 type DashboardEntry = {
@@ -869,6 +880,7 @@ function generateOperationalContextProposal(
     status: 'Pending',
     generatedContentRelativePath: `.agents/operational_context/proposals/${proposalId}/proposed.md`,
     generatedContentHash: `mock-hash-${proposalId}`,
+    editedContentRelativePath: null,
     semanticChanges: [
       {
         type: 'ConstraintAdded',
@@ -877,7 +889,17 @@ function generateOperationalContextProposal(
         itemId: 'mock-constraint',
       },
     ],
+    review: {
+      proposalId,
+      reviewState: 'PendingReview',
+      baselineCurrentContextHash: 'mock-current-context-hash',
+      reviewedContentHash: null,
+      reviewedAt: null,
+      reviewNote: null,
+      staleReason: null,
+    },
     generatedContent,
+    editedContent: null,
   }
 
   state.operationalContextProposals[repositoryId] = (
@@ -896,6 +918,87 @@ function generateOperationalContextProposal(
     sourceInputCount: 3,
     contentByteCount: generatedContent.length,
     contentCharacterCount: generatedContent.length,
+  }
+  return proposal
+}
+
+function getOperationalContextProposal(
+  state: MockState,
+  repositoryId: string,
+  proposalId: string,
+): OperationalContextProposal {
+  const proposal = state.operationalContextProposals[repositoryId]?.find(
+    (currentProposal) => currentProposal.proposalId === proposalId,
+  )
+  if (!proposal) {
+    throw new Error('Operational-context proposal was not found.')
+  }
+
+  return proposal
+}
+
+function editOperationalContextProposal(
+  state: MockState,
+  repositoryId: string,
+  proposalId: string,
+  content: string,
+): OperationalContextProposal {
+  const proposal = getOperationalContextProposal(state, repositoryId, proposalId)
+  if (proposal.status !== 'Pending' && proposal.status !== 'Edited') {
+    throw new Error(`Operational-context proposal is not reviewable from status ${proposal.status}.`)
+  }
+
+  proposal.status = 'Edited'
+  proposal.editedContentRelativePath = `.agents/operational_context/proposals/${proposalId}/edited.md`
+  proposal.editedContent = content
+  proposal.review = {
+    proposalId,
+    reviewState: 'Edited',
+    baselineCurrentContextHash: proposal.review.baselineCurrentContextHash,
+    reviewedContentHash: `mock-edited-hash-${content.length}`,
+    reviewedAt: new Date().toISOString(),
+    reviewNote: null,
+    staleReason: null,
+  }
+  proposal.semanticChanges = [
+    {
+      type: 'SectionChanged',
+      section: 'Operational Context',
+      description: 'Reviewer-edited proposal content.',
+      itemId: null,
+    },
+  ]
+  return proposal
+}
+
+function reviewOperationalContextProposal(
+  state: MockState,
+  repositoryId: string,
+  proposalId: string,
+  status: 'Accepted' | 'Rejected',
+  reviewNote: string | null,
+): OperationalContextProposal {
+  const proposal = getOperationalContextProposal(state, repositoryId, proposalId)
+  if (proposal.status !== 'Pending' && proposal.status !== 'Edited') {
+    throw new Error(`Operational-context proposal is not reviewable from status ${proposal.status}.`)
+  }
+
+  proposal.status = status
+  proposal.review = {
+    proposalId,
+    reviewState: status,
+    baselineCurrentContextHash: proposal.review.baselineCurrentContextHash,
+    reviewedContentHash: proposal.editedContent
+      ? `mock-edited-hash-${proposal.editedContent.length}`
+      : proposal.generatedContentHash,
+    reviewedAt: new Date().toISOString(),
+    reviewNote,
+    staleReason: null,
+  }
+  const workspace = state.workspaces[repositoryId]
+  if (workspace) {
+    workspace.operationalContextProposalSummary.status = status
+    workspace.operationalContextProposalSummary.pendingProposalExists = false
   }
   return proposal
 }
@@ -978,14 +1081,38 @@ export function installDevTauriMock() {
         case 'get_operational_context_proposal': {
           const repositoryId = getStringArg(args, 'repositoryId')
           const proposalId = getStringArg(args, 'proposalId')
-          const proposal = state.operationalContextProposals[repositoryId]?.find(
-            (currentProposal) => currentProposal.proposalId === proposalId,
+          return clone(getOperationalContextProposal(state, repositoryId, proposalId))
+        }
+        case 'edit_operational_context_proposal':
+          return clone(
+            editOperationalContextProposal(
+              state,
+              getStringArg(args, 'repositoryId'),
+              getStringArg(args, 'proposalId'),
+              getStringArg(args, 'content'),
+            ),
           )
-          if (!proposal) {
-            throw new Error('Operational-context proposal was not found.')
-          }
-
-          return clone(proposal)
+        case 'accept_operational_context_proposal': {
+          return clone(
+            reviewOperationalContextProposal(
+              state,
+              getStringArg(args, 'repositoryId'),
+              getStringArg(args, 'proposalId'),
+              'Accepted',
+              typeof args?.reviewNote === 'string' ? args.reviewNote : null,
+            ),
+          )
+        }
+        case 'reject_operational_context_proposal': {
+          return clone(
+            reviewOperationalContextProposal(
+              state,
+              getStringArg(args, 'repositoryId'),
+              getStringArg(args, 'proposalId'),
+              'Rejected',
+              typeof args?.reviewNote === 'string' ? args.reviewNote : null,
+            ),
+          )
         }
         case 'start_execution':
           return clone(

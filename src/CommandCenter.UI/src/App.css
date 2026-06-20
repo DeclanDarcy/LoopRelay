@@ -548,19 +548,22 @@ button:focus-visible {
 
 .commit-review-panel,
 .commit-message-editor,
+.proposal-editor,
 .commit-scope-list {
   min-width: 0;
   display: grid;
   gap: 10px;
 }
 
-.commit-message-editor span {
+.commit-message-editor span,
+.proposal-editor span {
   color: #3d4650;
   font-size: 0.82rem;
   font-weight: 750;
 }
 
-.commit-message-editor textarea {
+.commit-message-editor textarea,
+.proposal-editor textarea {
   min-height: 88px;
   resize: vertical;
   border: 1px solid #c8d0d8;
@@ -573,9 +576,33 @@ button:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.proposal-editor textarea {
+  min-height: 220px;
+}
+
 .commit-scope-toolbar {
   display: flex;
   flex-wrap: wrap;
+  gap: 8px;
+}
+
+.proposal-review-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.proposal-comparison-grid {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.proposal-comparison-grid > div {
+  min-width: 0;
+  display: grid;
+  align-content: start;
   gap: 8px;
 }
 

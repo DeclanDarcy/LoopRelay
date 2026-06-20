@@ -1,11 +1,10 @@
 namespace CommandCenter.Backend.Continuity;
 
-public enum OperationalContextProposalStatus
+public enum OperationalContextReviewState
 {
-    Pending,
+    PendingReview,
     Edited,
-    Superseded,
     Accepted,
     Rejected,
-    Promoted
+    Stale
 }
