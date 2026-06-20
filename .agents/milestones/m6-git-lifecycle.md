@@ -6,7 +6,7 @@ Replace manual status inspection, commit message drafting, commit, and push flow
 
 ## Backend Work
 
-- [ ] Implement full `GitService`.
+- [x] Implement full `GitService`.
 - [x] Add Git status endpoint.
 - [x] Add commit preparation endpoint that generates a deterministic proposed commit message.
 - [x] Include pre-execution dirty snapshot comparison in commit preparation.
@@ -21,11 +21,11 @@ Replace manual status inspection, commit message drafting, commit, and push flow
   - [x] Commit with reviewed message.
   - [x] Store commit sha.
   - [x] Transition to `AwaitingPush`.
-- [ ] Add push endpoint:
-  - [ ] Validate session is `AwaitingPush`.
-  - [ ] Push current branch.
-  - [ ] Store push result.
-  - [ ] Transition repository execution state to `Ready`.
+- [x] Add push endpoint:
+  - [x] Validate session is `AwaitingPush`.
+  - [x] Push current branch.
+  - [x] Store push result.
+  - [x] Transition repository execution state to `Ready`.
 - [ ] Return structured failures for commit and push errors.
 
 ## UI Work
@@ -38,9 +38,9 @@ Replace manual status inspection, commit message drafting, commit, and push flow
 - [x] Show the exact commit scope that will be staged.
 - [x] Add commit action.
 - [x] Show commit sha after success.
-- [ ] Add push action.
-- [ ] Show push success or failure.
-- [ ] Keep retry controls available after commit or push failure.
+- [x] Add push action.
+- [x] Show push success or failure.
+- [x] Keep retry controls available after commit or push failure.
 
 ## Tests
 
@@ -53,13 +53,13 @@ Replace manual status inspection, commit message drafting, commit, and push flow
 - [x] Empty selected path set is rejected unless the workflow is explicitly marking a clean execution ready without commit.
 - [x] Stale status snapshot is rejected.
 - [x] Commit failure returns a visible error and leaves state retryable.
-- [ ] Push failure records failure and leaves state retryable.
+- [x] Push failure records failure and leaves state retryable.
 - [x] Successful commit transitions to `AwaitingPush`.
-- [ ] Successful push transitions to `Ready`.
-- [ ] No destructive Git commands are issued.
+- [x] Successful push transitions to `Ready`.
+- [x] No destructive Git commands are issued.
 
 ## Exit Criteria
 
-- [ ] User can review status, edit commit message, commit, and push from Command Center.
-- [ ] Commit and push failures are visible and retryable.
-- [ ] Repository returns to `Ready` after successful push.
+- [x] User can review status, edit commit message, commit, and push from Command Center.
+- [x] Commit and push failures are visible and retryable.
+- [x] Repository returns to `Ready` after successful push.

@@ -686,6 +686,49 @@ public sealed class ExecutionSessionServiceTests
     }
 
     [Fact]
+    public async Task PushFromAwaitingPushPersistsMetadataAndTransitionsToReady()
+    {
+        var gitService = new FakeGitService(new RepositoryDirtyState { IsClean = true }, null);
+        var harness = await CreateHarnessAsync(gitService: gitService);
+        var session = await StoreAwaitingPushSessionAsync(harness);
+
+        var summary = await harness.SessionService.PushAsync(session.Id, new PushRequest());
+        var storedSession = (await harness.Store.LoadAsync()).Single(storedSession => storedSession.Id == session.Id);
+
+        Assert.Equal(RepositoryExecutionState.Ready, summary.RepositoryState);
+        Assert.Equal("commit-sha", summary.PushedCommitSha);
+        Assert.NotNull(summary.PushAttemptedAt);
+        Assert.NotNull(summary.PushedAt);
+        Assert.Equal("main", summary.PushBranchName);
+        Assert.Equal(RepositoryExecutionState.Ready, storedSession.RepositoryState);
+        Assert.Equal("commit-sha", storedSession.PushedCommitSha);
+        Assert.NotNull(storedSession.RepositorySnapshot);
+        Assert.Equal("commit-sha", gitService.LastPushedCommitSha);
+    }
+
+    [Fact]
+    public async Task PushFailureLeavesSessionAwaitingPushForRetry()
+    {
+        var gitService = new FakeGitService(new RepositoryDirtyState { IsClean = true }, null)
+        {
+            PushFailure = "git push failed"
+        };
+        var harness = await CreateHarnessAsync(gitService: gitService);
+        var session = await StoreAwaitingPushSessionAsync(harness);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            harness.SessionService.PushAsync(session.Id, new PushRequest()));
+        var storedSession = (await harness.Store.LoadAsync()).Single(storedSession => storedSession.Id == session.Id);
+
+        Assert.Contains("git push failed", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(RepositoryExecutionState.AwaitingPush, storedSession.RepositoryState);
+        Assert.NotNull(storedSession.PushAttemptedAt);
+        Assert.Contains("git push failed", storedSession.FailureReason, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(storedSession.PushedAt);
+        Assert.Null(storedSession.PushedCommitSha);
+    }
+
+    [Fact]
     public async Task LaunchEndpointReturnsSessionMetadata()
     {
         var configurationPath = Path.Combine(CreateTemporaryDirectory(), "configuration.json");
@@ -965,6 +1008,30 @@ public sealed class ExecutionSessionServiceTests
         return session;
     }
 
+    private static async Task<ExecutionSession> StoreAwaitingPushSessionAsync(Harness harness)
+    {
+        var session = new ExecutionSession
+        {
+            Id = Guid.NewGuid(),
+            RepositoryId = harness.Repository.Id,
+            RepositoryPath = harness.Repository.Path,
+            MilestonePath = ".agents/milestones/m6-git-lifecycle.md",
+            StartedAt = DateTimeOffset.UtcNow.AddMinutes(-5),
+            CompletedAt = DateTimeOffset.UtcNow.AddMinutes(-4),
+            AcceptedAt = DateTimeOffset.UtcNow.AddMinutes(-3),
+            LastActivityAt = DateTimeOffset.UtcNow.AddMinutes(-2),
+            State = ExecutionSessionState.Completed,
+            RepositoryState = RepositoryExecutionState.AwaitingPush,
+            ProviderName = "fake",
+            CommitSha = "commit-sha",
+            CommittedAt = DateTimeOffset.UtcNow.AddMinutes(-2),
+            CommitMessage = "Reviewed commit",
+            PreparationSnapshotId = "snapshot"
+        };
+        await harness.Store.SaveAsync([session]);
+        return session;
+    }
+
     private static ExecutionSession CreateAwaitingAcceptanceSession(Repository repository, string milestonePath)
     {
         var sessionId = Guid.NewGuid();
@@ -1036,7 +1103,11 @@ public sealed class ExecutionSessionServiceTests
 
         public string? CommitFailure { get; init; }
 
+        public string? PushFailure { get; init; }
+
         public IReadOnlyList<string> LastCommittedPaths { get; private set; } = [];
+
+        public string? LastPushedCommitSha { get; private set; }
 
         public Task<ExecutionRepositorySnapshot> GetSnapshotAsync(Repository repository)
         {
@@ -1138,6 +1209,23 @@ public sealed class ExecutionSessionServiceTests
                 CommitMessage = message,
                 PreparationSnapshotId = preparationSnapshotId,
                 SelectedPaths = selectedPaths
+            });
+        }
+
+        public Task<PushResult> PushAsync(Repository repository, string? commitSha)
+        {
+            if (PushFailure is not null)
+            {
+                throw new InvalidOperationException(PushFailure);
+            }
+
+            LastPushedCommitSha = commitSha;
+            return Task.FromResult(new PushResult
+            {
+                PushAttemptedAt = DateTimeOffset.UtcNow,
+                PushedAt = DateTimeOffset.UtcNow,
+                PushedCommitSha = commitSha,
+                BranchName = "main"
             });
         }
     }

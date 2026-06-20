@@ -61,6 +61,11 @@ struct ExecutionSessionSummary {
     committed_at: Option<String>,
     commit_message: Option<String>,
     preparation_snapshot_id: Option<String>,
+    push_attempted_at: Option<String>,
+    pushed_at: Option<String>,
+    pushed_commit_sha: Option<String>,
+    push_remote_name: Option<String>,
+    push_branch_name: Option<String>,
     failure_reason: Option<String>,
 }
 
@@ -127,6 +132,10 @@ struct CommitRequest {
     selected_paths: Vec<String>,
     status_snapshot_id: String,
 }
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PushRequest {}
 
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -464,6 +473,24 @@ fn commit_execution(
 }
 
 #[tauri::command]
+fn push_execution(session_id: String) -> Result<ExecutionSessionSummary, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/execution-sessions/{session_id}/git/push"
+        ))
+        .json(&PushRequest {})
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "push failed")
+}
+
+#[tauri::command]
 fn get_execution_session(session_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/execution-sessions/{session_id}"
@@ -666,6 +693,7 @@ fn main() {
             get_git_status,
             prepare_commit,
             commit_execution,
+            push_execution,
             get_execution_session,
             accept_execution_handoff,
             reject_execution_handoff

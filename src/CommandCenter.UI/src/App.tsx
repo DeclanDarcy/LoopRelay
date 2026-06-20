@@ -63,6 +63,11 @@ type ExecutionSessionSummary = {
   committedAt: string | null
   commitMessage: string | null
   preparationSnapshotId: string | null
+  pushAttemptedAt: string | null
+  pushedAt: string | null
+  pushedCommitSha: string | null
+  pushRemoteName: string | null
+  pushBranchName: string | null
   failureReason: string | null
 }
 
@@ -459,6 +464,7 @@ function App() {
   const [isGitStatusLoading, setIsGitStatusLoading] = useState(false)
   const [isCommitPreparationLoading, setIsCommitPreparationLoading] = useState(false)
   const [isCommitting, setIsCommitting] = useState(false)
+  const [isPushing, setIsPushing] = useState(false)
   const [isAdding, setIsAdding] = useState(false)
   const [removingRepositoryId, setRemovingRepositoryId] = useState<string | null>(null)
 
@@ -541,6 +547,11 @@ function App() {
         committedAt: executionSummary.committedAt,
         commitMessage: executionSummary.commitMessage,
         preparationSnapshotId: executionSummary.preparationSnapshotId,
+        pushAttemptedAt: executionSummary.pushAttemptedAt,
+        pushedAt: executionSummary.pushedAt,
+        pushedCommitSha: executionSummary.pushedCommitSha,
+        pushRemoteName: executionSummary.pushRemoteName,
+        pushBranchName: executionSummary.pushBranchName,
         failureReason: selectedExecutionStatus?.failureReason ?? executionSummary.failureReason,
       }
     : null
@@ -564,6 +575,11 @@ function App() {
     selectedCommitScopeItems.length > 0 &&
     commitMessage.trim().length > 0 &&
     !isCommitting
+  const canPushExecution =
+    Boolean(executionSessionId) &&
+    currentExecutionState === 'AwaitingPush' &&
+    Boolean(executionDisplay?.commitSha) &&
+    !isPushing
 
   const startExecutionBlockedReason = useMemo(() => {
     if (!workspace) {
@@ -749,6 +765,35 @@ function App() {
       setError(formatError(commitError))
     } finally {
       setIsCommitting(false)
+    }
+  }
+
+  async function pushExecution() {
+    if (!executionSessionId || !canPushExecution) {
+      return
+    }
+
+    setIsPushing(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const summary = await invoke<ExecutionSessionSummary>('push_execution', {
+        sessionId: executionSessionId,
+      })
+      setMessage(
+        summary.pushedCommitSha
+          ? `Pushed ${summary.pushedCommitSha}. Repository is ready.`
+          : 'Push completed. Repository is ready.',
+      )
+      await loadRepositories()
+      if (selectedRepository) {
+        await loadWorkspace(selectedRepository.repository.id)
+        await loadGitStatus(selectedRepository.repository.id)
+      }
+    } catch (pushError) {
+      setError(formatError(pushError))
+    } finally {
+      setIsPushing(false)
     }
   }
 
@@ -1869,11 +1914,25 @@ function App() {
                       </p>
                     )
                   ) : currentExecutionState === 'AwaitingPush' && executionDisplay?.commitSha ? (
-                    <div className="context-summary">
-                      <span>Commit: {executionDisplay.commitSha}</span>
-                      <span>Committed: {formatDateTime(executionDisplay.committedAt)}</span>
-                      <span>Snapshot: {executionDisplay.preparationSnapshotId ?? 'Not recorded'}</span>
-                      <span>State: Awaiting push</span>
+                    <div className="commit-review-panel">
+                      <div className="context-summary">
+                        <span>Commit: {executionDisplay.commitSha}</span>
+                        <span>Committed: {formatDateTime(executionDisplay.committedAt)}</span>
+                        <span>Snapshot: {executionDisplay.preparationSnapshotId ?? 'Not recorded'}</span>
+                        <span>Branch: {gitStatus?.branch || executionDisplay.pushBranchName || '(unknown)'}</span>
+                        <span>Ahead: {gitStatus?.aheadCount ?? 'Not loaded'}</span>
+                        <span>State: Awaiting push</span>
+                      </div>
+                      <div className="commit-scope-toolbar">
+                        <button
+                          type="button"
+                          className="primary-action"
+                          onClick={() => void pushExecution()}
+                          disabled={!canPushExecution}
+                        >
+                          {isPushing ? 'Pushing...' : 'Push Commit'}
+                        </button>
+                      </div>
                     </div>
                   ) : gitStatus ? (
                     <>
@@ -1929,6 +1988,8 @@ function App() {
                     <span>Handoff: {executionDisplay.handoffPath || 'Not recorded'}</span>
                     <span>Commit: {executionDisplay.commitSha || 'Not recorded'}</span>
                     <span>Committed: {formatDateTime(executionDisplay.committedAt)}</span>
+                    <span>Pushed: {formatDateTime(executionDisplay.pushedAt)}</span>
+                    <span>Pushed commit: {executionDisplay.pushedCommitSha || 'Not recorded'}</span>
                     {executionDisplay.failureReason ? (
                       <span className="execution-failure">Failure: {executionDisplay.failureReason}</span>
                     ) : null}

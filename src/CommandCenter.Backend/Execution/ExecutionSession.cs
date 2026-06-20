@@ -50,6 +50,16 @@ public sealed class ExecutionSession
 
     public string? PreparationSnapshotId { get; init; }
 
+    public DateTimeOffset? PushAttemptedAt { get; init; }
+
+    public DateTimeOffset? PushedAt { get; init; }
+
+    public string? PushedCommitSha { get; init; }
+
+    public string? PushRemoteName { get; init; }
+
+    public string? PushBranchName { get; init; }
+
     public string? PreviousHandoffContent { get; init; }
 
     public DateTimeOffset? PreviousHandoffCapturedAt { get; init; }
@@ -84,6 +94,11 @@ public sealed class ExecutionSession
             CommittedAt = CommittedAt,
             CommitMessage = CommitMessage,
             PreparationSnapshotId = PreparationSnapshotId,
+            PushAttemptedAt = PushAttemptedAt,
+            PushedAt = PushedAt,
+            PushedCommitSha = PushedCommitSha,
+            PushRemoteName = PushRemoteName,
+            PushBranchName = PushBranchName,
             FailureReason = FailureReason
         };
     }

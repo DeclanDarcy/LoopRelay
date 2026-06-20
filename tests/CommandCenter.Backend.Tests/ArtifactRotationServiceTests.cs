@@ -249,5 +249,10 @@ public sealed class ArtifactRotationServiceTests
         {
             throw new NotSupportedException();
         }
+
+        public Task<ExecutionSessionSummary> PushAsync(Guid sessionId, PushRequest request)
+        {
+            throw new NotSupportedException();
+        }
     }
 }

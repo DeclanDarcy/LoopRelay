@@ -21,4 +21,6 @@ public interface IExecutionSessionService
     Task<CommitPreparation> PrepareCommitAsync(Guid sessionId);
 
     Task<ExecutionSessionSummary> CommitAsync(Guid sessionId, CommitRequest request);
+
+    Task<ExecutionSessionSummary> PushAsync(Guid sessionId, PushRequest request);
 }

@@ -389,6 +389,50 @@ public sealed class ExecutionSessionService(
         }
     }
 
+    public async Task<ExecutionSessionSummary> PushAsync(Guid sessionId, PushRequest request)
+    {
+        await gate.WaitAsync();
+        try
+        {
+            var sessions = (await sessionStore.LoadAsync()).ToList();
+            var session = sessions.FirstOrDefault(session => session.Id == sessionId)
+                ?? throw new KeyNotFoundException($"Execution session was not found: {sessionId}");
+            if (session.RepositoryState != RepositoryExecutionState.AwaitingPush)
+            {
+                throw new InvalidOperationException("Push can only run while awaiting push.");
+            }
+
+            var repository = new Repository
+            {
+                Id = session.RepositoryId,
+                Name = Path.GetFileName(session.RepositoryPath),
+                Path = session.RepositoryPath
+            };
+
+            PushResult result;
+            try
+            {
+                result = await gitService.PushAsync(repository, session.CommitSha);
+            }
+            catch (InvalidOperationException exception)
+            {
+                var failedAttemptAt = DateTimeOffset.UtcNow;
+                var retryableSession = session.WithPushFailure(failedAttemptAt, exception.Message);
+                await ReplaceSessionAsync(sessions, retryableSession);
+                throw;
+            }
+
+            var snapshot = await gitService.GetSnapshotAsync(repository);
+            var pushedSession = session.WithPushResult(result, DateTimeOffset.UtcNow, snapshot);
+            await ReplaceSessionAsync(sessions, pushedSession);
+            return pushedSession.ToSummary();
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
     private static bool IsActiveRepositoryState(RepositoryExecutionState state)
     {
         return state == RepositoryExecutionState.Executing;
@@ -489,6 +533,11 @@ file static class ExecutionSessionMutation
             CommittedAt = session.CommittedAt,
             CommitMessage = session.CommitMessage,
             PreparationSnapshotId = session.PreparationSnapshotId,
+            PushAttemptedAt = session.PushAttemptedAt,
+            PushedAt = session.PushedAt,
+            PushedCommitSha = session.PushedCommitSha,
+            PushRemoteName = session.PushRemoteName,
+            PushBranchName = session.PushBranchName,
             PreviousHandoffContent = session.PreviousHandoffContent,
             PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,
             HandoffPath = session.HandoffPath,
@@ -531,6 +580,11 @@ file static class ExecutionSessionMutation
             CommittedAt = session.CommittedAt,
             CommitMessage = session.CommitMessage,
             PreparationSnapshotId = session.PreparationSnapshotId,
+            PushAttemptedAt = session.PushAttemptedAt,
+            PushedAt = session.PushedAt,
+            PushedCommitSha = session.PushedCommitSha,
+            PushRemoteName = session.PushRemoteName,
+            PushBranchName = session.PushBranchName,
             PreviousHandoffContent = session.PreviousHandoffContent,
             PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,
             HandoffPath = session.HandoffPath,
@@ -569,6 +623,11 @@ file static class ExecutionSessionMutation
             CommittedAt = session.CommittedAt,
             CommitMessage = session.CommitMessage,
             PreparationSnapshotId = session.PreparationSnapshotId,
+            PushAttemptedAt = session.PushAttemptedAt,
+            PushedAt = session.PushedAt,
+            PushedCommitSha = session.PushedCommitSha,
+            PushRemoteName = session.PushRemoteName,
+            PushBranchName = session.PushBranchName,
             PreviousHandoffContent = session.PreviousHandoffContent,
             PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,
             HandoffPath = session.HandoffPath,
@@ -607,10 +666,102 @@ file static class ExecutionSessionMutation
             CommittedAt = commitResult.CommittedAt,
             CommitMessage = commitResult.CommitMessage,
             PreparationSnapshotId = commitResult.PreparationSnapshotId,
+            PushAttemptedAt = session.PushAttemptedAt,
+            PushedAt = session.PushedAt,
+            PushedCommitSha = session.PushedCommitSha,
+            PushRemoteName = session.PushRemoteName,
+            PushBranchName = session.PushBranchName,
             PreviousHandoffContent = session.PreviousHandoffContent,
             PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,
             HandoffPath = session.HandoffPath,
             FailureReason = session.FailureReason,
+            Events = session.Events
+        };
+    }
+
+    public static ExecutionSession WithPushResult(
+        this ExecutionSession session,
+        PushResult pushResult,
+        DateTimeOffset lastActivityAt,
+        ExecutionRepositorySnapshot repositorySnapshot)
+    {
+        return new ExecutionSession
+        {
+            Id = session.Id,
+            RepositoryId = session.RepositoryId,
+            RepositoryPath = session.RepositoryPath,
+            MilestonePath = session.MilestonePath,
+            StartedAt = session.StartedAt,
+            CompletedAt = session.CompletedAt,
+            AcceptedAt = session.AcceptedAt,
+            RejectedAt = session.RejectedAt,
+            DecisionNote = session.DecisionNote,
+            LastActivityAt = lastActivityAt,
+            State = session.State,
+            RepositoryState = RepositoryExecutionState.Ready,
+            ProviderName = session.ProviderName,
+            ProviderExecutablePath = session.ProviderExecutablePath,
+            ProviderProcessId = session.ProviderProcessId,
+            ProviderStartedAt = session.ProviderStartedAt,
+            PromptMetadata = session.PromptMetadata,
+            RepositorySnapshot = repositorySnapshot,
+            CommitPreparation = session.CommitPreparation,
+            CommitSha = session.CommitSha,
+            CommittedAt = session.CommittedAt,
+            CommitMessage = session.CommitMessage,
+            PreparationSnapshotId = session.PreparationSnapshotId,
+            PushAttemptedAt = pushResult.PushAttemptedAt,
+            PushedAt = pushResult.PushedAt,
+            PushedCommitSha = pushResult.PushedCommitSha,
+            PushRemoteName = pushResult.RemoteName,
+            PushBranchName = pushResult.BranchName,
+            PreviousHandoffContent = session.PreviousHandoffContent,
+            PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,
+            HandoffPath = session.HandoffPath,
+            FailureReason = null,
+            Events = session.Events
+        };
+    }
+
+    public static ExecutionSession WithPushFailure(
+        this ExecutionSession session,
+        DateTimeOffset attemptedAt,
+        string failureReason)
+    {
+        return new ExecutionSession
+        {
+            Id = session.Id,
+            RepositoryId = session.RepositoryId,
+            RepositoryPath = session.RepositoryPath,
+            MilestonePath = session.MilestonePath,
+            StartedAt = session.StartedAt,
+            CompletedAt = session.CompletedAt,
+            AcceptedAt = session.AcceptedAt,
+            RejectedAt = session.RejectedAt,
+            DecisionNote = session.DecisionNote,
+            LastActivityAt = attemptedAt,
+            State = session.State,
+            RepositoryState = RepositoryExecutionState.AwaitingPush,
+            ProviderName = session.ProviderName,
+            ProviderExecutablePath = session.ProviderExecutablePath,
+            ProviderProcessId = session.ProviderProcessId,
+            ProviderStartedAt = session.ProviderStartedAt,
+            PromptMetadata = session.PromptMetadata,
+            RepositorySnapshot = session.RepositorySnapshot,
+            CommitPreparation = session.CommitPreparation,
+            CommitSha = session.CommitSha,
+            CommittedAt = session.CommittedAt,
+            CommitMessage = session.CommitMessage,
+            PreparationSnapshotId = session.PreparationSnapshotId,
+            PushAttemptedAt = attemptedAt,
+            PushedAt = session.PushedAt,
+            PushedCommitSha = session.PushedCommitSha,
+            PushRemoteName = session.PushRemoteName,
+            PushBranchName = session.PushBranchName,
+            PreviousHandoffContent = session.PreviousHandoffContent,
+            PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,
+            HandoffPath = session.HandoffPath,
+            FailureReason = failureReason,
             Events = session.Events
         };
     }

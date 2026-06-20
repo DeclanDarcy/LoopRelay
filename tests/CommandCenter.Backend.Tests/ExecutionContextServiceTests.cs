@@ -292,5 +292,10 @@ public sealed class ExecutionContextServiceTests
         {
             throw new NotSupportedException();
         }
+
+        public Task<PushResult> PushAsync(Repository repository, string? commitSha)
+        {
+            throw new NotSupportedException();
+        }
     }
 }

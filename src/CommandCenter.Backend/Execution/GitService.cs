@@ -117,6 +117,30 @@ public sealed class GitService(IProcessRunner processRunner) : IGitService
         };
     }
 
+    public async Task<PushResult> PushAsync(Repository repository, string? commitSha)
+    {
+        var attemptedAt = DateTimeOffset.UtcNow;
+        var pushResult = await processRunner.RunAsync(
+            "git",
+            ["push"],
+            repository.Path);
+        if (pushResult.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"git push failed: {pushResult.StandardError}");
+        }
+
+        var status = await GetStatusAsync(repository);
+
+        return new PushResult
+        {
+            PushAttemptedAt = attemptedAt,
+            PushedAt = DateTimeOffset.UtcNow,
+            PushedCommitSha = commitSha,
+            BranchName = status.Branch,
+            RemoteName = null
+        };
+    }
+
     private static ParsedGitStatus ParseStatus(string porcelainOutput)
     {
         string? branch = null;

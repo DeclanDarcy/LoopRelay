@@ -248,6 +248,33 @@ public sealed class GitServiceTests
             call => Assert.Equal(["rev-parse", "HEAD"], call.Arguments));
     }
 
+    [Fact]
+    public async Task PushRunsGitPushAndRefreshesStatus()
+    {
+        var runner = new FakeProcessRunner(
+            new ProcessRunResult { ExitCode = 0 },
+            new ProcessRunResult { ExitCode = 0, StandardOutput = "main\n" },
+            new ProcessRunResult { ExitCode = 0, StandardOutput = "## main...origin/main\0" });
+        var service = new GitService(runner);
+        var repository = new Repository
+        {
+            Id = Guid.NewGuid(),
+            Name = "Repo",
+            Path = CreateTemporaryDirectory()
+        };
+
+        var result = await service.PushAsync(repository, "abc123");
+
+        Assert.Equal("abc123", result.PushedCommitSha);
+        Assert.Equal("main", result.BranchName);
+        Assert.True(result.PushAttemptedAt <= result.PushedAt);
+        Assert.Collection(
+            runner.Calls,
+            call => Assert.Equal(["push"], call.Arguments),
+            call => Assert.Equal(["branch", "--show-current"], call.Arguments),
+            call => Assert.Equal(["status", "--porcelain=v1", "--branch", "-z"], call.Arguments));
+    }
+
     private static string CreateTemporaryDirectory()
     {
         var directory = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"));
@@ -356,6 +383,17 @@ public sealed class GitServiceTests
                 CommitMessage = message,
                 PreparationSnapshotId = preparationSnapshotId,
                 SelectedPaths = selectedPaths
+            });
+        }
+
+        public Task<PushResult> PushAsync(Repository repository, string? commitSha)
+        {
+            return Task.FromResult(new PushResult
+            {
+                PushAttemptedAt = DateTimeOffset.UtcNow,
+                PushedAt = DateTimeOffset.UtcNow,
+                PushedCommitSha = commitSha,
+                BranchName = "main"
             });
         }
     }

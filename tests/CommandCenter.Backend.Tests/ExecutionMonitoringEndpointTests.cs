@@ -473,5 +473,10 @@ public sealed class ExecutionMonitoringEndpointTests
         {
             throw new NotSupportedException();
         }
+
+        public Task<PushResult> PushAsync(Repository repository, string? commitSha)
+        {
+            throw new NotSupportedException();
+        }
     }
 }

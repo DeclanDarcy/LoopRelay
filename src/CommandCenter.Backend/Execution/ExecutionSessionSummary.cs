@@ -42,5 +42,15 @@ public sealed class ExecutionSessionSummary
 
     public string? PreparationSnapshotId { get; init; }
 
+    public DateTimeOffset? PushAttemptedAt { get; init; }
+
+    public DateTimeOffset? PushedAt { get; init; }
+
+    public string? PushedCommitSha { get; init; }
+
+    public string? PushRemoteName { get; init; }
+
+    public string? PushBranchName { get; init; }
+
     public string? FailureReason { get; init; }
 }

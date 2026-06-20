@@ -17,4 +17,6 @@ public interface IGitService
         string message,
         IReadOnlyList<string> selectedPaths,
         string preparationSnapshotId);
+
+    Task<PushResult> PushAsync(Repository repository, string? commitSha);
 }

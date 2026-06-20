@@ -2,19 +2,26 @@
 
 ## Newly Authorized Decisions
 
-- M6.3 is accepted as architecturally sound.
-- Preserve the backend-authoritative flow from Git status to commit preparation to user review to persisted preparation to commit validation to mutation.
-- Treat `Generate -> Persist -> Review -> Validate -> Mutate` as an emerging Command Center architectural principle.
-- M6.4 is authorized as push mutation.
-- M6.4 push validation must require `RepositoryExecutionState.AwaitingPush` only.
-- Push failures must leave the repository in `AwaitingPush`, not transition to `Failed`.
-- Push failures are retryable operational conditions, including remote rejection, network unavailability, expired authentication, and branch protection failures.
-- M6.4 should minimally persist `PushAttemptedAt`, `PushedAt`, and `PushedCommitSha`.
-- M6.4 may persist `RemoteName` and `BranchName` if available cheaply.
-- M6.4 must refresh Git status after successful `git push` before transitioning the repository to `Ready`.
-- M6.4 should not assume a successful `git push` means the repository is synchronized without re-reading status.
-- M6.4 should include push request/result contracts, `git push` through `IGitService`/`IProcessRunner`, push metadata persistence, retryable failure behavior, UI push workflow, and certification coverage.
+- M6 Git Lifecycle is complete.
+- The Git lifecycle is accepted as `Observe -> Prepare -> Review -> Validate -> Commit -> Push`.
+- Backend-owned authority at every mutation boundary remains the required model.
+- `Generate -> Persist -> Review -> Validate -> Mutate` is accepted as a core architectural primitive for Execution Context, Handoff, and Commit Preparation flows.
+- M7 is authorized as Workspace Consolidation, not a feature milestone.
+- M7 must not introduce major new capabilities.
+- M7 must solve workflow fragmentation across Context, Execution, Monitoring, Handoff, Acceptance, Commit, Push, and Git Status surfaces.
+- M7 must build a projection of existing workflow state machines, not a new workflow or state machine.
+- M7 should organize primarily around the Execution Session as the object that answers what happened, what is happening, and what must happen next.
+- M7 should progressively reveal `Context -> Execution -> Handoff -> Acceptance -> Commit -> Push` based on existing state.
+- M7 must preserve distinct authority boundaries, especially separate Execution State and Repository Workflow State.
+- M7 success means a user can understand and complete Launch, Monitor, Review Handoff, Accept, Prepare Commit, Commit, and Push from a single screen.
+- M7 should optimize for making M8 easy rather than introducing new workflow concepts.
+- M8 remains the repeatable execution loop: Execute, Review, Accept, Commit, Push, Select Next Milestone, Execute Again.
+- Proceed with M7.1 Workspace Consolidation under these constraints:
+  - no new workflow state;
+  - no new authority boundaries;
+  - no duplicated lifecycle logic;
+  - only projection and orchestration of existing certified behavior.
 
 ## Explicitly Deferred
 
-- M7 Unified Execution Workspace remains the next focus after M6.4 lands cleanly.
+- M8 Repeatable Execution Loop remains after M7 workspace consolidation.
