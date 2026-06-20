@@ -1,11 +1,15 @@
 namespace CommandCenter.Backend.Execution;
 
+using System.Runtime.CompilerServices;
+using System.Threading.Channels;
+
 public sealed class ExecutionMonitoringService(
     IExecutionSessionStore sessionStore,
     ExecutionEventRetentionPolicy? retentionPolicy = null) : IExecutionMonitoringService
 {
     private readonly SemaphoreSlim gate = new(1, 1);
     private readonly ExecutionEventRetentionPolicy retentionPolicy = retentionPolicy ?? new ExecutionEventRetentionPolicy();
+    private readonly Dictionary<Guid, List<Channel<ExecutionEvent>>> subscribers = [];
 
     public IExecutionProviderObserver CreateProviderObserver(Guid sessionId)
     {
@@ -53,6 +57,76 @@ public sealed class ExecutionMonitoringService(
     {
         var session = (await sessionStore.LoadAsync()).FirstOrDefault(session => session.Id == sessionId);
         return session?.Events ?? [];
+    }
+
+    public async IAsyncEnumerable<ExecutionEvent> StreamEventsAsync(
+        Guid sessionId,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        Channel<ExecutionEvent> channel;
+        IReadOnlyList<ExecutionEvent> retainedEvents;
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            var session = (await sessionStore.LoadAsync()).FirstOrDefault(session => session.Id == sessionId);
+            if (session is null)
+            {
+                yield break;
+            }
+
+            retainedEvents = session.Events;
+            channel = Channel.CreateUnbounded<ExecutionEvent>(new UnboundedChannelOptions
+            {
+                SingleReader = true,
+                SingleWriter = false
+            });
+            if (!subscribers.TryGetValue(sessionId, out var sessionSubscribers))
+            {
+                sessionSubscribers = [];
+                subscribers[sessionId] = sessionSubscribers;
+            }
+
+            sessionSubscribers.Add(channel);
+        }
+        finally
+        {
+            gate.Release();
+        }
+
+        try
+        {
+            foreach (var executionEvent in retainedEvents)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return executionEvent;
+            }
+
+            await foreach (var executionEvent in channel.Reader.ReadAllAsync(cancellationToken))
+            {
+                yield return executionEvent;
+            }
+        }
+        finally
+        {
+            await gate.WaitAsync(CancellationToken.None);
+            try
+            {
+                if (subscribers.TryGetValue(sessionId, out var sessionSubscribers))
+                {
+                    sessionSubscribers.Remove(channel);
+                    if (sessionSubscribers.Count == 0)
+                    {
+                        subscribers.Remove(sessionId);
+                    }
+                }
+
+                channel.Writer.TryComplete();
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
     }
 
     private Task RecordProviderOutputAsync(Guid sessionId, ExecutionEventType eventType, string text)
@@ -127,6 +201,7 @@ public sealed class ExecutionMonitoringService(
                 events: events);
             sessions[index] = updatedSession;
             await sessionStore.SaveAsync(sessions);
+            BroadcastEvent(sessionId, executionEvent);
         }
         finally
         {
@@ -155,6 +230,19 @@ public sealed class ExecutionMonitoringService(
             32 +
             executionEvent.Type.ToString().Length +
             executionEvent.Message.Length * sizeof(char));
+    }
+
+    private void BroadcastEvent(Guid sessionId, ExecutionEvent executionEvent)
+    {
+        if (!subscribers.TryGetValue(sessionId, out var sessionSubscribers))
+        {
+            return;
+        }
+
+        foreach (var subscriber in sessionSubscribers.ToArray())
+        {
+            subscriber.Writer.TryWrite(executionEvent);
+        }
     }
 
     private static ExecutionStatus ToStatus(ExecutionSession session)

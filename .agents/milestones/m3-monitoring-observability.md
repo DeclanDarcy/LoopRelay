@@ -11,7 +11,7 @@ Observe active execution sessions and display live output.
 - [x] Capture provider stdout and stderr as chronological output events.
 - [x] Update `LastActivityAt` when output is received.
 - [x] Project session state, started time, last activity time, and failure details.
-- [ ] Add server-sent events endpoint for live output.
+- [x] Add server-sent events endpoint for live output.
 - [x] Retain bounded recent output events for active sessions.
 - [x] Apply restart recovery policy to persisted active sessions.
 - [ ] Reconnect monitoring only when provider reattach succeeds.
@@ -35,7 +35,7 @@ Observe active execution sessions and display live output.
 - [ ] Cancellation state is projected to session and repository.
 - [x] JSON status and events endpoints return persisted event history after store reload.
 - [x] JSON status and events endpoints return not found for unknown sessions.
-- [ ] SSE endpoint streams events.
+- [x] SSE endpoint streams events.
 - [ ] Restart restores active session metadata and resumes monitoring when reattach succeeds.
 - [x] Restart marks unrecoverable active sessions failed with explicit orphaned-process reason.
 

@@ -4,6 +4,7 @@ using CommandCenter.Backend.Execution;
 using CommandCenter.Backend.Planning;
 using CommandCenter.Backend.Projections;
 using CommandCenter.Backend.Repositories;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace CommandCenter.Backend;
@@ -289,6 +290,39 @@ public static class Program
         {
             var status = await monitoringService.GetStatusAsync(sessionId);
             return status is null ? Results.NotFound(new { error = "Execution session was not found." }) : Results.Ok(await monitoringService.GetEventsAsync(sessionId));
+        });
+        app.MapGet("/api/execution-sessions/{sessionId:guid}/events/stream", async Task<IResult> (
+            Guid sessionId,
+            HttpContext httpContext,
+            IExecutionMonitoringService monitoringService) =>
+        {
+            var status = await monitoringService.GetStatusAsync(sessionId);
+            if (status is null)
+            {
+                return Results.NotFound(new { error = "Execution session was not found." });
+            }
+
+            httpContext.Response.Headers.CacheControl = "no-cache";
+            httpContext.Response.ContentType = "text/event-stream";
+
+            var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+            jsonOptions.Converters.Add(new JsonStringEnumConverter());
+
+            try
+            {
+                await foreach (var executionEvent in monitoringService.StreamEventsAsync(sessionId, httpContext.RequestAborted))
+                {
+                    await httpContext.Response.WriteAsync($"id: {executionEvent.Sequence}\n", httpContext.RequestAborted);
+                    await httpContext.Response.WriteAsync("event: execution-event\n", httpContext.RequestAborted);
+                    await httpContext.Response.WriteAsync($"data: {JsonSerializer.Serialize(executionEvent, jsonOptions)}\n\n", httpContext.RequestAborted);
+                    await httpContext.Response.Body.FlushAsync(httpContext.RequestAborted);
+                }
+            }
+            catch (OperationCanceledException) when (httpContext.RequestAborted.IsCancellationRequested)
+            {
+            }
+
+            return Results.Empty;
         });
         app.MapPost("/api/repositories/{repositoryId:guid}/refresh", async (
             Guid repositoryId,

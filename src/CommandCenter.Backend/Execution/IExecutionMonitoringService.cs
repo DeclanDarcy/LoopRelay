@@ -13,4 +13,6 @@ public interface IExecutionMonitoringService
     Task<ExecutionStatus?> GetStatusAsync(Guid sessionId);
 
     Task<IReadOnlyList<ExecutionEvent>> GetEventsAsync(Guid sessionId);
+
+    IAsyncEnumerable<ExecutionEvent> StreamEventsAsync(Guid sessionId, CancellationToken cancellationToken);
 }

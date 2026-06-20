@@ -85,7 +85,10 @@ public sealed class ExecutionMonitoringEndpointTests
     public async Task StatusEndpointProjectsFailedSession()
     {
         var storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");
-        var store = await CreateStoreWithSessionAsync(storePath);
+        var store = await CreateStoreWithSessionAsync(
+            storePath,
+            ExecutionSessionState.Failed,
+            RepositoryExecutionState.Failed);
         var session = (await store.LoadAsync()).Single();
         var monitoringService = new ExecutionMonitoringService(store);
         var observer = monitoringService.CreateProviderObserver(session.Id);
@@ -124,6 +127,161 @@ public sealed class ExecutionMonitoringEndpointTests
 
         Assert.Equal(HttpStatusCode.NotFound, statusResponse.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, eventsResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task EventsStreamEndpointStreamsRetainedEventsInChronologicalOrder()
+    {
+        var storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");
+        var store = await CreateStoreWithSessionAsync(
+            storePath,
+            ExecutionSessionState.Failed,
+            RepositoryExecutionState.Failed);
+        var session = (await store.LoadAsync()).Single();
+        var monitoringService = new ExecutionMonitoringService(store);
+        var observer = monitoringService.CreateProviderObserver(session.Id);
+
+        await observer.OnStdOutAsync("first");
+        await observer.OnStdErrAsync("second");
+
+        await using var app = CreateApp(storePath);
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+
+        using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var client = new HttpClient();
+        using var response = await client.GetAsync(
+            app.Urls.Single() + $"/api/execution-sessions/{session.Id}/events/stream",
+            HttpCompletionOption.ResponseHeadersRead,
+            cancellationTokenSource.Token);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("text/event-stream", response.Content.Headers.ContentType?.MediaType);
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationTokenSource.Token);
+        using var reader = new StreamReader(stream);
+
+        var events = await ReadSseEventsAsync(reader, 2, cancellationTokenSource.Token);
+
+        Assert.Equal(["first", "second"], events.Select(executionEvent => executionEvent.Message).ToArray());
+        Assert.Equal([1, 2], events.Select(executionEvent => executionEvent.Sequence).ToArray());
+        Assert.Equal([ExecutionEventType.StdOut, ExecutionEventType.StdErr], events.Select(executionEvent => executionEvent.Type).ToArray());
+    }
+
+    [Fact]
+    public async Task EventsStreamEndpointStreamsRetainedAndLiveEvents()
+    {
+        var storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");
+        var store = await CreateStoreWithSessionAsync(
+            storePath,
+            ExecutionSessionState.Failed,
+            RepositoryExecutionState.Failed);
+        var session = (await store.LoadAsync()).Single();
+        var seedMonitoringService = new ExecutionMonitoringService(store);
+        await seedMonitoringService.CreateProviderObserver(session.Id).OnStdOutAsync("retained");
+
+        await using var app = CreateApp(storePath);
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+
+        using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var client = new HttpClient();
+        using var response = await client.GetAsync(
+            app.Urls.Single() + $"/api/execution-sessions/{session.Id}/events/stream",
+            HttpCompletionOption.ResponseHeadersRead,
+            cancellationTokenSource.Token);
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationTokenSource.Token);
+        using var reader = new StreamReader(stream);
+
+        var retainedEvent = Assert.Single(await ReadSseEventsAsync(reader, 1, cancellationTokenSource.Token));
+        var liveObserver = app.Services.GetRequiredService<IExecutionMonitoringService>().CreateProviderObserver(session.Id);
+        await liveObserver.OnStdErrAsync("live");
+        var liveEvent = Assert.Single(await ReadSseEventsAsync(reader, 1, cancellationTokenSource.Token));
+
+        Assert.Equal("retained", retainedEvent.Message);
+        Assert.Equal("live", liveEvent.Message);
+        Assert.Equal(2, liveEvent.Sequence);
+    }
+
+    [Fact]
+    public async Task EventsStreamEndpointAllowsDisconnectWithoutBreakingFutureEvents()
+    {
+        var storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");
+        var store = await CreateStoreWithSessionAsync(
+            storePath,
+            ExecutionSessionState.Failed,
+            RepositoryExecutionState.Failed);
+        var session = (await store.LoadAsync()).Single();
+        var seedMonitoringService = new ExecutionMonitoringService(store);
+        await seedMonitoringService.CreateProviderObserver(session.Id).OnStdOutAsync("retained");
+
+        await using var app = CreateApp(storePath);
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+
+        using (var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(5)))
+        using (var client = new HttpClient())
+        using (var response = await client.GetAsync(
+            app.Urls.Single() + $"/api/execution-sessions/{session.Id}/events/stream",
+            HttpCompletionOption.ResponseHeadersRead,
+            cancellationTokenSource.Token))
+        {
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationTokenSource.Token);
+            using var reader = new StreamReader(stream);
+            Assert.Single(await ReadSseEventsAsync(reader, 1, cancellationTokenSource.Token));
+        }
+
+        var observer = app.Services.GetRequiredService<IExecutionMonitoringService>().CreateProviderObserver(session.Id);
+        await observer.OnStdOutAsync("after disconnect");
+
+        var events = await app.Services.GetRequiredService<IExecutionMonitoringService>().GetEventsAsync(session.Id);
+        Assert.Equal(["retained", "after disconnect"], events.Select(executionEvent => executionEvent.Message).ToArray());
+    }
+
+    [Fact]
+    public async Task EventsStreamEndpointSupportsMultipleSimultaneousConsumers()
+    {
+        var storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");
+        var store = await CreateStoreWithSessionAsync(
+            storePath,
+            ExecutionSessionState.Failed,
+            RepositoryExecutionState.Failed);
+        var session = (await store.LoadAsync()).Single();
+        var seedMonitoringService = new ExecutionMonitoringService(store);
+        await seedMonitoringService.CreateProviderObserver(session.Id).OnStdOutAsync("retained");
+
+        await using var app = CreateApp(storePath);
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+
+        using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var firstClient = new HttpClient();
+        using var secondClient = new HttpClient();
+        using var firstResponse = await firstClient.GetAsync(
+            app.Urls.Single() + $"/api/execution-sessions/{session.Id}/events/stream",
+            HttpCompletionOption.ResponseHeadersRead,
+            cancellationTokenSource.Token);
+        using var secondResponse = await secondClient.GetAsync(
+            app.Urls.Single() + $"/api/execution-sessions/{session.Id}/events/stream",
+            HttpCompletionOption.ResponseHeadersRead,
+            cancellationTokenSource.Token);
+        await using var firstStream = await firstResponse.Content.ReadAsStreamAsync(cancellationTokenSource.Token);
+        await using var secondStream = await secondResponse.Content.ReadAsStreamAsync(cancellationTokenSource.Token);
+        using var firstReader = new StreamReader(firstStream);
+        using var secondReader = new StreamReader(secondStream);
+
+        Assert.Single(await ReadSseEventsAsync(firstReader, 1, cancellationTokenSource.Token));
+        Assert.Single(await ReadSseEventsAsync(secondReader, 1, cancellationTokenSource.Token));
+
+        var observer = app.Services.GetRequiredService<IExecutionMonitoringService>().CreateProviderObserver(session.Id);
+        await observer.OnStdOutAsync("broadcast");
+
+        var firstLiveEvent = Assert.Single(await ReadSseEventsAsync(firstReader, 1, cancellationTokenSource.Token));
+        var secondLiveEvent = Assert.Single(await ReadSseEventsAsync(secondReader, 1, cancellationTokenSource.Token));
+
+        Assert.Equal("broadcast", firstLiveEvent.Message);
+        Assert.Equal("broadcast", secondLiveEvent.Message);
+        Assert.Equal(2, firstLiveEvent.Sequence);
+        Assert.Equal(2, secondLiveEvent.Sequence);
     }
 
     private static WebApplication CreateApp(string storePath)
@@ -169,6 +327,48 @@ public sealed class ExecutionMonitoringEndpointTests
         {
             Converters = { new JsonStringEnumConverter() }
         });
+    }
+
+    private static async Task<IReadOnlyList<ExecutionEvent>> ReadSseEventsAsync(
+        StreamReader reader,
+        int count,
+        CancellationToken cancellationToken)
+    {
+        var events = new List<ExecutionEvent>();
+        var data = string.Empty;
+        var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+        {
+            Converters = { new JsonStringEnumConverter() }
+        };
+
+        while (events.Count < count)
+        {
+            var line = await reader.ReadLineAsync(cancellationToken);
+            if (line is null)
+            {
+                break;
+            }
+
+            if (line.Length == 0)
+            {
+                if (data.Length > 0)
+                {
+                    var executionEvent = JsonSerializer.Deserialize<ExecutionEvent>(data, jsonOptions);
+                    Assert.NotNull(executionEvent);
+                    events.Add(executionEvent);
+                    data = string.Empty;
+                }
+
+                continue;
+            }
+
+            if (line.StartsWith("data: ", StringComparison.Ordinal))
+            {
+                data = line["data: ".Length..];
+            }
+        }
+
+        return events;
     }
 
     private static string CreateTemporaryDirectory()
