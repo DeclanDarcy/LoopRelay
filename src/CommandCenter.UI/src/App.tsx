@@ -854,6 +854,25 @@ function App() {
   const executionContextMatchesSelection =
     executionContext?.repositoryId === selectedRepository?.repository.id &&
     executionContext?.milestonePath === selectedMilestonePath
+  const executionContextOperationalContext = executionContextMatchesSelection
+    ? executionContext?.artifacts.find((artifact) => artifact.role === 'OperationalContext') ?? null
+    : null
+  const executionContextMissingOperationalContext = executionContextMatchesSelection
+    ? executionContext?.diagnostics.missingOptionalArtifacts.includes('.agents/operational_context.md') ?? false
+    : false
+  const operationalContextExecutionStatus = !executionContext
+    ? 'Preview not built'
+    : !executionContextMatchesSelection
+      ? 'Preview stale'
+      : executionContextOperationalContext
+        ? `Included (${executionContextOperationalContext.byteCount} bytes)`
+        : executionContextMissingOperationalContext
+          ? 'Not included: missing optional artifact'
+          : 'Not included'
+  const operationalContextReviewStatus =
+    workspace?.operationalContext.latestReviewState ??
+    workspace?.operationalContextProposalSummary.status ??
+    'None'
   const canStartExecution =
     Boolean(selectedRepository && workspace && selectedMilestonePath && executionContextMatchesSelection) &&
     workspace?.readiness === 'Ready' &&
@@ -2098,6 +2117,9 @@ function App() {
                       Context {entry.continuitySummary.operationalContextExists ? 'present' : 'missing'}
                     </span>
                     <span className="repository-metadata">
+                      Updated {formatDateTime(entry.continuitySummary.operationalContextLastUpdatedAt)}
+                    </span>
+                    <span className="repository-metadata">
                       Revisions {entry.continuitySummary.operationalContextRevisionCount}
                     </span>
                     <span className="repository-metadata">
@@ -2237,6 +2259,7 @@ function App() {
                   <div className="context-artifact-previews">
                     <div className="context-summary">
                       <span>Path: {workspace.operationalContext.currentRelativePath}</span>
+                      <span>Execution context: {operationalContextExecutionStatus}</span>
                       <span>Revisions: {workspace.operationalContext.revisionCount}</span>
                       <span>
                         Current revision: {workspace.operationalContext.currentRevisionNumber}
@@ -2251,7 +2274,13 @@ function App() {
                       <span>Questions: {workspace.operationalContext.openQuestions.length}</span>
                       <span>Risks: {workspace.operationalContext.activeRisks.length}</span>
                       <span>
-                        Review: {workspace.operationalContext.latestReviewState ?? 'None'}
+                        Review: {operationalContextReviewStatus}
+                      </span>
+                      <span>
+                        Proposal:{' '}
+                        {workspace.operationalContextProposalSummary.latestProposalId
+                          ? workspace.operationalContextProposalSummary.status ?? 'Unknown'
+                          : 'None'}
                       </span>
                     </div>
 
@@ -2278,6 +2307,54 @@ function App() {
                           </ul>
                         ) : (
                           <p>No stable decisions recorded.</p>
+                        )}
+                      </div>
+                      <div>
+                        <h5>Decision Rationale</h5>
+                        {workspace.operationalContext.decisionRationale.length > 0 ? (
+                          <ul>
+                            {workspace.operationalContext.decisionRationale.map((item) => (
+                              <li key={item.id}>{item.text}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p>No decision rationale recorded.</p>
+                        )}
+                      </div>
+                      <div>
+                        <h5>Architecture</h5>
+                        {workspace.operationalContext.architecture.length > 0 ? (
+                          <ul>
+                            {workspace.operationalContext.architecture.map((item) => (
+                              <li key={item.id}>{item.text}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p>No architecture items recorded.</p>
+                        )}
+                      </div>
+                      <div>
+                        <h5>Authority Boundaries</h5>
+                        {workspace.operationalContext.authorityBoundaries.length > 0 ? (
+                          <ul>
+                            {workspace.operationalContext.authorityBoundaries.map((item) => (
+                              <li key={item.id}>{item.text}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p>No authority boundaries recorded.</p>
+                        )}
+                      </div>
+                      <div>
+                        <h5>Constraints</h5>
+                        {workspace.operationalContext.constraints.length > 0 ? (
+                          <ul>
+                            {workspace.operationalContext.constraints.map((item) => (
+                              <li key={item.id}>{item.text}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p>No constraints recorded.</p>
                         )}
                       </div>
                       <div>
@@ -2331,7 +2408,19 @@ function App() {
                     </div>
                   </div>
                 ) : (
-                  <p className="empty-state">No current operational context exists.</p>
+                  <div className="context-artifact-previews">
+                    <div className="context-summary">
+                      <span>Execution context: {operationalContextExecutionStatus}</span>
+                      <span>Review: {operationalContextReviewStatus}</span>
+                      <span>
+                        Proposal:{' '}
+                        {workspace?.operationalContextProposalSummary.latestProposalId
+                          ? workspace.operationalContextProposalSummary.status ?? 'Unknown'
+                          : 'None'}
+                      </span>
+                    </div>
+                    <p className="empty-state">No current operational context exists.</p>
+                  </div>
                 )}
               </section>
 
@@ -2383,7 +2472,7 @@ function App() {
                     </span>
                     <span>
                       Current revisions:{' '}
-                      {workspace.artifactInventory.historicalOperationalContexts.length}
+                      {workspace.operationalContext.revisionCount}
                     </span>
                     <span>
                       Last promoted:{' '}
@@ -2699,6 +2788,7 @@ function App() {
                     <div className="context-summary">
                       <span>Generated: {new Date(executionContext.generatedAt).toLocaleString()}</span>
                       <span>Total: {executionContext.diagnostics.totalBytes} bytes</span>
+                      <span>Operational context: {operationalContextExecutionStatus}</span>
                       <span>
                         Launch:{' '}
                         {canStartExecution ? 'Ready' : startExecutionBlockedReason}

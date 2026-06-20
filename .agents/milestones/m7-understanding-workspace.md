@@ -35,7 +35,7 @@ Expose current project understanding as a first-class section inside the existin
 - [x] Dashboard shows:
   - [x] Operational context present or missing.
   - [x] Revision count.
-  - [ ] Last updated.
+  - [x] Last updated.
   - [x] Open question count.
   - [x] Active risk count.
 - [x] Workspace shows:
@@ -44,7 +44,7 @@ Expose current project understanding as a first-class section inside the existin
   - [x] Open questions.
   - [x] Active risks.
   - [x] Recent understanding changes.
-  - [ ] Whether operational context is included in execution context preview.
+  - [x] Whether operational context is included in execution context preview.
 - [x] Keep artifact explorer available for full Markdown editing.
 - [x] Avoid building a full historical revision browser.
 - [x] Avoid computing understanding state client-side.
@@ -61,16 +61,16 @@ Add backend tests:
 Add UI build validation:
 
 - [x] TypeScript build passes.
-- [ ] Understanding components handle missing, empty, present, pending proposal, accepted proposal, and stale proposal states.
+  - [x] Understanding components handle missing, empty, present, pending proposal, accepted proposal, and stale proposal states.
 
 ## Certification
 
 Understanding workspace is certified when a user can enter a repository workspace and answer:
 
-- [ ] What do we currently believe?
-- [ ] Why do we believe it?
-- [ ] What remains unresolved?
-- [ ] What changed recently?
-- [ ] What should guide future execution?
+- [x] What do we currently believe?
+- [x] Why do we believe it?
+- [x] What remains unresolved?
+- [x] What changed recently?
+- [x] What should guide future execution?
 
 without opening historical handoff or decision archives.
