@@ -122,6 +122,65 @@ public sealed class OperationalContextGenerationTests
     }
 
     [Fact]
+    public void DiffReportsDecisionSpecificChanges()
+    {
+        var parser = new MarkdownOperationalContextParser();
+        var diff = new UnderstandingDiffService();
+        var current = parser.Parse("""
+            # Operational Context
+
+            ## Stable Decisions
+
+            - Decision: Retired durable decision.
+
+            ## Decision Rationale
+
+            - Rationale for `Existing decision`: old reason.
+            - Rationale for `Dropped decision`: important reason.
+
+            ## Open Questions
+
+            - Open decision: Should stale proposals be auto-rejected?
+            """);
+        var proposed = parser.Parse("""
+            # Operational Context
+
+            ## Stable Decisions
+
+            - Decision: New durable decision.
+
+            ## Decision Rationale
+
+            - Rationale for `Existing decision`: new reason.
+
+            ## Open Questions
+
+            - Open decision: Should diagnostics show decision retention?
+            """);
+
+        var changes = diff.Compare(current, proposed);
+
+        Assert.Contains(changes, change =>
+            change.Type == OperationalContextSemanticChangeType.ImportantDecisionIntroduced &&
+            change.Description.Contains("New durable decision", StringComparison.Ordinal));
+        Assert.Contains(changes, change =>
+            change.Type == OperationalContextSemanticChangeType.DecisionRetired &&
+            change.Description.Contains("Retired durable decision", StringComparison.Ordinal));
+        Assert.Contains(changes, change =>
+            change.Type == OperationalContextSemanticChangeType.RationaleChanged &&
+            change.Description.Contains("Existing decision", StringComparison.Ordinal));
+        Assert.Contains(changes, change =>
+            change.Type == OperationalContextSemanticChangeType.RationaleLostWarning &&
+            change.Description.Contains("Dropped decision", StringComparison.Ordinal));
+        Assert.Contains(changes, change =>
+            change.Type == OperationalContextSemanticChangeType.OpenDecisionPreserved &&
+            change.Description.Contains("decision retention", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(changes, change =>
+            change.Type == OperationalContextSemanticChangeType.OpenDecisionResolved &&
+            change.Description.Contains("auto-rejected", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task GenerationSucceedsWithoutExistingOperationalContext()
     {
         var harness = await CreateHarnessAsync();
@@ -186,6 +245,26 @@ public sealed class OperationalContextGenerationTests
         Assert.Contains("Decision: Backend service boundaries must own workflow authority", proposal.GeneratedContent);
         Assert.Contains("Rationale for `Backend service boundaries must own workflow authority because client state cannot be authoritative.`: client state cannot be authoritative", proposal.GeneratedContent);
         Assert.Contains("Backend service boundaries must own workflow authority because client state cannot be authoritative.", proposal.GeneratedContent);
+    }
+
+    [Fact]
+    public async Task StrategicDecisionSurvivesWhileRelevant()
+    {
+        var harness = await CreateHarnessAsync();
+        await WriteAsync(harness.Repository, ".agents/decisions/decisions.md", """
+            # Decisions
+
+            - Reviewable deterministic classification should remain the default for future continuity work because automatic semantic authority is premature.
+            """);
+
+        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+
+        Assert.Contains("Decision: Reviewable deterministic classification should remain the default for future continuity work", proposal.GeneratedContent);
+        Assert.Contains("automatic semantic authority is premature", proposal.GeneratedContent);
+        Assert.Contains(proposal.SemanticChanges, change =>
+            change.Type == OperationalContextSemanticChangeType.ImportantDecisionIntroduced);
+        Assert.Contains(proposal.SemanticChanges, change =>
+            change.Type == OperationalContextSemanticChangeType.RationaleChanged);
     }
 
     [Fact]
@@ -875,6 +954,47 @@ public sealed class OperationalContextGenerationTests
         Assert.Equal(OperationalContextProposalStatus.Promoted, reloaded?.Status);
         Assert.NotNull(reloaded?.Promotion.PromotedAt);
         Assert.Equal(promoted.Promotion.PromotedContentHash, reloaded?.Promotion.PromotedContentHash);
+    }
+
+    [Fact]
+    public async Task RepeatedProposalCyclesDoNotReplayLargeDecisionArchiveIntoOperationalContext()
+    {
+        var harness = await CreateHarnessAsync();
+        await WriteAsync(harness.Repository, ".agents/decisions/decisions.md", """
+            # Decisions
+
+            - Backend continuity services must remain artifact-mediated because hidden session memory is not authoritative.
+            - M6 build passed.
+            - Stage and commit the current slice.
+            - Temporary workaround was approved for this slice.
+            - Next slice should update the UI.
+            - Verification completed for the previous run.
+            """);
+        await WriteAsync(harness.Repository, ".agents/decisions/decisions.0001.md", """
+            # Decisions
+
+            - Old milestone investigation completed.
+            - Historical approval: run the focused backend test.
+            - Completed cleanup from M4.
+            """);
+
+        for (var index = 0; index < 3; index++)
+        {
+            var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+            var accepted = await harness.ReviewService.AcceptAsync(harness.Repository.Id, proposal.ProposalId, null);
+            await harness.LifecycleService.PromoteAsync(harness.Repository.Id, accepted.ProposalId);
+        }
+
+        var current = new MarkdownOperationalContextParser().Parse(
+            await ReadAsync(harness.Repository, ".agents/operational_context.md"));
+
+        Assert.Single(current.StableDecisions);
+        Assert.Contains(current.StableDecisions, item =>
+            item.Text.Contains("artifact-mediated", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(current.StableDecisions, item =>
+            item.Text.Contains("build passed", StringComparison.OrdinalIgnoreCase) ||
+            item.Text.Contains("Stage and commit", StringComparison.OrdinalIgnoreCase) ||
+            item.Text.Contains("Old milestone investigation", StringComparison.OrdinalIgnoreCase));
     }
 
     private static async Task<Harness> CreateHarnessAsync(

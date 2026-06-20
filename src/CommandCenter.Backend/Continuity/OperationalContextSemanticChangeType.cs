@@ -16,6 +16,11 @@ public enum OperationalContextSemanticChangeType
     RiskRemoved,
     DecisionAdded,
     DecisionRemoved,
+    ImportantDecisionIntroduced,
+    DecisionRetired,
     RationaleChanged,
+    RationaleLostWarning,
+    OpenDecisionPreserved,
+    OpenDecisionResolved,
     PreservationWarning
 }

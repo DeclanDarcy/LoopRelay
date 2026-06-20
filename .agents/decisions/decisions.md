@@ -2,18 +2,17 @@
 
 ## Newly Authorized Decisions
 
-- The first half of M6 is accepted as correctly aligned because it implements deterministic decision analysis and durable consequence assimilation without turning operational context into a second decision archive.
-- M6 should continue preserving the boundary between decision history and current understanding: decision artifacts remain the record, while operational context receives only durable consequences.
-- Tactical decisions should continue to surface as reviewer warnings rather than being silently discarded or promoted into operational context.
-- Deterministic, auditable, reviewable classification remains preferred over early decision-intelligence or automatic semantic authority.
-- Rationale preservation is a core M6 value because durable rationale often survives architecture evolution better than literal decision wording.
-- Contradictory durable decisions must remain warnings only; the system must identify apparent conflicts but never decide which decision wins.
-- The next M6 slice should make stable decisions, open decisions, decision rationale, decision warnings, and decision contradictions first-class review concepts.
-- Reviewers should be able to evaluate decision-derived understanding without opening `decisions.md` or inspecting raw proposal metadata.
-- Before closing M6, add an explicit certification rule that decision assimilation must preserve separation between decision history and current understanding.
-- Add repeated-revision certification coverage proving a large decision archive does not cause operational context to accumulate historical decisions over repeated proposal cycles.
+- M6 is accepted as effectively closed because decision continuity now preserves durable decision consequences and rationale without becoming a second decision archive or an automated governance engine.
+- The combination of decision-specific semantic changes and decision archive creep certification is the strongest M6 boundary because it makes the operational-context versus decision-history separation testable.
+- Decision review should reason over stable decision additions/removals, open decision additions/removals, rationale changes, and decision warnings rather than treating the result as generic Markdown change.
+- Tactical classifier hardening is a high-leverage continuity guardrail because phrases such as `next slice should...` can otherwise turn current understanding into recent planning activity.
+- Decision contradiction and missing-rationale handling must remain advisory warnings; Command Center should not infer resolutions or become a governance authority.
+- M7 should primarily be a projection milestone focused on how humans observe existing understanding, not on creating more understanding.
+- M7 must preserve the boundary that projection is not authority: workspace surfaces may show stable decisions, unresolved questions, active risks, constraints, recent changes, and continuity warnings, but they must not become an operational-context editor, decision-resolution surface, or governance workspace.
+- M7 should define a formal backend projection contract, conceptually `UnderstandingWorkspaceProjection`, before multiple UI surfaces consume continuity information.
+- Epic 3 has transitioned from foundational continuity mechanics toward visibility, certification, and instrumentation.
 
 ## Recommended Next Slice
 
-- Extend decision-specific semantic changes and the review/workspace UI so decision-derived understanding is visible as reviewable concepts.
-- Add decision archive creep certification before marking M6 complete.
+- Start M7 by adding a canonical backend understanding workspace projection for operational-context sections, decision-derived understanding, and continuity warnings.
+- Surface that projection in the repository workspace before broad UI refactoring.

@@ -617,6 +617,34 @@ button:focus-visible {
   background: #f7fbff;
 }
 
+.proposal-decision-review {
+  background: #f8fbf8;
+}
+
+.proposal-decision-review p {
+  margin: 0;
+  color: #4b5661;
+  font-size: 0.86rem;
+}
+
+.proposal-decision-review h6 {
+  margin: 0 0 6px;
+  color: #1d252c;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.proposal-decision-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.proposal-decision-grid > div {
+  min-width: 0;
+}
+
 .proposal-comparison-grid {
   min-width: 0;
   display: grid;

@@ -2,25 +2,24 @@
 
 ## Slice Summary
 
-Started M6 decision continuity with deterministic backend decision analysis and generation assimilation.
+Continued and effectively completed M6 decision continuity by making decision-derived understanding reviewable in semantic changes and the operational-context proposal UI.
 
 ## New State
 
-- Added `IDecisionAnalysisService` and `DecisionAnalysisService` with a conservative taxonomy: architectural, strategic, tactical, and historical decision signals.
-- Decision analysis reads current decisions plus up to three historical decision artifacts discovered through `ArtifactService`.
-- Operational-context generation now assimilates only non-retired architectural and strategic decision signals into stable decisions.
-- Explicit rationale from `because`, `since`, or `so that` phrasing is promoted into decision rationale.
-- Open decision questions are promoted into operational-context open questions.
-- Constraint-like durable decisions are copied into constraints for review.
-- Tactical and historical decision signals stay in decision history and surface as review warnings instead of bloating operational context.
-- Obvious deterministic contradictions such as `must` versus `must not` on the same normalized statement surface as decision-continuity warnings.
-- `.agents/milestones/m6-decision-continuity.md` now marks the completed backend analysis, assimilation, warning, and focused test scope for this slice.
+- Added explicit decision semantic change types: important decision introduced, decision retired, rationale lost warning, open decision preserved, and open decision resolved.
+- Updated `UnderstandingDiffService` so stable-decision additions/removals, decision-rationale changes/loss, and open-decision question changes use decision-specific change types.
+- Added backend tests for decision-specific semantic changes and strategic decision survival.
+- Tightened decision classification so slice/build/test/commit execution-detail language is classified as tactical before broad strategic terms such as `should`.
+- Added repeated proposal/promotion certification coverage proving a large decision archive does not replay tactical or historical decisions into operational context.
+- Updated the proposal review UI with a Decision Continuity Review block showing proposed stable decisions, open decisions, decision rationale, decision changes, and decision warnings without requiring raw JSON or manual Markdown scanning.
+- Updated `.agents/milestones/m6-decision-continuity.md` to mark the completed semantic-change, UI, and strategic-decision test scope.
+- Clarified M6 certification text so decision history must remain separate from current understanding.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 172 tests.
-- `dotnet build CommandCenter.slnx --no-restore` passed with 0 warnings and 0 errors.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 175 tests.
+- `npm run build --prefix src/CommandCenter.UI` passed.
 
 ## Next Slice
 
-Continue M6 by extending decision-specific semantic change types and the review/workspace UI so reviewers can see stable decisions, open decisions, rationale changes, and decision-continuity warnings without inspecting raw proposal JSON.
+Start M7 Understanding Workspace by introducing backend workspace projections for operational-context sections and dashboard continuity summaries, then begin peeling the current `App.tsx` surface toward focused workspace components only where needed.

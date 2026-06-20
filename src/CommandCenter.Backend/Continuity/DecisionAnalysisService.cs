@@ -81,14 +81,14 @@ public sealed class DecisionAnalysisService : IDecisionAnalysisService
             return DecisionTaxonomy.ArchitecturalDecision;
         }
 
-        if (ContainsAny(statement, "must", "should", "avoid", "remain", "continue", "priority", "guardrail", "roadmap", "durable", "stable", "future", "reviewable", "deterministic", "conservative"))
-        {
-            return DecisionTaxonomy.StrategicDecision;
-        }
-
         if (ContainsAny(statement, "slice", "temporary", "one-time", "workaround", "verification", "build", "test", "passed", "commit", "push", "stage", "complete", "completed", "next slice"))
         {
             return DecisionTaxonomy.TacticalDecision;
+        }
+
+        if (ContainsAny(statement, "must", "should", "avoid", "remain", "continue", "priority", "guardrail", "roadmap", "durable", "stable", "future", "reviewable", "deterministic", "conservative"))
+        {
+            return DecisionTaxonomy.StrategicDecision;
         }
 
         return DecisionTaxonomy.TacticalDecision;

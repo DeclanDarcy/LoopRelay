@@ -348,6 +348,49 @@ function formatDuration(value: string | null) {
   return value ?? 'Not recorded'
 }
 
+const decisionSemanticChangeTypes = new Set([
+  'ImportantDecisionIntroduced',
+  'DecisionRetired',
+  'DecisionAdded',
+  'DecisionRemoved',
+  'RationaleChanged',
+  'RationaleLostWarning',
+  'OpenDecisionPreserved',
+  'OpenDecisionResolved',
+])
+
+function getOperationalContextSectionItems(content: string, heading: string) {
+  const items: string[] = []
+  let inSection = false
+
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trim()
+    if (line.startsWith('## ')) {
+      inSection = line.slice(3).trim().toLowerCase() === heading.toLowerCase()
+      continue
+    }
+
+    if (!inSection || !line.startsWith('- ')) {
+      continue
+    }
+
+    const item = line.slice(2).trim()
+    if (item) {
+      items.push(item)
+    }
+  }
+
+  return items
+}
+
+function getDecisionContinuityWarnings(summary: OperationalContextCompressionSummary) {
+  return summary.warnings
+    .concat(summary.stableUnderstandingRetentionWarnings)
+    .filter((warning, index, warnings) =>
+      warning.toLowerCase().includes('decision') && warnings.indexOf(warning) === index,
+    )
+}
+
 function mergeExecutionEvents(currentEvents: ExecutionEvent[], incomingEvents: ExecutionEvent[]) {
   const eventsBySequence = new Map<number, ExecutionEvent>()
   currentEvents.forEach((event) => eventsBySequence.set(event.sequence, event))
@@ -725,6 +768,25 @@ function App() {
   const hasOperationalContextProposalDraftChanges =
     operationalContextProposal !== null &&
     operationalContextProposalDraft !== operationalContextCandidateContent
+  const proposedStableDecisions = getOperationalContextSectionItems(
+    operationalContextProposalDraft,
+    'Stable Decisions',
+  )
+  const proposedOpenDecisions = getOperationalContextSectionItems(
+    operationalContextProposalDraft,
+    'Open Questions',
+  ).filter((item) => item.toLowerCase().startsWith('open decision:'))
+  const proposedDecisionRationale = getOperationalContextSectionItems(
+    operationalContextProposalDraft,
+    'Decision Rationale',
+  )
+  const decisionSemanticChanges =
+    operationalContextProposal?.semanticChanges.filter((change) =>
+      decisionSemanticChangeTypes.has(change.type),
+    ) ?? []
+  const decisionContinuityWarnings = operationalContextProposal
+    ? getDecisionContinuityWarnings(operationalContextProposal.compressionSummary)
+    : []
   const milestoneOptions = workspace?.artifactInventory.milestones ?? []
   const executionSummary =
     workspace?.executionSummary ??
@@ -2260,6 +2322,74 @@ function App() {
                         spellCheck={false}
                       />
                     </label>
+                    <div className="proposal-warning-list proposal-decision-review">
+                      <h5>Decision Continuity Review</h5>
+                      <p>
+                        Confirm important decisions, unresolved decisions, and rationale remain present before accepting.
+                      </p>
+                      <div className="proposal-decision-grid">
+                        <div>
+                          <h6>Stable Decisions</h6>
+                          {proposedStableDecisions.length > 0 ? (
+                            <ul>
+                              {proposedStableDecisions.map((decision) => (
+                                <li key={decision}>{decision}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p>No stable decisions in the proposal.</p>
+                          )}
+                        </div>
+                        <div>
+                          <h6>Open Decisions</h6>
+                          {proposedOpenDecisions.length > 0 ? (
+                            <ul>
+                              {proposedOpenDecisions.map((decision) => (
+                                <li key={decision}>{decision}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p>No open decisions in the proposal.</p>
+                          )}
+                        </div>
+                        <div>
+                          <h6>Decision Rationale</h6>
+                          {proposedDecisionRationale.length > 0 ? (
+                            <ul>
+                              {proposedDecisionRationale.map((rationale) => (
+                                <li key={rationale}>{rationale}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p>No decision rationale in the proposal.</p>
+                          )}
+                        </div>
+                        <div>
+                          <h6>Decision Changes</h6>
+                          {decisionSemanticChanges.length > 0 ? (
+                            <ul>
+                              {decisionSemanticChanges.map((change, index) => (
+                                <li key={`${change.type}-${change.itemId ?? index}`}>
+                                  {change.type}: {change.description}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p>No decision-specific semantic changes detected.</p>
+                          )}
+                        </div>
+                      </div>
+                      {decisionContinuityWarnings.length > 0 ? (
+                        <>
+                          <h6>Decision Warnings</h6>
+                          <ul>
+                            {decisionContinuityWarnings.map((warning) => (
+                              <li key={warning}>{warning}</li>
+                            ))}
+                          </ul>
+                        </>
+                      ) : null}
+                    </div>
                     <h5>Semantic Changes</h5>
                     {operationalContextProposal.semanticChanges.length === 0 ? (
                       <p>No coarse semantic changes detected.</p>
