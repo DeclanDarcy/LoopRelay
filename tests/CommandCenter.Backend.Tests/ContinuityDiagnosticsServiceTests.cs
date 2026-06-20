@@ -219,6 +219,22 @@ public sealed class ContinuityDiagnosticsServiceTests
         Assert.Contains(reports, listed => listed.ReportId == report.ReportId);
     }
 
+    [Fact]
+    public async Task ReportListingSkipsCorruptReportArtifacts()
+    {
+        var harness = await CreateHarnessAsync();
+        var report = await harness.ReportService.GenerateReportAsync(harness.Repository.Id);
+        await WriteAsync(
+            harness.Repository,
+            ".agents/operational_context/reports/continuity.19990101000000000.json",
+            "{ not valid json");
+
+        var reports = await harness.ReportService.ListReportsAsync(harness.Repository.Id);
+
+        Assert.Single(reports);
+        Assert.Equal(report.ReportId, reports[0].ReportId);
+    }
+
     private static async Task<Harness> CreateHarnessAsync()
     {
         var repositoryPath = CreateGitRepositoryDirectory();

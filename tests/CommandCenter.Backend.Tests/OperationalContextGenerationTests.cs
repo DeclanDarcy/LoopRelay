@@ -917,6 +917,22 @@ public sealed class OperationalContextGenerationTests
     }
 
     [Fact]
+    public async Task ProposalListingSkipsCorruptMetadataArtifacts()
+    {
+        var harness = await CreateHarnessAsync();
+        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        await WriteAsync(
+            harness.Repository,
+            ".agents/operational_context/proposals/corrupt-proposal/metadata.json",
+            "{ not valid json");
+
+        var proposals = await harness.ProposalStore.ListAsync(harness.Repository);
+
+        Assert.Single(proposals);
+        Assert.Equal(proposal.ProposalId, proposals[0].ProposalId);
+    }
+
+    [Fact]
     public async Task RegenerationSupersedesPreviousPendingProposal()
     {
         var harness = await CreateHarnessAsync();

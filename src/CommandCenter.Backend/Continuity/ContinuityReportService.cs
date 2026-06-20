@@ -47,7 +47,16 @@ public sealed class ContinuityReportService(
                 continue;
             }
 
-            var report = JsonSerializer.Deserialize<ContinuityReport>(content, JsonOptions);
+            ContinuityReport? report;
+            try
+            {
+                report = JsonSerializer.Deserialize<ContinuityReport>(content, JsonOptions);
+            }
+            catch (JsonException)
+            {
+                continue;
+            }
+
             if (report is not null)
             {
                 reports.Add(report);

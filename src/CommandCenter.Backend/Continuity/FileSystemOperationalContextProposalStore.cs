@@ -97,7 +97,16 @@ public sealed class FileSystemOperationalContextProposalStore(IArtifactStore art
             return null;
         }
 
-        var proposal = JsonSerializer.Deserialize<OperationalContextProposal>(metadata, JsonOptions);
+        OperationalContextProposal? proposal;
+        try
+        {
+            proposal = JsonSerializer.Deserialize<OperationalContextProposal>(metadata, JsonOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+
         if (proposal is null)
         {
             return null;
