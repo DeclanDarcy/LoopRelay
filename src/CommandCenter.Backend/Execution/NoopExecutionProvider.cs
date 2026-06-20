@@ -4,7 +4,10 @@ public sealed class NoopExecutionProvider : IExecutionProvider
 {
     public string Name => "none";
 
-    public Task<ExecutionProviderStartResult> StartAsync(ExecutionPrompt prompt, ExecutionSession session)
+    public Task<ExecutionProviderStartResult> StartAsync(
+        ExecutionPrompt prompt,
+        ExecutionSession session,
+        IExecutionProviderObserver observer)
     {
         throw new InvalidOperationException("No execution provider is configured.");
     }

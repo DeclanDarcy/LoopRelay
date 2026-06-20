@@ -8,7 +8,10 @@ public sealed class FakeExecutionProvider : IExecutionProvider
 
     public ExecutionPrompt? LastPrompt { get; private set; }
 
-    public Task<ExecutionProviderStartResult> StartAsync(ExecutionPrompt prompt, ExecutionSession session)
+    public Task<ExecutionProviderStartResult> StartAsync(
+        ExecutionPrompt prompt,
+        ExecutionSession session,
+        IExecutionProviderObserver observer)
     {
         LastPrompt = prompt;
 

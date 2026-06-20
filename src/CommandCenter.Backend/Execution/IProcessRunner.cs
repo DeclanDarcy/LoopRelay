@@ -8,5 +8,8 @@ public interface IProcessRunner
         string fileName,
         IReadOnlyList<string> arguments,
         string workingDirectory,
-        string? standardInput = null);
+        string? standardInput = null,
+        Func<string, Task>? onStandardOutput = null,
+        Func<string, Task>? onStandardError = null,
+        Func<int?, Task>? onExit = null);
 }

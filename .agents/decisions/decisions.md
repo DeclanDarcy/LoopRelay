@@ -2,48 +2,31 @@
 
 ## Newly Authorized Decisions
 
-- M2 is complete and certifiable.
-- The latest-session summary addition is accepted as the final M2 visibility piece.
-- M3 should be split into M3A and M3B.
-- M3A owns backend observability substrate only:
-  - event model
-  - status projection
-  - output capture
-  - bounded event retention
-- M3B owns transport and UI streaming:
-  - SSE endpoint
-  - EventSource integration
-  - streaming workspace UI
-  - dashboard activity indicators
-- The next authorized slice is M3A.1.
-- M3A.1 must add `ExecutionEvent`, `ExecutionEventType`, and `ExecutionStatus`.
-- M3A.1 must implement backend execution monitoring before SSE or React streaming.
-- Monitoring event types should remain observational: `Info`, `StdOut`, `StdErr`, `ProviderStarted`, `ProviderExited`, `Failure`, and `Recovery`.
-- Monitoring must avoid interpretive event types such as thinking, planning, confused, warning, or healthy.
-- Persisted session event history must be bounded by explicit maximum event count and maximum byte policy.
-- M3A.1 must support retained backend history sufficient to answer what happened during an execution session from backend state alone.
-
-## Certification Required
-
-- Output ordering:
-  - stdout and stderr events are retained in chronological order.
-- Activity tracking:
-  - received output updates `LastActivityAt`.
-- Failure tracking:
-  - provider exit or failure records a failure event.
-- Retention limits:
-  - event history remains bounded and does not grow without limit.
-- Restart behavior:
-  - retained events survive session store reload.
+- M3A.1 is complete as the backend monitoring substrate.
+- The monitoring model must remain independent of transport.
+- Persisted backend state must be sufficient to answer what happened during an execution session.
+- The provider-observer boundary is accepted:
+  - providers emit observer callbacks
+  - `ExecutionMonitoringService` owns event persistence and status projection
+  - providers must not own execution-session persistence
+- Zero-exit provider semantics are now locked:
+  - non-zero provider exit records `ProviderExited` and transitions the session/repository to `Failed`
+  - zero provider exit records `ProviderExited` and transitions `ExecutionSessionState` to `Completed`
+  - zero provider exit must not imply success, `AwaitingAcceptance`, or `Ready`
+- M3 owns process lifecycle observation only.
+- M4 owns handoff validation and decides whether a completed execution is acceptable.
+- M3A.2 is authorized before SSE work.
+- M3A.2 must certify the JSON backend status/event surface:
+  - `GET /api/execution-sessions/{sessionId}/status`
+  - `GET /api/execution-sessions/{sessionId}/events`
+- M3A.2 endpoint certification must cover event ordering, retention behavior, activity timestamps, failed sessions, completed sessions, and reload persistence.
+- M3B.1 follows M3A.2 and should add SSE transport using the existing `ExecutionEvent` model.
+- SSE must expose `ExecutionEvent` over a different transport, not introduce separate live/streaming event concepts.
+- Dashboard M3B work should add only execution state and `LastActivityAt` indicators.
+- Workspace M3B work should render the chronological event feed directly, without interpretation, grouping, or summaries.
 
 ## Explicitly Deferred
 
-- No SSE in M3A.1.
-- No EventSource in M3A.1.
-- No React streaming UI in M3A.1.
-- No live workspace feed in M3A.1.
-- No dashboard activity indicators until M3B.
-
-## Next Authorized Slice
-
-- Proceed with M3A.1: execution event/status models, monitoring service, stdout/stderr capture, bounded event retention, `LastActivityAt` projection, and backend certification.
+- No M4 handoff lifecycle work until M3B is complete.
+- No acceptance workflow before M4 handoff validation exists.
+- No separate `StreamingEvent` or `LiveEvent` model.

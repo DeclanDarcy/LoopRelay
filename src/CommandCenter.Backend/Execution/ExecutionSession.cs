@@ -38,6 +38,8 @@ public sealed class ExecutionSession
 
     public string? FailureReason { get; init; }
 
+    public IReadOnlyList<ExecutionEvent> Events { get; init; } = [];
+
     public ExecutionSessionSummary ToSummary()
     {
         return new ExecutionSessionSummary

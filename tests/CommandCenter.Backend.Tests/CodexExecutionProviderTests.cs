@@ -19,7 +19,8 @@ public sealed class CodexExecutionProviderTests
 
         var result = await provider.StartAsync(
             CreatePrompt(),
-            CreateSession(repositoryPath));
+            CreateSession(repositoryPath),
+            new RecordingObserver());
 
         Assert.Equal("codex", result.ProviderName);
         Assert.Equal("C:\\tools\\codex.exe", result.ExecutablePath);
@@ -40,7 +41,7 @@ public sealed class CodexExecutionProviderTests
             new RecordingProcessRunner(new ProcessStartResult()));
 
         var exception = await Assert.ThrowsAsync<ExecutionProviderException>(() =>
-            provider.StartAsync(CreatePrompt(), CreateSession(CreateTemporaryDirectory())));
+            provider.StartAsync(CreatePrompt(), CreateSession(CreateTemporaryDirectory()), new RecordingObserver()));
 
         Assert.Equal("ProviderExecutableNotFound", exception.Code);
     }
@@ -53,7 +54,7 @@ public sealed class CodexExecutionProviderTests
             new RecordingProcessRunner(new IOException("start failed")));
 
         var exception = await Assert.ThrowsAsync<ExecutionProviderException>(() =>
-            provider.StartAsync(CreatePrompt(), CreateSession(CreateTemporaryDirectory())));
+            provider.StartAsync(CreatePrompt(), CreateSession(CreateTemporaryDirectory()), new RecordingObserver()));
 
         Assert.Equal("ProviderLaunchFailed", exception.Code);
     }
@@ -71,7 +72,7 @@ public sealed class CodexExecutionProviderTests
             }));
 
         var exception = await Assert.ThrowsAsync<ExecutionProviderException>(() =>
-            provider.StartAsync(CreatePrompt(), CreateSession(CreateTemporaryDirectory())));
+            provider.StartAsync(CreatePrompt(), CreateSession(CreateTemporaryDirectory()), new RecordingObserver()));
 
         Assert.Equal("ProviderImmediateExit", exception.Code);
         Assert.Contains("2", exception.Message);
@@ -158,7 +159,10 @@ public sealed class CodexExecutionProviderTests
             string fileName,
             IReadOnlyList<string> arguments,
             string workingDirectory,
-            string? standardInput = null)
+            string? standardInput = null,
+            Func<string, Task>? onStandardOutput = null,
+            Func<string, Task>? onStandardError = null,
+            Func<int?, Task>? onExit = null)
         {
             FileName = fileName;
             Arguments = arguments.ToArray();
@@ -171,6 +175,24 @@ public sealed class CodexExecutionProviderTests
             }
 
             return Task.FromResult(startResult!);
+        }
+    }
+
+    private sealed class RecordingObserver : IExecutionProviderObserver
+    {
+        public Task OnStdOutAsync(string text)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task OnStdErrAsync(string text)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task OnProviderExitedAsync(int? exitCode)
+        {
+            return Task.CompletedTask;
         }
     }
 }

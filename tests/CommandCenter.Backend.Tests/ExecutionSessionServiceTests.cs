@@ -168,7 +168,8 @@ public sealed class ExecutionSessionServiceTests
             harness.ContextService,
             new FileSystemExecutionSessionStore(harness.StorePath),
             new FakeExecutionProvider(),
-            new ExecutionPromptBuilder());
+            new ExecutionPromptBuilder(),
+            new ExecutionMonitoringService(new FileSystemExecutionSessionStore(harness.StorePath)));
 
         await reloadedService.RecoverAsync();
         var active = await reloadedService.GetActiveSessionAsync(harness.Repository.Id);
@@ -205,7 +206,8 @@ public sealed class ExecutionSessionServiceTests
             harness.ContextService,
             new FileSystemExecutionSessionStore(harness.StorePath),
             new FakeExecutionProvider(),
-            new ExecutionPromptBuilder());
+            new ExecutionPromptBuilder(),
+            new ExecutionMonitoringService(new FileSystemExecutionSessionStore(harness.StorePath)));
         await reloadedService.RecoverAsync();
         var artifactStore = new FileSystemArtifactStore();
         var projectionService = new RepositoryProjectionService(
@@ -490,7 +492,8 @@ public sealed class ExecutionSessionServiceTests
             contextService,
             store,
             provider ?? new FakeExecutionProvider(),
-            new ExecutionPromptBuilder());
+            new ExecutionPromptBuilder(),
+            new ExecutionMonitoringService(store));
 
         return new Harness(repositoryService, repository, contextService, store, storePath, sessionService);
     }
@@ -557,7 +560,10 @@ public sealed class ExecutionSessionServiceTests
     {
         public string Name => "codex";
 
-        public Task<ExecutionProviderStartResult> StartAsync(ExecutionPrompt prompt, ExecutionSession session)
+        public Task<ExecutionProviderStartResult> StartAsync(
+            ExecutionPrompt prompt,
+            ExecutionSession session,
+            IExecutionProviderObserver observer)
         {
             return Task.FromResult(new ExecutionProviderStartResult
             {
@@ -573,7 +579,10 @@ public sealed class ExecutionSessionServiceTests
     {
         public string Name => "codex";
 
-        public Task<ExecutionProviderStartResult> StartAsync(ExecutionPrompt prompt, ExecutionSession session)
+        public Task<ExecutionProviderStartResult> StartAsync(
+            ExecutionPrompt prompt,
+            ExecutionSession session,
+            IExecutionProviderObserver observer)
         {
             throw exception;
         }

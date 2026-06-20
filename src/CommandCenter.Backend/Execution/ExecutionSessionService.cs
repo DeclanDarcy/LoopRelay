@@ -6,7 +6,8 @@ public sealed class ExecutionSessionService(
     IExecutionContextService executionContextService,
     IExecutionSessionStore sessionStore,
     IExecutionProvider executionProvider,
-    IExecutionPromptBuilder promptBuilder) : IExecutionSessionService
+    IExecutionPromptBuilder promptBuilder,
+    IExecutionMonitoringService monitoringService) : IExecutionSessionService
 {
     public const string OrphanedProviderFailureReason =
         "Active provider process could not be reattached after backend restart.";
@@ -42,6 +43,10 @@ public sealed class ExecutionSessionService(
             if (changed)
             {
                 await sessionStore.SaveAsync(sessions);
+                foreach (var session in sessions.Where(session => session.FailureReason == OrphanedProviderFailureReason))
+                {
+                    await monitoringService.RecordRecoveryAsync(session.Id, OrphanedProviderFailureReason);
+                }
             }
         }
         finally
@@ -138,7 +143,10 @@ public sealed class ExecutionSessionService(
             ExecutionProviderStartResult startResult;
             try
             {
-                startResult = await executionProvider.StartAsync(prompt, session);
+                startResult = await executionProvider.StartAsync(
+                    prompt,
+                    session,
+                    monitoringService.CreateProviderObserver(session.Id));
             }
             catch (Exception exception) when (exception is InvalidOperationException or IOException)
             {
@@ -148,18 +156,22 @@ public sealed class ExecutionSessionService(
                     completedAt: DateTimeOffset.UtcNow,
                     failureReason: exception.Message);
                 await ReplaceSessionAsync(sessions, failedSession);
+                await monitoringService.RecordFailureAsync(session.Id, exception.Message);
                 return failedSession.ToSummary();
             }
 
-            var executingSession = session.WithState(
+            var latestSession = (await sessionStore.LoadAsync()).FirstOrDefault(storedSession => storedSession.Id == session.Id) ?? session;
+            var providerStartedAt = startResult.StartedAt == default ? DateTimeOffset.UtcNow : startResult.StartedAt;
+            var executingSession = latestSession.WithState(
                 ExecutionSessionState.Executing,
                 RepositoryExecutionState.Executing,
                 lastActivityAt: DateTimeOffset.UtcNow,
                 providerExecutablePath: startResult.ExecutablePath,
                 providerProcessId: startResult.ProcessId,
-                providerStartedAt: startResult.StartedAt,
+                providerStartedAt: providerStartedAt,
                 promptMetadata: prompt.Metadata);
             await ReplaceSessionAsync(sessions, executingSession);
+            await monitoringService.RecordProviderStartedAsync(session.Id, providerStartedAt);
             return executingSession.ToSummary();
         }
         finally
@@ -227,7 +239,8 @@ file static class ExecutionSessionMutation
             RepositorySnapshot = session.RepositorySnapshot,
             PreviousHandoffContent = session.PreviousHandoffContent,
             PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,
-            FailureReason = failureReason ?? session.FailureReason
+            FailureReason = failureReason ?? session.FailureReason,
+            Events = session.Events
         };
     }
 }

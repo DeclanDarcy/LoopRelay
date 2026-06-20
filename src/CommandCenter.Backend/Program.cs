@@ -27,6 +27,7 @@ public static class Program
         builder.Services.AddSingleton<IExecutionSessionStore, FileSystemExecutionSessionStore>();
         builder.Services.AddSingleton<IExecutionSessionService, ExecutionSessionService>();
         builder.Services.AddHostedService<ExecutionSessionRecoveryHostedService>();
+        builder.Services.AddSingleton<ExecutionEventRetentionPolicy>();
         builder.Services.AddSingleton<IExecutionMonitoringService, ExecutionMonitoringService>();
         builder.Services.AddSingleton<IHandoffService, HandoffService>();
         builder.Services.AddSingleton<ICodexExecutableResolver, CodexExecutableResolver>();
@@ -274,6 +275,20 @@ public static class Program
         {
             var session = await executionSessionService.GetSessionAsync(sessionId);
             return session is null ? Results.NotFound(new { error = "Execution session was not found." }) : Results.Ok(session);
+        });
+        app.MapGet("/api/execution-sessions/{sessionId:guid}/status", async (
+            Guid sessionId,
+            IExecutionMonitoringService monitoringService) =>
+        {
+            var status = await monitoringService.GetStatusAsync(sessionId);
+            return status is null ? Results.NotFound(new { error = "Execution session was not found." }) : Results.Ok(status);
+        });
+        app.MapGet("/api/execution-sessions/{sessionId:guid}/events", async (
+            Guid sessionId,
+            IExecutionMonitoringService monitoringService) =>
+        {
+            var status = await monitoringService.GetStatusAsync(sessionId);
+            return status is null ? Results.NotFound(new { error = "Execution session was not found." }) : Results.Ok(await monitoringService.GetEventsAsync(sessionId));
         });
         app.MapPost("/api/repositories/{repositoryId:guid}/refresh", async (
             Guid repositoryId,

@@ -6,7 +6,10 @@ public sealed class CodexExecutionProvider(
 {
     public string Name => "codex";
 
-    public async Task<ExecutionProviderStartResult> StartAsync(ExecutionPrompt prompt, ExecutionSession session)
+    public async Task<ExecutionProviderStartResult> StartAsync(
+        ExecutionPrompt prompt,
+        ExecutionSession session,
+        IExecutionProviderObserver observer)
     {
         var executable = executableResolver.Resolve();
         var startedAt = DateTimeOffset.UtcNow;
@@ -18,7 +21,10 @@ public sealed class CodexExecutionProvider(
                 executable.Path,
                 ["exec", "--cd", session.RepositoryPath, "-"],
                 session.RepositoryPath,
-                prompt.Text);
+                prompt.Text,
+                observer.OnStdOutAsync,
+                observer.OnStdErrAsync,
+                observer.OnProviderExitedAsync);
         }
         catch (Exception exception) when (exception is InvalidOperationException or IOException)
         {

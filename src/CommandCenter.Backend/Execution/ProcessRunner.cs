@@ -48,13 +48,18 @@ public sealed class ProcessRunner : IProcessRunner
         string fileName,
         IReadOnlyList<string> arguments,
         string workingDirectory,
-        string? standardInput = null)
+        string? standardInput = null,
+        Func<string, Task>? onStandardOutput = null,
+        Func<string, Task>? onStandardError = null,
+        Func<int?, Task>? onExit = null)
     {
         var startInfo = new ProcessStartInfo
         {
             FileName = fileName,
             WorkingDirectory = workingDirectory,
             RedirectStandardInput = standardInput is not null,
+            RedirectStandardOutput = onStandardOutput is not null,
+            RedirectStandardError = onStandardError is not null,
             UseShellExecute = false,
             CreateNoWindow = true
         };
@@ -66,6 +71,26 @@ public sealed class ProcessRunner : IProcessRunner
 
         var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException($"Failed to start process: {fileName}");
+
+        if (onStandardOutput is not null)
+        {
+            _ = Task.Run(() => ReadLinesAsync(process.StandardOutput, onStandardOutput));
+        }
+
+        if (onStandardError is not null)
+        {
+            _ = Task.Run(() => ReadLinesAsync(process.StandardError, onStandardError));
+        }
+
+        if (onExit is not null)
+        {
+            _ = Task.Run(async () =>
+            {
+                await process.WaitForExitAsync();
+                await onExit(process.ExitCode);
+                process.Dispose();
+            });
+        }
 
         if (standardInput is not null)
         {
@@ -82,5 +107,13 @@ public sealed class ProcessRunner : IProcessRunner
             HasExited = process.HasExited,
             ExitCode = process.HasExited ? process.ExitCode : null
         };
+    }
+
+    private static async Task ReadLinesAsync(StreamReader reader, Func<string, Task> onLine)
+    {
+        while (await reader.ReadLineAsync() is { } line)
+        {
+            await onLine(line);
+        }
     }
 }
