@@ -28,6 +28,7 @@ public static class Program
         builder.Services.AddSingleton<IOperationalContextProposalStore, FileSystemOperationalContextProposalStore>();
         builder.Services.AddSingleton<IOperationalContextGenerationService, OperationalContextGenerationService>();
         builder.Services.AddSingleton<IOperationalContextReviewService, OperationalContextReviewService>();
+        builder.Services.AddSingleton<IOperationalContextLifecycleService, OperationalContextLifecycleService>();
         builder.Services.AddSingleton<IPlanningService, PlanningService>();
         builder.Services.AddSingleton<IExecutionContextService, ExecutionContextService>();
         builder.Services.AddSingleton<IExecutionPromptBuilder, ExecutionPromptBuilder>();
@@ -387,6 +388,31 @@ public static class Program
             try
             {
                 var proposal = await reviewService.RejectAsync(repositoryId, proposalId, request.ReviewNote);
+                await projectionService.RefreshWorkspaceAsync(repositoryId);
+                return Results.Ok(proposal);
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+        app.MapPost("/api/repositories/{repositoryId:guid}/operational-context/proposals/{proposalId}/promote", async (
+            Guid repositoryId,
+            string proposalId,
+            IOperationalContextLifecycleService lifecycleService,
+            IRepositoryProjectionService projectionService) =>
+        {
+            try
+            {
+                var proposal = await lifecycleService.PromoteAsync(repositoryId, proposalId);
                 await projectionService.RefreshWorkspaceAsync(repositoryId);
                 return Results.Ok(proposal);
             }

@@ -104,7 +104,9 @@ public sealed class RepositoryProjectionService(
                 fingerprint.Present &&
                 fingerprint.Name != "GeneratedProposal"),
             ContentByteCount = generatedFingerprint?.ByteCount ?? 0,
-            ContentCharacterCount = generatedFingerprint?.CharacterCount ?? 0
+            ContentCharacterCount = generatedFingerprint?.CharacterCount ?? 0,
+            LastPromotedAt = latestProposal.Promotion.PromotedAt,
+            LastArchivedRelativePath = latestProposal.Promotion.ArchivedRelativePath
         };
     }
 
@@ -127,7 +129,15 @@ public sealed class RepositoryProjectionService(
         return new ArtifactInventory
         {
             Plan = artifacts.SingleOrDefault(artifact => artifact.Type == ArtifactType.Plan),
-            OperationalContext = artifacts.SingleOrDefault(artifact => artifact.Type == ArtifactType.OperationalContext),
+            OperationalContext = artifacts.SingleOrDefault(artifact =>
+                artifact.Family == ArtifactFamily.OperationalContext &&
+                artifact.VersionKind == ArtifactVersionKind.Current),
+            HistoricalOperationalContexts = artifacts
+                .Where(artifact =>
+                    artifact.Family == ArtifactFamily.OperationalContext &&
+                    artifact.VersionKind == ArtifactVersionKind.Historical)
+                .OrderBy(artifact => artifact.RelativePath, StringComparer.OrdinalIgnoreCase)
+                .ToArray(),
             Milestones = artifacts
                 .Where(artifact => artifact.Type == ArtifactType.Milestone)
                 .OrderBy(artifact => artifact.RelativePath, StringComparer.OrdinalIgnoreCase)

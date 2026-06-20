@@ -26,6 +26,8 @@ public sealed class OperationalContextProposal
 
     public OperationalContextReview Review { get; init; } = new();
 
+    public OperationalContextPromotion Promotion { get; init; } = new();
+
     public string? GeneratedContent { get; init; }
 
     public string? EditedContent { get; init; }

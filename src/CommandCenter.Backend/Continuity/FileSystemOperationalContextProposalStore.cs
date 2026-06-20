@@ -45,7 +45,10 @@ public sealed class FileSystemOperationalContextProposalStore(IArtifactStore art
             CompressionSummary = proposal.CompressionSummary,
             Review = proposal.Review.ProposalId.Length == 0
                 ? CreatePendingReview(proposalId, proposal.BaselineCurrentContextHash)
-                : proposal.Review
+                : proposal.Review,
+            Promotion = proposal.Promotion.ProposalId.Length == 0
+                ? new OperationalContextPromotion { ProposalId = proposalId }
+                : proposal.Promotion
         };
 
         await artifactStore.WriteAsync(ArtifactPath.ResolveRepositoryPath(repository, generatedRelativePath), generatedContent);
@@ -149,7 +152,10 @@ public sealed class FileSystemOperationalContextProposalStore(IArtifactStore art
             EditedContentRelativePath = editedRelativePath,
             SemanticChanges = proposal.SemanticChanges,
             CompressionSummary = proposal.CompressionSummary,
-            Review = proposal.Review
+            Review = proposal.Review,
+            Promotion = proposal.Promotion.ProposalId.Length == 0
+                ? new OperationalContextPromotion { ProposalId = proposalId }
+                : proposal.Promotion
         };
 
         await WriteMetadataAsync(repository, storedProposal);
@@ -185,7 +191,8 @@ public sealed class FileSystemOperationalContextProposalStore(IArtifactStore art
                     ReviewedAt = DateTimeOffset.UtcNow,
                     ReviewNote = proposal.Review.ReviewNote,
                     StaleReason = "Proposal was superseded by a newer generated proposal."
-                }
+                },
+                Promotion = proposal.Promotion
             });
         }
     }
@@ -254,6 +261,7 @@ file static class OperationalContextProposalContentMutation
             SemanticChanges = proposal.SemanticChanges,
             CompressionSummary = proposal.CompressionSummary,
             Review = proposal.Review,
+            Promotion = proposal.Promotion,
             GeneratedContent = generatedContent,
             EditedContent = editedContent
         };

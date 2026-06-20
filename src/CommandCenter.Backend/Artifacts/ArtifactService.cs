@@ -12,6 +12,7 @@ public sealed class ArtifactService(IArtifactStore artifactStore) : IArtifactSer
 
         await AddStaticArtifactAsync(artifacts, repository, "plan.md", ArtifactType.Plan, ArtifactFamily.Plan);
         await AddStaticArtifactAsync(artifacts, repository, "operational_context.md", ArtifactType.OperationalContext, ArtifactFamily.OperationalContext);
+        await AddDirectoryArtifactsAsync(artifacts, repository, "", ArtifactType.OperationalContext, ArtifactFamily.OperationalContext);
         await AddDirectoryArtifactsAsync(artifacts, repository, "milestones", ArtifactType.Milestone, ArtifactFamily.Milestone);
         await AddDirectoryArtifactsAsync(artifacts, repository, "handoffs", ArtifactType.Handoff, ArtifactFamily.Handoff);
         await AddDirectoryArtifactsAsync(artifacts, repository, "decisions", ArtifactType.Decision, ArtifactFamily.Decision);
@@ -106,6 +107,7 @@ public sealed class ArtifactService(IArtifactStore artifactStore) : IArtifactSer
         {
             ArtifactFamily.Handoff => IsCurrentOrHistorical(fileName, "handoff"),
             ArtifactFamily.Decision => IsCurrentOrHistorical(fileName, "decisions"),
+            ArtifactFamily.OperationalContext => IsHistorical(fileName, "operational_context"),
             _ => true
         };
     }
@@ -122,6 +124,13 @@ public sealed class ArtifactService(IArtifactStore artifactStore) : IArtifactSer
         if (family == ArtifactFamily.Decision)
         {
             return string.Equals(fileName, "decisions.md", StringComparison.OrdinalIgnoreCase)
+                ? ArtifactVersionKind.Current
+                : ArtifactVersionKind.Historical;
+        }
+
+        if (family == ArtifactFamily.OperationalContext)
+        {
+            return string.Equals(fileName, "operational_context.md", StringComparison.OrdinalIgnoreCase)
                 ? ArtifactVersionKind.Current
                 : ArtifactVersionKind.Historical;
         }
@@ -150,5 +159,11 @@ public sealed class ArtifactService(IArtifactStore artifactStore) : IArtifactSer
             sequenceText.All(char.IsDigit) &&
             int.TryParse(sequenceText, out var sequence) &&
             sequence > 0;
+    }
+
+    private static bool IsHistorical(string fileName, string baseName)
+    {
+        return !string.Equals(fileName, $"{baseName}.md", StringComparison.OrdinalIgnoreCase) &&
+            IsCurrentOrHistorical(fileName, baseName);
     }
 }

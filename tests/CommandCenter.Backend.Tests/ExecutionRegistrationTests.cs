@@ -35,6 +35,10 @@ public sealed class ExecutionRegistrationTests
             app.Services.GetRequiredService<IOperationalContextProposalStore>());
         Assert.IsAssignableFrom<IOperationalContextGenerationService>(
             app.Services.GetRequiredService<IOperationalContextGenerationService>());
+        Assert.IsAssignableFrom<IOperationalContextReviewService>(
+            app.Services.GetRequiredService<IOperationalContextReviewService>());
+        Assert.IsAssignableFrom<IOperationalContextLifecycleService>(
+            app.Services.GetRequiredService<IOperationalContextLifecycleService>());
     }
 
     [Fact]

@@ -17,6 +17,7 @@ type Artifact = {
 type ArtifactInventory = {
   plan: Artifact | null
   operationalContext: Artifact | null
+  historicalOperationalContexts: Artifact[]
   milestones: Artifact[]
   currentHandoff: Artifact | null
   historicalHandoffs: Artifact[]
@@ -48,6 +49,8 @@ type OperationalContextProposalSummary = {
   sourceInputCount: number
   contentByteCount: number
   contentCharacterCount: number
+  lastPromotedAt: string | null
+  lastArchivedRelativePath: string | null
 }
 
 type OperationalContextProposal = {
@@ -72,6 +75,16 @@ type OperationalContextProposal = {
     reviewedAt: string | null
     reviewNote: string | null
     staleReason: string | null
+  }
+  promotion: {
+    proposalId: string
+    promotedAt: string | null
+    promotedContentHash: string | null
+    promotedContentSourceRelativePath: string | null
+    revisionNumber: number | null
+    archivedRelativePath: string | null
+    archiveFailureReason: string | null
+    writeFailureReason: string | null
   }
   generatedContent: string
   editedContent: string | null
@@ -349,6 +362,8 @@ function createWorkspace(repository: Repository, inventory: ArtifactInventory): 
       sourceInputCount: 0,
       contentByteCount: 0,
       contentCharacterCount: 0,
+      lastPromotedAt: null,
+      lastArchivedRelativePath: null,
     },
   }
 }
@@ -357,6 +372,7 @@ function createReadyInventory(): ArtifactInventory {
   return {
     plan: artifacts.plan,
     operationalContext: artifacts.context,
+    historicalOperationalContexts: [],
     milestones: [artifacts.milestone],
     currentHandoff: artifacts.handoff,
     historicalHandoffs: [artifacts.oldHandoff],
@@ -373,6 +389,7 @@ function createInitialState(): MockState {
       [emptyRepository.id]: createWorkspace(emptyRepository, {
         plan: null,
         operationalContext: null,
+        historicalOperationalContexts: [],
         milestones: [],
         currentHandoff: null,
         historicalHandoffs: [],
@@ -382,6 +399,7 @@ function createInitialState(): MockState {
       [planOnlyRepository.id]: createWorkspace(planOnlyRepository, {
         plan: artifacts.plan,
         operationalContext: null,
+        historicalOperationalContexts: [],
         milestones: [],
         currentHandoff: null,
         historicalHandoffs: [],
@@ -898,6 +916,16 @@ function generateOperationalContextProposal(
       reviewNote: null,
       staleReason: null,
     },
+    promotion: {
+      proposalId,
+      promotedAt: null,
+      promotedContentHash: null,
+      promotedContentSourceRelativePath: null,
+      revisionNumber: null,
+      archivedRelativePath: null,
+      archiveFailureReason: null,
+      writeFailureReason: null,
+    },
     generatedContent,
     editedContent: null,
   }
@@ -918,6 +946,8 @@ function generateOperationalContextProposal(
     sourceInputCount: 3,
     contentByteCount: generatedContent.length,
     contentCharacterCount: generatedContent.length,
+    lastPromotedAt: null,
+    lastArchivedRelativePath: null,
   }
   return proposal
 }
@@ -999,6 +1029,62 @@ function reviewOperationalContextProposal(
   if (workspace) {
     workspace.operationalContextProposalSummary.status = status
     workspace.operationalContextProposalSummary.pendingProposalExists = false
+  }
+  return proposal
+}
+
+function promoteOperationalContextProposal(
+  state: MockState,
+  repositoryId: string,
+  proposalId: string,
+): OperationalContextProposal {
+  const proposal = getOperationalContextProposal(state, repositoryId, proposalId)
+  if (proposal.status !== 'Accepted' || proposal.review.reviewState !== 'Accepted') {
+    throw new Error(`Operational-context proposal cannot be promoted from status ${proposal.status}.`)
+  }
+
+  const workspace = state.workspaces[repositoryId]
+  const promotedAt = new Date().toISOString()
+  const archivedRelativePath = workspace.artifactInventory.operationalContext
+    ? `.agents/operational_context.${String(workspace.artifactInventory.historicalOperationalContexts.length + 1).padStart(4, '0')}.md`
+    : null
+
+  if (workspace.artifactInventory.operationalContext && archivedRelativePath) {
+    workspace.artifactInventory.historicalOperationalContexts.push({
+      ...workspace.artifactInventory.operationalContext,
+      relativePath: archivedRelativePath,
+      name: archivedRelativePath.split('/').at(-1) ?? 'operational_context.0001.md',
+      versionKind: 'Historical',
+    })
+  }
+
+  workspace.artifactInventory.operationalContext = {
+    relativePath: '.agents/operational_context.md',
+    name: 'operational_context.md',
+    type: 'OperationalContext',
+    family: 'OperationalContext',
+    versionKind: 'Current',
+  }
+  workspace.hasOperationalContext = true
+  workspace.operationalContextProposalSummary.status = 'Promoted'
+  workspace.operationalContextProposalSummary.pendingProposalExists = false
+  workspace.operationalContextProposalSummary.lastPromotedAt = promotedAt
+  workspace.operationalContextProposalSummary.lastArchivedRelativePath = archivedRelativePath
+
+  proposal.status = 'Promoted'
+  state.content['.agents/operational_context.md'] = proposal.editedContent ?? proposal.generatedContent
+  proposal.promotion = {
+    proposalId,
+    promotedAt,
+    promotedContentHash: proposal.review.reviewedContentHash,
+    promotedContentSourceRelativePath:
+      proposal.editedContentRelativePath ?? proposal.generatedContentRelativePath,
+    revisionNumber: archivedRelativePath
+      ? workspace.artifactInventory.historicalOperationalContexts.length
+      : null,
+    archivedRelativePath,
+    archiveFailureReason: null,
+    writeFailureReason: null,
   }
   return proposal
 }
@@ -1114,6 +1200,14 @@ export function installDevTauriMock() {
             ),
           )
         }
+        case 'promote_operational_context_proposal':
+          return clone(
+            promoteOperationalContextProposal(
+              state,
+              getStringArg(args, 'repositoryId'),
+              getStringArg(args, 'proposalId'),
+            ),
+          )
         case 'start_execution':
           return clone(
             startExecution(

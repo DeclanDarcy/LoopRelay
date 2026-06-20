@@ -16,12 +16,21 @@ public sealed class ArtifactRotationService(
         return RotateAsync(repository, ArtifactFamily.Decision);
     }
 
+    public Task<Artifact> RotateCurrentOperationalContextAsync(Repository repository)
+    {
+        return RotateAsync(repository, ArtifactFamily.OperationalContext);
+    }
+
     public async Task<Artifact> RotateAsync(Repository repository, ArtifactFamily family)
     {
         var definition = GetDefinition(family);
-        var currentArtifact = family == ArtifactFamily.Handoff
-            ? await artifactService.GetCurrentHandoffAsync(repository)
-            : await artifactService.GetCurrentDecisionsAsync(repository);
+        var currentArtifact = family switch
+        {
+            ArtifactFamily.Handoff => await artifactService.GetCurrentHandoffAsync(repository),
+            ArtifactFamily.Decision => await artifactService.GetCurrentDecisionsAsync(repository),
+            ArtifactFamily.OperationalContext => await artifactService.GetCurrentOperationalContextAsync(repository),
+            _ => null
+        };
 
         if (currentArtifact is null)
         {
@@ -80,6 +89,11 @@ public sealed class ArtifactRotationService(
                 ".agents/decisions/decisions.md",
                 "decisions",
                 ArtifactType.Decision),
+            ArtifactFamily.OperationalContext => new RotationDefinition(
+                ".agents",
+                ".agents/operational_context.md",
+                "operational_context",
+                ArtifactType.OperationalContext),
             _ => throw new NotSupportedException($"Artifact family does not support rotation: {family}")
         };
     }

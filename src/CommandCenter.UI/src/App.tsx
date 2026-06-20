@@ -44,6 +44,7 @@ type Artifact = {
 type ArtifactInventory = {
   plan: Artifact | null
   operationalContext: Artifact | null
+  historicalOperationalContexts: Artifact[]
   milestones: Artifact[]
   currentHandoff: Artifact | null
   historicalHandoffs: Artifact[]
@@ -243,6 +244,8 @@ type OperationalContextProposalSummary = {
   sourceInputCount: number
   contentByteCount: number
   contentCharacterCount: number
+  lastPromotedAt: string | null
+  lastArchivedRelativePath: string | null
 }
 
 type OperationalContextSemanticChange = {
@@ -269,6 +272,16 @@ type OperationalContextProposal = {
     reviewedAt: string | null
     reviewNote: string | null
     staleReason: string | null
+  }
+  promotion: {
+    proposalId: string
+    promotedAt: string | null
+    promotedContentHash: string | null
+    promotedContentSourceRelativePath: string | null
+    revisionNumber: number | null
+    archivedRelativePath: string | null
+    archiveFailureReason: string | null
+    writeFailureReason: string | null
   }
   generatedContent: string | null
   editedContent: string | null
@@ -333,6 +346,11 @@ function getArtifactCategories(inventory: ArtifactInventory): ArtifactCategory[]
       label: 'Operational Context',
       missingLabel: 'operational_context.md is missing.',
       artifacts: inventory.operationalContext ? [inventory.operationalContext] : [],
+    },
+    {
+      label: 'Historical Operational Contexts',
+      missingLabel: 'No historical operational contexts found.',
+      artifacts: inventory.historicalOperationalContexts,
     },
     {
       label: 'Milestones',
@@ -680,6 +698,10 @@ function App() {
     !operationalContextProposal ||
     !isOperationalContextProposalReviewable ||
     operationalContextProposal.review.reviewState === 'Stale'
+  const canPromoteOperationalContextProposal =
+    operationalContextProposal?.status === 'Accepted' &&
+    operationalContextProposal.review.reviewState === 'Accepted' &&
+    !operationalContextProposal.review.staleReason
   const hasOperationalContextProposalDraftChanges =
     operationalContextProposal !== null &&
     operationalContextProposalDraft !== operationalContextCandidateContent
@@ -1264,6 +1286,42 @@ function App() {
       )
       setWorkspace(nextWorkspace)
       setMessage('Operational-context proposal rejected.')
+      await loadRepositories()
+    } catch (proposalError) {
+      setError(formatError(proposalError))
+    } finally {
+      setIsOperationalContextProposalSaving(false)
+    }
+  }
+
+  async function promoteOperationalContextProposal() {
+    if (!selectedRepository || !operationalContextProposal) {
+      return
+    }
+
+    setIsOperationalContextProposalSaving(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const proposal = await invoke<OperationalContextProposal>('promote_operational_context_proposal', {
+        repositoryId: selectedRepository.repository.id,
+        proposalId: operationalContextProposal.proposalId,
+      })
+      await setLoadedOperationalContextProposal(proposal)
+      const nextWorkspace = await invoke<RepositoryWorkspaceProjection>(
+        'refresh_repository_workspace',
+        { repositoryId: selectedRepository.repository.id },
+      )
+      setWorkspace(nextWorkspace)
+      reconcileSelectedArtifact(selectedRepository.repository.id, nextWorkspace)
+      if (nextWorkspace.artifactInventory.operationalContext) {
+        const content = await invoke<string>('load_artifact_content', {
+          repositoryId: selectedRepository.repository.id,
+          relativePath: nextWorkspace.artifactInventory.operationalContext.relativePath,
+        })
+        setOperationalContextCurrentContent(content)
+      }
+      setMessage('Operational-context proposal promoted.')
       await loadRepositories()
     } catch (proposalError) {
       setError(formatError(proposalError))
@@ -2079,6 +2137,18 @@ function App() {
                     <span>
                       Size: {workspace.operationalContextProposalSummary.contentByteCount} bytes
                     </span>
+                    <span>
+                      Current revisions:{' '}
+                      {workspace.artifactInventory.historicalOperationalContexts.length}
+                    </span>
+                    <span>
+                      Last promoted:{' '}
+                      {formatDateTime(workspace.operationalContextProposalSummary.lastPromotedAt)}
+                    </span>
+                    <span>
+                      Archived prior:{' '}
+                      {workspace.operationalContextProposalSummary.lastArchivedRelativePath ?? 'None'}
+                    </span>
                   </div>
                 ) : (
                   <p className="empty-state">No operational-context proposal has been generated.</p>
@@ -2093,10 +2163,26 @@ function App() {
                       <span>
                         Reviewed: {formatDateTime(operationalContextProposal.review.reviewedAt)}
                       </span>
+                      <span>
+                        Promoted: {formatDateTime(operationalContextProposal.promotion.promotedAt)}
+                      </span>
+                      <span>
+                        Archived: {operationalContextProposal.promotion.archivedRelativePath ?? 'None'}
+                      </span>
                     </div>
                     {operationalContextProposal.review.staleReason ? (
                       <p className="empty-state">
                         Review blocked: {operationalContextProposal.review.staleReason}
+                      </p>
+                    ) : null}
+                    {operationalContextProposal.promotion.archiveFailureReason ? (
+                      <p className="empty-state">
+                        Promotion archive failed: {operationalContextProposal.promotion.archiveFailureReason}
+                      </p>
+                    ) : null}
+                    {operationalContextProposal.promotion.writeFailureReason ? (
+                      <p className="empty-state">
+                        Promotion write failed: {operationalContextProposal.promotion.writeFailureReason}
                       </p>
                     ) : null}
                     <div className="proposal-review-toolbar">
@@ -2127,6 +2213,14 @@ function App() {
                         disabled={isOperationalContextReviewBlocked || isOperationalContextProposalSaving}
                       >
                         Reject
+                      </button>
+                      <button
+                        type="button"
+                        className="primary-action"
+                        onClick={() => void promoteOperationalContextProposal()}
+                        disabled={!canPromoteOperationalContextProposal || isOperationalContextProposalSaving}
+                      >
+                        Promote
                       </button>
                     </div>
                     <label className="commit-message-editor">

@@ -354,14 +354,195 @@ public sealed class OperationalContextGenerationTests
         Assert.Equal("# Operational Context", reloaded.EditedContent);
     }
 
-    private static async Task<Harness> CreateHarnessAsync(
-        IReadOnlyList<ExecutionSessionSummary>? executionHistory = null)
+    [Fact]
+    public async Task BootstrapPromotionCreatesCurrentOperationalContext()
+    {
+        var harness = await CreateHarnessAsync();
+        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        var accepted = await harness.ReviewService.AcceptAsync(harness.Repository.Id, proposal.ProposalId, "Promote it.");
+
+        var promoted = await harness.LifecycleService.PromoteAsync(harness.Repository.Id, accepted.ProposalId);
+
+        Assert.Equal(OperationalContextProposalStatus.Promoted, promoted.Status);
+        Assert.NotNull(promoted.Promotion.PromotedAt);
+        Assert.Null(promoted.Promotion.ArchivedRelativePath);
+        Assert.Equal(promoted.Promotion.PromotedContentHash, promoted.Review.ReviewedContentHash);
+        Assert.Contains("## Current Mental Model", await ReadAsync(harness.Repository, ".agents/operational_context.md"));
+        Assert.False(File.Exists(Path.Combine(harness.Repository.Path, ".agents", "operational_context.0001.md")));
+    }
+
+    [Fact]
+    public async Task RevisionPromotionArchivesPriorCurrentContextBeforeReplacement()
+    {
+        var harness = await CreateHarnessAsync();
+        var originalContext = """
+            # Operational Context
+
+            ## Architecture
+
+            - Prior architecture.
+            """;
+        await WriteAsync(harness.Repository, ".agents/operational_context.md", originalContext);
+        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        await harness.ReviewService.EditAsync(harness.Repository.Id, proposal.ProposalId, """
+            # Operational Context
+
+            ## Architecture
+
+            - Replacement architecture.
+            """);
+        var accepted = await harness.ReviewService.AcceptAsync(harness.Repository.Id, proposal.ProposalId, null);
+
+        var promoted = await harness.LifecycleService.PromoteAsync(harness.Repository.Id, accepted.ProposalId);
+
+        Assert.Equal(".agents/operational_context.0001.md", promoted.Promotion.ArchivedRelativePath);
+        Assert.Equal(1, promoted.Promotion.RevisionNumber);
+        Assert.Equal(originalContext, await ReadAsync(harness.Repository, ".agents/operational_context.0001.md"));
+        Assert.Contains("Replacement architecture.", await ReadAsync(harness.Repository, ".agents/operational_context.md"));
+    }
+
+    [Fact]
+    public async Task OperationalContextRotationUsesHighestExistingHistoricalNumber()
+    {
+        var repository = new Repository
+        {
+            Id = Guid.NewGuid(),
+            Name = "repo",
+            Path = CreateGitRepositoryDirectory()
+        };
+        await WriteAsync(repository, ".agents/operational_context.md", "current");
+        await WriteAsync(repository, ".agents/operational_context.0004.md", "old");
+        var rotationService = new ArtifactRotationService(
+            new FileSystemArtifactStore(),
+            new ArtifactService(new FileSystemArtifactStore()));
+
+        var archived = await rotationService.RotateCurrentOperationalContextAsync(repository);
+
+        Assert.Equal(".agents/operational_context.0005.md", archived.RelativePath);
+        Assert.Equal("current", await ReadAsync(repository, ".agents/operational_context.0005.md"));
+    }
+
+    [Fact]
+    public async Task PromotionRejectsPendingRejectedSupersededAndStaleProposals()
+    {
+        var pendingHarness = await CreateHarnessAsync();
+        var pending = await pendingHarness.GenerationService.GenerateAsync(pendingHarness.Repository.Id);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            pendingHarness.LifecycleService.PromoteAsync(pendingHarness.Repository.Id, pending.ProposalId));
+
+        var rejectedHarness = await CreateHarnessAsync();
+        var rejectedProposal = await rejectedHarness.GenerationService.GenerateAsync(rejectedHarness.Repository.Id);
+        var rejected = await rejectedHarness.ReviewService.RejectAsync(rejectedHarness.Repository.Id, rejectedProposal.ProposalId, null);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            rejectedHarness.LifecycleService.PromoteAsync(rejectedHarness.Repository.Id, rejected.ProposalId));
+
+        var supersededHarness = await CreateHarnessAsync();
+        var first = await supersededHarness.GenerationService.GenerateAsync(supersededHarness.Repository.Id);
+        var acceptedFirst = await supersededHarness.ReviewService.AcceptAsync(supersededHarness.Repository.Id, first.ProposalId, null);
+        _ = await supersededHarness.GenerationService.GenerateAsync(supersededHarness.Repository.Id);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            supersededHarness.LifecycleService.PromoteAsync(supersededHarness.Repository.Id, acceptedFirst.ProposalId));
+
+        var staleHarness = await CreateHarnessAsync();
+        await WriteAsync(staleHarness.Repository, ".agents/operational_context.md", "# Operational Context");
+        var staleProposal = await staleHarness.GenerationService.GenerateAsync(staleHarness.Repository.Id);
+        var acceptedStale = await staleHarness.ReviewService.AcceptAsync(staleHarness.Repository.Id, staleProposal.ProposalId, null);
+        await WriteAsync(staleHarness.Repository, ".agents/operational_context.md", "# Operational Context\n\nChanged.");
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            staleHarness.LifecycleService.PromoteAsync(staleHarness.Repository.Id, acceptedStale.ProposalId));
+        var reloaded = await staleHarness.ProposalStore.GetAsync(staleHarness.Repository, acceptedStale.ProposalId);
+        Assert.Equal(OperationalContextReviewState.Stale, reloaded?.Review.ReviewState);
+    }
+
+    [Fact]
+    public async Task ArchiveFailureBlocksPromotionAndLeavesCurrentContextUnchanged()
+    {
+        var artifactStore = new PathFailingArtifactStore(
+            new FileSystemArtifactStore(),
+            path => Path.GetFileName(path).Equals("operational_context.0001.md", StringComparison.OrdinalIgnoreCase));
+        var harness = await CreateHarnessAsync(artifactStore: artifactStore);
+        await WriteAsync(harness.Repository, ".agents/operational_context.md", "current");
+        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        var accepted = await harness.ReviewService.AcceptAsync(harness.Repository.Id, proposal.ProposalId, null);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            harness.LifecycleService.PromoteAsync(harness.Repository.Id, accepted.ProposalId));
+
+        Assert.Equal("current", await ReadAsync(harness.Repository, ".agents/operational_context.md"));
+        var reloaded = await harness.ProposalStore.GetAsync(harness.Repository, accepted.ProposalId);
+        Assert.Equal(OperationalContextProposalStatus.Accepted, reloaded?.Status);
+        Assert.NotNull(reloaded?.Promotion.ArchiveFailureReason);
+    }
+
+    [Fact]
+    public async Task WriteFailureDoesNotEraseCurrentContextAndReportsArchivedDuplicate()
+    {
+        var artifactStore = new PathFailingArtifactStore(
+            new FileSystemArtifactStore(),
+            path => Path.GetFileName(path).Equals("operational_context.md", StringComparison.OrdinalIgnoreCase));
+        var harness = await CreateHarnessAsync(artifactStore: artifactStore);
+        await WriteAsync(harness.Repository, ".agents/operational_context.md", "current");
+        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        var accepted = await harness.ReviewService.AcceptAsync(harness.Repository.Id, proposal.ProposalId, null);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            harness.LifecycleService.PromoteAsync(harness.Repository.Id, accepted.ProposalId));
+
+        Assert.Equal("current", await ReadAsync(harness.Repository, ".agents/operational_context.md"));
+        Assert.Equal("current", await ReadAsync(harness.Repository, ".agents/operational_context.0001.md"));
+        var reloaded = await harness.ProposalStore.GetAsync(harness.Repository, accepted.ProposalId);
+        Assert.Equal(".agents/operational_context.0001.md", reloaded?.Promotion.ArchivedRelativePath);
+        Assert.NotNull(reloaded?.Promotion.WriteFailureReason);
+    }
+
+    [Fact]
+    public async Task ArtifactInventoryIncludesHistoricalOperationalContextRevisions()
     {
         var repositoryPath = CreateGitRepositoryDirectory();
         var repositoryService = new RepositoryService(
             new ApplicationConfigurationStore(Path.Combine(CreateTemporaryDirectory(), "configuration.json")));
         var repository = await repositoryService.RegisterAsync(repositoryPath);
-        var artifactStore = new FileSystemArtifactStore();
+        await WriteAsync(repository, ".agents/operational_context.md", "current");
+        await WriteAsync(repository, ".agents/operational_context.0001.md", "historical");
+        var projectionService = new RepositoryProjectionService(
+            repositoryService,
+            new ArtifactService(new FileSystemArtifactStore()),
+            new PlanningService(new FileSystemArtifactStore()),
+            new StaticExecutionSessionService([]),
+            new FileSystemOperationalContextProposalStore(new FileSystemArtifactStore()));
+
+        var workspace = await projectionService.GetWorkspaceAsync(repository.Id);
+
+        Assert.NotNull(workspace.ArtifactInventory.OperationalContext);
+        var historical = Assert.Single(workspace.ArtifactInventory.HistoricalOperationalContexts);
+        Assert.Equal(".agents/operational_context.0001.md", historical.RelativePath);
+    }
+
+    [Fact]
+    public async Task PromotionStateSurvivesStoreRecreation()
+    {
+        var harness = await CreateHarnessAsync();
+        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        var accepted = await harness.ReviewService.AcceptAsync(harness.Repository.Id, proposal.ProposalId, null);
+        var promoted = await harness.LifecycleService.PromoteAsync(harness.Repository.Id, accepted.ProposalId);
+
+        var reloadedStore = new FileSystemOperationalContextProposalStore(new FileSystemArtifactStore());
+        var reloaded = await reloadedStore.GetAsync(harness.Repository, promoted.ProposalId);
+
+        Assert.Equal(OperationalContextProposalStatus.Promoted, reloaded?.Status);
+        Assert.NotNull(reloaded?.Promotion.PromotedAt);
+        Assert.Equal(promoted.Promotion.PromotedContentHash, reloaded?.Promotion.PromotedContentHash);
+    }
+
+    private static async Task<Harness> CreateHarnessAsync(
+        IReadOnlyList<ExecutionSessionSummary>? executionHistory = null,
+        IArtifactStore? artifactStore = null)
+    {
+        var repositoryPath = CreateGitRepositoryDirectory();
+        var repositoryService = new RepositoryService(
+            new ApplicationConfigurationStore(Path.Combine(CreateTemporaryDirectory(), "configuration.json")));
+        var repository = await repositoryService.RegisterAsync(repositoryPath);
+        artifactStore ??= new FileSystemArtifactStore();
         var artifactService = new ArtifactService(artifactStore);
         var executionSessionService = new StaticExecutionSessionService(executionHistory ?? []);
         var proposalStore = new FileSystemOperationalContextProposalStore(artifactStore);
@@ -380,6 +561,11 @@ public sealed class OperationalContextGenerationTests
             parser,
             new UnderstandingDiffService(),
             proposalStore);
+        var lifecycleService = new OperationalContextLifecycleService(
+            repositoryService,
+            artifactService,
+            new ArtifactRotationService(artifactStore, artifactService),
+            proposalStore);
 
         return new Harness(
             repository,
@@ -387,7 +573,8 @@ public sealed class OperationalContextGenerationTests
             executionSessionService,
             proposalStore,
             generationService,
-            reviewService);
+            reviewService,
+            lifecycleService);
     }
 
     private static async Task WriteAsync(Repository repository, string relativePath, string content)
@@ -428,7 +615,48 @@ public sealed class OperationalContextGenerationTests
         StaticExecutionSessionService ExecutionSessionService,
         FileSystemOperationalContextProposalStore ProposalStore,
         OperationalContextGenerationService GenerationService,
-        OperationalContextReviewService ReviewService);
+        OperationalContextReviewService ReviewService,
+        OperationalContextLifecycleService LifecycleService);
+
+    private sealed class PathFailingArtifactStore(
+        IArtifactStore innerStore,
+        Func<string, bool> shouldFailWrite) : IArtifactStore
+    {
+        public Task<bool> ExistsAsync(string path)
+        {
+            return innerStore.ExistsAsync(path);
+        }
+
+        public Task<string?> ReadAsync(string path)
+        {
+            return innerStore.ReadAsync(path);
+        }
+
+        public Task WriteAsync(string path, string content)
+        {
+            if (shouldFailWrite(path))
+            {
+                throw new IOException($"Configured write failure for {Path.GetFileName(path)}.");
+            }
+
+            return innerStore.WriteAsync(path, content);
+        }
+
+        public Task DeleteAsync(string path)
+        {
+            return innerStore.DeleteAsync(path);
+        }
+
+        public Task<IReadOnlyList<string>> ListAsync(string path, string searchPattern)
+        {
+            return innerStore.ListAsync(path, searchPattern);
+        }
+
+        public Task<IReadOnlyList<string>> ListDirectoriesAsync(string path)
+        {
+            return innerStore.ListDirectoriesAsync(path);
+        }
+    }
 
     private sealed class StaticExecutionSessionService(IReadOnlyList<ExecutionSessionSummary> history)
         : IExecutionSessionService

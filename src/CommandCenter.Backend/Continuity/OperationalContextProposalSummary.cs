@@ -15,4 +15,8 @@ public sealed class OperationalContextProposalSummary
     public int ContentByteCount { get; init; }
 
     public int ContentCharacterCount { get; init; }
+
+    public DateTimeOffset? LastPromotedAt { get; init; }
+
+    public string? LastArchivedRelativePath { get; init; }
 }

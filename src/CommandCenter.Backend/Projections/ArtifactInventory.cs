@@ -8,6 +8,8 @@ public sealed class ArtifactInventory
 
     public Artifact? OperationalContext { get; init; }
 
+    public IReadOnlyList<Artifact> HistoricalOperationalContexts { get; init; } = [];
+
     public IReadOnlyList<Artifact> Milestones { get; init; } = [];
 
     public Artifact? CurrentHandoff { get; init; }

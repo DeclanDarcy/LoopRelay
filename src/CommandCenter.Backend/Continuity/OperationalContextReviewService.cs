@@ -170,6 +170,7 @@ public sealed class OperationalContextReviewService(
             EditedContentRelativePath = proposal.EditedContentRelativePath,
             SemanticChanges = semanticChanges,
             CompressionSummary = proposal.CompressionSummary,
+            Promotion = proposal.Promotion,
             Review = new OperationalContextReview
             {
                 ProposalId = proposal.ProposalId,

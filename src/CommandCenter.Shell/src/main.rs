@@ -154,6 +154,7 @@ struct Artifact {
 struct ArtifactInventory {
     plan: Option<Artifact>,
     operational_context: Option<Artifact>,
+    historical_operational_contexts: Vec<Artifact>,
     milestones: Vec<Artifact>,
     current_handoff: Option<Artifact>,
     historical_handoffs: Vec<Artifact>,
@@ -189,6 +190,8 @@ struct OperationalContextProposalSummary {
     source_input_count: i32,
     content_byte_count: i32,
     content_character_count: i32,
+    last_promoted_at: Option<String>,
+    last_archived_relative_path: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -521,6 +524,26 @@ fn reject_operational_context_proposal(
 }
 
 #[tauri::command]
+fn promote_operational_context_proposal(
+    repository_id: String,
+    proposal_id: String,
+) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/operational-context/proposals/{proposal_id}/promote"
+        ))
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "operational-context proposal promote failed")
+}
+
+#[tauri::command]
 fn start_execution(
     repository_id: String,
     milestone_path: String,
@@ -835,6 +858,7 @@ fn main() {
             edit_operational_context_proposal,
             accept_operational_context_proposal,
             reject_operational_context_proposal,
+            promote_operational_context_proposal,
             start_execution,
             get_active_execution,
             get_git_status,

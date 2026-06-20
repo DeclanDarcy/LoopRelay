@@ -2,14 +2,21 @@
 
 ## Newly Authorized Decisions
 
-- M4 must preserve the M3 architectural boundary: review acceptance is not promotion, and accepted proposals remain non-authoritative until an explicit promotion operation succeeds.
-- Only accepted operational-context proposals may be promoted into `.agents/operational_context.md`.
-- M4 promotion must behave atomically from the user's perspective: validation, archive, promote, and finalize must not leave the repository in a partially promoted or partially archived state.
-- Promotion must preserve review provenance sufficient to answer which proposal produced the promoted understanding, whether `edited.md` or `proposed.md` was promoted, and when the proposal was accepted.
-- M4 should keep accepted and promoted states distinct so lifecycle state remains understandable across proposal review, promotion, certification, and later audit work.
+- M5 must focus on compression analysis before compression action.
+- M5 should answer what is bloated, historical, redundant, unsafe to remove, and required to preserve.
+- M5 must not implement model-assisted rewriting or narrative summarization.
+- Compression must preserve the operational model rather than create a smaller narrative.
+- No stable decision, active constraint, open question, or active risk may disappear without an explicit warning.
+- Preservation warnings should be surfaced in proposal review.
+- M5 must not mutate authoritative `.agents/operational_context.md`.
 
-## Next-Slice Constraints
+## Recommended M5 Test Shape
 
-- Do not let acceptance mutate current operational context.
-- Do not promote superseded, rejected, pending, edited-but-unaccepted, or stale proposals.
-- Do not overwrite current operational context without preserving the prior current context as a numbered historical artifact.
+- Detect long historical narrative.
+- Preserve stable decisions.
+- Preserve open questions.
+- Preserve active risks.
+- Preserve unknown sections.
+- Warn on redundant repeated decisions.
+- Show compression warning in proposal review.
+- Verify no authoritative context mutation.
