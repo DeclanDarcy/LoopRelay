@@ -511,6 +511,181 @@ public sealed class ExecutionSessionServiceTests
     }
 
     [Fact]
+    public async Task CommitFromAwaitingCommitPersistsMetadataAndTransitionsToAwaitingPush()
+    {
+        var gitService = new FakeGitService(
+            new RepositoryDirtyState
+            {
+                ModifiedPaths = ["src/changed.cs"],
+                IsClean = false
+            },
+            null);
+        var harness = await CreateHarnessAsync(gitService: gitService);
+        var session = await StoreAwaitingCommitSessionWithPreparationAsync(harness);
+
+        var summary = await harness.SessionService.CommitAsync(
+            session.Id,
+            new CommitRequest
+            {
+                Message = "Reviewed commit",
+                SelectedPaths = ["src/changed.cs"],
+                StatusSnapshotId = "snapshot"
+            });
+        var storedSession = (await harness.Store.LoadAsync()).Single(storedSession => storedSession.Id == session.Id);
+
+        Assert.Equal(RepositoryExecutionState.AwaitingPush, summary.RepositoryState);
+        Assert.Equal("commit-sha", summary.CommitSha);
+        Assert.Equal("Reviewed commit", summary.CommitMessage);
+        Assert.Equal("snapshot", summary.PreparationSnapshotId);
+        Assert.Equal(["src/changed.cs"], gitService.LastCommittedPaths);
+        Assert.Equal("commit-sha", storedSession.CommitSha);
+        Assert.Equal(RepositoryExecutionState.AwaitingPush, storedSession.RepositoryState);
+    }
+
+    [Fact]
+    public async Task CommitRejectsEmptySelectedPaths()
+    {
+        var harness = await CreateHarnessAsync(
+            new RepositoryDirtyState
+            {
+                ModifiedPaths = ["src/changed.cs"],
+                IsClean = false
+            });
+        var session = await StoreAwaitingCommitSessionWithPreparationAsync(harness);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            harness.SessionService.CommitAsync(
+                session.Id,
+                new CommitRequest
+                {
+                    Message = "Reviewed commit",
+                    SelectedPaths = [],
+                    StatusSnapshotId = "snapshot"
+                }));
+
+        Assert.Contains("At least one path", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CommitRejectsStaleReviewedSnapshot()
+    {
+        var harness = await CreateHarnessAsync(
+            new RepositoryDirtyState
+            {
+                ModifiedPaths = ["src/changed.cs"],
+                IsClean = false
+            });
+        var session = await StoreAwaitingCommitSessionWithPreparationAsync(harness);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            harness.SessionService.CommitAsync(
+                session.Id,
+                new CommitRequest
+                {
+                    Message = "Reviewed commit",
+                    SelectedPaths = ["src/changed.cs"],
+                    StatusSnapshotId = "old-snapshot"
+                }));
+
+        Assert.Contains("stale status snapshot", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CommitRejectsRepositoryStatusChangedAfterPreparation()
+    {
+        var gitService = new FakeGitService(
+            new RepositoryDirtyState
+            {
+                ModifiedPaths = ["src/changed.cs", "src/other.cs"],
+                IsClean = false
+            },
+            null)
+        {
+            CurrentSnapshotId = "changed-snapshot"
+        };
+        var harness = await CreateHarnessAsync(gitService: gitService);
+        var session = await StoreAwaitingCommitSessionWithPreparationAsync(harness);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            harness.SessionService.CommitAsync(
+                session.Id,
+                new CommitRequest
+                {
+                    Message = "Reviewed commit",
+                    SelectedPaths = ["src/changed.cs"],
+                    StatusSnapshotId = "snapshot"
+                }));
+
+        Assert.Contains("Refresh commit review", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CommitRejectsUnknownOrUnsafePaths()
+    {
+        var harness = await CreateHarnessAsync(
+            new RepositoryDirtyState
+            {
+                ModifiedPaths = ["src/changed.cs"],
+                IsClean = false
+            });
+        var session = await StoreAwaitingCommitSessionWithPreparationAsync(harness);
+
+        var unknown = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            harness.SessionService.CommitAsync(
+                session.Id,
+                new CommitRequest
+                {
+                    Message = "Reviewed commit",
+                    SelectedPaths = ["src/unknown.cs"],
+                    StatusSnapshotId = "snapshot"
+                }));
+        var escaping = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            harness.SessionService.CommitAsync(
+                session.Id,
+                new CommitRequest
+                {
+                    Message = "Reviewed commit",
+                    SelectedPaths = ["../outside.cs"],
+                    StatusSnapshotId = "snapshot"
+                }));
+
+        Assert.Contains("prepared commit scope", unknown.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("repository-relative", escaping.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CommitFailureLeavesSessionAwaitingCommitForRetry()
+    {
+        var gitService = new FakeGitService(
+            new RepositoryDirtyState
+            {
+                ModifiedPaths = ["src/changed.cs"],
+                IsClean = false
+            },
+            null)
+        {
+            CommitFailure = "git commit failed"
+        };
+        var harness = await CreateHarnessAsync(gitService: gitService);
+        var session = await StoreAwaitingCommitSessionWithPreparationAsync(harness);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            harness.SessionService.CommitAsync(
+                session.Id,
+                new CommitRequest
+                {
+                    Message = "Reviewed commit",
+                    SelectedPaths = ["src/changed.cs"],
+                    StatusSnapshotId = "snapshot"
+                }));
+        var storedSession = (await harness.Store.LoadAsync()).Single(storedSession => storedSession.Id == session.Id);
+
+        Assert.Contains("git commit failed", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(RepositoryExecutionState.AwaitingCommit, storedSession.RepositoryState);
+        Assert.Null(storedSession.CommitSha);
+    }
+
+    [Fact]
     public async Task LaunchEndpointReturnsSessionMetadata()
     {
         var configurationPath = Path.Combine(CreateTemporaryDirectory(), "configuration.json");
@@ -531,7 +706,7 @@ public sealed class ExecutionSessionServiceTests
                 [],
                 services =>
                 {
-                    services.AddSingleton<IGitService>(new FakeGitService(null, null));
+                services.AddSingleton<IGitService>(new FakeGitService(null, null));
                     services.AddSingleton<IExecutionProvider>(new FakeExecutionProvider());
                     services.AddSingleton<IExecutionSessionStore>(new FileSystemExecutionSessionStore(storePath));
                 });
@@ -702,7 +877,8 @@ public sealed class ExecutionSessionServiceTests
     private static async Task<Harness> CreateHarnessAsync(
         RepositoryDirtyState? dirtyState = null,
         string? gitFailure = null,
-        IExecutionProvider? provider = null)
+        IExecutionProvider? provider = null,
+        FakeGitService? gitService = null)
     {
         var repositoryService = new RepositoryService(
             new ApplicationConfigurationStore(Path.Combine(CreateTemporaryDirectory(), "configuration.json")));
@@ -712,7 +888,7 @@ public sealed class ExecutionSessionServiceTests
             repositoryService,
             new ArtifactService(artifactStore),
             new PlanningService(artifactStore),
-            new FakeGitService(dirtyState, gitFailure));
+            gitService ?? new FakeGitService(dirtyState, gitFailure));
         var storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");
         var store = new FileSystemExecutionSessionStore(storePath);
         var sessionService = new ExecutionSessionService(
@@ -721,7 +897,7 @@ public sealed class ExecutionSessionServiceTests
             provider ?? new FakeExecutionProvider(),
             new ExecutionPromptBuilder(),
             new ExecutionMonitoringService(store),
-            new FakeGitService(dirtyState, gitFailure));
+            gitService ?? new FakeGitService(dirtyState, gitFailure));
 
         return new Harness(repositoryService, repository, contextService, store, storePath, sessionService);
     }
@@ -735,6 +911,56 @@ public sealed class ExecutionSessionServiceTests
     private static async Task<ExecutionSession> StoreAwaitingAcceptanceSessionAsync(Harness harness)
     {
         var session = CreateAwaitingAcceptanceSession(harness.Repository, ".agents/milestones/m5.md");
+        await harness.Store.SaveAsync([session]);
+        return session;
+    }
+
+    private static async Task<ExecutionSession> StoreAwaitingCommitSessionWithPreparationAsync(Harness harness)
+    {
+        var session = new ExecutionSession
+        {
+            Id = Guid.NewGuid(),
+            RepositoryId = harness.Repository.Id,
+            RepositoryPath = harness.Repository.Path,
+            MilestonePath = ".agents/milestones/m6-git-lifecycle.md",
+            StartedAt = DateTimeOffset.UtcNow.AddMinutes(-5),
+            CompletedAt = DateTimeOffset.UtcNow.AddMinutes(-4),
+            AcceptedAt = DateTimeOffset.UtcNow.AddMinutes(-3),
+            LastActivityAt = DateTimeOffset.UtcNow.AddMinutes(-3),
+            State = ExecutionSessionState.Completed,
+            RepositoryState = RepositoryExecutionState.AwaitingCommit,
+            ProviderName = "fake",
+            CommitPreparation = new CommitPreparation
+            {
+                Id = Guid.NewGuid(),
+                SessionId = Guid.NewGuid(),
+                RepositoryId = harness.Repository.Id,
+                RepositoryPath = harness.Repository.Path,
+                ProposedMessage = "m6-git-lifecycle\n\n- 1 file changed",
+                ScopeItems =
+                [
+                    new CommitScopeItem
+                    {
+                        Path = "src/changed.cs",
+                        ChangeType = CommitChangeType.Modified,
+                        Origin = CommitChangeOrigin.ExecutionGenerated,
+                        IsSelected = true
+                    }
+                ],
+                StatusSnapshot = new CommitStatusSnapshot
+                {
+                    Id = "snapshot",
+                    Branch = "main",
+                    DirtyState = new RepositoryDirtyState
+                    {
+                        ModifiedPaths = ["src/changed.cs"],
+                        IsClean = false
+                    },
+                    CapturedAt = DateTimeOffset.UtcNow.AddMinutes(-3)
+                },
+                GeneratedAt = DateTimeOffset.UtcNow.AddMinutes(-3)
+            }
+        };
         await harness.Store.SaveAsync([session]);
         return session;
     }
@@ -806,6 +1032,12 @@ public sealed class ExecutionSessionServiceTests
 
     private sealed class FakeGitService(RepositoryDirtyState? dirtyState, string? failure) : IGitService
     {
+        public string CurrentSnapshotId { get; init; } = "snapshot";
+
+        public string? CommitFailure { get; init; }
+
+        public IReadOnlyList<string> LastCommittedPaths { get; private set; } = [];
+
         public Task<ExecutionRepositorySnapshot> GetSnapshotAsync(Repository repository)
         {
             if (failure is not null)
@@ -868,6 +1100,44 @@ public sealed class ExecutionSessionServiceTests
                     CapturedAt = DateTimeOffset.UtcNow
                 },
                 GeneratedAt = DateTimeOffset.UtcNow
+            });
+        }
+
+        public Task<CommitStatusSnapshot> GetCommitStatusSnapshotAsync(Repository repository)
+        {
+            if (failure is not null)
+            {
+                throw new InvalidOperationException(failure);
+            }
+
+            return Task.FromResult(new CommitStatusSnapshot
+            {
+                Id = CurrentSnapshotId,
+                Branch = "main",
+                DirtyState = dirtyState ?? new RepositoryDirtyState(),
+                CapturedAt = DateTimeOffset.UtcNow
+            });
+        }
+
+        public Task<CommitResult> CommitAsync(
+            Repository repository,
+            string message,
+            IReadOnlyList<string> selectedPaths,
+            string preparationSnapshotId)
+        {
+            if (CommitFailure is not null)
+            {
+                throw new InvalidOperationException(CommitFailure);
+            }
+
+            LastCommittedPaths = selectedPaths;
+            return Task.FromResult(new CommitResult
+            {
+                CommitSha = "commit-sha",
+                CommittedAt = DateTimeOffset.UtcNow,
+                CommitMessage = message,
+                PreparationSnapshotId = preparationSnapshotId,
+                SelectedPaths = selectedPaths
             });
         }
     }

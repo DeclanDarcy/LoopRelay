@@ -19,4 +19,6 @@ public interface IExecutionSessionService
     Task<ExecutionSessionSummary> RejectAsync(Guid sessionId, ExecutionAcceptanceRequest request);
 
     Task<CommitPreparation> PrepareCommitAsync(Guid sessionId);
+
+    Task<ExecutionSessionSummary> CommitAsync(Guid sessionId, CommitRequest request);
 }

@@ -57,6 +57,10 @@ struct ExecutionSessionSummary {
     provider_process_id: Option<i32>,
     provider_started_at: Option<String>,
     handoff_path: Option<String>,
+    commit_sha: Option<String>,
+    committed_at: Option<String>,
+    commit_message: Option<String>,
+    preparation_snapshot_id: Option<String>,
     failure_reason: Option<String>,
 }
 
@@ -114,6 +118,14 @@ struct CommitPreparation {
     status_snapshot: CommitStatusSnapshot,
     generated_at: String,
     has_pre_existing_changes: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CommitRequest {
+    message: String,
+    selected_paths: Vec<String>,
+    status_snapshot_id: String,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -425,6 +437,33 @@ fn prepare_commit(session_id: String) -> Result<CommitPreparation, String> {
 }
 
 #[tauri::command]
+fn commit_execution(
+    session_id: String,
+    message: String,
+    selected_paths: Vec<String>,
+    status_snapshot_id: String,
+) -> Result<ExecutionSessionSummary, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/execution-sessions/{session_id}/git/commit"
+        ))
+        .json(&CommitRequest {
+            message,
+            selected_paths,
+            status_snapshot_id,
+        })
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "commit failed")
+}
+
+#[tauri::command]
 fn get_execution_session(session_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/execution-sessions/{session_id}"
@@ -626,6 +665,7 @@ fn main() {
             get_active_execution,
             get_git_status,
             prepare_commit,
+            commit_execution,
             get_execution_session,
             accept_execution_handoff,
             reject_execution_handoff

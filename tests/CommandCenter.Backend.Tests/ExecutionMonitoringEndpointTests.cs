@@ -459,5 +459,19 @@ public sealed class ExecutionMonitoringEndpointTests
         {
             throw new NotSupportedException();
         }
+
+        public Task<CommitStatusSnapshot> GetCommitStatusSnapshotAsync(Repository repository)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<CommitResult> CommitAsync(
+            Repository repository,
+            string message,
+            IReadOnlyList<string> selectedPaths,
+            string preparationSnapshotId)
+        {
+            throw new NotSupportedException();
+        }
     }
 }

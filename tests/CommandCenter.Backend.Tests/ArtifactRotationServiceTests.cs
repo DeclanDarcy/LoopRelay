@@ -244,5 +244,10 @@ public sealed class ArtifactRotationServiceTests
         {
             throw new NotSupportedException();
         }
+
+        public Task<ExecutionSessionSummary> CommitAsync(Guid sessionId, CommitRequest request)
+        {
+            throw new NotSupportedException();
+        }
     }
 }

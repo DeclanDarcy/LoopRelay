@@ -212,6 +212,42 @@ public sealed class GitServiceTests
         Assert.Equal("snapshot", reloadedSession.CommitPreparation.StatusSnapshot.Id);
     }
 
+    [Fact]
+    public async Task CommitStagesOnlySelectedPathsAndStoresHeadSha()
+    {
+        var runner = new FakeProcessRunner(
+            new ProcessRunResult { ExitCode = 0 },
+            new ProcessRunResult { ExitCode = 0 },
+            new ProcessRunResult { ExitCode = 0, StandardOutput = "abc123\n" });
+        var service = new GitService(runner);
+        var repository = new Repository
+        {
+            Id = Guid.NewGuid(),
+            Name = "Repo",
+            Path = CreateTemporaryDirectory()
+        };
+
+        var result = await service.CommitAsync(
+            repository,
+            "Reviewed commit",
+            ["src/selected.cs", "docs/notes.md"],
+            "snapshot");
+
+        Assert.Equal("abc123", result.CommitSha);
+        Assert.Equal("Reviewed commit", result.CommitMessage);
+        Assert.Equal("snapshot", result.PreparationSnapshotId);
+        Assert.Equal(["src/selected.cs", "docs/notes.md"], result.SelectedPaths);
+        Assert.Collection(
+            runner.Calls,
+            call =>
+            {
+                Assert.Equal("git", call.FileName);
+                Assert.Equal(["add", "-A", "--", "src/selected.cs", "docs/notes.md"], call.Arguments);
+            },
+            call => Assert.Equal(["commit", "-m", "Reviewed commit"], call.Arguments),
+            call => Assert.Equal(["rev-parse", "HEAD"], call.Arguments));
+    }
+
     private static string CreateTemporaryDirectory()
     {
         var directory = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"));
@@ -291,17 +327,51 @@ public sealed class GitServiceTests
                 GeneratedAt = DateTimeOffset.UtcNow
             });
         }
+
+        public Task<CommitStatusSnapshot> GetCommitStatusSnapshotAsync(Repository repository)
+        {
+            return Task.FromResult(new CommitStatusSnapshot
+            {
+                Id = "snapshot",
+                Branch = "main",
+                DirtyState = new RepositoryDirtyState
+                {
+                    ModifiedPaths = ["src/changed.cs"],
+                    IsClean = false
+                },
+                CapturedAt = DateTimeOffset.UtcNow
+            });
+        }
+
+        public Task<CommitResult> CommitAsync(
+            Repository repository,
+            string message,
+            IReadOnlyList<string> selectedPaths,
+            string preparationSnapshotId)
+        {
+            return Task.FromResult(new CommitResult
+            {
+                CommitSha = "commit-sha",
+                CommittedAt = DateTimeOffset.UtcNow,
+                CommitMessage = message,
+                PreparationSnapshotId = preparationSnapshotId,
+                SelectedPaths = selectedPaths
+            });
+        }
     }
 
     private sealed class FakeProcessRunner(params ProcessRunResult[] results) : IProcessRunner
     {
         private int index;
 
+        public List<ProcessCall> Calls { get; } = [];
+
         public Task<ProcessRunResult> RunAsync(
             string fileName,
             IReadOnlyList<string> arguments,
             string workingDirectory)
         {
+            Calls.Add(new ProcessCall(fileName, arguments.ToArray(), workingDirectory));
             return Task.FromResult(results[index++]);
         }
 
@@ -317,4 +387,9 @@ public sealed class GitServiceTests
             throw new NotSupportedException();
         }
     }
+
+    private sealed record ProcessCall(
+        string FileName,
+        IReadOnlyList<string> Arguments,
+        string WorkingDirectory);
 }

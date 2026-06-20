@@ -42,6 +42,14 @@ public sealed class ExecutionSession
 
     public CommitPreparation? CommitPreparation { get; init; }
 
+    public string? CommitSha { get; init; }
+
+    public DateTimeOffset? CommittedAt { get; init; }
+
+    public string? CommitMessage { get; init; }
+
+    public string? PreparationSnapshotId { get; init; }
+
     public string? PreviousHandoffContent { get; init; }
 
     public DateTimeOffset? PreviousHandoffCapturedAt { get; init; }
@@ -72,6 +80,10 @@ public sealed class ExecutionSession
             ProviderProcessId = ProviderProcessId,
             ProviderStartedAt = ProviderStartedAt,
             HandoffPath = HandoffPath,
+            CommitSha = CommitSha,
+            CommittedAt = CommittedAt,
+            CommitMessage = CommitMessage,
+            PreparationSnapshotId = PreparationSnapshotId,
             FailureReason = FailureReason
         };
     }

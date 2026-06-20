@@ -54,15 +54,7 @@ public sealed class GitService(IProcessRunner processRunner) : IGitService
         var status = await GetStatusAsync(repository);
         var preExistingPaths = GetAllDirtyPaths(session.RepositorySnapshot?.DirtyState);
         var scopeItems = BuildScopeItems(status.DirtyState, preExistingPaths);
-        var snapshot = new CommitStatusSnapshot
-        {
-            Id = BuildSnapshotId(status),
-            Branch = status.Branch,
-            AheadCount = status.AheadCount,
-            BehindCount = status.BehindCount,
-            DirtyState = status.DirtyState,
-            CapturedAt = status.CapturedAt
-        };
+        var snapshot = CreateCommitStatusSnapshot(status);
 
         return new CommitPreparation
         {
@@ -75,6 +67,53 @@ public sealed class GitService(IProcessRunner processRunner) : IGitService
             StatusSnapshot = snapshot,
             GeneratedAt = DateTimeOffset.UtcNow,
             HasPreExistingChanges = scopeItems.Any(item => item.Origin == CommitChangeOrigin.PreExisting)
+        };
+    }
+
+    public async Task<CommitStatusSnapshot> GetCommitStatusSnapshotAsync(Repository repository)
+    {
+        return CreateCommitStatusSnapshot(await GetStatusAsync(repository));
+    }
+
+    public async Task<CommitResult> CommitAsync(
+        Repository repository,
+        string message,
+        IReadOnlyList<string> selectedPaths,
+        string preparationSnapshotId)
+    {
+        var addArguments = new List<string> { "add", "-A", "--" };
+        addArguments.AddRange(selectedPaths);
+        var addResult = await processRunner.RunAsync("git", addArguments, repository.Path);
+        if (addResult.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"git add failed: {addResult.StandardError}");
+        }
+
+        var commitResult = await processRunner.RunAsync(
+            "git",
+            ["commit", "-m", message],
+            repository.Path);
+        if (commitResult.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"git commit failed: {commitResult.StandardError}");
+        }
+
+        var shaResult = await processRunner.RunAsync(
+            "git",
+            ["rev-parse", "HEAD"],
+            repository.Path);
+        if (shaResult.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"git rev-parse failed: {shaResult.StandardError}");
+        }
+
+        return new CommitResult
+        {
+            CommitSha = shaResult.StandardOutput.Trim(),
+            CommittedAt = DateTimeOffset.UtcNow,
+            CommitMessage = message,
+            PreparationSnapshotId = preparationSnapshotId,
+            SelectedPaths = selectedPaths.Select(NormalizeGitPath).ToArray()
         };
     }
 
@@ -313,6 +352,19 @@ public sealed class GitService(IProcessRunner processRunner) : IGitService
 
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(builder.ToString()));
         return Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
+    private static CommitStatusSnapshot CreateCommitStatusSnapshot(RepositoryGitStatus status)
+    {
+        return new CommitStatusSnapshot
+        {
+            Id = BuildSnapshotId(status),
+            Branch = status.Branch,
+            AheadCount = status.AheadCount,
+            BehindCount = status.BehindCount,
+            DirtyState = status.DirtyState,
+            CapturedAt = status.CapturedAt
+        };
     }
 
     private static void AppendPaths(StringBuilder builder, string label, IEnumerable<string> paths)

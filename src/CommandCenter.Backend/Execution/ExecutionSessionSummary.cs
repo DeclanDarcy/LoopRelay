@@ -34,5 +34,13 @@ public sealed class ExecutionSessionSummary
 
     public string? HandoffPath { get; init; }
 
+    public string? CommitSha { get; init; }
+
+    public DateTimeOffset? CommittedAt { get; init; }
+
+    public string? CommitMessage { get; init; }
+
+    public string? PreparationSnapshotId { get; init; }
+
     public string? FailureReason { get; init; }
 }

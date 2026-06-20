@@ -59,6 +59,10 @@ type ExecutionSessionSummary = {
   providerProcessId: number | null
   providerStartedAt: string | null
   handoffPath: string | null
+  commitSha: string | null
+  committedAt: string | null
+  commitMessage: string | null
+  preparationSnapshotId: string | null
   failureReason: string | null
 }
 
@@ -454,6 +458,7 @@ function App() {
   const [isRejectingHandoff, setIsRejectingHandoff] = useState(false)
   const [isGitStatusLoading, setIsGitStatusLoading] = useState(false)
   const [isCommitPreparationLoading, setIsCommitPreparationLoading] = useState(false)
+  const [isCommitting, setIsCommitting] = useState(false)
   const [isAdding, setIsAdding] = useState(false)
   const [removingRepositoryId, setRemovingRepositoryId] = useState<string | null>(null)
 
@@ -532,6 +537,10 @@ function App() {
         providerProcessId: selectedExecutionStatus?.providerProcessId ?? executionSummary.providerProcessId,
         providerStartedAt: selectedExecutionStatus?.providerStartedAt ?? executionSummary.providerStartedAt,
         handoffPath: selectedExecutionStatus?.handoffPath ?? executionSummary.handoffPath,
+        commitSha: executionSummary.commitSha,
+        committedAt: executionSummary.committedAt,
+        commitMessage: executionSummary.commitMessage,
+        preparationSnapshotId: executionSummary.preparationSnapshotId,
         failureReason: selectedExecutionStatus?.failureReason ?? executionSummary.failureReason,
       }
     : null
@@ -550,6 +559,11 @@ function App() {
   const isCommitPreparationCurrent =
     commitPreparation?.sessionId === executionSessionId &&
     currentExecutionState === 'AwaitingCommit'
+  const canCommitPreparedScope =
+    Boolean(isCommitPreparationCurrent && commitPreparation) &&
+    selectedCommitScopeItems.length > 0 &&
+    commitMessage.trim().length > 0 &&
+    !isCommitting
 
   const startExecutionBlockedReason = useMemo(() => {
     if (!workspace) {
@@ -702,6 +716,40 @@ function App() {
 
   function selectNoCommitPaths() {
     setSelectedCommitPaths(new Set())
+  }
+
+  async function commitPreparedScope() {
+    if (!executionSessionId || !commitPreparation || !canCommitPreparedScope) {
+      return
+    }
+
+    setIsCommitting(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const summary = await invoke<ExecutionSessionSummary>('commit_execution', {
+        sessionId: executionSessionId,
+        message: commitMessage.trim(),
+        selectedPaths: selectedCommitScopeItems.map((item) => item.path),
+        statusSnapshotId: commitPreparation.statusSnapshot.id,
+      })
+      setCommitPreparation(null)
+      setSelectedCommitPaths(new Set())
+      setCommitMessage('')
+      setMessage(
+        summary.commitSha
+          ? `Committed ${summary.commitSha}. Push review is ready.`
+          : 'Commit completed. Push review is ready.',
+      )
+      await loadRepositories()
+      if (selectedRepository) {
+        await loadWorkspace(selectedRepository.repository.id)
+      }
+    } catch (commitError) {
+      setError(formatError(commitError))
+    } finally {
+      setIsCommitting(false)
+    }
   }
 
   const loadRepositories = useCallback(async () => {
@@ -1779,6 +1827,14 @@ function App() {
                           >
                             Select None
                           </button>
+                          <button
+                            type="button"
+                            className="primary-action"
+                            onClick={() => void commitPreparedScope()}
+                            disabled={!canCommitPreparedScope}
+                          >
+                            {isCommitting ? 'Committing...' : 'Commit Selected'}
+                          </button>
                         </div>
                         {commitPreparation.scopeItems.length === 0 ? (
                           <p className="empty-state">No changed paths are available for commit.</p>
@@ -1812,6 +1868,13 @@ function App() {
                           : 'Commit preparation is not loaded.'}
                       </p>
                     )
+                  ) : currentExecutionState === 'AwaitingPush' && executionDisplay?.commitSha ? (
+                    <div className="context-summary">
+                      <span>Commit: {executionDisplay.commitSha}</span>
+                      <span>Committed: {formatDateTime(executionDisplay.committedAt)}</span>
+                      <span>Snapshot: {executionDisplay.preparationSnapshotId ?? 'Not recorded'}</span>
+                      <span>State: Awaiting push</span>
+                    </div>
                   ) : gitStatus ? (
                     <>
                       <div className="context-summary">
@@ -1864,6 +1927,8 @@ function App() {
                     <span>PID: {executionDisplay.providerProcessId ?? 'Not recorded'}</span>
                     <span>Executable: {executionDisplay.providerExecutablePath || 'Not recorded'}</span>
                     <span>Handoff: {executionDisplay.handoffPath || 'Not recorded'}</span>
+                    <span>Commit: {executionDisplay.commitSha || 'Not recorded'}</span>
+                    <span>Committed: {formatDateTime(executionDisplay.committedAt)}</span>
                     {executionDisplay.failureReason ? (
                       <span className="execution-failure">Failure: {executionDisplay.failureReason}</span>
                     ) : null}

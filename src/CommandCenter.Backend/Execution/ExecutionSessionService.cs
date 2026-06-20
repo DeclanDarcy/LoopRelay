@@ -310,6 +310,85 @@ public sealed class ExecutionSessionService(
         }
     }
 
+    public async Task<ExecutionSessionSummary> CommitAsync(Guid sessionId, CommitRequest request)
+    {
+        await gate.WaitAsync();
+        try
+        {
+            var sessions = (await sessionStore.LoadAsync()).ToList();
+            var session = sessions.FirstOrDefault(session => session.Id == sessionId)
+                ?? throw new KeyNotFoundException($"Execution session was not found: {sessionId}");
+            if (session.RepositoryState != RepositoryExecutionState.AwaitingCommit)
+            {
+                throw new InvalidOperationException("Commit can only run while awaiting commit.");
+            }
+
+            var preparation = session.CommitPreparation
+                ?? throw new InvalidOperationException("Commit preparation is required before commit.");
+            if (!string.Equals(
+                    request.StatusSnapshotId,
+                    preparation.StatusSnapshot.Id,
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("Commit request uses a stale status snapshot.");
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Message))
+            {
+                throw new InvalidOperationException("Commit message is required.");
+            }
+
+            var selectedPaths = NormalizeSelectedPaths(request.SelectedPaths, session.RepositoryPath);
+            if (selectedPaths.Count == 0)
+            {
+                throw new InvalidOperationException("At least one path must be selected for commit.");
+            }
+
+            var preparedPaths = preparation.ScopeItems
+                .Select(item => item.Path)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var unknownPath = selectedPaths.FirstOrDefault(path => !preparedPaths.Contains(path));
+            if (unknownPath is not null)
+            {
+                throw new InvalidOperationException($"Selected path was not in the prepared commit scope: {unknownPath}");
+            }
+
+            var repository = new Repository
+            {
+                Id = session.RepositoryId,
+                Name = Path.GetFileName(session.RepositoryPath),
+                Path = session.RepositoryPath
+            };
+            var currentSnapshot = await gitService.GetCommitStatusSnapshotAsync(repository);
+            if (!string.Equals(currentSnapshot.Id, preparation.StatusSnapshot.Id, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("Repository status changed after commit preparation. Refresh commit review before committing.");
+            }
+
+            CommitResult result;
+            try
+            {
+                result = await gitService.CommitAsync(
+                    repository,
+                    request.Message.Trim(),
+                    selectedPaths,
+                    preparation.StatusSnapshot.Id);
+            }
+            catch (InvalidOperationException)
+            {
+                throw;
+            }
+
+            var committedSession = session.WithCommitResult(result, DateTimeOffset.UtcNow);
+            await ReplaceSessionAsync(sessions, committedSession);
+            return committedSession.ToSummary();
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
     private static bool IsActiveRepositoryState(RepositoryExecutionState state)
     {
         return state == RepositoryExecutionState.Executing;
@@ -333,6 +412,41 @@ public sealed class ExecutionSessionService(
     private static string? NormalizeDecisionNote(string? note)
     {
         return string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+    }
+
+    private static IReadOnlyList<string> NormalizeSelectedPaths(
+        IEnumerable<string>? selectedPaths,
+        string repositoryPath)
+    {
+        var normalizedPaths = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        var repositoryRoot = Path.GetFullPath(repositoryPath)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
+            Path.DirectorySeparatorChar;
+
+        foreach (var selectedPath in selectedPaths ?? Array.Empty<string>())
+        {
+            if (string.IsNullOrWhiteSpace(selectedPath))
+            {
+                throw new InvalidOperationException("Selected paths must be repository-relative paths.");
+            }
+
+            var normalizedPath = selectedPath.Replace('\\', '/').Trim();
+            if (Path.IsPathRooted(normalizedPath) ||
+                normalizedPath.Split('/').Any(segment => segment is ".." or "."))
+            {
+                throw new InvalidOperationException($"Selected path is not a safe repository-relative path: {selectedPath}");
+            }
+
+            var fullPath = Path.GetFullPath(Path.Combine(repositoryPath, normalizedPath));
+            if (!fullPath.StartsWith(repositoryRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException($"Selected path escapes the repository: {selectedPath}");
+            }
+
+            normalizedPaths.Add(normalizedPath);
+        }
+
+        return normalizedPaths.ToArray();
     }
 }
 
@@ -371,6 +485,10 @@ file static class ExecutionSessionMutation
             PromptMetadata = promptMetadata ?? session.PromptMetadata,
             RepositorySnapshot = session.RepositorySnapshot,
             CommitPreparation = session.CommitPreparation,
+            CommitSha = session.CommitSha,
+            CommittedAt = session.CommittedAt,
+            CommitMessage = session.CommitMessage,
+            PreparationSnapshotId = session.PreparationSnapshotId,
             PreviousHandoffContent = session.PreviousHandoffContent,
             PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,
             HandoffPath = session.HandoffPath,
@@ -409,6 +527,10 @@ file static class ExecutionSessionMutation
             PromptMetadata = session.PromptMetadata,
             RepositorySnapshot = repositorySnapshot ?? session.RepositorySnapshot,
             CommitPreparation = session.CommitPreparation,
+            CommitSha = session.CommitSha,
+            CommittedAt = session.CommittedAt,
+            CommitMessage = session.CommitMessage,
+            PreparationSnapshotId = session.PreparationSnapshotId,
             PreviousHandoffContent = session.PreviousHandoffContent,
             PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,
             HandoffPath = session.HandoffPath,
@@ -443,6 +565,48 @@ file static class ExecutionSessionMutation
             PromptMetadata = session.PromptMetadata,
             RepositorySnapshot = session.RepositorySnapshot,
             CommitPreparation = commitPreparation,
+            CommitSha = session.CommitSha,
+            CommittedAt = session.CommittedAt,
+            CommitMessage = session.CommitMessage,
+            PreparationSnapshotId = session.PreparationSnapshotId,
+            PreviousHandoffContent = session.PreviousHandoffContent,
+            PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,
+            HandoffPath = session.HandoffPath,
+            FailureReason = session.FailureReason,
+            Events = session.Events
+        };
+    }
+
+    public static ExecutionSession WithCommitResult(
+        this ExecutionSession session,
+        CommitResult commitResult,
+        DateTimeOffset lastActivityAt)
+    {
+        return new ExecutionSession
+        {
+            Id = session.Id,
+            RepositoryId = session.RepositoryId,
+            RepositoryPath = session.RepositoryPath,
+            MilestonePath = session.MilestonePath,
+            StartedAt = session.StartedAt,
+            CompletedAt = session.CompletedAt,
+            AcceptedAt = session.AcceptedAt,
+            RejectedAt = session.RejectedAt,
+            DecisionNote = session.DecisionNote,
+            LastActivityAt = lastActivityAt,
+            State = session.State,
+            RepositoryState = RepositoryExecutionState.AwaitingPush,
+            ProviderName = session.ProviderName,
+            ProviderExecutablePath = session.ProviderExecutablePath,
+            ProviderProcessId = session.ProviderProcessId,
+            ProviderStartedAt = session.ProviderStartedAt,
+            PromptMetadata = session.PromptMetadata,
+            RepositorySnapshot = session.RepositorySnapshot,
+            CommitPreparation = session.CommitPreparation,
+            CommitSha = commitResult.CommitSha,
+            CommittedAt = commitResult.CommittedAt,
+            CommitMessage = commitResult.CommitMessage,
+            PreparationSnapshotId = commitResult.PreparationSnapshotId,
             PreviousHandoffContent = session.PreviousHandoffContent,
             PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,
             HandoffPath = session.HandoffPath,

@@ -288,6 +288,11 @@ public sealed class RepositoryProjectionServiceTests
         {
             throw new NotSupportedException();
         }
+
+        public Task<ExecutionSessionSummary> CommitAsync(Guid sessionId, CommitRequest request)
+        {
+            throw new NotSupportedException();
+        }
     }
 
     private sealed class StaticExecutionSessionService(
@@ -341,6 +346,11 @@ public sealed class RepositoryProjectionServiceTests
         }
 
         public Task<CommitPreparation> PrepareCommitAsync(Guid sessionId)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<ExecutionSessionSummary> CommitAsync(Guid sessionId, CommitRequest request)
         {
             throw new NotSupportedException();
         }

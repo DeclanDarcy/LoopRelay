@@ -67,6 +67,10 @@ type ExecutionSessionSummary = {
   providerProcessId: number | null
   providerStartedAt: string | null
   handoffPath: string | null
+  commitSha: string | null
+  committedAt: string | null
+  commitMessage: string | null
+  preparationSnapshotId: string | null
   failureReason: string | null
 }
 
@@ -524,6 +528,10 @@ function startExecution(state: MockState, repositoryId: string, milestonePath: s
     providerProcessId: null,
     providerStartedAt: timestamp,
     handoffPath: artifacts.handoff.relativePath,
+    commitSha: null,
+    committedAt: null,
+    commitMessage: null,
+    preparationSnapshotId: null,
     failureReason: null,
   }
   state.content[artifacts.handoff.relativePath] = [
@@ -538,6 +546,51 @@ function startExecution(state: MockState, repositoryId: string, milestonePath: s
     repositoryPath: workspace.repository.path,
   }
   workspace.executionState = 'AwaitingAcceptance'
+  workspace.executionSummary = summary
+  return summary
+}
+
+function commitExecution(state: MockState, args: InvokeArgs): ExecutionSessionSummary {
+  const sessionId = getStringArg(args, 'sessionId')
+  const message = getStringArg(args, 'message')
+  const statusSnapshotId = getStringArg(args, 'statusSnapshotId')
+  const selectedPaths = args?.selectedPaths
+  if (!Array.isArray(selectedPaths) || selectedPaths.length === 0) {
+    throw new Error('At least one path must be selected for commit.')
+  }
+
+  const session = state.sessions[sessionId]
+  if (!session) {
+    throw new Error('Execution session was not found.')
+  }
+
+  if (session.repositoryState !== 'AwaitingCommit') {
+    throw new Error('Commit can only run while awaiting commit.')
+  }
+
+  if (statusSnapshotId !== `snapshot-${sessionId}`) {
+    throw new Error('Commit request uses a stale status snapshot.')
+  }
+
+  const workspace = state.workspaces[session.repositoryId]
+  const timestamp = new Date().toISOString()
+  const summary: ExecutionSessionSummary = {
+    ...session,
+    repositoryState: 'AwaitingPush',
+    lastActivityAt: timestamp,
+    commitSha: 'mock-commit-sha',
+    committedAt: timestamp,
+    commitMessage: message,
+    preparationSnapshotId: statusSnapshotId,
+  }
+
+  state.sessions[sessionId] = {
+    ...summary,
+    id: session.id,
+    repositoryId: session.repositoryId,
+    repositoryPath: session.repositoryPath,
+  }
+  workspace.executionState = 'AwaitingPush'
   workspace.executionSummary = summary
   return summary
 }
@@ -629,6 +682,8 @@ export function installDevTauriMock() {
           return clone(createGitStatus(state, getStringArg(args, 'repositoryId')))
         case 'prepare_commit':
           return clone(createCommitPreparation(state, getStringArg(args, 'sessionId')))
+        case 'commit_execution':
+          return clone(commitExecution(state, args))
         case 'get_execution_session': {
           const session = state.sessions[getStringArg(args, 'sessionId')]
           if (!session) {
