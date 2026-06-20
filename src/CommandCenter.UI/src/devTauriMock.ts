@@ -67,6 +67,21 @@ type OperationalContextProposal = {
     description: string
     itemId: string | null
   }>
+  compressionSummary: {
+    preservedItemCount: number
+    addedItemCount: number
+    modifiedItemCount: number
+    removedItemCount: number
+    compressedItemCount: number
+    permanentUnderstandingItemCount: number
+    activeUnderstandingItemCount: number
+    historicalUnderstandingItemCount: number
+    historicalNoiseItemCount: number
+    warningCount: number
+    warnings: string[]
+    noiseRemovedIndicators: string[]
+    stableUnderstandingRetentionWarnings: string[]
+  }
   review: {
     proposalId: string
     reviewState: string
@@ -907,6 +922,21 @@ function generateOperationalContextProposal(
         itemId: 'mock-constraint',
       },
     ],
+    compressionSummary: {
+      preservedItemCount: 3,
+      addedItemCount: 2,
+      modifiedItemCount: 0,
+      removedItemCount: 0,
+      compressedItemCount: 1,
+      permanentUnderstandingItemCount: 4,
+      activeUnderstandingItemCount: 0,
+      historicalUnderstandingItemCount: 1,
+      historicalNoiseItemCount: 1,
+      warningCount: 0,
+      warnings: [],
+      noiseRemovedIndicators: ['Repeated mock execution status was compressed.'],
+      stableUnderstandingRetentionWarnings: [],
+    },
     review: {
       proposalId,
       reviewState: 'PendingReview',
@@ -998,6 +1028,15 @@ function editOperationalContextProposal(
       itemId: null,
     },
   ]
+  proposal.compressionSummary = {
+    ...proposal.compressionSummary,
+    warningCount: content.includes('## Constraints') ? 0 : 1,
+    stableUnderstandingRetentionWarnings: content.includes('## Constraints')
+      ? []
+      : [
+          'Constraint disappeared without explicit resolution: Generated proposals do not mutate current operational context.',
+        ],
+  }
   return proposal
 }
 

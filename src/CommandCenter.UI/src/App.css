@@ -592,6 +592,27 @@ button:focus-visible {
   gap: 8px;
 }
 
+.proposal-warning-list {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid #d9e0e6;
+  border-radius: 6px;
+  background: #fffdf7;
+}
+
+.proposal-warning-list ul {
+  margin: 0;
+  padding-left: 18px;
+  color: #3d4650;
+  font-size: 0.86rem;
+}
+
+.proposal-warning-list li {
+  overflow-wrap: anywhere;
+}
+
 .proposal-comparison-grid {
   min-width: 0;
   display: grid;

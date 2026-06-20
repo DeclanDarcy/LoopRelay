@@ -2,21 +2,19 @@
 
 ## Newly Authorized Decisions
 
-- M5 must focus on compression analysis before compression action.
-- M5 should answer what is bloated, historical, redundant, unsafe to remove, and required to preserve.
-- M5 must not implement model-assisted rewriting or narrative summarization.
-- Compression must preserve the operational model rather than create a smaller narrative.
-- No stable decision, active constraint, open question, or active risk may disappear without an explicit warning.
-- Preservation warnings should be surfaced in proposal review.
-- M5 must not mutate authoritative `.agents/operational_context.md`.
+- M5 is at the correct midpoint when it remains understanding analysis, not understanding mutation.
+- Compression analysis must flow into warnings and reviewer visibility, not automatic rewrites or suggested truth.
+- Disappearance of architecture, constraints, stable decisions, risks, or questions must produce warnings unless explicit evidence authorizes removal.
+- Recent execution narratives, repeated activity, and transient detail are the correct initial compression target.
+- Compression metadata should remain first-class proposal metadata so later milestones can reason about compression history, trends, and warnings.
+- M5 must address false compression confidence before closure.
+- Resolved questions and retired risks should be explicit states rather than inferred from disappearance.
+- Repeated-revision certification should verify survival through multiple cycles, including architecture, constraints, stable decisions, and decision rationale.
+- Add the certification invariant: compression must never reduce authority.
+- Compressed does not mean removed, resolved, or retired unless explicit evidence exists.
 
-## Recommended M5 Test Shape
+## Recommended Next Slice
 
-- Detect long historical narrative.
-- Preserve stable decisions.
-- Preserve open questions.
-- Preserve active risks.
-- Preserve unknown sections.
-- Warn on redundant repeated decisions.
-- Show compression warning in proposal review.
-- Verify no authoritative context mutation.
+- Finish M5 with resolved-question and retired-risk semantics.
+- Add revision-summary review display.
+- Add multi-revision survival tests over repeated proposal cycles.

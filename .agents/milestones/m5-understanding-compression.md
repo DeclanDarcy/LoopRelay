@@ -8,60 +8,60 @@ M5 implements section- and tier-level compression over `OperationalContextDocume
 
 ## Backend Changes
 
-- [ ] Add `IUnderstandingCompressionService`.
-- [ ] Introduce information tiers:
-  - [ ] `PermanentUnderstanding`: architecture, authority boundaries, fundamental constraints, stable decisions, system mental model.
-  - [ ] `ActiveUnderstanding`: active risks, open questions, current tradeoffs, pending research.
-  - [ ] `HistoricalUnderstanding`: resolved risks, completed investigations, retired tradeoffs.
-  - [ ] `HistoricalNoise`: execution narratives, repeated status updates, superseded detail.
-- [ ] Extend generation to classify proposal content by tier.
-- [ ] Classify content using `OperationalContextDocument` sections and item kinds, not raw Markdown scanning.
-- [ ] Extend proposal metadata with `OperationalContextCompressionSummary`:
-  - [ ] Preserved item count.
-  - [ ] Added item count.
-  - [ ] Modified item count.
-  - [ ] Removed item count.
-  - [ ] Compressed item count.
-  - [ ] Noise removed indicators.
-  - [ ] Stable understanding retention warnings.
+- [x] Add `IUnderstandingCompressionService`.
+- [x] Introduce information tiers:
+  - [x] `PermanentUnderstanding`: architecture, authority boundaries, fundamental constraints, stable decisions, system mental model.
+  - [x] `ActiveUnderstanding`: active risks, open questions, current tradeoffs, pending research.
+  - [x] `HistoricalUnderstanding`: resolved risks, completed investigations, retired tradeoffs.
+  - [x] `HistoricalNoise`: execution narratives, repeated status updates, superseded detail.
+- [x] Extend generation to classify proposal content by tier.
+- [x] Classify content using `OperationalContextDocument` sections and item kinds, not raw Markdown scanning.
+- [x] Extend proposal metadata with `OperationalContextCompressionSummary`:
+  - [x] Preserved item count.
+  - [x] Added item count.
+  - [x] Modified item count.
+  - [x] Removed item count.
+  - [x] Compressed item count.
+  - [x] Noise removed indicators.
+  - [x] Stable understanding retention warnings.
 - [ ] Add compression rules:
-  - [ ] Always preserve architecture, constraints, intent, authority boundaries, and current mental model.
-  - [ ] Preserve risks, questions, tradeoffs, and research areas while active.
+  - [x] Always preserve architecture, constraints, intent, authority boundaries, and current mental model.
+  - [x] Preserve risks, questions, tradeoffs, and research areas while active.
   - [ ] Compress resolved investigations into outcomes and current relevance.
-  - [ ] Remove transient execution details and repeated information.
-- [ ] Add quality warnings when:
-  - [ ] Architecture disappears.
-  - [ ] Constraints disappear.
-  - [ ] Open questions disappear without resolution.
-  - [ ] Active risks disappear without retirement.
-  - [ ] Proposal growth indicates historical replay.
-- [ ] Treat decision items conservatively in M5:
-  - [ ] Preserve stable decision and rationale items already present in the document.
-  - [ ] Do not attempt to decide which new decision artifacts deserve assimilation.
-  - [ ] Defer decision taxonomy, rationale analysis, and decision-aware compression to M6.
+  - [x] Remove transient execution details and repeated information.
+- [x] Add quality warnings when:
+  - [x] Architecture disappears.
+  - [x] Constraints disappear.
+  - [x] Open questions disappear without resolution.
+  - [x] Active risks disappear without retirement.
+  - [x] Proposal growth indicates historical replay.
+- [x] Treat decision items conservatively in M5:
+  - [x] Preserve stable decision and rationale items already present in the document.
+  - [x] Do not attempt to decide which new decision artifacts deserve assimilation.
+  - [x] Defer decision taxonomy, rationale analysis, and decision-aware compression to M6.
 
 ## UI Changes
 
 - [ ] Review panel shows:
-  - [ ] Added understanding.
-  - [ ] Removed understanding.
-  - [ ] Compressed understanding.
-  - [ ] Stable understanding retention warnings.
+  - [x] Added understanding.
+  - [x] Removed understanding.
+  - [x] Compressed understanding.
+  - [x] Stable understanding retention warnings.
   - [ ] Revision summary.
-- [ ] Do not expose low-level compression internals as controls.
+- [x] Do not expose low-level compression internals as controls.
 
 ## Tests
 
 Add backend tests:
 
 - [ ] Architecture survives multiple generated revisions.
-- [ ] Constraints survive compression.
+- [x] Constraints survive compression.
 - [ ] Resolved questions are removed or moved to conclusions only when resolution evidence exists.
-- [ ] Unresolved questions remain visible.
+- [x] Unresolved questions remain visible.
 - [ ] Retired risks compress appropriately.
-- [ ] Historical noise does not accumulate.
-- [ ] Compression summary flags accidental loss of stable understanding.
-- [ ] Decision-related content already present in operational context is preserved rather than aggressively compressed.
+- [x] Historical noise does not accumulate.
+- [x] Compression summary flags accidental loss of stable understanding.
+- [x] Decision-related content already present in operational context is preserved rather than aggressively compressed.
 
 ## Certification
 

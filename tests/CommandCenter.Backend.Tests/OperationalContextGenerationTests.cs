@@ -172,6 +172,129 @@ public sealed class OperationalContextGenerationTests
     }
 
     [Fact]
+    public async Task CompressionPreservesDurableUnderstandingAndReportsTiers()
+    {
+        var harness = await CreateHarnessAsync();
+        await WriteAsync(harness.Repository, ".agents/operational_context.md", """
+            # Operational Context
+
+            ## Current Mental Model
+
+            - Repository artifacts are authoritative.
+
+            ## Architecture
+
+            - Backend services own workflow authority.
+
+            ## Constraints
+
+            - Human review is mandatory before promotion.
+
+            ## Stable Decisions
+
+            - Proposals are repository-owned artifacts.
+
+            ## Open Questions
+
+            - Should diagnostics include growth trends?
+
+            ## Active Risks
+
+            - Context growth can hide important constraints.
+            """);
+
+        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+
+        Assert.Contains("Backend services own workflow authority.", proposal.GeneratedContent);
+        Assert.Contains("Human review is mandatory before promotion.", proposal.GeneratedContent);
+        Assert.Contains("Should diagnostics include growth trends?", proposal.GeneratedContent);
+        Assert.Contains("Context growth can hide important constraints.", proposal.GeneratedContent);
+        Assert.True(proposal.CompressionSummary.PermanentUnderstandingItemCount >= 4);
+        Assert.True(proposal.CompressionSummary.ActiveUnderstandingItemCount >= 2);
+        Assert.Empty(proposal.CompressionSummary.StableUnderstandingRetentionWarnings);
+    }
+
+    [Fact]
+    public void CompressionFlagsAccidentalLossOfStableUnderstanding()
+    {
+        var parser = new MarkdownOperationalContextParser();
+        var compression = new UnderstandingCompressionService();
+        var current = parser.Parse("""
+            # Operational Context
+
+            ## Architecture
+
+            - Backend services own workflow authority.
+
+            ## Constraints
+
+            - Human review is mandatory before promotion.
+
+            ## Open Questions
+
+            - Should diagnostics include growth trends?
+
+            ## Active Risks
+
+            - Context growth can hide important constraints.
+            """);
+        var proposed = parser.Parse("# Operational Context");
+
+        var result = compression.Compress(current, proposed);
+
+        Assert.Contains(result.Summary.StableUnderstandingRetentionWarnings, warning =>
+            warning.Contains("Architecture disappeared", StringComparison.Ordinal));
+        Assert.Contains(result.Summary.StableUnderstandingRetentionWarnings, warning =>
+            warning.Contains("Constraint disappeared", StringComparison.Ordinal));
+        Assert.Contains(result.Summary.StableUnderstandingRetentionWarnings, warning =>
+            warning.Contains("Open question disappeared", StringComparison.Ordinal));
+        Assert.Contains(result.Summary.StableUnderstandingRetentionWarnings, warning =>
+            warning.Contains("Active risk disappeared", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task HistoricalNoiseDoesNotAccumulateInGeneratedProposal()
+    {
+        var harness = await CreateHarnessAsync();
+        var recentChanges = string.Join(
+            Environment.NewLine,
+            Enumerable.Range(1, 20).Select(index => $"- Recent execution for `.agents/milestones/m{index}.md` is recorded with state `Completed`."));
+        await WriteAsync(harness.Repository, ".agents/operational_context.md", $"""
+            # Operational Context
+
+            ## Recent Understanding Changes
+
+            {recentChanges}
+            """);
+
+        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        var generated = new MarkdownOperationalContextParser().Parse(proposal.GeneratedContent ?? string.Empty);
+
+        Assert.True(generated.RecentUnderstandingChanges.Count <= 12);
+        Assert.True(proposal.CompressionSummary.CompressedItemCount > 0);
+        Assert.NotEmpty(proposal.CompressionSummary.NoiseRemovedIndicators);
+    }
+
+    [Fact]
+    public async Task EditingProposalRecomputesCompressionWarnings()
+    {
+        var harness = await CreateHarnessAsync();
+        await WriteAsync(harness.Repository, ".agents/operational_context.md", """
+            # Operational Context
+
+            ## Constraints
+
+            - Human review is mandatory before promotion.
+            """);
+        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+
+        var edited = await harness.ReviewService.EditAsync(harness.Repository.Id, proposal.ProposalId, "# Operational Context");
+
+        Assert.Contains(edited.CompressionSummary.StableUnderstandingRetentionWarnings, warning =>
+            warning.Contains("Constraint disappeared", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task ProposalPersistsAcrossStoreRecreation()
     {
         var harness = await CreateHarnessAsync();
@@ -547,6 +670,7 @@ public sealed class OperationalContextGenerationTests
         var executionSessionService = new StaticExecutionSessionService(executionHistory ?? []);
         var proposalStore = new FileSystemOperationalContextProposalStore(artifactStore);
         var parser = new MarkdownOperationalContextParser();
+        var compressionService = new UnderstandingCompressionService();
         var generationService = new OperationalContextGenerationService(
             repositoryService,
             artifactService,
@@ -554,12 +678,14 @@ public sealed class OperationalContextGenerationTests
             executionSessionService,
             parser,
             new UnderstandingDiffService(),
+            compressionService,
             proposalStore);
         var reviewService = new OperationalContextReviewService(
             repositoryService,
             artifactService,
             parser,
             new UnderstandingDiffService(),
+            compressionService,
             proposalStore);
         var lifecycleService = new OperationalContextLifecycleService(
             repositoryService,

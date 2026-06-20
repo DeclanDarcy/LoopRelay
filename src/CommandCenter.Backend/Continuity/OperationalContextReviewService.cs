@@ -10,6 +10,7 @@ public sealed class OperationalContextReviewService(
     IArtifactService artifactService,
     IOperationalContextParser parser,
     IUnderstandingDiffService diffService,
+    IUnderstandingCompressionService compressionService,
     IOperationalContextProposalStore proposalStore) : IOperationalContextReviewService
 {
     private const string CurrentOperationalContextPath = ".agents/operational_context.md";
@@ -21,9 +22,10 @@ public sealed class OperationalContextReviewService(
         EnsureReviewable(proposal);
 
         var currentContent = await ReadCurrentOperationalContextAsync(repository);
-        var semanticChanges = diffService.Compare(
-            parser.Parse(currentContent ?? string.Empty),
-            parser.Parse(content));
+        var currentDocument = parser.Parse(currentContent ?? string.Empty);
+        var editedDocument = parser.Parse(content);
+        var semanticChanges = diffService.Compare(currentDocument, editedDocument);
+        var compression = compressionService.Compress(currentDocument, editedDocument);
         var contentHash = HashContent(content);
 
         return await proposalStore.UpdateAsync(
@@ -35,7 +37,8 @@ public sealed class OperationalContextReviewService(
                 contentHash,
                 reviewNote: null,
                 staleReason: null,
-                semanticChanges),
+                semanticChanges,
+                compression.Summary),
             editedContent: content,
             includeContent: true);
     }
@@ -59,7 +62,8 @@ public sealed class OperationalContextReviewService(
                 ReviewedContentHash(proposal),
                 reviewNote,
                 "Current operational context changed after this proposal was generated.",
-                proposal.SemanticChanges);
+                proposal.SemanticChanges,
+                proposal.CompressionSummary);
             await proposalStore.UpdateAsync(repository, staleProposal);
             throw new InvalidOperationException("Cannot accept a stale operational-context proposal because current context changed after generation.");
         }
@@ -73,7 +77,8 @@ public sealed class OperationalContextReviewService(
                 ReviewedContentHash(proposal),
                 reviewNote,
                 staleReason: null,
-                proposal.SemanticChanges),
+                proposal.SemanticChanges,
+                proposal.CompressionSummary),
             includeContent: true);
     }
 
@@ -95,7 +100,8 @@ public sealed class OperationalContextReviewService(
                 ReviewedContentHash(proposal),
                 reviewNote,
                 staleReason: null,
-                proposal.SemanticChanges),
+                proposal.SemanticChanges,
+                proposal.CompressionSummary),
             includeContent: true);
     }
 
@@ -127,7 +133,8 @@ public sealed class OperationalContextReviewService(
                 ReviewedContentHash(proposal),
                 proposal.Review.ReviewNote,
                 "Proposal was superseded by a newer generated proposal.",
-                proposal.SemanticChanges);
+                proposal.SemanticChanges,
+                proposal.CompressionSummary);
             await proposalStore.UpdateAsync(repository, staleProposal);
             throw new InvalidOperationException("Cannot review a superseded operational-context proposal.");
         }
@@ -155,7 +162,8 @@ public sealed class OperationalContextReviewService(
         string? reviewedContentHash,
         string? reviewNote,
         string? staleReason,
-        IReadOnlyList<OperationalContextSemanticChange> semanticChanges)
+        IReadOnlyList<OperationalContextSemanticChange> semanticChanges,
+        OperationalContextCompressionSummary compressionSummary)
     {
         return new OperationalContextProposal
         {
@@ -169,7 +177,7 @@ public sealed class OperationalContextReviewService(
             GeneratedContentRelativePath = proposal.GeneratedContentRelativePath,
             EditedContentRelativePath = proposal.EditedContentRelativePath,
             SemanticChanges = semanticChanges,
-            CompressionSummary = proposal.CompressionSummary,
+            CompressionSummary = compressionSummary,
             Promotion = proposal.Promotion,
             Review = new OperationalContextReview
             {

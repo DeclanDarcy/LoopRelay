@@ -14,6 +14,7 @@ public sealed class OperationalContextGenerationService(
     IExecutionSessionService executionSessionService,
     IOperationalContextParser parser,
     IUnderstandingDiffService diffService,
+    IUnderstandingCompressionService compressionService,
     IOperationalContextProposalStore proposalStore) : IOperationalContextGenerationService
 {
     private const string CurrentOperationalContextPath = ".agents/operational_context.md";
@@ -26,7 +27,8 @@ public sealed class OperationalContextGenerationService(
         var inputSet = await BuildInputSetAsync(repository);
         var currentDocument = parser.Parse(inputSet.CurrentOperationalContext ?? string.Empty);
         var proposedDocument = BuildProposedDocument(inputSet, currentDocument);
-        var generatedContent = parser.Render(proposedDocument);
+        var compression = compressionService.Compress(currentDocument, proposedDocument);
+        var generatedContent = parser.Render(compression.Document);
         var generatedDocument = parser.Parse(generatedContent);
         var generatedContentHash = HashContent(generatedContent);
 
@@ -42,15 +44,7 @@ public sealed class OperationalContextGenerationService(
             BaselineCurrentContextHash = HashOptionalContent(inputSet.CurrentOperationalContext),
             GeneratedContentHash = generatedContentHash,
             SemanticChanges = diffService.Compare(currentDocument, generatedDocument),
-            CompressionSummary = new OperationalContextCompressionSummary
-            {
-                PreservedItemCount = CountItems(currentDocument),
-                AddedItemCount = Math.Max(0, CountItems(generatedDocument) - CountItems(currentDocument)),
-                WarningCount = currentDocument.AdditionalSections.Count,
-                Warnings = currentDocument.AdditionalSections.Count == 0
-                    ? []
-                    : ["Unknown operational-context sections were preserved for reviewer inspection."]
-            }
+            CompressionSummary = compression.Summary
         };
 
         return await proposalStore.SaveAsync(repository, proposal, generatedContent);
@@ -266,18 +260,5 @@ public sealed class OperationalContextGenerationService(
     private static string Normalize(string value)
     {
         return string.Join(' ', value.Trim().ToLowerInvariant().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
-    }
-
-    private static int CountItems(OperationalContextDocument document)
-    {
-        return document.CurrentMentalModel.Count +
-            document.Architecture.Count +
-            document.AuthorityBoundaries.Count +
-            document.Constraints.Count +
-            document.StableDecisions.Count +
-            document.DecisionRationale.Count +
-            document.OpenQuestions.Count +
-            document.ActiveRisks.Count +
-            document.RecentUnderstandingChanges.Count;
     }
 }

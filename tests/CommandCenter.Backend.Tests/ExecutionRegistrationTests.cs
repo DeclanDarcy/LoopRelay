@@ -31,6 +31,8 @@ public sealed class ExecutionRegistrationTests
             app.Services.GetRequiredService<IGitService>());
         Assert.IsAssignableFrom<IOperationalContextParser>(
             app.Services.GetRequiredService<IOperationalContextParser>());
+        Assert.IsAssignableFrom<IUnderstandingCompressionService>(
+            app.Services.GetRequiredService<IUnderstandingCompressionService>());
         Assert.IsAssignableFrom<IOperationalContextProposalStore>(
             app.Services.GetRequiredService<IOperationalContextProposalStore>());
         Assert.IsAssignableFrom<IOperationalContextGenerationService>(
