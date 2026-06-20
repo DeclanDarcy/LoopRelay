@@ -2,12 +2,11 @@
 
 ## Newly Authorized Decisions
 
-- The repository removal selection-memory cleanup is accepted as the correct M5 fix.
-- The M5 workspace certification mock should cover all readiness states: `Ready`, `MissingPlan`, and `MissingMilestones`.
-- `PlanOnlyRepo -> MissingMilestones` is accepted as useful browser certification coverage.
-- The current authority chain remains correct: filesystem state flows through backend services into `ArtifactInventory`, then `RepositoryWorkspaceProjection`, then React.
-- There is no current evidence of UI-derived readiness, artifact state, or lifecycle state.
-- The browser certification harness now covers the core M5 behavioral surface sufficiently for workflow-level confidence.
-- Remaining M5 uncertainty is platform-specific native desktop behavior, not workspace logic.
-- The next and final M5 certification slice should be a single uninterrupted native Tauri desktop pass covering repository registration, switching, selection restore, artifact edit/save/refresh persistence, handoff and decision rotation, repository removal cleanup, quit/restart, and workspace recovery.
-- Do not add additional workspace mechanics unless final native desktop certification uncovers a concrete defect.
+- M5 remaining uncertainty is operational rather than architectural.
+- Backend workspace logic is considered fully exercised within authorized M5 scope through tests, API certification, browser mock certification, and native shell smoke.
+- The `APPDATA` override behavior is classified as a testability concern, not an M5 functional defect.
+- Future hardening should make the Command Center configuration location explicitly injectable or testable instead of relying on environment assumptions.
+- Remaining uncertified M5 surface is limited to the rendered desktop window workflows.
+- The final M5 certification pass should be one uninterrupted native desktop scenario covering repository setup, workspace switching and selection restore, persistence, lifecycle rotation, cleanup, and quit/restart recovery.
+- No additional M5 implementation work should be added unless final native desktop certification discovers a concrete defect.
+- If the final native desktop pass finds no defects, M5 should be closed and work should move to Epic 1 acceptance closure.
