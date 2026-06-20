@@ -18,5 +18,11 @@ public sealed class ExecutionSessionSummary
 
     public string ProviderName { get; init; } = string.Empty;
 
+    public string? ProviderExecutablePath { get; init; }
+
+    public int? ProviderProcessId { get; init; }
+
+    public DateTimeOffset? ProviderStartedAt { get; init; }
+
     public string? FailureReason { get; init; }
 }

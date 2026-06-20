@@ -2,6 +2,8 @@ namespace CommandCenter.Backend.Execution;
 
 public sealed class ExecutionPromptMetadata
 {
+    public DateTimeOffset GeneratedAt { get; init; }
+
     public string RepositoryPath { get; init; } = string.Empty;
 
     public string MilestonePath { get; init; } = string.Empty;

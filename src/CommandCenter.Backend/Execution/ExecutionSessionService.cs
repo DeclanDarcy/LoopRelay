@@ -85,9 +85,10 @@ public sealed class ExecutionSessionService(
 
             var prompt = promptBuilder.Build(context);
 
+            ExecutionProviderStartResult startResult;
             try
             {
-                await executionProvider.StartAsync(prompt, session);
+                startResult = await executionProvider.StartAsync(prompt, session);
             }
             catch (Exception exception) when (exception is InvalidOperationException or IOException)
             {
@@ -103,7 +104,11 @@ public sealed class ExecutionSessionService(
             var executingSession = session.WithState(
                 ExecutionSessionState.Executing,
                 RepositoryExecutionState.Executing,
-                lastActivityAt: DateTimeOffset.UtcNow);
+                lastActivityAt: DateTimeOffset.UtcNow,
+                providerExecutablePath: startResult.ExecutablePath,
+                providerProcessId: startResult.ProcessId,
+                providerStartedAt: startResult.StartedAt,
+                promptMetadata: prompt.Metadata);
             await ReplaceSessionAsync(sessions, executingSession);
             return executingSession.ToSummary();
         }
@@ -147,7 +152,11 @@ file static class ExecutionSessionMutation
         RepositoryExecutionState repositoryState,
         DateTimeOffset? completedAt = null,
         DateTimeOffset? lastActivityAt = null,
-        string? failureReason = null)
+        string? failureReason = null,
+        string? providerExecutablePath = null,
+        int? providerProcessId = null,
+        DateTimeOffset? providerStartedAt = null,
+        ExecutionPromptMetadata? promptMetadata = null)
     {
         return new ExecutionSession
         {
@@ -161,6 +170,10 @@ file static class ExecutionSessionMutation
             State = state,
             RepositoryState = repositoryState,
             ProviderName = session.ProviderName,
+            ProviderExecutablePath = providerExecutablePath ?? session.ProviderExecutablePath,
+            ProviderProcessId = providerProcessId ?? session.ProviderProcessId,
+            ProviderStartedAt = providerStartedAt ?? session.ProviderStartedAt,
+            PromptMetadata = promptMetadata ?? session.PromptMetadata,
             RepositorySnapshot = session.RepositorySnapshot,
             PreviousHandoffContent = session.PreviousHandoffContent,
             PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,

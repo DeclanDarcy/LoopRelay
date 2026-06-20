@@ -8,7 +8,7 @@ public sealed class FakeExecutionProvider : IExecutionProvider
 
     public ExecutionPrompt? LastPrompt { get; private set; }
 
-    public Task StartAsync(ExecutionPrompt prompt, ExecutionSession session)
+    public Task<ExecutionProviderStartResult> StartAsync(ExecutionPrompt prompt, ExecutionSession session)
     {
         LastPrompt = prompt;
 
@@ -17,6 +17,10 @@ public sealed class FakeExecutionProvider : IExecutionProvider
             throw new InvalidOperationException("Fake execution provider failed to start.");
         }
 
-        return Task.CompletedTask;
+        return Task.FromResult(new ExecutionProviderStartResult
+        {
+            ProviderName = Name,
+            StartedAt = DateTimeOffset.UtcNow
+        });
     }
 }

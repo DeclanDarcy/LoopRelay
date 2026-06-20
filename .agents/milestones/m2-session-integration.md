@@ -55,14 +55,14 @@ Implement M2 in two internal phases so session persistence is stable before real
 
 ### Backend Work
 
-- [ ] Implement initial `CodexExecutionProvider`.
-- [ ] Add provider process invocation through `IProcessRunner`.
+- [x] Implement initial `CodexExecutionProvider`.
+- [x] Add provider process invocation through `IProcessRunner`.
 - [x] Generate execution prompt from context.
-- [ ] Include context size diagnostics and dirty-state diagnostics in launch metadata.
-- [ ] Start the Codex process with repository root as the working directory.
-- [ ] Capture provider process id when available.
-- [ ] Persist prompt metadata without persisting secrets or full process environment.
-- [ ] Handle provider executable missing, process start failure, and immediate provider exit.
+- [x] Include context size diagnostics and dirty-state diagnostics in launch metadata.
+- [x] Start the Codex process with repository root as the working directory.
+- [x] Capture provider process id when available.
+- [x] Persist prompt metadata without persisting secrets or full process environment.
+- [x] Handle provider executable missing, process start failure, and immediate provider exit.
 - [ ] Implement startup recovery semantics for active persisted sessions:
   - [ ] Best-effort reattach when the provider process is alive and reattach is supported.
   - [ ] Otherwise mark the session and repository `Failed` with an explicit orphaned-process reason.
@@ -75,15 +75,15 @@ Implement M2 in two internal phases so session persistence is stable before real
 ### Tests
 
 - [x] Prompt construction includes required artifacts, selected milestone, repository path, Git snapshot, dirty-state diagnostics, and handoff requirement.
-- [ ] Missing Codex executable fails with structured provider error.
-- [ ] Provider start failure leaves repository ready and records failure details.
-- [ ] Immediate provider exit records failure.
+- [x] Missing Codex executable fails with structured provider error.
+- [x] Provider start failure leaves repository ready and records failure details.
+- [x] Immediate provider exit records failure.
 - [ ] Restart with reattachable provider process keeps session executing.
 - [ ] Restart with missing or unrecoverable provider process marks session and repository failed.
 
 ### Exit Criteria
 
-- [ ] Command Center can create a fresh Codex-backed execution session.
+- [x] Command Center can create a fresh Codex-backed execution session.
 - [x] Prompt construction is backend-owned and deterministic.
 - [ ] Process launch failure and orphaned restart recovery are explicit.
 - [ ] Live monitoring output is still completed in M3.

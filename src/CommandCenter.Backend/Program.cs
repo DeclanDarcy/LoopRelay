@@ -28,7 +28,8 @@ public static class Program
         builder.Services.AddSingleton<IExecutionSessionService, ExecutionSessionService>();
         builder.Services.AddSingleton<IExecutionMonitoringService, ExecutionMonitoringService>();
         builder.Services.AddSingleton<IHandoffService, HandoffService>();
-        builder.Services.AddSingleton<IExecutionProvider, FakeExecutionProvider>();
+        builder.Services.AddSingleton<ICodexExecutableResolver, CodexExecutableResolver>();
+        builder.Services.AddSingleton<IExecutionProvider, CodexExecutionProvider>();
         builder.Services.AddSingleton<IProcessRunner, ProcessRunner>();
         builder.Services.AddSingleton<IGitService, GitService>();
         builder.Services.AddSingleton<IRepositoryProjectionService, RepositoryProjectionService>();

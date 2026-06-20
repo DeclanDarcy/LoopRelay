@@ -135,6 +135,26 @@ public sealed class ExecutionSessionServiceTests
     }
 
     [Fact]
+    public async Task StructuredProviderStartFailureLeavesRepositoryReadyAndRecordsFailure()
+    {
+        var provider = new FailingExecutionProvider(new ExecutionProviderException(
+            "ProviderLaunchFailed",
+            "Codex process failed to start."));
+        var harness = await CreateHarnessAsync(provider: provider);
+        await WriteReadyArtifactsAsync(harness.Repository);
+
+        var summary = await harness.SessionService.StartAsync(
+            harness.Repository.Id,
+            new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
+        var session = (await harness.Store.LoadAsync()).Single();
+
+        Assert.Equal(ExecutionSessionState.Failed, summary.State);
+        Assert.Equal(RepositoryExecutionState.Ready, summary.RepositoryState);
+        Assert.Equal(RepositoryExecutionState.Ready, await harness.SessionService.GetRepositoryStateAsync(harness.Repository.Id));
+        Assert.Contains("ProviderLaunchFailed", session.FailureReason);
+    }
+
+    [Fact]
     public async Task ActiveSessionRestoresAfterStoreReload()
     {
         var harness = await CreateHarnessAsync();
@@ -221,6 +241,29 @@ public sealed class ExecutionSessionServiceTests
     }
 
     [Fact]
+    public async Task ProviderLaunchMetadataPersistsAfterStoreReload()
+    {
+        var provider = new MetadataExecutionProvider();
+        var harness = await CreateHarnessAsync(provider: provider);
+        await WriteReadyArtifactsAsync(harness.Repository);
+
+        var summary = await harness.SessionService.StartAsync(
+            harness.Repository.Id,
+            new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
+
+        var sessions = await new FileSystemExecutionSessionStore(harness.StorePath).LoadAsync();
+        var session = sessions.Single(session => session.Id == summary.SessionId);
+
+        Assert.Equal("codex", session.ProviderName);
+        Assert.Equal("C:\\tools\\codex.exe", session.ProviderExecutablePath);
+        Assert.Equal(7890, session.ProviderProcessId);
+        Assert.NotNull(session.ProviderStartedAt);
+        Assert.NotNull(session.PromptMetadata);
+        Assert.Equal(".agents/milestones/m2.md", session.PromptMetadata.MilestonePath);
+        Assert.Equal([".agents/plan.md", ".agents/milestones/m2.md"], session.PromptMetadata.IncludedArtifactPaths);
+    }
+
+    [Fact]
     public async Task LaunchEndpointReturnsSessionMetadata()
     {
         var configurationPath = Path.Combine(CreateTemporaryDirectory(), "configuration.json");
@@ -271,7 +314,7 @@ public sealed class ExecutionSessionServiceTests
     private static async Task<Harness> CreateHarnessAsync(
         RepositoryDirtyState? dirtyState = null,
         string? gitFailure = null,
-        FakeExecutionProvider? provider = null)
+        IExecutionProvider? provider = null)
     {
         var repositoryService = new RepositoryService(
             new ApplicationConfigurationStore(Path.Combine(CreateTemporaryDirectory(), "configuration.json")));
@@ -348,6 +391,32 @@ public sealed class ExecutionSessionServiceTests
                 DirtyState = dirtyState ?? new RepositoryDirtyState(),
                 CapturedAt = DateTimeOffset.UtcNow
             });
+        }
+    }
+
+    private sealed class MetadataExecutionProvider : IExecutionProvider
+    {
+        public string Name => "codex";
+
+        public Task<ExecutionProviderStartResult> StartAsync(ExecutionPrompt prompt, ExecutionSession session)
+        {
+            return Task.FromResult(new ExecutionProviderStartResult
+            {
+                ProviderName = Name,
+                ExecutablePath = "C:\\tools\\codex.exe",
+                ProcessId = 7890,
+                StartedAt = DateTimeOffset.UtcNow
+            });
+        }
+    }
+
+    private sealed class FailingExecutionProvider(Exception exception) : IExecutionProvider
+    {
+        public string Name => "codex";
+
+        public Task<ExecutionProviderStartResult> StartAsync(ExecutionPrompt prompt, ExecutionSession session)
+        {
+            throw exception;
         }
     }
 }

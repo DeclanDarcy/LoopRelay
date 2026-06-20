@@ -42,6 +42,7 @@ public sealed class ExecutionPromptBuilder : IExecutionPromptBuilder
             Text = builder.ToString(),
             Metadata = new ExecutionPromptMetadata
             {
+                GeneratedAt = DateTimeOffset.UtcNow,
                 RepositoryPath = context.RepositoryPath,
                 MilestonePath = context.MilestonePath,
                 IncludedArtifactPaths = OrderedArtifacts(context.Artifacts)

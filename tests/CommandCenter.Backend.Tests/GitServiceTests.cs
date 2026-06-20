@@ -51,5 +51,14 @@ public sealed class GitServiceTests
         {
             return Task.FromResult(results[index++]);
         }
+
+        public Task<ProcessStartResult> StartAsync(
+            string fileName,
+            IReadOnlyList<string> arguments,
+            string workingDirectory,
+            string? standardInput = null)
+        {
+            throw new NotSupportedException();
+        }
     }
 }

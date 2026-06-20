@@ -22,6 +22,14 @@ public sealed class ExecutionSession
 
     public string ProviderName { get; init; } = string.Empty;
 
+    public string? ProviderExecutablePath { get; init; }
+
+    public int? ProviderProcessId { get; init; }
+
+    public DateTimeOffset? ProviderStartedAt { get; init; }
+
+    public ExecutionPromptMetadata? PromptMetadata { get; init; }
+
     public ExecutionRepositorySnapshot? RepositorySnapshot { get; init; }
 
     public string? PreviousHandoffContent { get; init; }
@@ -42,6 +50,9 @@ public sealed class ExecutionSession
             CompletedAt = CompletedAt,
             LastActivityAt = LastActivityAt,
             ProviderName = ProviderName,
+            ProviderExecutablePath = ProviderExecutablePath,
+            ProviderProcessId = ProviderProcessId,
+            ProviderStartedAt = ProviderStartedAt,
             FailureReason = FailureReason
         };
     }
