@@ -76,6 +76,7 @@ Current implementation gaps:
 - `ExecutionPromptBuilder` orders `Plan`, `Milestone`, `CurrentHandoff`, and `CurrentDecisions`, but not operational context.
 - `ArtifactRotationService` supports handoff and decisions rotation, but not operational context rotation.
 - `ArtifactService` discovers only the current operational-context artifact, not historical operational-context revisions.
+- There is no canonical internal understanding model between operational-context Markdown and workspace projections.
 - There is no operational-context proposal model, proposal persistence, review state, promotion operation, compression logic, semantic diff, or continuity instrumentation.
 - The UI exposes operational context as an editable artifact only; it does not expose current understanding, proposals, review, lifecycle, decisions, or continuity diagnostics as first-class workspace projections.
 
@@ -121,6 +122,24 @@ It must not become:
 - Commit log mirror.
 - Milestone status tracking.
 - Session transcript storage.
+
+### Understanding Has A Canonical Internal Model
+
+Markdown is the repository serialization format. It is not the internal understanding model.
+
+Backend continuity services must parse operational-context Markdown into `OperationalContextDocument` before generation, diffing, compression, decision assimilation, projection, diagnostics, or reporting. This prevents later milestones from becoming ad hoc string analysis layered directly on Markdown.
+
+The canonical flow is:
+
+```text
+Markdown
+OperationalContextDocument
+Generation / Diff / Compression / Decision Analysis
+OperationalContextProjection
+Markdown
+```
+
+The renderer may write Markdown back to repository artifacts, but the services reason over the document model.
 
 ### Existing Artifact Responsibilities Remain Distinct
 
@@ -221,7 +240,10 @@ src/CommandCenter.Backend/
   Continuity/
     OperationalContextConstants.cs
     OperationalContextDocument.cs
+    OperationalContextDocumentSchema.cs
     OperationalContextSection.cs
+    OperationalContextItem.cs
+    OperationalContextItemKind.cs
     OperationalContextProjection.cs
     OperationalContextProposal.cs
     OperationalContextProposalStatus.cs
@@ -261,9 +283,86 @@ src/CommandCenter.Backend/
 
 Keep filesystem path validation centralized through `ArtifactPath`. Keep low-level file IO behind `IArtifactStore` and high-level artifact semantics in services.
 
+## Operational Context Schema And Understanding Model
+
+Add a short implementation specification at:
+
+```text
+docs/operational-context-schema.md
+```
+
+This specification is not a user workflow artifact. It is a codebase contract for how Command Center represents current understanding internally.
+
+The specification must define:
+
+- Canonical section names.
+- Allowed content types per section.
+- Parser expectations.
+- Renderer expectations.
+- Projection expectations.
+- Coarse diff expectations.
+- Compression tier expectations.
+- Decision assimilation expectations.
+- Backward-compatibility behavior for hand-written Markdown.
+
+Initial canonical internal model:
+
+```csharp
+public sealed class OperationalContextDocument
+{
+    public string Title { get; init; } = "Operational Context";
+    public IReadOnlyList<OperationalContextItem> CurrentMentalModel { get; init; } = [];
+    public IReadOnlyList<OperationalContextItem> Architecture { get; init; } = [];
+    public IReadOnlyList<OperationalContextItem> AuthorityBoundaries { get; init; } = [];
+    public IReadOnlyList<OperationalContextItem> Constraints { get; init; } = [];
+    public IReadOnlyList<OperationalContextItem> StableDecisions { get; init; } = [];
+    public IReadOnlyList<OperationalContextItem> DecisionRationale { get; init; } = [];
+    public IReadOnlyList<OperationalContextItem> OpenQuestions { get; init; } = [];
+    public IReadOnlyList<OperationalContextItem> ActiveRisks { get; init; } = [];
+    public IReadOnlyList<OperationalContextItem> RecentUnderstandingChanges { get; init; } = [];
+    public IReadOnlyList<OperationalContextSection> AdditionalSections { get; init; } = [];
+}
+
+public sealed class OperationalContextItem
+{
+    public string Id { get; init; } = "";
+    public OperationalContextItemKind Kind { get; init; }
+    public string Text { get; init; } = "";
+    public string? Rationale { get; init; }
+    public string? SourceRelativePath { get; init; }
+}
+```
+
+Initial item kinds:
+
+```text
+MentalModel
+Architecture
+AuthorityBoundary
+Constraint
+StableDecision
+DecisionRationale
+OpenQuestion
+ActiveRisk
+RecentChange
+Unknown
+```
+
+Rules:
+
+- `OperationalContextDocument` is the canonical shape for generation, review, semantic diff, compression, decision assimilation, projection, certification, and instrumentation.
+- Markdown parsing produces this model.
+- Markdown rendering consumes this model.
+- Hand-written Markdown that cannot be fully classified must be preserved in `AdditionalSections`.
+- Unknown content must not be silently discarded.
+- Coarse item identity can start with normalized section name plus normalized text hash; durable manually assigned ids are optional later.
+- The first implementation should not attempt deep semantic interpretation beyond section and list-item classification.
+
 ## Operational Context Document Format
 
-Generated and promoted operational context should use a stable Markdown structure so backend services can parse sections, compute semantic changes, and expose projections.
+Generated and promoted operational context should use a stable Markdown structure so backend services can parse it into `OperationalContextDocument`, compute coarse changes, and expose projections.
+
+Markdown remains the persisted repository artifact. `OperationalContextDocument` remains the service-level representation.
 
 Default structure:
 
@@ -294,7 +393,17 @@ Rules:
 - The generator may omit empty sections only if the parser and UI tolerate absence.
 - The promotion path must preserve reviewer edits exactly in the promoted Markdown.
 - The parser must degrade gracefully for hand-written Markdown that does not follow the generated structure.
-- Semantic diff should operate on known sections and fall back to section-level change summaries when item-level parsing is not possible.
+- Semantic diff must start coarse and deterministic:
+  - Section added.
+  - Section removed.
+  - Section changed.
+  - Item added.
+  - Item removed.
+  - Item changed.
+  - Constraint added or removed.
+  - Question added or removed.
+  - Risk added or removed.
+- Deeper semantic interpretation is deferred until the coarse model is certified.
 
 ## Backend API Surface
 
@@ -393,6 +502,7 @@ Ratify operational context as the current project understanding artifact and doc
 ### Deliverables
 
 - Update `docs/architecture.md` with an operational-context section.
+- Add `docs/operational-context-schema.md` as the implementation contract for `OperationalContextDocument`.
 - Define operational-context ontology:
   - Current mental model.
   - Architecture.
@@ -420,10 +530,20 @@ Current Handoff
 Current Decisions
 Git Snapshot
 ```
+- Document schema expectations:
+  - Canonical sections.
+  - Allowed item kinds.
+  - Parser fallback behavior.
+  - Renderer behavior.
+  - Projection mapping.
+  - Coarse diff categories.
+  - Compression tiers.
+  - Decision-assimilation hooks.
 
 ### Implementation Notes
 
-- No runtime service changes.
+- No runtime workflow changes.
+- Implementation may add inert schema/model types and parser tests only if needed to certify the schema contract.
 - No UI workflow changes.
 - No proposal generation.
 - No lifecycle mutation.
@@ -437,6 +557,8 @@ Verify the architecture document clearly answers:
 - What does not belong in it.
 - How it differs from plan, milestones, handoff, and decisions.
 - How it will participate in execution without replacing existing inputs.
+- How Markdown maps to `OperationalContextDocument`.
+- What coarse semantic changes are supported initially.
 
 ## Milestone M1 - Operational Context Consumption
 
@@ -503,6 +625,8 @@ Generate and persist reviewable proposed project understanding without modifying
 
 ### Backend Changes
 
+- Implement `OperationalContextDocument`, `OperationalContextItem`, `OperationalContextSection`, and `OperationalContextItemKind` according to `docs/operational-context-schema.md`.
+- Implement `MarkdownOperationalContextParser` and renderer before proposal generation.
 - Add `IOperationalContextGenerationService`.
 - Add `IOperationalContextProposalStore`.
 - Add repository-owned proposal persistence under:
@@ -532,13 +656,16 @@ Generate and persist reviewable proposed project understanding without modifying
   - Repository identity and availability.
 - Do not consume Git commit history, raw execution streams, raw provider output, or full conversation logs.
 - Implement deterministic generation as a backend service that:
+  - Parses existing context into `OperationalContextDocument`.
+  - Generates a new `OperationalContextDocument`.
+  - Renders the proposed document to Markdown for persistence.
   - Preserves existing stable understanding.
   - Incorporates latest handoff and decision signal.
   - Uses execution history only as bounded metadata.
   - Produces the stable operational-context Markdown structure.
   - Compresses completed work into current conclusions.
   - Excludes chronological session replay.
-- Generate a semantic change summary from current context to proposal.
+- Generate a coarse semantic change summary from current document to proposed document.
 - Persist generated proposal content and metadata before returning.
 - Regeneration creates a new proposal and marks previous pending proposal as stale or superseded.
 
@@ -573,6 +700,10 @@ Add backend tests:
 - Generation succeeds when handoff, decisions, or execution history are missing.
 - Proposal persists across service recreation.
 - Proposal content contains understanding sections rather than chronological replay.
+- Parser maps canonical Markdown sections into `OperationalContextDocument`.
+- Parser preserves unknown hand-written sections instead of discarding them.
+- Renderer round-trips the document model into stable Markdown.
+- Coarse semantic changes report section and item changes without deep interpretation.
 - Regeneration creates a new proposal and supersedes stale pending review state.
 - Workspace projection surfaces latest proposal summary.
 
@@ -605,8 +736,9 @@ Introduce human review for proposed project understanding without promoting it.
   - `Stale`.
 - Add edit operation:
   - Stores reviewer content in `edited.md`.
+  - Parses reviewer content into `OperationalContextDocument`.
   - Recomputes content hash.
-  - Recomputes semantic changes against current context.
+  - Recomputes coarse semantic changes against current context.
   - Keeps proposal reviewable.
 - Add accept operation:
   - Requires proposal exists.
@@ -631,13 +763,12 @@ Introduce human review for proposed project understanding without promoting it.
 
 - Display current understanding and proposed understanding side by side.
 - Display semantic understanding changes:
-  - Added understanding.
-  - Removed understanding.
-  - Modified understanding.
-  - Added or removed constraints.
-  - Added or resolved questions.
-  - Added or retired risks.
-  - Decision changes.
+  - Sections added, removed, or changed.
+  - Items added, removed, or changed.
+  - Constraints added or removed.
+  - Questions added or removed.
+  - Risks added or removed.
+  - Decision items added or removed when available.
 - Provide edit, accept, and reject controls.
 - Preserve reviewer edits in a Markdown editor.
 - Make stale proposals visibly blocked.
@@ -649,6 +780,7 @@ Add backend tests:
 
 - Pending proposal is reviewable.
 - Current and proposed content load together.
+- Current and proposed content parse into `OperationalContextDocument`.
 - Editing persists and changes accepted content candidate.
 - Accept records review state without changing current context.
 - Reject records review state and blocks promotion.
@@ -739,6 +871,8 @@ Lifecycle is certified when accepted understanding can become authoritative, pri
 
 Keep operational context high-signal across many revisions by preserving understanding while reducing historical detail.
 
+M5 implements section- and tier-level compression over `OperationalContextDocument`. Decision-specific compression remains limited until decision analysis is added in M6.
+
 ### Backend Changes
 
 - Add `IUnderstandingCompressionService`.
@@ -748,6 +882,7 @@ Keep operational context high-signal across many revisions by preserving underst
   - `HistoricalUnderstanding`: resolved risks, completed investigations, retired tradeoffs.
   - `HistoricalNoise`: execution narratives, repeated status updates, superseded detail.
 - Extend generation to classify proposal content by tier.
+- Classify content using `OperationalContextDocument` sections and item kinds, not raw Markdown scanning.
 - Extend proposal metadata with `OperationalContextCompressionSummary`:
   - Preserved item count.
   - Added item count.
@@ -767,6 +902,10 @@ Keep operational context high-signal across many revisions by preserving underst
   - Open questions disappear without resolution.
   - Active risks disappear without retirement.
   - Proposal growth indicates historical replay.
+- Treat decision items conservatively in M5:
+  - Preserve stable decision and rationale items already present in the document.
+  - Do not attempt to decide which new decision artifacts deserve assimilation.
+  - Defer decision taxonomy, rationale analysis, and decision-aware compression to M6.
 
 ### UI Changes
 
@@ -789,6 +928,7 @@ Add backend tests:
 - Retired risks compress appropriately.
 - Historical noise does not accumulate.
 - Compression summary flags accidental loss of stable understanding.
+- Decision-related content already present in operational context is preserved rather than aggressively compressed.
 
 ### Certification
 
@@ -799,6 +939,8 @@ Compression is certified when operational context can evolve through repeated pr
 ### Objective
 
 Assimilate important decisions and rationale into current understanding while keeping decision artifacts as the decision history authority.
+
+M6 completes the decision-aware portion of compression. After M6, compression can distinguish durable decision rationale from tactical or historical decision noise.
 
 ### Backend Changes
 
@@ -833,7 +975,11 @@ Assimilate important decisions and rationale into current understanding while ke
   - Rationale lost warning.
   - Open decision preserved.
   - Open decision resolved.
-- Extend compression warnings for lost decision rationale.
+- Extend compression and review warnings for:
+  - Lost decision rationale.
+  - Tactical decision accumulation.
+  - Historical decision replay.
+  - Contradictory decision preservation.
 
 ### UI Changes
 
@@ -1143,6 +1289,22 @@ Stale cases:
 
 Stale proposals remain auditable but cannot be accepted or promoted.
 
+### Understanding Model Strategy
+
+All continuity services operate on `OperationalContextDocument`.
+
+Required service boundaries:
+
+- Parser: Markdown to `OperationalContextDocument`.
+- Renderer: `OperationalContextDocument` to Markdown.
+- Generator: input artifacts to proposed `OperationalContextDocument`.
+- Diff: current document plus proposed document to coarse `OperationalContextSemanticChange` values.
+- Compression: current document plus proposed document to tier classifications and warnings.
+- Decision analysis: decision artifacts to candidate document items and warnings.
+- Projection: current document plus lifecycle metadata to workspace read models.
+
+Do not let generation, diffing, compression, or projection bypass the document model and perform unrelated Markdown-specific parsing.
+
 ### Parser Strategy
 
 `MarkdownOperationalContextParser` should:
@@ -1154,6 +1316,38 @@ Stale proposals remain auditable but cannot be accepted or promoted.
 - Avoid rewriting user-authored Markdown unless promotion uses edited/generated content directly.
 - Fall back to section-level semantic changes when item-level parsing is not reliable.
 
+### Semantic Change Scope
+
+The first semantic change implementation must stay coarse.
+
+Allowed initial change types:
+
+- `SectionAdded`.
+- `SectionRemoved`.
+- `SectionChanged`.
+- `ItemAdded`.
+- `ItemRemoved`.
+- `ItemChanged`.
+- `ConstraintAdded`.
+- `ConstraintRemoved`.
+- `QuestionAdded`.
+- `QuestionRemoved`.
+- `RiskAdded`.
+- `RiskRemoved`.
+- `DecisionAdded`.
+- `DecisionRemoved`.
+- `RationaleChanged`.
+- `PreservationWarning`.
+
+Avoid implementing:
+
+- Natural-language entailment.
+- Confidence scoring.
+- Automated correctness judgment.
+- Automatic drift correction.
+- Fine-grained paragraph rewrite analysis.
+- Provider-quality interpretation.
+
 ### Generation Strategy
 
 The first generator should be deterministic and testable:
@@ -1161,7 +1355,8 @@ The first generator should be deterministic and testable:
 - Use current operational context as the primary baseline.
 - Use current handoff and decisions as new signal.
 - Use bounded execution summaries as supporting metadata.
-- Populate the stable document format.
+- Populate `OperationalContextDocument`.
+- Render the document to the stable Markdown format only after generation.
 - Prefer preserving existing categories over replacing them.
 - Add warnings where inputs indicate possible understanding loss.
 
@@ -1221,6 +1416,17 @@ Proposal state is repository-owned and should survive:
 Local app metadata should not be required to recover operational-context lifecycle state.
 
 ## Certification Plan
+
+### Domain 0 - Understanding Model
+
+Verify:
+
+- `docs/operational-context-schema.md` defines canonical sections and item kinds.
+- Canonical Markdown parses into `OperationalContextDocument`.
+- Hand-written unknown sections are preserved.
+- Document rendering produces stable Markdown.
+- Coarse semantic changes are deterministic.
+- Generation, review, compression, decision analysis, projection, and diagnostics consume the document model rather than independent Markdown parsing.
 
 ### Domain 1 - Consumption
 
@@ -1329,19 +1535,20 @@ Verify:
 ## Implementation Order
 
 1. Ratify operational-context ontology and authority boundaries in `docs/architecture.md`.
-2. Add operational-context consumption to `ExecutionContextService`, prompt building, diagnostics, preview UI, and tests.
-3. Add current and historical operational-context artifact discovery and rotation support.
-4. Add continuity models, parser, proposal store, generation service, API endpoints, and proposal projection.
-5. Add proposal generation UI and shell commands.
-6. Add review service, edit/accept/reject endpoints, semantic diff, and review UI.
-7. Add lifecycle service, promotion endpoint, archive-before-replace behavior, and lifecycle UI.
-8. Add compression service, compression summaries, preservation warnings, and review integration.
-9. Add decision analysis, decision assimilation, rationale preservation, and decision surfaces.
-10. Add backend `OperationalContextProjection` and dashboard continuity summaries.
-11. Refactor UI into `api.ts`, `types.ts`, and focused workspace components while preserving current execution workflow behavior.
-12. Add long-horizon certification tests and fixtures.
-13. Add continuity diagnostics, evolution ledger, report generation, dashboard diagnostics, and read-only UI reporting.
-14. Run backend tests, UI build, backend build, and shell build.
+2. Add `docs/operational-context-schema.md` and implement the inert `OperationalContextDocument` model, parser, renderer, and coarse diff tests.
+3. Add operational-context consumption to `ExecutionContextService`, prompt building, diagnostics, preview UI, and tests.
+4. Add current and historical operational-context artifact discovery and rotation support.
+5. Add proposal store, generation service, API endpoints, and proposal projection using `OperationalContextDocument`.
+6. Add proposal generation UI and shell commands.
+7. Add review service, edit/accept/reject endpoints, coarse semantic diff, and review UI.
+8. Add lifecycle service, promotion endpoint, archive-before-replace behavior, and lifecycle UI.
+9. Add section- and tier-level compression service, compression summaries, preservation warnings, and review integration.
+10. Add decision analysis, decision assimilation, rationale preservation, decision-aware compression extensions, and decision surfaces.
+11. Add backend `OperationalContextProjection` and dashboard continuity summaries.
+12. Refactor UI into `api.ts`, `types.ts`, and focused workspace components while preserving current execution workflow behavior.
+13. Add long-horizon certification tests and fixtures.
+14. Add continuity diagnostics, evolution ledger, report generation, dashboard diagnostics, and read-only UI reporting.
+15. Run backend tests, UI build, backend build, and shell build.
 
 ## Verification Commands
 
