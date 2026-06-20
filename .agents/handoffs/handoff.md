@@ -2,31 +2,31 @@
 
 ## New State This Slice
 
-- Continued M5 Repository Workspace Experience certification from a clean working tree.
-- Verified build and check surface:
-  - `dotnet build src/CommandCenter.Backend/CommandCenter.Backend.csproj`.
-  - `npm run build` from `src/CommandCenter.UI`.
-  - `cargo check` from `src/CommandCenter.Shell`.
-  - `dotnet test CommandCenter.slnx`: 42 backend tests passed.
-  - `npm run lint` from `src/CommandCenter.UI`.
-- Ran an API-level M5 certification pass against temporary Git repositories covering:
-  - Repository registration.
-  - Dashboard readiness states: `Ready`, `MissingPlan`, and `MissingMilestones`.
-  - Workspace summary projection for plan, operational context, milestone count, current handoff, and current decisions.
-  - Artifact edit/save/reload for `.agents/plan.md`.
-  - Current handoff rotation to `handoff.0002.md` while preserving `handoff.md`.
-  - Current decisions rotation to `decisions.0001.md` while preserving `decisions.md`.
-  - Refresh detecting externally added plan and milestone files.
-  - Repository removal updating the dashboard.
-  - Backend restart recovery restoring persisted registrations.
-- The attempted config isolation through `$env:APPDATA` did not isolate `Environment.SpecialFolder.ApplicationData` on this Windows/.NET path; the API certification briefly touched the real Command Center configuration store.
-- Cleaned up the two temporary registrations created by this slice (`ReadyRepo`, `EmptyRepo`) by matching their temp-root paths.
-- Left the two pre-existing registrations (`CommandCenterRuntimeRepo-*`, `CommandCenterRestartRepo-*`) unchanged.
-- Ran a shell-level native smoke through `cargo run` from `src/CommandCenter.Shell`; the Tauri shell started its managed backend and `/api/ping` returned `Pong` on port 5000 in about 3.24 seconds.
-- Archived the previous handoff as `.agents/handoffs/handoff.0017.md`.
+- Continued M5 Repository Workspace Experience from the prior state, where backend/API/native-shell smoke certification was already complete and the remaining uncertainty was rendered workspace behavior.
+- Started the UI dev server with `npm run dev -- --host 127.0.0.1` from `src/CommandCenter.UI`.
+- Used the existing `?mock=workspace-certification` Tauri mock path to certify the rendered React workspace without mutating the real Command Center configuration store.
+- Verified visible dashboard/workspace behavior for:
+  - Three dashboard readiness states: `Ready`, `Missing plan`, and `Missing milestones`.
+  - Repository summary fields for plan, operational context, milestone count, current handoff, and current decisions.
+  - Artifact explorer categories for plan, operational context, milestones, current/historical handoffs, and current/historical decisions.
+  - Markdown artifact edit/save path, with the success message shown after saving `plan.md`.
+  - Repository switching from `AlphaRepo` to missing-artifact repositories and back.
+  - Per-repository artifact selection restore by selecting `m5.md`, switching repositories, and returning to `AlphaRepo`.
+  - Current handoff rotation adding `handoff.0002.md` while leaving `handoff.md` current in the mock state.
+  - Current decisions rotation adding `decisions.0001.md` while leaving `decisions.md` current in the mock state.
+  - Manual workspace refresh showing the success message.
+  - Repository registration removal updating the dashboard from 3 registered repositories to 2.
+- The in-app browser automation wedged once around a JavaScript confirm dialog; rerunning with nonblocking confirm handling completed the rendered-flow certification.
+- Re-ran verification commands after certification:
+  - `dotnet test CommandCenter.slnx`: 42 tests passed.
+  - `npm run lint` from `src/CommandCenter.UI`: passed.
+  - `npm run build` from `src/CommandCenter.UI`: passed.
+  - `cargo check` from `src/CommandCenter.Shell`: passed.
+- Stopped the Vite dev server after certification.
+- Archived the previous handoff as `.agents/handoffs/handoff.0018.md`.
 
 ## Immediate Gaps
 
-- Full native desktop interaction certification is still not complete.
-- The remaining gap is operating inside the Tauri window itself: native directory picker, React-to-Tauri command invocation from the desktop webview, manual repository switching, artifact save/refresh/rotation, repository removal, and quit/restart recovery as seen by the desktop UI.
-- Avoid relying on `$env:APPDATA` for future config isolation on Windows; use a deliberate test seam or backup/restore plan before any native pass that mutates real user configuration.
+- No product code changes were made in this slice.
+- The remaining uncertified surface is still a fully manual Tauri desktop window pass using the native directory picker against real temporary Git repositories.
+- Because the prior slice already found that `$env:APPDATA` does not isolate `Environment.SpecialFolder.ApplicationData` here, any native desktop pass that registers repositories should use an explicit backup/restore plan for the real Command Center configuration or wait for an injectable configuration-location test seam.
