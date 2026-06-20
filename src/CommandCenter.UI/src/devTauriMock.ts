@@ -28,6 +28,8 @@ type Workspace = {
   repository: Repository
   availability: string
   readiness: string
+  executionState: string
+  executionSummary: null
   artifactInventory: ArtifactInventory
   milestoneCount: number
   hasPlan: boolean
@@ -40,9 +42,60 @@ type DashboardEntry = {
   repository: Repository
   availability: string
   readiness: string
+  executionState: string
+  activeExecutionSession: null
   milestoneCount: number
   hasCurrentHandoff: boolean
   hasCurrentDecisions: boolean
+}
+
+type ExecutionContextPreview = {
+  repositoryId: string
+  repositoryName: string
+  repositoryPath: string
+  milestonePath: string
+  generatedAt: string
+  artifacts: Array<{
+    role: string
+    relativePath: string
+    name: string
+    content: string
+    byteCount: number
+    characterCount: number
+  }>
+  repositorySnapshot: {
+    branch: string
+    dirtyState: {
+      stagedPaths: string[]
+      modifiedPaths: string[]
+      deletedPaths: string[]
+      renamedPaths: string[]
+      untrackedPaths: string[]
+      isClean: boolean
+    }
+    capturedAt: string
+  }
+  diagnostics: {
+    totalBytes: number
+    totalCharacters: number
+    warningThresholdBytes: number
+    hardLimitBytes: number
+    warningThresholdExceeded: boolean
+    hardLimitExceeded: boolean
+    artifactDiagnostics: Array<{
+      role: string
+      relativePath: string
+      byteCount: number
+      characterCount: number
+      warningThresholdBytes: number
+      hardLimitBytes: number
+      warningThresholdExceeded: boolean
+      hardLimitExceeded: boolean
+    }>
+    validationErrors: string[]
+    missingOptionalArtifacts: string[]
+    launchBlocked: boolean
+  }
 }
 
 type MockState = {
@@ -132,6 +185,8 @@ function createWorkspace(repository: Repository, inventory: ArtifactInventory): 
     repository,
     availability: 'Available',
     readiness,
+    executionState: 'Ready',
+    executionSummary: null,
     artifactInventory: inventory,
     milestoneCount: inventory.milestones.length,
     hasPlan: inventory.plan !== null,
@@ -189,9 +244,78 @@ function dashboardEntry(workspace: Workspace): DashboardEntry {
     repository: workspace.repository,
     availability: workspace.availability,
     readiness: workspace.readiness,
+    executionState: workspace.executionState,
+    activeExecutionSession: null,
     milestoneCount: workspace.milestoneCount,
     hasCurrentHandoff: workspace.hasCurrentHandoff,
     hasCurrentDecisions: workspace.hasCurrentDecisions,
+  }
+}
+
+function createContextPreview(state: MockState, repositoryId: string, milestonePath: string): ExecutionContextPreview {
+  const workspace = state.workspaces[repositoryId]
+  const artifactsForContext = [
+    workspace.artifactInventory.plan,
+    workspace.artifactInventory.milestones.find((milestone) => milestone.relativePath === milestonePath) ?? null,
+    workspace.artifactInventory.currentHandoff,
+    workspace.artifactInventory.currentDecisions,
+  ].filter((artifact): artifact is Artifact => artifact !== null)
+  const artifactsWithContent = artifactsForContext.map((artifact) => {
+    const content = state.content[artifact.relativePath] ?? ''
+    return {
+      role: artifact.type,
+      relativePath: artifact.relativePath,
+      name: artifact.name,
+      content,
+      byteCount: content.length,
+      characterCount: content.length,
+    }
+  })
+  const totalBytes = artifactsWithContent.reduce((total, artifact) => total + artifact.byteCount, 0)
+
+  return {
+    repositoryId,
+    repositoryName: workspace.repository.name,
+    repositoryPath: workspace.repository.path,
+    milestonePath,
+    generatedAt: new Date().toISOString(),
+    artifacts: artifactsWithContent,
+    repositorySnapshot: {
+      branch: 'main',
+      dirtyState: {
+        stagedPaths: [],
+        modifiedPaths: [],
+        deletedPaths: [],
+        renamedPaths: [],
+        untrackedPaths: [],
+        isClean: true,
+      },
+      capturedAt: new Date().toISOString(),
+    },
+    diagnostics: {
+      totalBytes,
+      totalCharacters: totalBytes,
+      warningThresholdBytes: 131072,
+      hardLimitBytes: 524288,
+      warningThresholdExceeded: false,
+      hardLimitExceeded: false,
+      artifactDiagnostics: artifactsWithContent.map((artifact) => ({
+        role: artifact.role,
+        relativePath: artifact.relativePath,
+        byteCount: artifact.byteCount,
+        characterCount: artifact.characterCount,
+        warningThresholdBytes: 98304,
+        hardLimitBytes: 262144,
+        warningThresholdExceeded: false,
+        hardLimitExceeded: false,
+      })),
+      validationErrors: workspace.readiness === 'Ready' ? [] : [`Repository planning readiness is ${workspace.readiness}.`],
+      missingOptionalArtifacts: [
+        workspace.artifactInventory.currentHandoff ? null : '.agents/handoffs/handoff.md',
+        workspace.artifactInventory.currentDecisions ? null : '.agents/decisions/decisions.md',
+      ].filter((path): path is string => path !== null),
+      launchBlocked: workspace.readiness !== 'Ready',
+    },
   }
 }
 
@@ -259,6 +383,14 @@ export function installDevTauriMock() {
         case 'get_repository_workspace':
         case 'refresh_repository_workspace':
           return clone(state.workspaces[getStringArg(args, 'repositoryId')])
+        case 'preview_execution_context':
+          return clone(
+            createContextPreview(
+              state,
+              getStringArg(args, 'repositoryId'),
+              getStringArg(args, 'milestonePath'),
+            ),
+          )
         case 'load_artifact_content':
           return state.content[getStringArg(args, 'relativePath')] ?? ''
         case 'save_artifact_content':

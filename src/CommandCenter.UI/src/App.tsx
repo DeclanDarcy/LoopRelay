@@ -4,6 +4,15 @@ import './App.css'
 
 type RepositoryAvailability = 'Available' | 'Missing' | 'AccessDenied'
 type ExecutionReadiness = 'MissingPlan' | 'MissingMilestones' | 'Ready'
+type RepositoryExecutionState =
+  | 'Ready'
+  | 'Executing'
+  | 'AwaitingAcceptance'
+  | 'Accepted'
+  | 'AwaitingCommit'
+  | 'AwaitingPush'
+  | 'Failed'
+  | 'Cancelled'
 type ArtifactType = 'Plan' | 'OperationalContext' | 'Milestone' | 'Handoff' | 'Decision'
 type ArtifactFamily = ArtifactType
 type ArtifactVersionKind = 'Current' | 'Historical'
@@ -32,10 +41,80 @@ type ArtifactInventory = {
   historicalDecisions: Artifact[]
 }
 
+type ExecutionSessionSummary = {
+  sessionId: string
+  state: string
+  repositoryState: RepositoryExecutionState
+  milestonePath: string | null
+  startedAt: string | null
+  lastActivityAt: string | null
+}
+
+type ExecutionContextArtifact = {
+  role: string
+  relativePath: string
+  name: string
+  content: string
+  byteCount: number
+  characterCount: number
+}
+
+type ExecutionContextArtifactDiagnostic = {
+  role: string
+  relativePath: string
+  byteCount: number
+  characterCount: number
+  warningThresholdBytes: number
+  hardLimitBytes: number
+  warningThresholdExceeded: boolean
+  hardLimitExceeded: boolean
+}
+
+type RepositoryDirtyState = {
+  stagedPaths: string[]
+  modifiedPaths: string[]
+  deletedPaths: string[]
+  renamedPaths: string[]
+  untrackedPaths: string[]
+  isClean: boolean
+}
+
+type ExecutionRepositorySnapshot = {
+  branch: string
+  dirtyState: RepositoryDirtyState
+  capturedAt: string
+}
+
+type ExecutionContextDiagnostics = {
+  totalBytes: number
+  totalCharacters: number
+  warningThresholdBytes: number
+  hardLimitBytes: number
+  warningThresholdExceeded: boolean
+  hardLimitExceeded: boolean
+  artifactDiagnostics: ExecutionContextArtifactDiagnostic[]
+  validationErrors: string[]
+  missingOptionalArtifacts: string[]
+  launchBlocked: boolean
+}
+
+type ExecutionContextPreview = {
+  repositoryId: string
+  repositoryName: string
+  repositoryPath: string
+  milestonePath: string
+  generatedAt: string
+  artifacts: ExecutionContextArtifact[]
+  repositorySnapshot: ExecutionRepositorySnapshot | null
+  diagnostics: ExecutionContextDiagnostics
+}
+
 type RepositoryDashboardProjection = {
   repository: Repository
   availability: RepositoryAvailability
   readiness: ExecutionReadiness
+  executionState: RepositoryExecutionState
+  activeExecutionSession: ExecutionSessionSummary | null
   milestoneCount: number
   hasCurrentHandoff: boolean
   hasCurrentDecisions: boolean
@@ -45,6 +124,8 @@ type RepositoryWorkspaceProjection = {
   repository: Repository
   availability: RepositoryAvailability
   readiness: ExecutionReadiness
+  executionState: RepositoryExecutionState
+  executionSummary: ExecutionSessionSummary | null
   artifactInventory: ArtifactInventory
   milestoneCount: number
   hasPlan: boolean
@@ -69,6 +150,17 @@ const readinessLabels: Record<ExecutionReadiness, string> = {
   MissingPlan: 'Missing plan',
   MissingMilestones: 'Missing milestones',
   Ready: 'Ready',
+}
+
+const executionStateLabels: Record<RepositoryExecutionState, string> = {
+  Ready: 'Ready',
+  Executing: 'Executing',
+  AwaitingAcceptance: 'Awaiting acceptance',
+  Accepted: 'Accepted',
+  AwaitingCommit: 'Awaiting commit',
+  AwaitingPush: 'Awaiting push',
+  Failed: 'Failed',
+  Cancelled: 'Cancelled',
 }
 
 function formatError(error: unknown) {
@@ -202,11 +294,30 @@ function getAvailableArtifactPaths(inventory: ArtifactInventory) {
     .map((artifact) => artifact.relativePath)
 }
 
+function renderPathBucket(label: string, paths: string[]) {
+  return (
+    <div>
+      <h5>{label}</h5>
+      {paths.length === 0 ? (
+        <p>None</p>
+      ) : (
+        <ul>
+          {paths.map((path) => (
+            <li key={path}>{path}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 function App() {
   const [repositories, setRepositories] = useState<RepositoryDashboardProjection[]>([])
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<string | null>(null)
   const [workspace, setWorkspace] = useState<RepositoryWorkspaceProjection | null>(null)
   const [selectedArtifactPath, setSelectedArtifactPath] = useState<string | null>(null)
+  const [selectedMilestonePath, setSelectedMilestonePath] = useState<string | null>(null)
+  const [executionContext, setExecutionContext] = useState<ExecutionContextPreview | null>(null)
   const selectedArtifactPathsByRepository = useRef<Record<string, string>>({})
   const [artifactContent, setArtifactContent] = useState('')
   const [draftContent, setDraftContent] = useState('')
@@ -217,6 +328,7 @@ function App() {
   const [isArtifactLoading, setIsArtifactLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isRotating, setIsRotating] = useState(false)
+  const [isContextLoading, setIsContextLoading] = useState(false)
   const [isAdding, setIsAdding] = useState(false)
   const [removingRepositoryId, setRemovingRepositoryId] = useState<string | null>(null)
 
@@ -244,6 +356,7 @@ function App() {
   const canRotateSelectedArtifact =
     selectedArtifact?.versionKind === 'Current' &&
     (selectedArtifact.family === 'Handoff' || selectedArtifact.family === 'Decision')
+  const milestoneOptions = workspace?.artifactInventory.milestones ?? []
 
   const selectRepository = useCallback((repositoryId: string) => {
     setSelectedRepositoryId(repositoryId)
@@ -285,10 +398,13 @@ function App() {
         { repositoryId },
       )
       setWorkspace(nextWorkspace)
+      setExecutionContext(null)
       reconcileSelectedArtifact(repositoryId, nextWorkspace)
     } catch (loadError) {
       setWorkspace(null)
       setSelectedArtifactPath(null)
+      setSelectedMilestonePath(null)
+      setExecutionContext(null)
       setError(formatError(loadError))
     } finally {
       setIsWorkspaceLoading(false)
@@ -363,6 +479,8 @@ function App() {
       delete selectedArtifactPathsByRepository.current[repository.id]
       setWorkspace(null)
       setSelectedArtifactPath(null)
+      setSelectedMilestonePath(null)
+      setExecutionContext(null)
       await loadRepositories()
     } catch (removeError) {
       setError(formatError(removeError))
@@ -385,6 +503,7 @@ function App() {
         { repositoryId: selectedRepository.repository.id },
       )
       setWorkspace(nextWorkspace)
+      setExecutionContext(null)
       reconcileSelectedArtifact(selectedRepository.repository.id, nextWorkspace)
       setMessage('Workspace refreshed.')
       await loadRepositories()
@@ -444,6 +563,7 @@ function App() {
         repositoryId: selectedRepository.repository.id,
       })
       setWorkspace(nextWorkspace)
+      setExecutionContext(null)
       reconcileSelectedArtifact(selectedRepository.repository.id, nextWorkspace)
       setMessage('Artifact rotated.')
       await loadRepositories()
@@ -451,6 +571,28 @@ function App() {
       setError(formatError(rotateError))
     } finally {
       setIsRotating(false)
+    }
+  }
+
+  async function buildExecutionContext() {
+    if (!selectedRepository || !selectedMilestonePath) {
+      return
+    }
+
+    setIsContextLoading(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const context = await invoke<ExecutionContextPreview>('preview_execution_context', {
+        repositoryId: selectedRepository.repository.id,
+        milestonePath: selectedMilestonePath,
+      })
+      setExecutionContext(context)
+      setMessage('Execution context built.')
+    } catch (contextError) {
+      setError(formatError(contextError))
+    } finally {
+      setIsContextLoading(false)
     }
   }
 
@@ -519,6 +661,23 @@ function App() {
     }
   }, [selectedArtifactPath, selectedRepository])
 
+  useEffect(() => {
+    if (!workspace) {
+      setSelectedMilestonePath(null)
+      return
+    }
+
+    const milestones = workspace.artifactInventory.milestones
+    setSelectedMilestonePath((currentPath) => {
+      if (currentPath && milestones.some((milestone) => milestone.relativePath === currentPath)) {
+        return currentPath
+      }
+
+      return milestones[0]?.relativePath ?? null
+    })
+    setExecutionContext(null)
+  }, [workspace])
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -577,6 +736,9 @@ function App() {
                     <span className={`readiness readiness-${entry.readiness.toLowerCase()}`}>
                       {readinessLabels[entry.readiness]}
                     </span>
+                    <span className={`execution-state execution-state-${entry.executionState.toLowerCase()}`}>
+                      {executionStateLabels[entry.executionState]}
+                    </span>
                     <span className="repository-metadata">
                       {entry.milestoneCount} milestones
                     </span>
@@ -632,6 +794,16 @@ function App() {
                   <dd>{readinessLabels[workspace?.readiness ?? selectedRepository.readiness]}</dd>
                 </div>
                 <div>
+                  <dt>Execution</dt>
+                  <dd>
+                    {
+                      executionStateLabels[
+                        workspace?.executionState ?? selectedRepository.executionState
+                      ]
+                    }
+                  </dd>
+                </div>
+                <div>
                   <dt>Milestones</dt>
                   <dd>{workspace?.milestoneCount ?? selectedRepository.milestoneCount}</dd>
                 </div>
@@ -646,6 +818,140 @@ function App() {
                 <span>Handoff: {workspace?.hasCurrentHandoff ? 'Present' : 'Missing'}</span>
                 <span>Decisions: {workspace?.hasCurrentDecisions ? 'Present' : 'Missing'}</span>
               </div>
+
+              <section className="execution-context-panel" aria-label="Execution context preview">
+                <div className="context-toolbar">
+                  <div>
+                    <p className="eyebrow">Execution Context</p>
+                    <h4>Preview Package</h4>
+                  </div>
+                  <div className="context-controls">
+                    <select
+                      value={selectedMilestonePath ?? ''}
+                      onChange={(event) => setSelectedMilestonePath(event.target.value || null)}
+                      disabled={milestoneOptions.length === 0 || isContextLoading}
+                    >
+                      {milestoneOptions.length === 0 ? (
+                        <option value="">No milestones</option>
+                      ) : (
+                        milestoneOptions.map((milestone) => (
+                          <option key={milestone.relativePath} value={milestone.relativePath}>
+                            {milestone.name}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                    <button
+                      type="button"
+                      className="secondary-action"
+                      onClick={() => void buildExecutionContext()}
+                      disabled={!selectedMilestonePath || isContextLoading}
+                    >
+                      {isContextLoading ? 'Building...' : 'Build Execution Context'}
+                    </button>
+                  </div>
+                </div>
+
+                {executionContext ? (
+                  <div className="context-preview">
+                    <div className="context-summary">
+                      <span>Generated: {new Date(executionContext.generatedAt).toLocaleString()}</span>
+                      <span>Total: {executionContext.diagnostics.totalBytes} bytes</span>
+                      <span>
+                        Launch:{' '}
+                        {executionContext.diagnostics.launchBlocked ? 'Blocked' : 'Unavailable until M2'}
+                      </span>
+                      <span>
+                        Size:{' '}
+                        {executionContext.diagnostics.hardLimitExceeded
+                          ? 'Hard limit'
+                          : executionContext.diagnostics.warningThresholdExceeded
+                            ? 'Warning'
+                            : 'Within limits'}
+                      </span>
+                    </div>
+
+                    <div className="context-columns">
+                      <div>
+                        <h5>Artifacts</h5>
+                        <ul>
+                          {executionContext.artifacts.map((artifact) => (
+                            <li key={artifact.relativePath}>
+                              {artifact.role}: {artifact.relativePath} ({artifact.byteCount} bytes)
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <h5>Missing Optional</h5>
+                        {executionContext.diagnostics.missingOptionalArtifacts.length === 0 ? (
+                          <p>None</p>
+                        ) : (
+                          <ul>
+                            {executionContext.diagnostics.missingOptionalArtifacts.map((path) => (
+                              <li key={path}>{path}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                      <div>
+                        <h5>Validation</h5>
+                        {executionContext.diagnostics.validationErrors.length === 0 ? (
+                          <p>No validation errors</p>
+                        ) : (
+                          <ul>
+                            {executionContext.diagnostics.validationErrors.map((validationError) => (
+                              <li key={validationError}>{validationError}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+
+                    {executionContext.repositorySnapshot ? (
+                      <div className="dirty-state">
+                        <h5>Repository Snapshot</h5>
+                        <div className="context-summary">
+                          <span>Branch: {executionContext.repositorySnapshot.branch || '(detached)'}</span>
+                          <span>
+                            State:{' '}
+                            {executionContext.repositorySnapshot.dirtyState.isClean ? 'Clean' : 'Dirty'}
+                          </span>
+                          <span>
+                            Captured:{' '}
+                            {new Date(executionContext.repositorySnapshot.capturedAt).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="context-columns">
+                          {renderPathBucket('Staged', executionContext.repositorySnapshot.dirtyState.stagedPaths)}
+                          {renderPathBucket('Modified', executionContext.repositorySnapshot.dirtyState.modifiedPaths)}
+                          {renderPathBucket('Deleted', executionContext.repositorySnapshot.dirtyState.deletedPaths)}
+                          {renderPathBucket('Renamed', executionContext.repositorySnapshot.dirtyState.renamedPaths)}
+                          {renderPathBucket('Untracked', executionContext.repositorySnapshot.dirtyState.untrackedPaths)}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <div className="artifact-diagnostics">
+                      <h5>Artifact Sizes</h5>
+                      <div className="diagnostic-list">
+                        {executionContext.diagnostics.artifactDiagnostics.map((diagnostic) => (
+                          <span key={diagnostic.relativePath}>
+                            {diagnostic.relativePath}: {diagnostic.byteCount} bytes
+                            {diagnostic.hardLimitExceeded
+                              ? ' / hard limit'
+                              : diagnostic.warningThresholdExceeded
+                                ? ' / warning'
+                                : ''}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="empty-state">Build a context preview for a selected milestone.</p>
+                )}
+              </section>
 
               {workspace ? (
                 <div className="artifact-workspace">

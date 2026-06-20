@@ -1,5 +1,6 @@
 using CommandCenter.Backend.Artifacts;
 using CommandCenter.Backend.Configuration;
+using CommandCenter.Backend.Execution;
 using CommandCenter.Backend.Planning;
 using CommandCenter.Backend.Projections;
 using CommandCenter.Backend.Repositories;
@@ -104,7 +105,8 @@ public sealed class ArtifactRotationServiceTests
         var projectionService = new RepositoryProjectionService(
             repositoryService,
             artifactService,
-            new PlanningService(new FileSystemArtifactStore()));
+            new PlanningService(new FileSystemArtifactStore()),
+            new ExecutionSessionService());
 
         var beforeRotation = await projectionService.GetWorkspaceAsync(repository.Id);
         await rotationService.RotateCurrentHandoffAsync(repository);

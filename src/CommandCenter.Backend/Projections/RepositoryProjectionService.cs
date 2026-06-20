@@ -1,4 +1,5 @@
 using CommandCenter.Backend.Artifacts;
+using CommandCenter.Backend.Execution;
 using CommandCenter.Backend.Planning;
 using CommandCenter.Backend.Repositories;
 using System.Collections.Concurrent;
@@ -8,7 +9,8 @@ namespace CommandCenter.Backend.Projections;
 public sealed class RepositoryProjectionService(
     IRepositoryService repositoryService,
     IArtifactService artifactService,
-    IPlanningService planningService) : IRepositoryProjectionService
+    IPlanningService planningService,
+    IExecutionSessionService executionSessionService) : IRepositoryProjectionService
 {
     private readonly ConcurrentDictionary<Guid, ArtifactInventory> inventoryCache = new();
 
@@ -25,6 +27,8 @@ public sealed class RepositoryProjectionService(
                 Repository = repository,
                 Availability = DetermineAvailability(repository),
                 Readiness = await planningService.DetermineReadinessAsync(repository),
+                ExecutionState = await executionSessionService.GetRepositoryStateAsync(repository.Id),
+                ActiveExecutionSession = await executionSessionService.GetActiveSessionAsync(repository.Id),
                 MilestoneCount = inventory.Milestones.Count,
                 HasCurrentHandoff = inventory.CurrentHandoff is not null,
                 HasCurrentDecisions = inventory.CurrentDecisions is not null
@@ -63,6 +67,8 @@ public sealed class RepositoryProjectionService(
             Repository = repository,
             Availability = DetermineAvailability(repository),
             Readiness = await planningService.DetermineReadinessAsync(repository),
+            ExecutionState = await executionSessionService.GetRepositoryStateAsync(repository.Id),
+            ExecutionSummary = await executionSessionService.GetActiveSessionAsync(repository.Id),
             ArtifactInventory = inventory,
             MilestoneCount = inventory.Milestones.Count,
             HasPlan = inventory.Plan is not null,

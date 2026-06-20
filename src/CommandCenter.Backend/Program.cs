@@ -1,5 +1,6 @@
 using CommandCenter.Backend.Artifacts;
 using CommandCenter.Backend.Configuration;
+using CommandCenter.Backend.Execution;
 using CommandCenter.Backend.Planning;
 using CommandCenter.Backend.Projections;
 using CommandCenter.Backend.Repositories;
@@ -9,7 +10,9 @@ namespace CommandCenter.Backend;
 
 public static class Program
 {
-    public static WebApplication CreateApp(string[] args)
+    public static WebApplication CreateApp(
+        string[] args,
+        Action<IServiceCollection>? configureServices = null)
     {
         var builder = WebApplication.CreateBuilder(args);
 
@@ -18,8 +21,16 @@ public static class Program
         builder.Services.AddSingleton<IRepositoryService, RepositoryService>();
         builder.Services.AddSingleton<IArtifactService, ArtifactService>();
         builder.Services.AddSingleton<IArtifactRotationService, ArtifactRotationService>();
-        builder.Services.AddSingleton<IRepositoryProjectionService, RepositoryProjectionService>();
         builder.Services.AddSingleton<IPlanningService, PlanningService>();
+        builder.Services.AddSingleton<IExecutionContextService, ExecutionContextService>();
+        builder.Services.AddSingleton<IExecutionSessionService, ExecutionSessionService>();
+        builder.Services.AddSingleton<IExecutionMonitoringService, ExecutionMonitoringService>();
+        builder.Services.AddSingleton<IHandoffService, HandoffService>();
+        builder.Services.AddSingleton<IExecutionProvider, NoopExecutionProvider>();
+        builder.Services.AddSingleton<IProcessRunner, ProcessRunner>();
+        builder.Services.AddSingleton<IGitService, GitService>();
+        builder.Services.AddSingleton<IRepositoryProjectionService, RepositoryProjectionService>();
+        configureServices?.Invoke(builder.Services);
         builder.Services.ConfigureHttpJsonOptions(options =>
             options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
@@ -204,6 +215,24 @@ public static class Program
             catch (KeyNotFoundException exception)
             {
                 return Results.NotFound(new { error = exception.Message });
+            }
+        });
+        app.MapGet("/api/repositories/{repositoryId:guid}/execution/context", async (
+            Guid repositoryId,
+            string milestonePath,
+            IExecutionContextService executionContextService) =>
+        {
+            try
+            {
+                return Results.Ok(await executionContextService.BuildContextAsync(repositoryId, milestonePath));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
             }
         });
         app.MapPost("/api/repositories/{repositoryId:guid}/refresh", async (

@@ -1,5 +1,6 @@
 using CommandCenter.Backend.Artifacts;
 using CommandCenter.Backend.Configuration;
+using CommandCenter.Backend.Execution;
 using CommandCenter.Backend.Planning;
 using CommandCenter.Backend.Projections;
 using CommandCenter.Backend.Repositories;
@@ -117,6 +118,24 @@ public sealed class RepositoryProjectionServiceTests
     }
 
     [Fact]
+    public async Task DashboardAndWorkspaceProjectDefaultExecutionState()
+    {
+        var repositoryPath = CreateGitRepositoryDirectory();
+        var repositoryService = CreateRepositoryService();
+        var repository = await repositoryService.RegisterAsync(repositoryPath);
+        var projectionService = CreateProjectionService(repositoryService);
+
+        var dashboard = await projectionService.GetDashboardAsync();
+        var workspace = await projectionService.GetWorkspaceAsync(repository.Id);
+
+        var dashboardProjection = Assert.Single(dashboard);
+        Assert.Equal(RepositoryExecutionState.Ready, dashboardProjection.ExecutionState);
+        Assert.Null(dashboardProjection.ActiveExecutionSession);
+        Assert.Equal(RepositoryExecutionState.Ready, workspace.ExecutionState);
+        Assert.Null(workspace.ExecutionSummary);
+    }
+
+    [Fact]
     public async Task RefreshAfterAddingMilestoneUpdatesReadiness()
     {
         var repositoryPath = CreateGitRepositoryDirectory();
@@ -145,7 +164,8 @@ public sealed class RepositoryProjectionServiceTests
         return new RepositoryProjectionService(
             repositoryService,
             new ArtifactService(new FileSystemArtifactStore()),
-            new PlanningService(new FileSystemArtifactStore()));
+            new PlanningService(new FileSystemArtifactStore()),
+            new ExecutionSessionService());
     }
 
     private static async Task WriteAsync(Repository repository, string relativePath, string content)

@@ -6,37 +6,37 @@ Establish execution subsystem boundaries, lifecycle, models, and UI architecture
 
 ## Backend Work
 
-- [ ] Add `ExecutionSessionState` and `RepositoryExecutionState`.
-- [ ] Add minimal `ExecutionSession` model.
-- [ ] Add interfaces:
-  - [ ] `IExecutionContextService`
-  - [ ] `IExecutionSessionService`
-  - [ ] `IExecutionMonitoringService`
-  - [ ] `IHandoffService`
-  - [ ] `IExecutionProvider`
-  - [ ] `IGitService`
-- [ ] Add no-op or in-memory implementations only where needed to support projections.
-- [ ] Add execution state fields to dashboard and workspace projections.
-- [ ] Keep all repositories in `Ready`, `Failed`, or unavailable-derived states based on existing data until real execution exists.
+- [x] Add `ExecutionSessionState` and `RepositoryExecutionState`.
+- [x] Add minimal `ExecutionSession` model.
+- [x] Add interfaces:
+  - [x] `IExecutionContextService`
+  - [x] `IExecutionSessionService`
+  - [x] `IExecutionMonitoringService`
+  - [x] `IHandoffService`
+  - [x] `IExecutionProvider`
+  - [x] `IGitService`
+- [x] Add no-op or in-memory implementations only where needed to support projections.
+- [x] Add execution state fields to dashboard and workspace projections.
+- [x] Keep all repositories in `Ready`, `Failed`, or unavailable-derived states based on existing data until real execution exists.
 
 ## Documentation Work
 
-- [ ] Update `docs/architecture.md` or add `docs/execution-architecture.md`.
-- [ ] Document disposable sessions, service boundaries, lifecycle, provider strategy, state model, and handoff invariant.
+- [x] Update `docs/architecture.md` or add `docs/execution-architecture.md`.
+- [x] Document disposable sessions, service boundaries, lifecycle, provider strategy, state model, and handoff invariant.
 
 ## UI Work
 
-- [ ] Display execution state placeholders in dashboard and workspace.
-- [ ] Do not add a start button yet.
+- [x] Display execution state placeholders in dashboard and workspace.
+- [x] Do not add a start button yet.
 
 ## Tests
 
-- [ ] State model serialization tests through HTTP JSON options.
-- [ ] Projection tests verifying default execution state.
-- [ ] Service registration smoke test through `Program.CreateApp`.
+- [x] State model serialization tests through HTTP JSON options.
+- [x] Projection tests verifying default execution state.
+- [x] Service registration smoke test through `Program.CreateApp`.
 
 ## Exit Criteria
 
-- [ ] Execution boundaries and state model are defined in code and documentation.
-- [ ] Dashboard and workspace show execution state.
-- [ ] No execution session can be launched yet.
+- [x] Execution boundaries and state model are defined in code and documentation.
+- [x] Dashboard and workspace show execution state.
+- [x] No execution session can be launched yet.

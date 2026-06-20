@@ -12,10 +12,11 @@ public sealed class ApplicationConfigurationStore : IApplicationConfigurationSto
     private readonly string configurationPath;
 
     public ApplicationConfigurationStore()
-        : this(Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "CommandCenter",
-            "configuration.json"))
+        : this(Environment.GetEnvironmentVariable("COMMAND_CENTER_CONFIGURATION_PATH") ??
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "CommandCenter",
+                "configuration.json"))
     {
     }
 

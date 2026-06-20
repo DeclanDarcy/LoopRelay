@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::{
     env,
     path::PathBuf,
@@ -29,9 +30,22 @@ struct RepositoryDashboardProjection {
     repository: Repository,
     availability: String,
     readiness: String,
+    execution_state: String,
+    active_execution_session: Option<ExecutionSessionSummary>,
     milestone_count: i32,
     has_current_handoff: bool,
     has_current_decisions: bool,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ExecutionSessionSummary {
+    session_id: String,
+    state: String,
+    repository_state: String,
+    milestone_path: Option<String>,
+    started_at: Option<String>,
+    last_activity_at: Option<String>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -63,6 +77,8 @@ struct RepositoryWorkspaceProjection {
     repository: Repository,
     availability: String,
     readiness: String,
+    execution_state: String,
+    execution_summary: Option<ExecutionSessionSummary>,
     artifact_inventory: ArtifactInventory,
     milestone_count: i32,
     has_plan: bool,
@@ -241,6 +257,22 @@ fn rotate_current_decisions(repository_id: String) -> Result<RepositoryWorkspace
     rotate_artifact(repository_id, "rotate-current-decisions")
 }
 
+#[tauri::command]
+fn preview_execution_context(repository_id: String, milestone_path: String) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::new();
+    client
+        .get(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/execution/context"
+        ))
+        .query(&[("milestonePath", milestone_path)])
+        .send()
+        .map_err(|error| error.to_string())?
+        .error_for_status()
+        .map_err(|error| error.to_string())?
+        .json()
+        .map_err(|error| error.to_string())
+}
+
 fn rotate_artifact(
     repository_id: String,
     operation: &str,
@@ -380,7 +412,8 @@ fn main() {
             load_artifact_content,
             save_artifact_content,
             rotate_current_handoff,
-            rotate_current_decisions
+            rotate_current_decisions,
+            preview_execution_context
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Command Center shell");

@@ -223,6 +223,17 @@ button:focus-visible {
   font-weight: 750;
 }
 
+.execution-state {
+  align-self: start;
+  white-space: nowrap;
+  padding: 3px 8px;
+  border-radius: 999px;
+  color: #24496a;
+  background: #e5f1fb;
+  font-size: 0.75rem;
+  font-weight: 750;
+}
+
 .readiness-ready {
   color: #145c4b;
   background: #dff3ea;
@@ -247,6 +258,21 @@ button:focus-visible {
 .availability-accessdenied {
   color: #8a211b;
   background: #ffe1de;
+}
+
+.execution-state-failed,
+.execution-state-cancelled {
+  color: #8a211b;
+  background: #ffe1de;
+}
+
+.execution-state-executing,
+.execution-state-awaitingacceptance,
+.execution-state-accepted,
+.execution-state-awaitingcommit,
+.execution-state-awaitingpush {
+  color: #7c5200;
+  background: #fff2cc;
 }
 
 .details-body {
@@ -317,6 +343,109 @@ button:focus-visible {
   font-size: 0.88rem;
   font-weight: 650;
   overflow-wrap: anywhere;
+}
+
+.execution-context-panel {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #d9e0e6;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.context-toolbar,
+.context-controls {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.context-toolbar h4,
+.context-preview h5 {
+  margin: 4px 0 0;
+  color: #121820;
+  letter-spacing: 0;
+}
+
+.context-controls {
+  flex-wrap: wrap;
+  justify-content: end;
+}
+
+.context-controls select {
+  min-height: 38px;
+  min-width: 220px;
+  max-width: 340px;
+  border: 1px solid #c8d0d8;
+  border-radius: 6px;
+  padding: 0 10px;
+  color: #1d252c;
+  background: #ffffff;
+  font: inherit;
+}
+
+.context-preview {
+  display: grid;
+  gap: 14px;
+}
+
+.context-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.context-summary span,
+.diagnostic-list span {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid #d9e0e6;
+  border-radius: 6px;
+  background: #fafbfc;
+  color: #3d4650;
+  font-size: 0.82rem;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.context-columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.context-columns > div,
+.dirty-state,
+.artifact-diagnostics {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.context-columns ul,
+.context-columns p {
+  margin: 0;
+  color: #3d4650;
+  font-size: 0.86rem;
+}
+
+.context-columns ul {
+  padding-left: 18px;
+}
+
+.context-columns li {
+  overflow-wrap: anywhere;
+}
+
+.diagnostic-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .artifact-workspace {
@@ -525,6 +654,12 @@ button:focus-visible {
     grid-template-columns: 1fr 1fr;
   }
 
+  .context-summary,
+  .context-columns,
+  .diagnostic-list {
+    grid-template-columns: 1fr;
+  }
+
   .header-actions {
     justify-content: start;
   }
@@ -538,6 +673,8 @@ button:focus-visible {
 @media (max-width: 560px) {
   .repository-item,
   .summary-grid,
+  .context-toolbar,
+  .context-controls,
   .artifact-panel-header,
   .artifact-panel-actions {
     grid-template-columns: 1fr;

@@ -1,5 +1,6 @@
 using CommandCenter.Backend.Planning;
 using CommandCenter.Backend.Repositories;
+using CommandCenter.Backend.Execution;
 
 namespace CommandCenter.Backend.Projections;
 
@@ -10,6 +11,10 @@ public sealed class RepositoryDashboardProjection
     public RepositoryAvailability Availability { get; init; }
 
     public ExecutionReadiness Readiness { get; init; }
+
+    public RepositoryExecutionState ExecutionState { get; init; } = RepositoryExecutionState.Ready;
+
+    public ExecutionSessionSummary? ActiveExecutionSession { get; init; }
 
     public int MilestoneCount { get; init; }
 
