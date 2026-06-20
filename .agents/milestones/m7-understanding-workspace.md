@@ -6,61 +6,61 @@ Expose current project understanding as a first-class section inside the existin
 
 ## Backend Projection Changes
 
-- [ ] Add `OperationalContextProjection` to `RepositoryWorkspaceProjection`.
-- [ ] Add dashboard continuity summary fields.
-- [ ] Projection fields:
-  - [ ] Current context exists.
-  - [ ] Current relative path.
-  - [ ] Revision count.
-  - [ ] Current revision number.
-  - [ ] Last updated timestamp.
-  - [ ] Last promotion timestamp.
-  - [ ] Current understanding summary.
-  - [ ] Architecture items.
-  - [ ] Authority boundaries.
-  - [ ] Constraints.
-  - [ ] Stable decisions.
-  - [ ] Decision rationale.
-  - [ ] Open questions.
-  - [ ] Active risks.
-  - [ ] Recent semantic changes.
-  - [ ] Pending proposal summary.
-  - [ ] Latest review state.
-  - [ ] Continuity warnings.
-- [ ] All values originate from backend parsing and proposal metadata.
+- [x] Add `OperationalContextProjection` to `RepositoryWorkspaceProjection`.
+- [x] Add dashboard continuity summary fields.
+- [x] Projection fields:
+  - [x] Current context exists.
+  - [x] Current relative path.
+  - [x] Revision count.
+  - [x] Current revision number.
+  - [x] Last updated timestamp.
+  - [x] Last promotion timestamp.
+  - [x] Current understanding summary.
+  - [x] Architecture items.
+  - [x] Authority boundaries.
+  - [x] Constraints.
+  - [x] Stable decisions.
+  - [x] Decision rationale.
+  - [x] Open questions.
+  - [x] Active risks.
+  - [x] Recent semantic changes.
+  - [x] Pending proposal summary.
+  - [x] Latest review state.
+  - [x] Continuity warnings.
+- [x] All values originate from backend parsing and proposal metadata.
 
 ## UI Changes
 
-- [ ] Add an `OperationalContextSurface` inside repository details.
-- [ ] Dashboard shows:
-  - [ ] Operational context present or missing.
-  - [ ] Revision count.
+- [x] Add an `OperationalContextSurface` inside repository details.
+- [x] Dashboard shows:
+  - [x] Operational context present or missing.
+  - [x] Revision count.
   - [ ] Last updated.
-  - [ ] Open question count.
-  - [ ] Active risk count.
-- [ ] Workspace shows:
-  - [ ] Current understanding summary.
-  - [ ] Stable decisions.
-  - [ ] Open questions.
-  - [ ] Active risks.
-  - [ ] Recent understanding changes.
+  - [x] Open question count.
+  - [x] Active risk count.
+- [x] Workspace shows:
+  - [x] Current understanding summary.
+  - [x] Stable decisions.
+  - [x] Open questions.
+  - [x] Active risks.
+  - [x] Recent understanding changes.
   - [ ] Whether operational context is included in execution context preview.
-- [ ] Keep artifact explorer available for full Markdown editing.
-- [ ] Avoid building a full historical revision browser.
-- [ ] Avoid computing understanding state client-side.
+- [x] Keep artifact explorer available for full Markdown editing.
+- [x] Avoid building a full historical revision browser.
+- [x] Avoid computing understanding state client-side.
 
 ## Tests
 
 Add backend tests:
 
-- [ ] Projection parses current operational context into expected sections.
-- [ ] Dashboard exposes revision count and counts for questions/risks.
-- [ ] Workspace projection includes pending proposal and review state.
-- [ ] Missing operational context produces explicit missing state, not failure.
+- [x] Projection parses current operational context into expected sections.
+- [x] Dashboard exposes revision count and counts for questions/risks.
+- [x] Workspace projection includes pending proposal and review state.
+- [x] Missing operational context produces explicit missing state, not failure.
 
 Add UI build validation:
 
-- [ ] TypeScript build passes.
+- [x] TypeScript build passes.
 - [ ] Understanding components handle missing, empty, present, pending proposal, accepted proposal, and stale proposal states.
 
 ## Certification

@@ -2,24 +2,26 @@
 
 ## Slice Summary
 
-Continued and effectively completed M6 decision continuity by making decision-derived understanding reviewable in semantic changes and the operational-context proposal UI.
+Started M7 Understanding Workspace by adding backend-owned current-understanding projections, carrying them through the Tauri bridge, and showing a compact read-only understanding surface in the existing repository workspace.
 
 ## New State
 
-- Added explicit decision semantic change types: important decision introduced, decision retired, rationale lost warning, open decision preserved, and open decision resolved.
-- Updated `UnderstandingDiffService` so stable-decision additions/removals, decision-rationale changes/loss, and open-decision question changes use decision-specific change types.
-- Added backend tests for decision-specific semantic changes and strategic decision survival.
-- Tightened decision classification so slice/build/test/commit execution-detail language is classified as tactical before broad strategic terms such as `should`.
-- Added repeated proposal/promotion certification coverage proving a large decision archive does not replay tactical or historical decisions into operational context.
-- Updated the proposal review UI with a Decision Continuity Review block showing proposed stable decisions, open decisions, decision rationale, decision changes, and decision warnings without requiring raw JSON or manual Markdown scanning.
-- Updated `.agents/milestones/m6-decision-continuity.md` to mark the completed semantic-change, UI, and strategic-decision test scope.
-- Clarified M6 certification text so decision history must remain separate from current understanding.
+- Added `OperationalContextProjection` to workspace projections with parsed current model, architecture, authority boundaries, constraints, stable decisions, rationale, open questions, active risks, recent changes, latest review state, proposal summary, revision metadata, timestamps, and continuity warnings.
+- Added `RepositoryContinuitySummary` to dashboard projections with operational-context presence, revision count, last update timestamp, open question count, active risk count, and pending proposal presence.
+- `RepositoryProjectionService` now builds continuity state from backend parsing of `.agents/operational_context.md`, historical operational-context artifact inventory, and latest proposal metadata.
+- Added backend tests for parsed workspace sections, explicit missing operational context, dashboard continuity counts, and proposal review/warning projection.
+- Extended the Rust/Tauri DTOs so new backend continuity fields are not dropped before reaching the UI.
+- Extended UI and dev mock types for the new continuity projection.
+- Added a read-only Current Understanding section to repository details showing summary, stable decisions, open questions, active risks, recent changes, warnings, revision metadata, and latest review state.
+- Dashboard repository rows now show operational-context presence, revision count, open question count, and active risk count.
+- Updated `.agents/milestones/m7-understanding-workspace.md` to mark completed backend projection, initial UI surface, and backend test scope.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 175 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 179 tests.
 - `npm run build --prefix src/CommandCenter.UI` passed.
+- `cargo build --manifest-path src/CommandCenter.Shell/Cargo.toml` passed.
 
 ## Next Slice
 
-Start M7 Understanding Workspace by introducing backend workspace projections for operational-context sections and dashboard continuity summaries, then begin peeling the current `App.tsx` surface toward focused workspace components only where needed.
+Finish M7 by showing dashboard last-updated time, indicating whether operational context is included in execution context preview, and adding/validating UI states for missing, empty, present, pending, accepted, and stale proposal combinations.

@@ -218,6 +218,16 @@ type RepositoryDashboardProjection = {
   milestoneCount: number
   hasCurrentHandoff: boolean
   hasCurrentDecisions: boolean
+  continuitySummary: RepositoryContinuitySummary
+}
+
+type RepositoryContinuitySummary = {
+  operationalContextExists: boolean
+  operationalContextRevisionCount: number
+  operationalContextLastUpdatedAt: string | null
+  openQuestionCount: number
+  activeRiskCount: number
+  pendingProposalExists: boolean
 }
 
 type RepositoryWorkspaceProjection = {
@@ -234,6 +244,7 @@ type RepositoryWorkspaceProjection = {
   hasCurrentHandoff: boolean
   hasCurrentDecisions: boolean
   operationalContextProposalSummary: OperationalContextProposalSummary
+  operationalContext: OperationalContextProjection
 }
 
 type OperationalContextProposalSummary = {
@@ -246,6 +257,35 @@ type OperationalContextProposalSummary = {
   contentCharacterCount: number
   lastPromotedAt: string | null
   lastArchivedRelativePath: string | null
+}
+
+type OperationalContextItem = {
+  id: string
+  kind: string
+  text: string
+  rationale: string | null
+  sourceRelativePath: string | null
+}
+
+type OperationalContextProjection = {
+  exists: boolean
+  currentRelativePath: string | null
+  revisionCount: number
+  currentRevisionNumber: number
+  lastUpdatedAt: string | null
+  lastPromotionAt: string | null
+  currentUnderstandingSummary: string[]
+  architecture: OperationalContextItem[]
+  authorityBoundaries: OperationalContextItem[]
+  constraints: OperationalContextItem[]
+  stableDecisions: OperationalContextItem[]
+  decisionRationale: OperationalContextItem[]
+  openQuestions: OperationalContextItem[]
+  activeRisks: OperationalContextItem[]
+  recentUnderstandingChanges: OperationalContextItem[]
+  pendingProposalSummary: OperationalContextProposalSummary
+  latestReviewState: OperationalContextReviewState | null
+  continuityWarnings: string[]
 }
 
 type OperationalContextSemanticChange = {
@@ -2054,6 +2094,18 @@ function App() {
                     <span className="repository-metadata">
                       Decisions {entry.hasCurrentDecisions ? 'present' : 'missing'}
                     </span>
+                    <span className="repository-metadata">
+                      Context {entry.continuitySummary.operationalContextExists ? 'present' : 'missing'}
+                    </span>
+                    <span className="repository-metadata">
+                      Revisions {entry.continuitySummary.operationalContextRevisionCount}
+                    </span>
+                    <span className="repository-metadata">
+                      Questions {entry.continuitySummary.openQuestionCount}
+                    </span>
+                    <span className="repository-metadata">
+                      Risks {entry.continuitySummary.activeRiskCount}
+                    </span>
                   </button>
                 )
               })}
@@ -2172,6 +2224,116 @@ function App() {
                 <span>Handoff: {workspace?.hasCurrentHandoff ? 'Present' : 'Missing'}</span>
                 <span>Decisions: {workspace?.hasCurrentDecisions ? 'Present' : 'Missing'}</span>
               </div>
+
+              <section className="execution-context-panel" aria-label="Current understanding">
+                <div className="context-toolbar">
+                  <div>
+                    <p className="eyebrow">Operational Context</p>
+                    <h4>Current Understanding</h4>
+                  </div>
+                </div>
+
+                {workspace?.operationalContext.exists ? (
+                  <div className="context-artifact-previews">
+                    <div className="context-summary">
+                      <span>Path: {workspace.operationalContext.currentRelativePath}</span>
+                      <span>Revisions: {workspace.operationalContext.revisionCount}</span>
+                      <span>
+                        Current revision: {workspace.operationalContext.currentRevisionNumber}
+                      </span>
+                      <span>
+                        Updated: {formatDateTime(workspace.operationalContext.lastUpdatedAt)}
+                      </span>
+                      <span>
+                        Last promoted:{' '}
+                        {formatDateTime(workspace.operationalContext.lastPromotionAt)}
+                      </span>
+                      <span>Questions: {workspace.operationalContext.openQuestions.length}</span>
+                      <span>Risks: {workspace.operationalContext.activeRisks.length}</span>
+                      <span>
+                        Review: {workspace.operationalContext.latestReviewState ?? 'None'}
+                      </span>
+                    </div>
+
+                    <div className="context-columns">
+                      <div>
+                        <h5>Current Model</h5>
+                        {workspace.operationalContext.currentUnderstandingSummary.length > 0 ? (
+                          <ul>
+                            {workspace.operationalContext.currentUnderstandingSummary.map((item) => (
+                              <li key={item}>{item}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p>No current model items recorded.</p>
+                        )}
+                      </div>
+                      <div>
+                        <h5>Stable Decisions</h5>
+                        {workspace.operationalContext.stableDecisions.length > 0 ? (
+                          <ul>
+                            {workspace.operationalContext.stableDecisions.map((item) => (
+                              <li key={item.id}>{item.text}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p>No stable decisions recorded.</p>
+                        )}
+                      </div>
+                      <div>
+                        <h5>Open Questions</h5>
+                        {workspace.operationalContext.openQuestions.length > 0 ? (
+                          <ul>
+                            {workspace.operationalContext.openQuestions.map((item) => (
+                              <li key={item.id}>{item.text}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p>No open questions recorded.</p>
+                        )}
+                      </div>
+                      <div>
+                        <h5>Active Risks</h5>
+                        {workspace.operationalContext.activeRisks.length > 0 ? (
+                          <ul>
+                            {workspace.operationalContext.activeRisks.map((item) => (
+                              <li key={item.id}>{item.text}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p>No active risks recorded.</p>
+                        )}
+                      </div>
+                      <div>
+                        <h5>Recent Changes</h5>
+                        {workspace.operationalContext.recentUnderstandingChanges.length > 0 ? (
+                          <ul>
+                            {workspace.operationalContext.recentUnderstandingChanges.map((item) => (
+                              <li key={item.id}>{item.text}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p>No recent understanding changes recorded.</p>
+                        )}
+                      </div>
+                      <div>
+                        <h5>Continuity Warnings</h5>
+                        {workspace.operationalContext.continuityWarnings.length > 0 ? (
+                          <ul>
+                            {workspace.operationalContext.continuityWarnings.map((warning) => (
+                              <li key={warning}>{warning}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p>No continuity warnings recorded.</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="empty-state">No current operational context exists.</p>
+                )}
+              </section>
 
               <section className="execution-context-panel" aria-label="Operational context proposals">
                 <div className="context-toolbar">

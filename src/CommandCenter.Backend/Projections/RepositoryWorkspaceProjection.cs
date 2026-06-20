@@ -32,4 +32,6 @@ public sealed class RepositoryWorkspaceProjection
     public bool HasCurrentDecisions { get; init; }
 
     public OperationalContextProposalSummary OperationalContextProposalSummary { get; init; } = new();
+
+    public OperationalContextProjection OperationalContext { get; init; } = new();
 }

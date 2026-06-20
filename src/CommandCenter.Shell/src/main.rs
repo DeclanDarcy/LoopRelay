@@ -37,6 +37,18 @@ struct RepositoryDashboardProjection {
     milestone_count: i32,
     has_current_handoff: bool,
     has_current_decisions: bool,
+    continuity_summary: RepositoryContinuitySummary,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RepositoryContinuitySummary {
+    operational_context_exists: bool,
+    operational_context_revision_count: i32,
+    operational_context_last_updated_at: Option<String>,
+    open_question_count: i32,
+    active_risk_count: i32,
+    pending_proposal_exists: bool,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -178,6 +190,7 @@ struct RepositoryWorkspaceProjection {
     has_current_handoff: bool,
     has_current_decisions: bool,
     operational_context_proposal_summary: OperationalContextProposalSummary,
+    operational_context: OperationalContextProjection,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -192,6 +205,39 @@ struct OperationalContextProposalSummary {
     content_character_count: i32,
     last_promoted_at: Option<String>,
     last_archived_relative_path: Option<String>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct OperationalContextProjection {
+    exists: bool,
+    current_relative_path: Option<String>,
+    revision_count: i32,
+    current_revision_number: i32,
+    last_updated_at: Option<String>,
+    last_promotion_at: Option<String>,
+    current_understanding_summary: Vec<String>,
+    architecture: Vec<OperationalContextItem>,
+    authority_boundaries: Vec<OperationalContextItem>,
+    constraints: Vec<OperationalContextItem>,
+    stable_decisions: Vec<OperationalContextItem>,
+    decision_rationale: Vec<OperationalContextItem>,
+    open_questions: Vec<OperationalContextItem>,
+    active_risks: Vec<OperationalContextItem>,
+    recent_understanding_changes: Vec<OperationalContextItem>,
+    pending_proposal_summary: OperationalContextProposalSummary,
+    latest_review_state: Option<String>,
+    continuity_warnings: Vec<String>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct OperationalContextItem {
+    id: String,
+    kind: String,
+    text: String,
+    rationale: Option<String>,
+    source_relative_path: Option<String>,
 }
 
 #[derive(Serialize)]

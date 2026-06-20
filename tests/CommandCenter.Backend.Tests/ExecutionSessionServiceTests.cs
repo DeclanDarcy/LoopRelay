@@ -261,7 +261,9 @@ public sealed class ExecutionSessionServiceTests
             new ArtifactService(artifactStore),
             new PlanningService(artifactStore),
             reloadedService,
-            new FileSystemOperationalContextProposalStore(artifactStore));
+            new FileSystemOperationalContextProposalStore(artifactStore),
+            new MarkdownOperationalContextParser(),
+            artifactStore);
 
         var dashboard = await projectionService.GetDashboardAsync();
         var workspace = await projectionService.GetWorkspaceAsync(harness.Repository.Id);

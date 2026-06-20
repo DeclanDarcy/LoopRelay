@@ -39,6 +39,7 @@ type Workspace = {
   hasCurrentHandoff: boolean
   hasCurrentDecisions: boolean
   operationalContextProposalSummary: OperationalContextProposalSummary
+  operationalContext: OperationalContextProjection
 }
 
 type OperationalContextProposalSummary = {
@@ -51,6 +52,35 @@ type OperationalContextProposalSummary = {
   contentCharacterCount: number
   lastPromotedAt: string | null
   lastArchivedRelativePath: string | null
+}
+
+type OperationalContextItem = {
+  id: string
+  kind: string
+  text: string
+  rationale: string | null
+  sourceRelativePath: string | null
+}
+
+type OperationalContextProjection = {
+  exists: boolean
+  currentRelativePath: string | null
+  revisionCount: number
+  currentRevisionNumber: number
+  lastUpdatedAt: string | null
+  lastPromotionAt: string | null
+  currentUnderstandingSummary: string[]
+  architecture: OperationalContextItem[]
+  authorityBoundaries: OperationalContextItem[]
+  constraints: OperationalContextItem[]
+  stableDecisions: OperationalContextItem[]
+  decisionRationale: OperationalContextItem[]
+  openQuestions: OperationalContextItem[]
+  activeRisks: OperationalContextItem[]
+  recentUnderstandingChanges: OperationalContextItem[]
+  pendingProposalSummary: OperationalContextProposalSummary
+  latestReviewState: string | null
+  continuityWarnings: string[]
 }
 
 type OperationalContextProposal = {
@@ -119,6 +149,14 @@ type DashboardEntry = {
   milestoneCount: number
   hasCurrentHandoff: boolean
   hasCurrentDecisions: boolean
+  continuitySummary: {
+    operationalContextExists: boolean
+    operationalContextRevisionCount: number
+    operationalContextLastUpdatedAt: string | null
+    openQuestionCount: number
+    activeRiskCount: number
+    pendingProposalExists: boolean
+  }
 }
 
 type ExecutionSessionSummary = {
@@ -359,6 +397,18 @@ function createWorkspace(repository: Repository, inventory: ArtifactInventory): 
       : 'MissingMilestones'
     : 'MissingPlan'
 
+  const operationalContextProposalSummary = {
+    pendingProposalExists: false,
+    latestProposalId: null,
+    generatedAt: null,
+    status: null,
+    sourceInputCount: 0,
+    contentByteCount: 0,
+    contentCharacterCount: 0,
+    lastPromotedAt: null,
+    lastArchivedRelativePath: null,
+  }
+
   return {
     repository,
     availability: 'Available',
@@ -372,17 +422,85 @@ function createWorkspace(repository: Repository, inventory: ArtifactInventory): 
     hasOperationalContext: inventory.operationalContext !== null,
     hasCurrentHandoff: inventory.currentHandoff !== null,
     hasCurrentDecisions: inventory.currentDecisions !== null,
-    operationalContextProposalSummary: {
-      pendingProposalExists: false,
-      latestProposalId: null,
-      generatedAt: null,
-      status: null,
-      sourceInputCount: 0,
-      contentByteCount: 0,
-      contentCharacterCount: 0,
-      lastPromotedAt: null,
-      lastArchivedRelativePath: null,
-    },
+    operationalContextProposalSummary,
+    operationalContext: createOperationalContextProjection(inventory, operationalContextProposalSummary),
+  }
+}
+
+function createOperationalContextProjection(
+  inventory: ArtifactInventory,
+  proposalSummary: OperationalContextProposalSummary,
+): OperationalContextProjection {
+  if (!inventory.operationalContext) {
+    return {
+      exists: false,
+      currentRelativePath: null,
+      revisionCount: inventory.historicalOperationalContexts.length,
+      currentRevisionNumber: 0,
+      lastUpdatedAt: null,
+      lastPromotionAt: proposalSummary.lastPromotedAt,
+      currentUnderstandingSummary: [],
+      architecture: [],
+      authorityBoundaries: [],
+      constraints: [],
+      stableDecisions: [],
+      decisionRationale: [],
+      openQuestions: [],
+      activeRisks: [],
+      recentUnderstandingChanges: [],
+      pendingProposalSummary: proposalSummary,
+      latestReviewState: null,
+      continuityWarnings: [],
+    }
+  }
+
+  return {
+    exists: true,
+    currentRelativePath: inventory.operationalContext.relativePath,
+    revisionCount: inventory.historicalOperationalContexts.length + 1,
+    currentRevisionNumber: inventory.historicalOperationalContexts.length + 1,
+    lastUpdatedAt: new Date().toISOString(),
+    lastPromotionAt: proposalSummary.lastPromotedAt,
+    currentUnderstandingSummary: [
+      'Repository-owned artifacts carry current project understanding.',
+    ],
+    architecture: [
+      operationalContextItem('architecture', 'Backend projections feed the workspace surface.'),
+    ],
+    authorityBoundaries: [
+      operationalContextItem('authority', 'The UI displays continuity state without computing it.'),
+    ],
+    constraints: [
+      operationalContextItem('constraint', 'Operational-context changes require review before promotion.'),
+    ],
+    stableDecisions: [
+      operationalContextItem('decision', 'Execution sessions remain disposable.'),
+    ],
+    decisionRationale: [
+      operationalContextItem('rationale', 'Repository artifacts survive restarts.'),
+    ],
+    openQuestions: [
+      operationalContextItem('question', 'Which warning categories should be shown first?'),
+    ],
+    activeRisks: [
+      operationalContextItem('risk', 'Projection drift could confuse review state.'),
+    ],
+    recentUnderstandingChanges: [
+      operationalContextItem('recent-change', 'M7 mock data exposes current understanding.'),
+    ],
+    pendingProposalSummary: proposalSummary,
+    latestReviewState: null,
+    continuityWarnings: [],
+  }
+}
+
+function operationalContextItem(kind: string, text: string): OperationalContextItem {
+  return {
+    id: `${kind}-${text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`,
+    kind,
+    text,
+    rationale: null,
+    sourceRelativePath: null,
   }
 }
 
@@ -534,6 +652,14 @@ function dashboardEntry(workspace: Workspace): DashboardEntry {
     milestoneCount: workspace.milestoneCount,
     hasCurrentHandoff: workspace.hasCurrentHandoff,
     hasCurrentDecisions: workspace.hasCurrentDecisions,
+    continuitySummary: {
+      operationalContextExists: workspace.operationalContext.exists,
+      operationalContextRevisionCount: workspace.operationalContext.revisionCount,
+      operationalContextLastUpdatedAt: workspace.operationalContext.lastUpdatedAt,
+      openQuestionCount: workspace.operationalContext.openQuestions.length,
+      activeRiskCount: workspace.operationalContext.activeRisks.length,
+      pendingProposalExists: workspace.operationalContextProposalSummary.pendingProposalExists,
+    },
   }
 }
 
@@ -988,6 +1114,9 @@ function generateOperationalContextProposal(
     lastPromotedAt: null,
     lastArchivedRelativePath: null,
   }
+  workspace.operationalContext.pendingProposalSummary = workspace.operationalContextProposalSummary
+  workspace.operationalContext.latestReviewState = 'PendingReview'
+  workspace.operationalContext.continuityWarnings = proposal.compressionSummary.warnings
   return proposal
 }
 
@@ -1077,6 +1206,9 @@ function reviewOperationalContextProposal(
   if (workspace) {
     workspace.operationalContextProposalSummary.status = status
     workspace.operationalContextProposalSummary.pendingProposalExists = false
+    workspace.operationalContext.pendingProposalSummary = workspace.operationalContextProposalSummary
+    workspace.operationalContext.latestReviewState = status
+    workspace.operationalContext.continuityWarnings = proposal.compressionSummary.warnings
   }
   return proposal
 }
@@ -1118,6 +1250,11 @@ function promoteOperationalContextProposal(
   workspace.operationalContextProposalSummary.pendingProposalExists = false
   workspace.operationalContextProposalSummary.lastPromotedAt = promotedAt
   workspace.operationalContextProposalSummary.lastArchivedRelativePath = archivedRelativePath
+  workspace.operationalContext = createOperationalContextProjection(
+    workspace.artifactInventory,
+    workspace.operationalContextProposalSummary,
+  )
+  workspace.operationalContext.latestReviewState = 'Accepted'
 
   proposal.status = 'Promoted'
   state.content['.agents/operational_context.md'] = proposal.editedContent ?? proposal.generatedContent

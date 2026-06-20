@@ -25,4 +25,6 @@ public sealed class RepositoryDashboardProjection
     public bool HasCurrentHandoff { get; init; }
 
     public bool HasCurrentDecisions { get; init; }
+
+    public RepositoryContinuitySummary ContinuitySummary { get; init; } = new();
 }

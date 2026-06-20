@@ -98,6 +98,173 @@ public sealed class RepositoryProjectionServiceTests
     }
 
     [Fact]
+    public async Task WorkspaceProjectionParsesOperationalContextIntoUnderstandingSections()
+    {
+        var repositoryPath = CreateGitRepositoryDirectory();
+        var repositoryService = CreateRepositoryService();
+        var repository = await repositoryService.RegisterAsync(repositoryPath);
+        await WriteAsync(repository, ".agents/operational_context.0004.md", "historical");
+        await WriteAsync(repository, ".agents/operational_context.md", """
+            # Operational Context
+
+            ## Current Mental Model
+
+            - Command Center preserves understanding through repository artifacts.
+
+            ## Architecture
+
+            - Backend projections are the authority for workspace continuity state.
+
+            ## Authority Boundaries
+
+            - The UI may display understanding but must not compute it.
+
+            ## Constraints
+
+            - Operational context mutation requires human review.
+
+            ## Stable Decisions
+
+            - Disposable execution sessions remain separate from continuity.
+
+            ## Decision Rationale
+
+            - Repository artifacts survive restarts and provider replacement.
+
+            ## Open Questions
+
+            - Which continuity warnings should be visible on the dashboard?
+
+            ## Active Risks
+
+            - Projection drift could make the UI appear authoritative.
+
+            ## Recent Understanding Changes
+
+            - M7 introduced a backend understanding projection.
+            """);
+        var projectionService = CreateProjectionService(repositoryService);
+
+        var workspace = await projectionService.GetWorkspaceAsync(repository.Id);
+
+        Assert.True(workspace.OperationalContext.Exists);
+        Assert.Equal(".agents/operational_context.md", workspace.OperationalContext.CurrentRelativePath);
+        Assert.Equal(2, workspace.OperationalContext.RevisionCount);
+        Assert.Equal(5, workspace.OperationalContext.CurrentRevisionNumber);
+        Assert.NotNull(workspace.OperationalContext.LastUpdatedAt);
+        Assert.Contains("repository artifacts", Assert.Single(workspace.OperationalContext.CurrentUnderstandingSummary));
+        Assert.Contains(workspace.OperationalContext.Architecture, item =>
+            item.Text.Contains("Backend projections", StringComparison.Ordinal));
+        Assert.Contains(workspace.OperationalContext.AuthorityBoundaries, item =>
+            item.Text.Contains("UI may display", StringComparison.Ordinal));
+        Assert.Contains(workspace.OperationalContext.Constraints, item =>
+            item.Text.Contains("human review", StringComparison.Ordinal));
+        Assert.Contains(workspace.OperationalContext.StableDecisions, item =>
+            item.Text.Contains("Disposable execution sessions", StringComparison.Ordinal));
+        Assert.Contains(workspace.OperationalContext.DecisionRationale, item =>
+            item.Text.Contains("survive restarts", StringComparison.Ordinal));
+        Assert.Contains(workspace.OperationalContext.OpenQuestions, item =>
+            item.Text.Contains("dashboard", StringComparison.Ordinal));
+        Assert.Contains(workspace.OperationalContext.ActiveRisks, item =>
+            item.Text.Contains("Projection drift", StringComparison.Ordinal));
+        Assert.Contains(workspace.OperationalContext.RecentUnderstandingChanges, item =>
+            item.Text.Contains("M7 introduced", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task WorkspaceProjectionReportsMissingOperationalContextExplicitly()
+    {
+        var repositoryPath = CreateGitRepositoryDirectory();
+        var repositoryService = CreateRepositoryService();
+        var repository = await repositoryService.RegisterAsync(repositoryPath);
+        var projectionService = CreateProjectionService(repositoryService);
+
+        var workspace = await projectionService.GetWorkspaceAsync(repository.Id);
+
+        Assert.False(workspace.OperationalContext.Exists);
+        Assert.Null(workspace.OperationalContext.CurrentRelativePath);
+        Assert.Equal(0, workspace.OperationalContext.RevisionCount);
+        Assert.Equal(0, workspace.OperationalContext.CurrentRevisionNumber);
+        Assert.Empty(workspace.OperationalContext.OpenQuestions);
+        Assert.Empty(workspace.OperationalContext.ActiveRisks);
+    }
+
+    [Fact]
+    public async Task DashboardContinuitySummaryExposesRevisionQuestionAndRiskCounts()
+    {
+        var repositoryPath = CreateGitRepositoryDirectory();
+        var repositoryService = CreateRepositoryService();
+        var repository = await repositoryService.RegisterAsync(repositoryPath);
+        await WriteAsync(repository, ".agents/operational_context.0001.md", "historical");
+        await WriteAsync(repository, ".agents/operational_context.md", """
+            # Operational Context
+
+            ## Open Questions
+
+            - First question?
+            - Second question?
+
+            ## Active Risks
+
+            - Current risk.
+            """);
+        var projectionService = CreateProjectionService(repositoryService);
+
+        var dashboard = await projectionService.GetDashboardAsync();
+
+        var projection = Assert.Single(dashboard);
+        Assert.True(projection.ContinuitySummary.OperationalContextExists);
+        Assert.Equal(2, projection.ContinuitySummary.OperationalContextRevisionCount);
+        Assert.NotNull(projection.ContinuitySummary.OperationalContextLastUpdatedAt);
+        Assert.Equal(2, projection.ContinuitySummary.OpenQuestionCount);
+        Assert.Equal(1, projection.ContinuitySummary.ActiveRiskCount);
+    }
+
+    [Fact]
+    public async Task WorkspaceProjectionIncludesLatestProposalReviewStateAndWarnings()
+    {
+        var repositoryPath = CreateGitRepositoryDirectory();
+        var repositoryService = CreateRepositoryService();
+        var repository = await repositoryService.RegisterAsync(repositoryPath);
+        var proposalStore = new FileSystemOperationalContextProposalStore(new FileSystemArtifactStore());
+        var generatedAt = DateTimeOffset.UtcNow;
+        await proposalStore.SaveAsync(repository, new OperationalContextProposal
+        {
+            ProposalId = "proposal-1",
+            RepositoryId = repository.Id,
+            GeneratedAt = generatedAt,
+            Status = OperationalContextProposalStatus.Accepted,
+            BaselineCurrentContextHash = "baseline",
+            GeneratedContentHash = "generated",
+            InputFingerprints =
+            [
+                new OperationalContextInputFingerprint { Name = "CurrentHandoff", Present = true },
+                new OperationalContextInputFingerprint { Name = "GeneratedProposal", Present = true, ByteCount = 15, CharacterCount = 15 }
+            ],
+            CompressionSummary = new OperationalContextCompressionSummary
+            {
+                Warnings = ["Stable decision rationale is missing."]
+            },
+            Review = new OperationalContextReview
+            {
+                ProposalId = "proposal-1",
+                ReviewState = OperationalContextReviewState.Accepted,
+                BaselineCurrentContextHash = "baseline",
+                ReviewedContentHash = "generated",
+                ReviewedAt = generatedAt
+            }
+        }, "# Operational Context");
+        var projectionService = CreateProjectionService(repositoryService);
+
+        var workspace = await projectionService.GetWorkspaceAsync(repository.Id);
+
+        Assert.Equal("proposal-1", workspace.OperationalContext.PendingProposalSummary.LatestProposalId);
+        Assert.Equal(OperationalContextProposalStatus.Accepted, workspace.OperationalContext.PendingProposalSummary.Status);
+        Assert.Equal(OperationalContextReviewState.Accepted, workspace.OperationalContext.LatestReviewState);
+        Assert.Contains("Stable decision rationale", Assert.Single(workspace.OperationalContext.ContinuityWarnings));
+    }
+
+    [Fact]
     public async Task DashboardAndWorkspaceProjectPlanningReadiness()
     {
         var repositoryPath = CreateGitRepositoryDirectory();
@@ -219,7 +386,9 @@ public sealed class RepositoryProjectionServiceTests
             new ArtifactService(new FileSystemArtifactStore()),
             new PlanningService(new FileSystemArtifactStore()),
             executionSessionService,
-            new FileSystemOperationalContextProposalStore(new FileSystemArtifactStore()));
+            new FileSystemOperationalContextProposalStore(new FileSystemArtifactStore()),
+            new MarkdownOperationalContextParser(),
+            new FileSystemArtifactStore());
     }
 
     private static async Task WriteAsync(Repository repository, string relativePath, string content)

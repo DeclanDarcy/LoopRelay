@@ -106,9 +106,11 @@ public sealed class ArtifactRotationServiceTests
         var projectionService = new RepositoryProjectionService(
             repositoryService,
             artifactService,
-            new PlanningService(new FileSystemArtifactStore()),
+            new PlanningService(artifactStore),
             new ReadyExecutionSessionService(),
-            new FileSystemOperationalContextProposalStore(new FileSystemArtifactStore()));
+            new FileSystemOperationalContextProposalStore(artifactStore),
+            new MarkdownOperationalContextParser(),
+            artifactStore);
 
         var beforeRotation = await projectionService.GetWorkspaceAsync(repository.Id);
         await rotationService.RotateCurrentHandoffAsync(repository);

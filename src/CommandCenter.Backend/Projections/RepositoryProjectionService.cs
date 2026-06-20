@@ -12,7 +12,9 @@ public sealed class RepositoryProjectionService(
     IArtifactService artifactService,
     IPlanningService planningService,
     IExecutionSessionService executionSessionService,
-    IOperationalContextProposalStore operationalContextProposalStore) : IRepositoryProjectionService
+    IOperationalContextProposalStore operationalContextProposalStore,
+    IOperationalContextParser operationalContextParser,
+    IArtifactStore artifactStore) : IRepositoryProjectionService
 {
     private readonly ConcurrentDictionary<Guid, ArtifactInventory> inventoryCache = new();
 
@@ -24,6 +26,7 @@ public sealed class RepositoryProjectionService(
         foreach (var repository in repositories)
         {
             var inventory = await GetOrBuildInventoryAsync(repository);
+            var operationalContext = await BuildOperationalContextProjectionAsync(repository, inventory);
             projections.Add(new RepositoryDashboardProjection
             {
                 Repository = repository,
@@ -35,7 +38,16 @@ public sealed class RepositoryProjectionService(
                 ExecutionHistory = await executionSessionService.GetRepositorySessionHistoryAsync(repository.Id),
                 MilestoneCount = inventory.Milestones.Count,
                 HasCurrentHandoff = inventory.CurrentHandoff is not null,
-                HasCurrentDecisions = inventory.CurrentDecisions is not null
+                HasCurrentDecisions = inventory.CurrentDecisions is not null,
+                ContinuitySummary = new RepositoryContinuitySummary
+                {
+                    OperationalContextExists = operationalContext.Exists,
+                    OperationalContextRevisionCount = operationalContext.RevisionCount,
+                    OperationalContextLastUpdatedAt = operationalContext.LastUpdatedAt,
+                    OpenQuestionCount = operationalContext.OpenQuestions.Count,
+                    ActiveRiskCount = operationalContext.ActiveRisks.Count,
+                    PendingProposalExists = operationalContext.PendingProposalSummary.PendingProposalExists
+                }
             });
         }
 
@@ -66,6 +78,7 @@ public sealed class RepositoryProjectionService(
         Repository repository,
         ArtifactInventory inventory)
     {
+        var operationalContext = await BuildOperationalContextProjectionAsync(repository, inventory);
         return new RepositoryWorkspaceProjection
         {
             Repository = repository,
@@ -80,13 +93,67 @@ public sealed class RepositoryProjectionService(
             HasOperationalContext = inventory.OperationalContext is not null,
             HasCurrentHandoff = inventory.CurrentHandoff is not null,
             HasCurrentDecisions = inventory.CurrentDecisions is not null,
-            OperationalContextProposalSummary = await BuildOperationalContextProposalSummaryAsync(repository)
+            OperationalContextProposalSummary = operationalContext.PendingProposalSummary,
+            OperationalContext = operationalContext
         };
     }
 
-    private async Task<OperationalContextProposalSummary> BuildOperationalContextProposalSummaryAsync(Repository repository)
+    private async Task<OperationalContextProjection> BuildOperationalContextProjectionAsync(
+        Repository repository,
+        ArtifactInventory inventory)
     {
         var latestProposal = (await operationalContextProposalStore.ListAsync(repository)).FirstOrDefault();
+        var proposalSummary = BuildOperationalContextProposalSummary(latestProposal);
+        var current = inventory.OperationalContext;
+        var revisionCount = inventory.HistoricalOperationalContexts.Count + (current is null ? 0 : 1);
+        var currentRevisionNumber = current is null
+            ? 0
+            : GetHighestHistoricalRevisionNumber(inventory.HistoricalOperationalContexts) + 1;
+
+        if (current is null)
+        {
+            return new OperationalContextProjection
+            {
+                Exists = false,
+                RevisionCount = revisionCount,
+                CurrentRevisionNumber = currentRevisionNumber,
+                LastPromotionAt = proposalSummary.LastPromotedAt,
+                PendingProposalSummary = proposalSummary,
+                LatestReviewState = latestProposal?.Review.ReviewState,
+                ContinuityWarnings = latestProposal?.CompressionSummary.Warnings ?? []
+            };
+        }
+
+        var currentPath = ArtifactPath.ResolveRepositoryPath(repository, current.RelativePath);
+        var content = await artifactStore.ReadAsync(currentPath) ?? string.Empty;
+        var document = operationalContextParser.Parse(content);
+
+        return new OperationalContextProjection
+        {
+            Exists = true,
+            CurrentRelativePath = current.RelativePath,
+            RevisionCount = revisionCount,
+            CurrentRevisionNumber = currentRevisionNumber,
+            LastUpdatedAt = GetLastWriteTime(currentPath),
+            LastPromotionAt = proposalSummary.LastPromotedAt,
+            CurrentUnderstandingSummary = document.CurrentMentalModel.Select(item => item.Text).ToArray(),
+            Architecture = document.Architecture,
+            AuthorityBoundaries = document.AuthorityBoundaries,
+            Constraints = document.Constraints,
+            StableDecisions = document.StableDecisions,
+            DecisionRationale = document.DecisionRationale,
+            OpenQuestions = document.OpenQuestions,
+            ActiveRisks = document.ActiveRisks,
+            RecentUnderstandingChanges = document.RecentUnderstandingChanges,
+            PendingProposalSummary = proposalSummary,
+            LatestReviewState = latestProposal?.Review.ReviewState,
+            ContinuityWarnings = latestProposal?.CompressionSummary.Warnings ?? []
+        };
+    }
+
+    private static OperationalContextProposalSummary BuildOperationalContextProposalSummary(
+        OperationalContextProposal? latestProposal)
+    {
         if (latestProposal is null)
         {
             return new OperationalContextProposalSummary();
@@ -108,6 +175,23 @@ public sealed class RepositoryProjectionService(
             LastPromotedAt = latestProposal.Promotion.PromotedAt,
             LastArchivedRelativePath = latestProposal.Promotion.ArchivedRelativePath
         };
+    }
+
+    private static DateTimeOffset? GetLastWriteTime(string path)
+    {
+        return File.Exists(path) ? new DateTimeOffset(File.GetLastWriteTimeUtc(path), TimeSpan.Zero) : null;
+    }
+
+    private static int GetHighestHistoricalRevisionNumber(IReadOnlyList<Artifact> historicalOperationalContexts)
+    {
+        return historicalOperationalContexts
+            .Select(artifact => Path.GetFileNameWithoutExtension(artifact.RelativePath))
+            .Select(name => name.LastIndexOf('.') is var index && index >= 0
+                ? name[(index + 1)..]
+                : string.Empty)
+            .Select(text => int.TryParse(text, out var number) ? number : 0)
+            .DefaultIfEmpty(0)
+            .Max();
     }
 
     private async Task<ArtifactInventory> GetOrBuildInventoryAsync(Repository repository)

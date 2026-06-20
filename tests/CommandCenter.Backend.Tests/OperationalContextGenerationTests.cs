@@ -639,7 +639,9 @@ public sealed class OperationalContextGenerationTests
             new ArtifactService(new FileSystemArtifactStore()),
             new PlanningService(new FileSystemArtifactStore()),
             harness.ExecutionSessionService,
-            harness.ProposalStore);
+            harness.ProposalStore,
+            new MarkdownOperationalContextParser(),
+            new FileSystemArtifactStore());
 
         var workspace = await projectionService.GetWorkspaceAsync(harness.Repository.Id);
 
@@ -931,7 +933,9 @@ public sealed class OperationalContextGenerationTests
             new ArtifactService(new FileSystemArtifactStore()),
             new PlanningService(new FileSystemArtifactStore()),
             new StaticExecutionSessionService([]),
-            new FileSystemOperationalContextProposalStore(new FileSystemArtifactStore()));
+            new FileSystemOperationalContextProposalStore(new FileSystemArtifactStore()),
+            new MarkdownOperationalContextParser(),
+            new FileSystemArtifactStore());
 
         var workspace = await projectionService.GetWorkspaceAsync(repository.Id);
 
