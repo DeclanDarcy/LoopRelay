@@ -50,6 +50,9 @@ type ExecutionSessionSummary = {
   startedAt: string | null
   completedAt: string | null
   duration: string | null
+  acceptedAt: string | null
+  rejectedAt: string | null
+  decisionNote: string | null
   lastActivityAt: string | null
   providerName: string
   providerExecutablePath: string | null
@@ -73,6 +76,9 @@ type ExecutionStatus = {
   startedAt: string
   completedAt: string | null
   duration: string | null
+  acceptedAt: string | null
+  rejectedAt: string | null
+  decisionNote: string | null
   lastActivityAt: string | null
   providerName: string
   providerExecutablePath: string | null
@@ -385,6 +391,8 @@ function App() {
   const [isContextLoading, setIsContextLoading] = useState(false)
   const [isStartingExecution, setIsStartingExecution] = useState(false)
   const [isGeneratedHandoffLoading, setIsGeneratedHandoffLoading] = useState(false)
+  const [isAcceptingHandoff, setIsAcceptingHandoff] = useState(false)
+  const [isRejectingHandoff, setIsRejectingHandoff] = useState(false)
   const [isAdding, setIsAdding] = useState(false)
   const [removingRepositoryId, setRemovingRepositoryId] = useState<string | null>(null)
 
@@ -453,6 +461,9 @@ function App() {
         startedAt: selectedExecutionStatus?.startedAt ?? executionSummary.startedAt,
         completedAt: selectedExecutionStatus?.completedAt ?? executionSummary.completedAt,
         duration: selectedExecutionStatus?.duration ?? executionSummary.duration,
+        acceptedAt: selectedExecutionStatus?.acceptedAt ?? executionSummary.acceptedAt,
+        rejectedAt: selectedExecutionStatus?.rejectedAt ?? executionSummary.rejectedAt,
+        decisionNote: selectedExecutionStatus?.decisionNote ?? executionSummary.decisionNote,
         lastActivityAt: selectedExecutionStatus?.lastActivityAt ?? executionSummary.lastActivityAt,
         providerName: selectedExecutionStatus?.providerName ?? executionSummary.providerName,
         providerExecutablePath:
@@ -466,6 +477,8 @@ function App() {
   const canReviewGeneratedHandoff =
     executionDisplay?.repositoryState === 'AwaitingAcceptance' &&
     Boolean(executionDisplay.handoffPath)
+  const isHandoffDecisionPending =
+    canReviewGeneratedHandoff && !isAcceptingHandoff && !isRejectingHandoff
 
   const startExecutionBlockedReason = useMemo(() => {
     if (!workspace) {
@@ -788,6 +801,92 @@ function App() {
     }
   }
 
+  async function refreshAfterHandoffDecision(summary: ExecutionSessionSummary, successMessage: string) {
+    if (!selectedRepository) {
+      return
+    }
+
+    setExecutionStatusesBySession((currentStatuses) => {
+      const currentStatus = currentStatuses[summary.sessionId]
+      if (!currentStatus) {
+        return currentStatuses
+      }
+
+      return {
+        ...currentStatuses,
+        [summary.sessionId]: {
+          ...currentStatus,
+          state: summary.state,
+          repositoryState: summary.repositoryState,
+          completedAt: summary.completedAt,
+          duration: summary.duration,
+          acceptedAt: summary.acceptedAt,
+          rejectedAt: summary.rejectedAt,
+          decisionNote: summary.decisionNote,
+          lastActivityAt: summary.lastActivityAt,
+          handoffPath: summary.handoffPath,
+          failureReason: summary.failureReason,
+        },
+      }
+    })
+    setMessage(successMessage)
+    await loadRepositories()
+    await loadWorkspace(selectedRepository.repository.id)
+  }
+
+  async function acceptGeneratedHandoff() {
+    if (!executionDisplay || !isHandoffDecisionPending) {
+      return
+    }
+
+    setIsAcceptingHandoff(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const summary = await invoke<ExecutionSessionSummary>('accept_execution_handoff', {
+        sessionId: executionDisplay.sessionId,
+      })
+      await refreshAfterHandoffDecision(
+        summary,
+        summary.repositoryState === 'AwaitingCommit'
+          ? 'Handoff accepted. Commit review is ready.'
+          : 'Handoff accepted. Repository is ready.',
+      )
+    } catch (acceptError) {
+      setError(formatError(acceptError))
+    } finally {
+      setIsAcceptingHandoff(false)
+    }
+  }
+
+  async function rejectGeneratedHandoff() {
+    if (!executionDisplay || !isHandoffDecisionPending) {
+      return
+    }
+
+    const confirmed = window.confirm(
+      'Reject this execution handoff?\n\nThe handoff and session metadata will remain available for audit.',
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    setIsRejectingHandoff(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const summary = await invoke<ExecutionSessionSummary>('reject_execution_handoff', {
+        sessionId: executionDisplay.sessionId,
+      })
+      await refreshAfterHandoffDecision(summary, 'Handoff rejected. Repository is ready.')
+    } catch (rejectError) {
+      setError(formatError(rejectError))
+    } finally {
+      setIsRejectingHandoff(false)
+    }
+  }
+
   useEffect(() => {
     let isCurrent = true
 
@@ -917,6 +1016,9 @@ function App() {
               repositoryState: selectedExecutionStatus.repositoryState,
               completedAt: selectedExecutionStatus.completedAt,
               duration: selectedExecutionStatus.duration,
+              acceptedAt: selectedExecutionStatus.acceptedAt,
+              rejectedAt: selectedExecutionStatus.rejectedAt,
+              decisionNote: selectedExecutionStatus.decisionNote,
               lastActivityAt: selectedExecutionStatus.lastActivityAt,
               providerName: selectedExecutionStatus.providerName,
               providerExecutablePath: selectedExecutionStatus.providerExecutablePath,
@@ -941,6 +1043,9 @@ function App() {
           repositoryState: selectedExecutionStatus.repositoryState,
           completedAt: selectedExecutionStatus.completedAt,
           duration: selectedExecutionStatus.duration,
+          acceptedAt: selectedExecutionStatus.acceptedAt,
+          rejectedAt: selectedExecutionStatus.rejectedAt,
+          decisionNote: selectedExecutionStatus.decisionNote,
           lastActivityAt: selectedExecutionStatus.lastActivityAt,
           providerName: selectedExecutionStatus.providerName,
           providerExecutablePath: selectedExecutionStatus.providerExecutablePath,
@@ -1257,6 +1362,18 @@ function App() {
                       <dd>{formatDuration(executionDisplay.duration)}</dd>
                     </div>
                     <div>
+                      <dt>Accepted</dt>
+                      <dd>{formatDateTime(executionDisplay.acceptedAt)}</dd>
+                    </div>
+                    <div>
+                      <dt>Rejected</dt>
+                      <dd>{formatDateTime(executionDisplay.rejectedAt)}</dd>
+                    </div>
+                    <div>
+                      <dt>Decision note</dt>
+                      <dd>{executionDisplay.decisionNote || 'Not recorded'}</dd>
+                    </div>
+                    <div>
                       <dt>PID</dt>
                       <dd>{executionDisplay.providerProcessId ?? 'Not recorded'}</dd>
                     </div>
@@ -1449,6 +1566,8 @@ function App() {
                     <span>Started: {formatDateTime(executionDisplay.startedAt)}</span>
                     <span>Completed: {formatDateTime(executionDisplay.completedAt)}</span>
                     <span>Duration: {formatDuration(executionDisplay.duration)}</span>
+                    <span>Accepted: {formatDateTime(executionDisplay.acceptedAt)}</span>
+                    <span>Rejected: {formatDateTime(executionDisplay.rejectedAt)}</span>
                     <span>Last activity: {formatDateTime(executionDisplay.lastActivityAt)}</span>
                     <span>Provider start: {formatDateTime(executionDisplay.providerStartedAt)}</span>
                     <span>PID: {executionDisplay.providerProcessId ?? 'Not recorded'}</span>
@@ -1469,8 +1588,27 @@ function App() {
                           <span>State: {executionStateLabels[executionDisplay.repositoryState]}</span>
                           <span>Completed: {formatDateTime(executionDisplay.completedAt)}</span>
                           <span>Duration: {formatDuration(executionDisplay.duration)}</span>
+                          <span>Decision: Awaiting review</span>
                           <span>{generatedHandoffContent.length} characters</span>
                         </div>
+                      </div>
+                      <div className="handoff-review-actions">
+                        <button
+                          type="button"
+                          className="primary-action"
+                          onClick={() => void acceptGeneratedHandoff()}
+                          disabled={!isHandoffDecisionPending}
+                        >
+                          {isAcceptingHandoff ? 'Accepting...' : 'Accept Handoff'}
+                        </button>
+                        <button
+                          type="button"
+                          className="danger-action"
+                          onClick={() => void rejectGeneratedHandoff()}
+                          disabled={!isHandoffDecisionPending}
+                        >
+                          {isRejectingHandoff ? 'Rejecting...' : 'Reject Handoff'}
+                        </button>
                       </div>
                       <div className="markdown-preview handoff-review-content">
                         {isGeneratedHandoffLoading ? (

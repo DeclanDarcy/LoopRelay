@@ -501,6 +501,13 @@ button:focus-visible {
   gap: 6px;
 }
 
+.handoff-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: end;
+  gap: 8px;
+}
+
 .handoff-review-metadata span {
   min-width: 0;
   padding: 8px 10px;
@@ -780,6 +787,10 @@ button:focus-visible {
   .execution-event-row,
   .handoff-review-header {
     grid-template-columns: 1fr;
+  }
+
+  .handoff-review-actions {
+    justify-content: start;
   }
 
   .header-actions {

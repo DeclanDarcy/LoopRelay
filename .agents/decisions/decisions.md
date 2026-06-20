@@ -2,28 +2,28 @@
 
 ## Newly Authorized Decisions
 
-- M5A.2 is authorized as the next slice.
-- M5A.2 is UI-only acceptance controls.
-- Add Tauri commands `accept_execution_handoff` and `reject_execution_handoff`.
-- Tauri accept/reject commands must be thin HTTP bridges only.
-- Do not add workflow logic to Tauri.
-- Show accept/reject controls only when `RepositoryExecutionState == AwaitingAcceptance`.
-- Do not infer accept/reject visibility from session state.
-- Repository workflow state remains authoritative for acceptance control visibility.
-- Accept action is a single `Accept Handoff` action.
-- After accept succeeds, refresh workspace and dashboard projections.
-- Do not manually transition client state after accept.
-- Reject action must require confirmation before calling the backend.
-- After reject succeeds, refresh workspace and dashboard projections.
-- Display `AcceptedAt`, `RejectedAt`, and `DecisionNote` when available.
-- Certification must verify controls are visible only in `AwaitingAcceptance`.
-- Certification must verify controls are hidden for `Ready`, `Executing`, `Failed`, `Cancelled`, `AwaitingCommit`, and `AwaitingPush`.
-- Certification must verify accept refreshes projection state to `AwaitingCommit` or `Ready`.
-- Certification must verify reject confirmation then refreshes projection state to `Ready`.
-- Certification must verify browser refresh, Tauri restart, and backend restart preserve accepted/rejected metadata visibility.
+- M5 is complete and certified.
+- Missing `rustfmt` is not architecturally significant and does not block M5 closure.
+- M6 is the first milestone that mutates repository state after acceptance.
+- M6 must establish `IGitService` as the sole authoritative Git abstraction boundary.
+- Avoid exposing raw Git commands throughout the system.
+- Retain existing repository workflow states for M6: `Accepted`, `AwaitingCommit`, `AwaitingPush`, and `Ready`.
+- Do not introduce `Committing`, `Pushing`, `CommitFailed`, or `PushFailed` states unless asynchronous operations require them.
+- Git operation progress must not redefine `RepositoryExecutionState`.
+- Start M6 with four backend operations: status, commit preparation, commit, and push.
+- `GetStatus(repositoryId)` returns modified files, added files, deleted files, renamed files, current branch, ahead/behind counts, and dirty flag.
+- `PrepareCommit(repositoryId)` is a pure projection with no mutation.
+- Commit preparation returns candidate files, diff statistics, and a suggested commit message.
+- `Commit(repositoryId, selectedFiles, commitMessage)` transitions `AwaitingCommit` to `AwaitingPush`.
+- `Push(repositoryId)` transitions `AwaitingPush` to `Ready`.
+- Acceptance approves the repository state produced by execution.
+- Commit preparation may allow file-level exclusions, but exclusions are exceptional and do not redefine what acceptance means.
+- M6.1 is authorized as Git Status & Repository Inspection.
+- M6.1 must implement `IGitService`, repository status model, backend endpoints, persistence integration, Tauri bridge, and a read-only React workflow surface.
+- M6.1 must not perform commit mutation.
+- Certify that `Ready`, `AwaitingCommit`, and `AwaitingPush` correctly project repository Git state before implementing commit mutation.
 
 ## Explicitly Deferred
 
-- Do not implement Git automation in M5A.2.
-- Do not implement commit scope, commit, push, or Git lifecycle UI until M6.
-- Do not manually duplicate backend workflow transitions in the client.
+- Do not implement commit mutation in M6.1.
+- Do not add asynchronous Git workflow states unless a later implementation requires asynchronous operations.

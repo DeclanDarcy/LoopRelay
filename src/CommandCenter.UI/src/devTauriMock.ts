@@ -58,6 +58,9 @@ type ExecutionSessionSummary = {
   startedAt: string | null
   completedAt: string | null
   duration: string | null
+  acceptedAt: string | null
+  rejectedAt: string | null
+  decisionNote: string | null
   lastActivityAt: string | null
   providerName: string
   providerExecutablePath: string | null
@@ -409,27 +412,72 @@ function startExecution(state: MockState, repositoryId: string, milestonePath: s
   const sessionId = `session-${Object.keys(state.sessions).length + 1}`
   const summary: ExecutionSessionSummary = {
     sessionId,
-    state: 'Executing',
-    repositoryState: 'Executing',
+    state: 'Completed',
+    repositoryState: 'AwaitingAcceptance',
     milestonePath,
     startedAt: timestamp,
-    completedAt: null,
-    duration: null,
+    completedAt: timestamp,
+    duration: '00:00:01',
+    acceptedAt: null,
+    rejectedAt: null,
+    decisionNote: null,
     lastActivityAt: timestamp,
     providerName: 'Fake',
     providerExecutablePath: 'fake-provider',
-    providerProcessId: 1001,
+    providerProcessId: null,
     providerStartedAt: timestamp,
-    handoffPath: null,
+    handoffPath: artifacts.handoff.relativePath,
     failureReason: null,
   }
+  state.content[artifacts.handoff.relativePath] = [
+    '# Generated Handoff',
+    '',
+    'Mock execution completed and produced this handoff for review.',
+  ].join('\n')
   state.sessions[sessionId] = {
     ...summary,
     id: sessionId,
     repositoryId,
     repositoryPath: workspace.repository.path,
   }
-  workspace.executionState = 'Executing'
+  workspace.executionState = 'AwaitingAcceptance'
+  workspace.executionSummary = summary
+  return summary
+}
+
+function decideHandoff(
+  state: MockState,
+  sessionId: string,
+  decision: 'accept' | 'reject',
+): ExecutionSessionSummary {
+  const session = state.sessions[sessionId]
+  if (!session) {
+    throw new Error('Execution session was not found.')
+  }
+
+  if (session.repositoryState !== 'AwaitingAcceptance') {
+    throw new Error('Execution can only be decided while awaiting acceptance.')
+  }
+
+  const workspace = state.workspaces[session.repositoryId]
+  const timestamp = new Date().toISOString()
+  const repositoryState = decision === 'accept' ? 'AwaitingCommit' : 'Ready'
+  const summary: ExecutionSessionSummary = {
+    ...session,
+    repositoryState,
+    acceptedAt: decision === 'accept' ? timestamp : null,
+    rejectedAt: decision === 'reject' ? timestamp : null,
+    decisionNote: null,
+    lastActivityAt: timestamp,
+  }
+
+  state.sessions[sessionId] = {
+    ...summary,
+    id: session.id,
+    repositoryId: session.repositoryId,
+    repositoryPath: session.repositoryPath,
+  }
+  workspace.executionState = repositoryState
   workspace.executionSummary = summary
   return summary
 }
@@ -488,6 +536,10 @@ export function installDevTauriMock() {
 
           return clone(session)
         }
+        case 'accept_execution_handoff':
+          return clone(decideHandoff(state, getStringArg(args, 'sessionId'), 'accept'))
+        case 'reject_execution_handoff':
+          return clone(decideHandoff(state, getStringArg(args, 'sessionId'), 'reject'))
         case 'load_artifact_content':
           return state.content[getStringArg(args, 'relativePath')] ?? ''
         case 'save_artifact_content':

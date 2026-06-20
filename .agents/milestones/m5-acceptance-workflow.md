@@ -20,10 +20,10 @@ Require explicit user review before execution is accepted.
 
 ## UI Work
 
-- [ ] Add `Accept Handoff` and `Reject Handoff` controls.
-- [ ] Display execution status, duration, token usage when present, completion time, and handoff content.
-- [ ] Require confirmation before rejection.
-- [ ] After acceptance, load Git status and show commit preparation.
+- [x] Add `Accept Handoff` and `Reject Handoff` controls.
+- [x] Display execution status, duration, token usage when present, completion time, and handoff content.
+- [x] Require confirmation before rejection.
+- [x] After acceptance, transition repository projection to `AwaitingCommit` or `Ready`.
 
 ## Tests
 
@@ -36,6 +36,6 @@ Require explicit user review before execution is accepted.
 
 ## Exit Criteria
 
-- [ ] Execution results are not accepted until user review.
-- [ ] Accepted work proceeds into the Git workflow.
-- [ ] Rejected work does not proceed to commit or push.
+- [x] Execution results are not accepted until user review.
+- [x] Accepted work proceeds into the Git workflow.
+- [x] Rejected work does not proceed to commit or push.

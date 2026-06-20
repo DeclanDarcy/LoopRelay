@@ -48,6 +48,9 @@ struct ExecutionSessionSummary {
     started_at: Option<String>,
     completed_at: Option<String>,
     duration: Option<String>,
+    accepted_at: Option<String>,
+    rejected_at: Option<String>,
+    decision_note: Option<String>,
     last_activity_at: Option<String>,
     provider_name: String,
     provider_executable_path: Option<String>,
@@ -113,6 +116,12 @@ struct SaveArtifactContentRequest {
 #[serde(rename_all = "camelCase")]
 struct ExecutionStartRequest {
     milestone_path: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ExecutionAcceptanceRequest {
+    decision_note: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -342,6 +351,16 @@ fn get_execution_session(session_id: String) -> Result<Value, String> {
     response_error(response, "execution session lookup failed")
 }
 
+#[tauri::command]
+fn accept_execution_handoff(session_id: String) -> Result<ExecutionSessionSummary, String> {
+    complete_handoff_decision(session_id, "accept")
+}
+
+#[tauri::command]
+fn reject_execution_handoff(session_id: String) -> Result<ExecutionSessionSummary, String> {
+    complete_handoff_decision(session_id, "reject")
+}
+
 fn rotate_artifact(
     repository_id: String,
     operation: &str,
@@ -365,6 +384,28 @@ fn rotate_artifact(
         .unwrap_or_else(|_| format!("artifact rotation failed with status {status}"));
 
     Err(message)
+}
+
+fn complete_handoff_decision(
+    session_id: String,
+    operation: &str,
+) -> Result<ExecutionSessionSummary, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/execution-sessions/{session_id}/{operation}"
+        ))
+        .json(&ExecutionAcceptanceRequest {
+            decision_note: None,
+        })
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "handoff decision failed")
 }
 
 fn response_error<T>(response: reqwest::blocking::Response, fallback: &str) -> Result<T, String> {
@@ -496,7 +537,9 @@ fn main() {
             preview_execution_context,
             start_execution,
             get_active_execution,
-            get_execution_session
+            get_execution_session,
+            accept_execution_handoff,
+            reject_execution_handoff
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Command Center shell");
