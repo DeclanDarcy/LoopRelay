@@ -25,10 +25,10 @@ Implement M2 in two internal phases so session persistence is stable before real
 
 ### UI Work
 
-- [ ] Add `Start Execution` action when repository readiness is `Ready`, a milestone is selected, context validation succeeds, context hard limits are not exceeded, and no active session exists.
-- [ ] Show dirty repository diagnostics before launch when applicable.
-- [ ] On launch success, show execution workspace with session id, selected milestone, started time, provider name, and state.
-- [ ] Show `Executing` in dashboard immediately.
+- [x] Add `Start Execution` action when repository readiness is `Ready`, a milestone is selected, context validation succeeds, context hard limits are not exceeded, and no active session exists.
+- [x] Show dirty repository diagnostics before launch when applicable.
+- [x] On launch success, show execution workspace with session id, selected milestone, started time, provider name, and state.
+- [x] Show `Executing` in dashboard immediately.
 
 ### Tests
 
@@ -40,12 +40,14 @@ Implement M2 in two internal phases so session persistence is stable before real
 - [x] Duplicate launch blocks.
 - [x] Fake provider failure leaves repository ready and records failure details.
 - [x] Active session restores after session store reload.
+- [x] Dashboard and workspace projections restore active session state after session store reload.
 - [x] Launch endpoint returns session metadata.
 
 ### Exit Criteria
 
 - [x] Command Center can create and persist a fresh execution session through a fake provider.
 - [x] Active session state persists across backend restart.
+- [x] Dashboard and workspace show restored active session state from persisted session metadata.
 - [x] Duplicate execution is blocked.
 - [x] Real provider process launch is still deferred.
 

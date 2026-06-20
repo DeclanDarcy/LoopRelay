@@ -29,7 +29,7 @@ type Workspace = {
   availability: string
   readiness: string
   executionState: string
-  executionSummary: null
+  executionSummary: ExecutionSessionSummary | null
   artifactInventory: ArtifactInventory
   milestoneCount: number
   hasPlan: boolean
@@ -43,10 +43,28 @@ type DashboardEntry = {
   availability: string
   readiness: string
   executionState: string
-  activeExecutionSession: null
+  activeExecutionSession: ExecutionSessionSummary | null
   milestoneCount: number
   hasCurrentHandoff: boolean
   hasCurrentDecisions: boolean
+}
+
+type ExecutionSessionSummary = {
+  sessionId: string
+  state: string
+  repositoryState: string
+  milestonePath: string | null
+  startedAt: string | null
+  completedAt: string | null
+  lastActivityAt: string | null
+  providerName: string
+  failureReason: string | null
+}
+
+type ExecutionSession = ExecutionSessionSummary & {
+  id: string
+  repositoryId: string
+  repositoryPath: string
 }
 
 type ExecutionContextPreview = {
@@ -102,6 +120,7 @@ type MockState = {
   repositories: Repository[]
   workspaces: Record<string, Workspace>
   content: Record<string, string>
+  sessions: Record<string, ExecutionSession>
 }
 
 type TauriInternals = {
@@ -236,6 +255,7 @@ function createInitialState(): MockState {
       [artifacts.oldHandoff.relativePath]: '# Historical Handoff\n\nArchived content.',
       [artifacts.decisions.relativePath]: '# Decisions\n\nCurrent decisions content.',
     },
+    sessions: {},
   }
 }
 
@@ -245,7 +265,7 @@ function dashboardEntry(workspace: Workspace): DashboardEntry {
     availability: workspace.availability,
     readiness: workspace.readiness,
     executionState: workspace.executionState,
-    activeExecutionSession: null,
+    activeExecutionSession: workspace.executionSummary,
     milestoneCount: workspace.milestoneCount,
     hasCurrentHandoff: workspace.hasCurrentHandoff,
     hasCurrentDecisions: workspace.hasCurrentDecisions,
@@ -363,6 +383,45 @@ function rotateCurrentArtifact(
   state.content[historicalArtifact.relativePath] = state.content[currentArtifact.relativePath]
 }
 
+function startExecution(state: MockState, repositoryId: string, milestonePath: string): ExecutionSessionSummary {
+  const workspace = state.workspaces[repositoryId]
+  if (!workspace) {
+    throw new Error(`Repository was not found: ${repositoryId}`)
+  }
+
+  if (workspace.executionState === 'Executing' || workspace.executionSummary) {
+    throw new Error('Repository already has an active execution session.')
+  }
+
+  const context = createContextPreview(state, repositoryId, milestonePath)
+  if (context.diagnostics.launchBlocked) {
+    throw new Error('Execution launch is blocked.')
+  }
+
+  const timestamp = new Date().toISOString()
+  const sessionId = `session-${Object.keys(state.sessions).length + 1}`
+  const summary: ExecutionSessionSummary = {
+    sessionId,
+    state: 'Executing',
+    repositoryState: 'Executing',
+    milestonePath,
+    startedAt: timestamp,
+    completedAt: null,
+    lastActivityAt: timestamp,
+    providerName: 'Fake',
+    failureReason: null,
+  }
+  state.sessions[sessionId] = {
+    ...summary,
+    id: sessionId,
+    repositoryId,
+    repositoryPath: workspace.repository.path,
+  }
+  workspace.executionState = 'Executing'
+  workspace.executionSummary = summary
+  return summary
+}
+
 export function installDevTauriMock() {
   const searchParams = new URLSearchParams(window.location.search)
   if (searchParams.get('mock') !== 'workspace-certification') {
@@ -391,6 +450,30 @@ export function installDevTauriMock() {
               getStringArg(args, 'milestonePath'),
             ),
           )
+        case 'start_execution':
+          return clone(
+            startExecution(
+              state,
+              getStringArg(args, 'repositoryId'),
+              getStringArg(args, 'milestonePath'),
+            ),
+          )
+        case 'get_active_execution': {
+          const workspace = state.workspaces[getStringArg(args, 'repositoryId')]
+          if (!workspace?.executionSummary) {
+            throw new Error('No active execution session.')
+          }
+
+          return clone(workspace.executionSummary)
+        }
+        case 'get_execution_session': {
+          const session = state.sessions[getStringArg(args, 'sessionId')]
+          if (!session) {
+            throw new Error('Execution session was not found.')
+          }
+
+          return clone(session)
+        }
         case 'load_artifact_content':
           return state.content[getStringArg(args, 'relativePath')] ?? ''
         case 'save_artifact_content':

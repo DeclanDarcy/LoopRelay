@@ -47,7 +47,10 @@ type ExecutionSessionSummary = {
   repositoryState: RepositoryExecutionState
   milestonePath: string | null
   startedAt: string | null
+  completedAt: string | null
   lastActivityAt: string | null
+  providerName: string
+  failureReason: string | null
 }
 
 type ExecutionContextArtifact = {
@@ -329,6 +332,7 @@ function App() {
   const [isSaving, setIsSaving] = useState(false)
   const [isRotating, setIsRotating] = useState(false)
   const [isContextLoading, setIsContextLoading] = useState(false)
+  const [isStartingExecution, setIsStartingExecution] = useState(false)
   const [isAdding, setIsAdding] = useState(false)
   const [removingRepositoryId, setRemovingRepositoryId] = useState<string | null>(null)
 
@@ -357,6 +361,63 @@ function App() {
     selectedArtifact?.versionKind === 'Current' &&
     (selectedArtifact.family === 'Handoff' || selectedArtifact.family === 'Decision')
   const milestoneOptions = workspace?.artifactInventory.milestones ?? []
+  const activeExecutionSummary = workspace?.executionSummary ?? selectedRepository?.activeExecutionSession ?? null
+  const currentExecutionState = workspace?.executionState ?? selectedRepository?.executionState ?? 'Ready'
+  const executionContextMatchesSelection =
+    executionContext?.repositoryId === selectedRepository?.repository.id &&
+    executionContext?.milestonePath === selectedMilestonePath
+  const canStartExecution =
+    Boolean(selectedRepository && workspace && selectedMilestonePath && executionContextMatchesSelection) &&
+    workspace?.readiness === 'Ready' &&
+    currentExecutionState === 'Ready' &&
+    !executionContext?.diagnostics.launchBlocked &&
+    !executionContext?.diagnostics.hardLimitExceeded &&
+    executionContext?.diagnostics.validationErrors.length === 0 &&
+    !activeExecutionSummary &&
+    !isStartingExecution
+
+  const startExecutionBlockedReason = useMemo(() => {
+    if (!workspace) {
+      return 'Workspace is loading.'
+    }
+
+    if (workspace.readiness !== 'Ready') {
+      return `Repository readiness is ${readinessLabels[workspace.readiness]}.`
+    }
+
+    if (!selectedMilestonePath) {
+      return 'Select a milestone.'
+    }
+
+    if (!executionContext || !executionContextMatchesSelection) {
+      return 'Build an execution context for the selected milestone.'
+    }
+
+    if (activeExecutionSummary || currentExecutionState !== 'Ready') {
+      return 'Repository already has an active execution session.'
+    }
+
+    if (executionContext.diagnostics.launchBlocked) {
+      return 'Execution context validation blocks launch.'
+    }
+
+    if (executionContext.diagnostics.hardLimitExceeded) {
+      return 'Execution context exceeds the hard size limit.'
+    }
+
+    if (executionContext.diagnostics.validationErrors.length > 0) {
+      return executionContext.diagnostics.validationErrors[0]
+    }
+
+    return 'Ready to start execution.'
+  }, [
+    activeExecutionSummary,
+    currentExecutionState,
+    executionContext,
+    executionContextMatchesSelection,
+    selectedMilestonePath,
+    workspace,
+  ])
 
   const selectRepository = useCallback((repositoryId: string) => {
     setSelectedRepositoryId(repositoryId)
@@ -596,6 +657,38 @@ function App() {
     }
   }
 
+  async function startExecution() {
+    if (!selectedRepository || !selectedMilestonePath || !canStartExecution) {
+      return
+    }
+
+    setIsStartingExecution(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const session = await invoke<ExecutionSessionSummary>('start_execution', {
+        repositoryId: selectedRepository.repository.id,
+        milestonePath: selectedMilestonePath,
+      })
+      setWorkspace((currentWorkspace) =>
+        currentWorkspace && currentWorkspace.repository.id === selectedRepository.repository.id
+          ? {
+              ...currentWorkspace,
+              executionState: session.repositoryState,
+              executionSummary: session.repositoryState === 'Executing' ? session : null,
+            }
+          : currentWorkspace,
+      )
+      setMessage(`Execution started: ${session.sessionId}.`)
+      await loadRepositories()
+      await loadWorkspace(selectedRepository.repository.id)
+    } catch (startError) {
+      setError(formatError(startError))
+    } finally {
+      setIsStartingExecution(false)
+    }
+  }
+
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       void loadRepositories()
@@ -742,6 +835,19 @@ function App() {
                     <span className="repository-metadata">
                       {entry.milestoneCount} milestones
                     </span>
+                    {entry.activeExecutionSession ? (
+                      <>
+                        <span className="repository-metadata">
+                          Session {entry.activeExecutionSession.sessionId}
+                        </span>
+                        <span className="repository-metadata">
+                          Activity{' '}
+                          {entry.activeExecutionSession.lastActivityAt
+                            ? new Date(entry.activeExecutionSession.lastActivityAt).toLocaleString()
+                            : 'not recorded'}
+                        </span>
+                      </>
+                    ) : null}
                     <span className="repository-metadata">
                       Handoff {entry.hasCurrentHandoff ? 'present' : 'missing'}
                     </span>
@@ -796,13 +902,29 @@ function App() {
                 <div>
                   <dt>Execution</dt>
                   <dd>
-                    {
-                      executionStateLabels[
-                        workspace?.executionState ?? selectedRepository.executionState
-                      ]
-                    }
+                    {executionStateLabels[currentExecutionState]}
                   </dd>
                 </div>
+                {activeExecutionSummary ? (
+                  <>
+                    <div>
+                      <dt>Session</dt>
+                      <dd>{activeExecutionSummary.sessionId}</dd>
+                    </div>
+                    <div>
+                      <dt>Provider</dt>
+                      <dd>{activeExecutionSummary.providerName || 'Unknown'}</dd>
+                    </div>
+                    <div>
+                      <dt>Started</dt>
+                      <dd>
+                        {activeExecutionSummary.startedAt
+                          ? new Date(activeExecutionSummary.startedAt).toLocaleString()
+                          : 'Not recorded'}
+                      </dd>
+                    </div>
+                  </>
+                ) : null}
                 <div>
                   <dt>Milestones</dt>
                   <dd>{workspace?.milestoneCount ?? selectedRepository.milestoneCount}</dd>
@@ -849,6 +971,15 @@ function App() {
                     >
                       {isContextLoading ? 'Building...' : 'Build Execution Context'}
                     </button>
+                    <button
+                      type="button"
+                      className="primary-action"
+                      onClick={() => void startExecution()}
+                      disabled={!canStartExecution}
+                      title={startExecutionBlockedReason}
+                    >
+                      {isStartingExecution ? 'Starting...' : 'Start Execution'}
+                    </button>
                   </div>
                 </div>
 
@@ -859,7 +990,7 @@ function App() {
                       <span>Total: {executionContext.diagnostics.totalBytes} bytes</span>
                       <span>
                         Launch:{' '}
-                        {executionContext.diagnostics.launchBlocked ? 'Blocked' : 'Unavailable until M2'}
+                        {canStartExecution ? 'Ready' : startExecutionBlockedReason}
                       </span>
                       <span>
                         Size:{' '}
@@ -952,6 +1083,32 @@ function App() {
                   <p className="empty-state">Build a context preview for a selected milestone.</p>
                 )}
               </section>
+
+              {activeExecutionSummary ? (
+                <section className="execution-session-panel" aria-label="Active execution session">
+                  <div>
+                    <p className="eyebrow">Active Execution</p>
+                    <h4>{activeExecutionSummary.milestonePath ?? 'Selected milestone'}</h4>
+                  </div>
+                  <div className="execution-session-grid">
+                    <span>Session: {activeExecutionSummary.sessionId}</span>
+                    <span>Provider: {activeExecutionSummary.providerName || 'Unknown'}</span>
+                    <span>State: {activeExecutionSummary.state}</span>
+                    <span>
+                      Started:{' '}
+                      {activeExecutionSummary.startedAt
+                        ? new Date(activeExecutionSummary.startedAt).toLocaleString()
+                        : 'Not recorded'}
+                    </span>
+                    <span>
+                      Last activity:{' '}
+                      {activeExecutionSummary.lastActivityAt
+                        ? new Date(activeExecutionSummary.lastActivityAt).toLocaleString()
+                        : 'Not recorded'}
+                    </span>
+                  </div>
+                </section>
+              ) : null}
 
               {workspace ? (
                 <div className="artifact-workspace">

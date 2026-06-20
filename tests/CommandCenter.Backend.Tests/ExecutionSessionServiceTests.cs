@@ -7,6 +7,7 @@ using CommandCenter.Backend.Artifacts;
 using CommandCenter.Backend.Configuration;
 using CommandCenter.Backend.Execution;
 using CommandCenter.Backend.Planning;
+using CommandCenter.Backend.Projections;
 using CommandCenter.Backend.Repositories;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -155,6 +156,37 @@ public sealed class ExecutionSessionServiceTests
     }
 
     [Fact]
+    public async Task DashboardProjectionRestoresActiveSessionAfterStoreReload()
+    {
+        var harness = await CreateHarnessAsync();
+        await WriteReadyArtifactsAsync(harness.Repository);
+        var summary = await harness.SessionService.StartAsync(
+            harness.Repository.Id,
+            new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
+        var reloadedService = new ExecutionSessionService(
+            harness.ContextService,
+            new FileSystemExecutionSessionStore(harness.StorePath),
+            new FakeExecutionProvider());
+        var artifactStore = new FileSystemArtifactStore();
+        var projectionService = new RepositoryProjectionService(
+            harness.RepositoryService,
+            new ArtifactService(artifactStore),
+            new PlanningService(artifactStore),
+            reloadedService);
+
+        var dashboard = await projectionService.GetDashboardAsync();
+        var workspace = await projectionService.GetWorkspaceAsync(harness.Repository.Id);
+
+        var dashboardProjection = Assert.Single(dashboard);
+        Assert.Equal(RepositoryExecutionState.Executing, dashboardProjection.ExecutionState);
+        Assert.NotNull(dashboardProjection.ActiveExecutionSession);
+        Assert.Equal(summary.SessionId, dashboardProjection.ActiveExecutionSession.SessionId);
+        Assert.Equal(RepositoryExecutionState.Executing, workspace.ExecutionState);
+        Assert.NotNull(workspace.ExecutionSummary);
+        Assert.Equal(summary.SessionId, workspace.ExecutionSummary.SessionId);
+    }
+
+    [Fact]
     public async Task PreviousCurrentHandoffSnapshotIsCapturedBeforeProviderStart()
     {
         var harness = await CreateHarnessAsync();
@@ -239,7 +271,7 @@ public sealed class ExecutionSessionServiceTests
             store,
             provider ?? new FakeExecutionProvider());
 
-        return new Harness(repository, contextService, store, storePath, sessionService);
+        return new Harness(repositoryService, repository, contextService, store, storePath, sessionService);
     }
 
     private static async Task WriteReadyArtifactsAsync(Repository repository)
@@ -275,6 +307,7 @@ public sealed class ExecutionSessionServiceTests
     }
 
     private sealed record Harness(
+        RepositoryService RepositoryService,
         Repository Repository,
         ExecutionContextService ContextService,
         FileSystemExecutionSessionStore Store,

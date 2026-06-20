@@ -345,7 +345,8 @@ button:focus-visible {
   overflow-wrap: anywhere;
 }
 
-.execution-context-panel {
+.execution-context-panel,
+.execution-session-panel {
   min-width: 0;
   display: grid;
   gap: 12px;
@@ -365,7 +366,8 @@ button:focus-visible {
 }
 
 .context-toolbar h4,
-.context-preview h5 {
+.context-preview h5,
+.execution-session-panel h4 {
   margin: 4px 0 0;
   color: #121820;
   letter-spacing: 0;
@@ -446,6 +448,24 @@ button:focus-visible {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+}
+
+.execution-session-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.execution-session-grid span {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid #d9e0e6;
+  border-radius: 6px;
+  color: #3d4650;
+  background: #fafbfc;
+  font-size: 0.82rem;
+  font-weight: 650;
+  overflow-wrap: anywhere;
 }
 
 .artifact-workspace {
@@ -656,7 +676,8 @@ button:focus-visible {
 
   .context-summary,
   .context-columns,
-  .diagnostic-list {
+  .diagnostic-list,
+  .execution-session-grid {
     grid-template-columns: 1fr;
   }
 

@@ -45,7 +45,10 @@ struct ExecutionSessionSummary {
     repository_state: String,
     milestone_path: Option<String>,
     started_at: Option<String>,
+    completed_at: Option<String>,
     last_activity_at: Option<String>,
+    provider_name: String,
+    failure_reason: Option<String>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -98,6 +101,12 @@ struct RegisterRepositoryRequest {
 struct SaveArtifactContentRequest {
     relative_path: String,
     content: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ExecutionStartRequest {
+    milestone_path: String,
 }
 
 #[derive(Deserialize)]
@@ -273,6 +282,55 @@ fn preview_execution_context(repository_id: String, milestone_path: String) -> R
         .map_err(|error| error.to_string())
 }
 
+#[tauri::command]
+fn start_execution(
+    repository_id: String,
+    milestone_path: String,
+) -> Result<ExecutionSessionSummary, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/execution/start"
+        ))
+        .json(&ExecutionStartRequest { milestone_path })
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "execution start failed")
+}
+
+#[tauri::command]
+fn get_active_execution(repository_id: String) -> Result<ExecutionSessionSummary, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/execution/active"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "active execution lookup failed")
+}
+
+#[tauri::command]
+fn get_execution_session(session_id: String) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/execution-sessions/{session_id}"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "execution session lookup failed")
+}
+
 fn rotate_artifact(
     repository_id: String,
     operation: &str,
@@ -294,6 +352,16 @@ fn rotate_artifact(
         .json::<ErrorResponse>()
         .map(|response| response.error)
         .unwrap_or_else(|_| format!("artifact rotation failed with status {status}"));
+
+    Err(message)
+}
+
+fn response_error<T>(response: reqwest::blocking::Response, fallback: &str) -> Result<T, String> {
+    let status = response.status();
+    let message = response
+        .json::<ErrorResponse>()
+        .map(|response| response.error)
+        .unwrap_or_else(|_| format!("{fallback} with status {status}"));
 
     Err(message)
 }
@@ -413,7 +481,10 @@ fn main() {
             save_artifact_content,
             rotate_current_handoff,
             rotate_current_decisions,
-            preview_execution_context
+            preview_execution_context,
+            start_execution,
+            get_active_execution,
+            get_execution_session
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Command Center shell");
