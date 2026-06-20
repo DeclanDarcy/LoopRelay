@@ -4,5 +4,5 @@ public interface IExecutionProvider
 {
     string Name { get; }
 
-    Task StartAsync(ExecutionContext context, ExecutionSession session);
+    Task StartAsync(ExecutionPrompt prompt, ExecutionSession session);
 }

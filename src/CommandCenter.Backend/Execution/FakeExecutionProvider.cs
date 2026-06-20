@@ -6,8 +6,12 @@ public sealed class FakeExecutionProvider : IExecutionProvider
 
     public bool FailOnStart { get; set; }
 
-    public Task StartAsync(ExecutionContext context, ExecutionSession session)
+    public ExecutionPrompt? LastPrompt { get; private set; }
+
+    public Task StartAsync(ExecutionPrompt prompt, ExecutionSession session)
     {
+        LastPrompt = prompt;
+
         if (FailOnStart)
         {
             throw new InvalidOperationException("Fake execution provider failed to start.");

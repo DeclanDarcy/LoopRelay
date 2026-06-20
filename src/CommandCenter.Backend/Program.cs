@@ -23,6 +23,7 @@ public static class Program
         builder.Services.AddSingleton<IArtifactRotationService, ArtifactRotationService>();
         builder.Services.AddSingleton<IPlanningService, PlanningService>();
         builder.Services.AddSingleton<IExecutionContextService, ExecutionContextService>();
+        builder.Services.AddSingleton<IExecutionPromptBuilder, ExecutionPromptBuilder>();
         builder.Services.AddSingleton<IExecutionSessionStore, FileSystemExecutionSessionStore>();
         builder.Services.AddSingleton<IExecutionSessionService, ExecutionSessionService>();
         builder.Services.AddSingleton<IExecutionMonitoringService, ExecutionMonitoringService>();

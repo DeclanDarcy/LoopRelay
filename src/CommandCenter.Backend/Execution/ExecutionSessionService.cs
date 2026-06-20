@@ -5,7 +5,8 @@ namespace CommandCenter.Backend.Execution;
 public sealed class ExecutionSessionService(
     IExecutionContextService executionContextService,
     IExecutionSessionStore sessionStore,
-    IExecutionProvider executionProvider) : IExecutionSessionService
+    IExecutionProvider executionProvider,
+    IExecutionPromptBuilder promptBuilder) : IExecutionSessionService
 {
     private readonly SemaphoreSlim gate = new(1, 1);
 
@@ -82,9 +83,11 @@ public sealed class ExecutionSessionService(
             sessions.Add(session);
             await sessionStore.SaveAsync(sessions);
 
+            var prompt = promptBuilder.Build(context);
+
             try
             {
-                await executionProvider.StartAsync(context, session);
+                await executionProvider.StartAsync(prompt, session);
             }
             catch (Exception exception) when (exception is InvalidOperationException or IOException)
             {

@@ -18,6 +18,8 @@ public sealed class ExecutionRegistrationTests
             app.Services.GetRequiredService<IExecutionContextService>());
         Assert.IsAssignableFrom<IExecutionSessionService>(
             app.Services.GetRequiredService<IExecutionSessionService>());
+        Assert.IsAssignableFrom<IExecutionPromptBuilder>(
+            app.Services.GetRequiredService<IExecutionPromptBuilder>());
         Assert.IsAssignableFrom<IExecutionMonitoringService>(
             app.Services.GetRequiredService<IExecutionMonitoringService>());
         Assert.IsAssignableFrom<IHandoffService>(

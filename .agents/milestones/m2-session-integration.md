@@ -57,7 +57,7 @@ Implement M2 in two internal phases so session persistence is stable before real
 
 - [ ] Implement initial `CodexExecutionProvider`.
 - [ ] Add provider process invocation through `IProcessRunner`.
-- [ ] Generate execution prompt from context.
+- [x] Generate execution prompt from context.
 - [ ] Include context size diagnostics and dirty-state diagnostics in launch metadata.
 - [ ] Start the Codex process with repository root as the working directory.
 - [ ] Capture provider process id when available.
@@ -74,7 +74,7 @@ Implement M2 in two internal phases so session persistence is stable before real
 
 ### Tests
 
-- [ ] Prompt construction includes required artifacts, selected milestone, repository path, Git snapshot, dirty-state diagnostics, and handoff requirement.
+- [x] Prompt construction includes required artifacts, selected milestone, repository path, Git snapshot, dirty-state diagnostics, and handoff requirement.
 - [ ] Missing Codex executable fails with structured provider error.
 - [ ] Provider start failure leaves repository ready and records failure details.
 - [ ] Immediate provider exit records failure.
@@ -84,6 +84,6 @@ Implement M2 in two internal phases so session persistence is stable before real
 ### Exit Criteria
 
 - [ ] Command Center can create a fresh Codex-backed execution session.
-- [ ] Prompt construction is backend-owned and deterministic.
+- [x] Prompt construction is backend-owned and deterministic.
 - [ ] Process launch failure and orphaned restart recovery are explicit.
 - [ ] Live monitoring output is still completed in M3.

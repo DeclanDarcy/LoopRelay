@@ -146,7 +146,8 @@ public sealed class ExecutionSessionServiceTests
         var reloadedService = new ExecutionSessionService(
             harness.ContextService,
             new FileSystemExecutionSessionStore(harness.StorePath),
-            new FakeExecutionProvider());
+            new FakeExecutionProvider(),
+            new ExecutionPromptBuilder());
 
         var active = await reloadedService.GetActiveSessionAsync(harness.Repository.Id);
 
@@ -166,7 +167,8 @@ public sealed class ExecutionSessionServiceTests
         var reloadedService = new ExecutionSessionService(
             harness.ContextService,
             new FileSystemExecutionSessionStore(harness.StorePath),
-            new FakeExecutionProvider());
+            new FakeExecutionProvider(),
+            new ExecutionPromptBuilder());
         var artifactStore = new FileSystemArtifactStore();
         var projectionService = new RepositoryProjectionService(
             harness.RepositoryService,
@@ -200,6 +202,22 @@ public sealed class ExecutionSessionServiceTests
 
         Assert.Equal("previous handoff", session.PreviousHandoffContent);
         Assert.NotNull(session.PreviousHandoffCapturedAt);
+    }
+
+    [Fact]
+    public async Task ProviderReceivesExecutionPrompt()
+    {
+        var provider = new FakeExecutionProvider();
+        var harness = await CreateHarnessAsync(provider: provider);
+        await WriteReadyArtifactsAsync(harness.Repository);
+
+        await harness.SessionService.StartAsync(
+            harness.Repository.Id,
+            new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
+
+        Assert.NotNull(provider.LastPrompt);
+        Assert.Contains("Produce or update `.agents/handoffs/handoff.md`", provider.LastPrompt.Text);
+        Assert.Equal(".agents/milestones/m2.md", provider.LastPrompt.Metadata.MilestonePath);
     }
 
     [Fact]
@@ -269,7 +287,8 @@ public sealed class ExecutionSessionServiceTests
         var sessionService = new ExecutionSessionService(
             contextService,
             store,
-            provider ?? new FakeExecutionProvider());
+            provider ?? new FakeExecutionProvider(),
+            new ExecutionPromptBuilder());
 
         return new Harness(repositoryService, repository, contextService, store, storePath, sessionService);
     }
