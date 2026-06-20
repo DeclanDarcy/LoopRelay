@@ -136,6 +136,44 @@ public sealed class RepositoryProjectionServiceTests
     }
 
     [Fact]
+    public async Task DashboardAndWorkspaceProjectAwaitingAcceptanceSummary()
+    {
+        var repositoryPath = CreateGitRepositoryDirectory();
+        var repositoryService = CreateRepositoryService();
+        var repository = await repositoryService.RegisterAsync(repositoryPath);
+        var sessionId = Guid.NewGuid();
+        var projectionService = CreateProjectionService(
+            repositoryService,
+            new StaticExecutionSessionService(
+                repository.Id,
+                new ExecutionSessionSummary
+                {
+                    SessionId = sessionId,
+                    State = ExecutionSessionState.Completed,
+                    RepositoryState = RepositoryExecutionState.AwaitingAcceptance,
+                    MilestonePath = ".agents/milestones/m4.md",
+                    StartedAt = DateTimeOffset.UtcNow.AddMinutes(-3),
+                    CompletedAt = DateTimeOffset.UtcNow,
+                    LastActivityAt = DateTimeOffset.UtcNow,
+                    ProviderName = "fake",
+                    HandoffPath = HandoffService.CurrentHandoffPath
+                }));
+
+        var dashboard = await projectionService.GetDashboardAsync();
+        var workspace = await projectionService.GetWorkspaceAsync(repository.Id);
+
+        var dashboardProjection = Assert.Single(dashboard);
+        Assert.Equal(RepositoryExecutionState.AwaitingAcceptance, dashboardProjection.ExecutionState);
+        Assert.Null(dashboardProjection.ActiveExecutionSession);
+        Assert.NotNull(dashboardProjection.ExecutionSummary);
+        Assert.Equal(sessionId, dashboardProjection.ExecutionSummary.SessionId);
+        Assert.Equal(HandoffService.CurrentHandoffPath, dashboardProjection.ExecutionSummary.HandoffPath);
+        Assert.Equal(RepositoryExecutionState.AwaitingAcceptance, workspace.ExecutionState);
+        Assert.NotNull(workspace.ExecutionSummary);
+        Assert.Equal(HandoffService.CurrentHandoffPath, workspace.ExecutionSummary.HandoffPath);
+    }
+
+    [Fact]
     public async Task RefreshAfterAddingMilestoneUpdatesReadiness()
     {
         var repositoryPath = CreateGitRepositoryDirectory();
@@ -161,11 +199,18 @@ public sealed class RepositoryProjectionServiceTests
 
     private static RepositoryProjectionService CreateProjectionService(IRepositoryService repositoryService)
     {
+        return CreateProjectionService(repositoryService, new ReadyExecutionSessionService());
+    }
+
+    private static RepositoryProjectionService CreateProjectionService(
+        IRepositoryService repositoryService,
+        IExecutionSessionService executionSessionService)
+    {
         return new RepositoryProjectionService(
             repositoryService,
             new ArtifactService(new FileSystemArtifactStore()),
             new PlanningService(new FileSystemArtifactStore()),
-            new ReadyExecutionSessionService());
+            executionSessionService);
     }
 
     private static async Task WriteAsync(Repository repository, string relativePath, string content)
@@ -217,6 +262,47 @@ public sealed class RepositoryProjectionServiceTests
         }
 
         public Task<ExecutionSessionSummary> StartAsync(Guid repositoryId, ExecutionStartRequest request)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<ExecutionSession?> GetSessionAsync(Guid sessionId)
+        {
+            return Task.FromResult<ExecutionSession?>(null);
+        }
+    }
+
+    private sealed class StaticExecutionSessionService(
+        Guid repositoryId,
+        ExecutionSessionSummary summary) : IExecutionSessionService
+    {
+        public Task RecoverAsync()
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task<RepositoryExecutionState> GetRepositoryStateAsync(Guid requestedRepositoryId)
+        {
+            return Task.FromResult(requestedRepositoryId == repositoryId
+                ? summary.RepositoryState
+                : RepositoryExecutionState.Ready);
+        }
+
+        public Task<ExecutionSessionSummary?> GetActiveSessionAsync(Guid requestedRepositoryId)
+        {
+            return Task.FromResult<ExecutionSessionSummary?>(
+                requestedRepositoryId == repositoryId && summary.RepositoryState == RepositoryExecutionState.Executing
+                    ? summary
+                    : null);
+        }
+
+        public Task<ExecutionSessionSummary?> GetRepositorySessionSummaryAsync(Guid requestedRepositoryId)
+        {
+            return Task.FromResult<ExecutionSessionSummary?>(
+                requestedRepositoryId == repositoryId ? summary : null);
+        }
+
+        public Task<ExecutionSessionSummary> StartAsync(Guid requestedRepositoryId, ExecutionStartRequest request)
         {
             throw new NotSupportedException();
         }

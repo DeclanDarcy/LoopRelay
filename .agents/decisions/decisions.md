@@ -2,31 +2,27 @@
 
 ## Newly Authorized Decisions
 
-- M4A.2 is accepted as clean and correctly bounded.
-- The core handoff invariant is now protected: current handoff is the latest execution result, historical handoff is preserved prior state.
-- Providers must remain uninvolved in historical handoff numbering and archival behavior.
-- M4A.3 is authorized as the next implementation slice.
-- M4A.3 scope is visibility only.
-- The M4A.3 lifecycle target is: completed and validated handoff, then `AwaitingAcceptance` visible, then generated handoff reviewable.
-- M4A.3 must implement dashboard and workspace projection refresh after handoff processing.
-- M4A.3 must display `AwaitingAcceptance`.
-- M4A.3 must display generated handoff metadata.
-- M4A.3 must expose generated handoff content for review, either through a handoff review endpoint or by clean reuse of existing artifact loading.
-- M4A.3 must include a full handoff content viewer.
-- M4A.3 must preserve restart restoration of `AwaitingAcceptance`.
-- M4A.3 certification must verify completion with validated handoff shows `AwaitingAcceptance`.
-- M4A.3 certification must verify handoff content is visible in the workspace.
-- M4A.3 certification must verify session `HandoffPath` persists after reload.
-- M4A.3 certification must verify historical archive is visible in artifact inventory after refresh.
-- M4A.3 certification must verify failed handoff validation or archive failure displays the failure reason.
-- M4A.3 certification must verify no accept/reject controls appear yet.
+- M4B is authorized as the next closeout slice before opening M5.
+- M4B is named Completion Metadata Certification.
+- M4B goal is to certify that once execution completes, validates a handoff, and enters `AwaitingAcceptance`, the operator has a complete backend-projected record of what happened.
+- Session summary and status must consistently expose `StartedAt`, `CompletedAt`, `Duration`, provider, PID, repository state, session state, and `HandoffPath`.
+- Duration must be computed centrally by the backend and projected everywhere rather than recalculated independently by React.
+- Preferred duration invariant is `Duration = CompletedAt - StartedAt`.
+- Completion duration may be persisted or centrally projected, but it must survive summary/status/workspace/reload paths consistently.
+- M4B certification must verify completed duration appears in `ExecutionStatus`, `ExecutionSessionSummary`, and workspace projection.
+- M4B certification must verify `AwaitingAcceptance` survives backend restart.
+- M4B certification must verify `HandoffPath`, `CompletedAt`, and duration survive session store reload.
+- M4B certification must verify failed handoff validation and archive failure do not incorrectly produce successful-review completion duration metadata.
+- M4 should be formally closed only after completion metadata certification.
+- M5 acceptance workflow begins only after M4 closeout.
+- M5 must preserve the invariant that accept/reject are valid only from `AwaitingAcceptance`.
+- M5 must preserve separate workflow states: `Accepted`, `Committed`, and `Pushed` are not equivalent.
 
 ## Explicitly Deferred
 
-- Do not begin M4A.3 implementation before this commit-and-push stop point.
-- Do not add accept controls in M4A.3.
-- Do not add reject controls in M4A.3.
-- Do not add commit controls in M4A.3.
-- Do not add push controls in M4A.3.
-- Acceptance workflow remains M5.
-- Git lifecycle workflow remains M6.
+- Do not begin M5 before M4B is complete.
+- Do not add accept controls in M4B.
+- Do not add reject controls in M4B.
+- Do not add commit controls in M4B.
+- Do not add push controls in M4B.
+- Rejection semantics for M5 remain undecided.

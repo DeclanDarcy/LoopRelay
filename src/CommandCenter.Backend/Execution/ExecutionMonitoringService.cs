@@ -209,6 +209,24 @@ public sealed class ExecutionMonitoringService : IExecutionMonitoringService
         if (handoffService is not null)
         {
             await handoffService.ProcessProviderCompletionAsync(sessionId);
+            var status = await GetStatusAsync(sessionId);
+            if (status?.RepositoryState == RepositoryExecutionState.AwaitingAcceptance)
+            {
+                await AppendEventAsync(
+                    sessionId,
+                    ExecutionEventType.HandoffValidated,
+                    "Current handoff validated for review.",
+                    activityAt: DateTimeOffset.UtcNow);
+            }
+            else if (status?.RepositoryState == RepositoryExecutionState.Failed &&
+                !string.IsNullOrWhiteSpace(status.FailureReason))
+            {
+                await AppendEventAsync(
+                    sessionId,
+                    ExecutionEventType.Failure,
+                    status.FailureReason,
+                    activityAt: DateTimeOffset.UtcNow);
+            }
         }
     }
 

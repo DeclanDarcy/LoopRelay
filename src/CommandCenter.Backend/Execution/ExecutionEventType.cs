@@ -7,6 +7,7 @@ public enum ExecutionEventType
     StdErr,
     ProviderStarted,
     ProviderExited,
+    HandoffValidated,
     Failure,
     Cancellation,
     Recovery

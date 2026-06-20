@@ -351,7 +351,8 @@ button:focus-visible {
 }
 
 .execution-context-panel,
-.execution-session-panel {
+.execution-session-panel,
+.handoff-review-panel {
   min-width: 0;
   display: grid;
   gap: 12px;
@@ -372,10 +373,12 @@ button:focus-visible {
 
 .context-toolbar h4,
 .context-preview h5,
-.execution-session-panel h4 {
+.execution-session-panel h4,
+.handoff-review-header h4 {
   margin: 4px 0 0;
   color: #121820;
   letter-spacing: 0;
+  overflow-wrap: anywhere;
 }
 
 .context-controls {
@@ -478,6 +481,43 @@ button:focus-visible {
   border-color: #e5aaa5;
   color: #8a211b;
   background: #fff3f1;
+}
+
+.handoff-review-panel {
+  background: #fbfcfd;
+}
+
+.handoff-review-header {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, auto);
+  gap: 12px;
+  align-items: start;
+}
+
+.handoff-review-metadata {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.handoff-review-metadata span {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid #d9e0e6;
+  border-radius: 6px;
+  color: #3d4650;
+  background: #ffffff;
+  font-size: 0.8rem;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.handoff-review-content {
+  max-height: 460px;
+  border: 1px solid #d9e0e6;
+  border-radius: 6px;
+  background: #ffffff;
 }
 
 .execution-event-feed {
@@ -737,7 +777,8 @@ button:focus-visible {
   .context-columns,
   .diagnostic-list,
   .execution-session-grid,
-  .execution-event-row {
+  .execution-event-row,
+  .handoff-review-header {
     grid-template-columns: 1fr;
   }
 

@@ -52,6 +52,7 @@ struct ExecutionSessionSummary {
     provider_executable_path: Option<String>,
     provider_process_id: Option<i32>,
     provider_started_at: Option<String>,
+    handoff_path: Option<String>,
     failure_reason: Option<String>,
 }
 

@@ -14,14 +14,14 @@ Complete execution only when a handoff exists, rotate the previous handoff, and 
 - [ ] Add completed time and duration to session metadata.
 - [x] Transition from `Executing` to `AwaitingAcceptance` when validation succeeds.
 - [x] Transition to `Failed` when handoff validation or historical archive fails.
-- [ ] Refresh repository projections after completion processing.
+- [x] Refresh repository projections after completion processing.
 - [x] Restore `AwaitingAcceptance` state after restart.
 
 ## UI Work
 
-- [ ] Display `Awaiting Acceptance` state in dashboard and workspace.
-- [ ] Add handoff review workspace.
-- [ ] Display execution summary and complete generated handoff.
+- [x] Display `Awaiting Acceptance` state in dashboard and workspace.
+- [x] Add handoff review workspace.
+- [x] Display execution summary and complete generated handoff.
 - [ ] Do not add accept/reject controls until M5.
 
 ## Tests
@@ -36,5 +36,5 @@ Complete execution only when a handoff exists, rotate the previous handoff, and 
 ## Exit Criteria
 
 - [x] Execution cannot complete successfully without a current handoff.
-- [ ] Generated handoff is visible for review.
+- [x] Generated handoff is visible for review.
 - [x] Prior current handoff is preserved historically.

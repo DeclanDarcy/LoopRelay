@@ -54,6 +54,7 @@ type ExecutionSessionSummary = {
   providerExecutablePath: string | null
   providerProcessId: number | null
   providerStartedAt: string | null
+  handoffPath: string | null
   failureReason: string | null
 }
 
@@ -75,6 +76,7 @@ type ExecutionStatus = {
   providerExecutablePath: string | null
   providerProcessId: number | null
   providerStartedAt: string | null
+  handoffPath: string | null
   failureReason: string | null
   recentEvents: ExecutionEvent[]
 }
@@ -363,8 +365,10 @@ function App() {
   const [executionStatusesBySession, setExecutionStatusesBySession] = useState<Record<string, ExecutionStatus>>({})
   const [executionEventsBySession, setExecutionEventsBySession] = useState<Record<string, ExecutionEvent[]>>({})
   const selectedArtifactPathsByRepository = useRef<Record<string, string>>({})
+  const refreshedCompletedSessionIds = useRef<Set<string>>(new Set())
   const [artifactContent, setArtifactContent] = useState('')
   const [draftContent, setDraftContent] = useState('')
+  const [generatedHandoffContent, setGeneratedHandoffContent] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -374,6 +378,7 @@ function App() {
   const [isRotating, setIsRotating] = useState(false)
   const [isContextLoading, setIsContextLoading] = useState(false)
   const [isStartingExecution, setIsStartingExecution] = useState(false)
+  const [isGeneratedHandoffLoading, setIsGeneratedHandoffLoading] = useState(false)
   const [isAdding, setIsAdding] = useState(false)
   const [removingRepositoryId, setRemovingRepositoryId] = useState<string | null>(null)
 
@@ -447,9 +452,13 @@ function App() {
           selectedExecutionStatus?.providerExecutablePath ?? executionSummary.providerExecutablePath,
         providerProcessId: selectedExecutionStatus?.providerProcessId ?? executionSummary.providerProcessId,
         providerStartedAt: selectedExecutionStatus?.providerStartedAt ?? executionSummary.providerStartedAt,
+        handoffPath: selectedExecutionStatus?.handoffPath ?? executionSummary.handoffPath,
         failureReason: selectedExecutionStatus?.failureReason ?? executionSummary.failureReason,
       }
     : null
+  const canReviewGeneratedHandoff =
+    executionDisplay?.repositoryState === 'AwaitingAcceptance' &&
+    Boolean(executionDisplay.handoffPath)
 
   const startExecutionBlockedReason = useMemo(() => {
     if (!workspace) {
@@ -905,6 +914,7 @@ function App() {
               providerExecutablePath: selectedExecutionStatus.providerExecutablePath,
               providerProcessId: selectedExecutionStatus.providerProcessId,
               providerStartedAt: selectedExecutionStatus.providerStartedAt,
+              handoffPath: selectedExecutionStatus.handoffPath,
               failureReason: selectedExecutionStatus.failureReason,
             },
           }
@@ -927,6 +937,7 @@ function App() {
           providerExecutablePath: selectedExecutionStatus.providerExecutablePath,
           providerProcessId: selectedExecutionStatus.providerProcessId,
           providerStartedAt: selectedExecutionStatus.providerStartedAt,
+          handoffPath: selectedExecutionStatus.handoffPath,
           failureReason: selectedExecutionStatus.failureReason,
         }
 
@@ -940,6 +951,21 @@ function App() {
       }),
     )
   }, [executionSummary, selectedExecutionStatus])
+
+  useEffect(() => {
+    if (
+      !selectedRepository ||
+      !selectedExecutionStatus ||
+      selectedExecutionStatus.repositoryState === 'Executing' ||
+      refreshedCompletedSessionIds.current.has(selectedExecutionStatus.sessionId)
+    ) {
+      return
+    }
+
+    refreshedCompletedSessionIds.current.add(selectedExecutionStatus.sessionId)
+    void loadRepositories()
+    void loadWorkspace(selectedRepository.repository.id)
+  }, [loadRepositories, loadWorkspace, selectedExecutionStatus, selectedRepository])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -1005,6 +1031,41 @@ function App() {
       window.clearTimeout(timeoutId)
     }
   }, [selectedArtifactPath, selectedRepository])
+
+  useEffect(() => {
+    if (!selectedRepository || !canReviewGeneratedHandoff || !executionDisplay?.handoffPath) {
+      setGeneratedHandoffContent('')
+      setIsGeneratedHandoffLoading(false)
+      return
+    }
+
+    let isCurrent = true
+    setIsGeneratedHandoffLoading(true)
+    setError(null)
+    invoke<string>('load_artifact_content', {
+      repositoryId: selectedRepository.repository.id,
+      relativePath: executionDisplay.handoffPath,
+    })
+      .then((content) => {
+        if (isCurrent) {
+          setGeneratedHandoffContent(content)
+        }
+      })
+      .catch((loadError) => {
+        if (isCurrent) {
+          setError(formatError(loadError))
+        }
+      })
+      .finally(() => {
+        if (isCurrent) {
+          setIsGeneratedHandoffLoading(false)
+        }
+      })
+
+    return () => {
+      isCurrent = false
+    }
+  }, [canReviewGeneratedHandoff, executionDisplay?.handoffPath, selectedRepository])
 
   useEffect(() => {
     if (!workspace) {
@@ -1194,6 +1255,10 @@ function App() {
                       <dt>Failure</dt>
                       <dd>{executionDisplay.failureReason || 'None'}</dd>
                     </div>
+                    <div>
+                      <dt>Handoff</dt>
+                      <dd>{executionDisplay.handoffPath || 'Not recorded'}</dd>
+                    </div>
                   </>
                 ) : null}
                 <div>
@@ -1369,14 +1434,40 @@ function App() {
                     <span>State: {executionDisplay.state}</span>
                     <span>Repository state: {executionStateLabels[executionDisplay.repositoryState]}</span>
                     <span>Started: {formatDateTime(executionDisplay.startedAt)}</span>
+                    <span>Completed: {formatDateTime(executionDisplay.completedAt)}</span>
                     <span>Last activity: {formatDateTime(executionDisplay.lastActivityAt)}</span>
                     <span>Provider start: {formatDateTime(executionDisplay.providerStartedAt)}</span>
                     <span>PID: {executionDisplay.providerProcessId ?? 'Not recorded'}</span>
                     <span>Executable: {executionDisplay.providerExecutablePath || 'Not recorded'}</span>
+                    <span>Handoff: {executionDisplay.handoffPath || 'Not recorded'}</span>
                     {executionDisplay.failureReason ? (
                       <span className="execution-failure">Failure: {executionDisplay.failureReason}</span>
                     ) : null}
                   </div>
+                  {canReviewGeneratedHandoff ? (
+                    <section className="handoff-review-panel" aria-label="Generated handoff review">
+                      <div className="handoff-review-header">
+                        <div>
+                          <p className="eyebrow">Handoff Review</p>
+                          <h4>{executionDisplay.handoffPath}</h4>
+                        </div>
+                        <div className="handoff-review-metadata">
+                          <span>State: {executionStateLabels[executionDisplay.repositoryState]}</span>
+                          <span>Completed: {formatDateTime(executionDisplay.completedAt)}</span>
+                          <span>{generatedHandoffContent.length} characters</span>
+                        </div>
+                      </div>
+                      <div className="markdown-preview handoff-review-content">
+                        {isGeneratedHandoffLoading ? (
+                          <p>Loading generated handoff...</p>
+                        ) : generatedHandoffContent.trim() ? (
+                          renderMarkdown(generatedHandoffContent)
+                        ) : (
+                          <p>Generated handoff is empty.</p>
+                        )}
+                      </div>
+                    </section>
+                  ) : null}
                   <div className="execution-event-feed" aria-label="Execution output">
                     {selectedExecutionEvents.length === 0 ? (
                       <p className="empty-state">No execution events recorded.</p>

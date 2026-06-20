@@ -62,6 +62,7 @@ type ExecutionSessionSummary = {
   providerExecutablePath: string | null
   providerProcessId: number | null
   providerStartedAt: string | null
+  handoffPath: string | null
   failureReason: string | null
 }
 
@@ -417,6 +418,7 @@ function startExecution(state: MockState, repositoryId: string, milestonePath: s
     providerExecutablePath: 'fake-provider',
     providerProcessId: 1001,
     providerStartedAt: timestamp,
+    handoffPath: null,
     failureReason: null,
   }
   state.sessions[sessionId] = {
