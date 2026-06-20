@@ -68,3 +68,36 @@ Context preview captures repository branch, staged paths, modified paths, delete
 Context size policy is centralized in `ExecutionContextSizePolicy`: 128 KiB aggregate warning, 512 KiB aggregate hard limit, 96 KiB per-artifact warning, and 256 KiB per-artifact hard limit. Preview is still returned when validation or size diagnostics fail. Hard-limit excess and validation errors are represented as launch-blocking diagnostics for the future launch workflow.
 
 The preview endpoint is `GET /api/repositories/{repositoryId}/execution/context?milestonePath=...`. M1 does not add session launch, provider process start, monitoring, handoff acceptance, commit, or push behavior.
+
+## Operational Context
+
+Operational context is the repository-owned current project understanding artifact at `.agents/operational_context.md`. It carries the durable mental model needed by future execution slices: architecture, authority boundaries, constraints, stable decisions, rationale that still affects future work, open questions, active risks, and recent understanding changes.
+
+Operational context is not session memory. Execution sessions remain disposable provider workers, and the repository filesystem remains authoritative. Command Center may generate, review, promote, archive, and project operational context, but those operations must be mediated by repository artifacts and explicit human review.
+
+Operational context must not contain raw execution history, execution streams, conversation logs, complete handoff archives, Git commit history, milestone status tracking, provider transcripts, or generic progress notes. Those inputs may inform a proposed understanding update, but they are not themselves current understanding.
+
+Repository artifact responsibilities remain distinct:
+
+- Plan: durable project intent, scope, and implementation strategy.
+- Milestones: planned execution slices and certification criteria.
+- Handoff: compact result of the most recent execution slice.
+- Decisions: decision records, rationale history, and newly authorized choices.
+- Operational context: current understanding synthesized from stable, still-relevant information.
+
+Future execution context consumption must preserve this ordering:
+
+```text
+Plan
+Selected Milestone
+Operational Context
+Current Handoff
+Current Decisions
+Git Snapshot
+```
+
+Operational context supplements plan, milestone, handoff, and decisions. It does not replace any of them and does not become a new workflow authority or repository state machine.
+
+Markdown is the repository serialization format for operational context. Backend continuity services reason over a canonical `OperationalContextDocument` model defined in `docs/operational-context-schema.md`. Parsing, rendering, projection, coarse diffing, compression, decision assimilation, diagnostics, and later proposal review must use that document model rather than independent ad hoc Markdown parsing.
+
+The first supported semantic changes are intentionally coarse: section added, section removed, section changed, item added, item removed, item changed, constraint added or removed, question added or removed, risk added or removed, decision added or removed, rationale changed, and preservation warning. Deeper semantic interpretation, correctness scoring, automatic drift correction, and metrics-driven mutation are outside the architecture boundary.
