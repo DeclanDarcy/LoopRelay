@@ -2,26 +2,30 @@
 
 ## Slice Summary
 
-Completed M1 operational-context consumption.
+Completed M2 operational-context proposal generation end to end.
 
 ## New State
 
-- `.agents/operational_context.md` is now an optional execution-context artifact with role `OperationalContext`.
-- Execution prompt artifact ordering is now `Plan`, `Milestone`, `OperationalContext`, `CurrentHandoff`, `CurrentDecisions`.
-- Operational-context content contributes to aggregate and per-artifact diagnostics, including warning and hard-limit checks.
-- Missing operational context is reported as optional and does not block preview or launch.
-- Empty operational context is accepted.
-- Oversized operational context blocks launch through existing `LaunchBlocked` diagnostics.
-- Execution context preview now shows artifact content, with operational context expanded when present.
-- Development Tauri mock now emits operational context in the backend role order.
-- `.agents/milestones/m1-context-consumption.md` is marked complete.
+- Added backend `Continuity` models for `OperationalContextDocument`, items, sections, proposal metadata, input fingerprints, semantic changes, compression summary, and proposal summaries.
+- Added `MarkdownOperationalContextParser` with canonical section mapping, stable rendering, and preservation of unknown hand-written sections.
+- Added deterministic coarse `UnderstandingDiffService`.
+- Added repository-owned proposal persistence under `.agents/operational_context/proposals/<proposal-id>/` with `metadata.json` and `proposed.md`.
+- Added deterministic operational-context proposal generation from current operational context, current handoff, current decisions, bounded execution summaries, planning state, milestone inventory, and repository identity.
+- Proposal regeneration now supersedes previous pending proposals.
+- Added backend endpoints to generate, list, and load operational-context proposals.
+- Extended workspace projection with latest proposal summary.
+- Added Tauri bridge commands for generating, listing, and loading proposals.
+- Added UI workspace proposal panel with manual generation, latest proposal loading, proposal summary, semantic changes, and proposed-content preview.
+- Development Tauri mock now supports proposal summaries and proposal commands.
+- `.agents/milestones/m2-context-generation.md` is marked complete.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 138 tests.
-- `npm run build --prefix src/CommandCenter.UI` passed.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 147 tests.
 - `dotnet build CommandCenter.slnx` passed with 0 warnings and 0 errors.
+- `npm run build --prefix src/CommandCenter.UI` passed.
+- `cargo build --manifest-path src/CommandCenter.Shell/Cargo.toml` passed.
 
 ## Next Slice
 
-Start M2: add repository-owned operational-context proposal persistence and deterministic generation using the current operational context, handoff, and decisions as inputs.
+Start M3: implement proposal review state, edited proposal content, accept/reject endpoints, stale-state checks for review transitions, and UI controls for edit/accept/reject without promotion.

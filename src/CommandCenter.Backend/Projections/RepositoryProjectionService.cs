@@ -1,4 +1,5 @@
 using CommandCenter.Backend.Artifacts;
+using CommandCenter.Backend.Continuity;
 using CommandCenter.Backend.Execution;
 using CommandCenter.Backend.Planning;
 using CommandCenter.Backend.Repositories;
@@ -10,7 +11,8 @@ public sealed class RepositoryProjectionService(
     IRepositoryService repositoryService,
     IArtifactService artifactService,
     IPlanningService planningService,
-    IExecutionSessionService executionSessionService) : IRepositoryProjectionService
+    IExecutionSessionService executionSessionService,
+    IOperationalContextProposalStore operationalContextProposalStore) : IRepositoryProjectionService
 {
     private readonly ConcurrentDictionary<Guid, ArtifactInventory> inventoryCache = new();
 
@@ -77,7 +79,32 @@ public sealed class RepositoryProjectionService(
             HasPlan = inventory.Plan is not null,
             HasOperationalContext = inventory.OperationalContext is not null,
             HasCurrentHandoff = inventory.CurrentHandoff is not null,
-            HasCurrentDecisions = inventory.CurrentDecisions is not null
+            HasCurrentDecisions = inventory.CurrentDecisions is not null,
+            OperationalContextProposalSummary = await BuildOperationalContextProposalSummaryAsync(repository)
+        };
+    }
+
+    private async Task<OperationalContextProposalSummary> BuildOperationalContextProposalSummaryAsync(Repository repository)
+    {
+        var latestProposal = (await operationalContextProposalStore.ListAsync(repository)).FirstOrDefault();
+        if (latestProposal is null)
+        {
+            return new OperationalContextProposalSummary();
+        }
+
+        var generatedFingerprint = latestProposal.InputFingerprints
+            .FirstOrDefault(fingerprint => fingerprint.Name == "GeneratedProposal");
+        return new OperationalContextProposalSummary
+        {
+            PendingProposalExists = latestProposal.Status == OperationalContextProposalStatus.Pending,
+            LatestProposalId = latestProposal.ProposalId,
+            GeneratedAt = latestProposal.GeneratedAt,
+            Status = latestProposal.Status,
+            SourceInputCount = latestProposal.InputFingerprints.Count(fingerprint =>
+                fingerprint.Present &&
+                fingerprint.Name != "GeneratedProposal"),
+            ContentByteCount = generatedFingerprint?.ByteCount ?? 0,
+            ContentCharacterCount = generatedFingerprint?.CharacterCount ?? 0
         };
     }
 

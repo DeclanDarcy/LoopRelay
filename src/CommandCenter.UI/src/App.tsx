@@ -17,6 +17,7 @@ type ExecutionSessionState = 'Created' | 'Executing' | 'Completed' | 'Failed' | 
 type ArtifactType = 'Plan' | 'OperationalContext' | 'Milestone' | 'Handoff' | 'Decision'
 type ArtifactFamily = ArtifactType
 type ArtifactVersionKind = 'Current' | 'Historical'
+type OperationalContextProposalStatus = 'Pending' | 'Superseded' | 'Accepted' | 'Rejected' | 'Promoted'
 
 type Repository = {
   id: string
@@ -223,6 +224,35 @@ type RepositoryWorkspaceProjection = {
   hasOperationalContext: boolean
   hasCurrentHandoff: boolean
   hasCurrentDecisions: boolean
+  operationalContextProposalSummary: OperationalContextProposalSummary
+}
+
+type OperationalContextProposalSummary = {
+  pendingProposalExists: boolean
+  latestProposalId: string | null
+  generatedAt: string | null
+  status: OperationalContextProposalStatus | null
+  sourceInputCount: number
+  contentByteCount: number
+  contentCharacterCount: number
+}
+
+type OperationalContextSemanticChange = {
+  type: string
+  section: string
+  description: string
+  itemId: string | null
+}
+
+type OperationalContextProposal = {
+  proposalId: string
+  repositoryId: string
+  generatedAt: string
+  status: OperationalContextProposalStatus
+  generatedContentRelativePath: string
+  generatedContentHash: string
+  semanticChanges: OperationalContextSemanticChange[]
+  generatedContent: string | null
 }
 
 type ArtifactCategory = {
@@ -568,6 +598,8 @@ function App() {
   const [artifactContent, setArtifactContent] = useState('')
   const [draftContent, setDraftContent] = useState('')
   const [generatedHandoffContent, setGeneratedHandoffContent] = useState('')
+  const [operationalContextProposal, setOperationalContextProposal] =
+    useState<OperationalContextProposal | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -576,6 +608,8 @@ function App() {
   const [isSaving, setIsSaving] = useState(false)
   const [isRotating, setIsRotating] = useState(false)
   const [isContextLoading, setIsContextLoading] = useState(false)
+  const [isOperationalContextProposalLoading, setIsOperationalContextProposalLoading] =
+    useState(false)
   const [isStartingExecution, setIsStartingExecution] = useState(false)
   const [isGeneratedHandoffLoading, setIsGeneratedHandoffLoading] = useState(false)
   const [isAcceptingHandoff, setIsAcceptingHandoff] = useState(false)
@@ -755,6 +789,7 @@ function App() {
   const selectRepository = useCallback((repositoryId: string) => {
     setSelectedRepositoryId(repositoryId)
     setSelectedArtifactPath(selectedArtifactPathsByRepository.current[repositoryId] ?? null)
+    setOperationalContextProposal(null)
   }, [])
 
   const selectArtifact = useCallback((repositoryId: string, relativePath: string) => {
@@ -1031,6 +1066,58 @@ function App() {
       setError(formatError(refreshError))
     } finally {
       setIsWorkspaceLoading(false)
+    }
+  }
+
+  async function generateOperationalContextProposal() {
+    if (!selectedRepository) {
+      return
+    }
+
+    setIsOperationalContextProposalLoading(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const proposal = await invoke<OperationalContextProposal>(
+        'generate_operational_context_proposal',
+        { repositoryId: selectedRepository.repository.id },
+      )
+      setOperationalContextProposal(proposal)
+      const nextWorkspace = await invoke<RepositoryWorkspaceProjection>(
+        'refresh_repository_workspace',
+        { repositoryId: selectedRepository.repository.id },
+      )
+      setWorkspace(nextWorkspace)
+      setExecutionContext(null)
+      reconcileSelectedArtifact(selectedRepository.repository.id, nextWorkspace)
+      setMessage('Operational-context proposal generated.')
+      await loadRepositories()
+    } catch (proposalError) {
+      setError(formatError(proposalError))
+    } finally {
+      setIsOperationalContextProposalLoading(false)
+    }
+  }
+
+  async function loadLatestOperationalContextProposal() {
+    if (!selectedRepository || !workspace?.operationalContextProposalSummary.latestProposalId) {
+      return
+    }
+
+    setIsOperationalContextProposalLoading(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const proposal = await invoke<OperationalContextProposal>('get_operational_context_proposal', {
+        repositoryId: selectedRepository.repository.id,
+        proposalId: workspace.operationalContextProposalSummary.latestProposalId,
+      })
+      setOperationalContextProposal(proposal)
+      setMessage('Operational-context proposal loaded.')
+    } catch (proposalError) {
+      setError(formatError(proposalError))
+    } finally {
+      setIsOperationalContextProposalLoading(false)
     }
   }
 
@@ -1794,6 +1881,86 @@ function App() {
                 <span>Handoff: {workspace?.hasCurrentHandoff ? 'Present' : 'Missing'}</span>
                 <span>Decisions: {workspace?.hasCurrentDecisions ? 'Present' : 'Missing'}</span>
               </div>
+
+              <section className="execution-context-panel" aria-label="Operational context proposals">
+                <div className="context-toolbar">
+                  <div>
+                    <p className="eyebrow">Operational Context</p>
+                    <h4>Proposal Review</h4>
+                  </div>
+                  <div className="context-controls">
+                    <button
+                      type="button"
+                      className="secondary-action"
+                      onClick={() => void loadLatestOperationalContextProposal()}
+                      disabled={
+                        !workspace?.operationalContextProposalSummary.latestProposalId ||
+                        isOperationalContextProposalLoading
+                      }
+                    >
+                      Load Latest
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void generateOperationalContextProposal()}
+                      disabled={!selectedRepository || isOperationalContextProposalLoading}
+                    >
+                      {isOperationalContextProposalLoading ? 'Working...' : 'Generate Proposal'}
+                    </button>
+                  </div>
+                </div>
+
+                {workspace?.operationalContextProposalSummary.latestProposalId ? (
+                  <div className="context-summary-grid">
+                    <span>
+                      Latest: {workspace.operationalContextProposalSummary.latestProposalId}
+                    </span>
+                    <span>
+                      Status: {workspace.operationalContextProposalSummary.status ?? 'Unknown'}
+                    </span>
+                    <span>
+                      Generated:{' '}
+                      {formatDateTime(workspace.operationalContextProposalSummary.generatedAt)}
+                    </span>
+                    <span>
+                      Inputs: {workspace.operationalContextProposalSummary.sourceInputCount}
+                    </span>
+                    <span>
+                      Size: {workspace.operationalContextProposalSummary.contentByteCount} bytes
+                    </span>
+                  </div>
+                ) : (
+                  <p className="empty-state">No operational-context proposal has been generated.</p>
+                )}
+
+                {operationalContextProposal ? (
+                  <div className="context-artifact-previews">
+                    <h5>Semantic Changes</h5>
+                    {operationalContextProposal.semanticChanges.length === 0 ? (
+                      <p>No coarse semantic changes detected.</p>
+                    ) : (
+                      <ul>
+                        {operationalContextProposal.semanticChanges.map((change, index) => (
+                          <li key={`${change.type}-${change.itemId ?? index}`}>
+                            {change.type}: {change.description}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <details>
+                      <summary>
+                        Proposed content ({operationalContextProposal.generatedContent?.length ?? 0}{' '}
+                        characters)
+                      </summary>
+                      <div className="markdown-preview context-artifact-content">
+                        {operationalContextProposal.generatedContent?.trim()
+                          ? renderMarkdown(operationalContextProposal.generatedContent)
+                          : <p>Empty proposal.</p>}
+                      </div>
+                    </details>
+                  </div>
+                ) : null}
+              </section>
 
               <section className="execution-workspace" aria-label="Execution workspace">
                 <div className="execution-workspace-header">

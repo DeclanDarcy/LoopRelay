@@ -2,13 +2,14 @@
 
 ## Newly Authorized Decisions
 
-- M2 must implement proposal infrastructure before generator sophistication; persistence, reviewability, determinism, and traceability are higher priority than generated-output quality.
-- Current `.agents/operational_context.md` remains the only authoritative operational context; all proposals are non-authoritative artifacts, including the newest proposal.
-- Newer proposals must not gain implied authority from recency alone.
-- M2 tests must include proposal-level unknown Markdown preservation so unknown operational-context sections survive proposal generation and storage.
-- Prompt ordering should continue to keep `OperationalContext` before `CurrentHandoff`; recent activity must not outweigh accumulated understanding in execution context reconstruction.
+- M3 must preserve the distinction between review and lifecycle: edit, accept, and reject proposal review state without promoting or mutating `.agents/operational_context.md`.
+- M3 review state should use explicit vocabulary for `Pending`, `Edited`, `Accepted`, `Rejected`, and `Superseded` so stale proposal handling remains unambiguous.
+- Proposal identity must be stable enough to support generate, review, edit, accept, reject, stale detection, and later promotion without deriving authority indirectly from filesystem state.
+- Add a reproducibility certification expectation: same proposal inputs should produce equivalent generated understanding output, apart from proposal identity and timestamps.
+- Unknown operational-context Markdown preservation remains a high-risk invariant and must be tested through current context, proposal generation, and proposal persistence.
 
 ## Next-Slice Constraints
 
-- Do not build generation quality features before proposal persistence and reviewable traceability exist.
-- Do not introduce continuity sessions, proposal authority, or a separate workflow state machine.
+- Do not merge M3 review with M4 lifecycle.
+- Do not make acceptance update authoritative operational context.
+- Do not introduce lifecycle automation while implementing review state.

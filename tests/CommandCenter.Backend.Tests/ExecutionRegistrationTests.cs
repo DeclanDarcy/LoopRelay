@@ -1,4 +1,5 @@
 using CommandCenter.Backend;
+using CommandCenter.Backend.Continuity;
 using CommandCenter.Backend.Execution;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,6 +29,12 @@ public sealed class ExecutionRegistrationTests
             app.Services.GetRequiredService<IExecutionProvider>());
         Assert.IsAssignableFrom<IGitService>(
             app.Services.GetRequiredService<IGitService>());
+        Assert.IsAssignableFrom<IOperationalContextParser>(
+            app.Services.GetRequiredService<IOperationalContextParser>());
+        Assert.IsAssignableFrom<IOperationalContextProposalStore>(
+            app.Services.GetRequiredService<IOperationalContextProposalStore>());
+        Assert.IsAssignableFrom<IOperationalContextGenerationService>(
+            app.Services.GetRequiredService<IOperationalContextGenerationService>());
     }
 
     [Fact]

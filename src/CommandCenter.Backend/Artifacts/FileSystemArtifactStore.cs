@@ -51,4 +51,18 @@ public sealed class FileSystemArtifactStore : IArtifactStore
 
         return Task.FromResult<IReadOnlyList<string>>(files);
     }
+
+    public Task<IReadOnlyList<string>> ListDirectoriesAsync(string path)
+    {
+        if (!Directory.Exists(path))
+        {
+            return Task.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
+        }
+
+        var directories = Directory.GetDirectories(path)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return Task.FromResult<IReadOnlyList<string>>(directories);
+    }
 }

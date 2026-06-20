@@ -1,5 +1,6 @@
 using CommandCenter.Backend.Artifacts;
 using CommandCenter.Backend.Configuration;
+using CommandCenter.Backend.Continuity;
 using CommandCenter.Backend.Execution;
 using CommandCenter.Backend.Planning;
 using CommandCenter.Backend.Projections;
@@ -217,7 +218,8 @@ public sealed class RepositoryProjectionServiceTests
             repositoryService,
             new ArtifactService(new FileSystemArtifactStore()),
             new PlanningService(new FileSystemArtifactStore()),
-            executionSessionService);
+            executionSessionService,
+            new FileSystemOperationalContextProposalStore(new FileSystemArtifactStore()));
     }
 
     private static async Task WriteAsync(Repository repository, string relativePath, string content)

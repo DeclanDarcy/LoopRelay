@@ -41,6 +41,26 @@ public sealed class MemoryArtifactStore : IArtifactStore
         return Task.FromResult<IReadOnlyList<string>>(matches);
     }
 
+    public Task<IReadOnlyList<string>> ListDirectoriesAsync(string path)
+    {
+        var prefix = Normalize(path).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var directories = files.Keys
+            .Where(key => key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            .Select(key =>
+            {
+                var remainder = key[prefix.Length..];
+                var separator = remainder.IndexOf(Path.DirectorySeparatorChar);
+                return separator < 0 ? null : prefix + remainder[..separator];
+            })
+            .Where(directory => directory is not null)
+            .Select(directory => directory!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return Task.FromResult<IReadOnlyList<string>>(directories);
+    }
+
     private static string Normalize(string path)
     {
         return path.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);

@@ -1,5 +1,6 @@
 using CommandCenter.Backend.Artifacts;
 using CommandCenter.Backend.Configuration;
+using CommandCenter.Backend.Continuity;
 using CommandCenter.Backend.Execution;
 using CommandCenter.Backend.Planning;
 using CommandCenter.Backend.Projections;
@@ -22,6 +23,10 @@ public static class Program
         builder.Services.AddSingleton<IRepositoryService, RepositoryService>();
         builder.Services.AddSingleton<IArtifactService, ArtifactService>();
         builder.Services.AddSingleton<IArtifactRotationService, ArtifactRotationService>();
+        builder.Services.AddSingleton<IOperationalContextParser, MarkdownOperationalContextParser>();
+        builder.Services.AddSingleton<IUnderstandingDiffService, UnderstandingDiffService>();
+        builder.Services.AddSingleton<IOperationalContextProposalStore, FileSystemOperationalContextProposalStore>();
+        builder.Services.AddSingleton<IOperationalContextGenerationService, OperationalContextGenerationService>();
         builder.Services.AddSingleton<IPlanningService, PlanningService>();
         builder.Services.AddSingleton<IExecutionContextService, ExecutionContextService>();
         builder.Services.AddSingleton<IExecutionPromptBuilder, ExecutionPromptBuilder>();
@@ -243,6 +248,72 @@ public static class Program
             try
             {
                 return Results.Ok(await executionContextService.BuildContextAsync(repositoryId, milestonePath));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+        app.MapPost("/api/repositories/{repositoryId:guid}/operational-context/generate", async (
+            Guid repositoryId,
+            IOperationalContextGenerationService generationService,
+            IRepositoryProjectionService projectionService) =>
+        {
+            try
+            {
+                var proposal = await generationService.GenerateAsync(repositoryId);
+                await projectionService.RefreshWorkspaceAsync(repositoryId);
+                return Results.Ok(proposal);
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+        app.MapGet("/api/repositories/{repositoryId:guid}/operational-context/proposals", async (
+            Guid repositoryId,
+            IRepositoryService repositoryService,
+            IOperationalContextProposalStore proposalStore) =>
+        {
+            try
+            {
+                var repository = await GetRepositoryAsync(repositoryService, repositoryId);
+                return Results.Ok(await proposalStore.ListAsync(repository));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+        app.MapGet("/api/repositories/{repositoryId:guid}/operational-context/proposals/{proposalId}", async (
+            Guid repositoryId,
+            string proposalId,
+            IRepositoryService repositoryService,
+            IOperationalContextProposalStore proposalStore) =>
+        {
+            try
+            {
+                var repository = await GetRepositoryAsync(repositoryService, repositoryId);
+                var proposal = await proposalStore.GetAsync(repository, proposalId, includeContent: true);
+                return proposal is null
+                    ? Results.NotFound(new { error = $"Operational-context proposal was not found: {proposalId}" })
+                    : Results.Ok(proposal);
             }
             catch (KeyNotFoundException exception)
             {

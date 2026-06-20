@@ -1,5 +1,6 @@
 using CommandCenter.Backend.Artifacts;
 using CommandCenter.Backend.Configuration;
+using CommandCenter.Backend.Continuity;
 using CommandCenter.Backend.Execution;
 using CommandCenter.Backend.Planning;
 using CommandCenter.Backend.Projections;
@@ -106,7 +107,8 @@ public sealed class ArtifactRotationServiceTests
             repositoryService,
             artifactService,
             new PlanningService(new FileSystemArtifactStore()),
-            new ReadyExecutionSessionService());
+            new ReadyExecutionSessionService(),
+            new FileSystemOperationalContextProposalStore(new FileSystemArtifactStore()));
 
         var beforeRotation = await projectionService.GetWorkspaceAsync(repository.Id);
         await rotationService.RotateCurrentHandoffAsync(repository);
@@ -195,6 +197,11 @@ public sealed class ArtifactRotationServiceTests
         public Task<IReadOnlyList<string>> ListAsync(string path, string searchPattern)
         {
             return innerStore.ListAsync(path, searchPattern);
+        }
+
+        public Task<IReadOnlyList<string>> ListDirectoriesAsync(string path)
+        {
+            return innerStore.ListDirectoriesAsync(path);
         }
     }
 

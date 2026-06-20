@@ -271,5 +271,10 @@ public sealed class ExecutionHandoffServiceTests
         {
             return innerStore.ListAsync(path, searchPattern);
         }
+
+        public Task<IReadOnlyList<string>> ListDirectoriesAsync(string path)
+        {
+            return innerStore.ListDirectoriesAsync(path);
+        }
     }
 }

@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using CommandCenter.Backend;
 using CommandCenter.Backend.Artifacts;
 using CommandCenter.Backend.Configuration;
+using CommandCenter.Backend.Continuity;
 using CommandCenter.Backend.Execution;
 using CommandCenter.Backend.Planning;
 using CommandCenter.Backend.Projections;
@@ -259,7 +260,8 @@ public sealed class ExecutionSessionServiceTests
             harness.RepositoryService,
             new ArtifactService(artifactStore),
             new PlanningService(artifactStore),
-            reloadedService);
+            reloadedService,
+            new FileSystemOperationalContextProposalStore(artifactStore));
 
         var dashboard = await projectionService.GetDashboardAsync();
         var workspace = await projectionService.GetWorkspaceAsync(harness.Repository.Id);

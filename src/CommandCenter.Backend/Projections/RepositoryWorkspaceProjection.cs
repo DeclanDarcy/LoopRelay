@@ -1,6 +1,7 @@
 using CommandCenter.Backend.Planning;
 using CommandCenter.Backend.Repositories;
 using CommandCenter.Backend.Execution;
+using CommandCenter.Backend.Continuity;
 
 namespace CommandCenter.Backend.Projections;
 
@@ -29,4 +30,6 @@ public sealed class RepositoryWorkspaceProjection
     public bool HasCurrentHandoff { get; init; }
 
     public bool HasCurrentDecisions { get; init; }
+
+    public OperationalContextProposalSummary OperationalContextProposalSummary { get; init; } = new();
 }

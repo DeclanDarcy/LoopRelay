@@ -176,6 +176,19 @@ struct RepositoryWorkspaceProjection {
     has_operational_context: bool,
     has_current_handoff: bool,
     has_current_decisions: bool,
+    operational_context_proposal_summary: OperationalContextProposalSummary,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct OperationalContextProposalSummary {
+    pending_proposal_exists: bool,
+    latest_proposal_id: Option<String>,
+    generated_at: Option<String>,
+    status: Option<String>,
+    source_input_count: i32,
+    content_byte_count: i32,
+    content_character_count: i32,
 }
 
 #[derive(Serialize)]
@@ -379,6 +392,54 @@ fn preview_execution_context(repository_id: String, milestone_path: String) -> R
         .map_err(|error| error.to_string())?
         .json()
         .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn generate_operational_context_proposal(repository_id: String) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/operational-context/generate"
+        ))
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "operational-context proposal generation failed")
+}
+
+#[tauri::command]
+fn list_operational_context_proposals(repository_id: String) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/operational-context/proposals"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "operational-context proposal listing failed")
+}
+
+#[tauri::command]
+fn get_operational_context_proposal(
+    repository_id: String,
+    proposal_id: String,
+) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/operational-context/proposals/{proposal_id}"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "operational-context proposal lookup failed")
 }
 
 #[tauri::command]
@@ -690,6 +751,9 @@ fn main() {
             rotate_current_handoff,
             rotate_current_decisions,
             preview_execution_context,
+            generate_operational_context_proposal,
+            list_operational_context_proposals,
+            get_operational_context_proposal,
             start_execution,
             get_active_execution,
             get_git_status,

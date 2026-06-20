@@ -37,6 +37,33 @@ type Workspace = {
   hasOperationalContext: boolean
   hasCurrentHandoff: boolean
   hasCurrentDecisions: boolean
+  operationalContextProposalSummary: OperationalContextProposalSummary
+}
+
+type OperationalContextProposalSummary = {
+  pendingProposalExists: boolean
+  latestProposalId: string | null
+  generatedAt: string | null
+  status: string | null
+  sourceInputCount: number
+  contentByteCount: number
+  contentCharacterCount: number
+}
+
+type OperationalContextProposal = {
+  proposalId: string
+  repositoryId: string
+  generatedAt: string
+  status: string
+  generatedContentRelativePath: string
+  generatedContentHash: string
+  semanticChanges: Array<{
+    type: string
+    section: string
+    description: string
+    itemId: string | null
+  }>
+  generatedContent: string
 }
 
 type DashboardEntry = {
@@ -177,6 +204,7 @@ type MockState = {
   workspaces: Record<string, Workspace>
   content: Record<string, string>
   sessions: Record<string, ExecutionSession>
+  operationalContextProposals: Record<string, OperationalContextProposal[]>
 }
 
 type TauriInternals = {
@@ -302,6 +330,15 @@ function createWorkspace(repository: Repository, inventory: ArtifactInventory): 
     hasOperationalContext: inventory.operationalContext !== null,
     hasCurrentHandoff: inventory.currentHandoff !== null,
     hasCurrentDecisions: inventory.currentDecisions !== null,
+    operationalContextProposalSummary: {
+      pendingProposalExists: false,
+      latestProposalId: null,
+      generatedAt: null,
+      status: null,
+      sourceInputCount: 0,
+      contentByteCount: 0,
+      contentCharacterCount: 0,
+    },
   }
 }
 
@@ -356,6 +393,7 @@ function createInitialState(): MockState {
       [artifacts.decisions.relativePath]: '# Decisions\n\nCurrent decisions content.',
     },
     sessions: {},
+    operationalContextProposals: {},
   }
 
   seedCertificationSession(state, certificationRepositories[0], 'Executing', 'Executing')
@@ -784,6 +822,84 @@ function pushExecution(state: MockState, args: InvokeArgs): ExecutionSessionSumm
   return summary
 }
 
+function generateOperationalContextProposal(
+  state: MockState,
+  repositoryId: string,
+): OperationalContextProposal {
+  const workspace = state.workspaces[repositoryId]
+  if (!workspace) {
+    throw new Error(`Repository was not found: ${repositoryId}`)
+  }
+
+  const generatedAt = new Date().toISOString()
+  const proposalId = `mock-proposal-${(state.operationalContextProposals[repositoryId]?.length ?? 0) + 1}`
+  const generatedContent = [
+    '# Operational Context',
+    '',
+    '## Current Mental Model',
+    '',
+    `- Repository \`${workspace.repository.name}\` uses repository-owned continuity artifacts.`,
+    '',
+    '## Architecture',
+    '',
+    '- Backend services own proposal generation and persistence.',
+    '',
+    '## Authority Boundaries',
+    '',
+    '## Constraints',
+    '',
+    '- Generated proposals do not mutate current operational context.',
+    '',
+    '## Stable Decisions',
+    '',
+    '## Decision Rationale',
+    '',
+    '## Open Questions',
+    '',
+    '## Active Risks',
+    '',
+    '## Recent Understanding Changes',
+    '',
+    '- Mock proposal generation ran from the workspace surface.',
+  ].join('\n')
+  const proposal: OperationalContextProposal = {
+    proposalId,
+    repositoryId,
+    generatedAt,
+    status: 'Pending',
+    generatedContentRelativePath: `.agents/operational_context/proposals/${proposalId}/proposed.md`,
+    generatedContentHash: `mock-hash-${proposalId}`,
+    semanticChanges: [
+      {
+        type: 'ConstraintAdded',
+        section: 'Constraints',
+        description: 'Item added to Constraints: Generated proposals do not mutate current operational context.',
+        itemId: 'mock-constraint',
+      },
+    ],
+    generatedContent,
+  }
+
+  state.operationalContextProposals[repositoryId] = (
+    state.operationalContextProposals[repositoryId] ?? []
+  ).map((currentProposal) =>
+    currentProposal.status === 'Pending'
+      ? { ...currentProposal, status: 'Superseded' }
+      : currentProposal,
+  )
+  state.operationalContextProposals[repositoryId].unshift(proposal)
+  workspace.operationalContextProposalSummary = {
+    pendingProposalExists: true,
+    latestProposalId: proposalId,
+    generatedAt,
+    status: 'Pending',
+    sourceInputCount: 3,
+    contentByteCount: generatedContent.length,
+    contentCharacterCount: generatedContent.length,
+  }
+  return proposal
+}
+
 function decideHandoff(
   state: MockState,
   sessionId: string,
@@ -855,6 +971,22 @@ export function installDevTauriMock() {
               getStringArg(args, 'milestonePath'),
             ),
           )
+        case 'generate_operational_context_proposal':
+          return clone(generateOperationalContextProposal(state, getStringArg(args, 'repositoryId')))
+        case 'list_operational_context_proposals':
+          return clone(state.operationalContextProposals[getStringArg(args, 'repositoryId')] ?? [])
+        case 'get_operational_context_proposal': {
+          const repositoryId = getStringArg(args, 'repositoryId')
+          const proposalId = getStringArg(args, 'proposalId')
+          const proposal = state.operationalContextProposals[repositoryId]?.find(
+            (currentProposal) => currentProposal.proposalId === proposalId,
+          )
+          if (!proposal) {
+            throw new Error('Operational-context proposal was not found.')
+          }
+
+          return clone(proposal)
+        }
         case 'start_execution':
           return clone(
             startExecution(

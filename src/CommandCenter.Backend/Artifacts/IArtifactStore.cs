@@ -11,4 +11,6 @@ public interface IArtifactStore
     Task DeleteAsync(string path);
 
     Task<IReadOnlyList<string>> ListAsync(string path, string searchPattern);
+
+    Task<IReadOnlyList<string>> ListDirectoriesAsync(string path);
 }
