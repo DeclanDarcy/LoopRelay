@@ -8,6 +8,8 @@ public interface IArtifactService
 
     Task<Artifact?> GetCurrentHandoffAsync(Repository repository);
 
+    Task<Artifact?> GetCurrentOperationalContextAsync(Repository repository);
+
     Task<Artifact?> GetCurrentDecisionsAsync(Repository repository);
 
     Task<bool> ExistsAsync(Repository repository, string relativePath);

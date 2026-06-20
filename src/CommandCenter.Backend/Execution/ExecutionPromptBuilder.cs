@@ -8,6 +8,7 @@ public sealed class ExecutionPromptBuilder : IExecutionPromptBuilder
     [
         "Plan",
         "Milestone",
+        "OperationalContext",
         "CurrentHandoff",
         "CurrentDecisions"
     ];

@@ -2,20 +2,26 @@
 
 ## Slice Summary
 
-Completed M0 architecture ratification for operational context.
+Completed M1 operational-context consumption.
 
 ## New State
 
-- Added `docs/operational-context-schema.md` as the implementation contract for `OperationalContextDocument`.
-- Extended `docs/architecture.md` with the operational-context authority boundary, artifact responsibilities, execution-context ordering, and coarse semantic-change scope.
-- Marked `.agents/milestones/m0-architecture-ratification.md` complete.
-- No runtime, UI, proposal, lifecycle, or artifact mutation behavior was changed.
+- `.agents/operational_context.md` is now an optional execution-context artifact with role `OperationalContext`.
+- Execution prompt artifact ordering is now `Plan`, `Milestone`, `OperationalContext`, `CurrentHandoff`, `CurrentDecisions`.
+- Operational-context content contributes to aggregate and per-artifact diagnostics, including warning and hard-limit checks.
+- Missing operational context is reported as optional and does not block preview or launch.
+- Empty operational context is accepted.
+- Oversized operational context blocks launch through existing `LaunchBlocked` diagnostics.
+- Execution context preview now shows artifact content, with operational context expanded when present.
+- Development Tauri mock now emits operational context in the backend role order.
+- `.agents/milestones/m1-context-consumption.md` is marked complete.
 
 ## Verification
 
-- Performed documentation readback and diff review.
-- No build or test suite was run because this slice changed documentation only.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 138 tests.
+- `npm run build --prefix src/CommandCenter.UI` passed.
+- `dotnet build CommandCenter.slnx` passed with 0 warnings and 0 errors.
 
 ## Next Slice
 
-Start M1: make `.agents/operational_context.md` a first-class optional execution input in backend context construction, prompt ordering, diagnostics, preview API, and UI display.
+Start M2: add repository-owned operational-context proposal persistence and deterministic generation using the current operational context, handoff, and decisions as inputs.

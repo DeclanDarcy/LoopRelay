@@ -29,16 +29,48 @@ public sealed class ExecutionPromptBuilderTests
         var prompt = new ExecutionPromptBuilder().Build(CreateContext(
             optionalArtifacts:
             [
+                Artifact("OperationalContext", ".agents/operational_context.md", "context content"),
                 Artifact("CurrentHandoff", ".agents/handoffs/handoff.md", "handoff content"),
                 Artifact("CurrentDecisions", ".agents/decisions/decisions.md", "decisions content")
             ]));
 
+        Assert.Contains("OperationalContext: .agents/operational_context.md", prompt.Text);
+        Assert.Contains("context content", prompt.Text);
         Assert.Contains("CurrentHandoff: .agents/handoffs/handoff.md", prompt.Text);
         Assert.Contains("handoff content", prompt.Text);
         Assert.Contains("CurrentDecisions: .agents/decisions/decisions.md", prompt.Text);
         Assert.Contains("decisions content", prompt.Text);
+        Assert.Contains(".agents/operational_context.md", prompt.Metadata.IncludedArtifactPaths);
         Assert.Contains(".agents/handoffs/handoff.md", prompt.Metadata.IncludedArtifactPaths);
         Assert.Contains(".agents/decisions/decisions.md", prompt.Metadata.IncludedArtifactPaths);
+    }
+
+    [Fact]
+    public void PromptOrdersOperationalContextBetweenMilestoneAndHandoff()
+    {
+        var prompt = new ExecutionPromptBuilder().Build(CreateContext(
+            optionalArtifacts:
+            [
+                Artifact("CurrentDecisions", ".agents/decisions/decisions.md", "decisions content"),
+                Artifact("CurrentHandoff", ".agents/handoffs/handoff.md", "handoff content"),
+                Artifact("OperationalContext", ".agents/operational_context.md", "context content")
+            ]));
+
+        Assert.Equal(
+            [
+                ".agents/plan.md",
+                ".agents/milestones/m2.md",
+                ".agents/operational_context.md",
+                ".agents/handoffs/handoff.md",
+                ".agents/decisions/decisions.md"
+            ],
+            prompt.Metadata.IncludedArtifactPaths);
+        Assert.True(
+            prompt.Text.IndexOf("Milestone: .agents/milestones/m2.md", StringComparison.Ordinal) <
+            prompt.Text.IndexOf("OperationalContext: .agents/operational_context.md", StringComparison.Ordinal));
+        Assert.True(
+            prompt.Text.IndexOf("OperationalContext: .agents/operational_context.md", StringComparison.Ordinal) <
+            prompt.Text.IndexOf("CurrentHandoff: .agents/handoffs/handoff.md", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -47,6 +79,7 @@ public sealed class ExecutionPromptBuilderTests
         var prompt = new ExecutionPromptBuilder().Build(CreateContext());
 
         Assert.Contains("Missing optional artifacts:", prompt.Text);
+        Assert.Contains(".agents/operational_context.md", prompt.Text);
         Assert.Contains(".agents/handoffs/handoff.md", prompt.Text);
         Assert.Contains(".agents/decisions/decisions.md", prompt.Text);
     }
@@ -129,7 +162,7 @@ public sealed class ExecutionPromptBuilderTests
                 WarningThresholdBytes = 128 * 1024,
                 HardLimitBytes = 512 * 1024,
                 MissingOptionalArtifacts = optionalArtifacts is null
-                    ? [".agents/handoffs/handoff.md", ".agents/decisions/decisions.md"]
+                    ? [".agents/operational_context.md", ".agents/handoffs/handoff.md", ".agents/decisions/decisions.md"]
                     : []
             }
         };

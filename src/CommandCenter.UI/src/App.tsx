@@ -1956,6 +1956,20 @@ function App() {
                         ))}
                       </div>
                     </div>
+
+                    <div className="context-artifact-previews">
+                      <h5>Artifact Content</h5>
+                      {executionContext.artifacts.map((artifact) => (
+                        <details key={artifact.relativePath} open={artifact.role === 'OperationalContext'}>
+                          <summary>
+                            {artifact.role}: {artifact.relativePath} ({artifact.characterCount} characters)
+                          </summary>
+                          <div className="markdown-preview context-artifact-content">
+                            {artifact.content.trim() ? renderMarkdown(artifact.content) : <p>Empty artifact.</p>}
+                          </div>
+                        </details>
+                      ))}
+                    </div>
                   </div>
                 ) : (
                   <p className="empty-state">Build a context preview for a selected milestone.</p>

@@ -27,6 +27,14 @@ public sealed class ArtifactService(IArtifactStore artifactStore) : IArtifactSer
             : null;
     }
 
+    public async Task<Artifact?> GetCurrentOperationalContextAsync(Repository repository)
+    {
+        const string relativePath = ".agents/operational_context.md";
+        return await ExistsAsync(repository, relativePath)
+            ? CreateArtifact(repository, ArtifactPath.ResolveRepositoryPath(repository, relativePath), ArtifactType.OperationalContext, ArtifactFamily.OperationalContext)
+            : null;
+    }
+
     public async Task<Artifact?> GetCurrentDecisionsAsync(Repository repository)
     {
         const string relativePath = ".agents/decisions/decisions.md";

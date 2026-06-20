@@ -523,7 +523,8 @@ button:focus-visible {
 
 .context-columns > div,
 .dirty-state,
-.artifact-diagnostics {
+.artifact-diagnostics,
+.context-artifact-previews {
   min-width: 0;
   display: grid;
   align-content: start;
@@ -608,6 +609,29 @@ button:focus-visible {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+}
+
+.context-artifact-previews details {
+  min-width: 0;
+  border: 1px solid #d9e0e6;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.context-artifact-previews summary {
+  cursor: pointer;
+  padding: 9px 10px;
+  color: #1d252c;
+  font-size: 0.84rem;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.context-artifact-content {
+  border-top: 1px solid #e8edf2;
+  border-radius: 0;
+  max-height: 260px;
+  overflow: auto;
 }
 
 .execution-session-grid {

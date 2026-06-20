@@ -12,6 +12,7 @@ public sealed class ExecutionContextService(
     IGitService gitService) : IExecutionContextService
 {
     private const string PlanPath = ".agents/plan.md";
+    private const string OperationalContextPath = ".agents/operational_context.md";
     private const string CurrentHandoffPath = ".agents/handoffs/handoff.md";
     private const string CurrentDecisionsPath = ".agents/decisions/decisions.md";
     private const string MilestonesDirectory = ".agents/milestones";
@@ -48,6 +49,7 @@ public sealed class ExecutionContextService(
             await AddRequiredArtifactAsync(repository, artifacts, "Milestone", normalizedMilestonePath, validationErrors);
         }
 
+        await AddOptionalArtifactAsync(repository, artifacts, "OperationalContext", OperationalContextPath, missingOptionalArtifacts);
         await AddOptionalArtifactAsync(repository, artifacts, "CurrentHandoff", CurrentHandoffPath, missingOptionalArtifacts);
         await AddOptionalArtifactAsync(repository, artifacts, "CurrentDecisions", CurrentDecisionsPath, missingOptionalArtifacts);
 

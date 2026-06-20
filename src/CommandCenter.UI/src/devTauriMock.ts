@@ -455,15 +455,21 @@ function dashboardEntry(workspace: Workspace): DashboardEntry {
 function createContextPreview(state: MockState, repositoryId: string, milestonePath: string): ExecutionContextPreview {
   const workspace = state.workspaces[repositoryId]
   const artifactsForContext = [
-    workspace.artifactInventory.plan,
-    workspace.artifactInventory.milestones.find((milestone) => milestone.relativePath === milestonePath) ?? null,
-    workspace.artifactInventory.currentHandoff,
-    workspace.artifactInventory.currentDecisions,
-  ].filter((artifact): artifact is Artifact => artifact !== null)
-  const artifactsWithContent = artifactsForContext.map((artifact) => {
+    { role: 'Plan', artifact: workspace.artifactInventory.plan },
+    {
+      role: 'Milestone',
+      artifact:
+        workspace.artifactInventory.milestones.find((milestone) => milestone.relativePath === milestonePath) ??
+        null,
+    },
+    { role: 'OperationalContext', artifact: workspace.artifactInventory.operationalContext },
+    { role: 'CurrentHandoff', artifact: workspace.artifactInventory.currentHandoff },
+    { role: 'CurrentDecisions', artifact: workspace.artifactInventory.currentDecisions },
+  ].filter((entry): entry is { role: string; artifact: Artifact } => entry.artifact !== null)
+  const artifactsWithContent = artifactsForContext.map(({ role, artifact }) => {
     const content = state.content[artifact.relativePath] ?? ''
     return {
-      role: artifact.type,
+      role,
       relativePath: artifact.relativePath,
       name: artifact.name,
       content,
@@ -512,6 +518,7 @@ function createContextPreview(state: MockState, repositoryId: string, milestoneP
       })),
       validationErrors: workspace.readiness === 'Ready' ? [] : [`Repository planning readiness is ${workspace.readiness}.`],
       missingOptionalArtifacts: [
+        workspace.artifactInventory.operationalContext ? null : '.agents/operational_context.md',
         workspace.artifactInventory.currentHandoff ? null : '.agents/handoffs/handoff.md',
         workspace.artifactInventory.currentDecisions ? null : '.agents/decisions/decisions.md',
       ].filter((path): path is string => path !== null),

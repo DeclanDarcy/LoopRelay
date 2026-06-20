@@ -61,7 +61,7 @@ public sealed class ArtifactServiceTests
     }
 
     [Fact]
-    public async Task CurrentHandoffAndDecisionsResolveOnlyCurrentFiles()
+    public async Task CurrentArtifactsResolveOnlyCurrentFiles()
     {
         var repository = CreateRepository();
         await WriteAsync(repository, ".agents/handoffs/handoff.0001.md", "historical handoff");
@@ -69,12 +69,15 @@ public sealed class ArtifactServiceTests
         var service = new ArtifactService(new FileSystemArtifactStore());
 
         Assert.Null(await service.GetCurrentHandoffAsync(repository));
+        Assert.Null(await service.GetCurrentOperationalContextAsync(repository));
         Assert.Null(await service.GetCurrentDecisionsAsync(repository));
 
+        await WriteAsync(repository, ".agents/operational_context.md", "context");
         await WriteAsync(repository, ".agents/handoffs/handoff.md", "handoff");
         await WriteAsync(repository, ".agents/decisions/decisions.md", "decisions");
 
         Assert.Equal(".agents/handoffs/handoff.md", (await service.GetCurrentHandoffAsync(repository))?.RelativePath);
+        Assert.Equal(".agents/operational_context.md", (await service.GetCurrentOperationalContextAsync(repository))?.RelativePath);
         Assert.Equal(".agents/decisions/decisions.md", (await service.GetCurrentDecisionsAsync(repository))?.RelativePath);
     }
 

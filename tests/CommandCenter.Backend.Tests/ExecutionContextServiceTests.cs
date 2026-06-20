@@ -32,7 +32,48 @@ public sealed class ExecutionContextServiceTests
     }
 
     [Fact]
-    public async Task MissingOptionalHandoffAndDecisionsSucceedAndAreReported()
+    public async Task OperationalContextIsIncludedWhenPresent()
+    {
+        var harness = await CreateHarnessAsync();
+        await WriteAsync(harness.Repository, ".agents/plan.md", "plan");
+        await WriteAsync(harness.Repository, ".agents/operational_context.md", "operational context");
+        await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
+
+        var context = await harness.ContextService.BuildContextAsync(
+            harness.Repository.Id,
+            ".agents/milestones/m1.md");
+
+        var artifact = Assert.Single(
+            context.Artifacts,
+            artifact => artifact.Role == "OperationalContext");
+        Assert.Equal(".agents/operational_context.md", artifact.RelativePath);
+        Assert.Equal("operational context", artifact.Content);
+        Assert.DoesNotContain(".agents/operational_context.md", context.Diagnostics.MissingOptionalArtifacts);
+    }
+
+    [Fact]
+    public async Task EmptyOperationalContextIsAllowed()
+    {
+        var harness = await CreateHarnessAsync();
+        await WriteAsync(harness.Repository, ".agents/plan.md", "plan");
+        await WriteAsync(harness.Repository, ".agents/operational_context.md", string.Empty);
+        await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
+
+        var context = await harness.ContextService.BuildContextAsync(
+            harness.Repository.Id,
+            ".agents/milestones/m1.md");
+
+        var artifact = Assert.Single(
+            context.Artifacts,
+            artifact => artifact.Role == "OperationalContext");
+        Assert.Equal(0, artifact.ByteCount);
+        Assert.Equal(0, artifact.CharacterCount);
+        Assert.Empty(context.Diagnostics.ValidationErrors);
+        Assert.False(context.Diagnostics.LaunchBlocked);
+    }
+
+    [Fact]
+    public async Task MissingOptionalArtifactsSucceedAndAreReported()
     {
         var harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/plan.md", "plan");
@@ -43,6 +84,7 @@ public sealed class ExecutionContextServiceTests
             ".agents/milestones/m1.md");
 
         Assert.Empty(context.Diagnostics.ValidationErrors);
+        Assert.Contains(".agents/operational_context.md", context.Diagnostics.MissingOptionalArtifacts);
         Assert.Contains(".agents/handoffs/handoff.md", context.Diagnostics.MissingOptionalArtifacts);
         Assert.Contains(".agents/decisions/decisions.md", context.Diagnostics.MissingOptionalArtifacts);
     }
@@ -123,6 +165,49 @@ public sealed class ExecutionContextServiceTests
     }
 
     [Fact]
+    public async Task OperationalContextContributesToSizeDiagnostics()
+    {
+        var harness = await CreateHarnessAsync();
+        await WriteAsync(harness.Repository, ".agents/plan.md", "plan");
+        await WriteAsync(harness.Repository, ".agents/operational_context.md", new string('c', 100 * 1024));
+        await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
+
+        var context = await harness.ContextService.BuildContextAsync(
+            harness.Repository.Id,
+            ".agents/milestones/m1.md");
+
+        var diagnostic = Assert.Single(
+            context.Diagnostics.ArtifactDiagnostics,
+            diagnostic => diagnostic.Role == "OperationalContext");
+        Assert.Equal(".agents/operational_context.md", diagnostic.RelativePath);
+        Assert.Equal(100 * 1024, diagnostic.ByteCount);
+        Assert.True(diagnostic.WarningThresholdExceeded);
+        Assert.False(diagnostic.HardLimitExceeded);
+        Assert.True(context.Diagnostics.WarningThresholdExceeded);
+        Assert.False(context.Diagnostics.LaunchBlocked);
+    }
+
+    [Fact]
+    public async Task OversizedOperationalContextBlocksLaunch()
+    {
+        var harness = await CreateHarnessAsync();
+        await WriteAsync(harness.Repository, ".agents/plan.md", "plan");
+        await WriteAsync(harness.Repository, ".agents/operational_context.md", new string('c', 260 * 1024));
+        await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
+
+        var context = await harness.ContextService.BuildContextAsync(
+            harness.Repository.Id,
+            ".agents/milestones/m1.md");
+
+        var diagnostic = Assert.Single(
+            context.Diagnostics.ArtifactDiagnostics,
+            diagnostic => diagnostic.Role == "OperationalContext");
+        Assert.True(diagnostic.HardLimitExceeded);
+        Assert.True(context.Diagnostics.HardLimitExceeded);
+        Assert.True(context.Diagnostics.LaunchBlocked);
+    }
+
+    [Fact]
     public async Task DirtyRepositoryStateIsCapturedWithoutBlockingPreview()
     {
         var dirtyState = new RepositoryDirtyState
@@ -172,6 +257,7 @@ public sealed class ExecutionContextServiceTests
             var repositoryService = new RepositoryService(new ApplicationConfigurationStore(configurationPath));
             var repository = await repositoryService.RegisterAsync(repositoryPath);
             await WriteAsync(repository, ".agents/plan.md", "plan");
+            await WriteAsync(repository, ".agents/operational_context.md", "context");
             await WriteAsync(repository, ".agents/milestones/m1.md", "milestone");
 
             await using var app = Program.CreateApp(
@@ -189,6 +275,8 @@ public sealed class ExecutionContextServiceTests
             var context = await response.Content.ReadFromJsonAsync<CommandCenter.Backend.Execution.ExecutionContext>();
             Assert.NotNull(context);
             Assert.Contains(context.Artifacts, artifact => artifact.RelativePath == ".agents/plan.md");
+            Assert.Contains(context.Artifacts, artifact => artifact.RelativePath == ".agents/operational_context.md");
+            Assert.Contains(context.Diagnostics.ArtifactDiagnostics, diagnostic => diagnostic.RelativePath == ".agents/operational_context.md");
             Assert.NotNull(context.RepositorySnapshot);
         }
         finally
