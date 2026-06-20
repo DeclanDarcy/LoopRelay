@@ -47,6 +47,7 @@ struct ExecutionSessionSummary {
     milestone_path: Option<String>,
     started_at: Option<String>,
     completed_at: Option<String>,
+    duration: Option<String>,
     last_activity_at: Option<String>,
     provider_name: String,
     provider_executable_path: Option<String>,

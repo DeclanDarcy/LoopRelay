@@ -49,6 +49,7 @@ type ExecutionSessionSummary = {
   milestonePath: string | null
   startedAt: string | null
   completedAt: string | null
+  duration: string | null
   lastActivityAt: string | null
   providerName: string
   providerExecutablePath: string | null
@@ -71,6 +72,7 @@ type ExecutionStatus = {
   repositoryState: RepositoryExecutionState
   startedAt: string
   completedAt: string | null
+  duration: string | null
   lastActivityAt: string | null
   providerName: string
   providerExecutablePath: string | null
@@ -201,6 +203,10 @@ function formatError(error: unknown) {
 
 function formatDateTime(value: string | null) {
   return value ? new Date(value).toLocaleString() : 'Not recorded'
+}
+
+function formatDuration(value: string | null) {
+  return value ?? 'Not recorded'
 }
 
 function mergeExecutionEvents(currentEvents: ExecutionEvent[], incomingEvents: ExecutionEvent[]) {
@@ -446,6 +452,7 @@ function App() {
         repositoryState: selectedExecutionStatus?.repositoryState ?? executionSummary.repositoryState,
         startedAt: selectedExecutionStatus?.startedAt ?? executionSummary.startedAt,
         completedAt: selectedExecutionStatus?.completedAt ?? executionSummary.completedAt,
+        duration: selectedExecutionStatus?.duration ?? executionSummary.duration,
         lastActivityAt: selectedExecutionStatus?.lastActivityAt ?? executionSummary.lastActivityAt,
         providerName: selectedExecutionStatus?.providerName ?? executionSummary.providerName,
         providerExecutablePath:
@@ -909,6 +916,7 @@ function App() {
               state: selectedExecutionStatus.state,
               repositoryState: selectedExecutionStatus.repositoryState,
               completedAt: selectedExecutionStatus.completedAt,
+              duration: selectedExecutionStatus.duration,
               lastActivityAt: selectedExecutionStatus.lastActivityAt,
               providerName: selectedExecutionStatus.providerName,
               providerExecutablePath: selectedExecutionStatus.providerExecutablePath,
@@ -932,6 +940,7 @@ function App() {
           state: selectedExecutionStatus.state,
           repositoryState: selectedExecutionStatus.repositoryState,
           completedAt: selectedExecutionStatus.completedAt,
+          duration: selectedExecutionStatus.duration,
           lastActivityAt: selectedExecutionStatus.lastActivityAt,
           providerName: selectedExecutionStatus.providerName,
           providerExecutablePath: selectedExecutionStatus.providerExecutablePath,
@@ -1244,6 +1253,10 @@ function App() {
                       <dd>{formatDateTime(executionDisplay.lastActivityAt)}</dd>
                     </div>
                     <div>
+                      <dt>Duration</dt>
+                      <dd>{formatDuration(executionDisplay.duration)}</dd>
+                    </div>
+                    <div>
                       <dt>PID</dt>
                       <dd>{executionDisplay.providerProcessId ?? 'Not recorded'}</dd>
                     </div>
@@ -1435,6 +1448,7 @@ function App() {
                     <span>Repository state: {executionStateLabels[executionDisplay.repositoryState]}</span>
                     <span>Started: {formatDateTime(executionDisplay.startedAt)}</span>
                     <span>Completed: {formatDateTime(executionDisplay.completedAt)}</span>
+                    <span>Duration: {formatDuration(executionDisplay.duration)}</span>
                     <span>Last activity: {formatDateTime(executionDisplay.lastActivityAt)}</span>
                     <span>Provider start: {formatDateTime(executionDisplay.providerStartedAt)}</span>
                     <span>PID: {executionDisplay.providerProcessId ?? 'Not recorded'}</span>
@@ -1454,6 +1468,7 @@ function App() {
                         <div className="handoff-review-metadata">
                           <span>State: {executionStateLabels[executionDisplay.repositoryState]}</span>
                           <span>Completed: {formatDateTime(executionDisplay.completedAt)}</span>
+                          <span>Duration: {formatDuration(executionDisplay.duration)}</span>
                           <span>{generatedHandoffContent.length} characters</span>
                         </div>
                       </div>

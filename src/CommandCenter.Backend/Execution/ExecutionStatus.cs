@@ -12,6 +12,8 @@ public sealed class ExecutionStatus
 
     public DateTimeOffset? CompletedAt { get; init; }
 
+    public TimeSpan? Duration { get; init; }
+
     public DateTimeOffset? LastActivityAt { get; init; }
 
     public string ProviderName { get; init; } = string.Empty;

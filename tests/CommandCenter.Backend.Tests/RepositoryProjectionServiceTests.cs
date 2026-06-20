@@ -154,6 +154,7 @@ public sealed class RepositoryProjectionServiceTests
                     MilestonePath = ".agents/milestones/m4.md",
                     StartedAt = DateTimeOffset.UtcNow.AddMinutes(-3),
                     CompletedAt = DateTimeOffset.UtcNow,
+                    Duration = TimeSpan.FromMinutes(3),
                     LastActivityAt = DateTimeOffset.UtcNow,
                     ProviderName = "fake",
                     HandoffPath = HandoffService.CurrentHandoffPath
@@ -168,9 +169,11 @@ public sealed class RepositoryProjectionServiceTests
         Assert.NotNull(dashboardProjection.ExecutionSummary);
         Assert.Equal(sessionId, dashboardProjection.ExecutionSummary.SessionId);
         Assert.Equal(HandoffService.CurrentHandoffPath, dashboardProjection.ExecutionSummary.HandoffPath);
+        Assert.Equal(TimeSpan.FromMinutes(3), dashboardProjection.ExecutionSummary.Duration);
         Assert.Equal(RepositoryExecutionState.AwaitingAcceptance, workspace.ExecutionState);
         Assert.NotNull(workspace.ExecutionSummary);
         Assert.Equal(HandoffService.CurrentHandoffPath, workspace.ExecutionSummary.HandoffPath);
+        Assert.Equal(TimeSpan.FromMinutes(3), workspace.ExecutionSummary.Duration);
     }
 
     [Fact]

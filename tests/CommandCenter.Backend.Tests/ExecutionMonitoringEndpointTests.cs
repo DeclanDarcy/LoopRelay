@@ -38,6 +38,7 @@ public sealed class ExecutionMonitoringEndpointTests
         Assert.Equal(ExecutionSessionState.Completed, status.State);
         Assert.Equal(RepositoryExecutionState.Executing, status.RepositoryState);
         Assert.NotNull(status.CompletedAt);
+        Assert.Equal(status.CompletedAt.Value - session.StartedAt, status.Duration);
         Assert.True(status.LastActivityAt >= session.LastActivityAt);
         Assert.Equal(
             [ExecutionEventType.StdOut, ExecutionEventType.StdErr, ExecutionEventType.ProviderExited],

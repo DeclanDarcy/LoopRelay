@@ -87,6 +87,7 @@ public sealed class ExecutionMonitoringServiceTests
         Assert.Equal(ExecutionSessionState.Cancelled, status.State);
         Assert.Equal(RepositoryExecutionState.Cancelled, status.RepositoryState);
         Assert.NotNull(status.CompletedAt);
+        Assert.Equal(status.CompletedAt.Value - startedAt, status.Duration);
         Assert.True(status.LastActivityAt > startedAt);
         var cancellationEvent = Assert.Single(events);
         Assert.Equal(ExecutionEventType.Cancellation, cancellationEvent.Type);
@@ -108,6 +109,7 @@ public sealed class ExecutionMonitoringServiceTests
         Assert.NotNull(status);
         Assert.Equal(ExecutionSessionState.Cancelled, status.State);
         Assert.Equal(RepositoryExecutionState.Cancelled, status.RepositoryState);
+        Assert.NotNull(status.Duration);
         Assert.Equal(ExecutionEventType.Cancellation, Assert.Single(status.RecentEvents).Type);
     }
 

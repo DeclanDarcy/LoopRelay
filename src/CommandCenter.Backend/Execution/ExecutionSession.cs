@@ -14,6 +14,8 @@ public sealed class ExecutionSession
 
     public DateTimeOffset? CompletedAt { get; init; }
 
+    public TimeSpan? Duration => CalculateDuration(StartedAt, CompletedAt);
+
     public DateTimeOffset? LastActivityAt { get; init; }
 
     public ExecutionSessionState State { get; init; } = ExecutionSessionState.Created;
@@ -52,6 +54,7 @@ public sealed class ExecutionSession
             MilestonePath = MilestonePath,
             StartedAt = StartedAt,
             CompletedAt = CompletedAt,
+            Duration = Duration,
             LastActivityAt = LastActivityAt,
             ProviderName = ProviderName,
             ProviderExecutablePath = ProviderExecutablePath,
@@ -60,5 +63,10 @@ public sealed class ExecutionSession
             HandoffPath = HandoffPath,
             FailureReason = FailureReason
         };
+    }
+
+    public static TimeSpan? CalculateDuration(DateTimeOffset startedAt, DateTimeOffset? completedAt)
+    {
+        return completedAt is null ? null : completedAt.Value - startedAt;
     }
 }

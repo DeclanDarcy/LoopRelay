@@ -318,6 +318,7 @@ public sealed class ExecutionMonitoringService : IExecutionMonitoringService
             RepositoryState = session.RepositoryState,
             StartedAt = session.StartedAt,
             CompletedAt = session.CompletedAt,
+            Duration = session.Duration,
             LastActivityAt = session.LastActivityAt,
             ProviderName = session.ProviderName,
             ProviderExecutablePath = session.ProviderExecutablePath,

@@ -22,6 +22,7 @@ public sealed class ExecutionHandoffServiceTests
         Assert.Equal(RepositoryExecutionState.AwaitingAcceptance, status.RepositoryState);
         Assert.Equal(HandoffService.CurrentHandoffPath, status.HandoffPath);
         Assert.NotNull(status.CompletedAt);
+        Assert.Equal(status.CompletedAt.Value - session.StartedAt, status.Duration);
     }
 
     [Fact]
@@ -40,6 +41,7 @@ public sealed class ExecutionHandoffServiceTests
         Assert.Equal(RepositoryExecutionState.Failed, status.RepositoryState);
         Assert.Equal(HandoffService.MissingCurrentHandoffFailureReason, status.FailureReason);
         Assert.Null(status.HandoffPath);
+        Assert.NotNull(status.Duration);
     }
 
     [Fact]
@@ -73,11 +75,17 @@ public sealed class ExecutionHandoffServiceTests
         await monitoringService.CreateProviderObserver(session.Id).OnProviderExitedAsync(0);
         var reloadedMonitoringService = new ExecutionMonitoringService(new FileSystemExecutionSessionStore(storePath));
         var status = await reloadedMonitoringService.GetStatusAsync(session.Id);
+        var reloadedSession = (await new FileSystemExecutionSessionStore(storePath).LoadAsync()).Single();
+        var summary = reloadedSession.ToSummary();
 
         Assert.NotNull(status);
         Assert.Equal(ExecutionSessionState.Completed, status.State);
         Assert.Equal(RepositoryExecutionState.AwaitingAcceptance, status.RepositoryState);
         Assert.Equal(HandoffService.CurrentHandoffPath, status.HandoffPath);
+        Assert.NotNull(status.CompletedAt);
+        Assert.Equal(status.CompletedAt.Value - session.StartedAt, status.Duration);
+        Assert.Equal(HandoffService.CurrentHandoffPath, summary.HandoffPath);
+        Assert.Equal(reloadedSession.CompletedAt!.Value - reloadedSession.StartedAt, summary.Duration);
     }
 
     [Fact]
@@ -162,6 +170,7 @@ public sealed class ExecutionHandoffServiceTests
         Assert.Equal(RepositoryExecutionState.Failed, status.RepositoryState);
         Assert.Equal(HandoffService.CurrentHandoffPath, status.HandoffPath);
         Assert.Equal(HandoffService.ArchivePreviousHandoffFailureReason, status.FailureReason);
+        Assert.NotEqual(RepositoryExecutionState.AwaitingAcceptance, status.RepositoryState);
         Assert.Equal("generated handoff", await ReadAsync(repositoryPath, ".agents/handoffs/handoff.md"));
     }
 

@@ -57,6 +57,7 @@ type ExecutionSessionSummary = {
   milestonePath: string | null
   startedAt: string | null
   completedAt: string | null
+  duration: string | null
   lastActivityAt: string | null
   providerName: string
   providerExecutablePath: string | null
@@ -413,6 +414,7 @@ function startExecution(state: MockState, repositoryId: string, milestonePath: s
     milestonePath,
     startedAt: timestamp,
     completedAt: null,
+    duration: null,
     lastActivityAt: timestamp,
     providerName: 'Fake',
     providerExecutablePath: 'fake-provider',

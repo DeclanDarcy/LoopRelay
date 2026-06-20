@@ -11,7 +11,7 @@ Complete execution only when a handoff exists, rotate the previous handoff, and 
 - [x] Validate `.agents/handoffs/handoff.md` exists.
 - [x] Archive previous handoff snapshot to next `.agents/handoffs/handoff.NNNN.md` when appropriate.
 - [x] Associate current handoff with the session.
-- [ ] Add completed time and duration to session metadata.
+- [x] Add completed time and duration to session metadata.
 - [x] Transition from `Executing` to `AwaitingAcceptance` when validation succeeds.
 - [x] Transition to `Failed` when handoff validation or historical archive fails.
 - [x] Refresh repository projections after completion processing.
@@ -22,7 +22,7 @@ Complete execution only when a handoff exists, rotate the previous handoff, and 
 - [x] Display `Awaiting Acceptance` state in dashboard and workspace.
 - [x] Add handoff review workspace.
 - [x] Display execution summary and complete generated handoff.
-- [ ] Do not add accept/reject controls until M5.
+- [x] Do not add accept/reject controls until M5.
 
 ## Tests
 
