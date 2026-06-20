@@ -2,22 +2,11 @@
 
 ## Newly Authorized Decisions
 
-- The M5 mock harness is accepted as the right kind of test infrastructure because it validates React state, user interaction, projection consumption, and workspace behavior rather than duplicating backend logic.
-- The mock harness should continue consuming production-shaped `RepositoryWorkspaceProjection` and `ArtifactInventory` data to reinforce the backend/UI boundary.
-- Browser/mock certification is accepted as meaningful coverage for M5 workspace behavior, selection persistence, selection reconciliation, artifact lifecycle UX, and empty-state behavior.
-- Browser/mock certification is not equivalent to native Tauri certification because it does not validate window lifecycle, IPC transport, native dialogs, backend process lifecycle, or platform integration.
-- Native Tauri certification is the preferred next slice before automating the mock harness.
-- Mock harness automation is valuable as regression protection, but should not be treated as final certification closure for the Tauri path.
-- M5 is now primarily in certification and polish territory rather than implementation territory.
-- If native Tauri certification passes cleanly, the workspace experience can be considered effectively complete and effort should shift toward remaining Epic 1 acceptance items instead of additional workspace mechanics.
-
-## Authorized Native Certification Scope
-
-- Repository switching.
-- Artifact selection restore.
-- Artifact edit/save.
-- Refresh.
-- Handoff rotation.
-- Decision rotation.
-- Repository removal.
-- Restart recovery.
+- The native runtime path is considered substantially de-risked because `cargo run` exercised the actual Tauri shell, backend sidecar startup, HTTP connectivity, repository API access, and shutdown cleanup.
+- The remaining M5 uncertainty is behavioral rather than infrastructural.
+- M5 remains categorized as certification, polish, and acceptance work rather than implementation work.
+- The next native certification pass should be one continuous desktop workflow rather than isolated behavior checks.
+- The native certification workflow should cover repository registration, repository switching, artifact selection restoration, artifact edit/save, refresh persistence, handoff rotation, decision rotation, repository removal, and restart recovery.
+- The highest-value M5-specific edge case is removing a repository that has a remembered selected artifact, verifying no orphaned selection state and no stale editor content remain.
+- If the full native desktop certification pass succeeds without defects, effort should shift immediately to Epic 1 acceptance closure.
+- Additional workspace mechanics should be avoided before formal acceptance unless certification discovers a defect.
