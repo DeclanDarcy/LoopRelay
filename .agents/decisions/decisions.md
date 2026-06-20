@@ -2,49 +2,26 @@
 
 ## Newly Authorized Decisions
 
-- M8.2 is authorized as Repeatable Execution Certification.
-- M8.2 should focus on proving the loop works twice, not expanding the loop.
-- M8.2 certification must prove:
-  - Execution A.
-  - Acceptance.
-  - Commit.
-  - Push.
-  - Ready.
-  - Execution B on the same repository.
-- M8.2 must include a milestone-change certification:
-  - Execution A.
-  - Push.
-  - Ready.
-  - Select a different milestone.
-  - Execution B.
-- Milestone-change certification must verify:
-  - Context rebuilt.
-  - Prompt rebuilt.
-  - Selected milestone changed.
-  - Execution launched successfully.
-- M8.2 must inspect handoff rotation integrity across repeated executions.
-- Handoff rotation certification must verify:
-  - Prior handoff was archived.
-  - Historical numbering incremented correctly.
-  - Latest handoff was preserved.
-  - Execution history remained visible.
-- M8.2 must include restart-between-executions certification:
-  - Execution A.
-  - Push.
-  - Ready.
-  - Application restart.
-  - Execution B.
-- Restart certification must verify:
-  - History survives.
-  - Latest summary survives.
-  - Selected milestone can be changed.
-  - New execution launches.
-- If repeatable execution, history preservation, context rebuild, milestone selection, handoff rotation, and restart restoration pass, Epic 2 is probably functionally complete.
+- Epic 2 appears functionally complete pending final certification.
+- M8.3 is authorized as Epic 2 Final Certification.
+- M8.3 must not expand Epic 2 functionality.
+- M8.3 should run an Epic 2 exit review before starting Epic 3.
+- M8.3 should include exactly one realistic smoke test, not exhaustive additional coverage.
+- The real smoke test should exercise:
+  - Real provider invocation.
+  - Real repository filesystem behavior.
+  - Real Git status, commit, and push assumptions.
+- M8.3 should verify the six exit-review questions:
+  - Valid execution can be launched.
+  - Execution can be observed.
+  - Execution output can be reviewed through handoff.
+  - Acceptance remains independent from provider completion.
+  - Reviewed work can safely become repository history.
+  - The cycle can run again without manual reconstruction.
+- If final certification passes cleanly, Epic 2 should be considered certified and closed.
 
 ## Explicitly Deferred
 
-- Expanding the execution loop beyond current Epic 2 scope.
-- Automatic milestone progression.
-- Automatic milestone selection.
-- Execution chaining.
-- Treating execution history as repository artifacts.
+- Starting Epic 3 before Epic 2 final certification.
+- Expanding the execution system during final certification.
+- Exhaustive real-provider testing beyond one realistic smoke test.

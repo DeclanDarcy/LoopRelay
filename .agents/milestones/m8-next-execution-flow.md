@@ -9,8 +9,8 @@ Complete the repeatable execution loop.
 - [x] After successful push, close the active session and transition repository execution state to `Ready`.
 - [x] Ensure `GetActiveAsync(repositoryId)` returns null after successful push.
 - [x] Preserve completed session history for audit.
-- [ ] Ensure context can be rebuilt for the next selected milestone.
-- [ ] Keep automatic milestone progression out of scope.
+- [x] Ensure context can be rebuilt for the next selected milestone.
+- [x] Keep automatic milestone progression out of scope.
 
 ## UI Work
 
@@ -21,23 +21,23 @@ Complete the repeatable execution loop.
 
 ## Tests
 
-- [ ] Full loop test with fake provider and fake Git:
-  - [ ] Ready.
-  - [ ] Start execution.
-  - [ ] Stream output.
-  - [ ] Complete with handoff.
-  - [ ] Await acceptance.
-  - [ ] Accept.
-  - [ ] Commit.
-  - [ ] Push.
-  - [ ] Ready.
-- [ ] Repeat loop twice for one repository and verify only one active session exists at a time.
-- [ ] Verify handoff history increments across repeated executions.
+- [x] Full loop test with fake provider and fake Git:
+  - [x] Ready.
+  - [x] Start execution.
+  - [x] Stream output.
+  - [x] Complete with handoff.
+  - [x] Await acceptance.
+  - [x] Accept.
+  - [x] Commit.
+  - [x] Push.
+  - [x] Ready.
+- [x] Repeat loop twice for one repository and verify only one active session exists at a time.
+- [x] Verify handoff history increments across repeated executions.
 
 ## Exit Criteria
 
-- [ ] Repository can repeatedly move through execution, acceptance, commit, push, and ready states.
-- [ ] Command Center is ready to launch the next execution without manual artifact collection or manual Git flow.
+- [x] Repository can repeatedly move through execution, acceptance, commit, push, and ready states.
+- [x] Command Center is ready to launch the next execution without manual artifact collection or manual Git flow.
 
 ## M8.1 Notes
 
@@ -46,3 +46,12 @@ Complete the repeatable execution loop.
 - Verified successful push returns the repository to `Ready`, clears active execution lookup, and preserves the completed session in history.
 - Updated the workspace UI with a compact session history panel including milestone, state, duration, commit, and push metadata.
 - Updated the post-push UI path to refresh repository artifact inventory and Git status.
+
+## M8.2 Notes
+
+- Added repeatable execution certification covering two fake-provider/fake-Git loops against one repository.
+- Certified provider output retention, handoff validation, acceptance, commit, push, and return to `Ready`.
+- Certified duplicate execution launch remains blocked while a repository is executing.
+- Certified restart-between-executions behavior by rebuilding the service from the persisted execution store after the first push.
+- Certified context and prompt rebuild for a different selected milestone before the second execution.
+- Certified handoff history increments from `handoff.0001.md` to `handoff.0002.md` while preserving the latest `handoff.md`.

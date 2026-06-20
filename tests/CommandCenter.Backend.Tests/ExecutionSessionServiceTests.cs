@@ -761,6 +761,75 @@ public sealed class ExecutionSessionServiceTests
     }
 
     [Fact]
+    public async Task RepeatableExecutionLoopRebuildsContextArchivesHandoffsAndSurvivesRestart()
+    {
+        var providerA = new FakeExecutionProvider();
+        var gitService = new StatefulFakeGitService();
+        var harness = await CreateHarnessAsync(provider: providerA, gitService: gitService);
+        await WriteAsync(harness.Repository, ".agents/plan.md", "plan");
+        await WriteAsync(harness.Repository, ".agents/milestones/m8-a.md", "milestone A");
+        await WriteAsync(harness.Repository, ".agents/milestones/m8-b.md", "milestone B");
+        await WriteAsync(harness.Repository, ".agents/handoffs/handoff.md", "initial handoff");
+
+        var first = await ExecuteLoopAsync(
+            harness.SessionService,
+            harness.MonitoringService,
+            harness.Repository,
+            ".agents/milestones/m8-a.md",
+            "handoff A",
+            "provider output A");
+
+        Assert.Equal(RepositoryExecutionState.Ready, first.RepositoryState);
+        Assert.Null(await harness.SessionService.GetActiveSessionAsync(harness.Repository.Id));
+        Assert.NotNull(providerA.LastPrompt);
+        Assert.Equal(".agents/milestones/m8-a.md", providerA.LastPrompt.Metadata.MilestonePath);
+        Assert.Contains("milestone A", providerA.LastPrompt.Text);
+        Assert.Equal("initial handoff", await ReadAsync(harness.Repository, ".agents/handoffs/handoff.0001.md"));
+        Assert.Equal("handoff A", await ReadAsync(harness.Repository, ".agents/handoffs/handoff.md"));
+
+        var providerB = new FakeExecutionProvider();
+        var reloadedStore = new FileSystemExecutionSessionStore(harness.StorePath);
+        var reloadedMonitoringService = CreateMonitoringService(reloadedStore);
+        var reloadedService = new ExecutionSessionService(
+            harness.ContextService,
+            reloadedStore,
+            providerB,
+            new ExecutionPromptBuilder(),
+            reloadedMonitoringService,
+            gitService);
+
+        Assert.Equal(RepositoryExecutionState.Ready, await reloadedService.GetRepositoryStateAsync(harness.Repository.Id));
+        Assert.Null(await reloadedService.GetActiveSessionAsync(harness.Repository.Id));
+        Assert.Single(await reloadedService.GetRepositorySessionHistoryAsync(harness.Repository.Id));
+
+        var second = await ExecuteLoopAsync(
+            reloadedService,
+            reloadedMonitoringService,
+            harness.Repository,
+            ".agents/milestones/m8-b.md",
+            "handoff B",
+            "provider output B");
+        var history = await reloadedService.GetRepositorySessionHistoryAsync(harness.Repository.Id);
+        var secondEvents = await reloadedMonitoringService.GetEventsAsync(second.SessionId);
+
+        Assert.Equal(RepositoryExecutionState.Ready, second.RepositoryState);
+        Assert.Null(await reloadedService.GetActiveSessionAsync(harness.Repository.Id));
+        Assert.Equal(2, history.Count);
+        Assert.Equal([second.SessionId, first.SessionId], history.Select(session => session.SessionId).ToArray());
+        Assert.Contains(secondEvents, executionEvent =>
+            executionEvent.Type == ExecutionEventType.StdOut &&
+            executionEvent.Message == "provider output B");
+        Assert.Contains(secondEvents, executionEvent => executionEvent.Type == ExecutionEventType.HandoffValidated);
+        Assert.NotNull(providerB.LastPrompt);
+        Assert.Equal(".agents/milestones/m8-b.md", providerB.LastPrompt.Metadata.MilestonePath);
+        Assert.Contains("milestone B", providerB.LastPrompt.Text);
+        Assert.DoesNotContain("milestone A", providerB.LastPrompt.Text);
+        Assert.Equal("initial handoff", await ReadAsync(harness.Repository, ".agents/handoffs/handoff.0001.md"));
+        Assert.Equal("handoff A", await ReadAsync(harness.Repository, ".agents/handoffs/handoff.0002.md"));
+        Assert.Equal("handoff B", await ReadAsync(harness.Repository, ".agents/handoffs/handoff.md"));
+    }
+
+    [Fact]
     public async Task PushFailureLeavesSessionAwaitingPushForRetry()
     {
         var gitService = new FakeGitService(new RepositoryDirtyState { IsClean = true }, null)
@@ -975,7 +1044,7 @@ public sealed class ExecutionSessionServiceTests
         RepositoryDirtyState? dirtyState = null,
         string? gitFailure = null,
         IExecutionProvider? provider = null,
-        FakeGitService? gitService = null)
+        IGitService? gitService = null)
     {
         var repositoryService = new RepositoryService(
             new ApplicationConfigurationStore(Path.Combine(CreateTemporaryDirectory(), "configuration.json")));
@@ -988,15 +1057,69 @@ public sealed class ExecutionSessionServiceTests
             gitService ?? new FakeGitService(dirtyState, gitFailure));
         var storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");
         var store = new FileSystemExecutionSessionStore(storePath);
+        var monitoringService = CreateMonitoringService(store);
         var sessionService = new ExecutionSessionService(
             contextService,
             store,
             provider ?? new FakeExecutionProvider(),
             new ExecutionPromptBuilder(),
-            new ExecutionMonitoringService(store),
+            monitoringService,
             gitService ?? new FakeGitService(dirtyState, gitFailure));
 
-        return new Harness(repositoryService, repository, contextService, store, storePath, sessionService);
+        return new Harness(repositoryService, repository, contextService, store, storePath, monitoringService, sessionService);
+    }
+
+    private static ExecutionMonitoringService CreateMonitoringService(FileSystemExecutionSessionStore store)
+    {
+        return new ExecutionMonitoringService(
+            store,
+            new HandoffService(store, new FileSystemArtifactStore()));
+    }
+
+    private static async Task<ExecutionSessionSummary> ExecuteLoopAsync(
+        ExecutionSessionService sessionService,
+        ExecutionMonitoringService monitoringService,
+        Repository repository,
+        string milestonePath,
+        string generatedHandoff,
+        string providerOutput)
+    {
+        var started = await sessionService.StartAsync(
+            repository.Id,
+            new ExecutionStartRequest { MilestonePath = milestonePath });
+        var duplicate = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            sessionService.StartAsync(
+                repository.Id,
+                new ExecutionStartRequest { MilestonePath = milestonePath }));
+        Assert.Contains("active execution", duplicate.Message, StringComparison.OrdinalIgnoreCase);
+
+        var observer = monitoringService.CreateProviderObserver(started.SessionId);
+        await observer.OnStdOutAsync(providerOutput);
+        await WriteAsync(repository, ".agents/handoffs/handoff.md", generatedHandoff);
+        await observer.OnProviderExitedAsync(0);
+
+        var completed = await sessionService.GetSessionAsync(started.SessionId);
+        Assert.NotNull(completed);
+        Assert.Equal(RepositoryExecutionState.AwaitingAcceptance, completed.RepositoryState);
+        Assert.Equal(".agents/handoffs/handoff.md", completed.HandoffPath);
+
+        var accepted = await sessionService.AcceptAsync(started.SessionId, new ExecutionAcceptanceRequest());
+        Assert.Equal(RepositoryExecutionState.AwaitingCommit, accepted.RepositoryState);
+        var preparation = await sessionService.PrepareCommitAsync(started.SessionId);
+        var committed = await sessionService.CommitAsync(
+            started.SessionId,
+            new CommitRequest
+            {
+                Message = preparation.ProposedMessage,
+                SelectedPaths = preparation.ScopeItems
+                    .Where(item => item.IsSelected)
+                    .Select(item => item.Path)
+                    .ToArray(),
+                StatusSnapshotId = preparation.StatusSnapshot.Id
+            });
+        Assert.Equal(RepositoryExecutionState.AwaitingPush, committed.RepositoryState);
+
+        return await sessionService.PushAsync(started.SessionId, new PushRequest());
     }
 
     private static async Task WriteReadyArtifactsAsync(Repository repository)
@@ -1129,6 +1252,13 @@ public sealed class ExecutionSessionServiceTests
         await File.WriteAllTextAsync(path, content);
     }
 
+    private static Task<string> ReadAsync(Repository repository, string relativePath)
+    {
+        return File.ReadAllTextAsync(Path.Combine(
+            repository.Path,
+            relativePath.Replace('/', Path.DirectorySeparatorChar)));
+    }
+
     private static string CreateGitRepositoryDirectory()
     {
         var directory = CreateTemporaryDirectory();
@@ -1149,6 +1279,7 @@ public sealed class ExecutionSessionServiceTests
         ExecutionContextService ContextService,
         FileSystemExecutionSessionStore Store,
         string StorePath,
+        ExecutionMonitoringService MonitoringService,
         ExecutionSessionService SessionService);
 
     private sealed class FakeGitService(RepositoryDirtyState? dirtyState, string? failure) : IGitService
@@ -1281,6 +1412,111 @@ public sealed class ExecutionSessionServiceTests
                 PushedCommitSha = commitSha,
                 BranchName = "main"
             });
+        }
+    }
+
+    private sealed class StatefulFakeGitService : IGitService
+    {
+        private int commitCount;
+        private string currentSnapshotId = "snapshot-initial";
+
+        public Task<ExecutionRepositorySnapshot> GetSnapshotAsync(Repository repository)
+        {
+            return Task.FromResult(new ExecutionRepositorySnapshot
+            {
+                Branch = "main",
+                DirtyState = BuildDirtyState(),
+                CapturedAt = DateTimeOffset.UtcNow
+            });
+        }
+
+        public Task<RepositoryGitStatus> GetStatusAsync(Repository repository)
+        {
+            return Task.FromResult(new RepositoryGitStatus
+            {
+                Branch = "main",
+                DirtyState = BuildDirtyState(),
+                CapturedAt = DateTimeOffset.UtcNow
+            });
+        }
+
+        public Task<CommitPreparation> PrepareCommitAsync(Repository repository, ExecutionSession session)
+        {
+            currentSnapshotId = $"snapshot-{session.Id:N}";
+            return Task.FromResult(new CommitPreparation
+            {
+                Id = Guid.NewGuid(),
+                SessionId = session.Id,
+                RepositoryId = session.RepositoryId,
+                RepositoryPath = session.RepositoryPath,
+                ProposedMessage = $"{Path.GetFileNameWithoutExtension(session.MilestonePath)}\n\n- 1 file changed",
+                ScopeItems =
+                [
+                    new CommitScopeItem
+                    {
+                        Path = $"src/{Path.GetFileNameWithoutExtension(session.MilestonePath)}.cs",
+                        ChangeType = CommitChangeType.Modified,
+                        Origin = CommitChangeOrigin.ExecutionGenerated,
+                        IsSelected = true
+                    }
+                ],
+                StatusSnapshot = new CommitStatusSnapshot
+                {
+                    Id = currentSnapshotId,
+                    Branch = "main",
+                    DirtyState = BuildDirtyState(),
+                    CapturedAt = DateTimeOffset.UtcNow
+                },
+                GeneratedAt = DateTimeOffset.UtcNow
+            });
+        }
+
+        public Task<CommitStatusSnapshot> GetCommitStatusSnapshotAsync(Repository repository)
+        {
+            return Task.FromResult(new CommitStatusSnapshot
+            {
+                Id = currentSnapshotId,
+                Branch = "main",
+                DirtyState = BuildDirtyState(),
+                CapturedAt = DateTimeOffset.UtcNow
+            });
+        }
+
+        public Task<CommitResult> CommitAsync(
+            Repository repository,
+            string message,
+            IReadOnlyList<string> selectedPaths,
+            string preparationSnapshotId)
+        {
+            commitCount++;
+            return Task.FromResult(new CommitResult
+            {
+                CommitSha = $"commit-sha-{commitCount}",
+                CommittedAt = DateTimeOffset.UtcNow,
+                CommitMessage = message,
+                PreparationSnapshotId = preparationSnapshotId,
+                SelectedPaths = selectedPaths
+            });
+        }
+
+        public Task<PushResult> PushAsync(Repository repository, string? commitSha)
+        {
+            return Task.FromResult(new PushResult
+            {
+                PushAttemptedAt = DateTimeOffset.UtcNow,
+                PushedAt = DateTimeOffset.UtcNow,
+                PushedCommitSha = commitSha,
+                BranchName = "main"
+            });
+        }
+
+        private static RepositoryDirtyState BuildDirtyState()
+        {
+            return new RepositoryDirtyState
+            {
+                ModifiedPaths = ["src/changed.cs"],
+                IsClean = false
+            };
         }
     }
 

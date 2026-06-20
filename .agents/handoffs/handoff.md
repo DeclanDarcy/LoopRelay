@@ -2,31 +2,21 @@
 
 ## Slice Summary
 
-- Began Epic 2 M8.1 Execution History & Post-Push Continuity.
-- Added explicit execution history projection to backend dashboard and workspace responses.
-- Preserved `executionSummary` as latest-session continuity while exposing `executionHistory` as the bounded audit list.
-- Updated the Tauri bridge, React types, UI, and dev mock to carry and display recent session history.
-- Fixed dev mock start gating so a `Ready` repository with a latest summary can start another explicit execution.
-- Updated the post-push UI path to refresh workspace artifact inventory from disk and reload Git status.
-- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0025.md`.
+- Continued Epic 2 M8.2 Repeatable Execution Certification.
+- Added a backend service-level certification that runs the execution loop twice against one repository.
+- Certified each loop moves through start, output event, provider completion, handoff validation, acceptance, commit, push, and `Ready`.
+- Certified duplicate launch is blocked while the repository is executing.
+- Certified restart-between-executions by rebuilding `ExecutionSessionService` and `ExecutionMonitoringService` from the persisted session store after the first push.
+- Certified second execution uses a different selected milestone with a rebuilt prompt/context.
+- Certified handoff rotation across repeated executions: initial current handoff archived to `handoff.0001.md`, first generated handoff archived to `handoff.0002.md`, second generated handoff remains current.
+- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0026.md`.
 
 ## Files Changed
 
 - `.agents/milestones/m8-next-execution-flow.md`
-- `.agents/handoffs/handoff.0025.md`
+- `.agents/handoffs/handoff.0026.md`
 - `.agents/handoffs/handoff.md`
-- `src/CommandCenter.Backend/Execution/IExecutionSessionService.cs`
-- `src/CommandCenter.Backend/Execution/ExecutionSessionService.cs`
-- `src/CommandCenter.Backend/Projections/RepositoryDashboardProjection.cs`
-- `src/CommandCenter.Backend/Projections/RepositoryWorkspaceProjection.cs`
-- `src/CommandCenter.Backend/Projections/RepositoryProjectionService.cs`
-- `src/CommandCenter.Shell/src/main.rs`
-- `src/CommandCenter.UI/src/App.tsx`
-- `src/CommandCenter.UI/src/App.css`
-- `src/CommandCenter.UI/src/devTauriMock.ts`
-- `tests/CommandCenter.Backend.Tests/ArtifactRotationServiceTests.cs`
 - `tests/CommandCenter.Backend.Tests/ExecutionSessionServiceTests.cs`
-- `tests/CommandCenter.Backend.Tests/RepositoryProjectionServiceTests.cs`
 
 ## Verification
 
@@ -36,14 +26,13 @@
 
 ## New State
 
-- `IExecutionSessionService.GetRepositorySessionHistoryAsync(repositoryId, limit)` returns newest-first persisted `ExecutionSessionSummary` rows.
-- Dashboard and workspace projections now include `ExecutionHistory`.
-- UI displays a compact session history panel with milestone, repository state, started time, duration, commit SHA, and push time.
-- Successful push is now covered for: repository `Ready`, no active execution, latest summary retained, and history retained.
-- M8 full repeat-loop certification is still open.
+- M8 checklist is complete.
+- `RepeatableExecutionLoopRebuildsContextArchivesHandoffsAndSurvivesRestart` now guards the two-execution fake-provider/fake-Git loop.
+- The test harness now exposes a handoff-aware `ExecutionMonitoringService` so provider exit validation runs through `HandoffService`.
+- A stateful fake Git test double supports repeated commit/push certification with fresh commit SHAs and matching commit snapshot ids.
 
 ## Recommended Next Slice
 
-- Implement and certify the full repeatable fake-provider loop through two executions on one repository.
-- Verify context rebuild after a pushed `Ready` state using a newly selected milestone.
-- Verify handoff history increments across both executions.
+- Treat Epic 2 as ready for final certification review.
+- Run a full repository audit focused on whether any plan exit criteria remain uncertified outside M8.
+- If no gaps remain, prepare a final Epic 2 summary and decide whether to begin the next epic or perform a real-provider smoke test.
