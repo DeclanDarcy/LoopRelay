@@ -439,6 +439,7 @@ button:focus-visible {
 
 .execution-context-panel,
 .execution-session-panel,
+.execution-output-panel,
 .git-status-panel,
 .handoff-review-panel {
   min-width: 0;
@@ -463,6 +464,7 @@ button:focus-visible {
 .context-toolbar h4,
 .context-preview h5,
 .execution-session-panel h4,
+.execution-output-panel h4,
 .git-status-panel h4,
 .handoff-review-header h4 {
   margin: 4px 0 0;

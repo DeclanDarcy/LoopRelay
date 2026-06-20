@@ -453,8 +453,9 @@ function getExecutionWorkflowSteps(
   const handoffComplete =
     repositoryState === 'AwaitingCommit' ||
     repositoryState === 'AwaitingPush' ||
-    repositoryState === 'Ready'
-  const commitComplete = repositoryState === 'AwaitingPush' || repositoryState === 'Ready'
+    (repositoryState === 'Ready' && hasExecutionSession)
+  const commitComplete =
+    repositoryState === 'AwaitingPush' || (repositoryState === 'Ready' && hasExecutionSession)
   const pushComplete = repositoryState === 'Ready' && hasExecutionSession
   const isFailed = repositoryState === 'Failed' || repositoryState === 'Cancelled'
 
@@ -2138,51 +2139,61 @@ function App() {
                       <span className="execution-failure">Failure: {executionDisplay.failureReason}</span>
                     ) : null}
                   </div>
-                  {canReviewGeneratedHandoff ? (
-                    <section className="handoff-review-panel" aria-label="Generated handoff review">
-                      <div className="handoff-review-header">
-                        <div>
-                          <p className="eyebrow">Handoff Review</p>
-                          <h4>{executionDisplay.handoffPath}</h4>
-                        </div>
-                        <div className="handoff-review-metadata">
-                          <span>State: {executionStateLabels[executionDisplay.repositoryState]}</span>
-                          <span>Completed: {formatDateTime(executionDisplay.completedAt)}</span>
-                          <span>Duration: {formatDuration(executionDisplay.duration)}</span>
-                          <span>Decision: Awaiting review</span>
-                          <span>{generatedHandoffContent.length} characters</span>
-                        </div>
-                      </div>
-                      <div className="handoff-review-actions">
-                        <button
-                          type="button"
-                          className="primary-action"
-                          onClick={() => void acceptGeneratedHandoff()}
-                          disabled={!isHandoffDecisionPending}
-                        >
-                          {isAcceptingHandoff ? 'Accepting...' : 'Accept Handoff'}
-                        </button>
-                        <button
-                          type="button"
-                          className="danger-action"
-                          onClick={() => void rejectGeneratedHandoff()}
-                          disabled={!isHandoffDecisionPending}
-                        >
-                          {isRejectingHandoff ? 'Rejecting...' : 'Reject Handoff'}
-                        </button>
-                      </div>
-                      <div className="markdown-preview handoff-review-content">
-                        {isGeneratedHandoffLoading ? (
-                          <p>Loading generated handoff...</p>
-                        ) : generatedHandoffContent.trim() ? (
-                          renderMarkdown(generatedHandoffContent)
-                        ) : (
-                          <p>Generated handoff is empty.</p>
-                        )}
-                      </div>
-                    </section>
-                  ) : null}
-                  <div className="execution-event-feed" aria-label="Execution output">
+                </section>
+              ) : null}
+
+              {canReviewGeneratedHandoff && executionDisplay ? (
+                <section className="handoff-review-panel" aria-label="Generated handoff review">
+                  <div className="handoff-review-header">
+                    <div>
+                      <p className="eyebrow">Handoff Review</p>
+                      <h4>{executionDisplay.handoffPath}</h4>
+                    </div>
+                    <div className="handoff-review-metadata">
+                      <span>State: {executionStateLabels[executionDisplay.repositoryState]}</span>
+                      <span>Completed: {formatDateTime(executionDisplay.completedAt)}</span>
+                      <span>Duration: {formatDuration(executionDisplay.duration)}</span>
+                      <span>Decision: Awaiting review</span>
+                      <span>{generatedHandoffContent.length} characters</span>
+                    </div>
+                  </div>
+                  <div className="handoff-review-actions">
+                    <button
+                      type="button"
+                      className="primary-action"
+                      onClick={() => void acceptGeneratedHandoff()}
+                      disabled={!isHandoffDecisionPending}
+                    >
+                      {isAcceptingHandoff ? 'Accepting...' : 'Accept Handoff'}
+                    </button>
+                    <button
+                      type="button"
+                      className="danger-action"
+                      onClick={() => void rejectGeneratedHandoff()}
+                      disabled={!isHandoffDecisionPending}
+                    >
+                      {isRejectingHandoff ? 'Rejecting...' : 'Reject Handoff'}
+                    </button>
+                  </div>
+                  <div className="markdown-preview handoff-review-content">
+                    {isGeneratedHandoffLoading ? (
+                      <p>Loading generated handoff...</p>
+                    ) : generatedHandoffContent.trim() ? (
+                      renderMarkdown(generatedHandoffContent)
+                    ) : (
+                      <p>Generated handoff is empty.</p>
+                    )}
+                  </div>
+                </section>
+              ) : null}
+
+              {executionDisplay ? (
+                <section className="execution-output-panel" aria-label="Execution output">
+                  <div>
+                    <p className="eyebrow">Execution Output</p>
+                    <h4>{selectedExecutionEvents.length} events</h4>
+                  </div>
+                  <div className="execution-event-feed">
                     {selectedExecutionEvents.length === 0 ? (
                       <p className="empty-state">No execution events recorded.</p>
                     ) : (

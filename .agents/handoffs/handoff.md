@@ -2,34 +2,38 @@
 
 ## Slice Summary
 
-- Continued Epic 2 M7 Unified Execution Workspace.
-- Added a single execution workspace band in the repository workspace.
-- Added a derived lifecycle rail for `Context -> Execution -> Handoff -> Commit -> Push`.
-- Grouped existing execution context, Git workflow, execution session metadata, output stream, and handoff review under the execution workspace.
-- Kept the repository artifact explorer/editor available in a separate artifact workspace section.
-- Added responsive styling for the execution workspace header and lifecycle rail.
-- Updated M7 checklist for completed backend projection validation, UI consolidation, artifact editor preservation, responsive layout, TypeScript build verification, long-content wrapping, and primary workspace usability.
-- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0023.md`.
+- Completed Epic 2 M7.2 Workspace Certification & Hardening.
+- Added deterministic dev mock repositories for `Executing`, `AwaitingAcceptance`, `AwaitingCommit`, `AwaitingPush`, `Failed`, and `Cancelled` workspace certification.
+- Flattened the execution workspace so generated handoff review and output are sibling panels instead of nested inside session metadata.
+- Corrected lifecycle rail derivation so a `Ready` repository without an execution session does not mark handoff or commit as complete.
+- Marked all M7 checklist items complete and added M7.2 certification notes.
+- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0024.md`.
 
 ## Files Changed
 
 - `.agents/milestones/m7-execution-workspace.md`
-- `.agents/handoffs/handoff.0023.md`
+- `.agents/handoffs/handoff.0024.md`
 - `.agents/handoffs/handoff.md`
 - `src/CommandCenter.UI/src/App.tsx`
 - `src/CommandCenter.UI/src/App.css`
+- `src/CommandCenter.UI/src/devTauriMock.ts`
 
 ## Verification
 
 - `npm run build --prefix src/CommandCenter.UI` passed.
+- Browser-verified the workspace certification mock at `http://127.0.0.1:5174/?mock=workspace-certification`.
+- Browser-verified state coverage for `Ready`, `Executing`, `AwaitingAcceptance`, `AwaitingCommit`, `AwaitingPush`, `Failed`, and `Cancelled`.
+- Browser-verified transition coverage for `Ready -> AwaitingAcceptance -> AwaitingCommit -> AwaitingPush -> Ready`.
+- Browser-verified 390px viewport behavior with no horizontal document overflow.
 
 ## New State
 
-- M7 has a projection-only unified execution workspace shell.
-- The lifecycle rail is derived from existing repository execution state and does not introduce new workflow state or mutation authority.
-- Remaining M7 work is mostly certification and visual/workflow validation rather than backend capability work.
+- M7 is complete.
+- The dev mock now provides direct state fixtures for future UI certification.
+- The lifecycle rail remains projection-only and does not introduce workflow mutation authority.
+- The execution workspace is less nested and better aligned with the compact panel requirement.
 
 ## Recommended Next Slice
 
-- Run the UI through the dev mock or local app and verify the execution workspace across Ready, Executing, AwaitingAcceptance, AwaitingCommit, AwaitingPush, Failed, and Cancelled states.
-- Tighten any layout issues found during that pass, especially long session ids, long milestone paths, dense commit scopes, and handoff/output overflow.
+- Begin M8 Next Execution Flow.
+- Focus on verifying the post-push return-to-ready path, preserving session history visibility, and making the next selected milestone launch path clear without introducing automatic milestone progression.

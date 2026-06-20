@@ -210,6 +210,39 @@ const planOnlyRepository: Repository = {
   path: 'C:\\workspace\\PlanOnlyRepo',
 }
 
+const certificationRepositories: Repository[] = [
+  {
+    id: 'repo-cert-executing',
+    name: 'CertificationExecuting',
+    path: 'C:\\workspace\\CertificationExecuting',
+  },
+  {
+    id: 'repo-cert-awaiting-acceptance',
+    name: 'CertificationAwaitingAcceptance',
+    path: 'C:\\workspace\\CertificationAwaitingAcceptance',
+  },
+  {
+    id: 'repo-cert-awaiting-commit',
+    name: 'CertificationAwaitingCommit',
+    path: 'C:\\workspace\\CertificationAwaitingCommit',
+  },
+  {
+    id: 'repo-cert-awaiting-push',
+    name: 'CertificationAwaitingPush',
+    path: 'C:\\workspace\\CertificationAwaitingPush',
+  },
+  {
+    id: 'repo-cert-failed',
+    name: 'CertificationFailed',
+    path: 'C:\\workspace\\CertificationFailed',
+  },
+  {
+    id: 'repo-cert-cancelled',
+    name: 'CertificationCancelled',
+    path: 'C:\\workspace\\CertificationCancelled',
+  },
+]
+
 const artifacts = {
   plan: artifact('.agents/plan.md', 'plan.md', 'Plan', 'Plan', 'Current'),
   context: artifact(
@@ -269,19 +302,23 @@ function createWorkspace(repository: Repository, inventory: ArtifactInventory): 
   }
 }
 
-function createInitialState(): MockState {
+function createReadyInventory(): ArtifactInventory {
   return {
-    repositories: [alphaRepository, emptyRepository, planOnlyRepository],
+    plan: artifacts.plan,
+    operationalContext: artifacts.context,
+    milestones: [artifacts.milestone],
+    currentHandoff: artifacts.handoff,
+    historicalHandoffs: [artifacts.oldHandoff],
+    currentDecisions: artifacts.decisions,
+    historicalDecisions: [],
+  }
+}
+
+function createInitialState(): MockState {
+  const state: MockState = {
+    repositories: [alphaRepository, emptyRepository, planOnlyRepository, ...certificationRepositories],
     workspaces: {
-      [alphaRepository.id]: createWorkspace(alphaRepository, {
-        plan: artifacts.plan,
-        operationalContext: artifacts.context,
-        milestones: [artifacts.milestone],
-        currentHandoff: artifacts.handoff,
-        historicalHandoffs: [artifacts.oldHandoff],
-        currentDecisions: artifacts.decisions,
-        historicalDecisions: [],
-      }),
+      [alphaRepository.id]: createWorkspace(alphaRepository, createReadyInventory()),
       [emptyRepository.id]: createWorkspace(emptyRepository, {
         plan: null,
         operationalContext: null,
@@ -300,6 +337,12 @@ function createInitialState(): MockState {
         currentDecisions: null,
         historicalDecisions: [],
       }),
+      ...Object.fromEntries(
+        certificationRepositories.map((repository) => [
+          repository.id,
+          createWorkspace(repository, createReadyInventory()),
+        ]),
+      ),
     },
     content: {
       [artifacts.plan.relativePath]: '# Plan\n\nInitial plan content.',
@@ -311,6 +354,79 @@ function createInitialState(): MockState {
     },
     sessions: {},
   }
+
+  seedCertificationSession(state, certificationRepositories[0], 'Executing', 'Executing')
+  seedCertificationSession(state, certificationRepositories[1], 'AwaitingAcceptance', 'Completed')
+  seedCertificationSession(state, certificationRepositories[2], 'AwaitingCommit', 'Completed', {
+    acceptedAt: new Date().toISOString(),
+  })
+  seedCertificationSession(state, certificationRepositories[3], 'AwaitingPush', 'Completed', {
+    acceptedAt: new Date().toISOString(),
+    commitSha: 'mock-certification-commit',
+    committedAt: new Date().toISOString(),
+    preparationSnapshotId: `snapshot-cert-${certificationRepositories[3].id}`,
+  })
+  seedCertificationSession(state, certificationRepositories[4], 'Failed', 'Failed', {
+    failureReason:
+      'Certification failure with a deliberately long diagnostic message to verify wrapping in the unified execution workspace.',
+  })
+  seedCertificationSession(state, certificationRepositories[5], 'Cancelled', 'Cancelled', {
+    failureReason: 'Certification cancellation state.',
+  })
+
+  return state
+}
+
+function seedCertificationSession(
+  state: MockState,
+  repository: Repository,
+  repositoryState: string,
+  sessionState: string,
+  overrides: Partial<ExecutionSessionSummary> = {},
+) {
+  const workspace = state.workspaces[repository.id]
+  const timestamp = new Date().toISOString()
+  const sessionId = `cert-${repository.id}`
+  const summary: ExecutionSessionSummary = {
+    sessionId,
+    state: sessionState,
+    repositoryState,
+    milestonePath:
+      '.agents/milestones/extremely-long-certification-milestone-name-for-responsive-layout-validation.md',
+    startedAt: timestamp,
+    completedAt: repositoryState === 'Executing' ? null : timestamp,
+    duration: repositoryState === 'Executing' ? null : '00:03:24',
+    acceptedAt: null,
+    rejectedAt: null,
+    decisionNote: null,
+    lastActivityAt: timestamp,
+    providerName: 'Fake',
+    providerExecutablePath:
+      'C:\\tools\\command-center\\providers\\fake-provider-with-a-long-executable-path.exe',
+    providerProcessId: repositoryState === 'Executing' ? 4242 : null,
+    providerStartedAt: timestamp,
+    handoffPath: repositoryState === 'Executing' ? null : artifacts.handoff.relativePath,
+    commitSha: null,
+    committedAt: null,
+    commitMessage: null,
+    preparationSnapshotId: null,
+    pushAttemptedAt: null,
+    pushedAt: null,
+    pushedCommitSha: null,
+    pushRemoteName: null,
+    pushBranchName: null,
+    failureReason: null,
+    ...overrides,
+  }
+
+  state.sessions[sessionId] = {
+    ...summary,
+    id: sessionId,
+    repositoryId: repository.id,
+    repositoryPath: repository.path,
+  }
+  workspace.executionState = repositoryState
+  workspace.executionSummary = summary
 }
 
 function dashboardEntry(workspace: Workspace): DashboardEntry {
