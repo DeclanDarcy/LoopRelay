@@ -31,6 +31,8 @@ public static class Program
         builder.Services.AddSingleton<IOperationalContextGenerationService, OperationalContextGenerationService>();
         builder.Services.AddSingleton<IOperationalContextReviewService, OperationalContextReviewService>();
         builder.Services.AddSingleton<IOperationalContextLifecycleService, OperationalContextLifecycleService>();
+        builder.Services.AddSingleton<IContinuityDiagnosticsService, ContinuityDiagnosticsService>();
+        builder.Services.AddSingleton<IContinuityReportService, ContinuityReportService>();
         builder.Services.AddSingleton<IPlanningService, PlanningService>();
         builder.Services.AddSingleton<IExecutionContextService, ExecutionContextService>();
         builder.Services.AddSingleton<IExecutionPromptBuilder, ExecutionPromptBuilder>();
@@ -429,6 +431,65 @@ public static class Program
             catch (InvalidOperationException exception)
             {
                 return Results.Conflict(new { error = exception.Message });
+            }
+        });
+        app.MapGet("/api/repositories/{repositoryId:guid}/continuity/diagnostics", async (
+            Guid repositoryId,
+            IContinuityDiagnosticsService diagnosticsService) =>
+        {
+            try
+            {
+                return Results.Ok(await diagnosticsService.GetDiagnosticsAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+        app.MapPost("/api/repositories/{repositoryId:guid}/continuity/reports", async (
+            Guid repositoryId,
+            IContinuityReportService reportService) =>
+        {
+            try
+            {
+                return Results.Ok(await reportService.GenerateReportAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (IOException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+            catch (UnauthorizedAccessException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+        app.MapGet("/api/repositories/{repositoryId:guid}/continuity/reports", async (
+            Guid repositoryId,
+            IContinuityReportService reportService) =>
+        {
+            try
+            {
+                return Results.Ok(await reportService.ListReportsAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
             }
         });
         app.MapPost("/api/repositories/{repositoryId:guid}/execution/start", async (

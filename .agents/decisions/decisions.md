@@ -2,17 +2,21 @@
 
 ## Newly Authorized Decisions
 
-- M8 was correctly executed by placing proof in backend tests that exercise real continuity services rather than a synthetic certification layer or separate continuity harness.
-- Certification must remain attached to the actual implementation path: generation, review, promotion, compression, and decision continuity.
-- Archive-independent reconstruction is the core continuity hypothesis: plan, selected milestone, and current operational context should be sufficient for orientation without historical replay.
-- M8 validated that continuity can survive repeated cycles, not merely that continuity features can be built.
-- Drift detection must remain advisory through retention, compression, and decision warnings rather than becoming workflow authority.
-- M9 must remain read-only and observational throughout.
-- M9 instrumentation should measure understanding evolution rather than process compliance.
-- M9 should instrument revision count, compression trends, retention warnings, decision retention, rationale retention, open question lifecycle, and active risk lifecycle.
-- Add an observational understanding-density signal that tracks counts of stable decisions, constraints, open questions, active risks, and architecture elements across revisions; sudden change is interesting, but more is not inherently better.
-- Do not introduce a continuity score, understanding score, project health score, continuity gate, promotion blocker, or instrumentation-driven governance workflow.
+- Epic 3 is functionally complete after M9 unless a repository-wide review uncovers major architectural defects.
+- The central Epic 3 hypothesis is validated: current understanding can be generated, reviewed, promoted, compressed, preserved, observed, and certified while remaining repository-owned, artifact-mediated, deterministic, and review-governed.
+- Continuity must continue to mean artifact-mediated understanding, not long-lived sessions, provider memory, decision sessions, project journals, or historical replay.
+- `.agents/operational_context.md` remains the authority for current understanding; proposals, reports, UI projections, and diagnostics remain supporting artifacts or observations.
+- Backend projections remain authoritative for workspace continuity state, and the UI remains a projection surface rather than a governance, decision-resolution, or operational-context authority surface.
+- The generate-review-accept-promote boundary remains important; accepting a proposal must not collapse into promotion.
+- M9 diagnostics remain observational only and must not introduce continuity scores, automatic promotion, automatic rejection, automatic correction, or workflow gates.
+- The strongest Epic 3 proof is the combination of compression, decision continuity, and long-horizon certification, because it demonstrates understanding preservation across repeated evolution rather than only storage.
+- Do not add more roadmap work until a repository-wide review audits continuity authority boundaries, stale artifact behavior, documentation alignment, and UI density.
 
 ## Recommended Next Slice
 
-Start M9 Continuity Instrumentation by implementing read-only diagnostics/reporting for observable continuity facts, including understanding-density deltas, while preserving the boundary that metrics never govern workflow.
+Run a repository-wide review focused on:
+
+- Ensuring proposals and reports cannot become authoritative through promotion, reload, startup recovery, or projection construction paths.
+- Pressure-testing accepted-then-stale, promoted-then-replaced, missing historical revision, corrupt report, orphan proposal, and interrupted promotion cases.
+- Aligning `architecture.md`, `operational-context-schema.md`, milestone docs, and certification docs around the same continuity model.
+- Checking that the UI remains an execution-supporting understanding surface rather than drifting into a continuity dashboard.

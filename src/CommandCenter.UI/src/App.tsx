@@ -347,6 +347,53 @@ type OperationalContextProposal = {
   editedContent: string | null
 }
 
+type ContinuityTrend = {
+  addedCount: number
+  removedCount: number
+  resolvedCount: number
+  lostCount: number
+}
+
+type CompressionTrend = {
+  proposalCount: number
+  compressedItemCount: number
+  removedItemCount: number
+  resolvedQuestionCount: number
+  retiredRiskCount: number
+  warningCount: number
+  warnings: string[]
+  noiseRemovedIndicators: string[]
+}
+
+type ContinuityDiagnostics = {
+  repositoryId: string
+  generatedAt: string
+  revisionCount: number
+  currentContextByteCount: number
+  currentContextCharacterCount: number
+  contextByteGrowth: number
+  averageBytesPerRevision: number
+  architectureTrend: ContinuityTrend
+  constraintTrend: ContinuityTrend
+  decisionTrend: ContinuityTrend
+  rationaleTrend: ContinuityTrend
+  openQuestionTrend: ContinuityTrend
+  activeRiskTrend: ContinuityTrend
+  compressionTrend: CompressionTrend
+  repeatedInvestigationIndicators: string[]
+  repeatedQuestionIndicators: string[]
+  decisionReworkIndicators: string[]
+  continuityWarnings: string[]
+}
+
+type ContinuityReport = {
+  reportId: string
+  repositoryId: string
+  generatedAt: string
+  relativePath: string
+  diagnostics: ContinuityDiagnostics
+}
+
 type ArtifactCategory = {
   label: string
   missingLabel: string
@@ -740,6 +787,7 @@ function App() {
   const [generatedHandoffContent, setGeneratedHandoffContent] = useState('')
   const [operationalContextProposal, setOperationalContextProposal] =
     useState<OperationalContextProposal | null>(null)
+  const [continuityDiagnostics, setContinuityDiagnostics] = useState<ContinuityDiagnostics | null>(null)
   const [operationalContextCurrentContent, setOperationalContextCurrentContent] = useState('')
   const [operationalContextProposalDraft, setOperationalContextProposalDraft] = useState('')
   const [operationalContextReviewNote, setOperationalContextReviewNote] = useState('')
@@ -755,6 +803,8 @@ function App() {
     useState(false)
   const [isOperationalContextProposalSaving, setIsOperationalContextProposalSaving] =
     useState(false)
+  const [isContinuityDiagnosticsLoading, setIsContinuityDiagnosticsLoading] = useState(false)
+  const [isContinuityReportGenerating, setIsContinuityReportGenerating] = useState(false)
   const [isStartingExecution, setIsStartingExecution] = useState(false)
   const [isGeneratedHandoffLoading, setIsGeneratedHandoffLoading] = useState(false)
   const [isAcceptingHandoff, setIsAcceptingHandoff] = useState(false)
@@ -991,6 +1041,7 @@ function App() {
     setSelectedRepositoryId(repositoryId)
     setSelectedArtifactPath(selectedArtifactPathsByRepository.current[repositoryId] ?? null)
     setOperationalContextProposal(null)
+    setContinuityDiagnostics(null)
     setOperationalContextCurrentContent('')
     setOperationalContextProposalDraft('')
     setOperationalContextReviewNote('')
@@ -1054,6 +1105,21 @@ function App() {
       setError(formatError(statusError))
     } finally {
       setIsGitStatusLoading(false)
+    }
+  }, [])
+
+  const loadContinuityDiagnostics = useCallback(async (repositoryId: string) => {
+    setIsContinuityDiagnosticsLoading(true)
+    try {
+      const diagnostics = await invoke<ContinuityDiagnostics>('get_continuity_diagnostics', {
+        repositoryId,
+      })
+      setContinuityDiagnostics(diagnostics)
+    } catch (diagnosticsError) {
+      setContinuityDiagnostics(null)
+      setError(formatError(diagnosticsError))
+    } finally {
+      setIsContinuityDiagnosticsLoading(false)
     }
   }, [])
 
@@ -1471,6 +1537,27 @@ function App() {
     }
   }
 
+  async function generateContinuityReport() {
+    if (!selectedRepository) {
+      return
+    }
+
+    setIsContinuityReportGenerating(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const report = await invoke<ContinuityReport>('generate_continuity_report', {
+        repositoryId: selectedRepository.repository.id,
+      })
+      setContinuityDiagnostics(report.diagnostics)
+      setMessage(`Continuity report generated: ${report.relativePath}`)
+    } catch (reportError) {
+      setError(formatError(reportError))
+    } finally {
+      setIsContinuityReportGenerating(false)
+    }
+  }
+
   async function saveArtifact() {
     if (!selectedRepository || !selectedArtifact) {
       return
@@ -1884,15 +1971,17 @@ function App() {
   useEffect(() => {
     if (!selectedRepository) {
       setGitStatus(null)
+      setContinuityDiagnostics(null)
       return
     }
 
     const timeoutId = window.setTimeout(() => {
       void loadWorkspace(selectedRepository.repository.id)
+      void loadContinuityDiagnostics(selectedRepository.repository.id)
     }, 0)
 
     return () => window.clearTimeout(timeoutId)
-  }, [loadWorkspace, selectedRepository])
+  }, [loadContinuityDiagnostics, loadWorkspace, selectedRepository])
 
   useEffect(() => {
     if (!selectedRepository || !shouldShowGitWorkflow) {
@@ -2421,6 +2510,124 @@ function App() {
                     </div>
                     <p className="empty-state">No current operational context exists.</p>
                   </div>
+                )}
+              </section>
+
+              <section className="execution-context-panel" aria-label="Continuity diagnostics">
+                <div className="context-toolbar">
+                  <div>
+                    <p className="eyebrow">Continuity</p>
+                    <h4>Diagnostics</h4>
+                  </div>
+                  <div className="context-controls">
+                    <button
+                      type="button"
+                      className="secondary-action"
+                      onClick={() =>
+                        selectedRepository
+                          ? void loadContinuityDiagnostics(selectedRepository.repository.id)
+                          : undefined
+                      }
+                      disabled={!selectedRepository || isContinuityDiagnosticsLoading}
+                    >
+                      {isContinuityDiagnosticsLoading ? 'Loading...' : 'Refresh Diagnostics'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void generateContinuityReport()}
+                      disabled={!selectedRepository || isContinuityReportGenerating}
+                    >
+                      {isContinuityReportGenerating ? 'Generating...' : 'Generate Report'}
+                    </button>
+                  </div>
+                </div>
+
+                {continuityDiagnostics ? (
+                  <div className="context-artifact-previews">
+                    <div className="context-summary">
+                      <span>Revisions: {continuityDiagnostics.revisionCount}</span>
+                      <span>Current size: {continuityDiagnostics.currentContextByteCount} bytes</span>
+                      <span>Growth: {continuityDiagnostics.contextByteGrowth} bytes</span>
+                      <span>
+                        Average:{' '}
+                        {Math.round(continuityDiagnostics.averageBytesPerRevision)} bytes/revision
+                      </span>
+                      <span>
+                        Questions resolved: {continuityDiagnostics.openQuestionTrend.resolvedCount}
+                      </span>
+                      <span>
+                        Questions lost: {continuityDiagnostics.openQuestionTrend.lostCount}
+                      </span>
+                      <span>
+                        Risks retired: {continuityDiagnostics.activeRiskTrend.resolvedCount}
+                      </span>
+                      <span>
+                        Risks lost: {continuityDiagnostics.activeRiskTrend.lostCount}
+                      </span>
+                      <span>Decisions lost: {continuityDiagnostics.decisionTrend.lostCount}</span>
+                      <span>Rationale lost: {continuityDiagnostics.rationaleTrend.lostCount}</span>
+                    </div>
+
+                    <div className="context-columns">
+                      <div>
+                        <h5>Preservation</h5>
+                        <ul>
+                          <li>Architecture lost: {continuityDiagnostics.architectureTrend.lostCount}</li>
+                          <li>Constraints lost: {continuityDiagnostics.constraintTrend.lostCount}</li>
+                          <li>Decisions added: {continuityDiagnostics.decisionTrend.addedCount}</li>
+                          <li>Decisions removed: {continuityDiagnostics.decisionTrend.removedCount}</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <h5>Compression</h5>
+                        <ul>
+                          <li>Proposals observed: {continuityDiagnostics.compressionTrend.proposalCount}</li>
+                          <li>Items compressed: {continuityDiagnostics.compressionTrend.compressedItemCount}</li>
+                          <li>Items removed: {continuityDiagnostics.compressionTrend.removedItemCount}</li>
+                          <li>Warnings: {continuityDiagnostics.compressionTrend.warningCount}</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <h5>Repeated Signals</h5>
+                        {continuityDiagnostics.repeatedInvestigationIndicators.length +
+                          continuityDiagnostics.repeatedQuestionIndicators.length +
+                          continuityDiagnostics.decisionReworkIndicators.length >
+                        0 ? (
+                          <ul>
+                            {continuityDiagnostics.repeatedInvestigationIndicators.map((indicator) => (
+                              <li key={`investigation-${indicator}`}>{indicator}</li>
+                            ))}
+                            {continuityDiagnostics.repeatedQuestionIndicators.map((indicator) => (
+                              <li key={`question-${indicator}`}>{indicator}</li>
+                            ))}
+                            {continuityDiagnostics.decisionReworkIndicators.map((indicator) => (
+                              <li key={`decision-${indicator}`}>{indicator}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p>No repeated indicators recorded.</p>
+                        )}
+                      </div>
+                      <div>
+                        <h5>Warnings</h5>
+                        {continuityDiagnostics.continuityWarnings.length > 0 ? (
+                          <ul>
+                            {continuityDiagnostics.continuityWarnings.map((warning) => (
+                              <li key={warning}>{warning}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p>No continuity warnings recorded.</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="empty-state">
+                    {isContinuityDiagnosticsLoading
+                      ? 'Loading continuity diagnostics...'
+                      : 'No continuity diagnostics loaded.'}
+                  </p>
                 )}
               </section>
 

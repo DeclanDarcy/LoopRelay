@@ -590,6 +590,51 @@ fn promote_operational_context_proposal(
 }
 
 #[tauri::command]
+fn get_continuity_diagnostics(repository_id: String) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/continuity/diagnostics"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "continuity diagnostics lookup failed")
+}
+
+#[tauri::command]
+fn generate_continuity_report(repository_id: String) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/continuity/reports"
+        ))
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "continuity report generation failed")
+}
+
+#[tauri::command]
+fn list_continuity_reports(repository_id: String) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/continuity/reports"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "continuity report listing failed")
+}
+
+#[tauri::command]
 fn start_execution(
     repository_id: String,
     milestone_path: String,
@@ -905,6 +950,9 @@ fn main() {
             accept_operational_context_proposal,
             reject_operational_context_proposal,
             promote_operational_context_proposal,
+            get_continuity_diagnostics,
+            generate_continuity_report,
+            list_continuity_reports,
             start_execution,
             get_active_execution,
             get_git_status,

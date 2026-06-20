@@ -138,6 +138,51 @@ type OperationalContextProposal = {
   editedContent: string | null
 }
 
+type ContinuityTrend = {
+  addedCount: number
+  removedCount: number
+  resolvedCount: number
+  lostCount: number
+}
+
+type ContinuityDiagnostics = {
+  repositoryId: string
+  generatedAt: string
+  revisionCount: number
+  currentContextByteCount: number
+  currentContextCharacterCount: number
+  contextByteGrowth: number
+  averageBytesPerRevision: number
+  architectureTrend: ContinuityTrend
+  constraintTrend: ContinuityTrend
+  decisionTrend: ContinuityTrend
+  rationaleTrend: ContinuityTrend
+  openQuestionTrend: ContinuityTrend
+  activeRiskTrend: ContinuityTrend
+  compressionTrend: {
+    proposalCount: number
+    compressedItemCount: number
+    removedItemCount: number
+    resolvedQuestionCount: number
+    retiredRiskCount: number
+    warningCount: number
+    warnings: string[]
+    noiseRemovedIndicators: string[]
+  }
+  repeatedInvestigationIndicators: string[]
+  repeatedQuestionIndicators: string[]
+  decisionReworkIndicators: string[]
+  continuityWarnings: string[]
+}
+
+type ContinuityReport = {
+  reportId: string
+  repositoryId: string
+  generatedAt: string
+  relativePath: string
+  diagnostics: ContinuityDiagnostics
+}
+
 type DashboardEntry = {
   repository: Repository
   availability: string
@@ -285,6 +330,7 @@ type MockState = {
   content: Record<string, string>
   sessions: Record<string, ExecutionSession>
   operationalContextProposals: Record<string, OperationalContextProposal[]>
+  continuityReports: Record<string, ContinuityReport[]>
 }
 
 type TauriInternals = {
@@ -559,6 +605,7 @@ function createInitialState(): MockState {
     },
     sessions: {},
     operationalContextProposals: {},
+    continuityReports: {},
   }
 
   seedCertificationSession(state, certificationRepositories[0], 'Executing', 'Executing')
@@ -1274,6 +1321,103 @@ function promoteOperationalContextProposal(
   return proposal
 }
 
+function zeroTrend(): ContinuityTrend {
+  return {
+    addedCount: 0,
+    removedCount: 0,
+    resolvedCount: 0,
+    lostCount: 0,
+  }
+}
+
+function getContinuityDiagnostics(state: MockState, repositoryId: string): ContinuityDiagnostics {
+  const workspace = state.workspaces[repositoryId]
+  if (!workspace) {
+    throw new Error(`Repository was not found: ${repositoryId}`)
+  }
+
+  const content = state.content[workspace.artifactInventory.operationalContext?.relativePath ?? ''] ?? ''
+  const proposals = state.operationalContextProposals[repositoryId] ?? []
+  const warnings = proposals.flatMap((proposal) =>
+    proposal.compressionSummary.warnings.concat(
+      proposal.compressionSummary.stableUnderstandingRetentionWarnings,
+    ),
+  )
+  return {
+    repositoryId,
+    generatedAt: new Date().toISOString(),
+    revisionCount: workspace.operationalContext.revisionCount,
+    currentContextByteCount: content.length,
+    currentContextCharacterCount: content.length,
+    contextByteGrowth: workspace.artifactInventory.historicalOperationalContexts.length > 0 ? 128 : 0,
+    averageBytesPerRevision: content.length,
+    architectureTrend: zeroTrend(),
+    constraintTrend: zeroTrend(),
+    decisionTrend: zeroTrend(),
+    rationaleTrend: zeroTrend(),
+    openQuestionTrend: {
+      addedCount: workspace.operationalContext.openQuestions.length,
+      removedCount: 0,
+      resolvedCount: proposals.reduce(
+        (count, proposal) => count + proposal.compressionSummary.resolvedQuestionCount,
+        0,
+      ),
+      lostCount: 0,
+    },
+    activeRiskTrend: {
+      addedCount: workspace.operationalContext.activeRisks.length,
+      removedCount: 0,
+      resolvedCount: proposals.reduce(
+        (count, proposal) => count + proposal.compressionSummary.retiredRiskCount,
+        0,
+      ),
+      lostCount: 0,
+    },
+    compressionTrend: {
+      proposalCount: proposals.length,
+      compressedItemCount: proposals.reduce(
+        (count, proposal) => count + proposal.compressionSummary.compressedItemCount,
+        0,
+      ),
+      removedItemCount: proposals.reduce(
+        (count, proposal) => count + proposal.compressionSummary.removedItemCount,
+        0,
+      ),
+      resolvedQuestionCount: proposals.reduce(
+        (count, proposal) => count + proposal.compressionSummary.resolvedQuestionCount,
+        0,
+      ),
+      retiredRiskCount: proposals.reduce(
+        (count, proposal) => count + proposal.compressionSummary.retiredRiskCount,
+        0,
+      ),
+      warningCount: warnings.length,
+      warnings,
+      noiseRemovedIndicators: proposals.flatMap(
+        (proposal) => proposal.compressionSummary.noiseRemovedIndicators,
+      ),
+    },
+    repeatedInvestigationIndicators: [],
+    repeatedQuestionIndicators: [],
+    decisionReworkIndicators: [],
+    continuityWarnings: warnings,
+  }
+}
+
+function generateContinuityReport(state: MockState, repositoryId: string): ContinuityReport {
+  const timestamp = new Date().toISOString()
+  const reportId = `continuity.${Date.now()}`
+  const report: ContinuityReport = {
+    reportId,
+    repositoryId,
+    generatedAt: timestamp,
+    relativePath: `.agents/operational_context/reports/${reportId}.json`,
+    diagnostics: getContinuityDiagnostics(state, repositoryId),
+  }
+  state.continuityReports[repositoryId] = [report, ...(state.continuityReports[repositoryId] ?? [])]
+  return report
+}
+
 function decideHandoff(
   state: MockState,
   sessionId: string,
@@ -1393,6 +1537,12 @@ export function installDevTauriMock() {
               getStringArg(args, 'proposalId'),
             ),
           )
+        case 'get_continuity_diagnostics':
+          return clone(getContinuityDiagnostics(state, getStringArg(args, 'repositoryId')))
+        case 'generate_continuity_report':
+          return clone(generateContinuityReport(state, getStringArg(args, 'repositoryId')))
+        case 'list_continuity_reports':
+          return clone(state.continuityReports[getStringArg(args, 'repositoryId')] ?? [])
         case 'start_execution':
           return clone(
             startExecution(
