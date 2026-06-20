@@ -613,6 +613,10 @@ button:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.proposal-revision-summary {
+  background: #f7fbff;
+}
+
 .proposal-comparison-grid {
   min-width: 0;
   display: grid;

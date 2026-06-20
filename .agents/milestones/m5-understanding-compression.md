@@ -24,10 +24,10 @@ M5 implements section- and tier-level compression over `OperationalContextDocume
   - [x] Compressed item count.
   - [x] Noise removed indicators.
   - [x] Stable understanding retention warnings.
-- [ ] Add compression rules:
+- [x] Add compression rules:
   - [x] Always preserve architecture, constraints, intent, authority boundaries, and current mental model.
   - [x] Preserve risks, questions, tradeoffs, and research areas while active.
-  - [ ] Compress resolved investigations into outcomes and current relevance.
+  - [x] Compress resolved investigations into outcomes and current relevance.
   - [x] Remove transient execution details and repeated information.
 - [x] Add quality warnings when:
   - [x] Architecture disappears.
@@ -42,23 +42,23 @@ M5 implements section- and tier-level compression over `OperationalContextDocume
 
 ## UI Changes
 
-- [ ] Review panel shows:
+- [x] Review panel shows:
   - [x] Added understanding.
   - [x] Removed understanding.
   - [x] Compressed understanding.
   - [x] Stable understanding retention warnings.
-  - [ ] Revision summary.
+  - [x] Revision summary.
 - [x] Do not expose low-level compression internals as controls.
 
 ## Tests
 
 Add backend tests:
 
-- [ ] Architecture survives multiple generated revisions.
+- [x] Architecture survives multiple generated revisions.
 - [x] Constraints survive compression.
-- [ ] Resolved questions are removed or moved to conclusions only when resolution evidence exists.
+- [x] Resolved questions are removed or moved to conclusions only when resolution evidence exists.
 - [x] Unresolved questions remain visible.
-- [ ] Retired risks compress appropriately.
+- [x] Retired risks compress appropriately.
 - [x] Historical noise does not accumulate.
 - [x] Compression summary flags accidental loss of stable understanding.
 - [x] Decision-related content already present in operational context is preserved rather than aggressively compressed.

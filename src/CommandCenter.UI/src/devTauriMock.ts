@@ -77,8 +77,11 @@ type OperationalContextProposal = {
     activeUnderstandingItemCount: number
     historicalUnderstandingItemCount: number
     historicalNoiseItemCount: number
+    resolvedQuestionCount: number
+    retiredRiskCount: number
     warningCount: number
     warnings: string[]
+    revisionSummary: string[]
     noiseRemovedIndicators: string[]
     stableUnderstandingRetentionWarnings: string[]
   }
@@ -932,8 +935,14 @@ function generateOperationalContextProposal(
       activeUnderstandingItemCount: 0,
       historicalUnderstandingItemCount: 1,
       historicalNoiseItemCount: 1,
+      resolvedQuestionCount: 0,
+      retiredRiskCount: 0,
       warningCount: 0,
       warnings: [],
+      revisionSummary: [
+        '2 durable understanding item(s) added.',
+        '1 historical-noise item(s) compressed.',
+      ],
       noiseRemovedIndicators: ['Repeated mock execution status was compressed.'],
       stableUnderstandingRetentionWarnings: [],
     },

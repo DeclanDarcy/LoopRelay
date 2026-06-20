@@ -265,8 +265,11 @@ type OperationalContextCompressionSummary = {
   activeUnderstandingItemCount: number
   historicalUnderstandingItemCount: number
   historicalNoiseItemCount: number
+  resolvedQuestionCount: number
+  retiredRiskCount: number
   warningCount: number
   warnings: string[]
+  revisionSummary: string[]
   noiseRemovedIndicators: string[]
   stableUnderstandingRetentionWarnings: string[]
 }
@@ -2278,8 +2281,20 @@ function App() {
                       <span>Permanent: {operationalContextProposal.compressionSummary.permanentUnderstandingItemCount}</span>
                       <span>Active: {operationalContextProposal.compressionSummary.activeUnderstandingItemCount}</span>
                       <span>Historical: {operationalContextProposal.compressionSummary.historicalUnderstandingItemCount}</span>
+                      <span>Resolved: {operationalContextProposal.compressionSummary.resolvedQuestionCount}</span>
+                      <span>Retired: {operationalContextProposal.compressionSummary.retiredRiskCount}</span>
                       <span>Warnings: {operationalContextProposal.compressionSummary.warningCount}</span>
                     </div>
+                    {operationalContextProposal.compressionSummary.revisionSummary.length > 0 ? (
+                      <div className="proposal-warning-list proposal-revision-summary">
+                        <h5>Revision Summary</h5>
+                        <ul>
+                          {operationalContextProposal.compressionSummary.revisionSummary.map((summary) => (
+                            <li key={summary}>{summary}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
                     {operationalContextProposal.compressionSummary.stableUnderstandingRetentionWarnings.length > 0 ? (
                       <div className="proposal-warning-list">
                         <h5>Retention Warnings</h5>

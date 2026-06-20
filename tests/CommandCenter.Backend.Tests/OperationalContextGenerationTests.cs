@@ -276,6 +276,157 @@ public sealed class OperationalContextGenerationTests
     }
 
     [Fact]
+    public async Task DurableUnderstandingSurvivesRepeatedGeneratedRevisions()
+    {
+        var harness = await CreateHarnessAsync();
+        await WriteAsync(harness.Repository, ".agents/operational_context.md", """
+            # Operational Context
+
+            ## Architecture
+
+            - Backend services own continuity workflow authority.
+
+            ## Constraints
+
+            - Compression must never reduce authority.
+
+            ## Stable Decisions
+
+            - Repository artifacts remain authoritative.
+
+            ## Decision Rationale
+
+            - Disposable execution sessions must not become project memory.
+
+            ## Open Questions
+
+            - Should diagnostics include retention trends?
+
+            ## Active Risks
+
+            - Context growth can hide important constraints.
+            """);
+
+        for (var index = 0; index < 3; index++)
+        {
+            await WriteAsync(harness.Repository, ".agents/handoffs/handoff.md", $"""
+                # Handoff
+
+                - Slice {index} completed without changing authority boundaries.
+                - Recent execution for `.agents/milestones/m5.md` is recorded with state `Completed`.
+                """);
+
+            var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+            var accepted = await harness.ReviewService.AcceptAsync(harness.Repository.Id, proposal.ProposalId, null);
+            await harness.LifecycleService.PromoteAsync(harness.Repository.Id, accepted.ProposalId);
+        }
+
+        var current = new MarkdownOperationalContextParser().Parse(
+            await ReadAsync(harness.Repository, ".agents/operational_context.md"));
+
+        Assert.Contains(current.Architecture, item =>
+            item.Text.Contains("Backend services own continuity workflow authority", StringComparison.Ordinal));
+        Assert.Contains(current.Constraints, item =>
+            item.Text.Contains("Compression must never reduce authority", StringComparison.Ordinal));
+        Assert.Contains(current.StableDecisions, item =>
+            item.Text.Contains("Repository artifacts remain authoritative", StringComparison.Ordinal));
+        Assert.Contains(current.DecisionRationale, item =>
+            item.Text.Contains("Disposable execution sessions", StringComparison.Ordinal));
+        Assert.Contains(current.OpenQuestions, item =>
+            item.Text.Contains("retention trends", StringComparison.Ordinal));
+        Assert.Contains(current.ActiveRisks, item =>
+            item.Text.Contains("Context growth", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ResolvedQuestionsCompressOnlyWithExplicitResolutionEvidence()
+    {
+        var parser = new MarkdownOperationalContextParser();
+        var compression = new UnderstandingCompressionService();
+        var current = parser.Parse("""
+            # Operational Context
+
+            ## Open Questions
+
+            - Should diagnostics include growth trends?
+            """);
+        var proposedWithoutEvidence = parser.Parse("""
+            # Operational Context
+
+            ## Recent Understanding Changes
+
+            - Diagnostics were discussed.
+            """);
+        var proposedWithEvidence = parser.Parse("""
+            # Operational Context
+
+            ## Open Questions
+
+            - Should diagnostics include growth trends?
+
+            ## Recent Understanding Changes
+
+            - Resolved question: diagnostics include growth trends.
+            """);
+
+        var missingWithoutEvidence = compression.Compress(current, proposedWithoutEvidence);
+        var resolvedWithEvidence = compression.Compress(current, proposedWithEvidence);
+
+        Assert.Contains(missingWithoutEvidence.Summary.StableUnderstandingRetentionWarnings, warning =>
+            warning.Contains("Open question disappeared", StringComparison.Ordinal));
+        Assert.Empty(resolvedWithEvidence.Document.OpenQuestions);
+        Assert.Equal(1, resolvedWithEvidence.Summary.ResolvedQuestionCount);
+        Assert.DoesNotContain(resolvedWithEvidence.Summary.StableUnderstandingRetentionWarnings, warning =>
+            warning.Contains("Open question disappeared", StringComparison.Ordinal));
+        Assert.Contains(resolvedWithEvidence.Summary.RevisionSummary, summary =>
+            summary.Contains("open question", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void RetiredRisksCompressOnlyWithExplicitRetirementEvidence()
+    {
+        var parser = new MarkdownOperationalContextParser();
+        var compression = new UnderstandingCompressionService();
+        var current = parser.Parse("""
+            # Operational Context
+
+            ## Active Risks
+
+            - Context growth can hide important constraints.
+            """);
+        var proposedWithoutEvidence = parser.Parse("""
+            # Operational Context
+
+            ## Recent Understanding Changes
+
+            - Compression warnings were improved.
+            """);
+        var proposedWithEvidence = parser.Parse("""
+            # Operational Context
+
+            ## Active Risks
+
+            - Context growth can hide important constraints.
+
+            ## Recent Understanding Changes
+
+            - Retired risk: context growth can hide important constraints because retention warnings now surface it.
+            """);
+
+        var missingWithoutEvidence = compression.Compress(current, proposedWithoutEvidence);
+        var retiredWithEvidence = compression.Compress(current, proposedWithEvidence);
+
+        Assert.Contains(missingWithoutEvidence.Summary.StableUnderstandingRetentionWarnings, warning =>
+            warning.Contains("Active risk disappeared", StringComparison.Ordinal));
+        Assert.Empty(retiredWithEvidence.Document.ActiveRisks);
+        Assert.Equal(1, retiredWithEvidence.Summary.RetiredRiskCount);
+        Assert.DoesNotContain(retiredWithEvidence.Summary.StableUnderstandingRetentionWarnings, warning =>
+            warning.Contains("Active risk disappeared", StringComparison.Ordinal));
+        Assert.Contains(retiredWithEvidence.Summary.RevisionSummary, summary =>
+            summary.Contains("active risk", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task EditingProposalRecomputesCompressionWarnings()
     {
         var harness = await CreateHarnessAsync();

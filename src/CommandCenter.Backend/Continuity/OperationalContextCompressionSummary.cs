@@ -20,9 +20,15 @@ public sealed class OperationalContextCompressionSummary
 
     public int HistoricalNoiseItemCount { get; init; }
 
+    public int ResolvedQuestionCount { get; init; }
+
+    public int RetiredRiskCount { get; init; }
+
     public int WarningCount { get; init; }
 
     public IReadOnlyList<string> Warnings { get; init; } = [];
+
+    public IReadOnlyList<string> RevisionSummary { get; init; } = [];
 
     public IReadOnlyList<string> NoiseRemovedIndicators { get; init; } = [];
 

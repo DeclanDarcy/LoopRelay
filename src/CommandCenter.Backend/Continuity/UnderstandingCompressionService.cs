@@ -10,6 +10,14 @@ public sealed class UnderstandingCompressionService : IUnderstandingCompressionS
     {
         var noiseRemovedIndicators = new List<string>();
         var compressedRecentChanges = CompressRecentChanges(proposed.RecentUnderstandingChanges, noiseRemovedIndicators);
+        var resolvedQuestions = SelectItemsWithExplicitOutcome(
+            proposed.OpenQuestions,
+            compressedRecentChanges,
+            IsQuestionResolutionEvidence).ToArray();
+        var retiredRisks = SelectItemsWithExplicitOutcome(
+            proposed.ActiveRisks,
+            compressedRecentChanges,
+            IsRiskRetirementEvidence).ToArray();
         var compressedDocument = new OperationalContextDocument
         {
             Title = proposed.Title,
@@ -19,13 +27,17 @@ public sealed class UnderstandingCompressionService : IUnderstandingCompressionS
             Constraints = proposed.Constraints,
             StableDecisions = proposed.StableDecisions,
             DecisionRationale = proposed.DecisionRationale,
-            OpenQuestions = proposed.OpenQuestions,
-            ActiveRisks = proposed.ActiveRisks,
+            OpenQuestions = proposed.OpenQuestions
+                .Where(item => !ContainsEquivalent(resolvedQuestions, item))
+                .ToArray(),
+            ActiveRisks = proposed.ActiveRisks
+                .Where(item => !ContainsEquivalent(retiredRisks, item))
+                .ToArray(),
             AdditionalSections = proposed.AdditionalSections,
             RecentUnderstandingChanges = compressedRecentChanges
         };
 
-        var warnings = BuildRetentionWarnings(current, compressedDocument).ToList();
+        var warnings = BuildRetentionWarnings(current, compressedDocument, resolvedQuestions, retiredRisks).ToList();
         var stableWarnings = warnings
             .Where(warning =>
                 warning.Contains("Architecture", StringComparison.OrdinalIgnoreCase) ||
@@ -49,6 +61,13 @@ public sealed class UnderstandingCompressionService : IUnderstandingCompressionS
             .Select(item => Normalize(item.Text))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var compressedNoiseCount = proposed.RecentUnderstandingChanges.Count - compressedDocument.RecentUnderstandingChanges.Count;
+        var revisionSummary = BuildRevisionSummary(
+            compressedDocument,
+            currentTexts,
+            resolvedQuestions,
+            retiredRisks,
+            compressedNoiseCount,
+            warnings).ToArray();
 
         var summary = new OperationalContextCompressionSummary
         {
@@ -61,8 +80,11 @@ public sealed class UnderstandingCompressionService : IUnderstandingCompressionS
             ActiveUnderstandingItemCount = CountTier(compressedDocument, OperationalContextInformationTier.ActiveUnderstanding),
             HistoricalUnderstandingItemCount = CountTier(compressedDocument, OperationalContextInformationTier.HistoricalUnderstanding),
             HistoricalNoiseItemCount = Math.Max(0, compressedNoiseCount),
+            ResolvedQuestionCount = resolvedQuestions.Length,
+            RetiredRiskCount = retiredRisks.Length,
             WarningCount = warnings.Count,
             Warnings = warnings,
+            RevisionSummary = revisionSummary,
             NoiseRemovedIndicators = noiseRemovedIndicators,
             StableUnderstandingRetentionWarnings = stableWarnings
         };
@@ -125,7 +147,9 @@ public sealed class UnderstandingCompressionService : IUnderstandingCompressionS
 
     private static IEnumerable<string> BuildRetentionWarnings(
         OperationalContextDocument current,
-        OperationalContextDocument proposed)
+        OperationalContextDocument proposed,
+        IReadOnlyList<OperationalContextItem> explicitlyResolvedQuestions,
+        IReadOnlyList<OperationalContextItem> explicitlyRetiredRisks)
     {
         foreach (var warning in MissingWarnings("Architecture", current.Architecture, proposed.Architecture))
         {
@@ -137,12 +161,18 @@ public sealed class UnderstandingCompressionService : IUnderstandingCompressionS
             yield return warning;
         }
 
-        foreach (var warning in MissingWarnings("Open question", current.OpenQuestions, proposed.OpenQuestions))
+        foreach (var warning in MissingWarnings(
+            "Open question",
+            current.OpenQuestions.Where(item => !ContainsEquivalent(explicitlyResolvedQuestions, item)).ToArray(),
+            proposed.OpenQuestions))
         {
             yield return warning;
         }
 
-        foreach (var warning in MissingWarnings("Active risk", current.ActiveRisks, proposed.ActiveRisks))
+        foreach (var warning in MissingWarnings(
+            "Active risk",
+            current.ActiveRisks.Where(item => !ContainsEquivalent(explicitlyRetiredRisks, item)).ToArray(),
+            proposed.ActiveRisks))
         {
             yield return warning;
         }
@@ -175,6 +205,148 @@ public sealed class UnderstandingCompressionService : IUnderstandingCompressionS
         foreach (var item in current.Where(item => !proposedTexts.Contains(Normalize(item.Text))))
         {
             yield return $"{label} disappeared without explicit resolution: {item.Text}";
+        }
+    }
+
+    private static IEnumerable<OperationalContextItem> SelectItemsWithExplicitOutcome(
+        IReadOnlyList<OperationalContextItem> candidates,
+        IReadOnlyList<OperationalContextItem> evidenceItems,
+        Func<string, bool> isOutcomeEvidence)
+    {
+        foreach (var candidate in candidates)
+        {
+            var candidateTokens = MeaningfulTokens(candidate.Text).ToArray();
+            if (candidateTokens.Length == 0)
+            {
+                continue;
+            }
+
+            if (evidenceItems.Any(evidence =>
+                    isOutcomeEvidence(evidence.Text) &&
+                    candidateTokens.Count(token => evidence.Text.Contains(token, StringComparison.OrdinalIgnoreCase)) >=
+                    Math.Min(3, candidateTokens.Length)))
+            {
+                yield return candidate;
+            }
+        }
+    }
+
+    private static IEnumerable<string> BuildRevisionSummary(
+        OperationalContextDocument compressedDocument,
+        HashSet<string> currentTexts,
+        IReadOnlyList<OperationalContextItem> resolvedQuestions,
+        IReadOnlyList<OperationalContextItem> retiredRisks,
+        int compressedNoiseCount,
+        IReadOnlyList<string> warnings)
+    {
+        var addedPermanent = AllItems(compressedDocument)
+            .Count(item =>
+                !currentTexts.Contains(Normalize(item.Text)) &&
+                Classify(item) == OperationalContextInformationTier.PermanentUnderstanding);
+        var addedActive = AllItems(compressedDocument)
+            .Count(item =>
+                !currentTexts.Contains(Normalize(item.Text)) &&
+                Classify(item) == OperationalContextInformationTier.ActiveUnderstanding);
+
+        if (addedPermanent > 0)
+        {
+            yield return $"{addedPermanent} durable understanding item(s) added.";
+        }
+
+        if (addedActive > 0)
+        {
+            yield return $"{addedActive} active understanding item(s) added.";
+        }
+
+        if (resolvedQuestions.Count > 0)
+        {
+            yield return $"{resolvedQuestions.Count} open question(s) explicitly resolved.";
+        }
+
+        if (retiredRisks.Count > 0)
+        {
+            yield return $"{retiredRisks.Count} active risk(s) explicitly retired.";
+        }
+
+        if (compressedNoiseCount > 0)
+        {
+            yield return $"{compressedNoiseCount} historical-noise item(s) compressed.";
+        }
+
+        if (warnings.Count > 0)
+        {
+            yield return $"{warnings.Count} retention warning(s) require review.";
+        }
+
+        if (addedPermanent == 0 &&
+            addedActive == 0 &&
+            resolvedQuestions.Count == 0 &&
+            retiredRisks.Count == 0 &&
+            compressedNoiseCount == 0 &&
+            warnings.Count == 0)
+        {
+            yield return "No material compression changes detected.";
+        }
+    }
+
+    private static bool IsQuestionResolutionEvidence(string text)
+    {
+        return text.Contains("resolved question", StringComparison.OrdinalIgnoreCase) ||
+            text.Contains("question resolved", StringComparison.OrdinalIgnoreCase) ||
+            text.Contains("resolved open question", StringComparison.OrdinalIgnoreCase) ||
+            text.Contains("open question resolved", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsRiskRetirementEvidence(string text)
+    {
+        return text.Contains("retired risk", StringComparison.OrdinalIgnoreCase) ||
+            text.Contains("risk retired", StringComparison.OrdinalIgnoreCase) ||
+            text.Contains("resolved risk", StringComparison.OrdinalIgnoreCase) ||
+            text.Contains("risk resolved", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool ContainsEquivalent(
+        IReadOnlyList<OperationalContextItem> items,
+        OperationalContextItem item)
+    {
+        return items.Any(candidate => string.Equals(Normalize(candidate.Text), Normalize(item.Text), StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static IEnumerable<string> MeaningfulTokens(string text)
+    {
+        var stopWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "a",
+            "an",
+            "and",
+            "are",
+            "be",
+            "before",
+            "can",
+            "do",
+            "does",
+            "for",
+            "how",
+            "in",
+            "is",
+            "of",
+            "or",
+            "should",
+            "the",
+            "to",
+            "when",
+            "while",
+            "with"
+        };
+
+        foreach (var token in Normalize(text)
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Select(token => token.Trim('`', '.', ',', ':', ';', '?', '!', '"', '\'')))
+        {
+            if (token.Length >= 4 && !stopWords.Contains(token))
+            {
+                yield return token;
+            }
         }
     }
 
