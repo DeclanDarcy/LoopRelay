@@ -14,6 +14,12 @@ public sealed class ExecutionStatus
 
     public TimeSpan? Duration { get; init; }
 
+    public DateTimeOffset? AcceptedAt { get; init; }
+
+    public DateTimeOffset? RejectedAt { get; init; }
+
+    public string? DecisionNote { get; init; }
+
     public DateTimeOffset? LastActivityAt { get; init; }
 
     public string ProviderName { get; init; } = string.Empty;

@@ -2,27 +2,28 @@
 
 ## Newly Authorized Decisions
 
-- M5A.1 is authorized as the next backend-only slice.
-- M5A.1 is named Backend Accept/Reject Workflow.
-- Rejection is a user decision, not a system failure.
-- Rejecting an execution from `AwaitingAcceptance` transitions the repository back to `Ready`.
-- Rejection must preserve session history, handoff content, events, and metadata.
-- Rejection must not delete artifacts, clean up files, roll back changes, or mark execution as `Failed`.
-- `Failed` remains reserved for launch failure, monitoring failure, provider failure, handoff validation failure, archive failure, and other execution-system failures.
-- Acceptance is valid only from `AwaitingAcceptance`.
-- Rejection is valid only from `AwaitingAcceptance`.
-- Add backend endpoints `POST /api/execution-sessions/{sessionId}/accept` and `POST /api/execution-sessions/{sessionId}/reject`.
-- Add session metadata for `AcceptedAt`, `RejectedAt`, and optional `DecisionNote`.
-- Accepting from `AwaitingAcceptance` transitions through user acceptance and records `AcceptedAt`.
-- If accepted work has Git changes, repository workflow should proceed to `AwaitingCommit`.
-- If accepted work has no Git changes, repository workflow should proceed to `Ready`.
-- Invalid accept and reject attempts from non-`AwaitingAcceptance` states must be rejected.
-- Accepted and rejected metadata/state must survive session store reload.
+- M5A.2 is authorized as the next slice.
+- M5A.2 is UI-only acceptance controls.
+- Add Tauri commands `accept_execution_handoff` and `reject_execution_handoff`.
+- Tauri accept/reject commands must be thin HTTP bridges only.
+- Do not add workflow logic to Tauri.
+- Show accept/reject controls only when `RepositoryExecutionState == AwaitingAcceptance`.
+- Do not infer accept/reject visibility from session state.
+- Repository workflow state remains authoritative for acceptance control visibility.
+- Accept action is a single `Accept Handoff` action.
+- After accept succeeds, refresh workspace and dashboard projections.
+- Do not manually transition client state after accept.
+- Reject action must require confirmation before calling the backend.
+- After reject succeeds, refresh workspace and dashboard projections.
+- Display `AcceptedAt`, `RejectedAt`, and `DecisionNote` when available.
+- Certification must verify controls are visible only in `AwaitingAcceptance`.
+- Certification must verify controls are hidden for `Ready`, `Executing`, `Failed`, `Cancelled`, `AwaitingCommit`, and `AwaitingPush`.
+- Certification must verify accept refreshes projection state to `AwaitingCommit` or `Ready`.
+- Certification must verify reject confirmation then refreshes projection state to `Ready`.
+- Certification must verify browser refresh, Tauri restart, and backend restart preserve accepted/rejected metadata visibility.
 
 ## Explicitly Deferred
 
-- Do not implement M5A.2 UI controls in M5A.1.
-- Do not add accept or reject buttons until backend certification is complete.
-- Do not add confirmation dialogs until M5A.2.
-- Do not add Git commit or push controls in M5.
-- Do not implement cleanup, rollback, or artifact deletion on rejection.
+- Do not implement Git automation in M5A.2.
+- Do not implement commit scope, commit, push, or Git lifecycle UI until M6.
+- Do not manually duplicate backend workflow transitions in the client.

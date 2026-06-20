@@ -169,7 +169,8 @@ public sealed class ExecutionSessionServiceTests
             new FileSystemExecutionSessionStore(harness.StorePath),
             new FakeExecutionProvider(),
             new ExecutionPromptBuilder(),
-            new ExecutionMonitoringService(new FileSystemExecutionSessionStore(harness.StorePath)));
+            new ExecutionMonitoringService(new FileSystemExecutionSessionStore(harness.StorePath)),
+            new FakeGitService(null, null));
 
         await reloadedService.RecoverAsync();
         var active = await reloadedService.GetActiveSessionAsync(harness.Repository.Id);
@@ -215,7 +216,8 @@ public sealed class ExecutionSessionServiceTests
             reloadedStore,
             reattachProvider,
             new ExecutionPromptBuilder(),
-            reloadedMonitoringService);
+            reloadedMonitoringService,
+            new FakeGitService(null, null));
 
         await reloadedService.RecoverAsync();
         var active = await reloadedService.GetActiveSessionAsync(harness.Repository.Id);
@@ -249,7 +251,8 @@ public sealed class ExecutionSessionServiceTests
             new FileSystemExecutionSessionStore(harness.StorePath),
             new FakeExecutionProvider(),
             new ExecutionPromptBuilder(),
-            new ExecutionMonitoringService(new FileSystemExecutionSessionStore(harness.StorePath)));
+            new ExecutionMonitoringService(new FileSystemExecutionSessionStore(harness.StorePath)),
+            new FakeGitService(null, null));
         await reloadedService.RecoverAsync();
         var artifactStore = new FileSystemArtifactStore();
         var projectionService = new RepositoryProjectionService(
@@ -395,6 +398,119 @@ public sealed class ExecutionSessionServiceTests
     }
 
     [Fact]
+    public async Task AcceptFromAwaitingAcceptanceWithChangedFilesTransitionsToAwaitingCommit()
+    {
+        var dirtyState = new RepositoryDirtyState
+        {
+            ModifiedPaths = ["src/changed.cs"],
+            IsClean = false
+        };
+        var harness = await CreateHarnessAsync(dirtyState);
+        var session = await StoreAwaitingAcceptanceSessionAsync(harness);
+
+        var summary = await harness.SessionService.AcceptAsync(
+            session.Id,
+            new ExecutionAcceptanceRequest { DecisionNote = " Reviewed and accepted. " });
+        var storedSession = (await harness.Store.LoadAsync()).Single(storedSession => storedSession.Id == session.Id);
+
+        Assert.Equal(ExecutionSessionState.Completed, summary.State);
+        Assert.Equal(RepositoryExecutionState.AwaitingCommit, summary.RepositoryState);
+        Assert.NotNull(summary.AcceptedAt);
+        Assert.Equal("Reviewed and accepted.", summary.DecisionNote);
+        Assert.Equal(RepositoryExecutionState.AwaitingCommit, await harness.SessionService.GetRepositoryStateAsync(harness.Repository.Id));
+        Assert.Equal(summary.AcceptedAt, storedSession.AcceptedAt);
+        Assert.Equal("Reviewed and accepted.", storedSession.DecisionNote);
+        Assert.False(storedSession.RepositorySnapshot!.DirtyState.IsClean);
+    }
+
+    [Fact]
+    public async Task AcceptFromAwaitingAcceptanceWithCleanWorkingTreeTransitionsToReady()
+    {
+        var harness = await CreateHarnessAsync();
+        var session = await StoreAwaitingAcceptanceSessionAsync(harness);
+
+        var summary = await harness.SessionService.AcceptAsync(session.Id, new ExecutionAcceptanceRequest());
+
+        Assert.Equal(ExecutionSessionState.Completed, summary.State);
+        Assert.Equal(RepositoryExecutionState.Ready, summary.RepositoryState);
+        Assert.NotNull(summary.AcceptedAt);
+        Assert.Null(summary.DecisionNote);
+        Assert.Equal(RepositoryExecutionState.Ready, await harness.SessionService.GetRepositoryStateAsync(harness.Repository.Id));
+    }
+
+    [Fact]
+    public async Task RejectFromAwaitingAcceptanceTransitionsToReadyAndPreservesHandoff()
+    {
+        var harness = await CreateHarnessAsync();
+        var session = await StoreAwaitingAcceptanceSessionAsync(harness);
+
+        var summary = await harness.SessionService.RejectAsync(
+            session.Id,
+            new ExecutionAcceptanceRequest { DecisionNote = "Not sufficient" });
+        var storedSession = (await harness.Store.LoadAsync()).Single(storedSession => storedSession.Id == session.Id);
+
+        Assert.Equal(ExecutionSessionState.Completed, summary.State);
+        Assert.Equal(RepositoryExecutionState.Ready, summary.RepositoryState);
+        Assert.NotNull(summary.RejectedAt);
+        Assert.Equal("Not sufficient", summary.DecisionNote);
+        Assert.Equal(".agents/handoffs/handoff.md", summary.HandoffPath);
+        Assert.Equal(".agents/handoffs/handoff.md", storedSession.HandoffPath);
+        Assert.Equal(RepositoryExecutionState.Ready, await harness.SessionService.GetRepositoryStateAsync(harness.Repository.Id));
+    }
+
+    [Fact]
+    public async Task AcceptOutsideAwaitingAcceptanceFails()
+    {
+        var harness = await CreateHarnessAsync();
+        await WriteReadyArtifactsAsync(harness.Repository);
+        var summary = await harness.SessionService.StartAsync(
+            harness.Repository.Id,
+            new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            harness.SessionService.AcceptAsync(summary.SessionId, new ExecutionAcceptanceRequest()));
+
+        Assert.Contains("awaiting acceptance", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task RejectOutsideAwaitingAcceptanceFails()
+    {
+        var harness = await CreateHarnessAsync();
+        await WriteReadyArtifactsAsync(harness.Repository);
+        var summary = await harness.SessionService.StartAsync(
+            harness.Repository.Id,
+            new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            harness.SessionService.RejectAsync(summary.SessionId, new ExecutionAcceptanceRequest()));
+
+        Assert.Contains("awaiting acceptance", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AcceptedStatePersistsAfterStoreReload()
+    {
+        var dirtyState = new RepositoryDirtyState
+        {
+            ModifiedPaths = ["src/changed.cs"],
+            IsClean = false
+        };
+        var harness = await CreateHarnessAsync(dirtyState);
+        var session = await StoreAwaitingAcceptanceSessionAsync(harness);
+
+        await harness.SessionService.AcceptAsync(session.Id, new ExecutionAcceptanceRequest { DecisionNote = "accepted" });
+        var reloadedSession = (await new FileSystemExecutionSessionStore(harness.StorePath).LoadAsync()).Single();
+
+        Assert.Equal(ExecutionSessionState.Completed, reloadedSession.State);
+        Assert.Equal(RepositoryExecutionState.AwaitingCommit, reloadedSession.RepositoryState);
+        Assert.NotNull(reloadedSession.AcceptedAt);
+        Assert.Null(reloadedSession.RejectedAt);
+        Assert.Equal("accepted", reloadedSession.DecisionNote);
+        Assert.Equal(".agents/handoffs/handoff.md", reloadedSession.HandoffPath);
+    }
+
+    [Fact]
     public async Task LaunchEndpointReturnsSessionMetadata()
     {
         var configurationPath = Path.Combine(CreateTemporaryDirectory(), "configuration.json");
@@ -514,6 +630,75 @@ public sealed class ExecutionSessionServiceTests
         }
     }
 
+    [Fact]
+    public async Task AcceptAndRejectEndpointsReturnTransitionedSessionMetadata()
+    {
+        var configurationPath = Path.Combine(CreateTemporaryDirectory(), "configuration.json");
+        var storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");
+        var previousConfigurationPath = Environment.GetEnvironmentVariable("COMMAND_CENTER_CONFIGURATION_PATH");
+        var previousStorePath = Environment.GetEnvironmentVariable("COMMAND_CENTER_EXECUTION_SESSIONS_PATH");
+        Environment.SetEnvironmentVariable("COMMAND_CENTER_CONFIGURATION_PATH", configurationPath);
+        Environment.SetEnvironmentVariable("COMMAND_CENTER_EXECUTION_SESSIONS_PATH", storePath);
+
+        try
+        {
+            var repositoryPath = CreateGitRepositoryDirectory();
+            var repositoryService = new RepositoryService(new ApplicationConfigurationStore(configurationPath));
+            var repository = await repositoryService.RegisterAsync(repositoryPath);
+            var acceptSession = CreateAwaitingAcceptanceSession(repository, ".agents/milestones/m5-accept.md");
+            var rejectSession = CreateAwaitingAcceptanceSession(repository, ".agents/milestones/m5-reject.md");
+            await new FileSystemExecutionSessionStore(storePath).SaveAsync([acceptSession, rejectSession]);
+
+            await using var app = Program.CreateApp(
+                [],
+                services =>
+                {
+                    services.AddSingleton<IGitService>(new FakeGitService(
+                        new RepositoryDirtyState
+                        {
+                            ModifiedPaths = ["src/changed.cs"],
+                            IsClean = false
+                        },
+                        null));
+                    services.AddSingleton<IExecutionProvider>(new FakeExecutionProvider());
+                    services.AddSingleton<IExecutionSessionStore>(new FileSystemExecutionSessionStore(storePath));
+                });
+            app.Urls.Add("http://127.0.0.1:0");
+            await app.StartAsync();
+
+            using var client = new HttpClient();
+            var acceptResponse = await client.PostAsJsonAsync(
+                app.Urls.Single() + $"/api/execution-sessions/{acceptSession.Id}/accept",
+                new ExecutionAcceptanceRequest { DecisionNote = "accepted" });
+            var rejectResponse = await client.PostAsJsonAsync(
+                app.Urls.Single() + $"/api/execution-sessions/{rejectSession.Id}/reject",
+                new ExecutionAcceptanceRequest { DecisionNote = "rejected" });
+
+            Assert.Equal(HttpStatusCode.OK, acceptResponse.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, rejectResponse.StatusCode);
+            var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+            {
+                Converters = { new JsonStringEnumConverter() }
+            };
+            var accepted = await acceptResponse.Content.ReadFromJsonAsync<ExecutionSessionSummary>(jsonOptions);
+            var rejected = await rejectResponse.Content.ReadFromJsonAsync<ExecutionSessionSummary>(jsonOptions);
+
+            Assert.NotNull(accepted);
+            Assert.Equal(RepositoryExecutionState.AwaitingCommit, accepted.RepositoryState);
+            Assert.NotNull(accepted.AcceptedAt);
+            Assert.Equal("accepted", accepted.DecisionNote);
+            Assert.NotNull(rejected);
+            Assert.Equal(RepositoryExecutionState.Ready, rejected.RepositoryState);
+            Assert.NotNull(rejected.RejectedAt);
+            Assert.Equal("rejected", rejected.DecisionNote);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("COMMAND_CENTER_CONFIGURATION_PATH", previousConfigurationPath);
+            Environment.SetEnvironmentVariable("COMMAND_CENTER_EXECUTION_SESSIONS_PATH", previousStorePath);
+        }
+    }
+
     private static async Task<Harness> CreateHarnessAsync(
         RepositoryDirtyState? dirtyState = null,
         string? gitFailure = null,
@@ -535,7 +720,8 @@ public sealed class ExecutionSessionServiceTests
             store,
             provider ?? new FakeExecutionProvider(),
             new ExecutionPromptBuilder(),
-            new ExecutionMonitoringService(store));
+            new ExecutionMonitoringService(store),
+            new FakeGitService(dirtyState, gitFailure));
 
         return new Harness(repositoryService, repository, contextService, store, storePath, sessionService);
     }
@@ -544,6 +730,44 @@ public sealed class ExecutionSessionServiceTests
     {
         await WriteAsync(repository, ".agents/plan.md", "plan");
         await WriteAsync(repository, ".agents/milestones/m2.md", "milestone");
+    }
+
+    private static async Task<ExecutionSession> StoreAwaitingAcceptanceSessionAsync(Harness harness)
+    {
+        var session = CreateAwaitingAcceptanceSession(harness.Repository, ".agents/milestones/m5.md");
+        await harness.Store.SaveAsync([session]);
+        return session;
+    }
+
+    private static ExecutionSession CreateAwaitingAcceptanceSession(Repository repository, string milestonePath)
+    {
+        var sessionId = Guid.NewGuid();
+        var startedAt = DateTimeOffset.UtcNow.AddMinutes(-2);
+        var completedAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+        return new ExecutionSession
+        {
+            Id = sessionId,
+            RepositoryId = repository.Id,
+            RepositoryPath = repository.Path,
+            MilestonePath = milestonePath,
+            StartedAt = startedAt,
+            CompletedAt = completedAt,
+            LastActivityAt = completedAt,
+            State = ExecutionSessionState.Completed,
+            RepositoryState = RepositoryExecutionState.AwaitingAcceptance,
+            ProviderName = "fake",
+            HandoffPath = ".agents/handoffs/handoff.md",
+            Events =
+            [
+                new ExecutionEvent
+                {
+                    Sequence = 1,
+                    Type = ExecutionEventType.StdOut,
+                    Timestamp = completedAt,
+                    Message = "done"
+                }
+            ]
+        };
     }
 
     private static async Task WriteAsync(Repository repository, string relativePath, string content)

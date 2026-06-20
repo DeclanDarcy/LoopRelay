@@ -273,6 +273,16 @@ public sealed class RepositoryProjectionServiceTests
         {
             return Task.FromResult<ExecutionSession?>(null);
         }
+
+        public Task<ExecutionSessionSummary> AcceptAsync(Guid sessionId, ExecutionAcceptanceRequest request)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<ExecutionSessionSummary> RejectAsync(Guid sessionId, ExecutionAcceptanceRequest request)
+        {
+            throw new NotSupportedException();
+        }
     }
 
     private sealed class StaticExecutionSessionService(
@@ -313,6 +323,16 @@ public sealed class RepositoryProjectionServiceTests
         public Task<ExecutionSession?> GetSessionAsync(Guid sessionId)
         {
             return Task.FromResult<ExecutionSession?>(null);
+        }
+
+        public Task<ExecutionSessionSummary> AcceptAsync(Guid sessionId, ExecutionAcceptanceRequest request)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<ExecutionSessionSummary> RejectAsync(Guid sessionId, ExecutionAcceptanceRequest request)
+        {
+            throw new NotSupportedException();
         }
     }
 }

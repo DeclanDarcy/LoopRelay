@@ -229,5 +229,15 @@ public sealed class ArtifactRotationServiceTests
         {
             return Task.FromResult<ExecutionSession?>(null);
         }
+
+        public Task<ExecutionSessionSummary> AcceptAsync(Guid sessionId, ExecutionAcceptanceRequest request)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<ExecutionSessionSummary> RejectAsync(Guid sessionId, ExecutionAcceptanceRequest request)
+        {
+            throw new NotSupportedException();
+        }
     }
 }

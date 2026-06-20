@@ -1,4 +1,5 @@
 using System.Threading;
+using CommandCenter.Backend.Repositories;
 
 namespace CommandCenter.Backend.Execution;
 
@@ -7,7 +8,8 @@ public sealed class ExecutionSessionService(
     IExecutionSessionStore sessionStore,
     IExecutionProvider executionProvider,
     IExecutionPromptBuilder promptBuilder,
-    IExecutionMonitoringService monitoringService) : IExecutionSessionService
+    IExecutionMonitoringService monitoringService,
+    IGitService gitService) : IExecutionSessionService
 {
     public const string OrphanedProviderFailureReason =
         "Active provider process could not be reattached after backend restart.";
@@ -209,6 +211,75 @@ public sealed class ExecutionSessionService(
         return (await sessionStore.LoadAsync()).FirstOrDefault(session => session.Id == sessionId);
     }
 
+    public async Task<ExecutionSessionSummary> AcceptAsync(Guid sessionId, ExecutionAcceptanceRequest request)
+    {
+        await gate.WaitAsync();
+        try
+        {
+            var sessions = (await sessionStore.LoadAsync()).ToList();
+            var session = sessions.FirstOrDefault(session => session.Id == sessionId)
+                ?? throw new KeyNotFoundException($"Execution session was not found: {sessionId}");
+            if (session.RepositoryState != RepositoryExecutionState.AwaitingAcceptance)
+            {
+                throw new InvalidOperationException("Execution can only be accepted while awaiting acceptance.");
+            }
+
+            var acceptedAt = DateTimeOffset.UtcNow;
+            var repository = new Repository
+            {
+                Id = session.RepositoryId,
+                Name = Path.GetFileName(session.RepositoryPath),
+                Path = session.RepositoryPath
+            };
+            var snapshot = await gitService.GetSnapshotAsync(repository);
+            var repositoryState = snapshot.DirtyState.IsClean
+                ? RepositoryExecutionState.Ready
+                : RepositoryExecutionState.AwaitingCommit;
+            var acceptedSession = session.WithDecision(
+                repositoryState,
+                acceptedAt: acceptedAt,
+                lastActivityAt: acceptedAt,
+                decisionNote: NormalizeDecisionNote(request.DecisionNote),
+                repositorySnapshot: snapshot);
+
+            await ReplaceSessionAsync(sessions, acceptedSession);
+            return acceptedSession.ToSummary();
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    public async Task<ExecutionSessionSummary> RejectAsync(Guid sessionId, ExecutionAcceptanceRequest request)
+    {
+        await gate.WaitAsync();
+        try
+        {
+            var sessions = (await sessionStore.LoadAsync()).ToList();
+            var session = sessions.FirstOrDefault(session => session.Id == sessionId)
+                ?? throw new KeyNotFoundException($"Execution session was not found: {sessionId}");
+            if (session.RepositoryState != RepositoryExecutionState.AwaitingAcceptance)
+            {
+                throw new InvalidOperationException("Execution can only be rejected while awaiting acceptance.");
+            }
+
+            var rejectedAt = DateTimeOffset.UtcNow;
+            var rejectedSession = session.WithDecision(
+                RepositoryExecutionState.Ready,
+                rejectedAt: rejectedAt,
+                lastActivityAt: rejectedAt,
+                decisionNote: NormalizeDecisionNote(request.DecisionNote));
+
+            await ReplaceSessionAsync(sessions, rejectedSession);
+            return rejectedSession.ToSummary();
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
     private static bool IsActiveRepositoryState(RepositoryExecutionState state)
     {
         return state == RepositoryExecutionState.Executing;
@@ -227,6 +298,11 @@ public sealed class ExecutionSessionService(
         }
 
         await sessionStore.SaveAsync(sessions);
+    }
+
+    private static string? NormalizeDecisionNote(string? note)
+    {
+        return string.IsNullOrWhiteSpace(note) ? null : note.Trim();
     }
 }
 
@@ -252,6 +328,9 @@ file static class ExecutionSessionMutation
             MilestonePath = session.MilestonePath,
             StartedAt = session.StartedAt,
             CompletedAt = completedAt ?? session.CompletedAt,
+            AcceptedAt = session.AcceptedAt,
+            RejectedAt = session.RejectedAt,
+            DecisionNote = session.DecisionNote,
             LastActivityAt = lastActivityAt ?? session.LastActivityAt,
             State = state,
             RepositoryState = repositoryState,
@@ -265,6 +344,43 @@ file static class ExecutionSessionMutation
             PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,
             HandoffPath = session.HandoffPath,
             FailureReason = failureReason ?? session.FailureReason,
+            Events = session.Events
+        };
+    }
+
+    public static ExecutionSession WithDecision(
+        this ExecutionSession session,
+        RepositoryExecutionState repositoryState,
+        DateTimeOffset? acceptedAt = null,
+        DateTimeOffset? rejectedAt = null,
+        DateTimeOffset? lastActivityAt = null,
+        string? decisionNote = null,
+        ExecutionRepositorySnapshot? repositorySnapshot = null)
+    {
+        return new ExecutionSession
+        {
+            Id = session.Id,
+            RepositoryId = session.RepositoryId,
+            RepositoryPath = session.RepositoryPath,
+            MilestonePath = session.MilestonePath,
+            StartedAt = session.StartedAt,
+            CompletedAt = session.CompletedAt,
+            AcceptedAt = acceptedAt ?? session.AcceptedAt,
+            RejectedAt = rejectedAt ?? session.RejectedAt,
+            DecisionNote = decisionNote ?? session.DecisionNote,
+            LastActivityAt = lastActivityAt ?? session.LastActivityAt,
+            State = session.State,
+            RepositoryState = repositoryState,
+            ProviderName = session.ProviderName,
+            ProviderExecutablePath = session.ProviderExecutablePath,
+            ProviderProcessId = session.ProviderProcessId,
+            ProviderStartedAt = session.ProviderStartedAt,
+            PromptMetadata = session.PromptMetadata,
+            RepositorySnapshot = repositorySnapshot ?? session.RepositorySnapshot,
+            PreviousHandoffContent = session.PreviousHandoffContent,
+            PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,
+            HandoffPath = session.HandoffPath,
+            FailureReason = session.FailureReason,
             Events = session.Events
         };
     }

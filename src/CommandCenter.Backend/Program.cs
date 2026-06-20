@@ -336,6 +336,42 @@ public static class Program
 
             return Results.Empty;
         });
+        app.MapPost("/api/execution-sessions/{sessionId:guid}/accept", async (
+            Guid sessionId,
+            ExecutionAcceptanceRequest request,
+            IExecutionSessionService executionSessionService) =>
+        {
+            try
+            {
+                return Results.Ok(await executionSessionService.AcceptAsync(sessionId, request));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+        app.MapPost("/api/execution-sessions/{sessionId:guid}/reject", async (
+            Guid sessionId,
+            ExecutionAcceptanceRequest request,
+            IExecutionSessionService executionSessionService) =>
+        {
+            try
+            {
+                return Results.Ok(await executionSessionService.RejectAsync(sessionId, request));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
         app.MapPost("/api/repositories/{repositoryId:guid}/refresh", async (
             Guid repositoryId,
             IRepositoryProjectionService projectionService) =>

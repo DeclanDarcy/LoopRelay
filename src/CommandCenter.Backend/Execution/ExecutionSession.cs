@@ -16,6 +16,12 @@ public sealed class ExecutionSession
 
     public TimeSpan? Duration => CalculateDuration(StartedAt, CompletedAt);
 
+    public DateTimeOffset? AcceptedAt { get; init; }
+
+    public DateTimeOffset? RejectedAt { get; init; }
+
+    public string? DecisionNote { get; init; }
+
     public DateTimeOffset? LastActivityAt { get; init; }
 
     public ExecutionSessionState State { get; init; } = ExecutionSessionState.Created;
@@ -55,6 +61,9 @@ public sealed class ExecutionSession
             StartedAt = StartedAt,
             CompletedAt = CompletedAt,
             Duration = Duration,
+            AcceptedAt = AcceptedAt,
+            RejectedAt = RejectedAt,
+            DecisionNote = DecisionNote,
             LastActivityAt = LastActivityAt,
             ProviderName = ProviderName,
             ProviderExecutablePath = ProviderExecutablePath,
