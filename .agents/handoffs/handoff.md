@@ -2,48 +2,42 @@
 
 ## Slice Summary
 
-- Implemented Epic 2 M1 execution context resolution.
-- Added deterministic context package models: `ExecutionContext`, `ExecutionContextArtifact`, `ExecutionContextDiagnostics`, `ExecutionContextArtifactDiagnostic`, `ExecutionContextSizePolicy`, `ExecutionRepositorySnapshot`, and `RepositoryDirtyState`.
-- Implemented `ExecutionContextService` behind `IExecutionContextService`.
-- Added fakeable Git snapshot support through `IProcessRunner`, `ProcessRunner`, and `GitService.GetSnapshotAsync`.
-- Added `GET /api/repositories/{repositoryId}/execution/context?milestonePath=...`.
-- Added `preview_execution_context` Tauri command.
-- Added React milestone selector, `Build Execution Context` action, and context diagnostics panel.
-- Kept execution launch unavailable; no provider process, monitoring, acceptance, commit, or push behavior was added.
-- Updated architecture docs and marked M1 complete.
+- Continued Epic 2 M2A.1 backend execution session integration.
+- Implemented persisted execution session storage with `IExecutionSessionStore` and `FileSystemExecutionSessionStore`.
+- Expanded `ExecutionSession` and `ExecutionSessionSummary` with provider metadata, repository snapshot, prior handoff snapshot, completion/activity timestamps, and failure reason.
+- Replaced the placeholder `ExecutionSessionService` with launch, duplicate-active-session protection, active-session lookup, session lookup, context validation, fake-provider start, and provider-failure recording.
+- Added `ExecutionStartRequest`, `FakeExecutionProvider`, and provider `StartAsync` contract.
+- Added backend endpoints:
+  - `POST /api/repositories/{repositoryId}/execution/start`
+  - `GET /api/repositories/{repositoryId}/execution/active`
+  - `GET /api/execution-sessions/{sessionId}`
+- Registered `FileSystemExecutionSessionStore` and `FakeExecutionProvider` for the M2A phase; real Codex launch remains deferred.
+- Updated M2 checklist to mark M2A backend work, tests, and exit criteria complete while leaving UI and M2B open.
 
 ## Files Changed
 
-- `.agents/milestones/m1-context-resolution.md`
+- `.agents/milestones/m2-session-integration.md`
 - `.agents/handoffs/handoff.md`
-- `.agents/handoffs/handoff.0001.md`
-- `docs/architecture.md`
-- `src/CommandCenter.Backend/Configuration/ApplicationConfigurationStore.cs`
+- `.agents/handoffs/handoff.0002.md`
 - `src/CommandCenter.Backend/Execution/*`
 - `src/CommandCenter.Backend/Program.cs`
-- `src/CommandCenter.Shell/Cargo.toml`
-- `src/CommandCenter.Shell/src/main.rs`
-- `src/CommandCenter.UI/src/App.tsx`
-- `src/CommandCenter.UI/src/App.css`
-- `src/CommandCenter.UI/src/devTauriMock.ts`
-- `tests/CommandCenter.Backend.Tests/ExecutionContextServiceTests.cs`
-- `tests/CommandCenter.Backend.Tests/GitServiceTests.cs`
+- `tests/CommandCenter.Backend.Tests/ExecutionSessionServiceTests.cs`
+- `tests/CommandCenter.Backend.Tests/ArtifactRotationServiceTests.cs`
+- `tests/CommandCenter.Backend.Tests/RepositoryProjectionServiceTests.cs`
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 56 tests.
-- `npm run build --prefix src/CommandCenter.UI` passed.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 66 tests.
 - `dotnet build CommandCenter.slnx` passed with 0 warnings and 0 errors.
-- `cargo build --manifest-path src/CommandCenter.Shell/Cargo.toml` passed.
 
 ## High-Leverage Decisions
 
-- Context preview returns structured diagnostics even when validation fails; preview remains inspectable while future launch is blocked.
-- Git access is isolated behind `IProcessRunner`; tests use fakes and do not shell out to real Git.
-- Dirty repository state is captured and displayed but does not block context preview.
-- M1 keeps launch unavailable. The UI labels non-blocked context as unavailable until M2 instead of implying execution can start.
+- Provider start failure persists a failed session with diagnostic details but returns the repository execution state to `Ready`, so a failed fake start does not block the next execution attempt.
+- Successful M2A starts intentionally remain in `Executing`; completion, monitoring, and handoff validation are still owned by later milestones.
+- The default registered provider is the fake provider during M2A so launch APIs can be certified without accidentally invoking Codex.
+- The previous current handoff is captured in the session before provider start, setting up M4 preservation without requiring the provider to understand historical numbering.
 
 ## Recommended Next Slice
 
-- Begin M2 execution session integration with session store, start endpoint, duplicate active-session protection, prompt construction, and fake provider workflow.
-- Keep Codex process launch and restart/orphan recovery as a later M2 slice after fake-provider session lifecycle is certified.
+- Implement M2A UI wiring: enable `Start Execution` only after a selected milestone has non-blocked context diagnostics and no active session, call the start endpoint, display the returned session metadata, and refresh dashboard/workspace execution state.
+- After UI launch flow is certified, proceed to M2B prompt construction and real Codex provider process launch.

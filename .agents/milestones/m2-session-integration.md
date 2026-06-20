@@ -10,18 +10,18 @@ Implement M2 in two internal phases so session persistence is stable before real
 
 ### Backend Work
 
-- [ ] Implement `ExecutionSessionService`.
-- [ ] Implement `IExecutionSessionStore`.
-- [ ] Implement a deterministic fake execution provider for tests and local certification.
-- [ ] Add launch and active session endpoints.
-- [ ] Validate context before launch, including context hard limits.
-- [ ] Allow launch from dirty repositories only after capturing the pre-execution dirty snapshot.
-- [ ] Capture previous current handoff snapshot before provider start.
-- [ ] Enforce one active session per repository.
-- [ ] Persist session records.
-- [ ] Transition repository execution state from `Ready` to `Executing`.
-- [ ] Handle context failure, hard-limit failure, fake provider start failure, and duplicate execution failure.
-- [ ] Do not launch Codex yet.
+- [x] Implement `ExecutionSessionService`.
+- [x] Implement `IExecutionSessionStore`.
+- [x] Implement a deterministic fake execution provider for tests and local certification.
+- [x] Add launch and active session endpoints.
+- [x] Validate context before launch, including context hard limits.
+- [x] Allow launch from dirty repositories only after capturing the pre-execution dirty snapshot.
+- [x] Capture previous current handoff snapshot before provider start.
+- [x] Enforce one active session per repository.
+- [x] Persist session records.
+- [x] Transition repository execution state from `Ready` to `Executing`.
+- [x] Handle context failure, hard-limit failure, fake provider start failure, and duplicate execution failure.
+- [x] Do not launch Codex yet.
 
 ### UI Work
 
@@ -32,22 +32,22 @@ Implement M2 in two internal phases so session persistence is stable before real
 
 ### Tests
 
-- [ ] Ready repository launches with fake provider.
-- [ ] Missing plan blocks launch.
-- [ ] Missing milestone blocks launch.
-- [ ] Context hard-limit failure blocks launch.
-- [ ] Dirty repository launch succeeds and stores the pre-execution dirty snapshot.
-- [ ] Duplicate launch blocks.
-- [ ] Fake provider failure leaves repository ready and records failure details.
-- [ ] Active session restores after session store reload.
-- [ ] Launch endpoint returns session metadata.
+- [x] Ready repository launches with fake provider.
+- [x] Missing plan blocks launch.
+- [x] Missing milestone blocks launch.
+- [x] Context hard-limit failure blocks launch.
+- [x] Dirty repository launch succeeds and stores the pre-execution dirty snapshot.
+- [x] Duplicate launch blocks.
+- [x] Fake provider failure leaves repository ready and records failure details.
+- [x] Active session restores after session store reload.
+- [x] Launch endpoint returns session metadata.
 
 ### Exit Criteria
 
-- [ ] Command Center can create and persist a fresh execution session through a fake provider.
-- [ ] Active session state persists across backend restart.
-- [ ] Duplicate execution is blocked.
-- [ ] Real provider process launch is still deferred.
+- [x] Command Center can create and persist a fresh execution session through a fake provider.
+- [x] Active session state persists across backend restart.
+- [x] Duplicate execution is blocked.
+- [x] Real provider process launch is still deferred.
 
 ## M2B - Codex Provider, Prompt Construction, And Process Launch
 

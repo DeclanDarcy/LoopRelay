@@ -23,10 +23,11 @@ public static class Program
         builder.Services.AddSingleton<IArtifactRotationService, ArtifactRotationService>();
         builder.Services.AddSingleton<IPlanningService, PlanningService>();
         builder.Services.AddSingleton<IExecutionContextService, ExecutionContextService>();
+        builder.Services.AddSingleton<IExecutionSessionStore, FileSystemExecutionSessionStore>();
         builder.Services.AddSingleton<IExecutionSessionService, ExecutionSessionService>();
         builder.Services.AddSingleton<IExecutionMonitoringService, ExecutionMonitoringService>();
         builder.Services.AddSingleton<IHandoffService, HandoffService>();
-        builder.Services.AddSingleton<IExecutionProvider, NoopExecutionProvider>();
+        builder.Services.AddSingleton<IExecutionProvider, FakeExecutionProvider>();
         builder.Services.AddSingleton<IProcessRunner, ProcessRunner>();
         builder.Services.AddSingleton<IGitService, GitService>();
         builder.Services.AddSingleton<IRepositoryProjectionService, RepositoryProjectionService>();
@@ -234,6 +235,42 @@ public static class Program
             {
                 return Results.BadRequest(new { error = exception.Message });
             }
+        });
+        app.MapPost("/api/repositories/{repositoryId:guid}/execution/start", async (
+            Guid repositoryId,
+            ExecutionStartRequest request,
+            IExecutionSessionService executionSessionService) =>
+        {
+            try
+            {
+                return Results.Ok(await executionSessionService.StartAsync(repositoryId, request));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+        app.MapGet("/api/repositories/{repositoryId:guid}/execution/active", async (
+            Guid repositoryId,
+            IExecutionSessionService executionSessionService) =>
+        {
+            var session = await executionSessionService.GetActiveSessionAsync(repositoryId);
+            return session is null ? Results.NotFound(new { error = "No active execution session." }) : Results.Ok(session);
+        });
+        app.MapGet("/api/execution-sessions/{sessionId:guid}", async (
+            Guid sessionId,
+            IExecutionSessionService executionSessionService) =>
+        {
+            var session = await executionSessionService.GetSessionAsync(sessionId);
+            return session is null ? Results.NotFound(new { error = "Execution session was not found." }) : Results.Ok(session);
         });
         app.MapPost("/api/repositories/{repositoryId:guid}/refresh", async (
             Guid repositoryId,

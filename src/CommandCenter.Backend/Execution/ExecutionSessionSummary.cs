@@ -12,5 +12,11 @@ public sealed class ExecutionSessionSummary
 
     public DateTimeOffset? StartedAt { get; init; }
 
+    public DateTimeOffset? CompletedAt { get; init; }
+
     public DateTimeOffset? LastActivityAt { get; init; }
+
+    public string ProviderName { get; init; } = string.Empty;
+
+    public string? FailureReason { get; init; }
 }

@@ -165,7 +165,7 @@ public sealed class RepositoryProjectionServiceTests
             repositoryService,
             new ArtifactService(new FileSystemArtifactStore()),
             new PlanningService(new FileSystemArtifactStore()),
-            new ExecutionSessionService());
+            new ReadyExecutionSessionService());
     }
 
     private static async Task WriteAsync(Repository repository, string relativePath, string content)
@@ -192,5 +192,28 @@ public sealed class RepositoryProjectionServiceTests
         var directory = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         return directory;
+    }
+
+    private sealed class ReadyExecutionSessionService : IExecutionSessionService
+    {
+        public Task<RepositoryExecutionState> GetRepositoryStateAsync(Guid repositoryId)
+        {
+            return Task.FromResult(RepositoryExecutionState.Ready);
+        }
+
+        public Task<ExecutionSessionSummary?> GetActiveSessionAsync(Guid repositoryId)
+        {
+            return Task.FromResult<ExecutionSessionSummary?>(null);
+        }
+
+        public Task<ExecutionSessionSummary> StartAsync(Guid repositoryId, ExecutionStartRequest request)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<ExecutionSession?> GetSessionAsync(Guid sessionId)
+        {
+            return Task.FromResult<ExecutionSession?>(null);
+        }
     }
 }

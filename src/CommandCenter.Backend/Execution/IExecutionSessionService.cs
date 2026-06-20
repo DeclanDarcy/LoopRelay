@@ -5,4 +5,8 @@ public interface IExecutionSessionService
     Task<RepositoryExecutionState> GetRepositoryStateAsync(Guid repositoryId);
 
     Task<ExecutionSessionSummary?> GetActiveSessionAsync(Guid repositoryId);
+
+    Task<ExecutionSessionSummary> StartAsync(Guid repositoryId, ExecutionStartRequest request);
+
+    Task<ExecutionSession?> GetSessionAsync(Guid sessionId);
 }

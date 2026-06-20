@@ -22,5 +22,27 @@ public sealed class ExecutionSession
 
     public string ProviderName { get; init; } = string.Empty;
 
+    public ExecutionRepositorySnapshot? RepositorySnapshot { get; init; }
+
+    public string? PreviousHandoffContent { get; init; }
+
+    public DateTimeOffset? PreviousHandoffCapturedAt { get; init; }
+
     public string? FailureReason { get; init; }
+
+    public ExecutionSessionSummary ToSummary()
+    {
+        return new ExecutionSessionSummary
+        {
+            SessionId = Id,
+            State = State,
+            RepositoryState = RepositoryState,
+            MilestonePath = MilestonePath,
+            StartedAt = StartedAt,
+            CompletedAt = CompletedAt,
+            LastActivityAt = LastActivityAt,
+            ProviderName = ProviderName,
+            FailureReason = FailureReason
+        };
+    }
 }

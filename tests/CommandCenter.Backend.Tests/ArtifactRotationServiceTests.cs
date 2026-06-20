@@ -106,7 +106,7 @@ public sealed class ArtifactRotationServiceTests
             repositoryService,
             artifactService,
             new PlanningService(new FileSystemArtifactStore()),
-            new ExecutionSessionService());
+            new ReadyExecutionSessionService());
 
         var beforeRotation = await projectionService.GetWorkspaceAsync(repository.Id);
         await rotationService.RotateCurrentHandoffAsync(repository);
@@ -195,6 +195,29 @@ public sealed class ArtifactRotationServiceTests
         public Task<IReadOnlyList<string>> ListAsync(string path, string searchPattern)
         {
             return innerStore.ListAsync(path, searchPattern);
+        }
+    }
+
+    private sealed class ReadyExecutionSessionService : IExecutionSessionService
+    {
+        public Task<RepositoryExecutionState> GetRepositoryStateAsync(Guid repositoryId)
+        {
+            return Task.FromResult(RepositoryExecutionState.Ready);
+        }
+
+        public Task<ExecutionSessionSummary?> GetActiveSessionAsync(Guid repositoryId)
+        {
+            return Task.FromResult<ExecutionSessionSummary?>(null);
+        }
+
+        public Task<ExecutionSessionSummary> StartAsync(Guid repositoryId, ExecutionStartRequest request)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<ExecutionSession?> GetSessionAsync(Guid sessionId)
+        {
+            return Task.FromResult<ExecutionSession?>(null);
         }
     }
 }

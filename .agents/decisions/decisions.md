@@ -2,17 +2,19 @@
 
 ## Newly Authorized Decisions
 
-- M1 is accepted as a clean completion aligned with the Epic 2 sequencing.
-- Execution context resolution is accepted as a first-class backend capability that remains deterministic, reviewable, and separate from launch authority.
-- The Epic 2 layering remains authoritative: M0 architecture, M1 context resolution, M2 session lifecycle, M3 monitoring, M4 handoff, M5 acceptance, M6 Git lifecycle, M7 unified workspace, and M8 repeatable execution loop.
-- M2 should be split into M2A and M2B.
-- M2A should prove session store, state transitions, active session rules, and fake provider behavior before any real Codex process launch.
-- M2B should add prompt construction, real provider integration, process launch, and restart recovery after the session model is proven.
-- `ExecutionSessionService` must own duplicate active-session protection as a backend invariant: one repository may have only one active execution session.
-- Execution session persistence is now the critical path for downstream launch, monitoring, recovery, handoff validation, acceptance, commit, and push behavior.
-- Prompt construction should be treated as a backend contract, preferably through `ExecutionPromptBuilder` and `ExecutionPrompt`, before provider invocation.
-- Recovery semantics should stay within the existing session states: `Created`, `Executing`, `Completed`, `Failed`, and `Cancelled`; avoid adding intermediate states such as unknown, recovering, or reconnecting.
+- M2A.1 is accepted as correctly scoped session lifecycle skeleton work.
+- Provider start failure should continue to record a failed historical session while returning the repository workflow state to `Ready`.
+- The next slice is authorized as M2A.2: Execution Launch UX.
+- M2A.2 should stay UI-focused and should not start Codex integration.
+- Backend work in M2A.2 should avoid major architecture additions; only session projection refinements or launch validation DTO cleanup are authorized if discovered during UI integration.
+- Tauri should add thin HTTP bridge commands for `start_execution`, `get_active_execution`, and `get_execution_session` if they are not already present.
+- React launch authority should be gated by planning readiness, selected milestone, built context, no validation errors, no hard-limit failure, and no active session.
+- Workspace projection should show session id, provider, started time, execution state, and repository execution state after launch.
+- Dashboard projection should show executing status, active session id, and last updated/last activity metadata where available.
+- Before M2B, add certification that an application restart or service reload restores session-store-backed dashboard projection showing the repository still executing.
+- Do not add execution events, monitoring service behavior, SSE, or stdout/stderr capture in M2A.2.
+- Do not add prompt construction, Codex provider, process launch, PID tracking, or restart recovery until M2B.
 
 ## Next Authorized Slice
 
-- Proceed into M2A.1: session store, fake provider, start endpoint, active session endpoint, session lookup endpoint, and backend tests for launch, duplicate launch blocking, store reload, fake provider failure, and context-validation launch blocking.
+- Proceed into M2A.2: Tauri execution commands, React start-execution workflow, launch gating from context diagnostics, active execution summary display, dashboard/workspace execution indicators, session detail loading, and persistence-backed UI restoration after refresh/restart.
