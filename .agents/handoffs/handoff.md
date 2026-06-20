@@ -2,22 +2,33 @@
 
 ## New State This Slice
 
-- Continued M5 Repository Workspace Experience certification work.
-- Verified the existing implementation still passes:
-  - `dotnet test CommandCenter.slnx` from the repository root: 42 backend tests passed.
+- Continued M5 Repository Workspace Experience certification and polish work.
+- Changed `src/CommandCenter.UI/src/App.tsx` so removing a repository also clears that repository's remembered artifact selection from the per-repository selection cache.
+- Changed `src/CommandCenter.UI/src/devTauriMock.ts` so the workspace certification mock now includes `PlanOnlyRepo` and correctly projects `MissingMilestones` when a repository has `plan.md` but no milestone files.
+- Verified checks after the UI changes:
   - `npm run lint` from `src/CommandCenter.UI`.
   - `npm run build` from `src/CommandCenter.UI`.
+  - `dotnet test CommandCenter.slnx` from the repository root: 42 backend tests passed.
   - `cargo check` from `src/CommandCenter.Shell`.
-- Performed a native shell smoke launch with `cargo run` from `src/CommandCenter.Shell`.
-- Confirmed the native shell started the .NET backend sidecar on `http://127.0.0.1:5000`.
-- Confirmed the live sidecar responded to:
-  - `GET /api/ping` with `Pong`.
-  - `GET /api/repositories` with dashboard projection JSON.
-- Stopped the launched `command_center_shell` and `CommandCenter.Backend` processes after the smoke check.
-- Archived the previous handoff as `.agents/handoffs/handoff.0015.md`.
+- Ran a browser-based M5 mock workspace pass at `http://127.0.0.1:5173/?mock=workspace-certification`.
+- Verified rendered dashboard/workspace behavior for:
+  - `Ready`.
+  - `MissingPlan`.
+  - `MissingMilestones`.
+  - Explicit missing artifact categories.
+  - Artifact edit/save preview update.
+  - Current handoff rotation showing `handoff.0002.md` while preserving `handoff.0001.md`.
+  - Current decisions rotation showing `decisions.0001.md`.
+  - Removing a repository with a selected artifact clears stale editor content and selects the next repository.
+- Stopped the Vite dev server after verification.
+- Archived the previous handoff as `.agents/handoffs/handoff.0016.md`.
 
 ## Immediate Gaps
 
-- Native launch and sidecar startup are smoke-tested.
-- Full native Tauri desktop certification is still not complete because this slice did not interact through the desktop window for repository switching, artifact edit/save, refresh, rotation, removal, or restart recovery.
-- No production code changes were made in this slice.
+- Full native Tauri desktop certification is still not complete.
+- This slice verified rendered React behavior through the dev Tauri mock, not the native directory picker or real backend sidecar from inside the desktop window.
+- Current working tree has intentional unstaged changes in:
+  - `src/CommandCenter.UI/src/App.tsx`
+  - `src/CommandCenter.UI/src/devTauriMock.ts`
+  - `.agents/handoffs/handoff.md`
+  - `.agents/handoffs/handoff.0016.md`

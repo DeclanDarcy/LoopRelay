@@ -78,6 +78,12 @@ const emptyRepository: Repository = {
   path: 'C:\\workspace\\EmptyRepo',
 }
 
+const planOnlyRepository: Repository = {
+  id: 'repo-plan-only',
+  name: 'PlanOnlyRepo',
+  path: 'C:\\workspace\\PlanOnlyRepo',
+}
+
 const artifacts = {
   plan: artifact('.agents/plan.md', 'plan.md', 'Plan', 'Plan', 'Current'),
   context: artifact(
@@ -116,10 +122,16 @@ function artifact(
 }
 
 function createWorkspace(repository: Repository, inventory: ArtifactInventory): Workspace {
+  const readiness = inventory.plan
+    ? inventory.milestones.length > 0
+      ? 'Ready'
+      : 'MissingMilestones'
+    : 'MissingPlan'
+
   return {
     repository,
     availability: 'Available',
-    readiness: inventory.plan && inventory.milestones.length > 0 ? 'Ready' : 'MissingPlan',
+    readiness,
     artifactInventory: inventory,
     milestoneCount: inventory.milestones.length,
     hasPlan: inventory.plan !== null,
@@ -131,7 +143,7 @@ function createWorkspace(repository: Repository, inventory: ArtifactInventory): 
 
 function createInitialState(): MockState {
   return {
-    repositories: [alphaRepository, emptyRepository],
+    repositories: [alphaRepository, emptyRepository, planOnlyRepository],
     workspaces: {
       [alphaRepository.id]: createWorkspace(alphaRepository, {
         plan: artifacts.plan,
@@ -144,6 +156,15 @@ function createInitialState(): MockState {
       }),
       [emptyRepository.id]: createWorkspace(emptyRepository, {
         plan: null,
+        operationalContext: null,
+        milestones: [],
+        currentHandoff: null,
+        historicalHandoffs: [],
+        currentDecisions: null,
+        historicalDecisions: [],
+      }),
+      [planOnlyRepository.id]: createWorkspace(planOnlyRepository, {
+        plan: artifacts.plan,
         operationalContext: null,
         milestones: [],
         currentHandoff: null,

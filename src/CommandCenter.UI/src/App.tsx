@@ -360,6 +360,7 @@ function App() {
     try {
       await invoke('remove_repository', { repositoryId: repository.id })
       setMessage('Repository registration removed.')
+      delete selectedArtifactPathsByRepository.current[repository.id]
       setWorkspace(null)
       setSelectedArtifactPath(null)
       await loadRepositories()

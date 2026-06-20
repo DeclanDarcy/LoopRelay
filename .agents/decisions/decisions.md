@@ -2,11 +2,12 @@
 
 ## Newly Authorized Decisions
 
-- The native runtime path is considered substantially de-risked because `cargo run` exercised the actual Tauri shell, backend sidecar startup, HTTP connectivity, repository API access, and shutdown cleanup.
-- The remaining M5 uncertainty is behavioral rather than infrastructural.
-- M5 remains categorized as certification, polish, and acceptance work rather than implementation work.
-- The next native certification pass should be one continuous desktop workflow rather than isolated behavior checks.
-- The native certification workflow should cover repository registration, repository switching, artifact selection restoration, artifact edit/save, refresh persistence, handoff rotation, decision rotation, repository removal, and restart recovery.
-- The highest-value M5-specific edge case is removing a repository that has a remembered selected artifact, verifying no orphaned selection state and no stale editor content remain.
-- If the full native desktop certification pass succeeds without defects, effort should shift immediately to Epic 1 acceptance closure.
-- Additional workspace mechanics should be avoided before formal acceptance unless certification discovers a defect.
+- The repository removal selection-memory cleanup is accepted as the correct M5 fix.
+- The M5 workspace certification mock should cover all readiness states: `Ready`, `MissingPlan`, and `MissingMilestones`.
+- `PlanOnlyRepo -> MissingMilestones` is accepted as useful browser certification coverage.
+- The current authority chain remains correct: filesystem state flows through backend services into `ArtifactInventory`, then `RepositoryWorkspaceProjection`, then React.
+- There is no current evidence of UI-derived readiness, artifact state, or lifecycle state.
+- The browser certification harness now covers the core M5 behavioral surface sufficiently for workflow-level confidence.
+- Remaining M5 uncertainty is platform-specific native desktop behavior, not workspace logic.
+- The next and final M5 certification slice should be a single uninterrupted native Tauri desktop pass covering repository registration, switching, selection restore, artifact edit/save/refresh persistence, handoff and decision rotation, repository removal cleanup, quit/restart, and workspace recovery.
+- Do not add additional workspace mechanics unless final native desktop certification uncovers a concrete defect.
