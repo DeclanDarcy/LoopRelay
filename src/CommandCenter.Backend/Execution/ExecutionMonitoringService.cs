@@ -47,6 +47,20 @@ public sealed class ExecutionMonitoringService(
         return AppendEventAsync(sessionId, ExecutionEventType.Recovery, message, DateTimeOffset.UtcNow);
     }
 
+    public Task RecordCancellationAsync(Guid sessionId, string reason)
+    {
+        return AppendEventAsync(
+            sessionId,
+            ExecutionEventType.Cancellation,
+            reason,
+            activityAt: DateTimeOffset.UtcNow,
+            mutateSession: session => CopySession(
+                session,
+                state: ExecutionSessionState.Cancelled,
+                repositoryState: RepositoryExecutionState.Cancelled,
+                completedAt: DateTimeOffset.UtcNow));
+    }
+
     public async Task<ExecutionStatus?> GetStatusAsync(Guid sessionId)
     {
         var session = (await sessionStore.LoadAsync()).FirstOrDefault(session => session.Id == sessionId);
@@ -314,6 +328,11 @@ public sealed class ExecutionMonitoringService(
         public Task OnProviderExitedAsync(int? exitCode)
         {
             return monitoringService.RecordProviderExitAsync(sessionId, exitCode);
+        }
+
+        public Task OnProviderCancelledAsync(string reason)
+        {
+            return monitoringService.RecordCancellationAsync(sessionId, reason);
         }
     }
 }

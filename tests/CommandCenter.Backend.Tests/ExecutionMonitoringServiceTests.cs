@@ -71,6 +71,47 @@ public sealed class ExecutionMonitoringServiceTests
     }
 
     [Fact]
+    public async Task ProviderCancellationRecordsCancellationEventAndState()
+    {
+        var startedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
+        var store = await CreateStoreWithSessionAsync(startedAt);
+        var session = (await store.LoadAsync()).Single();
+        var monitoringService = new ExecutionMonitoringService(store);
+        var observer = monitoringService.CreateProviderObserver(session.Id);
+
+        await observer.OnProviderCancelledAsync("Provider cancellation was requested.");
+        var status = await monitoringService.GetStatusAsync(session.Id);
+        var events = await monitoringService.GetEventsAsync(session.Id);
+
+        Assert.NotNull(status);
+        Assert.Equal(ExecutionSessionState.Cancelled, status.State);
+        Assert.Equal(RepositoryExecutionState.Cancelled, status.RepositoryState);
+        Assert.NotNull(status.CompletedAt);
+        Assert.True(status.LastActivityAt > startedAt);
+        var cancellationEvent = Assert.Single(events);
+        Assert.Equal(ExecutionEventType.Cancellation, cancellationEvent.Type);
+        Assert.Equal("Provider cancellation was requested.", cancellationEvent.Message);
+    }
+
+    [Fact]
+    public async Task CancellationStatusSurvivesStoreReload()
+    {
+        var storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");
+        var store = await CreateStoreWithSessionAsync(storePath: storePath);
+        var session = (await store.LoadAsync()).Single();
+        var monitoringService = new ExecutionMonitoringService(store);
+
+        await monitoringService.CreateProviderObserver(session.Id).OnProviderCancelledAsync("cancelled");
+        var reloadedMonitoringService = new ExecutionMonitoringService(new FileSystemExecutionSessionStore(storePath));
+        var status = await reloadedMonitoringService.GetStatusAsync(session.Id);
+
+        Assert.NotNull(status);
+        Assert.Equal(ExecutionSessionState.Cancelled, status.State);
+        Assert.Equal(RepositoryExecutionState.Cancelled, status.RepositoryState);
+        Assert.Equal(ExecutionEventType.Cancellation, Assert.Single(status.RecentEvents).Type);
+    }
+
+    [Fact]
     public async Task EventHistoryIsBoundedByRetentionPolicy()
     {
         var store = await CreateStoreWithSessionAsync();

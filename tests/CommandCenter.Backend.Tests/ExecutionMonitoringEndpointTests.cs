@@ -113,6 +113,60 @@ public sealed class ExecutionMonitoringEndpointTests
     }
 
     [Fact]
+    public async Task StatusEndpointProjectsCancelledSession()
+    {
+        var storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");
+        var store = await CreateStoreWithSessionAsync(storePath);
+        var session = (await store.LoadAsync()).Single();
+        var monitoringService = new ExecutionMonitoringService(store);
+
+        await monitoringService.CreateProviderObserver(session.Id).OnProviderCancelledAsync("Provider cancellation was requested.");
+
+        await using var app = CreateApp(storePath);
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+
+        using var client = new HttpClient();
+        var response = await client.GetAsync(app.Urls.Single() + $"/api/execution-sessions/{session.Id}/status");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var status = await ReadJsonAsync<ExecutionStatus>(response);
+        Assert.NotNull(status);
+        Assert.Equal(ExecutionSessionState.Cancelled, status.State);
+        Assert.Equal(RepositoryExecutionState.Cancelled, status.RepositoryState);
+        var cancellationEvent = Assert.Single(status.RecentEvents);
+        Assert.Equal(ExecutionEventType.Cancellation, cancellationEvent.Type);
+    }
+
+    [Fact]
+    public async Task EventsStreamEndpointStreamsCancellationEvent()
+    {
+        var storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");
+        var store = await CreateStoreWithSessionAsync(storePath);
+        var session = (await store.LoadAsync()).Single();
+        var monitoringService = new ExecutionMonitoringService(store);
+        await monitoringService.CreateProviderObserver(session.Id).OnProviderCancelledAsync("Provider cancellation was requested.");
+
+        await using var app = CreateApp(storePath);
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+
+        using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var client = new HttpClient();
+        using var response = await client.GetAsync(
+            app.Urls.Single() + $"/api/execution-sessions/{session.Id}/events/stream",
+            HttpCompletionOption.ResponseHeadersRead,
+            cancellationTokenSource.Token);
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationTokenSource.Token);
+        using var reader = new StreamReader(stream);
+
+        var cancellationEvent = Assert.Single(await ReadSseEventsAsync(reader, 1, cancellationTokenSource.Token));
+
+        Assert.Equal(ExecutionEventType.Cancellation, cancellationEvent.Type);
+        Assert.Equal("Provider cancellation was requested.", cancellationEvent.Message);
+    }
+
+    [Fact]
     public async Task StatusAndEventsEndpointsReturnNotFoundForUnknownSession()
     {
         var storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");

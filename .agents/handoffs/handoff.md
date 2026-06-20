@@ -2,41 +2,47 @@
 
 ## Slice Summary
 
-- Continued Epic 2 M3B.2: React execution monitoring display.
-- Added React-side `ExecutionStatus` and `ExecutionEvent` models.
-- Added `EventSource` streaming from `/api/execution-sessions/{sessionId}/events/stream`.
-- The execution session panel now renders session metadata from `ExecutionStatus` and displays raw execution events chronologically with sequence, timestamp, event type, and message.
-- Event history is retained in React state by session id so switching repositories and returning preserves the visible feed.
-- Dashboard cards now update execution state and last activity from the same `ExecutionStatus` state used by the workspace.
-- Added backend CORS for Vite dev origins and the Tauri production origin so browser SSE can connect to the sidecar.
-- Added Tauri `get_backend_url` and preserved full execution summary metadata through shell serialization.
-- Updated the dev Tauri mock to return `mock` for `get_backend_url`.
-- Updated M3 checklist to mark M3B.2 UI streaming/display/dashboard/preservation work complete.
+- Completed Epic 2 M3C monitoring lifecycle edge cases.
+- Added explicit provider reattach capability to `IExecutionProvider`: `SupportsReattach` and `TryReattachAsync`.
+- `ExecutionSessionService.RecoverAsync` now keeps restarted executing sessions active only when provider reattach succeeds; otherwise it preserves the existing orphan-failure behavior.
+- Codex provider is explicitly `SupportsReattach = false`; fake provider can simulate supported/successful reattach for certification.
+- Added first-class cancellation observation through `ExecutionEventType.Cancellation`, `RecordCancellationAsync`, and `IExecutionProviderObserver.OnProviderCancelledAsync`.
+- Cancellation now sets session state to `Cancelled`, repository state to `Cancelled`, updates completion/activity timestamps, persists event history, and is visible through status and SSE endpoints.
+- Marked all remaining M3 checklist items complete.
 
 ## Files Changed
 
 - `.agents/milestones/m3-monitoring-observability.md`
-- `.agents/handoffs/handoff.0011.md`
+- `.agents/handoffs/handoff.0012.md`
 - `.agents/handoffs/handoff.md`
-- `src/CommandCenter.Backend/Program.cs`
-- `src/CommandCenter.Shell/src/main.rs`
-- `src/CommandCenter.UI/src/App.tsx`
-- `src/CommandCenter.UI/src/App.css`
-- `src/CommandCenter.UI/src/devTauriMock.ts`
+- `src/CommandCenter.Backend/Execution/IExecutionProvider.cs`
+- `src/CommandCenter.Backend/Execution/IExecutionProviderObserver.cs`
+- `src/CommandCenter.Backend/Execution/IExecutionMonitoringService.cs`
+- `src/CommandCenter.Backend/Execution/ExecutionEventType.cs`
+- `src/CommandCenter.Backend/Execution/ExecutionMonitoringService.cs`
+- `src/CommandCenter.Backend/Execution/ExecutionSessionService.cs`
+- `src/CommandCenter.Backend/Execution/CodexExecutionProvider.cs`
+- `src/CommandCenter.Backend/Execution/FakeExecutionProvider.cs`
+- `src/CommandCenter.Backend/Execution/NoopExecutionProvider.cs`
+- `tests/CommandCenter.Backend.Tests/CodexExecutionProviderTests.cs`
+- `tests/CommandCenter.Backend.Tests/ExecutionMonitoringEndpointTests.cs`
+- `tests/CommandCenter.Backend.Tests/ExecutionMonitoringServiceTests.cs`
+- `tests/CommandCenter.Backend.Tests/ExecutionSessionServiceTests.cs`
 
 ## Verification
 
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 101 tests.
 - `npm run build --prefix src/CommandCenter.UI` passed.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 95 tests.
 - `cargo build --manifest-path src/CommandCenter.Shell/Cargo.toml` passed.
+- `dotnet build CommandCenter.slnx` passed with 0 warnings and 0 errors.
 
 ## New State
 
-- M3B.2 is implemented and certified by build/test checks.
-- React consumes backend `ExecutionStatus` for state and displays raw `ExecutionEvent` entries without interpretation.
-- Browser SSE has the backend URL needed to connect from Tauri and allowed CORS origins.
-- M3 still has cancellation projection and provider reattach behavior open.
+- M3 is complete.
+- Restart recovery is deterministic for both provider-supported reattach and provider-unsupported orphan failure.
+- Cancellation is a terminal observation state distinct from failure and completion.
+- The next milestone to open is M4 handoff lifecycle management.
 
 ## Recommended Next Slice
 
-- Finish the remaining M3 backend behavior: add cancellation state projection tests/implementation and provider reattach-success coverage, then close M3 if the restart behavior is deterministic.
+- Begin M4A.1: implement handoff validation and provider-completion processing so a completed provider run only transitions forward when `.agents/handoffs/handoff.md` exists.

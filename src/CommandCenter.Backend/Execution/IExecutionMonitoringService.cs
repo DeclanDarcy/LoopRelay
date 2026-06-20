@@ -10,6 +10,8 @@ public interface IExecutionMonitoringService
 
     Task RecordRecoveryAsync(Guid sessionId, string message);
 
+    Task RecordCancellationAsync(Guid sessionId, string reason);
+
     Task<ExecutionStatus?> GetStatusAsync(Guid sessionId);
 
     Task<IReadOnlyList<ExecutionEvent>> GetEventsAsync(Guid sessionId);

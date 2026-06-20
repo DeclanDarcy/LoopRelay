@@ -12,6 +12,9 @@ public sealed class ExecutionSessionService(
     public const string OrphanedProviderFailureReason =
         "Active provider process could not be reattached after backend restart.";
 
+    public const string ReattachedProviderRecoveryMessage =
+        "Active provider process was reattached after backend restart.";
+
     private readonly SemaphoreSlim gate = new(1, 1);
 
     public async Task RecoverAsync()
@@ -22,6 +25,7 @@ public sealed class ExecutionSessionService(
             var sessions = (await sessionStore.LoadAsync()).ToList();
             var recoveredAt = DateTimeOffset.UtcNow;
             var changed = false;
+            var reattachedSessionIds = new List<Guid>();
 
             for (var index = 0; index < sessions.Count; index++)
             {
@@ -29,6 +33,20 @@ public sealed class ExecutionSessionService(
                 if (session.RepositoryState != RepositoryExecutionState.Executing ||
                     session.State != ExecutionSessionState.Executing)
                 {
+                    continue;
+                }
+
+                if (executionProvider.SupportsReattach &&
+                    await executionProvider.TryReattachAsync(
+                        session,
+                        monitoringService.CreateProviderObserver(session.Id)))
+                {
+                    sessions[index] = session.WithState(
+                        ExecutionSessionState.Executing,
+                        RepositoryExecutionState.Executing,
+                        lastActivityAt: recoveredAt);
+                    changed = true;
+                    reattachedSessionIds.Add(session.Id);
                     continue;
                 }
 
@@ -44,6 +62,11 @@ public sealed class ExecutionSessionService(
             if (changed)
             {
                 await sessionStore.SaveAsync(sessions);
+                foreach (var sessionId in reattachedSessionIds)
+                {
+                    await monitoringService.RecordRecoveryAsync(sessionId, ReattachedProviderRecoveryMessage);
+                }
+
                 foreach (var session in sessions.Where(session => session.FailureReason == OrphanedProviderFailureReason))
                 {
                     await monitoringService.RecordRecoveryAsync(session.Id, OrphanedProviderFailureReason);

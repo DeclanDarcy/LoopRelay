@@ -8,5 +8,6 @@ public enum ExecutionEventType
     ProviderStarted,
     ProviderExited,
     Failure,
+    Cancellation,
     Recovery
 }

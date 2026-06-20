@@ -195,6 +195,48 @@ public sealed class ExecutionSessionServiceTests
     }
 
     [Fact]
+    public async Task StartupRecoveryKeepsExecutingSessionActiveWhenProviderReattachSucceeds()
+    {
+        var provider = new MetadataExecutionProvider();
+        var harness = await CreateHarnessAsync(provider: provider);
+        await WriteReadyArtifactsAsync(harness.Repository);
+        var summary = await harness.SessionService.StartAsync(
+            harness.Repository.Id,
+            new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
+        var reattachProvider = new FakeExecutionProvider
+        {
+            SupportsReattach = true,
+            ReattachSucceeds = true
+        };
+        var reloadedStore = new FileSystemExecutionSessionStore(harness.StorePath);
+        var reloadedMonitoringService = new ExecutionMonitoringService(reloadedStore);
+        var reloadedService = new ExecutionSessionService(
+            harness.ContextService,
+            reloadedStore,
+            reattachProvider,
+            new ExecutionPromptBuilder(),
+            reloadedMonitoringService);
+
+        await reloadedService.RecoverAsync();
+        var active = await reloadedService.GetActiveSessionAsync(harness.Repository.Id);
+        var repositorySummary = await reloadedService.GetRepositorySessionSummaryAsync(harness.Repository.Id);
+        var recoveredSession = await reloadedService.GetSessionAsync(summary.SessionId);
+        var events = await reloadedMonitoringService.GetEventsAsync(summary.SessionId);
+
+        Assert.NotNull(active);
+        Assert.Equal(ExecutionSessionState.Executing, active.State);
+        Assert.Equal(RepositoryExecutionState.Executing, active.RepositoryState);
+        Assert.NotNull(repositorySummary);
+        Assert.Equal(ExecutionSessionState.Executing, repositorySummary.State);
+        Assert.NotNull(recoveredSession);
+        Assert.Equal(ExecutionSessionState.Executing, recoveredSession.State);
+        Assert.Equal(RepositoryExecutionState.Executing, await reloadedService.GetRepositoryStateAsync(harness.Repository.Id));
+        var recoveryEvent = Assert.Single(events, executionEvent => executionEvent.Type == ExecutionEventType.Recovery);
+        Assert.Equal(ExecutionEventType.Recovery, recoveryEvent.Type);
+        Assert.Equal(ExecutionSessionService.ReattachedProviderRecoveryMessage, recoveryEvent.Message);
+    }
+
+    [Fact]
     public async Task DashboardProjectionShowsRecoveredFailedStateAfterStoreReload()
     {
         var harness = await CreateHarnessAsync();
@@ -560,6 +602,8 @@ public sealed class ExecutionSessionServiceTests
     {
         public string Name => "codex";
 
+        public bool SupportsReattach => false;
+
         public Task<ExecutionProviderStartResult> StartAsync(
             ExecutionPrompt prompt,
             ExecutionSession session,
@@ -573,11 +617,20 @@ public sealed class ExecutionSessionServiceTests
                 StartedAt = DateTimeOffset.UtcNow
             });
         }
+
+        public Task<bool> TryReattachAsync(
+            ExecutionSession session,
+            IExecutionProviderObserver observer)
+        {
+            return Task.FromResult(false);
+        }
     }
 
     private sealed class FailingExecutionProvider(Exception exception) : IExecutionProvider
     {
         public string Name => "codex";
+
+        public bool SupportsReattach => false;
 
         public Task<ExecutionProviderStartResult> StartAsync(
             ExecutionPrompt prompt,
@@ -585,6 +638,13 @@ public sealed class ExecutionSessionServiceTests
             IExecutionProviderObserver observer)
         {
             throw exception;
+        }
+
+        public Task<bool> TryReattachAsync(
+            ExecutionSession session,
+            IExecutionProviderObserver observer)
+        {
+            return Task.FromResult(false);
         }
     }
 }

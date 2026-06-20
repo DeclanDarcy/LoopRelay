@@ -78,6 +78,21 @@ public sealed class CodexExecutionProviderTests
         Assert.Contains("2", exception.Message);
     }
 
+    [Fact]
+    public async Task CodexProviderDeclaresReattachUnsupported()
+    {
+        var provider = new CodexExecutionProvider(
+            new StaticCodexExecutableResolver("C:\\tools\\codex.exe"),
+            new RecordingProcessRunner(new ProcessStartResult()));
+
+        var reattached = await provider.TryReattachAsync(
+            CreateSession(CreateTemporaryDirectory()),
+            new RecordingObserver());
+
+        Assert.False(provider.SupportsReattach);
+        Assert.False(reattached);
+    }
+
     private static ExecutionPrompt CreatePrompt()
     {
         return new ExecutionPrompt
@@ -191,6 +206,11 @@ public sealed class CodexExecutionProviderTests
         }
 
         public Task OnProviderExitedAsync(int? exitCode)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task OnProviderCancelledAsync(string reason)
         {
             return Task.CompletedTask;
         }

@@ -6,6 +6,8 @@ public sealed class CodexExecutionProvider(
 {
     public string Name => "codex";
 
+    public bool SupportsReattach => false;
+
     public async Task<ExecutionProviderStartResult> StartAsync(
         ExecutionPrompt prompt,
         ExecutionSession session,
@@ -48,5 +50,12 @@ public sealed class CodexExecutionProvider(
             ProcessId = result.ProcessId,
             StartedAt = startedAt
         };
+    }
+
+    public Task<bool> TryReattachAsync(
+        ExecutionSession session,
+        IExecutionProviderObserver observer)
+    {
+        return Task.FromResult(false);
     }
 }
