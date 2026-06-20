@@ -220,6 +220,11 @@ public sealed class ArtifactRotationServiceTests
             return Task.FromResult<ExecutionSessionSummary?>(null);
         }
 
+        public Task<IReadOnlyList<ExecutionSessionSummary>> GetRepositorySessionHistoryAsync(Guid repositoryId, int limit = 10)
+        {
+            return Task.FromResult<IReadOnlyList<ExecutionSessionSummary>>([]);
+        }
+
         public Task<ExecutionSessionSummary> StartAsync(Guid repositoryId, ExecutionStartRequest request)
         {
             throw new NotSupportedException();

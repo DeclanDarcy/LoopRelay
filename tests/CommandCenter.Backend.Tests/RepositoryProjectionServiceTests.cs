@@ -168,10 +168,14 @@ public sealed class RepositoryProjectionServiceTests
         Assert.Null(dashboardProjection.ActiveExecutionSession);
         Assert.NotNull(dashboardProjection.ExecutionSummary);
         Assert.Equal(sessionId, dashboardProjection.ExecutionSummary.SessionId);
+        var dashboardHistory = Assert.Single(dashboardProjection.ExecutionHistory);
+        Assert.Equal(sessionId, dashboardHistory.SessionId);
         Assert.Equal(HandoffService.CurrentHandoffPath, dashboardProjection.ExecutionSummary.HandoffPath);
         Assert.Equal(TimeSpan.FromMinutes(3), dashboardProjection.ExecutionSummary.Duration);
         Assert.Equal(RepositoryExecutionState.AwaitingAcceptance, workspace.ExecutionState);
         Assert.NotNull(workspace.ExecutionSummary);
+        var workspaceHistory = Assert.Single(workspace.ExecutionHistory);
+        Assert.Equal(sessionId, workspaceHistory.SessionId);
         Assert.Equal(HandoffService.CurrentHandoffPath, workspace.ExecutionSummary.HandoffPath);
         Assert.Equal(TimeSpan.FromMinutes(3), workspace.ExecutionSummary.Duration);
     }
@@ -264,6 +268,11 @@ public sealed class RepositoryProjectionServiceTests
             return Task.FromResult<ExecutionSessionSummary?>(null);
         }
 
+        public Task<IReadOnlyList<ExecutionSessionSummary>> GetRepositorySessionHistoryAsync(Guid repositoryId, int limit = 10)
+        {
+            return Task.FromResult<IReadOnlyList<ExecutionSessionSummary>>([]);
+        }
+
         public Task<ExecutionSessionSummary> StartAsync(Guid repositoryId, ExecutionStartRequest request)
         {
             throw new NotSupportedException();
@@ -328,6 +337,12 @@ public sealed class RepositoryProjectionServiceTests
         {
             return Task.FromResult<ExecutionSessionSummary?>(
                 requestedRepositoryId == repositoryId ? summary : null);
+        }
+
+        public Task<IReadOnlyList<ExecutionSessionSummary>> GetRepositorySessionHistoryAsync(Guid requestedRepositoryId, int limit = 10)
+        {
+            return Task.FromResult<IReadOnlyList<ExecutionSessionSummary>>(
+                requestedRepositoryId == repositoryId ? [summary] : []);
         }
 
         public Task<ExecutionSessionSummary> StartAsync(Guid requestedRepositoryId, ExecutionStartRequest request)

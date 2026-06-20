@@ -18,6 +18,8 @@ public sealed class RepositoryDashboardProjection
 
     public ExecutionSessionSummary? ExecutionSummary { get; init; }
 
+    public IReadOnlyList<ExecutionSessionSummary> ExecutionHistory { get; init; } = [];
+
     public int MilestoneCount { get; init; }
 
     public bool HasCurrentHandoff { get; init; }

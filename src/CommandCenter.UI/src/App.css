@@ -439,6 +439,7 @@ button:focus-visible {
 
 .execution-context-panel,
 .execution-session-panel,
+.execution-history-panel,
 .execution-output-panel,
 .git-status-panel,
 .handoff-review-panel {
@@ -632,6 +633,42 @@ button:focus-visible {
   border-color: #e5aaa5;
   color: #8a211b;
   background: #fff3f1;
+}
+
+.execution-history-list {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.execution-history-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  align-items: center;
+  padding: 9px 10px;
+  border: 1px solid #d9e0e6;
+  border-radius: 6px;
+  background: #fafbfc;
+}
+
+.execution-history-row span,
+.execution-history-row small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.execution-history-row span {
+  color: #1d252c;
+  font-size: 0.84rem;
+  font-weight: 750;
+}
+
+.execution-history-row small {
+  color: #5d6873;
+  font-size: 0.76rem;
+  font-weight: 700;
 }
 
 .handoff-review-panel {
@@ -936,6 +973,7 @@ button:focus-visible {
   .diagnostic-list,
   .execution-workflow-rail,
   .execution-session-grid,
+  .execution-history-row,
   .execution-event-row,
   .handoff-review-header {
     grid-template-columns: 1fr;

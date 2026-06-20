@@ -111,6 +111,24 @@ public sealed class ExecutionSessionService(
         return session?.ToSummary();
     }
 
+    public async Task<IReadOnlyList<ExecutionSessionSummary>> GetRepositorySessionHistoryAsync(
+        Guid repositoryId,
+        int limit = 10)
+    {
+        if (limit <= 0)
+        {
+            return [];
+        }
+
+        return (await sessionStore.LoadAsync())
+            .Where(session => session.RepositoryId == repositoryId)
+            .OrderByDescending(session => session.StartedAt)
+            .ThenByDescending(session => session.Id)
+            .Take(limit)
+            .Select(session => session.ToSummary())
+            .ToArray();
+    }
+
     public async Task<ExecutionSessionSummary> StartAsync(Guid repositoryId, ExecutionStartRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.MilestonePath))

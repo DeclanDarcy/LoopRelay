@@ -2,43 +2,49 @@
 
 ## Newly Authorized Decisions
 
-- M8 is authorized as the repeatable execution loop milestone.
-- M8 must solve the post-completion question: after a successful execution cycle, what does the user do next?
-- M8 must make the transition from `Ready` to the next intentional execution frictionless but not automatic.
-- `User selects milestone` remains an explicit act.
-- The system may suggest, highlight, and surface history, but it must not choose a milestone.
-- Do not introduce system-selected milestones.
-- Do not introduce automatic milestone advancement.
-- Do not introduce execution chaining.
-- Continue using `ExecutionSession` as the primary organizing object for M8.
-- The next execution should be understood relative to previous executions through session history.
-- M8.1 is authorized as Execution History & Post-Push Continuity.
-- M8.1 must prioritize session history before other M8 work.
-- M8.1 scope is projection-only:
-  - Session history projection.
-  - Session summary cards.
-  - Last execution visibility.
-  - Commit SHA visibility.
-  - Push visibility.
-  - Duration visibility.
-  - Selected milestone visibility.
-  - Ready-state continuation UX.
-- Session history must use `ExecutionSession` summaries as its source.
-- Session history must not become another artifact system.
-- M8.2 is authorized conceptually as Next Execution Guidance after history exists.
-- M8.2 should answer:
-  - What was the last execution?
-  - What milestone is currently selected?
-  - Can execution start right now?
-  - If not, why not?
-- M8 must expose state, not make decisions.
+- M8.2 is authorized as Repeatable Execution Certification.
+- M8.2 should focus on proving the loop works twice, not expanding the loop.
+- M8.2 certification must prove:
+  - Execution A.
+  - Acceptance.
+  - Commit.
+  - Push.
+  - Ready.
+  - Execution B on the same repository.
+- M8.2 must include a milestone-change certification:
+  - Execution A.
+  - Push.
+  - Ready.
+  - Select a different milestone.
+  - Execution B.
+- Milestone-change certification must verify:
+  - Context rebuilt.
+  - Prompt rebuilt.
+  - Selected milestone changed.
+  - Execution launched successfully.
+- M8.2 must inspect handoff rotation integrity across repeated executions.
+- Handoff rotation certification must verify:
+  - Prior handoff was archived.
+  - Historical numbering incremented correctly.
+  - Latest handoff was preserved.
+  - Execution history remained visible.
+- M8.2 must include restart-between-executions certification:
+  - Execution A.
+  - Push.
+  - Ready.
+  - Application restart.
+  - Execution B.
+- Restart certification must verify:
+  - History survives.
+  - Latest summary survives.
+  - Selected milestone can be changed.
+  - New execution launches.
+- If repeatable execution, history preservation, context rebuild, milestone selection, handoff rotation, and restart restoration pass, Epic 2 is probably functionally complete.
 
 ## Explicitly Deferred
 
-- Automatic progression.
+- Expanding the execution loop beyond current Epic 2 scope.
+- Automatic milestone progression.
 - Automatic milestone selection.
-- Workflow automation.
-- System-selected next milestone.
-- Loading handoff markdown or repository artifacts as a history authority.
-- New workflow state.
-- Any mutation without explicit user action.
+- Execution chaining.
+- Treating execution history as repository artifacts.

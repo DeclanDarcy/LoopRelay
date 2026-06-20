@@ -204,6 +204,7 @@ type RepositoryDashboardProjection = {
   executionState: RepositoryExecutionState
   activeExecutionSession: ExecutionSessionSummary | null
   executionSummary: ExecutionSessionSummary | null
+  executionHistory: ExecutionSessionSummary[]
   milestoneCount: number
   hasCurrentHandoff: boolean
   hasCurrentDecisions: boolean
@@ -215,6 +216,7 @@ type RepositoryWorkspaceProjection = {
   readiness: ExecutionReadiness
   executionState: RepositoryExecutionState
   executionSummary: ExecutionSessionSummary | null
+  executionHistory: ExecutionSessionSummary[]
   artifactInventory: ArtifactInventory
   milestoneCount: number
   hasPlan: boolean
@@ -615,6 +617,10 @@ function App() {
     selectedRepository?.executionSummary ??
     selectedRepository?.activeExecutionSession ??
     null
+  const selectedExecutionHistory =
+    workspace?.executionHistory ??
+    selectedRepository?.executionHistory ??
+    (executionSummary ? [executionSummary] : [])
   const activeExecutionSummary =
     executionSummary?.repositoryState === 'Executing'
       ? executionSummary
@@ -909,7 +915,13 @@ function App() {
       )
       await loadRepositories()
       if (selectedRepository) {
-        await loadWorkspace(selectedRepository.repository.id)
+        const nextWorkspace = await invoke<RepositoryWorkspaceProjection>(
+          'refresh_repository_workspace',
+          { repositoryId: selectedRepository.repository.id },
+        )
+        setWorkspace(nextWorkspace)
+        setExecutionContext(null)
+        reconcileSelectedArtifact(selectedRepository.repository.id, nextWorkspace)
         await loadGitStatus(selectedRepository.repository.id)
       }
     } catch (pushError) {
@@ -2138,6 +2150,27 @@ function App() {
                     {executionDisplay.failureReason ? (
                       <span className="execution-failure">Failure: {executionDisplay.failureReason}</span>
                     ) : null}
+                  </div>
+                </section>
+              ) : null}
+
+              {selectedExecutionHistory.length > 0 ? (
+                <section className="execution-history-panel" aria-label="Execution history">
+                  <div>
+                    <p className="eyebrow">Session History</p>
+                    <h4>{selectedExecutionHistory.length} recent sessions</h4>
+                  </div>
+                  <div className="execution-history-list">
+                    {selectedExecutionHistory.map((session) => (
+                      <div className="execution-history-row" key={session.sessionId}>
+                        <span>{session.milestonePath ?? 'Milestone not recorded'}</span>
+                        <small>{executionStateLabels[session.repositoryState]}</small>
+                        <small>Started {formatDateTime(session.startedAt)}</small>
+                        <small>Duration {formatDuration(session.duration)}</small>
+                        <small>Commit {session.commitSha ?? 'Not recorded'}</small>
+                        <small>Push {session.pushedAt ? formatDateTime(session.pushedAt) : 'Not recorded'}</small>
+                      </div>
+                    ))}
                   </div>
                 </section>
               ) : null}

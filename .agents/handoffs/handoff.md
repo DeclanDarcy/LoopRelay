@@ -2,38 +2,48 @@
 
 ## Slice Summary
 
-- Completed Epic 2 M7.2 Workspace Certification & Hardening.
-- Added deterministic dev mock repositories for `Executing`, `AwaitingAcceptance`, `AwaitingCommit`, `AwaitingPush`, `Failed`, and `Cancelled` workspace certification.
-- Flattened the execution workspace so generated handoff review and output are sibling panels instead of nested inside session metadata.
-- Corrected lifecycle rail derivation so a `Ready` repository without an execution session does not mark handoff or commit as complete.
-- Marked all M7 checklist items complete and added M7.2 certification notes.
-- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0024.md`.
+- Began Epic 2 M8.1 Execution History & Post-Push Continuity.
+- Added explicit execution history projection to backend dashboard and workspace responses.
+- Preserved `executionSummary` as latest-session continuity while exposing `executionHistory` as the bounded audit list.
+- Updated the Tauri bridge, React types, UI, and dev mock to carry and display recent session history.
+- Fixed dev mock start gating so a `Ready` repository with a latest summary can start another explicit execution.
+- Updated the post-push UI path to refresh workspace artifact inventory from disk and reload Git status.
+- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0025.md`.
 
 ## Files Changed
 
-- `.agents/milestones/m7-execution-workspace.md`
-- `.agents/handoffs/handoff.0024.md`
+- `.agents/milestones/m8-next-execution-flow.md`
+- `.agents/handoffs/handoff.0025.md`
 - `.agents/handoffs/handoff.md`
+- `src/CommandCenter.Backend/Execution/IExecutionSessionService.cs`
+- `src/CommandCenter.Backend/Execution/ExecutionSessionService.cs`
+- `src/CommandCenter.Backend/Projections/RepositoryDashboardProjection.cs`
+- `src/CommandCenter.Backend/Projections/RepositoryWorkspaceProjection.cs`
+- `src/CommandCenter.Backend/Projections/RepositoryProjectionService.cs`
+- `src/CommandCenter.Shell/src/main.rs`
 - `src/CommandCenter.UI/src/App.tsx`
 - `src/CommandCenter.UI/src/App.css`
 - `src/CommandCenter.UI/src/devTauriMock.ts`
+- `tests/CommandCenter.Backend.Tests/ArtifactRotationServiceTests.cs`
+- `tests/CommandCenter.Backend.Tests/ExecutionSessionServiceTests.cs`
+- `tests/CommandCenter.Backend.Tests/RepositoryProjectionServiceTests.cs`
 
 ## Verification
 
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed.
 - `npm run build --prefix src/CommandCenter.UI` passed.
-- Browser-verified the workspace certification mock at `http://127.0.0.1:5174/?mock=workspace-certification`.
-- Browser-verified state coverage for `Ready`, `Executing`, `AwaitingAcceptance`, `AwaitingCommit`, `AwaitingPush`, `Failed`, and `Cancelled`.
-- Browser-verified transition coverage for `Ready -> AwaitingAcceptance -> AwaitingCommit -> AwaitingPush -> Ready`.
-- Browser-verified 390px viewport behavior with no horizontal document overflow.
+- `cargo build --manifest-path src/CommandCenter.Shell/Cargo.toml` passed.
 
 ## New State
 
-- M7 is complete.
-- The dev mock now provides direct state fixtures for future UI certification.
-- The lifecycle rail remains projection-only and does not introduce workflow mutation authority.
-- The execution workspace is less nested and better aligned with the compact panel requirement.
+- `IExecutionSessionService.GetRepositorySessionHistoryAsync(repositoryId, limit)` returns newest-first persisted `ExecutionSessionSummary` rows.
+- Dashboard and workspace projections now include `ExecutionHistory`.
+- UI displays a compact session history panel with milestone, repository state, started time, duration, commit SHA, and push time.
+- Successful push is now covered for: repository `Ready`, no active execution, latest summary retained, and history retained.
+- M8 full repeat-loop certification is still open.
 
 ## Recommended Next Slice
 
-- Begin M8 Next Execution Flow.
-- Focus on verifying the post-push return-to-ready path, preserving session history visibility, and making the next selected milestone launch path clear without introducing automatic milestone progression.
+- Implement and certify the full repeatable fake-provider loop through two executions on one repository.
+- Verify context rebuild after a pushed `Ready` state using a newly selected milestone.
+- Verify handoff history increments across both executions.

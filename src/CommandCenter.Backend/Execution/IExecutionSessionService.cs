@@ -10,6 +10,8 @@ public interface IExecutionSessionService
 
     Task<ExecutionSessionSummary?> GetRepositorySessionSummaryAsync(Guid repositoryId);
 
+    Task<IReadOnlyList<ExecutionSessionSummary>> GetRepositorySessionHistoryAsync(Guid repositoryId, int limit = 10);
+
     Task<ExecutionSessionSummary> StartAsync(Guid repositoryId, ExecutionStartRequest request);
 
     Task<ExecutionSession?> GetSessionAsync(Guid sessionId);

@@ -16,6 +16,8 @@ public sealed class RepositoryWorkspaceProjection
 
     public ExecutionSessionSummary? ExecutionSummary { get; init; }
 
+    public IReadOnlyList<ExecutionSessionSummary> ExecutionHistory { get; init; } = [];
+
     public ArtifactInventory ArtifactInventory { get; init; } = new();
 
     public int MilestoneCount { get; init; }

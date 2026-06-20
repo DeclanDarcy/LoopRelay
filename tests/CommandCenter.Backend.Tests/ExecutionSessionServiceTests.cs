@@ -704,6 +704,60 @@ public sealed class ExecutionSessionServiceTests
         Assert.Equal("commit-sha", storedSession.PushedCommitSha);
         Assert.NotNull(storedSession.RepositorySnapshot);
         Assert.Equal("commit-sha", gitService.LastPushedCommitSha);
+        Assert.Null(await harness.SessionService.GetActiveSessionAsync(harness.Repository.Id));
+        var latestSummary = await harness.SessionService.GetRepositorySessionSummaryAsync(harness.Repository.Id);
+        Assert.NotNull(latestSummary);
+        Assert.Equal(session.Id, latestSummary.SessionId);
+        var history = await harness.SessionService.GetRepositorySessionHistoryAsync(harness.Repository.Id);
+        var historySummary = Assert.Single(history);
+        Assert.Equal(session.Id, historySummary.SessionId);
+        Assert.Equal(RepositoryExecutionState.Ready, historySummary.RepositoryState);
+    }
+
+    [Fact]
+    public async Task RepositorySessionHistoryReturnsNewestSessionsFirst()
+    {
+        var harness = await CreateHarnessAsync();
+        var firstStartedAt = DateTimeOffset.UtcNow.AddMinutes(-10);
+        var secondStartedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
+        var firstSession = new ExecutionSession
+        {
+            Id = Guid.NewGuid(),
+            RepositoryId = harness.Repository.Id,
+            RepositoryPath = harness.Repository.Path,
+            MilestonePath = ".agents/milestones/m7.md",
+            StartedAt = firstStartedAt,
+            CompletedAt = firstStartedAt.AddMinutes(1),
+            LastActivityAt = firstStartedAt.AddMinutes(1),
+            State = ExecutionSessionState.Completed,
+            RepositoryState = RepositoryExecutionState.Ready,
+            ProviderName = "fake",
+            PushedAt = firstStartedAt.AddMinutes(2),
+            PushedCommitSha = "first-sha"
+        };
+        var secondSession = new ExecutionSession
+        {
+            Id = Guid.NewGuid(),
+            RepositoryId = harness.Repository.Id,
+            RepositoryPath = harness.Repository.Path,
+            MilestonePath = ".agents/milestones/m8.md",
+            StartedAt = secondStartedAt,
+            CompletedAt = secondStartedAt.AddMinutes(1),
+            LastActivityAt = secondStartedAt.AddMinutes(1),
+            State = ExecutionSessionState.Completed,
+            RepositoryState = RepositoryExecutionState.Ready,
+            ProviderName = "fake",
+            PushedAt = secondStartedAt.AddMinutes(2),
+            PushedCommitSha = "second-sha"
+        };
+        await harness.Store.SaveAsync([firstSession, secondSession]);
+
+        var history = await harness.SessionService.GetRepositorySessionHistoryAsync(harness.Repository.Id, limit: 1);
+
+        var summary = Assert.Single(history);
+        Assert.Equal(secondSession.Id, summary.SessionId);
+        Assert.Equal(".agents/milestones/m8.md", summary.MilestonePath);
+        Assert.Equal("second-sha", summary.PushedCommitSha);
     }
 
     [Fact]

@@ -30,6 +30,7 @@ type Workspace = {
   readiness: string
   executionState: string
   executionSummary: ExecutionSessionSummary | null
+  executionHistory: ExecutionSessionSummary[]
   artifactInventory: ArtifactInventory
   milestoneCount: number
   hasPlan: boolean
@@ -45,6 +46,7 @@ type DashboardEntry = {
   executionState: string
   activeExecutionSession: ExecutionSessionSummary | null
   executionSummary: ExecutionSessionSummary | null
+  executionHistory: ExecutionSessionSummary[]
   milestoneCount: number
   hasCurrentHandoff: boolean
   hasCurrentDecisions: boolean
@@ -293,6 +295,7 @@ function createWorkspace(repository: Repository, inventory: ArtifactInventory): 
     readiness,
     executionState: 'Ready',
     executionSummary: null,
+    executionHistory: [],
     artifactInventory: inventory,
     milestoneCount: inventory.milestones.length,
     hasPlan: inventory.plan !== null,
@@ -427,6 +430,10 @@ function seedCertificationSession(
   }
   workspace.executionState = repositoryState
   workspace.executionSummary = summary
+  workspace.executionHistory = [
+    summary,
+    ...workspace.executionHistory.filter((session) => session.sessionId !== sessionId),
+  ]
 }
 
 function dashboardEntry(workspace: Workspace): DashboardEntry {
@@ -435,8 +442,10 @@ function dashboardEntry(workspace: Workspace): DashboardEntry {
     availability: workspace.availability,
     readiness: workspace.readiness,
     executionState: workspace.executionState,
-    activeExecutionSession: workspace.executionSummary,
+    activeExecutionSession:
+      workspace.executionState === 'Executing' ? workspace.executionSummary : null,
     executionSummary: workspace.executionSummary,
+    executionHistory: workspace.executionHistory,
     milestoneCount: workspace.milestoneCount,
     hasCurrentHandoff: workspace.hasCurrentHandoff,
     hasCurrentDecisions: workspace.hasCurrentDecisions,
@@ -621,7 +630,7 @@ function startExecution(state: MockState, repositoryId: string, milestonePath: s
     throw new Error(`Repository was not found: ${repositoryId}`)
   }
 
-  if (workspace.executionState === 'Executing' || workspace.executionSummary) {
+  if (workspace.executionState !== 'Ready') {
     throw new Error('Repository already has an active execution session.')
   }
 
@@ -673,6 +682,10 @@ function startExecution(state: MockState, repositoryId: string, milestonePath: s
   }
   workspace.executionState = 'AwaitingAcceptance'
   workspace.executionSummary = summary
+  workspace.executionHistory = [
+    summary,
+    ...workspace.executionHistory.filter((session) => session.sessionId !== sessionId),
+  ]
   return summary
 }
 
@@ -718,6 +731,10 @@ function commitExecution(state: MockState, args: InvokeArgs): ExecutionSessionSu
   }
   workspace.executionState = 'AwaitingPush'
   workspace.executionSummary = summary
+  workspace.executionHistory = [
+    summary,
+    ...workspace.executionHistory.filter((session) => session.sessionId !== sessionId),
+  ]
   return summary
 }
 
@@ -753,6 +770,10 @@ function pushExecution(state: MockState, args: InvokeArgs): ExecutionSessionSumm
   }
   workspace.executionState = 'Ready'
   workspace.executionSummary = summary
+  workspace.executionHistory = [
+    summary,
+    ...workspace.executionHistory.filter((session) => session.sessionId !== sessionId),
+  ]
   return summary
 }
 
@@ -790,6 +811,10 @@ function decideHandoff(
   }
   workspace.executionState = repositoryState
   workspace.executionSummary = summary
+  workspace.executionHistory = [
+    summary,
+    ...workspace.executionHistory.filter((session) => session.sessionId !== sessionId),
+  ]
   return summary
 }
 
