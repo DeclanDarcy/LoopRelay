@@ -430,6 +430,122 @@ function countDirtyPaths(dirtyState: RepositoryDirtyState | null) {
   )
 }
 
+type ExecutionWorkflowStepState = 'complete' | 'current' | 'pending' | 'blocked'
+
+type ExecutionWorkflowStep = {
+  key: string
+  label: string
+  detail: string
+  state: ExecutionWorkflowStepState
+}
+
+function getExecutionWorkflowSteps(
+  repositoryState: RepositoryExecutionState,
+  hasContextForSelection: boolean,
+  hasExecutionSession: boolean,
+): ExecutionWorkflowStep[] {
+  const contextComplete = hasContextForSelection || hasExecutionSession || repositoryState !== 'Ready'
+  const executionComplete =
+    hasExecutionSession &&
+    repositoryState !== 'Executing' &&
+    repositoryState !== 'Failed' &&
+    repositoryState !== 'Cancelled'
+  const handoffComplete =
+    repositoryState === 'AwaitingCommit' ||
+    repositoryState === 'AwaitingPush' ||
+    repositoryState === 'Ready'
+  const commitComplete = repositoryState === 'AwaitingPush' || repositoryState === 'Ready'
+  const pushComplete = repositoryState === 'Ready' && hasExecutionSession
+  const isFailed = repositoryState === 'Failed' || repositoryState === 'Cancelled'
+
+  return [
+    {
+      key: 'context',
+      label: 'Context',
+      detail: contextComplete ? 'Prepared' : 'Needs preview',
+      state: contextComplete ? 'complete' : repositoryState === 'Ready' ? 'current' : 'pending',
+    },
+    {
+      key: 'execution',
+      label: 'Execution',
+      detail:
+        repositoryState === 'Executing'
+          ? 'Running'
+          : executionComplete
+            ? 'Completed'
+            : isFailed
+              ? executionStateLabels[repositoryState]
+              : 'Not started',
+      state:
+        repositoryState === 'Executing'
+          ? 'current'
+          : executionComplete
+            ? 'complete'
+            : isFailed
+              ? 'blocked'
+              : contextComplete
+                ? 'current'
+                : 'pending',
+    },
+    {
+      key: 'handoff',
+      label: 'Handoff',
+      detail:
+        repositoryState === 'AwaitingAcceptance'
+          ? 'Awaiting review'
+          : handoffComplete
+            ? 'Accepted or closed'
+            : isFailed
+              ? 'Unavailable'
+              : 'Pending execution',
+      state:
+        repositoryState === 'AwaitingAcceptance'
+          ? 'current'
+          : handoffComplete
+            ? 'complete'
+            : isFailed
+              ? 'blocked'
+              : 'pending',
+    },
+    {
+      key: 'commit',
+      label: 'Commit',
+      detail:
+        repositoryState === 'AwaitingCommit'
+          ? 'Awaiting review'
+          : commitComplete
+            ? 'Committed'
+            : 'Pending acceptance',
+      state:
+        repositoryState === 'AwaitingCommit'
+          ? 'current'
+          : commitComplete
+            ? 'complete'
+            : isFailed
+              ? 'blocked'
+              : 'pending',
+    },
+    {
+      key: 'push',
+      label: 'Push',
+      detail:
+        repositoryState === 'AwaitingPush'
+          ? 'Awaiting push'
+          : pushComplete
+            ? 'Published'
+            : 'Pending commit',
+      state:
+        repositoryState === 'AwaitingPush'
+          ? 'current'
+          : pushComplete
+            ? 'complete'
+            : isFailed
+              ? 'blocked'
+              : 'pending',
+    },
+  ]
+}
+
 function App() {
   const [repositories, setRepositories] = useState<RepositoryDashboardProjection[]>([])
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<string | null>(null)
@@ -580,6 +696,11 @@ function App() {
     currentExecutionState === 'AwaitingPush' &&
     Boolean(executionDisplay?.commitSha) &&
     !isPushing
+  const executionWorkflowSteps = getExecutionWorkflowSteps(
+    currentExecutionState,
+    executionContextMatchesSelection,
+    Boolean(executionDisplay),
+  )
 
   const startExecutionBlockedReason = useMemo(() => {
     if (!workspace) {
@@ -1661,6 +1782,29 @@ function App() {
                 <span>Decisions: {workspace?.hasCurrentDecisions ? 'Present' : 'Missing'}</span>
               </div>
 
+              <section className="execution-workspace" aria-label="Execution workspace">
+                <div className="execution-workspace-header">
+                  <div>
+                    <p className="eyebrow">Execution Workspace</p>
+                    <h4>{executionDisplay?.milestonePath ?? selectedMilestonePath ?? 'Select a milestone'}</h4>
+                  </div>
+                  <span className={`execution-state execution-state-${currentExecutionState.toLowerCase()}`}>
+                    {executionStateLabels[currentExecutionState]}
+                  </span>
+                </div>
+
+                <div className="execution-workflow-rail" aria-label="Execution lifecycle">
+                  {executionWorkflowSteps.map((step) => (
+                    <div
+                      className={`execution-workflow-step execution-workflow-step-${step.state}`}
+                      key={step.key}
+                    >
+                      <span>{step.label}</span>
+                      <small>{step.detail}</small>
+                    </div>
+                  ))}
+                </div>
+
               <section className="execution-context-panel" aria-label="Execution context preview">
                 <div className="context-toolbar">
                   <div>
@@ -2056,8 +2200,14 @@ function App() {
                   </div>
                 </section>
               ) : null}
+              </section>
 
               {workspace ? (
+                <section className="artifact-workspace-shell" aria-label="Artifact workspace">
+                  <div>
+                    <p className="eyebrow">Repository Artifacts</p>
+                    <h4>Explorer and Editor</h4>
+                  </div>
                 <div className="artifact-workspace">
                   <section className="artifact-explorer" aria-label="Artifact explorer">
                     {getArtifactCategories(workspace.artifactInventory).map((category) => (
@@ -2153,6 +2303,7 @@ function App() {
                     )}
                   </section>
                 </div>
+                </section>
               ) : (
                 <p className="empty-state">Loading workspace...</p>
               )}

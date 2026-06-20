@@ -350,6 +350,93 @@ button:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.execution-workspace,
+.artifact-workspace-shell {
+  min-width: 0;
+  display: grid;
+  gap: 14px;
+}
+
+.execution-workspace-header,
+.artifact-workspace-shell > div:first-child {
+  min-width: 0;
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.execution-workspace-header h4,
+.artifact-workspace-shell h4 {
+  margin: 4px 0 0;
+  color: #121820;
+  font-size: 1rem;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.execution-workflow-rail {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.execution-workflow-step {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid #d9e0e6;
+  border-radius: 6px;
+  background: #fafbfc;
+}
+
+.execution-workflow-step span,
+.execution-workflow-step small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.execution-workflow-step span {
+  color: #121820;
+  font-size: 0.86rem;
+  font-weight: 750;
+}
+
+.execution-workflow-step small {
+  color: #65717d;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.execution-workflow-step-current {
+  border-color: #b98b19;
+  background: #fff8e6;
+}
+
+.execution-workflow-step-current span {
+  color: #7c5200;
+}
+
+.execution-workflow-step-complete {
+  border-color: #a8d5c2;
+  background: #edf8f2;
+}
+
+.execution-workflow-step-complete span {
+  color: #145c4b;
+}
+
+.execution-workflow-step-blocked {
+  border-color: #e5aaa5;
+  background: #fff3f1;
+}
+
+.execution-workflow-step-blocked span {
+  color: #8a211b;
+}
+
 .execution-context-panel,
 .execution-session-panel,
 .git-status-panel,
@@ -845,6 +932,7 @@ button:focus-visible {
   .context-summary,
   .context-columns,
   .diagnostic-list,
+  .execution-workflow-rail,
   .execution-session-grid,
   .execution-event-row,
   .handoff-review-header {
@@ -878,6 +966,8 @@ button:focus-visible {
   .summary-grid,
   .context-toolbar,
   .context-controls,
+  .execution-workspace-header,
+  .artifact-workspace-shell > div:first-child,
   .artifact-panel-header,
   .artifact-panel-actions {
     grid-template-columns: 1fr;
