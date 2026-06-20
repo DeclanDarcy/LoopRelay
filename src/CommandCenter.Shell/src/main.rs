@@ -32,6 +32,7 @@ struct RepositoryDashboardProjection {
     readiness: String,
     execution_state: String,
     active_execution_session: Option<ExecutionSessionSummary>,
+    execution_summary: Option<ExecutionSessionSummary>,
     milestone_count: i32,
     has_current_handoff: bool,
     has_current_decisions: bool,
@@ -48,6 +49,9 @@ struct ExecutionSessionSummary {
     completed_at: Option<String>,
     last_activity_at: Option<String>,
     provider_name: String,
+    provider_executable_path: Option<String>,
+    provider_process_id: Option<i32>,
+    provider_started_at: Option<String>,
     failure_reason: Option<String>,
 }
 
@@ -137,6 +141,11 @@ fn ping_backend() -> Result<String, String> {
         .map_err(|error| error.to_string())?
         .text()
         .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn get_backend_url() -> String {
+    BACKEND_URL.to_string()
 }
 
 #[tauri::command]
@@ -471,6 +480,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             ping_backend,
+            get_backend_url,
             select_repository_directory,
             list_repositories,
             register_repository,

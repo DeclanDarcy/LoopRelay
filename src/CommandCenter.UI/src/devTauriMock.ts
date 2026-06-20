@@ -445,6 +445,8 @@ export function installDevTauriMock() {
     unregisterCallback: () => undefined,
     invoke: async (cmd: string, args?: InvokeArgs) => {
       switch (cmd) {
+        case 'get_backend_url':
+          return 'mock'
         case 'list_repositories':
           return clone(state.repositories.map((repository) => dashboardEntry(state.workspaces[repository.id])))
         case 'get_repository_workspace':

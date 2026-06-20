@@ -13,6 +13,7 @@ type RepositoryExecutionState =
   | 'AwaitingPush'
   | 'Failed'
   | 'Cancelled'
+type ExecutionSessionState = 'Created' | 'Executing' | 'Completed' | 'Failed' | 'Cancelled'
 type ArtifactType = 'Plan' | 'OperationalContext' | 'Milestone' | 'Handoff' | 'Decision'
 type ArtifactFamily = ArtifactType
 type ArtifactVersionKind = 'Current' | 'Historical'
@@ -43,7 +44,7 @@ type ArtifactInventory = {
 
 type ExecutionSessionSummary = {
   sessionId: string
-  state: string
+  state: ExecutionSessionState
   repositoryState: RepositoryExecutionState
   milestonePath: string | null
   startedAt: string | null
@@ -54,6 +55,28 @@ type ExecutionSessionSummary = {
   providerProcessId: number | null
   providerStartedAt: string | null
   failureReason: string | null
+}
+
+type ExecutionEvent = {
+  sequence: number
+  timestamp: string
+  type: string
+  message: string
+}
+
+type ExecutionStatus = {
+  sessionId: string
+  state: ExecutionSessionState
+  repositoryState: RepositoryExecutionState
+  startedAt: string
+  completedAt: string | null
+  lastActivityAt: string | null
+  providerName: string
+  providerExecutablePath: string | null
+  providerProcessId: number | null
+  providerStartedAt: string | null
+  failureReason: string | null
+  recentEvents: ExecutionEvent[]
 }
 
 type ExecutionContextArtifact = {
@@ -176,6 +199,13 @@ function formatError(error: unknown) {
 
 function formatDateTime(value: string | null) {
   return value ? new Date(value).toLocaleString() : 'Not recorded'
+}
+
+function mergeExecutionEvents(currentEvents: ExecutionEvent[], incomingEvents: ExecutionEvent[]) {
+  const eventsBySequence = new Map<number, ExecutionEvent>()
+  currentEvents.forEach((event) => eventsBySequence.set(event.sequence, event))
+  incomingEvents.forEach((event) => eventsBySequence.set(event.sequence, event))
+  return Array.from(eventsBySequence.values()).sort((left, right) => left.sequence - right.sequence)
 }
 
 function getArtifactCategories(inventory: ArtifactInventory): ArtifactCategory[] {
@@ -329,6 +359,9 @@ function App() {
   const [selectedArtifactPath, setSelectedArtifactPath] = useState<string | null>(null)
   const [selectedMilestonePath, setSelectedMilestonePath] = useState<string | null>(null)
   const [executionContext, setExecutionContext] = useState<ExecutionContextPreview | null>(null)
+  const [backendUrl, setBackendUrl] = useState<string | null>(null)
+  const [executionStatusesBySession, setExecutionStatusesBySession] = useState<Record<string, ExecutionStatus>>({})
+  const [executionEventsBySession, setExecutionEventsBySession] = useState<Record<string, ExecutionEvent[]>>({})
   const selectedArtifactPathsByRepository = useRef<Record<string, string>>({})
   const [artifactContent, setArtifactContent] = useState('')
   const [draftContent, setDraftContent] = useState('')
@@ -378,6 +411,15 @@ function App() {
     executionSummary?.repositoryState === 'Executing'
       ? executionSummary
       : selectedRepository?.activeExecutionSession ?? null
+  const executionSessionId = executionSummary?.sessionId ?? null
+  const selectedExecutionStatus = executionSummary
+    ? executionStatusesBySession[executionSessionId ?? ''] ?? null
+    : null
+  const selectedExecutionEvents = executionSummary
+    ? executionEventsBySession[executionSummary.sessionId] ??
+      selectedExecutionStatus?.recentEvents ??
+      []
+    : []
   const currentExecutionState = workspace?.executionState ?? selectedRepository?.executionState ?? 'Ready'
   const executionContextMatchesSelection =
     executionContext?.repositoryId === selectedRepository?.repository.id &&
@@ -391,6 +433,23 @@ function App() {
     executionContext?.diagnostics.validationErrors.length === 0 &&
     !activeExecutionSummary &&
     !isStartingExecution
+  const executionDisplay = executionSummary
+    ? {
+        sessionId: executionSummary.sessionId,
+        milestonePath: executionSummary.milestonePath,
+        state: selectedExecutionStatus?.state ?? executionSummary.state,
+        repositoryState: selectedExecutionStatus?.repositoryState ?? executionSummary.repositoryState,
+        startedAt: selectedExecutionStatus?.startedAt ?? executionSummary.startedAt,
+        completedAt: selectedExecutionStatus?.completedAt ?? executionSummary.completedAt,
+        lastActivityAt: selectedExecutionStatus?.lastActivityAt ?? executionSummary.lastActivityAt,
+        providerName: selectedExecutionStatus?.providerName ?? executionSummary.providerName,
+        providerExecutablePath:
+          selectedExecutionStatus?.providerExecutablePath ?? executionSummary.providerExecutablePath,
+        providerProcessId: selectedExecutionStatus?.providerProcessId ?? executionSummary.providerProcessId,
+        providerStartedAt: selectedExecutionStatus?.providerStartedAt ?? executionSummary.providerStartedAt,
+        failureReason: selectedExecutionStatus?.failureReason ?? executionSummary.failureReason,
+      }
+    : null
 
   const startExecutionBlockedReason = useMemo(() => {
     if (!workspace) {
@@ -686,6 +745,10 @@ function App() {
         repositoryId: selectedRepository.repository.id,
         milestonePath: selectedMilestonePath,
       })
+      setExecutionEventsBySession((currentEvents) => ({
+        ...currentEvents,
+        [session.sessionId]: currentEvents[session.sessionId] ?? [],
+      }))
       setWorkspace((currentWorkspace) =>
         currentWorkspace && currentWorkspace.repository.id === selectedRepository.repository.id
           ? {
@@ -708,6 +771,175 @@ function App() {
       setIsStartingExecution(false)
     }
   }
+
+  useEffect(() => {
+    let isCurrent = true
+
+    invoke<string>('get_backend_url')
+      .then((url) => {
+        if (isCurrent) {
+          setBackendUrl(url.replace(/\/$/, ''))
+        }
+      })
+      .catch(() => {
+        if (isCurrent) {
+          setBackendUrl('http://127.0.0.1:5000')
+        }
+      })
+
+    return () => {
+      isCurrent = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!executionSessionId || !backendUrl || backendUrl === 'mock') {
+      return
+    }
+
+    let isCurrent = true
+    const statusUrl = `${backendUrl}/api/execution-sessions/${executionSessionId}/status`
+
+    fetch(statusUrl)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`execution status lookup failed with status ${response.status}`)
+        }
+
+        return response.json() as Promise<ExecutionStatus>
+      })
+      .then((status) => {
+        if (!isCurrent) {
+          return
+        }
+
+        setExecutionStatusesBySession((currentStatuses) => ({
+          ...currentStatuses,
+          [status.sessionId]: status,
+        }))
+        setExecutionEventsBySession((currentEvents) => ({
+          ...currentEvents,
+          [status.sessionId]: mergeExecutionEvents(
+            currentEvents[status.sessionId] ?? [],
+            status.recentEvents,
+          ),
+        }))
+      })
+      .catch((statusError) => {
+        if (isCurrent) {
+          setError(formatError(statusError))
+        }
+      })
+
+    return () => {
+      isCurrent = false
+    }
+  }, [backendUrl, executionSessionId])
+
+  useEffect(() => {
+    if (!executionSessionId || !backendUrl || backendUrl === 'mock') {
+      return
+    }
+
+    const sessionId = executionSessionId
+    const eventSource = new EventSource(
+      `${backendUrl}/api/execution-sessions/${sessionId}/events/stream`,
+    )
+
+    eventSource.addEventListener('execution-event', (event) => {
+      const executionEvent = JSON.parse(event.data) as ExecutionEvent
+      setExecutionEventsBySession((currentEvents) => ({
+        ...currentEvents,
+        [sessionId]: mergeExecutionEvents(currentEvents[sessionId] ?? [], [executionEvent]),
+      }))
+      fetch(`${backendUrl}/api/execution-sessions/${sessionId}/status`)
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error(`execution status lookup failed with status ${response.status}`)
+          }
+
+          return response.json() as Promise<ExecutionStatus>
+        })
+        .then((status) => {
+          setExecutionStatusesBySession((currentStatuses) => ({
+            ...currentStatuses,
+            [status.sessionId]: status,
+          }))
+          setExecutionEventsBySession((currentEvents) => ({
+            ...currentEvents,
+            [status.sessionId]: mergeExecutionEvents(
+              currentEvents[status.sessionId] ?? [],
+              status.recentEvents,
+            ),
+          }))
+        })
+        .catch(() => undefined)
+    })
+
+    eventSource.onerror = () => {
+      if (eventSource.readyState === EventSource.CLOSED) {
+        return
+      }
+    }
+
+    return () => eventSource.close()
+  }, [backendUrl, executionSessionId])
+
+  useEffect(() => {
+    if (!selectedExecutionStatus || !executionSummary) {
+      return
+    }
+
+    setWorkspace((currentWorkspace) =>
+      currentWorkspace && currentWorkspace.executionSummary?.sessionId === selectedExecutionStatus.sessionId
+        ? {
+            ...currentWorkspace,
+            executionState: selectedExecutionStatus.repositoryState,
+            executionSummary: {
+              ...currentWorkspace.executionSummary,
+              state: selectedExecutionStatus.state,
+              repositoryState: selectedExecutionStatus.repositoryState,
+              completedAt: selectedExecutionStatus.completedAt,
+              lastActivityAt: selectedExecutionStatus.lastActivityAt,
+              providerName: selectedExecutionStatus.providerName,
+              providerExecutablePath: selectedExecutionStatus.providerExecutablePath,
+              providerProcessId: selectedExecutionStatus.providerProcessId,
+              providerStartedAt: selectedExecutionStatus.providerStartedAt,
+              failureReason: selectedExecutionStatus.failureReason,
+            },
+          }
+        : currentWorkspace,
+    )
+    setRepositories((currentRepositories) =>
+      currentRepositories.map((entry) => {
+        const summary = entry.executionSummary ?? entry.activeExecutionSession
+        if (summary?.sessionId !== selectedExecutionStatus.sessionId) {
+          return entry
+        }
+
+        const nextSummary = {
+          ...summary,
+          state: selectedExecutionStatus.state,
+          repositoryState: selectedExecutionStatus.repositoryState,
+          completedAt: selectedExecutionStatus.completedAt,
+          lastActivityAt: selectedExecutionStatus.lastActivityAt,
+          providerName: selectedExecutionStatus.providerName,
+          providerExecutablePath: selectedExecutionStatus.providerExecutablePath,
+          providerProcessId: selectedExecutionStatus.providerProcessId,
+          providerStartedAt: selectedExecutionStatus.providerStartedAt,
+          failureReason: selectedExecutionStatus.failureReason,
+        }
+
+        return {
+          ...entry,
+          executionState: selectedExecutionStatus.repositoryState,
+          activeExecutionSession:
+            selectedExecutionStatus.repositoryState === 'Executing' ? nextSummary : null,
+          executionSummary: nextSummary,
+        }
+      }),
+    )
+  }, [executionSummary, selectedExecutionStatus])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -932,31 +1164,35 @@ function App() {
                     {executionStateLabels[currentExecutionState]}
                   </dd>
                 </div>
-                {executionSummary ? (
+                {executionDisplay ? (
                   <>
                     <div>
                       <dt>Session</dt>
-                      <dd>{executionSummary.sessionId}</dd>
+                      <dd>{executionDisplay.sessionId}</dd>
                     </div>
                     <div>
                       <dt>Provider</dt>
-                      <dd>{executionSummary.providerName || 'Unknown'}</dd>
+                      <dd>{executionDisplay.providerName || 'Unknown'}</dd>
                     </div>
                     <div>
                       <dt>Started</dt>
-                      <dd>{formatDateTime(executionSummary.startedAt)}</dd>
+                      <dd>{formatDateTime(executionDisplay.startedAt)}</dd>
+                    </div>
+                    <div>
+                      <dt>Last activity</dt>
+                      <dd>{formatDateTime(executionDisplay.lastActivityAt)}</dd>
                     </div>
                     <div>
                       <dt>PID</dt>
-                      <dd>{executionSummary.providerProcessId ?? 'Not recorded'}</dd>
+                      <dd>{executionDisplay.providerProcessId ?? 'Not recorded'}</dd>
                     </div>
                     <div>
                       <dt>Executable</dt>
-                      <dd>{executionSummary.providerExecutablePath || 'Not recorded'}</dd>
+                      <dd>{executionDisplay.providerExecutablePath || 'Not recorded'}</dd>
                     </div>
                     <div>
                       <dt>Failure</dt>
-                      <dd>{executionSummary.failureReason || 'None'}</dd>
+                      <dd>{executionDisplay.failureReason || 'None'}</dd>
                     </div>
                   </>
                 ) : null}
@@ -1119,27 +1355,43 @@ function App() {
                 )}
               </section>
 
-              {executionSummary ? (
+              {executionDisplay ? (
                 <section className="execution-session-panel" aria-label="Execution session">
                   <div>
                     <p className="eyebrow">
-                      {executionSummary.repositoryState === 'Executing' ? 'Active Execution' : 'Execution Session'}
+                      {executionDisplay.repositoryState === 'Executing' ? 'Active Execution' : 'Execution Session'}
                     </p>
-                    <h4>{executionSummary.milestonePath ?? 'Selected milestone'}</h4>
+                    <h4>{executionDisplay.milestonePath ?? 'Selected milestone'}</h4>
                   </div>
                   <div className="execution-session-grid">
-                    <span>Session: {executionSummary.sessionId}</span>
-                    <span>Provider: {executionSummary.providerName || 'Unknown'}</span>
-                    <span>State: {executionSummary.state}</span>
-                    <span>Repository state: {executionStateLabels[executionSummary.repositoryState]}</span>
-                    <span>Started: {formatDateTime(executionSummary.startedAt)}</span>
-                    <span>Last activity: {formatDateTime(executionSummary.lastActivityAt)}</span>
-                    <span>Provider start: {formatDateTime(executionSummary.providerStartedAt)}</span>
-                    <span>PID: {executionSummary.providerProcessId ?? 'Not recorded'}</span>
-                    <span>Executable: {executionSummary.providerExecutablePath || 'Not recorded'}</span>
-                    {executionSummary.failureReason ? (
-                      <span className="execution-failure">Failure: {executionSummary.failureReason}</span>
+                    <span>Session: {executionDisplay.sessionId}</span>
+                    <span>Provider: {executionDisplay.providerName || 'Unknown'}</span>
+                    <span>State: {executionDisplay.state}</span>
+                    <span>Repository state: {executionStateLabels[executionDisplay.repositoryState]}</span>
+                    <span>Started: {formatDateTime(executionDisplay.startedAt)}</span>
+                    <span>Last activity: {formatDateTime(executionDisplay.lastActivityAt)}</span>
+                    <span>Provider start: {formatDateTime(executionDisplay.providerStartedAt)}</span>
+                    <span>PID: {executionDisplay.providerProcessId ?? 'Not recorded'}</span>
+                    <span>Executable: {executionDisplay.providerExecutablePath || 'Not recorded'}</span>
+                    {executionDisplay.failureReason ? (
+                      <span className="execution-failure">Failure: {executionDisplay.failureReason}</span>
                     ) : null}
+                  </div>
+                  <div className="execution-event-feed" aria-label="Execution output">
+                    {selectedExecutionEvents.length === 0 ? (
+                      <p className="empty-state">No execution events recorded.</p>
+                    ) : (
+                      selectedExecutionEvents.map((executionEvent) => (
+                        <div className="execution-event-row" key={executionEvent.sequence}>
+                          <span className="execution-event-sequence">#{executionEvent.sequence}</span>
+                          <span className="execution-event-time">
+                            {formatDateTime(executionEvent.timestamp)}
+                          </span>
+                          <span className="execution-event-type">{executionEvent.type}</span>
+                          <pre>{executionEvent.message}</pre>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </section>
               ) : null}

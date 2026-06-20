@@ -480,6 +480,53 @@ button:focus-visible {
   background: #fff3f1;
 }
 
+.execution-event-feed {
+  min-width: 0;
+  max-height: 360px;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  overflow: auto;
+  padding: 10px;
+  border: 1px solid #d9e0e6;
+  border-radius: 6px;
+  background: #fbfcfd;
+}
+
+.execution-event-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(150px, auto) auto minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid #edf0f2;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.execution-event-sequence,
+.execution-event-time,
+.execution-event-type {
+  color: #65717d;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.execution-event-type {
+  color: #24496a;
+}
+
+.execution-event-row pre {
+  min-width: 0;
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: #1d252c;
+  font: 0.8rem/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
 .artifact-workspace {
   min-width: 0;
   min-height: 520px;
@@ -689,7 +736,8 @@ button:focus-visible {
   .context-summary,
   .context-columns,
   .diagnostic-list,
-  .execution-session-grid {
+  .execution-session-grid,
+  .execution-event-row {
     grid-template-columns: 1fr;
   }
 

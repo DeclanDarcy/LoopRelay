@@ -36,11 +36,23 @@ public static class Program
         builder.Services.AddSingleton<IProcessRunner, ProcessRunner>();
         builder.Services.AddSingleton<IGitService, GitService>();
         builder.Services.AddSingleton<IRepositoryProjectionService, RepositoryProjectionService>();
+        builder.Services.AddCors(options =>
+            options.AddDefaultPolicy(policy =>
+                policy
+                    .WithOrigins(
+                        "http://localhost:1420",
+                        "http://127.0.0.1:1420",
+                        "http://localhost:5173",
+                        "http://127.0.0.1:5173",
+                        "tauri://localhost")
+                    .AllowAnyHeader()
+                    .AllowAnyMethod()));
         configureServices?.Invoke(builder.Services);
         builder.Services.ConfigureHttpJsonOptions(options =>
             options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
         var app = builder.Build();
+        app.UseCors();
 
         app.MapGet("/api/ping", () => "Pong");
         app.MapGet("/api/repositories", async (IRepositoryProjectionService projectionService) =>

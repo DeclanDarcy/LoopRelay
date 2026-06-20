@@ -2,35 +2,41 @@
 
 ## Slice Summary
 
-- Continued Epic 2 M3B.1: server-sent events transport for execution monitoring.
-- Added `GET /api/execution-sessions/{sessionId}/events/stream`.
-- The stream returns `text/event-stream` and emits existing `ExecutionEvent` instances as SSE frames with `id`, `event: execution-event`, and JSON `data`.
-- Extended `IExecutionMonitoringService` with `StreamEventsAsync`.
-- Added monitor-side per-session subscriber channels so SSE consumers receive retained events first and then live appended events.
-- Subscriber channels are removed on disconnect or cancellation.
-- Updated M3 checklist to mark backend SSE endpoint and SSE streaming certification complete.
+- Continued Epic 2 M3B.2: React execution monitoring display.
+- Added React-side `ExecutionStatus` and `ExecutionEvent` models.
+- Added `EventSource` streaming from `/api/execution-sessions/{sessionId}/events/stream`.
+- The execution session panel now renders session metadata from `ExecutionStatus` and displays raw execution events chronologically with sequence, timestamp, event type, and message.
+- Event history is retained in React state by session id so switching repositories and returning preserves the visible feed.
+- Dashboard cards now update execution state and last activity from the same `ExecutionStatus` state used by the workspace.
+- Added backend CORS for Vite dev origins and the Tauri production origin so browser SSE can connect to the sidecar.
+- Added Tauri `get_backend_url` and preserved full execution summary metadata through shell serialization.
+- Updated the dev Tauri mock to return `mock` for `get_backend_url`.
+- Updated M3 checklist to mark M3B.2 UI streaming/display/dashboard/preservation work complete.
 
 ## Files Changed
 
 - `.agents/milestones/m3-monitoring-observability.md`
-- `.agents/handoffs/handoff.0010.md`
+- `.agents/handoffs/handoff.0011.md`
 - `.agents/handoffs/handoff.md`
-- `src/CommandCenter.Backend/Execution/IExecutionMonitoringService.cs`
-- `src/CommandCenter.Backend/Execution/ExecutionMonitoringService.cs`
 - `src/CommandCenter.Backend/Program.cs`
-- `tests/CommandCenter.Backend.Tests/ExecutionMonitoringEndpointTests.cs`
+- `src/CommandCenter.Shell/src/main.rs`
+- `src/CommandCenter.UI/src/App.tsx`
+- `src/CommandCenter.UI/src/App.css`
+- `src/CommandCenter.UI/src/devTauriMock.ts`
 
 ## Verification
 
+- `npm run build --prefix src/CommandCenter.UI` passed.
 - `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 95 tests.
+- `cargo build --manifest-path src/CommandCenter.Shell/Cargo.toml` passed.
 
 ## New State
 
-- M3B.1 backend SSE transport is implemented and certified.
-- JSON events and SSE events derive from the same persisted `ExecutionSession.Events` source.
-- SSE certification covers chronological retained event ordering, retained plus live event delivery, disconnect safety, and multiple simultaneous consumers.
-- M3 still has UI `EventSource` integration, dashboard/workspace display, cancellation projection, and provider reattach work remaining.
+- M3B.2 is implemented and certified by build/test checks.
+- React consumes backend `ExecutionStatus` for state and displays raw `ExecutionEvent` entries without interpretation.
+- Browser SSE has the backend URL needed to connect from Tauri and allowed CORS origins.
+- M3 still has cancellation projection and provider reattach behavior open.
 
 ## Recommended Next Slice
 
-- Start M3B.2: wire the UI to the SSE endpoint with `EventSource`, display the chronological execution feed in the execution workspace, and surface session state plus last activity in the workspace/dashboard.
+- Finish the remaining M3 backend behavior: add cancellation state projection tests/implementation and provider reattach-success coverage, then close M3 if the restart behavior is deterministic.

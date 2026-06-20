@@ -21,10 +21,10 @@ Observe active execution sessions and display live output.
 
 ## UI Work
 
-- [ ] Add live execution stream using `EventSource`.
-- [ ] Display session state, started time, last activity time, and output chronologically.
-- [ ] Show execution state and last activity on dashboard cards.
-- [ ] Preserve visibility if user switches repositories and returns.
+- [x] Add live execution stream using `EventSource`.
+- [x] Display session state, started time, last activity time, and output chronologically.
+- [x] Show execution state and last activity on dashboard cards.
+- [x] Preserve visibility if user switches repositories and returns.
 
 ## Tests
 
@@ -41,7 +41,7 @@ Observe active execution sessions and display live output.
 
 ## Exit Criteria
 
-- [ ] Active execution output is visible in real time.
-- [ ] Dashboard shows whether execution is running.
+- [x] Active execution output is visible in real time.
+- [x] Dashboard shows whether execution is running.
 - [x] Failures are observable.
 - [ ] Restart and orphaned-session behavior is deterministic.
