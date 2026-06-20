@@ -44,6 +44,7 @@ type DashboardEntry = {
   readiness: string
   executionState: string
   activeExecutionSession: ExecutionSessionSummary | null
+  executionSummary: ExecutionSessionSummary | null
   milestoneCount: number
   hasCurrentHandoff: boolean
   hasCurrentDecisions: boolean
@@ -58,6 +59,9 @@ type ExecutionSessionSummary = {
   completedAt: string | null
   lastActivityAt: string | null
   providerName: string
+  providerExecutablePath: string | null
+  providerProcessId: number | null
+  providerStartedAt: string | null
   failureReason: string | null
 }
 
@@ -266,6 +270,7 @@ function dashboardEntry(workspace: Workspace): DashboardEntry {
     readiness: workspace.readiness,
     executionState: workspace.executionState,
     activeExecutionSession: workspace.executionSummary,
+    executionSummary: workspace.executionSummary,
     milestoneCount: workspace.milestoneCount,
     hasCurrentHandoff: workspace.hasCurrentHandoff,
     hasCurrentDecisions: workspace.hasCurrentDecisions,
@@ -409,6 +414,9 @@ function startExecution(state: MockState, repositoryId: string, milestonePath: s
     completedAt: null,
     lastActivityAt: timestamp,
     providerName: 'Fake',
+    providerExecutablePath: 'fake-provider',
+    providerProcessId: 1001,
+    providerStartedAt: timestamp,
     failureReason: null,
   }
   state.sessions[sessionId] = {

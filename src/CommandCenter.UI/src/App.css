@@ -203,6 +203,11 @@ button:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.failure-metadata {
+  grid-column: 1 / -1;
+  color: #8a211b;
+}
+
 .availability {
   align-self: start;
   white-space: nowrap;
@@ -466,6 +471,13 @@ button:focus-visible {
   font-size: 0.82rem;
   font-weight: 650;
   overflow-wrap: anywhere;
+}
+
+.execution-session-grid .execution-failure {
+  grid-column: 1 / -1;
+  border-color: #e5aaa5;
+  color: #8a211b;
+  background: #fff3f1;
 }
 
 .artifact-workspace {

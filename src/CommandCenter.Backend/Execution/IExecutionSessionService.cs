@@ -8,6 +8,8 @@ public interface IExecutionSessionService
 
     Task<ExecutionSessionSummary?> GetActiveSessionAsync(Guid repositoryId);
 
+    Task<ExecutionSessionSummary?> GetRepositorySessionSummaryAsync(Guid repositoryId);
+
     Task<ExecutionSessionSummary> StartAsync(Guid repositoryId, ExecutionStartRequest request);
 
     Task<ExecutionSession?> GetSessionAsync(Guid sessionId);

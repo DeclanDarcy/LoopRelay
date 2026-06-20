@@ -172,9 +172,16 @@ public sealed class ExecutionSessionServiceTests
 
         await reloadedService.RecoverAsync();
         var active = await reloadedService.GetActiveSessionAsync(harness.Repository.Id);
+        var repositorySummary = await reloadedService.GetRepositorySessionSummaryAsync(harness.Repository.Id);
         var recoveredSession = await reloadedService.GetSessionAsync(summary.SessionId);
 
         Assert.Null(active);
+        Assert.NotNull(repositorySummary);
+        Assert.Equal(ExecutionSessionState.Failed, repositorySummary.State);
+        Assert.Equal(RepositoryExecutionState.Failed, repositorySummary.RepositoryState);
+        Assert.Equal(ExecutionSessionService.OrphanedProviderFailureReason, repositorySummary.FailureReason);
+        Assert.Equal("C:\\tools\\codex.exe", repositorySummary.ProviderExecutablePath);
+        Assert.Equal(7890, repositorySummary.ProviderProcessId);
         Assert.NotNull(recoveredSession);
         Assert.Equal(ExecutionSessionState.Failed, recoveredSession.State);
         Assert.Equal(RepositoryExecutionState.Failed, recoveredSession.RepositoryState);
@@ -213,8 +220,37 @@ public sealed class ExecutionSessionServiceTests
         var dashboardProjection = Assert.Single(dashboard);
         Assert.Equal(RepositoryExecutionState.Failed, dashboardProjection.ExecutionState);
         Assert.Null(dashboardProjection.ActiveExecutionSession);
+        Assert.NotNull(dashboardProjection.ExecutionSummary);
+        Assert.Equal(ExecutionSessionState.Failed, dashboardProjection.ExecutionSummary.State);
+        Assert.Equal(ExecutionSessionService.OrphanedProviderFailureReason, dashboardProjection.ExecutionSummary.FailureReason);
         Assert.Equal(RepositoryExecutionState.Failed, workspace.ExecutionState);
-        Assert.Null(workspace.ExecutionSummary);
+        Assert.NotNull(workspace.ExecutionSummary);
+        Assert.Equal(ExecutionSessionState.Failed, workspace.ExecutionSummary.State);
+        Assert.Equal(ExecutionSessionService.OrphanedProviderFailureReason, workspace.ExecutionSummary.FailureReason);
+    }
+
+    [Fact]
+    public async Task ProviderStartFailureRemainsVisibleWhenRepositoryReturnsReady()
+    {
+        var provider = new FailingExecutionProvider(new ExecutionProviderException(
+            "ProviderLaunchFailed",
+            "Codex process failed to start."));
+        var harness = await CreateHarnessAsync(provider: provider);
+        await WriteReadyArtifactsAsync(harness.Repository);
+
+        var summary = await harness.SessionService.StartAsync(
+            harness.Repository.Id,
+            new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
+        var active = await harness.SessionService.GetActiveSessionAsync(harness.Repository.Id);
+        var repositorySummary = await harness.SessionService.GetRepositorySessionSummaryAsync(harness.Repository.Id);
+
+        Assert.Equal(ExecutionSessionState.Failed, summary.State);
+        Assert.Equal(RepositoryExecutionState.Ready, summary.RepositoryState);
+        Assert.Null(active);
+        Assert.NotNull(repositorySummary);
+        Assert.Equal(ExecutionSessionState.Failed, repositorySummary.State);
+        Assert.Equal(RepositoryExecutionState.Ready, repositorySummary.RepositoryState);
+        Assert.Contains("ProviderLaunchFailed", repositorySummary.FailureReason);
     }
 
     [Fact]

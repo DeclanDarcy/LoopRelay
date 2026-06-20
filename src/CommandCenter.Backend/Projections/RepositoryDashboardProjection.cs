@@ -16,6 +16,8 @@ public sealed class RepositoryDashboardProjection
 
     public ExecutionSessionSummary? ActiveExecutionSession { get; init; }
 
+    public ExecutionSessionSummary? ExecutionSummary { get; init; }
+
     public int MilestoneCount { get; init; }
 
     public bool HasCurrentHandoff { get; init; }

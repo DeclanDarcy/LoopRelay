@@ -50,6 +50,9 @@ type ExecutionSessionSummary = {
   completedAt: string | null
   lastActivityAt: string | null
   providerName: string
+  providerExecutablePath: string | null
+  providerProcessId: number | null
+  providerStartedAt: string | null
   failureReason: string | null
 }
 
@@ -118,6 +121,7 @@ type RepositoryDashboardProjection = {
   readiness: ExecutionReadiness
   executionState: RepositoryExecutionState
   activeExecutionSession: ExecutionSessionSummary | null
+  executionSummary: ExecutionSessionSummary | null
   milestoneCount: number
   hasCurrentHandoff: boolean
   hasCurrentDecisions: boolean
@@ -168,6 +172,10 @@ const executionStateLabels: Record<RepositoryExecutionState, string> = {
 
 function formatError(error: unknown) {
   return error instanceof Error ? error.message : String(error)
+}
+
+function formatDateTime(value: string | null) {
+  return value ? new Date(value).toLocaleString() : 'Not recorded'
 }
 
 function getArtifactCategories(inventory: ArtifactInventory): ArtifactCategory[] {
@@ -361,7 +369,15 @@ function App() {
     selectedArtifact?.versionKind === 'Current' &&
     (selectedArtifact.family === 'Handoff' || selectedArtifact.family === 'Decision')
   const milestoneOptions = workspace?.artifactInventory.milestones ?? []
-  const activeExecutionSummary = workspace?.executionSummary ?? selectedRepository?.activeExecutionSession ?? null
+  const executionSummary =
+    workspace?.executionSummary ??
+    selectedRepository?.executionSummary ??
+    selectedRepository?.activeExecutionSession ??
+    null
+  const activeExecutionSummary =
+    executionSummary?.repositoryState === 'Executing'
+      ? executionSummary
+      : selectedRepository?.activeExecutionSession ?? null
   const currentExecutionState = workspace?.executionState ?? selectedRepository?.executionState ?? 'Ready'
   const executionContextMatchesSelection =
     executionContext?.repositoryId === selectedRepository?.repository.id &&
@@ -675,11 +691,15 @@ function App() {
           ? {
               ...currentWorkspace,
               executionState: session.repositoryState,
-              executionSummary: session.repositoryState === 'Executing' ? session : null,
+              executionSummary: session,
             }
           : currentWorkspace,
       )
-      setMessage(`Execution started: ${session.sessionId}.`)
+      setMessage(
+        session.state === 'Failed'
+          ? `Execution failed: ${session.sessionId}.`
+          : `Execution started: ${session.sessionId}.`,
+      )
       await loadRepositories()
       await loadWorkspace(selectedRepository.repository.id)
     } catch (startError) {
@@ -835,17 +855,24 @@ function App() {
                     <span className="repository-metadata">
                       {entry.milestoneCount} milestones
                     </span>
-                    {entry.activeExecutionSession ? (
+                    {entry.executionSummary ? (
                       <>
                         <span className="repository-metadata">
-                          Session {entry.activeExecutionSession.sessionId}
+                          Session {entry.executionSummary.sessionId}
                         </span>
                         <span className="repository-metadata">
-                          Activity{' '}
-                          {entry.activeExecutionSession.lastActivityAt
-                            ? new Date(entry.activeExecutionSession.lastActivityAt).toLocaleString()
-                            : 'not recorded'}
+                          State {entry.executionSummary.state}
                         </span>
+                        {entry.executionSummary.lastActivityAt ? (
+                          <span className="repository-metadata">
+                            Activity {formatDateTime(entry.executionSummary.lastActivityAt)}
+                          </span>
+                        ) : null}
+                        {entry.executionSummary.failureReason ? (
+                          <span className="repository-metadata failure-metadata">
+                            Failure {entry.executionSummary.failureReason}
+                          </span>
+                        ) : null}
                       </>
                     ) : null}
                     <span className="repository-metadata">
@@ -905,23 +932,31 @@ function App() {
                     {executionStateLabels[currentExecutionState]}
                   </dd>
                 </div>
-                {activeExecutionSummary ? (
+                {executionSummary ? (
                   <>
                     <div>
                       <dt>Session</dt>
-                      <dd>{activeExecutionSummary.sessionId}</dd>
+                      <dd>{executionSummary.sessionId}</dd>
                     </div>
                     <div>
                       <dt>Provider</dt>
-                      <dd>{activeExecutionSummary.providerName || 'Unknown'}</dd>
+                      <dd>{executionSummary.providerName || 'Unknown'}</dd>
                     </div>
                     <div>
                       <dt>Started</dt>
-                      <dd>
-                        {activeExecutionSummary.startedAt
-                          ? new Date(activeExecutionSummary.startedAt).toLocaleString()
-                          : 'Not recorded'}
-                      </dd>
+                      <dd>{formatDateTime(executionSummary.startedAt)}</dd>
+                    </div>
+                    <div>
+                      <dt>PID</dt>
+                      <dd>{executionSummary.providerProcessId ?? 'Not recorded'}</dd>
+                    </div>
+                    <div>
+                      <dt>Executable</dt>
+                      <dd>{executionSummary.providerExecutablePath || 'Not recorded'}</dd>
+                    </div>
+                    <div>
+                      <dt>Failure</dt>
+                      <dd>{executionSummary.failureReason || 'None'}</dd>
                     </div>
                   </>
                 ) : null}
@@ -1084,28 +1119,27 @@ function App() {
                 )}
               </section>
 
-              {activeExecutionSummary ? (
-                <section className="execution-session-panel" aria-label="Active execution session">
+              {executionSummary ? (
+                <section className="execution-session-panel" aria-label="Execution session">
                   <div>
-                    <p className="eyebrow">Active Execution</p>
-                    <h4>{activeExecutionSummary.milestonePath ?? 'Selected milestone'}</h4>
+                    <p className="eyebrow">
+                      {executionSummary.repositoryState === 'Executing' ? 'Active Execution' : 'Execution Session'}
+                    </p>
+                    <h4>{executionSummary.milestonePath ?? 'Selected milestone'}</h4>
                   </div>
                   <div className="execution-session-grid">
-                    <span>Session: {activeExecutionSummary.sessionId}</span>
-                    <span>Provider: {activeExecutionSummary.providerName || 'Unknown'}</span>
-                    <span>State: {activeExecutionSummary.state}</span>
-                    <span>
-                      Started:{' '}
-                      {activeExecutionSummary.startedAt
-                        ? new Date(activeExecutionSummary.startedAt).toLocaleString()
-                        : 'Not recorded'}
-                    </span>
-                    <span>
-                      Last activity:{' '}
-                      {activeExecutionSummary.lastActivityAt
-                        ? new Date(activeExecutionSummary.lastActivityAt).toLocaleString()
-                        : 'Not recorded'}
-                    </span>
+                    <span>Session: {executionSummary.sessionId}</span>
+                    <span>Provider: {executionSummary.providerName || 'Unknown'}</span>
+                    <span>State: {executionSummary.state}</span>
+                    <span>Repository state: {executionStateLabels[executionSummary.repositoryState]}</span>
+                    <span>Started: {formatDateTime(executionSummary.startedAt)}</span>
+                    <span>Last activity: {formatDateTime(executionSummary.lastActivityAt)}</span>
+                    <span>Provider start: {formatDateTime(executionSummary.providerStartedAt)}</span>
+                    <span>PID: {executionSummary.providerProcessId ?? 'Not recorded'}</span>
+                    <span>Executable: {executionSummary.providerExecutablePath || 'Not recorded'}</span>
+                    {executionSummary.failureReason ? (
+                      <span className="execution-failure">Failure: {executionSummary.failureReason}</span>
+                    ) : null}
                   </div>
                 </section>
               ) : null}

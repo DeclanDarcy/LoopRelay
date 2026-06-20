@@ -2,54 +2,48 @@
 
 ## Newly Authorized Decisions
 
-- M2 is functionally complete from an infrastructure standpoint after M2B.3 restart/orphan recovery.
-- M2 must receive one final closeout slice before M3 begins.
-- The next authorized slice is M2C: failure projection and recovery visibility.
-- M2C must add UI visibility for launch and recovery failures.
-- M2C must not add new backend lifecycle work.
-- M2C must not add monitoring.
-- M2C must not add streaming.
-- M2C must not add completion detection.
-- Dashboard must surface repository execution state: `Failed`, `Cancelled`, `Executing`, and `Ready`.
-- Dashboard must surface a failure summary when one is present.
-- Orphan recovery failure must be visible directly from the dashboard without drill-down.
-- Workspace must surface session id, provider, PID, provider executable, started time, and failure reason when available.
-- Workspace is the operational debugging view for execution-session metadata.
-- M2 can be formally closed after M2C failure visibility is complete.
-- M3 must not begin until M2 is formally closed.
+- M2 is complete and certifiable.
+- The latest-session summary addition is accepted as the final M2 visibility piece.
+- M3 should be split into M3A and M3B.
+- M3A owns backend observability substrate only:
+  - event model
+  - status projection
+  - output capture
+  - bounded event retention
+- M3B owns transport and UI streaming:
+  - SSE endpoint
+  - EventSource integration
+  - streaming workspace UI
+  - dashboard activity indicators
+- The next authorized slice is M3A.1.
+- M3A.1 must add `ExecutionEvent`, `ExecutionEventType`, and `ExecutionStatus`.
+- M3A.1 must implement backend execution monitoring before SSE or React streaming.
+- Monitoring event types should remain observational: `Info`, `StdOut`, `StdErr`, `ProviderStarted`, `ProviderExited`, `Failure`, and `Recovery`.
+- Monitoring must avoid interpretive event types such as thinking, planning, confused, warning, or healthy.
+- Persisted session event history must be bounded by explicit maximum event count and maximum byte policy.
+- M3A.1 must support retained backend history sufficient to answer what happened during an execution session from backend state alone.
 
 ## Certification Required
 
-- Provider start failure UI test:
-  - Launch.
-  - Executable missing.
-  - Session failed.
-  - Repository ready.
-  - Failure visible.
-- Orphan recovery UI test:
-  - Executing session exists.
-  - Backend restart occurs.
-  - Recovery runs.
-  - Session and repository become failed.
-  - Failure visible.
-- Metadata preservation UI test:
-  - PID is displayed after recovery failure.
-  - Provider path is displayed after recovery failure.
-  - Provider name is displayed after recovery failure.
-  - Prompt metadata is displayed after recovery failure.
+- Output ordering:
+  - stdout and stderr events are retained in chronological order.
+- Activity tracking:
+  - received output updates `LastActivityAt`.
+- Failure tracking:
+  - provider exit or failure records a failure event.
+- Retention limits:
+  - event history remains bounded and does not grow without limit.
+- Restart behavior:
+  - retained events survive session store reload.
 
 ## Explicitly Deferred
 
-- Do not start M3 during M2C.
-- Do not add `ExecutionEvent`.
-- Do not add `ExecutionStatus`.
-- Do not add monitoring infrastructure.
-- Do not add stdout capture.
-- Do not add stderr capture.
-- Do not add SSE streaming.
-- Do not add event retention.
-- Do not add completion detection.
+- No SSE in M3A.1.
+- No EventSource in M3A.1.
+- No React streaming UI in M3A.1.
+- No live workspace feed in M3A.1.
+- No dashboard activity indicators until M3B.
 
 ## Next Authorized Slice
 
-- Proceed with M2C failure projection and recovery visibility, then mark M2 closed.
+- Proceed with M3A.1: execution event/status models, monitoring service, stdout/stderr capture, bounded event retention, `LastActivityAt` projection, and backend certification.

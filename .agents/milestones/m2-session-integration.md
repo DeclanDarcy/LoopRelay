@@ -69,8 +69,8 @@ Implement M2 in two internal phases so session persistence is stable before real
 
 ### UI Work
 
-- [ ] Display provider name and process-start failure messages.
-- [ ] Display orphaned-session failure details after backend restart when reattach fails.
+- [x] Display provider name and process-start failure messages.
+- [x] Display orphaned-session failure details after backend restart when reattach fails.
 
 ### Tests
 
@@ -87,4 +87,4 @@ Implement M2 in two internal phases so session persistence is stable before real
 - [x] Command Center can create a fresh Codex-backed execution session.
 - [x] Prompt construction is backend-owned and deterministic.
 - [x] Process launch failure and orphaned restart recovery are explicit.
-- [ ] Live monitoring output is still completed in M3.
+- [x] Live monitoring output remains deferred to M3.

@@ -29,6 +29,7 @@ public sealed class RepositoryProjectionService(
                 Readiness = await planningService.DetermineReadinessAsync(repository),
                 ExecutionState = await executionSessionService.GetRepositoryStateAsync(repository.Id),
                 ActiveExecutionSession = await executionSessionService.GetActiveSessionAsync(repository.Id),
+                ExecutionSummary = await executionSessionService.GetRepositorySessionSummaryAsync(repository.Id),
                 MilestoneCount = inventory.Milestones.Count,
                 HasCurrentHandoff = inventory.CurrentHandoff is not null,
                 HasCurrentDecisions = inventory.CurrentDecisions is not null
@@ -68,7 +69,7 @@ public sealed class RepositoryProjectionService(
             Availability = DetermineAvailability(repository),
             Readiness = await planningService.DetermineReadinessAsync(repository),
             ExecutionState = await executionSessionService.GetRepositoryStateAsync(repository.Id),
-            ExecutionSummary = await executionSessionService.GetActiveSessionAsync(repository.Id),
+            ExecutionSummary = await executionSessionService.GetRepositorySessionSummaryAsync(repository.Id),
             ArtifactInventory = inventory,
             MilestoneCount = inventory.Milestones.Count,
             HasPlan = inventory.Plan is not null,

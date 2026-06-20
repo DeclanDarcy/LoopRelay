@@ -70,6 +70,16 @@ public sealed class ExecutionSessionService(
         return session?.ToSummary();
     }
 
+    public async Task<ExecutionSessionSummary?> GetRepositorySessionSummaryAsync(Guid repositoryId)
+    {
+        var session = (await sessionStore.LoadAsync())
+            .Where(session => session.RepositoryId == repositoryId)
+            .OrderByDescending(session => session.StartedAt)
+            .FirstOrDefault();
+
+        return session?.ToSummary();
+    }
+
     public async Task<ExecutionSessionSummary> StartAsync(Guid repositoryId, ExecutionStartRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.MilestonePath))
