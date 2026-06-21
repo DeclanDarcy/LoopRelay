@@ -39,6 +39,7 @@ import { ExecutionSessionPanel } from './features/execution/ExecutionSessionPane
 import { GitPathBucket } from './features/execution/GitPathBucket'
 import { OperationalContextCompressionSummaryPanel } from './features/operational-context/OperationalContextCompressionSummaryPanel'
 import { OperationalContextCurrentPanel } from './features/operational-context/OperationalContextCurrentPanel'
+import { OperationalContextProposalComparison } from './features/operational-context/OperationalContextProposalComparison'
 import { OperationalContextSemanticChangeList } from './features/operational-context/OperationalContextSemanticChangeList'
 import { OperationalContextProposalSummaryPanel } from './features/operational-context/OperationalContextProposalSummaryPanel'
 import { OperationalContextProposalStatusPanel } from './features/operational-context/OperationalContextProposalStatusPanel'
@@ -1581,24 +1582,10 @@ function App() {
                     <OperationalContextCompressionSummaryPanel
                       compressionSummary={operationalContextProposal.compressionSummary}
                     />
-                    <div className="proposal-comparison-grid">
-                      <div>
-                        <h5>Current Understanding</h5>
-                        <div className="markdown-preview context-artifact-content">
-                          {operationalContextCurrentContent.trim()
-                            ? renderMarkdown(operationalContextCurrentContent)
-                            : <p>No current operational context.</p>}
-                        </div>
-                      </div>
-                      <div>
-                        <h5>Review Candidate</h5>
-                        <div className="markdown-preview context-artifact-content">
-                          {operationalContextProposalDraft.trim()
-                            ? renderMarkdown(operationalContextProposalDraft)
-                            : <p>Empty proposal.</p>}
-                        </div>
-                      </div>
-                    </div>
+                    <OperationalContextProposalComparison
+                      currentContent={operationalContextCurrentContent}
+                      proposedContent={operationalContextProposalDraft}
+                    />
                   </div>
                 ) : null}
               </section>

@@ -186,6 +186,8 @@ Slice progress:
 - [x] Extracted operational-context proposal summary and compression summary rendering as presentation-only `OperationalContextProposalSummaryPanel` and `OperationalContextCompressionSummaryPanel` with characterization coverage for existing labels, timestamp/null fallbacks, optional section ordering, and empty optional-section behavior.
 - [x] Extracted loaded operational-context proposal status rendering as presentation-only `OperationalContextProposalStatusPanel` with characterization coverage for metadata labels, date/none fallbacks, stale-review notice, and promotion failure notices.
 - [x] Extracted operational-context semantic change rendering as presentation-only `OperationalContextSemanticChangeList` with characterization coverage for the existing heading, empty fallback, backend-provided ordering, and type/description labels.
+- [x] Audited decision-continuity review and deliberately left it in `App.tsx` because the block carries acceptance guidance and sits inside proposal review coordination.
+- [x] Extracted operational-context proposal comparison rendering as presentation-only `OperationalContextProposalComparison` with characterization coverage for headings, empty fallbacks, and existing markdown rendering.
 - [x] Left feature component extraction in `App.tsx` for later Workstream 0.5 slices.
 
 ### Certification
