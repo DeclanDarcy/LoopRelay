@@ -2,37 +2,34 @@
 
 ## Slice Summary
 
-Continued Milestone 0 Workstream 0.4 by extracting frontend navigation authority into a narrow shell-state hook.
+Continued Milestone 0 boundary certification by proving artifact editor draft changes remain local and do not reload repository, workspace, refresh, or artifact projections.
 
 ## New State
 
-- Added `src/CommandCenter.UI/src/state/shellState.ts`.
-- `useShellState()` owns only navigation-shaped values:
-  - selected repository id
-  - selected artifact path by repository
-  - selected milestone path by repository
-  - active primary workspace tab
-  - command palette open state
-- Updated `App.tsx` to use shell-state operations for repository selection, artifact selection, milestone selection, repository reconciliation, and repository navigation cleanup.
-- Left projection state, workflow state, and draft state in their existing owners.
-- Added `src/CommandCenter.UI/src/test/characterization/shellState.test.tsx` to certify per-repository path memory, path reconciliation by id, tab state, and command-palette state.
-- Marked the completed navigation-state items and two navigation-specific certification checks in `.agents/milestones/m0-frontend-foundations.md`.
+- Added an App-level characterization in `src/CommandCenter.UI/src/test/characterization/app.smoke.test.tsx`.
+- The test installs the workspace-certification Tauri mock, wraps mock `invoke`, waits for initial projection calls to settle, edits the artifact textarea, and asserts these projection commands do not fire again:
+  - `list_repositories`
+  - `get_repository_workspace`
+  - `refresh_repository_workspace`
+  - `load_artifact_content`
+- Updated `.agents/milestones/m0-frontend-foundations.md` to mark the artifact editor draft boundary and artifact-draft projection-reload certification as complete.
+- No production frontend code changed in this slice.
 
 ## Verification
 
 - `cd src\CommandCenter.UI; npm run lint`
 - `cd src\CommandCenter.UI; npm run build`
+- `cd src\CommandCenter.UI; npm run test -- app.smoke.test.tsx`
 - `cd src\CommandCenter.UI; npm run test`
 - `cd src\CommandCenter.UI; npm run test:e2e`
+- `dotnet test CommandCenter.slnx`
 
-All four commands passed.
+All commands passed.
 
 ## Next Slice
 
-Continue Milestone 0 Workstream 0.4 by certifying the remaining state boundaries:
+Continue Milestone 0 closure by auditing remaining authority boundaries before extracting more code:
 
-- Prove draft edits do not trigger projection reloads.
-- Document or test that workflow/review state remains outside `shellState`.
-- Decide whether optional section anchors or expanded sections are needed now or should be deferred to Milestone 7 navigation/discovery work.
-
-Recommended first step: add a focused characterization test around artifact draft editing that asserts no extra `load_artifact_content`, workspace, or repository projection calls occur while the draft changes.
+- Confirm whether commit draft state, operational-context proposal draft state, and review note draft state need characterization now or can remain documented gaps for later workflow/component migration.
+- Re-run projection authority review for hooks still unchecked in M0, especially commit preparation and operational-context proposal loading.
+- Decide whether Workstream 0.5 should begin with pure helper extraction from `App.tsx` or whether M0 should close with documented deferred items.

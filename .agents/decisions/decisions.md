@@ -2,24 +2,26 @@
 
 ## Newly Authorized
 
-- Consider Workstream 0.4 architecturally successful because navigation now has explicit authority in `shellState`.
-- Treat the current authority map as:
-  - Projection authority: `hooks/`
-  - Navigation authority: `shellState`
-  - Workflow authority: `App.tsx`
-  - Draft authority: `App.tsx`
-- Aggressively protect `shellState` as navigation-only state.
-- Keep `shellState` limited to ids, paths, active tab, and command-palette state.
-- Do not place commit message, review note, proposal draft, git status, or execution status in `shellState`.
-- Add a characterization test proving artifact draft edits do not trigger projection reloads.
-- Defer optional section anchors and expanded sections to Milestone 7 unless the current UI, `App.tsx` complexity, or Milestone 2 shell migration requires them earlier.
-- Treat remaining M0 work as small certification gaps, boundary hardening, and closure review rather than major architectural construction.
-- Prefer an M0 closure audit over additional automatic extraction.
+- Proceed with an M0 closure audit before any additional extraction work.
+- Do not begin Workstream 0.5 until the audit answers whether remaining responsibilities are intentionally owned.
+- Treat another extraction slice as lower leverage than authority-boundary closure at this point.
+- Focus the M0 closure audit on authority leaks, misplaced responsibilities, and intentional ownership of remaining `App.tsx` responsibilities.
+- Do not use code size, hook count, or `App.tsx` line count as closure-audit success criteria.
+- Audit operational-context proposal boundaries as:
+  - Proposal loading is projection.
+  - Proposal generation is workflow action.
+  - Proposal editing is draft state.
+  - Proposal review is workflow authority.
+  - Proposal promotion is workflow authority.
+- Leave operational-context proposal loading in its current location if extraction would not improve authority clarity.
+- Treat commit preparation as likely intentional `App.tsx` ownership for M0 because it intersects selection state, draft state, workflow review, and readiness evaluation.
+- Review remaining refresh paths to confirm they are mutation followed by immediate reconciliation, not projection ownership leaks.
+- Produce an M0 closure authority matrix with responsibility, authority, certification state, and deferral state.
+- Consider M0 effectively complete with documented deferrals if the audit confirms remaining responsibilities are intentionally owned.
 
-## Validation Expected For Next Slice
+## Expected Audit Outcomes
 
-- Add draft-does-not-reload-projection characterization.
-- Re-run projection authority review.
-- Re-run navigation authority review.
-- Perform an M0 closure audit.
-- Decide whether M0 is complete based on whether authority boundaries are explicit, stable, and certified.
+- Operational Context Proposal: likely deferred.
+- Commit Preparation: likely deferred.
+- Workflow Gating: likely deferred.
+- Workflow Actions: likely deferred.

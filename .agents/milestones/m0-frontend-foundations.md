@@ -127,7 +127,7 @@ Projection state:
 
 Draft state:
 
-- [ ] Artifact editor draft.
+- [x] Artifact editor draft.
 - [ ] Commit message draft.
 - [ ] Commit path selection.
 - [ ] Operational-context proposal edit draft.
@@ -135,7 +135,7 @@ Draft state:
 
 ### Certification
 
-- [ ] Changing draft state does not trigger projection reloads.
+- [x] Changing artifact draft state does not trigger projection reloads.
 - [x] Changing tabs does not trigger backend mutations.
 - [x] Navigation state never stores projection objects.
 
