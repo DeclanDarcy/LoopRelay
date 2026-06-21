@@ -26,6 +26,7 @@ import {
 import { ArtifactMarkdownPreview } from './features/artifacts/ArtifactMarkdownPreview'
 import { ArtifactMetadata } from './features/artifacts/ArtifactMetadata'
 import { Button, EmptyState, Panel, SectionHeader, StatusBadge } from './components/design'
+import { AppShell, CommandPalette, Header, Sidebar, WorkspaceTabs } from './components/shell'
 import { ContinuityDiagnosticsPanel } from './features/continuity/ContinuityDiagnosticsPanel'
 import { ExecutionContextArtifactDiagnosticsList } from './features/execution/ExecutionContextArtifactDiagnosticsList'
 import { ExecutionContextArtifactContentPreviews } from './features/execution/ExecutionContextArtifactContentPreviews'
@@ -50,7 +51,6 @@ import { OperationalContextProposalComparison } from './features/operational-con
 import { OperationalContextSemanticChangeList } from './features/operational-context/OperationalContextSemanticChangeList'
 import { OperationalContextProposalSummaryPanel } from './features/operational-context/OperationalContextProposalSummaryPanel'
 import { OperationalContextProposalStatusPanel } from './features/operational-context/OperationalContextProposalStatusPanel'
-import { RepositoryDashboardItemContent } from './features/repositories/RepositoryDashboardItemContent'
 import { SelectedRepositorySummary } from './features/repositories/SelectedRepositorySummary'
 import {
   useArtifactContent,
@@ -108,6 +108,9 @@ function App() {
     selectedRepositoryId,
     selectedArtifactPath,
     selectedMilestonePath,
+    activePrimaryTab,
+    isCommandPaletteOpen,
+    sectionTarget,
     selectRepository: selectRepositoryNavigation,
     reconcileRepositorySelection,
     selectArtifact: selectArtifactNavigation,
@@ -115,6 +118,9 @@ function App() {
     selectMilestone,
     reconcileSelectedMilestone,
     clearRepositoryNavigation,
+    setActivePrimaryTab,
+    setIsCommandPaletteOpen,
+    setSectionTarget,
   } = useShellState()
   const [commitPreparation, setCommitPreparation] = useState<CommitPreparation | null>(null)
   const [selectedCommitPaths, setSelectedCommitPaths] = useState<Set<string>>(new Set())
@@ -1254,65 +1260,78 @@ function App() {
     setExecutionContext(null)
   }, [reconcileSelectedMilestone, selectMilestone, selectedRepositoryId, setExecutionContext, workspace])
 
+  useEffect(() => {
+    if (!sectionTarget) {
+      return
+    }
+
+    document.getElementById(sectionTarget)?.scrollIntoView({ block: 'start' })
+    setSectionTarget(null)
+  }, [sectionTarget, setSectionTarget])
+
   return (
-    <main className="app-shell">
-      <header className="app-header">
-        <div>
-          <p className="eyebrow">Command Center</p>
-          <h1>Repositories</h1>
-        </div>
-        <div className="header-actions">
-          <Button type="button" variant="secondary" className="secondary-action" onClick={loadRepositories}>
-            Refresh
-          </Button>
-          <Button
-            type="button"
-            variant="primary"
-            className="primary-action"
-            onClick={addRepository}
-            disabled={isAdding}
-          >
-            {isAdding ? 'Adding...' : 'Add Repository'}
-          </Button>
-        </div>
-      </header>
+    <AppShell
+      sidebar={
+        <Sidebar
+          repositories={repositories}
+          selectedRepositoryId={selectedRepository?.repository.id ?? selectedRepositoryId}
+          isLoading={isLoading}
+          onOpenPalette={() => setIsCommandPaletteOpen(true)}
+          onSelectRepository={selectRepository}
+        />
+      }
+      header={
+        <Header
+          selectedRepository={selectedRepository}
+          currentExecutionState={currentExecutionState}
+          isWorkspaceLoading={isWorkspaceLoading}
+          isAddingRepository={isAdding}
+          onRefreshRepositories={loadRepositories}
+          onRefreshWorkspace={() => void refreshWorkspace()}
+          onAddRepository={addRepository}
+        />
+      }
+      tabs={
+        <WorkspaceTabs
+          activeTab={activePrimaryTab}
+          onSelectTab={setActivePrimaryTab}
+        />
+      }
+      palette={
+        <CommandPalette
+          isOpen={isCommandPaletteOpen}
+          repositories={repositories}
+          onClose={() => setIsCommandPaletteOpen(false)}
+          onOpen={() => setIsCommandPaletteOpen(true)}
+          onSelectRepository={selectRepository}
+          onSelectSection={(sectionId) => {
+            if (sectionId === 'execution-context') {
+              setActivePrimaryTab('execution')
+            }
+
+            if (sectionId === 'proposal-review') {
+              setActivePrimaryTab('operational-context')
+            }
+
+            if (sectionId === 'continuity-diagnostics') {
+              setActivePrimaryTab('continuity')
+            }
+
+            if (sectionId === 'artifacts') {
+              setActivePrimaryTab('workspace')
+            }
+
+            setSectionTarget(sectionId)
+          }}
+          onSelectTab={setActivePrimaryTab}
+        />
+      }
+    >
 
       {error ? <div className="notice error">{error}</div> : null}
       {message ? <div className="notice success">{message}</div> : null}
 
       <section className="workspace-grid" aria-label="Repository workspace">
-        <Panel className="repository-list" aria-label="Registered repositories">
-          <SectionHeader
-            className="section-heading"
-            title="Dashboard"
-            headingLevel={3}
-            actions={<span>{repositories.length} registered</span>}
-          />
-
-          {isLoading ? (
-            <EmptyState className="empty-state">Loading repositories...</EmptyState>
-          ) : repositories.length === 0 ? (
-            <EmptyState className="empty-state">No repositories registered.</EmptyState>
-          ) : (
-            <div className="repository-items">
-              {repositories.map((entry) => {
-                const isSelected = entry.repository.id === selectedRepository?.repository.id
-
-                return (
-                  <button
-                    type="button"
-                    key={entry.repository.id}
-                    className={`repository-item${isSelected ? ' selected' : ''}`}
-                    onClick={() => selectRepository(entry.repository.id)}
-                  >
-                    <RepositoryDashboardItemContent repository={entry} />
-                  </button>
-                )
-              })}
-            </div>
-          )}
-        </Panel>
-
         <Panel className="repository-details" aria-label="Repository details">
           <SectionHeader
             className="section-heading"
@@ -1334,15 +1353,20 @@ function App() {
           />
 
           {selectedRepository ? (
-            <div className="details-body">
-              <SelectedRepositorySummary
-                repository={selectedRepository}
-                workspace={workspace}
-                executionDisplay={executionDisplay}
-                currentExecutionState={currentExecutionState}
-              />
+            <div className="details-body" data-active-tab={activePrimaryTab}>
+              <div className="tab-panel tab-workspace">
+                <SelectedRepositorySummary
+                  repository={selectedRepository}
+                  workspace={workspace}
+                  executionDisplay={executionDisplay}
+                  currentExecutionState={currentExecutionState}
+                />
+              </div>
 
-              <Panel className="execution-context-panel" aria-label="Current understanding">
+              <Panel
+                className="execution-context-panel tab-panel tab-operational-context"
+                aria-label="Current understanding"
+              >
                 <SectionHeader
                   className="context-toolbar"
                   eyebrow="Operational Context"
@@ -1360,7 +1384,11 @@ function App() {
                 ) : null}
               </Panel>
 
-              <Panel className="execution-context-panel" aria-label="Continuity diagnostics">
+              <Panel
+                className="execution-context-panel tab-panel tab-continuity"
+                id="continuity-diagnostics"
+                aria-label="Continuity diagnostics"
+              >
                 <SectionHeader
                   className="context-toolbar"
                   eyebrow="Continuity"
@@ -1398,7 +1426,11 @@ function App() {
                 )}
               </Panel>
 
-              <Panel className="execution-context-panel" aria-label="Operational context proposals">
+              <Panel
+                className="execution-context-panel tab-panel tab-operational-context"
+                id="proposal-review"
+                aria-label="Operational context proposals"
+              >
                 <SectionHeader
                   className="context-toolbar"
                   eyebrow="Operational Context"
@@ -1575,7 +1607,11 @@ function App() {
                 ) : null}
               </Panel>
 
-              <section className="execution-workspace" aria-label="Execution workspace">
+              <section
+                id="execution-context"
+                className="execution-workspace tab-panel tab-execution"
+                aria-label="Execution workspace"
+              >
                 <SectionHeader
                   className="execution-workspace-header"
                   eyebrow="Execution Workspace"
@@ -1861,7 +1897,11 @@ function App() {
               </section>
 
               {workspace ? (
-                <Panel className="artifact-workspace-shell" aria-label="Artifact workspace">
+                <Panel
+                  id="artifacts"
+                  className="artifact-workspace-shell tab-panel tab-workspace"
+                  aria-label="Artifact workspace"
+                >
                   <SectionHeader
                     eyebrow="Repository Artifacts"
                     title="Explorer and Editor"
@@ -1976,7 +2016,7 @@ function App() {
           )}
         </Panel>
       </section>
-    </main>
+    </AppShell>
   )
 }
 

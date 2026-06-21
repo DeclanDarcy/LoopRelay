@@ -42,6 +42,7 @@ export function useShellState() {
     useState<RepositoryPathSelections>({})
   const [activePrimaryTab, setActivePrimaryTab] = useState<PrimaryWorkspaceTab>('workspace')
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
+  const [sectionTarget, setSectionTarget] = useState<string | null>(null)
 
   const selectedArtifactPath = selectedRepositoryId
     ? selectedArtifactPathsByRepository[selectedRepositoryId] ?? null
@@ -112,6 +113,7 @@ export function useShellState() {
       selectedMilestonePath,
       activePrimaryTab,
       isCommandPaletteOpen,
+      sectionTarget,
       selectRepository,
       reconcileRepositorySelection,
       selectArtifact,
@@ -121,6 +123,7 @@ export function useShellState() {
       clearRepositoryNavigation,
       setActivePrimaryTab,
       setIsCommandPaletteOpen,
+      setSectionTarget,
     }),
     [
       activePrimaryTab,
@@ -135,6 +138,7 @@ export function useShellState() {
       selectedArtifactPath,
       selectedMilestonePath,
       selectedRepositoryId,
+      sectionTarget,
     ],
   )
 }

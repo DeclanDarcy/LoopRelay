@@ -2,14 +2,18 @@
 
 ## Slice Summary
 
-Certified Milestone 1 complete after verifying the completed design-system foundation against the requested M1 gate.
+Advanced Milestone 2 from planning into implementation by introducing the application shell layer and wiring current repository workspace surfaces into shell-owned navigation.
 
 ## New State
 
-- Marked Milestone 1 complete in `.agents/milestones/m1-design-system-foundation.md`.
-- Marked Workstream 1.5 implementation and certification complete.
-- Added a Milestone 1 certification slice note recording that the dark console theme is active, hierarchy/workflows remain unchanged, and primitive authority remains render-only.
-- Rotated the previous handoff to `.agents/handoffs/handoff.0053.md`.
+- Added `src/CommandCenter.UI/src/components/shell/` with `AppShell`, `Sidebar`, `Header`, `WorkspaceTabs`, `CommandPalette`, and an index export.
+- Updated `App.tsx` to render through the new shell components while keeping workflow mutations, drafts, readiness checks, git workflow, execution workflow, handoff review, operational-context review, and continuity actions in `App.tsx`.
+- Extended `useShellState` with `activePrimaryTab`, command-palette visibility, and a client-owned `sectionTarget`.
+- Workspace tabs now show the existing Workspace, Execution, Operational Context, and Continuity regions by client navigation state.
+- Command palette opens with Ctrl+K / Meta+K, closes with Escape or outside click, filters repositories/tabs/sections, and only performs navigation updates.
+- Sidebar uses dashboard projections only. Branch and dirty indicators remain omitted because the dashboard projection does not provide them.
+- Updated `.agents/milestones/m2-application-shell.md` to mark M2 implementation workstreams complete while leaving p95 tab and palette certification open.
+- Rotated the previous handoff to `.agents/handoffs/handoff.0054.md`.
 
 ## Verification
 
@@ -19,6 +23,7 @@ Certified Milestone 1 complete after verifying the completed design-system found
 - Passed `npm run test:e2e` with 2 Playwright tests.
 - Passed `dotnet test CommandCenter.slnx` with 192 backend tests.
 
-## Next Slice
+## Remaining Work
 
-Open Milestone 2: Application Shell. Start with shell architecture and navigation-state boundaries before introducing visible shell changes, because M1 is now closed and the remaining modernization work is layout/application-shell work rather than visual-system work.
+- M2 is not certified complete. Add explicit Playwright coverage for tab switching and command-palette open/filter/navigation latency, ideally with repeated measurements or a real p95 helper.
+- Consider browser visual verification at desktop and narrow widths after the latency tests exist.

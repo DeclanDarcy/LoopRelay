@@ -1,0 +1,5 @@
+export { AppShell } from './AppShell'
+export { CommandPalette } from './CommandPalette'
+export { Header } from './Header'
+export { Sidebar } from './Sidebar'
+export { WorkspaceTabs } from './WorkspaceTabs'

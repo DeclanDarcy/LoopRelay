@@ -2,10 +2,12 @@
 
 ## Newly Authorized
 
-- Treat Milestone 1 as complete, certified, and closed.
-- Do not reopen Milestone 1 for more `Button` conversions, primitive usage counts, `App.tsx` size reduction, workflow extraction, or navigation restructuring.
-- Treat the preserved M0 authority map as the core reason M1 can close: DTO authority in `types`, transport in `api`, projection loading in `hooks`, navigation in `shellState`, presentation in `features`, and remaining workflow/draft/readiness/mutation authority in `App.tsx`.
-- Move next to Milestone 2: Application Shell.
-- Before visible M2 shell implementation, review the M2 milestone document and define shell authority boundaries, `shellState` relationship, layout composition model, sidebar/header/tab responsibilities, and workflow-ownership exclusions.
-- In M2, classify global layout, sidebar, workspace switching, repository navigation, tab navigation, and command-palette entry points as likely shell concerns.
-- Keep execution workflow, git workflow, proposal workflow, continuity workflow, readiness logic, and mutation logic outside shell ownership.
+- Treat Milestone 2 as implemented but not certified complete.
+- Treat the shell as a legitimate new authority-bearing layer only for frontend navigation and application composition.
+- Preserve the M0 authority split: `shellState` owns shell navigation state, `components/shell` own navigation presentation, and `App.tsx` continues to own workflow authority, mutation authority, and readiness authority.
+- Use the shell authority test during M2 certification: no shell component should perform workflow coordination.
+- Keep `activePrimaryTab`, palette visibility, and section target in `shellState`; do not add workflow state such as execution phase, proposal readiness, commit gating, or promotion eligibility to shell state.
+- Keep Command Palette v1 limited to navigation, surface discovery, and workspace movement.
+- Do not expose execution, proposal review, promotion, commit, push, handoff accept/reject, or other workflow mutations through the command palette.
+- Continue omitting sidebar branch, dirty, ahead/behind, or similar git state until backend projections provide that truth.
+- Next slice should focus on M2 certification: tab latency, command-palette latency, responsive verification, and a shell-authority audit before closing Milestone 2.
