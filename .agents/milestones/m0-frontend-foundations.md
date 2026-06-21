@@ -83,7 +83,7 @@ Create hooks that own loading, refreshing, errors, and cleanup:
 - [x] `useRepositoryWorkspace(repositoryId)`
 - [x] `useArtifactContent(repositoryId, relativePath)`
 - [x] `useExecutionContextPreview(repositoryId, milestonePath)`
-- [ ] `useExecutionSession(repositoryId, sessionId)`
+- [x] `useExecutionSession(repositoryId, sessionId)`
 - [ ] `useExecutionEvents(sessionId)`
 - [ ] `useGitStatus(repositoryId)`
 - [ ] `useCommitPreparation(sessionId)`

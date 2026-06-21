@@ -1,4 +1,5 @@
 export * from './useArtifactContent'
 export * from './useExecutionContextPreview'
+export * from './useExecutionSession'
 export * from './useRepositories'
 export * from './useRepositoryWorkspace'

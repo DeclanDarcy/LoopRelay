@@ -7,9 +7,7 @@ import {
   formatError,
   generateContinuityReport as generateContinuityReportCommand,
   generateOperationalContextProposal as generateOperationalContextProposalCommand,
-  getBackendUrl,
   getContinuityDiagnostics,
-  getExecutionStatus,
   getGitStatus,
   getOperationalContextProposal,
   loadArtifactContent,
@@ -31,6 +29,7 @@ import {
 import {
   useArtifactContent,
   useExecutionContextPreview,
+  useExecutionSession,
   useRepositories,
   useRepositoryWorkspace,
 } from './hooks'
@@ -42,7 +41,6 @@ import type {
   ExecutionEvent,
   ExecutionReadiness,
   ExecutionSessionSummary,
-  ExecutionStatus,
   ExecutionWorkflowStep,
   OperationalContextCompressionSummary,
   OperationalContextProposal,
@@ -412,8 +410,6 @@ function App() {
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<string | null>(null)
   const [selectedArtifactPath, setSelectedArtifactPath] = useState<string | null>(null)
   const [selectedMilestonePath, setSelectedMilestonePath] = useState<string | null>(null)
-  const [backendUrl, setBackendUrl] = useState<string | null>(null)
-  const [executionStatusesBySession, setExecutionStatusesBySession] = useState<Record<string, ExecutionStatus>>({})
   const [executionEventsBySession, setExecutionEventsBySession] = useState<Record<string, ExecutionEvent[]>>({})
   const [gitStatus, setGitStatus] = useState<RepositoryGitStatus | null>(null)
   const [commitPreparation, setCommitPreparation] = useState<CommitPreparation | null>(null)
@@ -472,6 +468,27 @@ function App() {
     load: loadWorkspaceProjection,
     refresh: refreshWorkspaceProjection,
   } = useRepositoryWorkspace(selectedRepository?.repository.id ?? null)
+  const executionSummary =
+    workspace?.executionSummary ??
+    selectedRepository?.executionSummary ??
+    selectedRepository?.activeExecutionSession ??
+    null
+  const selectedExecutionHistory =
+    workspace?.executionHistory ??
+    selectedRepository?.executionHistory ??
+    (executionSummary ? [executionSummary] : [])
+  const activeExecutionSummary =
+    executionSummary?.repositoryState === 'Executing'
+      ? executionSummary
+      : selectedRepository?.activeExecutionSession ?? null
+  const executionSessionId = executionSummary?.sessionId ?? null
+  const {
+    data: executionSessionStatus,
+    setData: setExecutionSessionStatus,
+    backendUrl,
+    error: executionSessionError,
+    refresh: refreshExecutionSessionStatus,
+  } = useExecutionSession(selectedRepository?.repository.id ?? null, executionSessionId)
   const {
     data: artifactContent,
     setData: setArtifactContent,
@@ -540,22 +557,10 @@ function App() {
     ? getDecisionContinuityWarnings(operationalContextProposal.compressionSummary)
     : []
   const milestoneOptions = workspace?.artifactInventory.milestones ?? []
-  const executionSummary =
-    workspace?.executionSummary ??
-    selectedRepository?.executionSummary ??
-    selectedRepository?.activeExecutionSession ??
-    null
-  const selectedExecutionHistory =
-    workspace?.executionHistory ??
-    selectedRepository?.executionHistory ??
-    (executionSummary ? [executionSummary] : [])
-  const activeExecutionSummary =
-    executionSummary?.repositoryState === 'Executing'
-      ? executionSummary
-      : selectedRepository?.activeExecutionSession ?? null
-  const executionSessionId = executionSummary?.sessionId ?? null
   const selectedExecutionStatus = executionSummary
-    ? executionStatusesBySession[executionSessionId ?? ''] ?? null
+    ? executionSessionStatus?.sessionId === executionSessionId
+      ? executionSessionStatus
+      : null
     : null
   const selectedExecutionEvents = executionSummary
     ? executionEventsBySession[executionSummary.sessionId] ??
@@ -1259,29 +1264,23 @@ function App() {
       return
     }
 
-    setExecutionStatusesBySession((currentStatuses) => {
-      const currentStatus = currentStatuses[summary.sessionId]
-      if (!currentStatus) {
-        return currentStatuses
-      }
-
-      return {
-        ...currentStatuses,
-        [summary.sessionId]: {
-          ...currentStatus,
-          state: summary.state,
-          repositoryState: summary.repositoryState,
-          completedAt: summary.completedAt,
-          duration: summary.duration,
-          acceptedAt: summary.acceptedAt,
-          rejectedAt: summary.rejectedAt,
-          decisionNote: summary.decisionNote,
-          lastActivityAt: summary.lastActivityAt,
-          handoffPath: summary.handoffPath,
-          failureReason: summary.failureReason,
-        },
-      }
-    })
+    setExecutionSessionStatus((currentStatus) =>
+      currentStatus?.sessionId === summary.sessionId
+        ? {
+            ...currentStatus,
+            state: summary.state,
+            repositoryState: summary.repositoryState,
+            completedAt: summary.completedAt,
+            duration: summary.duration,
+            acceptedAt: summary.acceptedAt,
+            rejectedAt: summary.rejectedAt,
+            decisionNote: summary.decisionNote,
+            lastActivityAt: summary.lastActivityAt,
+            handoffPath: summary.handoffPath,
+            failureReason: summary.failureReason,
+          }
+        : currentStatus,
+    )
     setMessage(successMessage)
     await loadRepositories()
     await loadWorkspace(selectedRepository.repository.id)
@@ -1337,56 +1336,6 @@ function App() {
   }
 
   useEffect(() => {
-    let isCurrent = true
-
-    getBackendUrl()
-      .then((url) => {
-        if (isCurrent) {
-          setBackendUrl(url)
-        }
-      })
-
-    return () => {
-      isCurrent = false
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!executionSessionId || !backendUrl || backendUrl === 'mock') {
-      return
-    }
-
-    let isCurrent = true
-    getExecutionStatus(backendUrl, executionSessionId)
-      .then((status) => {
-        if (!isCurrent) {
-          return
-        }
-
-        setExecutionStatusesBySession((currentStatuses) => ({
-          ...currentStatuses,
-          [status.sessionId]: status,
-        }))
-        setExecutionEventsBySession((currentEvents) => ({
-          ...currentEvents,
-          [status.sessionId]: mergeExecutionEvents(
-            currentEvents[status.sessionId] ?? [],
-            status.recentEvents,
-          ),
-        }))
-      })
-      .catch((statusError) => {
-        if (isCurrent) {
-          setError(formatError(statusError))
-        }
-      })
-
-    return () => {
-      isCurrent = false
-    }
-  }, [backendUrl, executionSessionId])
-
-  useEffect(() => {
     if (!executionSessionId || !backendUrl || backendUrl === 'mock') {
       return
     }
@@ -1397,25 +1346,25 @@ function App() {
         ...currentEvents,
         [sessionId]: mergeExecutionEvents(currentEvents[sessionId] ?? [], [executionEvent]),
       }))
-      getExecutionStatus(backendUrl, sessionId)
-        .then((status) => {
-          setExecutionStatusesBySession((currentStatuses) => ({
-            ...currentStatuses,
-            [status.sessionId]: status,
-          }))
-          setExecutionEventsBySession((currentEvents) => ({
-            ...currentEvents,
-            [status.sessionId]: mergeExecutionEvents(
-              currentEvents[status.sessionId] ?? [],
-              status.recentEvents,
-            ),
-          }))
-        })
-        .catch(() => undefined)
+      void refreshExecutionSessionStatus({ silent: true })
     })
 
     return () => subscription.close()
-  }, [backendUrl, executionSessionId])
+  }, [backendUrl, executionSessionId, refreshExecutionSessionStatus])
+
+  useEffect(() => {
+    if (!selectedExecutionStatus) {
+      return
+    }
+
+    setExecutionEventsBySession((currentEvents) => ({
+      ...currentEvents,
+      [selectedExecutionStatus.sessionId]: mergeExecutionEvents(
+        currentEvents[selectedExecutionStatus.sessionId] ?? [],
+        selectedExecutionStatus.recentEvents,
+      ),
+    }))
+  }, [selectedExecutionStatus])
 
   useEffect(() => {
     if (!selectedExecutionStatus || !executionSummary) {
@@ -1538,6 +1487,12 @@ function App() {
       setError(executionContextError)
     }
   }, [executionContextError])
+
+  useEffect(() => {
+    if (executionSessionError) {
+      setError(executionSessionError)
+    }
+  }, [executionSessionError])
 
   useEffect(() => {
     if (!selectedRepository || !workspace) {

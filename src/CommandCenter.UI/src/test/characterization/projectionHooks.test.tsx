@@ -3,11 +3,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   useArtifactContent,
   useExecutionContextPreview,
+  useExecutionSession,
   useRepositories,
   useRepositoryWorkspace,
 } from '../../hooks'
 import type {
   ExecutionContextPreview,
+  ExecutionStatus,
   RepositoryDashboardProjection,
   RepositoryWorkspaceProjection,
 } from '../../types'
@@ -136,6 +138,51 @@ function createExecutionContextPreview(
       launchBlocked: false,
     },
   }
+}
+
+function createExecutionStatus(sessionId = 'session-alpha'): ExecutionStatus {
+  return {
+    sessionId,
+    state: 'Executing',
+    repositoryState: 'Executing',
+    startedAt: '2026-01-01T00:00:00Z',
+    completedAt: null,
+    duration: null,
+    acceptedAt: null,
+    rejectedAt: null,
+    decisionNote: null,
+    lastActivityAt: '2026-01-01T00:01:00Z',
+    providerName: 'codex',
+    providerExecutablePath: null,
+    providerProcessId: null,
+    providerStartedAt: null,
+    handoffPath: null,
+    failureReason: null,
+    recentEvents: [
+      {
+        sequence: 1,
+        timestamp: '2026-01-01T00:01:00Z',
+        type: 'status',
+        message: 'Execution started',
+      },
+    ],
+  }
+}
+
+function createFetchResponse(value: unknown) {
+  return {
+    ok: true,
+    json: () => Promise.resolve(value),
+  } as Response
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve
+  })
+
+  return { promise, resolve }
 }
 
 function installInvokeMock(invoke: unknown) {
@@ -286,5 +333,90 @@ describe('projection hook characterization', () => {
     })
 
     expect(result.current.data).toBe(secondPreview)
+  })
+
+  it('loads and refreshes execution session status from the backend status projection', async () => {
+    const initialStatus = createExecutionStatus('session-alpha')
+    const refreshedStatus = {
+      ...initialStatus,
+      lastActivityAt: '2026-01-01T00:02:00Z',
+      recentEvents: [
+        ...initialStatus.recentEvents,
+        {
+          sequence: 2,
+          timestamp: '2026-01-01T00:02:00Z',
+          type: 'status',
+          message: 'Execution progressed',
+        },
+      ],
+    } satisfies ExecutionStatus
+    const invoke = vi.fn().mockResolvedValue('http://backend.test')
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(createFetchResponse(initialStatus))
+      .mockResolvedValueOnce(createFetchResponse(refreshedStatus))
+    installInvokeMock(invoke)
+    vi.stubGlobal('fetch', fetch)
+
+    const { result } = renderHook(() => useExecutionSession('repo-alpha', 'session-alpha'))
+
+    await waitFor(() => expect(result.current.data).toBe(initialStatus))
+    expect(fetch).toHaveBeenCalledWith(
+      'http://backend.test/api/execution-sessions/session-alpha/status',
+    )
+
+    await act(async () => {
+      await result.current.refresh()
+    })
+
+    expect(result.current.data).toBe(refreshedStatus)
+    expect(fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('reattaches to an existing execution session id by loading its current status', async () => {
+    const status = createExecutionStatus('session-existing')
+    const invoke = vi.fn().mockResolvedValue('http://backend.test')
+    const fetch = vi.fn().mockResolvedValue(createFetchResponse(status))
+    installInvokeMock(invoke)
+    vi.stubGlobal('fetch', fetch)
+
+    const { result } = renderHook(() => useExecutionSession('repo-alpha', 'session-existing'))
+
+    await waitFor(() => expect(result.current.data).toBe(status))
+    expect(fetch).toHaveBeenCalledWith(
+      'http://backend.test/api/execution-sessions/session-existing/status',
+    )
+  })
+
+  it('does not leak stale execution session loads across repository boundaries', async () => {
+    const alphaStatus = createExecutionStatus('session-alpha')
+    const betaStatus = createExecutionStatus('session-beta')
+    const alphaFetch = createDeferred<Response>()
+    const invoke = vi.fn().mockResolvedValue('http://backend.test')
+    const fetch = vi
+      .fn()
+      .mockReturnValueOnce(alphaFetch.promise)
+      .mockResolvedValueOnce(createFetchResponse(betaStatus))
+    installInvokeMock(invoke)
+    vi.stubGlobal('fetch', fetch)
+
+    const { result, rerender } = renderHook(
+      ({ repositoryId, sessionId }: { repositoryId: string; sessionId: string }) =>
+        useExecutionSession(repositoryId, sessionId),
+      { initialProps: { repositoryId: 'repo-alpha', sessionId: 'session-alpha' } },
+    )
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
+
+    rerender({ repositoryId: 'repo-beta', sessionId: 'session-beta' })
+
+    await waitFor(() => expect(result.current.data).toBe(betaStatus))
+
+    await act(async () => {
+      alphaFetch.resolve(createFetchResponse(alphaStatus))
+      await alphaFetch.promise
+    })
+
+    expect(result.current.data).toBe(betaStatus)
   })
 })
