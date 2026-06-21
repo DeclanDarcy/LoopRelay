@@ -174,6 +174,8 @@ Slice progress:
 - [x] Re-inventoried remaining execution context preview regions in `.agents/audits/m0-execution-context-preview-inventory.md` after validation-list extraction.
 - [x] Extracted repository snapshot rendering as presentation-only `ExecutionRepositorySnapshotPanel` with characterization coverage for missing snapshot, branch fallback, clean/dirty label, captured timestamp formatting, and path buckets.
 - [x] Reassessed remaining execution context preview regions in `.agents/audits/m0-execution-context-preview-inventory.md` after repository snapshot extraction.
+- [x] Extracted artifact diagnostics rendering as presentation-only `ExecutionContextArtifactDiagnosticsList` with characterization coverage for provided order, byte-count text, existing warning/hard-limit suffix labels, and empty-list behavior.
+- [x] Reassessed remaining execution context preview regions in `.agents/audits/m0-execution-context-preview-inventory.md` after artifact diagnostics extraction.
 - [x] Left feature component extraction in `App.tsx` for later Workstream 0.5 slices.
 
 ### Certification

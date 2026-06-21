@@ -23,6 +23,7 @@ import {
   selectRepositoryDirectory,
   startExecution as startExecutionCommand,
 } from './api'
+import { ExecutionContextArtifactDiagnosticsList } from './features/execution/ExecutionContextArtifactDiagnosticsList'
 import { ExecutionContextArtifactList } from './features/execution/ExecutionContextArtifactList'
 import { ExecutionContextMissingOptionalList } from './features/execution/ExecutionContextMissingOptionalList'
 import { ExecutionRepositorySnapshotPanel } from './features/execution/ExecutionRepositorySnapshotPanel'
@@ -2180,18 +2181,9 @@ function App() {
 
                     <div className="artifact-diagnostics">
                       <h5>Artifact Sizes</h5>
-                      <div className="diagnostic-list">
-                        {executionContext.diagnostics.artifactDiagnostics.map((diagnostic) => (
-                          <span key={diagnostic.relativePath}>
-                            {diagnostic.relativePath}: {diagnostic.byteCount} bytes
-                            {diagnostic.hardLimitExceeded
-                              ? ' / hard limit'
-                              : diagnostic.warningThresholdExceeded
-                                ? ' / warning'
-                                : ''}
-                          </span>
-                        ))}
-                      </div>
+                      <ExecutionContextArtifactDiagnosticsList
+                        diagnostics={executionContext.diagnostics.artifactDiagnostics}
+                      />
                     </div>
 
                     <div className="context-artifact-previews">

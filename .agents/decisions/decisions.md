@@ -2,16 +2,16 @@
 
 ## Newly Authorized
 
-- Treat `ExecutionRepositorySnapshotPanel` as the last execution-context extraction that is unambiguously justified by the M0.5 charter unless a later audit proves another remaining surface is pure `props -> render`.
-- Keep repository snapshot rendering projection-only: branch, staged paths, modified paths, untracked paths, related path buckets, and backend-provided state labels may render; repository health, readiness, blocked state, risk, or action guidance must not be inferred in UI code.
-- Treat the existing execution-context presentation components as meaningful structural progress while keeping workflow authority, execution authority, readiness authority, draft authority, and composition in `App.tsx`.
-- Proceed next with an Artifact Diagnostics Audit before considering extraction.
-- Raise the burden of proof for artifact diagnostics because byte thresholds and diagnostic labels are close to execution readiness, blocking, severity, and action semantics.
-- Artifact diagnostics may be extracted only if the component renders backend-provided labels, byte counts, paths, threshold labels, and ordering exactly as projected.
-- Stop artifact diagnostics extraction immediately if it introduces severity ranking, impact sorting, impact grouping, recommendation generation, readiness determination, blocking determination, action suggestions, or meaning-bearing labels such as `Attention Required`, `Large Artifact`, `Recommended Fix`, or `Execution Risk`.
-- Accept that a successful artifact diagnostics audit may conclude `Remain in App.tsx`; this is a valid M0.5 outcome when remaining code reflects deliberate authority placement rather than technical debt.
-- Treat M0.5 as transitioning from finding obvious render-only islands to proving that authority-adjacent surfaces should remain where they are.
+- Treat `ExecutionContextArtifactDiagnosticsList` as a defensible M0.5 extraction only because it preserves a direct `backend projection -> verbatim display` boundary.
+- Keep artifact diagnostics rendering limited to projected ordering, byte counts, warning labels, and hard-limit labels.
+- Do not add severity ranking, risk scoring, recommendation generation, readiness evaluation, importance, relevance, priority, or recommended action derivation to artifact diagnostics rendering.
+- Treat artifact content previews as the final likely execution-context presentation extraction candidate.
+- Artifact content previews may be extracted only if they preserve artifact ordering, existing markdown rendering, `OperationalContext` default-open behavior, and the `Empty artifact.` fallback.
+- Do not derive importance, relevance, priority, or recommended action from artifact content previews.
+- If artifact preview extraction remains clean, strongly consider declaring execution-context decomposition complete.
+- After artifact preview extraction, use a stricter final inventory filter: a candidate must render entirely from props and remain fully functional with all workflow knowledge removed.
+- Treat `Retain in App.tsx` as the likely successful outcome for later execution-context audits when remaining surfaces coordinate workflow, readiness, or authority boundaries.
 
 ## Next Authorized Slice
 
-Perform an Artifact Diagnostics Audit. Do not assume extraction is desired; extract only if the audited surface satisfies `props -> render` without interpretation.
+Extract artifact content previews only if the implementation remains pure `artifact -> render`; otherwise record why the surface should remain in `App.tsx`.

@@ -2,23 +2,23 @@
 
 ## Slice Summary
 
-Continued Milestone 0 Workstream 0.5 by extracting execution repository snapshot rendering into a presentation-only component.
+Continued Milestone 0 Workstream 0.5 by auditing and extracting artifact size diagnostics from the execution context preview.
 
 ## New State
 
-- Added `src/CommandCenter.UI/src/features/execution/ExecutionRepositorySnapshotPanel.tsx`.
-- Replaced the inline repository snapshot JSX in `src/CommandCenter.UI/src/App.tsx` with `ExecutionRepositorySnapshotPanel`.
-- Added `src/CommandCenter.UI/src/test/characterization/executionRepositorySnapshotPanel.test.tsx`.
-- Updated `.agents/milestones/m0-frontend-foundations.md` to record the repository snapshot extraction.
-- Updated `.agents/audits/m0-execution-context-preview-inventory.md` to mark repository snapshot extraction complete and reassess the remaining preview regions.
-- Rotated the previous handoff to `.agents/handoffs/handoff.0027.md`.
+- Added `src/CommandCenter.UI/src/features/execution/ExecutionContextArtifactDiagnosticsList.tsx`.
+- Replaced the inline artifact diagnostics JSX in `src/CommandCenter.UI/src/App.tsx` with `ExecutionContextArtifactDiagnosticsList`.
+- Added `src/CommandCenter.UI/src/test/characterization/executionContextArtifactDiagnosticsList.test.tsx`.
+- Updated `.agents/milestones/m0-frontend-foundations.md` to record artifact diagnostics extraction.
+- Updated `.agents/audits/m0-execution-context-preview-inventory.md` to mark artifact diagnostics extraction complete and narrow the remaining preview inventory.
+- Rotated the previous handoff to `.agents/handoffs/handoff.0028.md`.
 
 ## Verification
 
-- `npm run test -- executionRepositorySnapshotPanel`
+- `npm run test -- executionContextArtifactDiagnosticsList`
 - `npm run lint`
 - `npm run build`
 
 ## Next Slice
 
-Reassess artifact diagnostics before extracting. If extracted, keep it strictly presentation-only: render backend-provided paths, byte counts, threshold labels, and current ordering/fallback behavior without adding readiness, risk, recommendation, or launch-blocking interpretation.
+Extract artifact content previews last if the surface remains strictly presentation-only: preserve current artifact order, default-open behavior for `OperationalContext`, existing markdown rendering, and the `Empty artifact.` fallback. Stop execution-context preview extraction after that unless a new audit proves another remaining surface is pure `props -> render`.
