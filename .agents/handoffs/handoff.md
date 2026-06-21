@@ -2,20 +2,19 @@
 
 ## Slice Summary
 
-Continued Milestone 0 Workstream 0.5 with a focused loaded operational-context proposal status extraction.
+Continued Milestone 0 Workstream 0.5 with a focused operational-context semantic-change presentation extraction.
 
 ## New State
 
-- Extracted loaded proposal metadata/status rendering from `App.tsx` into `src/CommandCenter.UI/src/features/operational-context/OperationalContextProposalStatusPanel.tsx`.
-- The extracted component renders only backend-projected proposal id, status, review state, reviewed/promoted timestamps, archive path, stale-review reason, and promotion archive/write failure notices.
-- Proposal loading, generation, draft editing, review notes, save, accept, reject, promote, semantic-change review, decision-continuity review, and comparison rendering remain in `App.tsx`.
-- Added characterization coverage in `operationalContextProposalStatusPanel.test.tsx`.
-- Updated `.agents/milestones/m0-frontend-foundations.md` and `.agents/audits/m0-app-responsibility-inventory.md` with the new status-panel boundary.
-- Rotated the previous handoff to `.agents/handoffs/handoff.0041.md`.
+- Extracted coarse semantic-change rendering from `App.tsx` into `src/CommandCenter.UI/src/features/operational-context/OperationalContextSemanticChangeList.tsx`.
+- The extracted component renders only backend-provided semantic-change rows, preserving caller-provided order and the existing `type: description` text plus empty fallback.
+- Added characterization coverage in `operationalContextSemanticChangeList.test.tsx` for the heading, empty fallback, ordered rows, and existing labels.
+- Updated `.agents/milestones/m0-frontend-foundations.md` and `.agents/audits/m0-app-responsibility-inventory.md` with the semantic-change boundary.
+- Rotated the previous handoff to `.agents/handoffs/handoff.0042.md`.
 
 ## Verification
 
-- `npm run test -- operationalContextProposalStatusPanel`
+- `npm run test -- operationalContextSemanticChangeList`
 - `npm run lint`
 - `npm run test`
 - `npm run build`
@@ -24,4 +23,4 @@ Continued Milestone 0 Workstream 0.5 with a focused loaded operational-context p
 
 ## Next Slice
 
-Stay in M0.5. The next high-value slice is to audit the remaining operational-context proposal review area for another narrow presentation-only extraction. Best candidates are semantic-change list rendering or decision-continuity review rendering, but only if they remain meaningful as `props -> render` with all accept/reject/promote/edit handlers removed.
+Stay in M0.5. The next high-value target is to audit the decision-continuity review area. Extract only if it remains useful as read-only evidence display after removing accept/reject/promote/edit authority; otherwise keep it in `App.tsx` and move to another low-risk presentation boundary or M0 closure cleanup.

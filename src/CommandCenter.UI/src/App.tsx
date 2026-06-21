@@ -39,6 +39,7 @@ import { ExecutionSessionPanel } from './features/execution/ExecutionSessionPane
 import { GitPathBucket } from './features/execution/GitPathBucket'
 import { OperationalContextCompressionSummaryPanel } from './features/operational-context/OperationalContextCompressionSummaryPanel'
 import { OperationalContextCurrentPanel } from './features/operational-context/OperationalContextCurrentPanel'
+import { OperationalContextSemanticChangeList } from './features/operational-context/OperationalContextSemanticChangeList'
 import { OperationalContextProposalSummaryPanel } from './features/operational-context/OperationalContextProposalSummaryPanel'
 import { OperationalContextProposalStatusPanel } from './features/operational-context/OperationalContextProposalStatusPanel'
 import { RepositoryDashboardItemContent } from './features/repositories/RepositoryDashboardItemContent'
@@ -1574,18 +1575,9 @@ function App() {
                         </>
                       ) : null}
                     </div>
-                    <h5>Semantic Changes</h5>
-                    {operationalContextProposal.semanticChanges.length === 0 ? (
-                      <p>No coarse semantic changes detected.</p>
-                    ) : (
-                      <ul>
-                        {operationalContextProposal.semanticChanges.map((change, index) => (
-                          <li key={`${change.type}-${change.itemId ?? index}`}>
-                            {change.type}: {change.description}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
+                    <OperationalContextSemanticChangeList
+                      semanticChanges={operationalContextProposal.semanticChanges}
+                    />
                     <OperationalContextCompressionSummaryPanel
                       compressionSummary={operationalContextProposal.compressionSummary}
                     />
