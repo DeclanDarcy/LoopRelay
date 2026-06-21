@@ -155,6 +155,11 @@ Draft state:
 - [ ] Extract pure helpers from `App.tsx` into `src/lib`, including formatting, markdown rendering, artifact categories, dirty path counts, and workflow-display mapping.
 - [ ] Keep the user-visible interface unchanged during this milestone.
 
+Slice progress:
+
+- [x] Added `src/lib` extraction for formatting helpers, artifact category/path helpers, and dirty-path counting.
+- [x] Left workflow-display, markdown rendering, and feature component extraction in `App.tsx` for later Workstream 0.5 slices.
+
 ### Certification
 
 - [ ] Existing UI behavior is unchanged.
@@ -166,9 +171,9 @@ Use the mandatory frontend test infrastructure to protect current behavior befor
 
 Minimum scenarios:
 
-- [ ] Repository list loads and first repository selection behavior is preserved.
-- [ ] Selecting a repository loads the same workspace projection.
-- [ ] Refresh reloads workspace and reconciles selected artifacts.
+- [x] Repository list loads and first repository selection behavior is preserved.
+- [x] Selecting a repository loads the same workspace projection.
+- [x] Refresh reloads workspace and reconciles selected artifacts.
 - [ ] Milestone selection builds execution context only when requested.
 - [x] Execution events merge by sequence and preserve ordering.
 - [x] SSE cleanup occurs when session changes or unmounts.

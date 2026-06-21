@@ -33,10 +33,15 @@ import {
   useRepositories,
   useRepositoryWorkspace,
 } from './hooks'
+import {
+  countDirtyPaths,
+  formatDateTime,
+  formatDuration,
+  getArtifactCategories,
+  getAvailableArtifactPaths,
+} from './lib'
 import { useShellState } from './state/shellState'
 import type {
-  ArtifactCategory,
-  ArtifactInventory,
   CommitPreparation,
   ExecutionEvent,
   ExecutionReadiness,
@@ -46,7 +51,6 @@ import type {
   OperationalContextProposal,
   Repository,
   RepositoryAvailability,
-  RepositoryDirtyState,
   RepositoryExecutionState,
   RepositoryWorkspaceProjection,
 } from './types'
@@ -73,14 +77,6 @@ const executionStateLabels: Record<RepositoryExecutionState, string> = {
   AwaitingPush: 'Awaiting push',
   Failed: 'Failed',
   Cancelled: 'Cancelled',
-}
-
-function formatDateTime(value: string | null) {
-  return value ? new Date(value).toLocaleString() : 'Not recorded'
-}
-
-function formatDuration(value: string | null) {
-  return value ?? 'Not recorded'
 }
 
 const decisionSemanticChangeTypes = new Set([
@@ -131,51 +127,6 @@ function mergeExecutionEvents(currentEvents: ExecutionEvent[], incomingEvents: E
   currentEvents.forEach((event) => eventsBySequence.set(event.sequence, event))
   incomingEvents.forEach((event) => eventsBySequence.set(event.sequence, event))
   return Array.from(eventsBySequence.values()).sort((left, right) => left.sequence - right.sequence)
-}
-
-function getArtifactCategories(inventory: ArtifactInventory): ArtifactCategory[] {
-  return [
-    {
-      label: 'Plan',
-      missingLabel: 'plan.md is missing.',
-      artifacts: inventory.plan ? [inventory.plan] : [],
-    },
-    {
-      label: 'Operational Context',
-      missingLabel: 'operational_context.md is missing.',
-      artifacts: inventory.operationalContext ? [inventory.operationalContext] : [],
-    },
-    {
-      label: 'Historical Operational Contexts',
-      missingLabel: 'No historical operational contexts found.',
-      artifacts: inventory.historicalOperationalContexts,
-    },
-    {
-      label: 'Milestones',
-      missingLabel: 'No milestone files found.',
-      artifacts: inventory.milestones,
-    },
-    {
-      label: 'Current Handoff',
-      missingLabel: 'handoff.md is missing.',
-      artifacts: inventory.currentHandoff ? [inventory.currentHandoff] : [],
-    },
-    {
-      label: 'Historical Handoffs',
-      missingLabel: 'No historical handoffs found.',
-      artifacts: inventory.historicalHandoffs,
-    },
-    {
-      label: 'Current Decisions',
-      missingLabel: 'decisions.md is missing.',
-      artifacts: inventory.currentDecisions ? [inventory.currentDecisions] : [],
-    },
-    {
-      label: 'Historical Decisions',
-      missingLabel: 'No historical decisions found.',
-      artifacts: inventory.historicalDecisions,
-    },
-  ]
 }
 
 function renderMarkdown(content: string) {
@@ -259,12 +210,6 @@ function renderMarkdown(content: string) {
   return nodes
 }
 
-function getAvailableArtifactPaths(inventory: ArtifactInventory) {
-  return getArtifactCategories(inventory)
-    .flatMap((category) => category.artifacts)
-    .map((artifact) => artifact.relativePath)
-}
-
 function renderPathBucket(label: string, paths: string[]) {
   return (
     <div>
@@ -279,21 +224,6 @@ function renderPathBucket(label: string, paths: string[]) {
         </ul>
       )}
     </div>
-  )
-}
-
-function countDirtyPaths(dirtyState: RepositoryDirtyState | null) {
-  if (!dirtyState) {
-    return 0
-  }
-
-  return (
-    dirtyState.stagedPaths.length +
-    dirtyState.modifiedPaths.length +
-    dirtyState.addedPaths.length +
-    dirtyState.deletedPaths.length +
-    dirtyState.renamedPaths.length +
-    dirtyState.untrackedPaths.length
   )
 }
 

@@ -1,10 +1,11 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '../../App'
 import { certificationExecutionStates } from '../fixtures/certification'
 import { installWorkspaceCertificationMock, renderWithWorkspaceCertification } from '../render'
 
 afterEach(() => {
+  cleanup()
   delete window.__COMMAND_CENTER_MOCK_STATE__
   delete window.__TAURI_INTERNALS__
   window.history.pushState({}, '', '/')
@@ -82,5 +83,84 @@ describe('workspace certification mock', () => {
 
     await new Promise((resolve) => window.setTimeout(resolve, 0))
     expect(projectionCallCounts()).toEqual(beforeDraftEdit)
+  })
+
+  it('loads the selected repository workspace through the workspace projection', async () => {
+    installWorkspaceCertificationMock()
+
+    const invoke = window.__TAURI_INTERNALS__?.invoke
+    expect(invoke).toBeDefined()
+    if (!invoke) {
+      return
+    }
+
+    const invokeSpy = vi.fn(invoke)
+    window.__TAURI_INTERNALS__!.invoke = invokeSpy
+
+    render(<App />)
+
+    await screen.findAllByRole('heading', { name: 'AlphaRepo' })
+
+    fireEvent.click(screen.getByRole('button', { name: /EmptyRepo/ }))
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'EmptyRepo' })).toBeInTheDocument())
+    await screen.findAllByText('Missing plan')
+
+    expect(
+      invokeSpy.mock.calls.some(
+        ([command, args]) =>
+          command === 'get_repository_workspace' &&
+          typeof args === 'object' &&
+          args !== null &&
+          'repositoryId' in args &&
+          args.repositoryId === 'repo-empty',
+      ),
+    ).toBe(true)
+  })
+
+  it('refreshes the workspace projection and reconciles a removed selected artifact', async () => {
+    installWorkspaceCertificationMock()
+
+    const invoke = window.__TAURI_INTERNALS__?.invoke
+    expect(invoke).toBeDefined()
+    if (!invoke) {
+      return
+    }
+
+    const invokeSpy = vi.fn(invoke)
+    window.__TAURI_INTERNALS__!.invoke = invokeSpy
+
+    render(<App />)
+
+    const editor = await screen.findByRole('textbox')
+    await waitFor(() => expect(editor).toHaveValue('# Plan\n\nInitial plan content.'))
+
+    fireEvent.click(screen.getByRole('button', { name: /decisions\.md/ }))
+    await waitFor(() => expect(editor).toHaveValue('# Decisions\n\nCurrent decisions content.'))
+
+    const state = window.__COMMAND_CENTER_MOCK_STATE__
+    expect(state).toBeDefined()
+    if (!state) {
+      return
+    }
+
+    state.workspaces['repo-alpha'].artifactInventory.currentDecisions = null
+    state.workspaces['repo-alpha'].hasCurrentDecisions = false
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh Workspace' }))
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'plan.md' })).toBeInTheDocument())
+    await waitFor(() => expect(editor).toHaveValue('# Plan\n\nInitial plan content.'))
+
+    expect(
+      invokeSpy.mock.calls.some(
+        ([command, args]) =>
+          command === 'refresh_repository_workspace' &&
+          typeof args === 'object' &&
+          args !== null &&
+          'repositoryId' in args &&
+          args.repositoryId === 'repo-alpha',
+      ),
+    ).toBe(true)
   })
 })
