@@ -6,6 +6,7 @@ import { installWorkspaceCertificationMock, renderWithWorkspaceCertification } f
 
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
   delete window.__COMMAND_CENTER_MOCK_STATE__
   delete window.__TAURI_INTERNALS__
   window.history.pushState({}, '', '/')
@@ -224,6 +225,210 @@ describe('workspace certification mock', () => {
       ).toBe(true),
     )
     expect(await screen.findByText('Continuity milestone.')).toBeInTheDocument()
+  })
+
+  it('keeps artifact save and rotation behind explicit artifact actions', async () => {
+    installWorkspaceCertificationMock()
+
+    const invoke = window.__TAURI_INTERNALS__?.invoke
+    expect(invoke).toBeDefined()
+    if (!invoke) {
+      return
+    }
+
+    const invokeSpy = vi.fn(invoke)
+    window.__TAURI_INTERNALS__!.invoke = invokeSpy
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    render(<App />)
+
+    const editor = await screen.findByRole('textbox')
+    await waitFor(() => expect(editor).toHaveValue('# Plan\n\nInitial plan content.'))
+
+    const artifactWorkflowCommands = [
+      'save_artifact_content',
+      'rotate_current_handoff',
+      'rotate_current_decisions',
+    ]
+    const artifactWorkflowCallCounts = () =>
+      Object.fromEntries(
+        artifactWorkflowCommands.map((command) => [
+          command,
+          invokeSpy.mock.calls.filter(([calledCommand]) => calledCommand === command).length,
+        ]),
+      )
+
+    const beforeDraftEdit = artifactWorkflowCallCounts()
+    fireEvent.change(editor, {
+      target: { value: '# Plan\n\nInitial plan content.\n\nExplicit save boundary.' },
+    })
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: 'Save' }).some((button) => !button.hasAttribute('disabled'))).toBe(
+        true,
+      ),
+    )
+    await new Promise((resolve) => window.setTimeout(resolve, 0))
+    expect(artifactWorkflowCallCounts()).toEqual(beforeDraftEdit)
+
+    const enabledSaveButton = screen
+      .getAllByRole('button', { name: 'Save' })
+      .find((button) => !button.hasAttribute('disabled'))
+    expect(enabledSaveButton).toBeDefined()
+    if (!enabledSaveButton) {
+      return
+    }
+    fireEvent.click(enabledSaveButton)
+
+    await waitFor(() =>
+      expect(
+        invokeSpy.mock.calls.some(
+          ([command, args]) =>
+            command === 'save_artifact_content' &&
+            typeof args === 'object' &&
+            args !== null &&
+            'repositoryId' in args &&
+            args.repositoryId === 'repo-alpha' &&
+            'relativePath' in args &&
+            args.relativePath === '.agents/plan.md' &&
+            'content' in args &&
+            args.content === '# Plan\n\nInitial plan content.\n\nExplicit save boundary.',
+        ),
+      ).toBe(true),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /handoff\.md/ }))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'handoff.md' })).toBeInTheDocument())
+    await waitFor(() => expect(editor).toHaveValue('# Handoff\n\nCurrent handoff content.'))
+    const beforeRotate = artifactWorkflowCallCounts()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Rotate' })).not.toBeDisabled())
+    await new Promise((resolve) => window.setTimeout(resolve, 0))
+    expect(artifactWorkflowCallCounts()).toEqual(beforeRotate)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate' }))
+
+    await waitFor(() =>
+      expect(
+        invokeSpy.mock.calls.some(
+          ([command, args]) =>
+            command === 'rotate_current_handoff' &&
+            typeof args === 'object' &&
+            args !== null &&
+            'repositoryId' in args &&
+            args.repositoryId === 'repo-alpha',
+        ),
+      ).toBe(true),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /decisions\.md/ }))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'decisions.md' })).toBeInTheDocument())
+    await waitFor(() => expect(editor).toHaveValue('# Decisions\n\nCurrent decisions content.'))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Rotate' })).not.toBeDisabled())
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate' }))
+
+    await waitFor(() =>
+      expect(
+        invokeSpy.mock.calls.some(
+          ([command, args]) =>
+            command === 'rotate_current_decisions' &&
+            typeof args === 'object' &&
+            args !== null &&
+            'repositoryId' in args &&
+            args.repositoryId === 'repo-alpha',
+        ),
+      ).toBe(true),
+    )
+  })
+
+  it('keeps execution launch and handoff decisions behind explicit execution actions', async () => {
+    installWorkspaceCertificationMock()
+
+    const invoke = window.__TAURI_INTERNALS__?.invoke
+    expect(invoke).toBeDefined()
+    if (!invoke) {
+      return
+    }
+
+    const invokeSpy = vi.fn(invoke)
+    window.__TAURI_INTERNALS__!.invoke = invokeSpy
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    render(<App />)
+
+    await screen.findAllByRole('heading', { name: 'AlphaRepo' })
+    expect(invokeSpy.mock.calls.some(([command]) => command === 'start_execution')).toBe(false)
+    expect(invokeSpy.mock.calls.some(([command]) => command === 'accept_execution_handoff')).toBe(false)
+    expect(invokeSpy.mock.calls.some(([command]) => command === 'reject_execution_handoff')).toBe(false)
+
+    await waitFor(() => expect(screen.getByRole('combobox')).toHaveValue('.agents/milestones/m5.md'))
+    fireEvent.click(screen.getByRole('button', { name: 'Build Execution Context' }))
+    await waitFor(() => expect(screen.getByText('Launch: Ready')).toBeInTheDocument())
+    expect(invokeSpy.mock.calls.some(([command]) => command === 'start_execution')).toBe(false)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start Execution' }))
+
+    await waitFor(() =>
+      expect(
+        invokeSpy.mock.calls.some(
+          ([command, args]) =>
+            command === 'start_execution' &&
+            typeof args === 'object' &&
+            args !== null &&
+            'repositoryId' in args &&
+            args.repositoryId === 'repo-alpha' &&
+            'milestonePath' in args &&
+            args.milestonePath === '.agents/milestones/m5.md',
+        ),
+      ).toBe(true),
+    )
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Accept Handoff' })).toBeInTheDocument())
+    expect(invokeSpy.mock.calls.some(([command]) => command === 'accept_execution_handoff')).toBe(false)
+    expect(invokeSpy.mock.calls.some(([command]) => command === 'reject_execution_handoff')).toBe(false)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept Handoff' }))
+
+    await waitFor(() =>
+      expect(
+        invokeSpy.mock.calls.some(
+          ([command, args]) =>
+            command === 'accept_execution_handoff' &&
+            typeof args === 'object' &&
+            args !== null &&
+            'sessionId' in args &&
+            args.sessionId === 'session-7',
+        ),
+      ).toBe(true),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /CertificationAwaitingAcceptance/ }))
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'CertificationAwaitingAcceptance' })).toBeInTheDocument(),
+    )
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Reject Handoff' })).toBeInTheDocument())
+
+    const acceptCallCount = invokeSpy.mock.calls.filter(([command]) => command === 'accept_execution_handoff').length
+    const rejectCallCount = invokeSpy.mock.calls.filter(([command]) => command === 'reject_execution_handoff').length
+    await new Promise((resolve) => window.setTimeout(resolve, 0))
+    expect(invokeSpy.mock.calls.filter(([command]) => command === 'accept_execution_handoff')).toHaveLength(
+      acceptCallCount,
+    )
+    expect(invokeSpy.mock.calls.filter(([command]) => command === 'reject_execution_handoff')).toHaveLength(
+      rejectCallCount,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reject Handoff' }))
+
+    await waitFor(() =>
+      expect(
+        invokeSpy.mock.calls.some(
+          ([command, args]) =>
+            command === 'reject_execution_handoff' &&
+            typeof args === 'object' &&
+            args !== null &&
+            'sessionId' in args &&
+            args.sessionId === 'cert-repo-cert-awaiting-acceptance',
+        ),
+      ).toBe(true),
+    )
   })
 
   it('keeps commit preparation and commit execution behind explicit workflow actions', async () => {
@@ -754,6 +959,7 @@ describe('workspace certification mock', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /AlphaRepo/ }))
     await waitFor(() => expect(screen.getByRole('heading', { name: 'AlphaRepo' })).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: /decisions\.md/ })).toBeInTheDocument())
     const beforeNavigation = continuityWorkflowCallCounts()
     fireEvent.click(screen.getByRole('button', { name: /decisions\.md/ }))
     await waitFor(() => expect(screen.getByRole('heading', { name: 'decisions.md' })).toBeInTheDocument())

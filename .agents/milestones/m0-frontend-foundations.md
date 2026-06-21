@@ -9,7 +9,7 @@
 - [ ] Workstream 0.3: Extract Projection Hooks
 - [ ] Workstream 0.4: Separate State Boundaries
 - [ ] Workstream 0.5: Decompose Without Redesign
-- [ ] Workstream 0.6: Add Characterization Protection
+- [x] Workstream 0.6: Add Characterization Protection
 - [ ] Certification complete
 
 Goal: create stable type, transport, hook, and state boundaries with no visible UX change.
@@ -203,20 +203,22 @@ Minimum scenarios:
 - [x] Proposal generation, load, edit, accept, reject, and promote keep current gating.
 - [x] Commit preparation, selection, commit, and push keep current gating.
 - [x] Continuity diagnostics and report generation remain read-only except for explicit report generation.
+- [x] Artifact save and current handoff/decisions rotation remain local/draft-only except for explicit artifact actions.
+- [x] Execution launch and generated handoff accept/reject remain projection/review-only except for explicit execution actions.
 
 Use `?mock=workspace-certification` to certify all repository execution states:
 
-- [ ] `Ready`
-- [ ] `Executing`
-- [ ] `AwaitingAcceptance`
-- [ ] `AwaitingCommit`
-- [ ] `AwaitingPush`
-- [ ] `Failed`
-- [ ] `Cancelled`
+- [x] `Ready`
+- [x] `Executing`
+- [x] `AwaitingAcceptance`
+- [x] `AwaitingCommit`
+- [x] `AwaitingPush`
+- [x] `Failed`
+- [x] `Cancelled`
 
 ### Certification
 
-- [ ] Frontend tests cover the behavior above.
+- [x] Frontend tests cover the behavior above.
 - [ ] `npm run lint`, `npm run build`, `npm run test`, `npm run test:e2e`, and `dotnet test CommandCenter.slnx` pass.
 
 Closure audit note: M0 already has boundary characterization for transport, shell navigation, extracted projection hooks, execution event cleanup/order, certification fixture state coverage, and artifact-draft projection isolation. Remaining workflow characterization should be added alongside Workstream 0.5 decomposition and feature workspace migration.
@@ -228,3 +230,9 @@ Slice note: `app.smoke.test.tsx` now characterizes commit workflow authority. Se
 Slice note: `app.smoke.test.tsx` now characterizes operational-context proposal workflow authority. Repository/artifact navigation and draft edits do not invoke proposal workflow commands. Existing proposals are loaded only through `Load Latest`; generation, edit save, accept, reject, and promote each require their explicit action and send the selected repository/proposal payload.
 
 Slice note: `app.smoke.test.tsx` now characterizes continuity diagnostics/report authority. Diagnostics initial load, repository selection, and `Refresh Diagnostics` remain read-only projection retrieval through `get_continuity_diagnostics`; repository/artifact navigation does not invoke report generation; only `Generate Report` invokes `generate_continuity_report` for the selected repository.
+
+Slice note: `app.smoke.test.tsx` now characterizes artifact mutation authority. Artifact draft edits do not invoke save or rotation commands; only `Save` invokes `save_artifact_content`; only confirmed `Rotate` while a current handoff or current decisions artifact is selected invokes the matching rotation command.
+
+Slice note: `app.smoke.test.tsx` now characterizes execution launch and generated handoff decision authority. Rendering, repository navigation, and context build do not invoke workflow mutations; only `Start Execution` invokes `start_execution`; only `Accept Handoff` or confirmed `Reject Handoff` invokes the corresponding generated-handoff decision command.
+
+Slice note: `.agents/audits/m0-closure-authority-matrix.md` now includes a complete workflow-mutating frontend command inventory for M0.6. Workstream 0.6 is closed; return to M0.5 decomposition before final M0 certification.

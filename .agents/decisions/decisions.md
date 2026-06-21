@@ -2,10 +2,10 @@
 
 ## Newly Authorized
 
-- Treat M0.6 as frontend-wide authority certification, not local behavior documentation.
-- Use the invariant that navigation, draft editing, and projection loading are not workflow mutations; only explicit workflow actions may mutate workflow state.
-- Treat the four currently characterized workflow domains as certified mutation systems: execution context, git workflow, operational-context proposals, and continuity reports.
-- Perform a workflow-mutating backend command inventory next before adding more opportunistic characterization.
-- Define M0.6 completion as every workflow-mutating backend command appearing in an authority matrix, every such command having characterization coverage, and every such command being certified to require an explicit user workflow action.
-- If the inventory reveals only a small number of uncovered commands, finish M0.6 before returning to M0.5 decomposition.
-- If the inventory shows coverage is largely complete, formally close Workstream 0.6 and record the resulting authority constitution as a primary M0 deliverable.
+- Close M0.6 based on the completed workflow authority inventory, not merely on additional smoke-test count.
+- Treat the workflow authority invariant as documented, characterized, and verified across the frontend workflow command inventory.
+- Treat the remaining M0 focus as validating foundations rather than adding more authority-foundation work.
+- Return to M0.5 cautiously with a high extraction threshold: only `props -> render` regions are candidates.
+- Before further extraction, perform a residual `App.tsx` inventory that classifies remaining regions as pure presentation, presentation plus interpretation, workflow coordination, or authority decisions.
+- Retain regions that include presentation plus interpretation, workflow coordination, or authority decisions.
+- Accept that a successful M0 outcome is deliberate ownership of remaining responsibilities, not necessarily making `App.tsx` tiny.
