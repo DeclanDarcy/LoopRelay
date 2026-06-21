@@ -2,15 +2,15 @@
 
 ## Tracking
 
-- [ ] Milestone complete
+- [x] Milestone complete
 - [x] Workstream 3.1: Workflow Rail
-- [ ] Workstream 3.2: Workspace Layout
+- [x] Workstream 3.2: Workspace Layout
 - [x] Workstream 3.3: Execution Context Panel
 - [x] Workstream 3.4: Live Activity Panel
 - [x] Workstream 3.5: Milestones Panel
 - [x] Workstream 3.6: Inspector Rail
 - [x] Workstream 3.7: Workspace Cross-Links
-- [ ] Certification complete
+- [x] Certification complete
 
 Goal: make Workspace the primary operational surface with simultaneous visibility.
 
@@ -57,7 +57,7 @@ Rules:
 
 Implement `features/workspace/WorkspaceTab.tsx`.
 
-Status: started. `WorkspaceTab` now owns a desktop-first main column plus right inspector rail, with the existing repository summary, workflow rail, execution context panel, artifact workspace, and execution history slotted through real projections. Live activity, milestones, commit/push, and operational-context inspector placement still need to move into the workspace layout before this workstream is complete.
+Status: complete. `WorkspaceTab` owns a desktop-first main column plus right inspector rail, with the repository summary, workflow rail, execution context panel, live activity, milestones, artifact workspace, commit/push summary, operational-context summary, and execution history slotted through real projections.
 
 Target structure:
 
