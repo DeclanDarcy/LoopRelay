@@ -109,11 +109,11 @@ Create shell/navigation state in `src/state/shellState.ts`.
 
 Navigation state:
 
-- [ ] Selected repository id.
-- [ ] Active primary tab: `workspace`, `execution`, `operational-context`, `continuity`.
-- [ ] Selected artifact path by repository.
-- [ ] Selected milestone path by repository.
-- [ ] Command palette open/closed.
+- [x] Selected repository id.
+- [x] Active primary tab: `workspace`, `execution`, `operational-context`, `continuity`.
+- [x] Selected artifact path by repository.
+- [x] Selected milestone path by repository.
+- [x] Command palette open/closed.
 - [ ] Optional section anchors and expanded sections.
 
 Projection state:
@@ -136,8 +136,8 @@ Draft state:
 ### Certification
 
 - [ ] Changing draft state does not trigger projection reloads.
-- [ ] Changing tabs does not trigger backend mutations.
-- [ ] Navigation state never stores projection objects.
+- [x] Changing tabs does not trigger backend mutations.
+- [x] Navigation state never stores projection objects.
 
 ## Workstream 0.5: Decompose Without Redesign
 

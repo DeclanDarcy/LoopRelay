@@ -2,27 +2,24 @@
 
 ## Newly Authorized
 
-- Treat Milestone 0 as an authority migration with evidence, not as a sequence of refactors.
-- Preserve the conclusion: do not extract hooks just to reduce `App.tsx`.
-- Classify current M0 status as infrastructure complete, type authority complete, transport authority complete, projection authority substantially complete, authority certification complete, and navigation authority not yet explicit.
-- Treat navigation ownership as the highest-leverage remaining M0 ambiguity.
-- Proceed next with Workstream 0.4 by making navigation authority explicit.
-- Create `src/CommandCenter.UI/src/state/shellState.ts` as navigation authority only.
-- Start `shellState.ts` with clearly navigation-owned state:
-  - selected repository id
-  - selected artifact path by repository
-  - selected milestone path by repository
-  - active tab
-  - command palette open state
-- Allow `shellState` to own selection, active view, palette visibility, and navigation history.
-- Do not allow `shellState` to own workspace data, execution data, git status, proposal data, draft content, or review state.
-- Keep projection retrieval authority in `hooks/`.
-- Keep workflow actions, workflow gating, draft state, and view composition in `App.tsx` during the next boundary step.
-- Do not move `draftContent`, `commitMessage`, `selectedCommitPaths`, `operationalContextProposalDraft`, or `operationalContextReviewNote` into shell state.
-- Treat M0 completion as requiring explicit projection authority, explicit navigation authority, explicit draft authority, and certified boundaries rather than extracting every possible hook.
+- Consider Workstream 0.4 architecturally successful because navigation now has explicit authority in `shellState`.
+- Treat the current authority map as:
+  - Projection authority: `hooks/`
+  - Navigation authority: `shellState`
+  - Workflow authority: `App.tsx`
+  - Draft authority: `App.tsx`
+- Aggressively protect `shellState` as navigation-only state.
+- Keep `shellState` limited to ids, paths, active tab, and command-palette state.
+- Do not place commit message, review note, proposal draft, git status, or execution status in `shellState`.
+- Add a characterization test proving artifact draft edits do not trigger projection reloads.
+- Defer optional section anchors and expanded sections to Milestone 7 unless the current UI, `App.tsx` complexity, or Milestone 2 shell migration requires them earlier.
+- Treat remaining M0 work as small certification gaps, boundary hardening, and closure review rather than major architectural construction.
+- Prefer an M0 closure audit over additional automatic extraction.
 
 ## Validation Expected For Next Slice
 
-- Implement navigation authority without introducing application-wide state.
-- Preserve the separation: navigation state is not projection state, workflow state, or draft state.
-- Keep `shellState.ts` narrow enough that it cannot become a dumping ground for backend projections or editor drafts.
+- Add draft-does-not-reload-projection characterization.
+- Re-run projection authority review.
+- Re-run navigation authority review.
+- Perform an M0 closure audit.
+- Decide whether M0 is complete based on whether authority boundaries are explicit, stable, and certified.

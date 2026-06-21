@@ -33,6 +33,7 @@ import {
   useRepositories,
   useRepositoryWorkspace,
 } from './hooks'
+import { useShellState } from './state/shellState'
 import type {
   ArtifactCategory,
   ArtifactInventory,
@@ -405,13 +406,21 @@ function getExecutionWorkflowSteps(
 }
 
 function App() {
-  const [selectedRepositoryId, setSelectedRepositoryId] = useState<string | null>(null)
-  const [selectedArtifactPath, setSelectedArtifactPath] = useState<string | null>(null)
-  const [selectedMilestonePath, setSelectedMilestonePath] = useState<string | null>(null)
+  const {
+    selectedRepositoryId,
+    selectedArtifactPath,
+    selectedMilestonePath,
+    selectRepository: selectRepositoryNavigation,
+    reconcileRepositorySelection,
+    selectArtifact: selectArtifactNavigation,
+    reconcileSelectedArtifact: reconcileSelectedArtifactNavigation,
+    selectMilestone,
+    reconcileSelectedMilestone,
+    clearRepositoryNavigation,
+  } = useShellState()
   const [commitPreparation, setCommitPreparation] = useState<CommitPreparation | null>(null)
   const [selectedCommitPaths, setSelectedCommitPaths] = useState<Set<string>>(new Set())
   const [commitMessage, setCommitMessage] = useState('')
-  const selectedArtifactPathsByRepository = useRef<Record<string, string>>({})
   const refreshedCompletedSessionIds = useRef<Set<string>>(new Set())
   const [draftContent, setDraftContent] = useState('')
   const [generatedHandoffContent, setGeneratedHandoffContent] = useState('')
@@ -717,41 +726,29 @@ function App() {
 
   const selectRepository = useCallback(
     (repositoryId: string) => {
-      setSelectedRepositoryId(repositoryId)
-      setSelectedArtifactPath(selectedArtifactPathsByRepository.current[repositoryId] ?? null)
+      selectRepositoryNavigation(repositoryId)
       setOperationalContextProposal(null)
       setContinuityDiagnostics(null)
       setOperationalContextCurrentContent('')
       setOperationalContextProposalDraft('')
       setOperationalContextReviewNote('')
     },
-    [setContinuityDiagnostics],
+    [selectRepositoryNavigation, setContinuityDiagnostics],
   )
 
-  const selectArtifact = useCallback((repositoryId: string, relativePath: string) => {
-    selectedArtifactPathsByRepository.current[repositoryId] = relativePath
-    setSelectedArtifactPath(relativePath)
-  }, [])
+  const selectArtifact = useCallback(
+    (repositoryId: string, relativePath: string) => {
+      selectArtifactNavigation(repositoryId, relativePath)
+    },
+    [selectArtifactNavigation],
+  )
 
   const reconcileSelectedArtifact = useCallback(
     (repositoryId: string, nextWorkspace: RepositoryWorkspaceProjection) => {
       const artifactPaths = getAvailableArtifactPaths(nextWorkspace.artifactInventory)
-      const rememberedPath = selectedArtifactPathsByRepository.current[repositoryId]
-
-      if (rememberedPath && artifactPaths.includes(rememberedPath)) {
-        setSelectedArtifactPath(rememberedPath)
-        return
-      }
-
-      const nextPath = artifactPaths[0] ?? null
-      setSelectedArtifactPath(nextPath)
-      if (nextPath) {
-        selectedArtifactPathsByRepository.current[repositoryId] = nextPath
-      } else {
-        delete selectedArtifactPathsByRepository.current[repositoryId]
-      }
+      reconcileSelectedArtifactNavigation(repositoryId, artifactPaths)
     },
-    [],
+    [reconcileSelectedArtifactNavigation],
   )
 
   const loadWorkspace = useCallback(async (repositoryId: string) => {
@@ -906,10 +903,8 @@ function App() {
     try {
       await removeRepositoryRegistration(repository.id)
       setMessage('Repository registration removed.')
-      delete selectedArtifactPathsByRepository.current[repository.id]
+      clearRepositoryNavigation(repository.id)
       setWorkspace(null)
-      setSelectedArtifactPath(null)
-      setSelectedMilestonePath(null)
       setExecutionContext(null)
       await loadRepositories()
     } catch (removeError) {
@@ -1409,18 +1404,8 @@ function App() {
   }, [loadRepositories, loadWorkspace, selectedExecutionStatus, selectedRepository])
 
   useEffect(() => {
-    setSelectedRepositoryId((currentId) => {
-      if (repositories.length === 0) {
-        return null
-      }
-
-      if (currentId && repositories.some((entry) => entry.repository.id === currentId)) {
-        return currentId
-      }
-
-      return repositories[0].repository.id
-    })
-  }, [repositories])
+    reconcileRepositorySelection(repositories.map((entry) => entry.repository.id))
+  }, [reconcileRepositorySelection, repositories])
 
   useEffect(() => {
     if (repositoriesError) {
@@ -1430,12 +1415,20 @@ function App() {
 
   useEffect(() => {
     if (workspaceError) {
-      setSelectedArtifactPath(null)
-      setSelectedMilestonePath(null)
+      if (selectedRepositoryId) {
+        selectArtifactNavigation(selectedRepositoryId, null)
+        selectMilestone(selectedRepositoryId, null)
+      }
       setExecutionContext(null)
       setError(workspaceError)
     }
-  }, [setExecutionContext, workspaceError])
+  }, [
+    selectArtifactNavigation,
+    selectMilestone,
+    selectedRepositoryId,
+    setExecutionContext,
+    workspaceError,
+  ])
 
   useEffect(() => {
     if (artifactError) {
@@ -1549,20 +1542,19 @@ function App() {
 
   useEffect(() => {
     if (!workspace) {
-      setSelectedMilestonePath(null)
+      if (selectedRepositoryId) {
+        selectMilestone(selectedRepositoryId, null)
+      }
       return
     }
 
     const milestones = workspace.artifactInventory.milestones
-    setSelectedMilestonePath((currentPath) => {
-      if (currentPath && milestones.some((milestone) => milestone.relativePath === currentPath)) {
-        return currentPath
-      }
-
-      return milestones[0]?.relativePath ?? null
-    })
+    reconcileSelectedMilestone(
+      workspace.repository.id,
+      milestones.map((milestone) => milestone.relativePath),
+    )
     setExecutionContext(null)
-  }, [setExecutionContext, workspace])
+  }, [reconcileSelectedMilestone, selectMilestone, selectedRepositoryId, setExecutionContext, workspace])
 
   return (
     <main className="app-shell">
@@ -2405,7 +2397,12 @@ function App() {
                   <div className="context-controls">
                     <select
                       value={selectedMilestonePath ?? ''}
-                      onChange={(event) => setSelectedMilestonePath(event.target.value || null)}
+                      onChange={(event) =>
+                        selectMilestone(
+                          selectedRepository.repository.id,
+                          event.target.value || null,
+                        )
+                      }
                       disabled={milestoneOptions.length === 0 || isContextLoading}
                     >
                       {milestoneOptions.length === 0 ? (
