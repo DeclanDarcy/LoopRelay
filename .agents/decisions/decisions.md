@@ -2,12 +2,12 @@
 
 ## Newly Authorized
 
-- Treat the completed Workspace Live Activity slice as architecturally correct: `WorkspaceLiveActivityPanel` is a display wrapper, `ExecutionEventFeed` remains the shared renderer, and `selectedExecutionEvents` remains the existing source of event truth.
-- Preserve the invariant that Workspace activity must not introduce a second event store.
-- Continue M3 with Workstream 3.5: Milestones Panel.
-- Implement `WorkspaceMilestonesPanel` as an overview and navigation surface only.
-- Render only known milestone inventory and selection state from existing frontend/backend projections.
-- Safe milestone inputs are `workspace.artifactInventory.milestones`, selected milestone path, click/select milestone behavior, and navigation/open affordances.
-- Do not invent milestone completion status, inferred progress, derived readiness, or synthetic workflow state unless those values are already provided by backend projections.
-- `WorkspaceMilestonesPanel` may own milestone list rendering, empty state rendering, selected visual state, and navigation callbacks.
-- `WorkspaceMilestonesPanel` must not own milestone parsing, progress inference, execution readiness, or workflow mutation.
+- Treat M3 Workstream 3.5 as complete and architecturally correct because `WorkspaceMilestonesPanel` stayed within the artifact-inventory boundary.
+- Continue M3 with Workstream 3.6: Inspector Rail.
+- Start the Inspector Rail with read-only commit/push summary placement using existing git status and commit-preparation projections.
+- The Inspector Rail should consume existing backend/frontend projection answers, not create new workflow answers.
+- Safe commit/push summary inputs include current git status, pending changes counts, commit preparation summary, readiness indicators already produced elsewhere, and existing projection outputs.
+- Do not add commit orchestration, push orchestration, new readiness calculations, new git state derivation, or new branch inference in the Inspector Rail slice.
+- Treat Operational Context inspector placement similarly: show current operational context summary, proposal status summary, compression summary, and existing projection outputs only.
+- Do not add proposal interpretation, proposal generation, or proposal readiness ownership to the Workspace Inspector Rail.
+- Preserve the emerging M3 split: Workspace main area owns planning, activity, and evidence visibility; Inspector Rail owns review, readiness visibility, and context summary; detailed workflow authority remains in Execution, Operational Context, Continuity, and git workflow surfaces.

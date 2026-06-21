@@ -717,6 +717,7 @@ button:focus-visible {
 }
 
 .execution-context-panel,
+.workspace-milestones-panel,
 .execution-session-panel,
 .execution-history-panel,
 .execution-output-panel,
@@ -733,6 +734,7 @@ button:focus-visible {
 
 .context-toolbar,
 .context-controls,
+.workspace-milestones-header,
 .git-status-header {
   min-width: 0;
   display: flex;
@@ -742,6 +744,7 @@ button:focus-visible {
 }
 
 .context-toolbar h4,
+.workspace-milestones-header h4,
 .context-preview h5,
 .execution-session-panel h4,
 .execution-output-panel h4,
@@ -751,6 +754,49 @@ button:focus-visible {
   color: var(--fg-default);
   letter-spacing: 0;
   overflow-wrap: anywhere;
+}
+
+.workspace-milestone-list {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.workspace-milestone-item {
+  min-width: 0;
+  min-height: 68px;
+  display: grid;
+  gap: 4px;
+  align-content: center;
+  padding: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  color: var(--fg-muted);
+  background: var(--bg-inset);
+  text-align: left;
+}
+
+.workspace-milestone-item.selected,
+.workspace-milestone-item:hover {
+  border-color: var(--accent-muted);
+  background: var(--accent-subtle);
+}
+
+.workspace-milestone-item span,
+.workspace-milestone-item small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.workspace-milestone-item span {
+  color: var(--fg-default);
+  font-weight: 750;
+}
+
+.workspace-milestone-item small {
+  color: var(--fg-subtle);
+  font: var(--font-mono-small);
 }
 
 .context-controls {

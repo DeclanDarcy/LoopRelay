@@ -47,6 +47,7 @@ import { OperationalContextProposalStatusPanel } from './features/operational-co
 import { SelectedRepositorySummary } from './features/repositories/SelectedRepositorySummary'
 import { ExecutionContextPanel } from './features/workspace/ExecutionContextPanel'
 import { WorkspaceLiveActivityPanel } from './features/workspace/WorkspaceLiveActivityPanel'
+import { WorkspaceMilestonesPanel } from './features/workspace/WorkspaceMilestonesPanel'
 import { WorkspaceTab } from './features/workspace/WorkspaceTab'
 import {
   useArtifactContent,
@@ -1384,6 +1385,17 @@ function App() {
                 liveActivity={
                   executionDisplay ? (
                     <WorkspaceLiveActivityPanel events={selectedExecutionEvents} />
+                  ) : null
+                }
+                milestones={
+                  workspace ? (
+                    <WorkspaceMilestonesPanel
+                      milestones={milestoneOptions}
+                      selectedMilestonePath={selectedMilestonePath}
+                      onSelectMilestone={(milestonePath) =>
+                        selectMilestone(selectedRepository.repository.id, milestonePath)
+                      }
+                    />
                   ) : null
                 }
                 artifactWorkspace={

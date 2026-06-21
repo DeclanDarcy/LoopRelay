@@ -7,7 +7,7 @@
 - [ ] Workstream 3.2: Workspace Layout
 - [x] Workstream 3.3: Execution Context Panel
 - [x] Workstream 3.4: Live Activity Panel
-- [ ] Workstream 3.5: Milestones Panel
+- [x] Workstream 3.5: Milestones Panel
 - [ ] Workstream 3.6: Inspector Rail
 - [ ] Workstream 3.7: Workspace Cross-Links
 - [ ] Certification complete
@@ -119,17 +119,19 @@ Rules:
 
 ## Workstream 3.5: Milestones Panel
 
+Status: complete. Workspace now renders a display-only milestone panel backed by artifact inventory and selected milestone navigation state.
+
 Display milestones from artifact inventory and planning projection if needed:
 
-- [ ] Current selected milestone.
-- [ ] Milestone file path/name.
-- [ ] Status when projected.
-- [ ] Progress only when projected.
+- [x] Current selected milestone.
+- [x] Milestone file path/name.
+- [x] Status when projected.
+- [x] Progress only when projected.
 
 Rules:
 
-- [ ] Do not fabricate criteria counts or progress metrics.
-- [ ] If only milestone files are available, show file names and selection state.
+- [x] Do not fabricate criteria counts or progress metrics.
+- [x] If only milestone files are available, show file names and selection state.
 
 ## Workstream 3.6: Inspector Rail
 
