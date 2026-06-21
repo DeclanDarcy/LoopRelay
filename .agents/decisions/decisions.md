@@ -2,14 +2,12 @@
 
 ## Newly Authorized
 
-- Treat `SectionHeader.headingLevel` as an appropriate M1 evolution because it keeps `SectionHeader` a flexible render-only presentation primitive.
-- Avoid creating domain-specific design-system wrappers such as `ExecutionSectionHeader`, `OperationalContextSectionHeader`, or `ContinuitySectionHeader`.
-- Continue using `EmptyState` adoption as a safe Workstream 1.5 target because empty states represent presentation and must not own workflow, navigation, readiness, mutation, or projection authority.
-- Continue using the certification question for panel conversions: can this `Panel` be replaced with a `div` without changing behavior?
-- Prioritize remaining Workstream 1.5 primitive adoption in this order: `Panel`, `SectionHeader`, `Metric`, then opportunistic `Table`, then careful `Button`.
-- Adopt `Table` only where a current table structure already exists; do not invent new table abstractions to force adoption.
-- Treat `Button` as the highest-risk primitive because buttons sit on authority boundaries.
-- For every `Button` conversion, preserve `type`, `disabled`, `onClick`, and `children` exactly.
-- Do not add workflow-oriented props to design primitives, including examples such as `workflow`, `readiness`, `status` carrying workflow meaning, `proposal`, or domain objects.
-- Watch for primitive inflation and keep the design-system catalog boring, render-only, and free of domain convenience or workflow knowledge.
-- Continue Milestone 1 as presentation modernization only, preserving the M0 authority model.
+- Treat Workstream 1.5 as nearing diminishing returns now that `App.tsx` render-only surfaces have adopted shared primitives while workflow actions, workflow buttons, backend transitions, and readiness logic remain untouched.
+- Evaluate any further primitive adoption against a stricter standard: it should reduce real presentation duplication, not merely increase primitive usage counts.
+- Recognize the current target architecture as `Design System -> Render Primitives`, `Features -> Presentation Composition`, and `App.tsx -> Workflow Coordination / Mutation Authority / Readiness Authority`.
+- Reject design-system primitive changes that make primitives workflow-aware or domain-aware.
+- Treat `Button` conversion as safe only when it is a literal JSX wrapper replacement preserving `type`, `className`, `disabled`, `title`, `onClick`, and children exactly.
+- Reject `Button` conversions that introduce workflow/domain props such as `variant="promotion"`, `proposal`, `workflowState`, or `readiness`.
+- Prioritize the next and likely final Workstream 1.5 implementation pass in this order: extracted feature components, low-risk trivially equivalent button usage, and `App.tsx` workflow controls last.
+- Stop button conversion immediately if any conversion requires workflow interpretation.
+- After one more focused Workstream 1.5 pass, seriously evaluate whether Milestone 1 should transition from additional foundation work to certification review.

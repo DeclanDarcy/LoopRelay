@@ -2,24 +2,18 @@
 
 ## Slice Summary
 
-Continued Milestone 1 Workstream 1.5 with a render-only primitive adoption pass.
+Continued Milestone 1 Workstream 1.5 with a second mechanical render-only primitive adoption pass in `App.tsx`.
 
 ## New State
 
-- Extended `src/CommandCenter.UI/src/components/design/SectionHeader.tsx` with `headingLevel` support for `h3`, `h4`, and `h5`.
-- Kept `SectionHeader` eyebrow text compatible with existing `.eyebrow` styling and characterization expectations.
-- Updated `src/CommandCenter.UI/src/styles/theme.css` so `SectionHeader` styles apply across supported heading levels.
-- Adopted `Panel`, `SectionHeader`, and `EmptyState` in extracted execution surfaces:
-  - `ExecutionEventFeed`
-  - `ExecutionHistoryPanel`
-  - `ExecutionSessionPanel`
-- Adopted `EmptyState` in extracted operational-context surfaces:
-  - `OperationalContextCurrentPanel`
-  - `OperationalContextProposalSummaryPanel`
-  - `OperationalContextProposalStatusPanel`
-- Converted all remaining `App.tsx` `empty-state` placeholder paragraphs to the shared `EmptyState` primitive while preserving existing `empty-state` class names and conditional rendering.
-- Updated `.agents/milestones/m1-design-system-foundation.md` slice notes with this Workstream 1.5 progress.
-- Rotated the previous handoff to `.agents/handoffs/handoff.0050.md`.
+- Imported shared `Panel` and `SectionHeader` into `src/CommandCenter.UI/src/App.tsx`.
+- Adopted `SectionHeader` for remaining dashboard, workspace, operational-context, continuity, execution-workspace, execution-context, git-workflow, handoff-review, and artifact-shell heading blocks.
+- Adopted `Panel` for remaining render-only display panels in `App.tsx`, including operational-context, continuity diagnostics, execution context preview, git workflow, generated handoff review, repository list/details, and artifact workspace shell surfaces.
+- Kept workflow/action buttons as native `button` elements because they sit on backend-owned authority boundaries and require more careful conversion.
+- Kept artifact explorer/editor structural sections unchanged except for the surrounding shell heading/panel adoption.
+- Added `App.css` coverage for `.section-heading h3` so `SectionHeader` dashboard/workspace headings retain the existing sizing.
+- Added slice notes to `.agents/milestones/m1-design-system-foundation.md`.
+- Rotated the previous handoff to `.agents/handoffs/handoff.0051.md`.
 
 ## Verification
 
@@ -31,4 +25,4 @@ Continued Milestone 1 Workstream 1.5 with a render-only primitive adoption pass.
 
 ## Next Slice
 
-Continue Milestone 1 Workstream 1.5 with another mechanical primitive adoption pass. Prioritize remaining low-risk `Panel` and `SectionHeader` substitutions in `App.tsx` panels, then evaluate `Button` adoption only where the mapping preserves existing `type`, `className`, `onClick`, and `disabled` behavior exactly.
+Continue Milestone 1 Workstream 1.5 with a careful, narrow primitive adoption pass for remaining low-risk surfaces. Prioritize extracted feature components and any true static table/metric candidates before attempting `Button`; only convert buttons where `type`, `className`, `onClick`, `disabled`, `title`, and children can be preserved exactly.

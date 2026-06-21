@@ -25,7 +25,7 @@ import {
 } from './api'
 import { ArtifactMarkdownPreview } from './features/artifacts/ArtifactMarkdownPreview'
 import { ArtifactMetadata } from './features/artifacts/ArtifactMetadata'
-import { EmptyState, StatusBadge } from './components/design'
+import { EmptyState, Panel, SectionHeader, StatusBadge } from './components/design'
 import { ContinuityDiagnosticsPanel } from './features/continuity/ContinuityDiagnosticsPanel'
 import { ExecutionContextArtifactDiagnosticsList } from './features/execution/ExecutionContextArtifactDiagnosticsList'
 import { ExecutionContextArtifactContentPreviews } from './features/execution/ExecutionContextArtifactContentPreviews'
@@ -1280,11 +1280,13 @@ function App() {
       {message ? <div className="notice success">{message}</div> : null}
 
       <section className="workspace-grid" aria-label="Repository workspace">
-        <section className="repository-list" aria-label="Registered repositories">
-          <div className="section-heading">
-            <h2>Dashboard</h2>
-            <span>{repositories.length} registered</span>
-          </div>
+        <Panel className="repository-list" aria-label="Registered repositories">
+          <SectionHeader
+            className="section-heading"
+            title="Dashboard"
+            headingLevel={3}
+            actions={<span>{repositories.length} registered</span>}
+          />
 
           {isLoading ? (
             <EmptyState className="empty-state">Loading repositories...</EmptyState>
@@ -1308,12 +1310,15 @@ function App() {
               })}
             </div>
           )}
-        </section>
+        </Panel>
 
-        <section className="repository-details" aria-label="Repository details">
-          <div className="section-heading">
-            <h2>Workspace</h2>
-            <div className="section-actions">
+        <Panel className="repository-details" aria-label="Repository details">
+          <SectionHeader
+            className="section-heading"
+            title="Workspace"
+            headingLevel={3}
+            actions={
+              <div className="section-actions">
               <button
                 type="button"
                 className="secondary-action"
@@ -1322,8 +1327,9 @@ function App() {
               >
                 {isWorkspaceLoading ? 'Refreshing...' : 'Refresh Workspace'}
               </button>
-            </div>
-          </div>
+              </div>
+            }
+          />
 
           {selectedRepository ? (
             <div className="details-body">
@@ -1334,13 +1340,13 @@ function App() {
                 currentExecutionState={currentExecutionState}
               />
 
-              <section className="execution-context-panel" aria-label="Current understanding">
-                <div className="context-toolbar">
-                  <div>
-                    <p className="eyebrow">Operational Context</p>
-                    <h4>Current Understanding</h4>
-                  </div>
-                </div>
+              <Panel className="execution-context-panel" aria-label="Current understanding">
+                <SectionHeader
+                  className="context-toolbar"
+                  eyebrow="Operational Context"
+                  title="Current Understanding"
+                  headingLevel={4}
+                />
 
                 {workspace ? (
                   <OperationalContextCurrentPanel
@@ -1350,15 +1356,16 @@ function App() {
                     reviewStatus={operationalContextReviewStatus}
                   />
                 ) : null}
-              </section>
+              </Panel>
 
-              <section className="execution-context-panel" aria-label="Continuity diagnostics">
-                <div className="context-toolbar">
-                  <div>
-                    <p className="eyebrow">Continuity</p>
-                    <h4>Diagnostics</h4>
-                  </div>
-                  <div className="context-controls">
+              <Panel className="execution-context-panel" aria-label="Continuity diagnostics">
+                <SectionHeader
+                  className="context-toolbar"
+                  eyebrow="Continuity"
+                  title="Diagnostics"
+                  headingLevel={4}
+                  actions={
+                    <div className="context-controls">
                     <button
                       type="button"
                       className="secondary-action"
@@ -1374,8 +1381,9 @@ function App() {
                     >
                       {isContinuityReportGenerating ? 'Generating...' : 'Generate Report'}
                     </button>
-                  </div>
-                </div>
+                    </div>
+                  }
+                />
 
                 {continuityDiagnostics ? (
                   <ContinuityDiagnosticsPanel diagnostics={continuityDiagnostics} />
@@ -1386,15 +1394,16 @@ function App() {
                       : 'No continuity diagnostics loaded.'}
                   </EmptyState>
                 )}
-              </section>
+              </Panel>
 
-              <section className="execution-context-panel" aria-label="Operational context proposals">
-                <div className="context-toolbar">
-                  <div>
-                    <p className="eyebrow">Operational Context</p>
-                    <h4>Proposal Review</h4>
-                  </div>
-                  <div className="context-controls">
+              <Panel className="execution-context-panel" aria-label="Operational context proposals">
+                <SectionHeader
+                  className="context-toolbar"
+                  eyebrow="Operational Context"
+                  title="Proposal Review"
+                  headingLevel={4}
+                  actions={
+                    <div className="context-controls">
                     <button
                       type="button"
                       className="secondary-action"
@@ -1413,8 +1422,9 @@ function App() {
                     >
                       {isOperationalContextProposalLoading ? 'Working...' : 'Generate Proposal'}
                     </button>
-                  </div>
-                </div>
+                    </div>
+                  }
+                />
 
                 {workspace ? (
                   <OperationalContextProposalSummaryPanel
@@ -1561,26 +1571,27 @@ function App() {
                     />
                   </div>
                 ) : null}
-              </section>
+              </Panel>
 
               <section className="execution-workspace" aria-label="Execution workspace">
-                <div className="execution-workspace-header">
-                  <div>
-                    <p className="eyebrow">Execution Workspace</p>
-                    <h4>{executionDisplay?.milestonePath ?? selectedMilestonePath ?? 'Select a milestone'}</h4>
-                  </div>
-                  <StatusBadge status={repositoryExecutionStatus[currentExecutionState]} />
-                </div>
+                <SectionHeader
+                  className="execution-workspace-header"
+                  eyebrow="Execution Workspace"
+                  title={executionDisplay?.milestonePath ?? selectedMilestonePath ?? 'Select a milestone'}
+                  headingLevel={4}
+                  actions={<StatusBadge status={repositoryExecutionStatus[currentExecutionState]} />}
+                />
 
                 <ExecutionWorkflowRail steps={executionWorkflowSteps} />
 
-              <section className="execution-context-panel" aria-label="Execution context preview">
-                <div className="context-toolbar">
-                  <div>
-                    <p className="eyebrow">Execution Context</p>
-                    <h4>Preview Package</h4>
-                  </div>
-                  <div className="context-controls">
+              <Panel className="execution-context-panel" aria-label="Execution context preview">
+                <SectionHeader
+                  className="context-toolbar"
+                  eyebrow="Execution Context"
+                  title="Preview Package"
+                  headingLevel={4}
+                  actions={
+                    <div className="context-controls">
                     <select
                       value={selectedMilestonePath ?? ''}
                       onChange={(event) =>
@@ -1618,8 +1629,9 @@ function App() {
                     >
                       {isStartingExecution ? 'Starting...' : 'Start Execution'}
                     </button>
-                  </div>
-                </div>
+                    </div>
+                  }
+                />
 
                 {executionContext ? (
                   <div className="context-preview">
@@ -1667,15 +1679,16 @@ function App() {
                     Build a context preview for a selected milestone.
                   </EmptyState>
                 )}
-              </section>
+              </Panel>
 
               {shouldShowGitWorkflow ? (
-                <section className="git-status-panel" aria-label="Git status">
-                  <div className="git-status-header">
-                    <div>
-                      <p className="eyebrow">Git Workflow</p>
-                      <h4>{repositoryExecutionStatus[currentExecutionState].label}</h4>
-                    </div>
+                <Panel className="git-status-panel" aria-label="Git status">
+                  <SectionHeader
+                    className="git-status-header"
+                    eyebrow="Git Workflow"
+                    title={repositoryExecutionStatus[currentExecutionState].label}
+                    headingLevel={4}
+                    actions={
                     <button
                       type="button"
                       className="secondary-action"
@@ -1694,7 +1707,8 @@ function App() {
                     >
                       {isGitStatusLoading || isCommitPreparationLoading ? 'Refreshing...' : 'Refresh'}
                     </button>
-                  </div>
+                    }
+                  />
                   {currentExecutionState === 'AwaitingCommit' ? (
                     isCommitPreparationCurrent && commitPreparation ? (
                       <div className="commit-review-panel">
@@ -1791,7 +1805,7 @@ function App() {
                       {isGitStatusLoading ? 'Loading Git status...' : 'Git status is not loaded.'}
                     </EmptyState>
                   )}
-                </section>
+                </Panel>
               ) : null}
 
               {executionDisplay ? (
@@ -1801,12 +1815,13 @@ function App() {
               <ExecutionHistoryPanel sessions={selectedExecutionHistory} />
 
               {canReviewGeneratedHandoff && executionDisplay ? (
-                <section className="handoff-review-panel" aria-label="Generated handoff review">
+                <Panel className="handoff-review-panel" aria-label="Generated handoff review">
                   <div className="handoff-review-header">
-                    <div>
-                      <p className="eyebrow">Handoff Review</p>
-                      <h4>{executionDisplay.handoffPath}</h4>
-                    </div>
+                    <SectionHeader
+                      eyebrow="Handoff Review"
+                      title={executionDisplay.handoffPath ?? 'Generated handoff'}
+                      headingLevel={4}
+                    />
                     <div className="handoff-review-metadata">
                       <span>State: {repositoryExecutionStatus[executionDisplay.repositoryState].label}</span>
                       <span>Completed: {formatDateTime(executionDisplay.completedAt)}</span>
@@ -1837,18 +1852,19 @@ function App() {
                     content={generatedHandoffContent}
                     isLoading={isGeneratedHandoffLoading}
                   />
-                </section>
+                </Panel>
               ) : null}
 
               {executionDisplay ? <ExecutionEventFeed events={selectedExecutionEvents} /> : null}
               </section>
 
               {workspace ? (
-                <section className="artifact-workspace-shell" aria-label="Artifact workspace">
-                  <div>
-                    <p className="eyebrow">Repository Artifacts</p>
-                    <h4>Explorer and Editor</h4>
-                  </div>
+                <Panel className="artifact-workspace-shell" aria-label="Artifact workspace">
+                  <SectionHeader
+                    eyebrow="Repository Artifacts"
+                    title="Explorer and Editor"
+                    headingLevel={4}
+                  />
                 <div className="artifact-workspace">
                   <section className="artifact-explorer" aria-label="Artifact explorer">
                     {getArtifactCategories(workspace.artifactInventory).map((category) => (
@@ -1935,7 +1951,7 @@ function App() {
                     )}
                   </section>
                 </div>
-                </section>
+                </Panel>
               ) : (
                 <EmptyState className="empty-state">Loading workspace...</EmptyState>
               )}
@@ -1956,7 +1972,7 @@ function App() {
           ) : (
             <EmptyState className="empty-state">Select or add a repository.</EmptyState>
           )}
-        </section>
+        </Panel>
       </section>
     </main>
   )

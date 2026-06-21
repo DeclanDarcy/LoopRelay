@@ -17,6 +17,7 @@
 
 .app-header h1,
 .section-heading h2,
+.section-heading h3,
 .details-title-row h3 {
   margin: 0;
   color: var(--fg-default);
@@ -29,7 +30,8 @@
   line-height: 1.1;
 }
 
-.section-heading h2 {
+.section-heading h2,
+.section-heading h3 {
   font-size: 1rem;
 }
 
