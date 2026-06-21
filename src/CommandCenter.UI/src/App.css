@@ -624,6 +624,30 @@ button:focus-visible {
   gap: 14px;
 }
 
+.workspace-inspector-panel {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.workspace-inspector-summary {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.workspace-inspector-summary span {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  color: var(--fg-muted);
+  background: var(--bg-inset);
+  font-size: 0.82rem;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
 .execution-workspace-header,
 .artifact-workspace-shell > div:first-child {
   min-width: 0;

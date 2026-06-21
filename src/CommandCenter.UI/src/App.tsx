@@ -48,6 +48,7 @@ import { SelectedRepositorySummary } from './features/repositories/SelectedRepos
 import { ExecutionContextPanel } from './features/workspace/ExecutionContextPanel'
 import { WorkspaceLiveActivityPanel } from './features/workspace/WorkspaceLiveActivityPanel'
 import { WorkspaceMilestonesPanel } from './features/workspace/WorkspaceMilestonesPanel'
+import { WorkspaceInspectorRail } from './features/workspace/WorkspaceInspectorRail'
 import { WorkspaceTab } from './features/workspace/WorkspaceTab'
 import {
   useArtifactContent,
@@ -1501,7 +1502,26 @@ function App() {
                     <EmptyState className="empty-state">Loading workspace...</EmptyState>
                   )
                 }
-                inspector={<ExecutionHistoryPanel sessions={selectedExecutionHistory} />}
+                inspector={
+                  <WorkspaceInspectorRail
+                    currentExecutionState={currentExecutionState}
+                    gitStatus={gitStatus}
+                    gitStatusPathCount={gitStatusPathCount}
+                    isGitStatusLoading={isGitStatusLoading}
+                    gitStatusError={gitStatusError}
+                    commitPreparation={commitPreparation}
+                    isCommitPreparationCurrent={isCommitPreparationCurrent}
+                    selectedCommitPathCount={selectedCommitScopeItems.length}
+                    execution={executionDisplay}
+                    operationalContext={workspace?.operationalContext ?? null}
+                    proposalSummary={workspace?.operationalContextProposalSummary ?? null}
+                    executionHistory={selectedExecutionHistory}
+                    onOpenOperationalContext={() => {
+                      setActivePrimaryTab('operational-context')
+                      setSectionTarget('proposal-review')
+                    }}
+                  />
+                }
               />
 
               <Panel

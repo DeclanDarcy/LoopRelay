@@ -8,7 +8,7 @@
 - [x] Workstream 3.3: Execution Context Panel
 - [x] Workstream 3.4: Live Activity Panel
 - [x] Workstream 3.5: Milestones Panel
-- [ ] Workstream 3.6: Inspector Rail
+- [x] Workstream 3.6: Inspector Rail
 - [ ] Workstream 3.7: Workspace Cross-Links
 - [ ] Certification complete
 
@@ -135,33 +135,35 @@ Rules:
 
 ## Workstream 3.6: Inspector Rail
 
+Status: complete. Workspace now renders a read-only inspector rail backed by existing git status, commit-preparation, operational-context, and execution-history projections. The inspector summarizes commit/push readiness evidence, operational-context counts and proposal status, and recent sessions without introducing commit/push orchestration or new readiness derivation.
+
 Required sections:
 
-- [ ] Commit and push summary:
-  - [ ] Current repository state.
-  - [ ] Commit preparation status when available.
-  - [ ] Selected/generated change scope when available.
-  - [ ] Ahead/behind only when backed by git status.
-  - [ ] Explicit commit/push actions only in valid workflow states.
-- [ ] Operational context summary:
-  - [ ] Revision count.
-  - [ ] Stable decision count.
-  - [ ] Open question count.
-  - [ ] Active risk count.
-  - [ ] Pending proposal status.
-  - [ ] Link to Operational Context tab.
-- [ ] Execution history:
-  - [ ] Recent sessions.
-  - [ ] Milestone.
-  - [ ] State.
-  - [ ] Duration.
-  - [ ] Timestamp.
-  - [ ] Commit/push summary when projected.
+- [x] Commit and push summary:
+  - [x] Current repository state.
+  - [x] Commit preparation status when available.
+  - [x] Selected/generated change scope when available.
+  - [x] Ahead/behind only when backed by git status.
+  - [x] Explicit commit/push actions remain only in valid workflow states outside the inspector.
+- [x] Operational context summary:
+  - [x] Revision count.
+  - [x] Stable decision count.
+  - [x] Open question count.
+  - [x] Active risk count.
+  - [x] Pending proposal status.
+  - [x] Link to Operational Context tab.
+- [x] Execution history:
+  - [x] Recent sessions.
+  - [x] Milestone.
+  - [x] State.
+  - [x] Duration.
+  - [x] Timestamp.
+  - [x] Commit/push summary when projected.
 
 Rules:
 
-- [ ] Inspector sections summarize and navigate.
-- [ ] They do not own workflow state.
+- [x] Inspector sections summarize and navigate.
+- [x] They do not own workflow state.
 
 ## Workstream 3.7: Workspace Cross-Links
 
