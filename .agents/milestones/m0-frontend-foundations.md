@@ -176,6 +176,8 @@ Slice progress:
 - [x] Reassessed remaining execution context preview regions in `.agents/audits/m0-execution-context-preview-inventory.md` after repository snapshot extraction.
 - [x] Extracted artifact diagnostics rendering as presentation-only `ExecutionContextArtifactDiagnosticsList` with characterization coverage for provided order, byte-count text, existing warning/hard-limit suffix labels, and empty-list behavior.
 - [x] Reassessed remaining execution context preview regions in `.agents/audits/m0-execution-context-preview-inventory.md` after artifact diagnostics extraction.
+- [x] Extracted artifact content preview rendering as presentation-only `ExecutionContextArtifactContentPreviews` with characterization coverage for provided order, summary labels, `OperationalContext` default-open behavior, markdown rendering, and the `Empty artifact.` fallback.
+- [x] Completed the authorized execution-context preview extraction inventory for M0.5.
 - [x] Left feature component extraction in `App.tsx` for later Workstream 0.5 slices.
 
 ### Certification

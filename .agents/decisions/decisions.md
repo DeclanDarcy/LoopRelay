@@ -2,16 +2,19 @@
 
 ## Newly Authorized
 
-- Treat `ExecutionContextArtifactDiagnosticsList` as a defensible M0.5 extraction only because it preserves a direct `backend projection -> verbatim display` boundary.
-- Keep artifact diagnostics rendering limited to projected ordering, byte counts, warning labels, and hard-limit labels.
-- Do not add severity ranking, risk scoring, recommendation generation, readiness evaluation, importance, relevance, priority, or recommended action derivation to artifact diagnostics rendering.
-- Treat artifact content previews as the final likely execution-context presentation extraction candidate.
-- Artifact content previews may be extracted only if they preserve artifact ordering, existing markdown rendering, `OperationalContext` default-open behavior, and the `Empty artifact.` fallback.
-- Do not derive importance, relevance, priority, or recommended action from artifact content previews.
-- If artifact preview extraction remains clean, strongly consider declaring execution-context decomposition complete.
-- After artifact preview extraction, use a stricter final inventory filter: a candidate must render entirely from props and remain fully functional with all workflow knowledge removed.
-- Treat `Retain in App.tsx` as the likely successful outcome for later execution-context audits when remaining surfaces coordinate workflow, readiness, or authority boundaries.
+- Treat the execution-context preview decomposition effort as complete unless a new audit produces unexpectedly clean `props -> render` candidates.
+- Preserve the current burden of proof: remaining execution-context code in `App.tsx` is presumed intentional until demonstrated otherwise.
+- Do not continue extracting execution-context preview surfaces automatically.
+- Treat M0.5 execution-context preview work as complete because the extracted components reduced presentation density without moving workflow, readiness, commit, promotion, or execution authority.
+- Make the next high-value activity authority inventory and characterization rather than further decomposition.
+- Audit remaining large `App.tsx` regions by responsibility category:
+  - Category A: pure presentation, candidate for extraction.
+  - Category B: presentation plus interpretation, likely retain.
+  - Category C: workflow coordination, must retain.
+  - Category D: authority decisions, must retain.
+- Prefer Workstream 0.6 characterization around milestone selection, proposal gating, commit gating, and review gating.
+- Shift the key M0 question from `Can this move?` to `What must never change?`.
 
 ## Next Authorized Slice
 
-Extract artifact content previews only if the implementation remains pure `artifact -> render`; otherwise record why the surface should remain in `App.tsx`.
+Start with an authority inventory of remaining large `App.tsx` regions, then add focused M0.6 characterization for the highest-risk authority boundaries instead of continuing extraction-first work.
