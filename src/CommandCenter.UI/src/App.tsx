@@ -23,6 +23,7 @@ import {
   selectRepositoryDirectory,
   startExecution as startExecutionCommand,
 } from './api'
+import { ExecutionEventFeed } from './features/execution/ExecutionEventFeed'
 import { GitPathBucket } from './features/execution/GitPathBucket'
 import {
   useArtifactContent,
@@ -2524,30 +2525,7 @@ function App() {
                 </section>
               ) : null}
 
-              {executionDisplay ? (
-                <section className="execution-output-panel" aria-label="Execution output">
-                  <div>
-                    <p className="eyebrow">Execution Output</p>
-                    <h4>{selectedExecutionEvents.length} events</h4>
-                  </div>
-                  <div className="execution-event-feed">
-                    {selectedExecutionEvents.length === 0 ? (
-                      <p className="empty-state">No execution events recorded.</p>
-                    ) : (
-                      selectedExecutionEvents.map((executionEvent) => (
-                        <div className="execution-event-row" key={executionEvent.sequence}>
-                          <span className="execution-event-sequence">#{executionEvent.sequence}</span>
-                          <span className="execution-event-time">
-                            {formatDateTime(executionEvent.timestamp)}
-                          </span>
-                          <span className="execution-event-type">{executionEvent.type}</span>
-                          <pre>{executionEvent.message}</pre>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </section>
-              ) : null}
+              {executionDisplay ? <ExecutionEventFeed events={selectedExecutionEvents} /> : null}
               </section>
 
               {workspace ? (
