@@ -2,16 +2,20 @@
 
 ## Newly Authorized
 
-- Classify `mergeExecutionEvents` as stream correctness logic, not display logic and not workflow logic.
-- Keep `mergeExecutionEvents` beside `useExecutionEvents` subscription, cleanup, ordering, duplicate replacement, and session isolation behavior.
-- Continue treating the retained M0.5 responsibilities as important ownership findings, not merely unextracted code.
-- Use the question "If git workflow semantics changed, would this helper still exist?" before extracting git path bucket rendering.
-- Extract git path bucket rendering only if classification shows it is presentation, formatting, or grouping.
-- Do not extract git path bucket rendering if it embeds staged/unstaged meaning, commit readiness, review meaning, or workflow grouping.
-- Continue refusing extraction of commit readiness, proposal readiness, promotion readiness, and execution readiness.
-- Treat remaining M0 closure less as an `App.tsx` size target and more as an intentional ownership audit.
-- Continue the M0.5 decomposition rule: extract presentation, formatting, and grouping; move stream correctness to stream authority; keep meaning, readiness, and workflow review with their current authority.
+- Continue treating late M0 Workstream 0.5 extractions as cognitive-load reductions, not authority moves.
+- Favor extractions that preserve a direct `data -> presentation` relationship.
+- Treat "caller-provided labels and paths" as the reason `GitPathBucket` is presentation-only and safely inside Workstream 0.5.
+- Do not move components or helpers that convert data into workflow meaning before presentation.
+- Continue preserving ownership of git meaning, commit readiness, workflow grouping, and review semantics.
+- Before selecting the next extraction, classify remaining large `App.tsx` render regions as `Presentation Only`, `Presentation + Formatting`, `Presentation + Workflow`, or `Workflow Only`.
+- Extract only `Presentation Only` and `Presentation + Formatting` regions during Workstream 0.5.
+- Leave `Presentation + Workflow` and `Workflow Only` regions in place unless separately authorized.
+- Use "Can this component be rendered from props alone?" as the classification question for the next extraction.
+- Treat presentational execution workspace components as good next candidates when they consume already-derived state only.
+- Candidate safe targets include execution session summary, execution context diagnostics panel, execution event timeline, and execution metadata card, provided they do not decide workflow state.
+- Do not extract code that answers whether commit is enabled, promotion is enabled, review is valid, or execution can start.
+- Evaluate every remaining M0 extraction by whether it reduces cognitive complexity without moving authority.
 
 ## Next Authorized Slice
 
-Continue Workstream 0.5 with classification-first decomposition. The likely next candidate remains git path bucket rendering, but only after confirming it is pure presentation/formatting/grouping rather than workflow meaning or readiness.
+Audit remaining large render regions inside `App.tsx` using the four-category classification above. Then extract one low-risk presentational execution workspace component that can render from props alone and does not own readiness, review validity, promotion, commit, push, or execution-start decisions.

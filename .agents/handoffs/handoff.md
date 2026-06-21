@@ -2,19 +2,20 @@
 
 ## Slice Summary
 
-Continued Milestone 0 Workstream 0.5 by classifying `mergeExecutionEvents` ownership and centralizing the remaining App-level event merge through the execution event hook boundary.
+Continued Milestone 0 Workstream 0.5 by classifying git path bucket rendering as presentation-only and extracting it from `App.tsx`.
 
 ## New State
 
-- Exported `mergeExecutionEvents` from `src/CommandCenter.UI/src/hooks/useExecutionEvents.ts`.
-- Updated `App.tsx` to import `mergeExecutionEvents` from `src/hooks` and removed the duplicate local helper.
-- Added characterization coverage for merging execution status snapshot events with streamed events, including sequence ordering and duplicate sequence replacement.
-- Updated `.agents/milestones/m0-frontend-foundations.md` to record execution event merge centralization.
-- Rotated the prior handoff to `.agents/handoffs/handoff.0017.md`.
+- Added `src/CommandCenter.UI/src/features/execution/GitPathBucket.tsx`.
+- Updated `App.tsx` to use `GitPathBucket` for execution-context repository snapshots and live git status dirty-path buckets.
+- Removed the local `renderPathBucket` helper from `App.tsx`.
+- Added characterization coverage for empty git path buckets and ordered path lists in `src/CommandCenter.UI/src/test/characterization/gitPathBucket.test.tsx`.
+- Updated `.agents/milestones/m0-frontend-foundations.md` to record the extraction.
+- Rotated the prior handoff to `.agents/handoffs/handoff.0018.md`.
 
 ## Verification
 
-- `cd src/CommandCenter.UI; npm run test` passed: 7 files, 35 tests.
+- `cd src/CommandCenter.UI; npm run test` passed: 8 files, 37 tests.
 - `cd src/CommandCenter.UI; npm run lint` passed.
 - `cd src/CommandCenter.UI; npm run build` passed.
 - `cd src/CommandCenter.UI; npm run test:e2e` passed: 2 tests.
@@ -22,4 +23,4 @@ Continued Milestone 0 Workstream 0.5 by classifying `mergeExecutionEvents` owner
 
 ## Next Slice
 
-Continue Milestone 0 Workstream 0.5 with another classification-first extraction from `App.tsx`. A high-leverage next target is a small rendering/helper boundary around git path bucket display or another already-characterized pure display helper, while keeping workflow gating and draft initialization in `App.tsx` until explicitly authorized.
+Continue Milestone 0 Workstream 0.5 with another classification-first extraction from `App.tsx`. The next high-leverage target is likely a presentational subcomponent in the execution workspace around context diagnostics or session details, while keeping commit preparation, commit readiness, push readiness, proposal review, and promotion gates in `App.tsx` until separately authorized.

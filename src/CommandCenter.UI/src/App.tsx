@@ -23,6 +23,7 @@ import {
   selectRepositoryDirectory,
   startExecution as startExecutionCommand,
 } from './api'
+import { GitPathBucket } from './features/execution/GitPathBucket'
 import {
   useArtifactContent,
   useContinuityDiagnostics,
@@ -98,23 +99,6 @@ function getDecisionContinuityWarnings(summary: OperationalContextCompressionSum
     .filter((warning, index, warnings) =>
       warning.toLowerCase().includes('decision') && warnings.indexOf(warning) === index,
     )
-}
-
-function renderPathBucket(label: string, paths: string[]) {
-  return (
-    <div>
-      <h5>{label}</h5>
-      {paths.length === 0 ? (
-        <p>None</p>
-      ) : (
-        <ul>
-          {paths.map((path) => (
-            <li key={path}>{path}</li>
-          ))}
-        </ul>
-      )}
-    </div>
-  )
 }
 
 function App() {
@@ -2219,12 +2203,30 @@ function App() {
                           </span>
                         </div>
                         <div className="context-columns">
-                          {renderPathBucket('Staged', executionContext.repositorySnapshot.dirtyState.stagedPaths)}
-                          {renderPathBucket('Modified', executionContext.repositorySnapshot.dirtyState.modifiedPaths)}
-                          {renderPathBucket('Added', executionContext.repositorySnapshot.dirtyState.addedPaths)}
-                          {renderPathBucket('Deleted', executionContext.repositorySnapshot.dirtyState.deletedPaths)}
-                          {renderPathBucket('Renamed', executionContext.repositorySnapshot.dirtyState.renamedPaths)}
-                          {renderPathBucket('Untracked', executionContext.repositorySnapshot.dirtyState.untrackedPaths)}
+                          <GitPathBucket
+                            label="Staged"
+                            paths={executionContext.repositorySnapshot.dirtyState.stagedPaths}
+                          />
+                          <GitPathBucket
+                            label="Modified"
+                            paths={executionContext.repositorySnapshot.dirtyState.modifiedPaths}
+                          />
+                          <GitPathBucket
+                            label="Added"
+                            paths={executionContext.repositorySnapshot.dirtyState.addedPaths}
+                          />
+                          <GitPathBucket
+                            label="Deleted"
+                            paths={executionContext.repositorySnapshot.dirtyState.deletedPaths}
+                          />
+                          <GitPathBucket
+                            label="Renamed"
+                            paths={executionContext.repositorySnapshot.dirtyState.renamedPaths}
+                          />
+                          <GitPathBucket
+                            label="Untracked"
+                            paths={executionContext.repositorySnapshot.dirtyState.untrackedPaths}
+                          />
                         </div>
                       </div>
                     ) : null}
@@ -2406,12 +2408,12 @@ function App() {
                         <span>Captured: {formatDateTime(gitStatus.capturedAt)}</span>
                       </div>
                       <div className="context-columns">
-                        {renderPathBucket('Staged', gitStatus.dirtyState.stagedPaths)}
-                        {renderPathBucket('Modified', gitStatus.dirtyState.modifiedPaths)}
-                        {renderPathBucket('Added', gitStatus.dirtyState.addedPaths)}
-                        {renderPathBucket('Deleted', gitStatus.dirtyState.deletedPaths)}
-                        {renderPathBucket('Renamed', gitStatus.dirtyState.renamedPaths)}
-                        {renderPathBucket('Untracked', gitStatus.dirtyState.untrackedPaths)}
+                        <GitPathBucket label="Staged" paths={gitStatus.dirtyState.stagedPaths} />
+                        <GitPathBucket label="Modified" paths={gitStatus.dirtyState.modifiedPaths} />
+                        <GitPathBucket label="Added" paths={gitStatus.dirtyState.addedPaths} />
+                        <GitPathBucket label="Deleted" paths={gitStatus.dirtyState.deletedPaths} />
+                        <GitPathBucket label="Renamed" paths={gitStatus.dirtyState.renamedPaths} />
+                        <GitPathBucket label="Untracked" paths={gitStatus.dirtyState.untrackedPaths} />
                       </div>
                     </>
                   ) : (
