@@ -1,5 +1,5 @@
 import { formatDateTime } from '../../lib'
-import { StatusBadge } from '../../components/design'
+import { EmptyState, StatusBadge } from '../../components/design'
 import {
   operationalContextProposalStatus,
   operationalContextReviewStatus,
@@ -28,15 +28,17 @@ export function OperationalContextProposalStatusPanel({
         <span>Archived: {proposal.promotion.archivedRelativePath ?? 'None'}</span>
       </div>
       {proposal.review.staleReason ? (
-        <p className="empty-state">Review blocked: {proposal.review.staleReason}</p>
+        <EmptyState className="empty-state">Review blocked: {proposal.review.staleReason}</EmptyState>
       ) : null}
       {proposal.promotion.archiveFailureReason ? (
-        <p className="empty-state">
+        <EmptyState className="empty-state">
           Promotion archive failed: {proposal.promotion.archiveFailureReason}
-        </p>
+        </EmptyState>
       ) : null}
       {proposal.promotion.writeFailureReason ? (
-        <p className="empty-state">Promotion write failed: {proposal.promotion.writeFailureReason}</p>
+        <EmptyState className="empty-state">
+          Promotion write failed: {proposal.promotion.writeFailureReason}
+        </EmptyState>
       ) : null}
     </>
   )

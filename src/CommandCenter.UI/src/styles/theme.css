@@ -123,7 +123,9 @@
 }
 
 .cc-inspector-section-header h4,
-.cc-section-header h3 {
+.cc-section-header h3,
+.cc-section-header h4,
+.cc-section-header h5 {
   margin: 0;
   color: var(--fg-default);
   font: var(--font-h4);

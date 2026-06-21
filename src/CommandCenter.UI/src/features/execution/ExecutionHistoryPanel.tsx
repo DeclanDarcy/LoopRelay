@@ -1,5 +1,5 @@
 import { formatDateTime, formatDuration } from '../../lib'
-import { StatusBadge } from '../../components/design'
+import { Panel, SectionHeader, StatusBadge } from '../../components/design'
 import { repositoryExecutionStatus } from '../../lib/status'
 import type { ExecutionSessionSummary } from '../../types'
 
@@ -13,11 +13,8 @@ export function ExecutionHistoryPanel({ sessions }: ExecutionHistoryPanelProps) 
   }
 
   return (
-    <section className="execution-history-panel" aria-label="Execution history">
-      <div>
-        <p className="eyebrow">Session History</p>
-        <h4>{sessions.length} recent sessions</h4>
-      </div>
+    <Panel className="execution-history-panel" aria-label="Execution history">
+      <SectionHeader eyebrow="Session History" title={`${sessions.length} recent sessions`} headingLevel={4} />
       <div className="execution-history-list">
         {sessions.map((session) => (
           <div className="execution-history-row" key={session.sessionId}>
@@ -32,6 +29,6 @@ export function ExecutionHistoryPanel({ sessions }: ExecutionHistoryPanelProps) 
           </div>
         ))}
       </div>
-    </section>
+    </Panel>
   )
 }

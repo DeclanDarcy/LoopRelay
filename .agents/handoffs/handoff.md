@@ -2,16 +2,24 @@
 
 ## Slice Summary
 
-Continued Milestone 1 by completing Workstream 1.4 status-language adoption in the current render branches.
+Continued Milestone 1 Workstream 1.5 with a render-only primitive adoption pass.
 
 ## New State
 
-- Removed duplicated status label maps from `src/CommandCenter.UI/src/App.tsx`.
-- Wired centralized `src/CommandCenter.UI/src/lib/status.ts` metadata into repository dashboard rows, selected repository summary, execution workspace header, git workflow heading, execution session panel, execution history panel, generated handoff metadata, operational-context proposal status panel, and continuity diagnostics.
-- Adopted the shared `StatusBadge` primitive for equivalent status rendering across repository availability, execution readiness, repository execution state, execution session state, operational-context proposal/review state, and continuity warning status.
-- Updated affected frontend characterization tests to assert shared badge rendering rather than injected local label maps or legacy per-status classes.
-- Updated `.agents/milestones/m1-design-system-foundation.md`: Workstream 1.4 and its certification are complete; Workstream 1.5 remains open.
-- Rotated the previous handoff to `.agents/handoffs/handoff.0049.md`.
+- Extended `src/CommandCenter.UI/src/components/design/SectionHeader.tsx` with `headingLevel` support for `h3`, `h4`, and `h5`.
+- Kept `SectionHeader` eyebrow text compatible with existing `.eyebrow` styling and characterization expectations.
+- Updated `src/CommandCenter.UI/src/styles/theme.css` so `SectionHeader` styles apply across supported heading levels.
+- Adopted `Panel`, `SectionHeader`, and `EmptyState` in extracted execution surfaces:
+  - `ExecutionEventFeed`
+  - `ExecutionHistoryPanel`
+  - `ExecutionSessionPanel`
+- Adopted `EmptyState` in extracted operational-context surfaces:
+  - `OperationalContextCurrentPanel`
+  - `OperationalContextProposalSummaryPanel`
+  - `OperationalContextProposalStatusPanel`
+- Converted all remaining `App.tsx` `empty-state` placeholder paragraphs to the shared `EmptyState` primitive while preserving existing `empty-state` class names and conditional rendering.
+- Updated `.agents/milestones/m1-design-system-foundation.md` slice notes with this Workstream 1.5 progress.
+- Rotated the previous handoff to `.agents/handoffs/handoff.0050.md`.
 
 ## Verification
 
@@ -23,4 +31,4 @@ Continued Milestone 1 by completing Workstream 1.4 status-language adoption in t
 
 ## Next Slice
 
-Continue Milestone 1 Workstream 1.5 by applying the existing render-only primitives more broadly to current surfaces without changing layout or workflow behavior. Prioritize pure presentation swaps for buttons, panels/sections, empty states, section headings, metrics, and tables where the current hierarchy can remain identical.
+Continue Milestone 1 Workstream 1.5 with another mechanical primitive adoption pass. Prioritize remaining low-risk `Panel` and `SectionHeader` substitutions in `App.tsx` panels, then evaluate `Button` adoption only where the mapping preserves existing `type`, `className`, `onClick`, and `disabled` behavior exactly.

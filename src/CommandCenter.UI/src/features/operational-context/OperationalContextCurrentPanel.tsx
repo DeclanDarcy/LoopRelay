@@ -1,4 +1,5 @@
 import { formatDateTime } from '../../lib'
+import { EmptyState } from '../../components/design'
 import type { OperationalContextProjection, OperationalContextProposalSummary } from '../../types'
 
 type OperationalContextCurrentPanelProps = {
@@ -53,7 +54,7 @@ export function OperationalContextCurrentPanel({
           <span>Review: {reviewStatus}</span>
           <span>Proposal: {proposalStatus}</span>
         </div>
-        <p className="empty-state">No current operational context exists.</p>
+        <EmptyState className="empty-state">No current operational context exists.</EmptyState>
       </div>
     )
   }

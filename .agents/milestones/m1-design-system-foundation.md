@@ -123,3 +123,5 @@ Cover:
 - 2026-06-21: Verification passed: `npm run lint`, `npm run build`, `npm run test`, and `npm run test:e2e`.
 - 2026-06-21: Adopted centralized status metadata and `StatusBadge` across repository dashboard rows, selected repository summary, execution workspace/session/history surfaces, operational-context proposal review status, and continuity diagnostics. Workstream 1.4 is complete.
 - 2026-06-21: Verification passed after status adoption: `npm run lint`, `npm run test`, `npm run build`, `npm run test:e2e`, and `dotnet test CommandCenter.slnx`.
+- 2026-06-21: Advanced Workstream 1.5 by adopting `Panel`, `SectionHeader`, and `EmptyState` in extracted execution and operational-context surfaces, extending `SectionHeader` to preserve heading levels, and converting remaining `App.tsx` empty-state placeholders to the shared primitive while retaining legacy classes and behavior.
+- 2026-06-21: Verification passed after primitive adoption: `npm run lint`, `npm run test`, `npm run build`, `npm run test:e2e`, and `dotnet test CommandCenter.slnx`.

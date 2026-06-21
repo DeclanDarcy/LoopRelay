@@ -1,4 +1,5 @@
 import { formatDateTime } from '../../lib'
+import { EmptyState } from '../../components/design'
 import type { OperationalContextProjection, OperationalContextProposalSummary } from '../../types'
 
 type OperationalContextProposalSummaryPanelProps = {
@@ -11,7 +12,11 @@ export function OperationalContextProposalSummaryPanel({
   proposalSummary,
 }: OperationalContextProposalSummaryPanelProps) {
   if (!proposalSummary.latestProposalId) {
-    return <p className="empty-state">No operational-context proposal has been generated.</p>
+    return (
+      <EmptyState className="empty-state">
+        No operational-context proposal has been generated.
+      </EmptyState>
+    )
   }
 
   return (

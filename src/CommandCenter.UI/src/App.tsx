@@ -25,7 +25,7 @@ import {
 } from './api'
 import { ArtifactMarkdownPreview } from './features/artifacts/ArtifactMarkdownPreview'
 import { ArtifactMetadata } from './features/artifacts/ArtifactMetadata'
-import { StatusBadge } from './components/design'
+import { EmptyState, StatusBadge } from './components/design'
 import { ContinuityDiagnosticsPanel } from './features/continuity/ContinuityDiagnosticsPanel'
 import { ExecutionContextArtifactDiagnosticsList } from './features/execution/ExecutionContextArtifactDiagnosticsList'
 import { ExecutionContextArtifactContentPreviews } from './features/execution/ExecutionContextArtifactContentPreviews'
@@ -1287,9 +1287,9 @@ function App() {
           </div>
 
           {isLoading ? (
-            <p className="empty-state">Loading repositories...</p>
+            <EmptyState className="empty-state">Loading repositories...</EmptyState>
           ) : repositories.length === 0 ? (
-            <p className="empty-state">No repositories registered.</p>
+            <EmptyState className="empty-state">No repositories registered.</EmptyState>
           ) : (
             <div className="repository-items">
               {repositories.map((entry) => {
@@ -1380,11 +1380,11 @@ function App() {
                 {continuityDiagnostics ? (
                   <ContinuityDiagnosticsPanel diagnostics={continuityDiagnostics} />
                 ) : (
-                  <p className="empty-state">
+                  <EmptyState className="empty-state">
                     {isContinuityDiagnosticsLoading
                       ? 'Loading continuity diagnostics...'
                       : 'No continuity diagnostics loaded.'}
-                  </p>
+                  </EmptyState>
                 )}
               </section>
 
@@ -1663,7 +1663,9 @@ function App() {
                     <ExecutionContextArtifactContentPreviews artifacts={executionContext.artifacts} />
                   </div>
                 ) : (
-                  <p className="empty-state">Build a context preview for a selected milestone.</p>
+                  <EmptyState className="empty-state">
+                    Build a context preview for a selected milestone.
+                  </EmptyState>
                 )}
               </section>
 
@@ -1735,7 +1737,9 @@ function App() {
                           </button>
                         </div>
                         {commitPreparation.scopeItems.length === 0 ? (
-                          <p className="empty-state">No changed paths are available for commit.</p>
+                          <EmptyState className="empty-state">
+                            No changed paths are available for commit.
+                          </EmptyState>
                         ) : (
                           <div className="commit-scope-list" aria-label="Commit scope">
                             {commitPreparation.scopeItems.map((item) => (
@@ -1760,11 +1764,11 @@ function App() {
                         )}
                       </div>
                     ) : (
-                      <p className="empty-state">
+                      <EmptyState className="empty-state">
                         {isCommitPreparationLoading
                           ? 'Preparing commit review...'
                           : 'Commit preparation is not loaded.'}
-                      </p>
+                      </EmptyState>
                     )
                   ) : currentExecutionState === 'AwaitingPush' && executionDisplay?.commitSha ? (
                     <div className="commit-review-panel">
@@ -1783,9 +1787,9 @@ function App() {
                   ) : gitStatus ? (
                     <GitStatusDetails gitStatus={gitStatus} changedPathCount={gitStatusPathCount} />
                   ) : (
-                    <p className="empty-state">
+                    <EmptyState className="empty-state">
                       {isGitStatusLoading ? 'Loading Git status...' : 'Git status is not loaded.'}
-                    </p>
+                    </EmptyState>
                   )}
                 </section>
               ) : null}
@@ -1927,13 +1931,13 @@ function App() {
                         />
                       </>
                     ) : (
-                      <p className="empty-state">No artifact selected.</p>
+                      <EmptyState className="empty-state">No artifact selected.</EmptyState>
                     )}
                   </section>
                 </div>
                 </section>
               ) : (
-                <p className="empty-state">Loading workspace...</p>
+                <EmptyState className="empty-state">Loading workspace...</EmptyState>
               )}
 
               <div className="details-actions">
@@ -1950,7 +1954,7 @@ function App() {
               </div>
             </div>
           ) : (
-            <p className="empty-state">Select or add a repository.</p>
+            <EmptyState className="empty-state">Select or add a repository.</EmptyState>
           )}
         </section>
       </section>

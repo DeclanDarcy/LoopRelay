@@ -1,4 +1,5 @@
 import { formatDateTime } from '../../lib'
+import { EmptyState, Panel, SectionHeader } from '../../components/design'
 import type { ExecutionEvent } from '../../types'
 
 type ExecutionEventFeedProps = {
@@ -7,14 +8,11 @@ type ExecutionEventFeedProps = {
 
 export function ExecutionEventFeed({ events }: ExecutionEventFeedProps) {
   return (
-    <section className="execution-output-panel" aria-label="Execution output">
-      <div>
-        <p className="eyebrow">Execution Output</p>
-        <h4>{events.length} events</h4>
-      </div>
+    <Panel className="execution-output-panel" aria-label="Execution output">
+      <SectionHeader eyebrow="Execution Output" title={`${events.length} events`} headingLevel={4} />
       <div className="execution-event-feed">
         {events.length === 0 ? (
-          <p className="empty-state">No execution events recorded.</p>
+          <EmptyState className="empty-state">No execution events recorded.</EmptyState>
         ) : (
           events.map((executionEvent) => (
             <div className="execution-event-row" key={executionEvent.sequence}>
@@ -26,6 +24,6 @@ export function ExecutionEventFeed({ events }: ExecutionEventFeedProps) {
           ))
         )}
       </div>
-    </section>
+    </Panel>
   )
 }

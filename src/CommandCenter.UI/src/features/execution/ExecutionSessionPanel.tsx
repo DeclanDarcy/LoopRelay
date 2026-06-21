@@ -1,5 +1,5 @@
 import { formatDateTime, formatDuration } from '../../lib'
-import { StatusBadge } from '../../components/design'
+import { Panel, SectionHeader, StatusBadge } from '../../components/design'
 import { executionSessionStatus, repositoryExecutionStatus } from '../../lib/status'
 import type { ExecutionSessionSummary } from '../../types'
 
@@ -9,11 +9,12 @@ type ExecutionSessionPanelProps = {
 
 export function ExecutionSessionPanel({ session }: ExecutionSessionPanelProps) {
   return (
-    <section className="execution-session-panel" aria-label="Execution session">
-      <div>
-        <p className="eyebrow">{session.repositoryState === 'Executing' ? 'Active Execution' : 'Execution Session'}</p>
-        <h4>{session.milestonePath ?? 'Selected milestone'}</h4>
-      </div>
+    <Panel className="execution-session-panel" aria-label="Execution session">
+      <SectionHeader
+        eyebrow={session.repositoryState === 'Executing' ? 'Active Execution' : 'Execution Session'}
+        title={session.milestonePath ?? 'Selected milestone'}
+        headingLevel={4}
+      />
       <div className="execution-session-grid">
         <span>Session: {session.sessionId}</span>
         <span>Provider: {session.providerName || 'Unknown'}</span>
@@ -39,6 +40,6 @@ export function ExecutionSessionPanel({ session }: ExecutionSessionPanelProps) {
         <span>Pushed commit: {session.pushedCommitSha || 'Not recorded'}</span>
         {session.failureReason ? <span className="execution-failure">Failure: {session.failureReason}</span> : null}
       </div>
-    </section>
+    </Panel>
   )
 }

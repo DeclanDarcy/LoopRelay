@@ -2,13 +2,14 @@
 
 ## Newly Authorized
 
-- Treat Workstream 1.4 as successful because status standardization did not centralize workflow meaning.
-- Continue to define `src/lib/status.ts` as presentation-only ownership for labels, tones, and presentation metadata.
-- Continue to prohibit `src/lib/status.ts` from owning readiness, promotion eligibility, acceptance logic, execution authority, or workflow decisions.
-- Treat the current layering as `Workflow Authority -> Domain Status Values -> status.ts -> StatusBadge`.
-- Proceed with Milestone 1 Workstream 1.5 as a render-only primitive adoption pass.
-- Treat primitive adoption as a mechanical replacement exercise that preserves existing `onClick`, `disabled`, and visibility conditions exactly.
-- Prioritize primitive adoption in this order where mappings are clean: `Panel`, `SectionHeader`, `EmptyState`, `Metric`, `Table`, then `Button`.
-- Keep `Button` visual, interaction, and accessibility focused only; do not move workflow semantics, readiness rules, or permission checks into it.
-- Certify Workstream 1.5 with the question: can every primitive be replaced with a `div`, `button`, or `table` without changing application behavior?
-- Continue treating any proposal that moves workflow decisions into primitives as out of scope for Milestone 1.
+- Treat `SectionHeader.headingLevel` as an appropriate M1 evolution because it keeps `SectionHeader` a flexible render-only presentation primitive.
+- Avoid creating domain-specific design-system wrappers such as `ExecutionSectionHeader`, `OperationalContextSectionHeader`, or `ContinuitySectionHeader`.
+- Continue using `EmptyState` adoption as a safe Workstream 1.5 target because empty states represent presentation and must not own workflow, navigation, readiness, mutation, or projection authority.
+- Continue using the certification question for panel conversions: can this `Panel` be replaced with a `div` without changing behavior?
+- Prioritize remaining Workstream 1.5 primitive adoption in this order: `Panel`, `SectionHeader`, `Metric`, then opportunistic `Table`, then careful `Button`.
+- Adopt `Table` only where a current table structure already exists; do not invent new table abstractions to force adoption.
+- Treat `Button` as the highest-risk primitive because buttons sit on authority boundaries.
+- For every `Button` conversion, preserve `type`, `disabled`, `onClick`, and `children` exactly.
+- Do not add workflow-oriented props to design primitives, including examples such as `workflow`, `readiness`, `status` carrying workflow meaning, `proposal`, or domain objects.
+- Watch for primitive inflation and keep the design-system catalog boring, render-only, and free of domain convenience or workflow knowledge.
+- Continue Milestone 1 as presentation modernization only, preserving the M0 authority model.
