@@ -36,6 +36,7 @@ import { ExecutionHistoryPanel } from './features/execution/ExecutionHistoryPane
 import { ExecutionSessionPanel } from './features/execution/ExecutionSessionPanel'
 import { GitPathBucket } from './features/execution/GitPathBucket'
 import { OperationalContextCurrentPanel } from './features/operational-context/OperationalContextCurrentPanel'
+import { RepositoryDashboardItemContent } from './features/repositories/RepositoryDashboardItemContent'
 import {
   useArtifactContent,
   useContinuityDiagnostics,
@@ -1312,63 +1313,12 @@ function App() {
                     className={`repository-item${isSelected ? ' selected' : ''}`}
                     onClick={() => selectRepository(entry.repository.id)}
                   >
-                    <span className="repository-name">{entry.repository.name}</span>
-                    <span className="repository-path">{entry.repository.path}</span>
-                    <span
-                      className={`availability availability-${entry.availability.toLowerCase()}`}
-                    >
-                      {availabilityLabels[entry.availability]}
-                    </span>
-                    <span className={`readiness readiness-${entry.readiness.toLowerCase()}`}>
-                      {readinessLabels[entry.readiness]}
-                    </span>
-                    <span className={`execution-state execution-state-${entry.executionState.toLowerCase()}`}>
-                      {executionStateLabels[entry.executionState]}
-                    </span>
-                    <span className="repository-metadata">
-                      {entry.milestoneCount} milestones
-                    </span>
-                    {entry.executionSummary ? (
-                      <>
-                        <span className="repository-metadata">
-                          Session {entry.executionSummary.sessionId}
-                        </span>
-                        <span className="repository-metadata">
-                          State {entry.executionSummary.state}
-                        </span>
-                        {entry.executionSummary.lastActivityAt ? (
-                          <span className="repository-metadata">
-                            Activity {formatDateTime(entry.executionSummary.lastActivityAt)}
-                          </span>
-                        ) : null}
-                        {entry.executionSummary.failureReason ? (
-                          <span className="repository-metadata failure-metadata">
-                            Failure {entry.executionSummary.failureReason}
-                          </span>
-                        ) : null}
-                      </>
-                    ) : null}
-                    <span className="repository-metadata">
-                      Handoff {entry.hasCurrentHandoff ? 'present' : 'missing'}
-                    </span>
-                    <span className="repository-metadata">
-                      Decisions {entry.hasCurrentDecisions ? 'present' : 'missing'}
-                    </span>
-                    <span className="repository-metadata">
-                      Context {entry.continuitySummary.operationalContextExists ? 'present' : 'missing'}
-                    </span>
-                    <span className="repository-metadata">
-                      Updated {formatDateTime(entry.continuitySummary.operationalContextLastUpdatedAt)}
-                    </span>
-                    <span className="repository-metadata">
-                      Revisions {entry.continuitySummary.operationalContextRevisionCount}
-                    </span>
-                    <span className="repository-metadata">
-                      Questions {entry.continuitySummary.openQuestionCount}
-                    </span>
-                    <span className="repository-metadata">
-                      Risks {entry.continuitySummary.activeRiskCount}
-                    </span>
+                    <RepositoryDashboardItemContent
+                      repository={entry}
+                      availabilityLabels={availabilityLabels}
+                      readinessLabels={readinessLabels}
+                      executionStateLabels={executionStateLabels}
+                    />
                   </button>
                 )
               })}

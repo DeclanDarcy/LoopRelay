@@ -2,26 +2,26 @@
 
 ## Slice Summary
 
-Continued Milestone 0 Workstream 0.5 with another narrow presentation-only extraction, this time from the current operational-context display region.
+Continued Milestone 0 Workstream 0.5 with a narrow repository dashboard extraction.
 
 ## New State
 
-- Extracted current operational-context display rendering from `App.tsx` into `src/CommandCenter.UI/src/features/operational-context/OperationalContextCurrentPanel.tsx`.
-- The new component receives `OperationalContextProjection`, `OperationalContextProposalSummary`, and caller-computed execution/review status strings via props only.
-- Kept operational-context proposal workflow actions, draft editing, review-note ownership, semantic/compression proposal display, comparison rendering, and promotion/review gating in `App.tsx`.
-- Added characterization in `src/CommandCenter.UI/src/test/characterization/operationalContextCurrentPanel.test.tsx`.
-- The new tests cover existing summary labels, local `formatDateTime` output, section ordering, list item rendering, empty section fallbacks, missing-current-context fallback, and proposal `None`/`Unknown` status fallbacks.
+- Extracted repository dashboard item content rendering from `App.tsx` into `src/CommandCenter.UI/src/features/repositories/RepositoryDashboardItemContent.tsx`.
+- The new component renders only `RepositoryDashboardProjection` display values plus caller-provided availability/readiness/execution-state labels.
+- Kept repository selectable button ownership, selected class composition, repository selection callback, list loading/empty state, registration/removal actions, and selection reconciliation in `App.tsx`.
+- Added characterization in `src/CommandCenter.UI/src/test/characterization/repositoryDashboardItemContent.test.tsx`.
+- The new tests cover projected repository labels, status classes, continuity metadata, optional execution summary metadata, missing handoff/decisions/context labels, and null timestamp fallback.
 - Updated `.agents/milestones/m0-frontend-foundations.md` to record this M0.5 slice.
-- Updated `.agents/audits/m0-app-responsibility-inventory.md` with the current operational-context display boundary.
-- Rotated the previous handoff to `.agents/handoffs/handoff.0036.md`.
+- Updated `.agents/audits/m0-app-responsibility-inventory.md` with the repository dashboard item boundary.
+- Rotated the previous handoff to `.agents/handoffs/handoff.0037.md`.
 
 ## Verification
 
-- `npm run test -- operationalContextCurrentPanel`
+- `npm run test -- repositoryDashboardItemContent`
 - `npm run lint`
 - `npm run test`
 - `npm run build`
 
 ## Next Slice
 
-Stay in M0.5. The best next slice is a focused audit of the repository list / selected repository summary region to split direct projection display from navigation callbacks and registration/removal actions. Do not extract remove-registration, repository selection reconciliation, or workspace refresh coordination into a presentation component.
+Stay in M0.5. The best next slice is a focused selected-repository summary audit: separate the static repository/workspace facts from `Refresh Workspace`, `Remove Registration`, operational-context actions, continuity actions, artifact/editor state, and execution workflows. Only extract a subcomponent if it remains useful with no workflow callbacks.

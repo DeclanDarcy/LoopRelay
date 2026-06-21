@@ -2,12 +2,12 @@
 
 ## Newly Authorized
 
-- Treat the `OperationalContextCurrentPanel` extraction as satisfying the stricter post-M0.6 standard because it is bounded around `current operational context -> display`, not operational-context workflow.
-- Continue requiring remaining M0.5 extraction candidates to pass these tests: all data arrives through props, no backend commands are required, and the component remains meaningful when rendered in isolation.
-- Treat `projection -> presentation` regions as the preferred late-M0.5 extraction category.
-- Keep workflow transitions, workflow mutations, draft coordination, authority decisions, proposal generation/loading/review/promotion, review notes, and comparison workflows out of presentation components.
-- Audit the repository summary region next by distinguishing `repository projection -> display` from selection coordination and repository lifecycle responsibilities.
-- Consider repository name, path, metadata, counts, and status text likely safe only when rendered exactly as projected.
-- Treat repository selection, selection reconciliation, repository registration, repository removal, and repository refresh orchestration as unsafe for presentation extraction because they participate in state coordination.
-- Use this heuristic for repository-summary candidates: if every callback prop were removed, the component should still be useful; otherwise it is probably a coordination component.
-- Continue assuming most remaining `App.tsx` code is intentional until a focused audit proves a presentation-only boundary.
+- Treat `RepositoryDashboardItemContent` as an appropriate late-M0.5 extraction because it isolates repository item body rendering while retaining selection, selected styling, registration, removal, loading, empty-state coordination, and selection reconciliation in `App.tsx`.
+- Continue distinguishing repository projected facts from repository selection behavior; repository card display and repository selection are separate responsibilities.
+- Treat the successful repository dashboard item extraction as consistent with M0.5 decomposition and M0.6 authority certification because it remains `backend projection -> display` with no embedded workflow authority.
+- Proceed next with a more aggressive selected-repository summary audit, assuming the likely outcome may be partial extraction rather than full panel extraction.
+- Consider repository name, path, metadata, workspace statistics, and other read-only projected facts potentially extractable as a `SelectedRepositorySummary` only if the component can receive props only and remain useful without callbacks.
+- Treat regions owning `onRefresh`, `onRemove`, `onGenerate`, `onPromote`, `onExecute`, `onCommit`, or `onPush` as workflow coordination surfaces unless a focused audit proves otherwise.
+- Use the late-M0.5 callback-removal heuristic: if a component remains meaningful with every callback removed, it is probably presentation; if not, it is probably participating in coordination.
+- Assume remaining M0.5 opportunities are small display islands inside larger authority-bearing surfaces, not broad region extractions.
+- Accept that a focused audit may conclude a surface should remain in `App.tsx`; at this stage, retaining authority-bearing surfaces is as valuable as extracting safe display-only components.
