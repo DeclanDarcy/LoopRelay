@@ -160,6 +160,7 @@ Slice progress:
 - [x] Added `src/lib` extraction for formatting helpers, artifact category/path helpers, and dirty-path counting.
 - [x] Added `src/lib/markdown.tsx` extraction for current markdown preview rendering.
 - [x] Added `src/lib/executionWorkflow.ts` extraction for current execution workflow rail display mapping.
+- [x] Added `src/lib/operationalContext.ts` extraction for current operational-context section item display parsing.
 - [x] Left feature component extraction in `App.tsx` for later Workstream 0.5 slices.
 
 ### Certification
@@ -178,6 +179,7 @@ Minimum scenarios:
 - [x] Refresh reloads workspace and reconciles selected artifacts.
 - [x] Markdown preview rendering preserves current headings, lists, paragraphs, fenced code blocks, and literal unsupported markdown behavior.
 - [x] Execution workflow rail mapping preserves current ready, previewed, executing, review, commit, push, completed, and failed display states.
+- [x] Operational-context section parsing preserves h2 section matching, list ordering, trimming, flattened nested bullets, section omission, and empty-state behavior.
 - [ ] Milestone selection builds execution context only when requested.
 - [x] Execution events merge by sequence and preserve ordering.
 - [x] SSE cleanup occurs when session changes or unmounts.
