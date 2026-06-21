@@ -70,6 +70,7 @@ export function Sidebar({
                   type="button"
                   key={entry.repository.id}
                   className={`sidebar-repository-item${isSelected ? ' selected' : ''}`}
+                  aria-current={isSelected ? 'page' : undefined}
                   onClick={() => onSelectRepository(entry.repository.id)}
                 >
                   <span className="sidebar-repository-name">{entry.repository.name}</span>

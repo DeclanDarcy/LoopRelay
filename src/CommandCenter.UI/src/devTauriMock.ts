@@ -31,6 +31,7 @@ type MockState = {
   sessions: Record<string, ExecutionSession>
   operationalContextProposals: Record<string, OperationalContextProposal[]>
   continuityReports: Record<string, ContinuityReport[]>
+  commandCalls: Record<string, number>
 }
 
 type TauriInternals = {
@@ -306,6 +307,7 @@ function createInitialState(): MockState {
     sessions: {},
     operationalContextProposals: {},
     continuityReports: {},
+    commandCalls: {},
   }
 
   seedCertificationSession(state, certificationRepositories[0], 'Executing', 'Executing')
@@ -1173,6 +1175,8 @@ export function installDevTauriMock() {
     transformCallback: () => 0,
     unregisterCallback: () => undefined,
     invoke: async (cmd: string, args?: InvokeArgs) => {
+      state.commandCalls[cmd] = (state.commandCalls[cmd] ?? 0) + 1
+
       switch (cmd) {
         case 'get_backend_url':
           return 'mock'

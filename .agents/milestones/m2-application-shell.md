@@ -2,13 +2,13 @@
 
 ## Tracking
 
-- [ ] Milestone complete
+- [x] Milestone complete
 - [x] Workstream 2.1: Shell State
 - [x] Workstream 2.2: Sidebar
 - [x] Workstream 2.3: Header
 - [x] Workstream 2.4: Primary Workspace Tabs
 - [x] Workstream 2.5: Command Palette v1
-- [ ] Certification complete
+- [x] Certification complete
 
 Goal: replace the top-level layout with the final shell while keeping existing workflow surfaces mostly intact.
 
@@ -29,10 +29,10 @@ Use `shellState.ts` as the single source for client-owned navigation:
 
 - [x] Tab changes mutate navigation state only.
 - [x] Repository switching does not mutate backend workflow state.
-- [ ] In the mock certification app, tab switch visible response is p95 under 100ms.
-- [ ] In the mock certification app, palette open, close, filter, and item navigation visible response is p95 under 100ms.
-- [ ] Repository selection visually updates within 100ms and starts workspace loading without blocking the sidebar.
-- [ ] Repository switching does not trigger duplicate workspace loads for the same selected repository.
+- [x] In the mock certification app, tab switch visible response is p95 under 100ms.
+- [x] In the mock certification app, palette open, close, filter, and item navigation visible response is p95 under 100ms.
+- [x] Repository selection visually updates within 100ms and starts workspace loading without blocking the sidebar.
+- [x] Repository switching does not trigger duplicate workspace loads for the same selected repository.
 
 ## Workstream 2.2: Sidebar
 
@@ -96,7 +96,7 @@ Initial tab mapping:
 
 - [x] Switching tabs never mutates backend state.
 - [x] Existing actions still work from their new locations.
-- [ ] Tab switch latency remains p95 under 100ms in Playwright against `?mock=workspace-certification`.
+- [x] Tab switch latency remains p95 under 100ms in Playwright against `?mock=workspace-certification`.
 
 ## Workstream 2.5: Command Palette v1
 
@@ -124,10 +124,11 @@ Forbidden in v1:
 
 - [x] Palette actions only update navigation state.
 - [x] Palette owns no workflow authority.
-- [ ] Palette open, close, filtering, and navigation remain p95 under 100ms in Playwright against `?mock=workspace-certification`.
+- [x] Palette open, close, filtering, and navigation remain p95 under 100ms in Playwright against `?mock=workspace-certification`.
 
 ## Slice Notes
 
 - 2026-06-21: Implemented the M2 shell layer with `AppShell`, `Sidebar`, `Header`, `WorkspaceTabs`, and `CommandPalette`; extended `shellState` with active primary tab, palette visibility, and section target ownership; wired the existing repository detail, execution, operational-context, continuity, and artifact surfaces into tab-visible shell regions without moving workflow authority out of `App.tsx`.
 - 2026-06-21: Sidebar now uses dashboard projections only, omits branch/dirty values because the dashboard projection does not provide them, shows proposal state only from the continuity summary, and keeps unsupported global navigation entries disabled.
 - 2026-06-21: Verification passed after shell implementation: `npm run lint`, `npm run test`, `npm run build`, `npm run test:e2e`, and `dotnet test CommandCenter.slnx`. Certification remains open for explicit p95 tab and command-palette latency coverage.
+- 2026-06-21: Completed M2 certification by adding Playwright coverage for repository selection visible response under 100ms, duplicate workspace-load prevention for same-repository selection, tab switching p95 under 100ms, command-palette open/close/filter/navigation p95 under 100ms, and shell availability at 1440x900, 1280x800, and 390x844. Verification passed with `npm run lint`, `npm run test`, `npm run build`, `npm run test:e2e`, and `dotnet test CommandCenter.slnx`.
