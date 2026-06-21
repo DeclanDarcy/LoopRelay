@@ -166,6 +166,7 @@ Slice progress:
 - [x] Extracted execution event feed rendering as presentation-only `ExecutionEventFeed` with characterization coverage for empty and ordered event rows.
 - [x] Extracted execution session summary rendering as presentation-only `ExecutionSessionPanel` with characterization coverage for active-session labels and missing-field fallbacks.
 - [x] Extracted execution history rendering as presentation-only `ExecutionHistoryPanel` with characterization coverage for empty history, provided order, labels, and missing-field fallbacks.
+- [x] Extracted execution context summary row rendering as presentation-only `ExecutionContextSummaryRows` with characterization coverage for existing labels and caller-provided status strings.
 - [x] Left feature component extraction in `App.tsx` for later Workstream 0.5 slices.
 
 ### Certification

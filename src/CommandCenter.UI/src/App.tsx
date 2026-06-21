@@ -23,6 +23,7 @@ import {
   selectRepositoryDirectory,
   startExecution as startExecutionCommand,
 } from './api'
+import { ExecutionContextSummaryRows } from './features/execution/ExecutionContextSummaryRows'
 import { ExecutionEventFeed } from './features/execution/ExecutionEventFeed'
 import { ExecutionHistoryPanel } from './features/execution/ExecutionHistoryPanel'
 import { ExecutionSessionPanel } from './features/execution/ExecutionSessionPanel'
@@ -379,6 +380,13 @@ function App() {
     executionContextMatchesSelection,
     Boolean(executionDisplay),
   )
+  const executionContextSizeStatus = !executionContext
+    ? 'Not available'
+    : executionContext.diagnostics.hardLimitExceeded
+      ? 'Hard limit'
+      : executionContext.diagnostics.warningThresholdExceeded
+        ? 'Warning'
+        : 'Within limits'
 
   const startExecutionBlockedReason = useMemo(() => {
     if (!workspace) {
@@ -2136,23 +2144,12 @@ function App() {
 
                 {executionContext ? (
                   <div className="context-preview">
-                    <div className="context-summary">
-                      <span>Generated: {new Date(executionContext.generatedAt).toLocaleString()}</span>
-                      <span>Total: {executionContext.diagnostics.totalBytes} bytes</span>
-                      <span>Operational context: {operationalContextExecutionStatus}</span>
-                      <span>
-                        Launch:{' '}
-                        {canStartExecution ? 'Ready' : startExecutionBlockedReason}
-                      </span>
-                      <span>
-                        Size:{' '}
-                        {executionContext.diagnostics.hardLimitExceeded
-                          ? 'Hard limit'
-                          : executionContext.diagnostics.warningThresholdExceeded
-                            ? 'Warning'
-                            : 'Within limits'}
-                      </span>
-                    </div>
+                    <ExecutionContextSummaryRows
+                      executionContext={executionContext}
+                      operationalContextStatus={operationalContextExecutionStatus}
+                      launchStatus={canStartExecution ? 'Ready' : startExecutionBlockedReason}
+                      sizeStatus={executionContextSizeStatus}
+                    />
 
                     <div className="context-columns">
                       <div>

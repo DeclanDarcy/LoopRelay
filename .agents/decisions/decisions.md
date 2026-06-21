@@ -2,17 +2,20 @@
 
 ## Newly Authorized
 
-- Treat the `ExecutionHistoryPanel` extraction as architecturally safe because `selectedExecutionHistory` was already derived upstream and the component owns only `sessions -> render`.
-- Preserve the boundary that feature components must not decide which sessions matter, which sessions are selected, which sessions are current, or which sessions are relevant.
-- Classify remaining large `App.tsx` regions as either workflow authority or read-only summary surfaces before extracting them.
-- Keep workflow authority in `App.tsx`, including execution start, commit preparation, commit readiness, push readiness, proposal review, promotion review, and handoff review.
-- Treat read-only diagnostic summaries, context summaries, metadata cards, and status rows as likely Workstream 0.5 extraction candidates only after an authority audit.
-- Prefer execution context summary rows as the next extraction candidate because they are more likely than launch diagnostics to satisfy `props -> render` without hidden interpretation.
-- Before extracting execution context summary rows, verify the component does not answer authority questions such as whether execution can start, context is sufficient, execution should proceed, or readiness is blocked.
-- Be more cautious with launch diagnostics because severity, importance, blocking, and recommendations may hide frontend interpretation unless those meanings are backend-provided.
-- Continue the Milestone 0.5 loop as audit, characterize, classify, extract, and verify.
-- Treat every extraction candidate as authority-sensitive until proven to be presentation-only.
+- Continue Milestone 0.5 with the audit, characterize, classify, extract, verify loop.
+- Treat the `ExecutionContextSummaryRows` extraction as safe because it renders a backend preview projection plus caller-provided display strings without deciding readiness, sufficiency, staleness, warning impact, or launch behavior.
+- Keep launch readiness in `App.tsx`.
+- Keep stale-preview interpretation in `App.tsx`.
+- Keep operational-context inclusion status derivation in `App.tsx`.
+- Keep size-status derivation in `App.tsx`.
+- Treat launch diagnostics as authority-sensitive until audited because blocking, warning, recommendation, severity, and required-action meanings may be backend-provided or frontend-derived.
+- Prioritize artifact list rendering as the next extraction candidate.
+- Extract artifact list rendering only if it is genuinely `artifacts -> render`.
+- Do not extract artifact list rendering if it includes importance, blocking, requiredness, or recommendation interpretation.
+- Treat missing optional list rendering as likely safe only after checking for importance ranking, priority ordering, or recommendation wording.
+- Treat validation list rendering as more suspicious because validation UI may contain error categorization, severity derivation, blocking logic, or recommendation generation.
+- Continue using the guiding rule: extract presentation, retain meaning.
 
 ## Next Authorized Slice
 
-Audit execution context summary rows first. Extract them only if they simply display backend-provided context items, values, metadata, and descriptions from props. Audit launch diagnostics afterward.
+Audit artifact list rendering. Extract it only if it is a direct collection rendering surface with no hidden interpretation.
