@@ -675,4 +675,108 @@ describe('workspace certification mock', () => {
     )
     await waitFor(() => expect(screen.getByText('Proposal: mock-proposal-1')).toBeInTheDocument())
   })
+
+  it('keeps continuity diagnostics read-only and report generation behind the explicit action', async () => {
+    installWorkspaceCertificationMock()
+
+    const invoke = window.__TAURI_INTERNALS__?.invoke
+    expect(invoke).toBeDefined()
+    if (!invoke) {
+      return
+    }
+
+    const invokeSpy = vi.fn(invoke)
+    window.__TAURI_INTERNALS__!.invoke = invokeSpy
+
+    render(<App />)
+
+    await screen.findAllByRole('heading', { name: 'AlphaRepo' })
+    await waitFor(() =>
+      expect(
+        invokeSpy.mock.calls.some(
+          ([command, args]) =>
+            command === 'get_continuity_diagnostics' &&
+            typeof args === 'object' &&
+            args !== null &&
+            'repositoryId' in args &&
+            args.repositoryId === 'repo-alpha',
+        ),
+      ).toBe(true),
+    )
+    let continuityPanel = await screen.findByLabelText('Continuity diagnostics')
+    await within(continuityPanel).findByText((_, element) => element?.textContent === 'Revisions: 1')
+    expect(invokeSpy.mock.calls.some(([command]) => command === 'generate_continuity_report')).toBe(false)
+
+    const continuityWorkflowCommands = ['get_continuity_diagnostics', 'generate_continuity_report']
+    const continuityWorkflowCallCounts = () =>
+      Object.fromEntries(
+        continuityWorkflowCommands.map((command) => [
+          command,
+          invokeSpy.mock.calls.filter(([calledCommand]) => calledCommand === command).length,
+        ]),
+      )
+
+    const beforeRefresh = continuityWorkflowCallCounts()
+    await waitFor(() =>
+      expect(within(continuityPanel).getByRole('button', { name: 'Refresh Diagnostics' })).not.toBeDisabled(),
+    )
+    fireEvent.click(within(continuityPanel).getByRole('button', { name: 'Refresh Diagnostics' }))
+
+    await waitFor(() =>
+      expect(
+        invokeSpy.mock.calls.filter(
+          ([command, args]) =>
+            command === 'get_continuity_diagnostics' &&
+            typeof args === 'object' &&
+            args !== null &&
+            'repositoryId' in args &&
+            args.repositoryId === 'repo-alpha',
+        ),
+      ).toHaveLength(beforeRefresh.get_continuity_diagnostics + 1),
+    )
+    expect(invokeSpy.mock.calls.some(([command]) => command === 'generate_continuity_report')).toBe(false)
+
+    fireEvent.click(screen.getByRole('button', { name: /EmptyRepo/ }))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'EmptyRepo' })).toBeInTheDocument())
+    await waitFor(() =>
+      expect(
+        invokeSpy.mock.calls.some(
+          ([command, args]) =>
+            command === 'get_continuity_diagnostics' &&
+            typeof args === 'object' &&
+            args !== null &&
+            'repositoryId' in args &&
+            args.repositoryId === 'repo-empty',
+        ),
+      ).toBe(true),
+    )
+    expect(invokeSpy.mock.calls.some(([command]) => command === 'generate_continuity_report')).toBe(false)
+
+    fireEvent.click(screen.getByRole('button', { name: /AlphaRepo/ }))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'AlphaRepo' })).toBeInTheDocument())
+    const beforeNavigation = continuityWorkflowCallCounts()
+    fireEvent.click(screen.getByRole('button', { name: /decisions\.md/ }))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'decisions.md' })).toBeInTheDocument())
+    await new Promise((resolve) => window.setTimeout(resolve, 0))
+    expect(continuityWorkflowCallCounts()).toEqual(beforeNavigation)
+
+    continuityPanel = screen.getByLabelText('Continuity diagnostics')
+    fireEvent.click(within(continuityPanel).getByRole('button', { name: 'Generate Report' }))
+
+    await waitFor(() =>
+      expect(
+        invokeSpy.mock.calls.some(
+          ([command, args]) =>
+            command === 'generate_continuity_report' &&
+            typeof args === 'object' &&
+            args !== null &&
+            'repositoryId' in args &&
+            args.repositoryId === 'repo-alpha',
+        ),
+      ).toBe(true),
+    )
+    await waitFor(() =>
+      expect(screen.getByText(/Continuity report generated: \.agents\/.*\/continuity\./)).toBeInTheDocument(),
+    )
+  })
 })

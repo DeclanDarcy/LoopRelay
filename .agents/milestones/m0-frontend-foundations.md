@@ -202,7 +202,7 @@ Minimum scenarios:
 - [x] SSE cleanup occurs when session changes or unmounts.
 - [x] Proposal generation, load, edit, accept, reject, and promote keep current gating.
 - [x] Commit preparation, selection, commit, and push keep current gating.
-- [ ] Continuity diagnostics and report generation remain read-only except for explicit report generation.
+- [x] Continuity diagnostics and report generation remain read-only except for explicit report generation.
 
 Use `?mock=workspace-certification` to certify all repository execution states:
 
@@ -226,3 +226,5 @@ Slice note: `app.smoke.test.tsx` now characterizes milestone selection as naviga
 Slice note: `app.smoke.test.tsx` now characterizes commit workflow authority. Selecting an awaiting-commit repository does not invoke `prepare_commit`; only the Git Workflow refresh action prepares the commit review. Editing the commit message and changing selected paths remain local draft state and do not invoke `prepare_commit` or `commit_execution`; only `Commit Selected` invokes `commit_execution` with the selected path set and preparation snapshot. Selecting or refreshing an awaiting-push repository does not invoke `push_execution`; only `Push Commit` invokes the backend push command.
 
 Slice note: `app.smoke.test.tsx` now characterizes operational-context proposal workflow authority. Repository/artifact navigation and draft edits do not invoke proposal workflow commands. Existing proposals are loaded only through `Load Latest`; generation, edit save, accept, reject, and promote each require their explicit action and send the selected repository/proposal payload.
+
+Slice note: `app.smoke.test.tsx` now characterizes continuity diagnostics/report authority. Diagnostics initial load, repository selection, and `Refresh Diagnostics` remain read-only projection retrieval through `get_continuity_diagnostics`; repository/artifact navigation does not invoke report generation; only `Generate Report` invokes `generate_continuity_report` for the selected repository.

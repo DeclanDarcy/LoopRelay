@@ -2,19 +2,18 @@
 
 ## Slice Summary
 
-Continued Milestone 0 Workstream 0.6 by certifying operational-context proposal workflow authority boundaries.
+Continued Milestone 0 Workstream 0.6 by certifying continuity diagnostics and report-generation authority boundaries.
 
 ## New State
 
-- Added app-level smoke characterization for operational-context proposal generation, loading, edit saving, acceptance, rejection, and promotion.
-- Seeded proposal tests prove repository/artifact navigation does not invoke proposal workflow commands.
-- Proposal metadata visibility does not auto-load proposal content; `Load Latest` is the explicit load action.
-- Proposal markdown edits and review-note edits remain local draft state and do not call edit, accept, reject, or promote commands.
-- `Save Edits`, `Accept`, `Reject`, and `Promote` are characterized to call their backend workflow commands with explicit selected repository/proposal payloads.
-- `Generate Proposal` is characterized to call proposal generation only through the explicit button action.
-- Updated `.agents/milestones/m0-frontend-foundations.md` to mark proposal workflow characterization complete.
-- Updated `.agents/audits/m0-app-responsibility-inventory.md` with the new operational-context proposal authority boundary.
-- Rotated the previous handoff to `.agents/handoffs/handoff.0032.md`.
+- Added app-level smoke characterization for continuity diagnostics/report authority in `src/CommandCenter.UI/src/test/characterization/app.smoke.test.tsx`.
+- Diagnostics initial load and explicit `Refresh Diagnostics` are characterized as read-only `get_continuity_diagnostics` projection retrieval.
+- Repository navigation may reload continuity diagnostics but must not generate continuity reports.
+- Artifact navigation is characterized as local/navigation state that does not call continuity diagnostics or report-generation commands.
+- `Generate Report` is characterized as the only UI path that invokes `generate_continuity_report` for the selected repository.
+- Updated `.agents/milestones/m0-frontend-foundations.md` to mark continuity diagnostics/report characterization complete.
+- Updated `.agents/audits/m0-app-responsibility-inventory.md` with the new continuity authority boundary.
+- Rotated the previous handoff to `.agents/handoffs/handoff.0033.md`.
 
 ## Verification
 
@@ -27,4 +26,4 @@ Continued Milestone 0 Workstream 0.6 by certifying operational-context proposal 
 
 ## Next Slice
 
-Continue Workstream 0.6 with continuity diagnostics/report generation authority characterization: diagnostics loading/refresh must remain read-only projection work, and report generation must happen only through the explicit `Generate Report` action.
+Inventory remaining workflow-mutating backend commands against M0.6 coverage, then either close Workstream 0.6 with an audit note or add the next missing authority characterization before returning to M0.5 decomposition.

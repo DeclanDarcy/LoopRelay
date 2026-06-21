@@ -2,13 +2,10 @@
 
 ## Newly Authorized
 
-- Treat the emerging M0.6 authority model as a certified frontend authority model, not a loose collection of characterization tests.
-- Use this invariant as a primary frontend architecture rule: navigation state, draft state, and projection state must not mutate workflow state; only explicit workflow actions may mutate workflow state.
-- Treat the earlier commit-preparation leak as evidence that M0.6 characterizations are validating real architectural boundaries.
-- Make continuity diagnostics and report generation the next M0.6 characterization target.
-- Characterize continuity authority with this split:
-  - diagnostics load and refresh are projection retrieval only;
-  - repository/tab/navigation changes must not generate reports;
-  - `Generate Report` is the only path that may invoke report generation.
-- Consider M0.6 substantially complete when every workflow mutation path has been checked against navigation, projection refresh, draft edit, and explicit workflow action triggers.
-- After continuity report characterization, inventory remaining workflow-mutating backend commands and characterize them systematically rather than opportunistically.
+- Treat M0.6 as frontend-wide authority certification, not local behavior documentation.
+- Use the invariant that navigation, draft editing, and projection loading are not workflow mutations; only explicit workflow actions may mutate workflow state.
+- Treat the four currently characterized workflow domains as certified mutation systems: execution context, git workflow, operational-context proposals, and continuity reports.
+- Perform a workflow-mutating backend command inventory next before adding more opportunistic characterization.
+- Define M0.6 completion as every workflow-mutating backend command appearing in an authority matrix, every such command having characterization coverage, and every such command being certified to require an explicit user workflow action.
+- If the inventory reveals only a small number of uncovered commands, finish M0.6 before returning to M0.5 decomposition.
+- If the inventory shows coverage is largely complete, formally close Workstream 0.6 and record the resulting authority constitution as a primary M0 deliverable.
