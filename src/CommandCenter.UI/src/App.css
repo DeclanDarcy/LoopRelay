@@ -604,6 +604,10 @@ button:focus-visible {
   gap: 14px;
 }
 
+.tab-panel[hidden] {
+  display: none;
+}
+
 .workspace-tab {
   min-width: 0;
   display: grid;

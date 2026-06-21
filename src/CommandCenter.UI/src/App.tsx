@@ -28,13 +28,6 @@ import { ArtifactMetadata } from './features/artifacts/ArtifactMetadata'
 import { Button, EmptyState, Panel, SectionHeader, StatusBadge } from './components/design'
 import { AppShell, CommandPalette, Header, Sidebar, WorkspaceTabs } from './components/shell'
 import { ContinuityDiagnosticsPanel } from './features/continuity/ContinuityDiagnosticsPanel'
-import { ExecutionContextArtifactDiagnosticsList } from './features/execution/ExecutionContextArtifactDiagnosticsList'
-import { ExecutionContextArtifactContentPreviews } from './features/execution/ExecutionContextArtifactContentPreviews'
-import { ExecutionContextArtifactList } from './features/execution/ExecutionContextArtifactList'
-import { ExecutionContextMissingOptionalList } from './features/execution/ExecutionContextMissingOptionalList'
-import { ExecutionRepositorySnapshotPanel } from './features/execution/ExecutionRepositorySnapshotPanel'
-import { ExecutionContextSummaryRows } from './features/execution/ExecutionContextSummaryRows'
-import { ExecutionContextValidationList } from './features/execution/ExecutionContextValidationList'
 import { ExecutionEventFeed } from './features/execution/ExecutionEventFeed'
 import { ExecutionHistoryPanel } from './features/execution/ExecutionHistoryPanel'
 import { ExecutionSessionPanel } from './features/execution/ExecutionSessionPanel'
@@ -52,6 +45,7 @@ import { OperationalContextSemanticChangeList } from './features/operational-con
 import { OperationalContextProposalSummaryPanel } from './features/operational-context/OperationalContextProposalSummaryPanel'
 import { OperationalContextProposalStatusPanel } from './features/operational-context/OperationalContextProposalStatusPanel'
 import { SelectedRepositorySummary } from './features/repositories/SelectedRepositorySummary'
+import { ExecutionContextPanel } from './features/workspace/ExecutionContextPanel'
 import { WorkspaceTab } from './features/workspace/WorkspaceTab'
 import {
   useArtifactContent,
@@ -1270,6 +1264,25 @@ function App() {
     setSectionTarget(null)
   }, [sectionTarget, setSectionTarget])
 
+  const executionContextPanel = selectedRepository ? (
+    <ExecutionContextPanel
+      executionContext={executionContext}
+      milestoneOptions={milestoneOptions}
+      selectedMilestonePath={selectedMilestonePath}
+      isContextLoading={isContextLoading}
+      canStartExecution={canStartExecution}
+      isStartingExecution={isStartingExecution}
+      startExecutionBlockedReason={startExecutionBlockedReason}
+      operationalContextExecutionStatus={operationalContextExecutionStatus}
+      executionContextSizeStatus={executionContextSizeStatus}
+      onSelectMilestone={(milestonePath) =>
+        selectMilestone(selectedRepository.repository.id, milestonePath)
+      }
+      onBuildExecutionContext={() => void buildExecutionContext()}
+      onStartExecution={() => void startExecution()}
+    />
+  ) : null
+
   return (
     <AppShell
       sidebar={
@@ -1356,6 +1369,7 @@ function App() {
           {selectedRepository ? (
             <div className="details-body" data-active-tab={activePrimaryTab}>
               <WorkspaceTab
+                hidden={activePrimaryTab !== 'workspace'}
                 workflowSteps={executionWorkflowSteps}
                 summary={
                   <SelectedRepositorySummary
@@ -1365,6 +1379,7 @@ function App() {
                     currentExecutionState={currentExecutionState}
                   />
                 }
+                executionContext={executionContextPanel}
                 artifactWorkspace={
                   workspace ? (
                     <Panel
@@ -1730,102 +1745,7 @@ function App() {
 
                 <ExecutionWorkflowRail steps={executionWorkflowSteps} />
 
-              <Panel className="execution-context-panel" aria-label="Execution context preview">
-                <SectionHeader
-                  className="context-toolbar"
-                  eyebrow="Execution Context"
-                  title="Preview Package"
-                  headingLevel={4}
-                  actions={
-                    <div className="context-controls">
-                    <select
-                      value={selectedMilestonePath ?? ''}
-                      onChange={(event) =>
-                        selectMilestone(
-                          selectedRepository.repository.id,
-                          event.target.value || null,
-                        )
-                      }
-                      disabled={milestoneOptions.length === 0 || isContextLoading}
-                    >
-                      {milestoneOptions.length === 0 ? (
-                        <option value="">No milestones</option>
-                      ) : (
-                        milestoneOptions.map((milestone) => (
-                          <option key={milestone.relativePath} value={milestone.relativePath}>
-                            {milestone.name}
-                          </option>
-                        ))
-                      )}
-                    </select>
-                    <button
-                      type="button"
-                      className="secondary-action"
-                      onClick={() => void buildExecutionContext()}
-                      disabled={!selectedMilestonePath || isContextLoading}
-                    >
-                      {isContextLoading ? 'Building...' : 'Build Execution Context'}
-                    </button>
-                    <button
-                      type="button"
-                      className="primary-action"
-                      onClick={() => void startExecution()}
-                      disabled={!canStartExecution}
-                      title={startExecutionBlockedReason}
-                    >
-                      {isStartingExecution ? 'Starting...' : 'Start Execution'}
-                    </button>
-                    </div>
-                  }
-                />
-
-                {executionContext ? (
-                  <div className="context-preview">
-                    <ExecutionContextSummaryRows
-                      executionContext={executionContext}
-                      operationalContextStatus={operationalContextExecutionStatus}
-                      launchStatus={canStartExecution ? 'Ready' : startExecutionBlockedReason}
-                      sizeStatus={executionContextSizeStatus}
-                    />
-
-                    <div className="context-columns">
-                      <div>
-                        <h5>Artifacts</h5>
-                        <ExecutionContextArtifactList artifacts={executionContext.artifacts} />
-                      </div>
-                      <div>
-                        <h5>Missing Optional</h5>
-                        <ExecutionContextMissingOptionalList
-                          paths={executionContext.diagnostics.missingOptionalArtifacts}
-                        />
-                      </div>
-                      <div>
-                        <h5>Validation</h5>
-                        <ExecutionContextValidationList
-                          validationErrors={executionContext.diagnostics.validationErrors}
-                        />
-                      </div>
-                    </div>
-
-                    <ExecutionRepositorySnapshotPanel
-                      repositorySnapshot={executionContext.repositorySnapshot}
-                    />
-
-                    <div className="artifact-diagnostics">
-                      <h5>Artifact Sizes</h5>
-                      <ExecutionContextArtifactDiagnosticsList
-                        diagnostics={executionContext.diagnostics.artifactDiagnostics}
-                      />
-                    </div>
-
-                    <ExecutionContextArtifactContentPreviews artifacts={executionContext.artifacts} />
-                  </div>
-                ) : (
-                  <EmptyState className="empty-state">
-                    Build a context preview for a selected milestone.
-                  </EmptyState>
-                )}
-              </Panel>
+                {activePrimaryTab === 'execution' ? executionContextPanel : null}
 
               {shouldShowGitWorkflow ? (
                 <Panel className="git-status-panel" aria-label="Git status">

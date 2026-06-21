@@ -5,7 +5,7 @@
 - [ ] Milestone complete
 - [x] Workstream 3.1: Workflow Rail
 - [ ] Workstream 3.2: Workspace Layout
-- [ ] Workstream 3.3: Execution Context Panel
+- [x] Workstream 3.3: Execution Context Panel
 - [ ] Workstream 3.4: Live Activity Panel
 - [ ] Workstream 3.5: Milestones Panel
 - [ ] Workstream 3.6: Inspector Rail
@@ -57,7 +57,7 @@ Rules:
 
 Implement `features/workspace/WorkspaceTab.tsx`.
 
-Status: started. `WorkspaceTab` now owns a desktop-first main column plus right inspector rail, with the existing repository summary, workflow rail, artifact workspace, and execution history slotted through real projections. Execution context, live activity, milestones, commit/push, and operational-context inspector placement still need to move into the workspace layout before this workstream is complete.
+Status: started. `WorkspaceTab` now owns a desktop-first main column plus right inspector rail, with the existing repository summary, workflow rail, execution context panel, artifact workspace, and execution history slotted through real projections. Live activity, milestones, commit/push, and operational-context inspector placement still need to move into the workspace layout before this workstream is complete.
 
 Target structure:
 
@@ -79,24 +79,26 @@ Use a desktop-first grid with a right rail around 364px wide. Collapse cleanly o
 
 ## Workstream 3.3: Execution Context Panel
 
+Status: complete. Workspace now renders the execution context through a reusable display component backed by the existing execution context projection and App-owned action callbacks.
+
 Display from `ExecutionContextPreview`:
 
-- [ ] Artifact role.
-- [ ] Relative path.
-- [ ] Byte count.
-- [ ] Character count.
-- [ ] Per-artifact warnings and hard-limit status.
-- [ ] Aggregate bytes and characters.
-- [ ] Warning/hard thresholds.
-- [ ] Missing optional artifacts.
-- [ ] Validation errors.
-- [ ] Launch blocked status.
-- [ ] Repository snapshot branch and dirty-state summary.
+- [x] Artifact role.
+- [x] Relative path.
+- [x] Byte count.
+- [x] Character count.
+- [x] Per-artifact warnings and hard-limit status.
+- [x] Aggregate bytes and characters.
+- [x] Warning/hard thresholds.
+- [x] Missing optional artifacts.
+- [x] Validation errors.
+- [x] Launch blocked status.
+- [x] Repository snapshot branch and dirty-state summary.
 
 Rules:
 
-- [ ] Do not recalculate aggregate totals or validation.
-- [ ] Use backend diagnostics as the source of truth.
+- [x] Do not recalculate aggregate totals or validation.
+- [x] Use backend diagnostics as the source of truth.
 
 ## Workstream 3.4: Live Activity Panel
 

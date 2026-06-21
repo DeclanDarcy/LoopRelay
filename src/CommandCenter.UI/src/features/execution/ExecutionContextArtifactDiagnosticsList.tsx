@@ -9,16 +9,25 @@ export function ExecutionContextArtifactDiagnosticsList({
 }: ExecutionContextArtifactDiagnosticsListProps) {
   return (
     <div className="diagnostic-list">
-      {diagnostics.map((diagnostic) => (
-        <span key={diagnostic.relativePath}>
-          {diagnostic.relativePath}: {diagnostic.byteCount} bytes
-          {diagnostic.hardLimitExceeded
-            ? ' / hard limit'
-            : diagnostic.warningThresholdExceeded
-              ? ' / warning'
-              : ''}
-        </span>
-      ))}
+      {diagnostics.map((diagnostic) => {
+        const sizeStatus = diagnostic.hardLimitExceeded
+          ? ' / hard limit'
+          : diagnostic.warningThresholdExceeded
+            ? ' / warning'
+            : ''
+
+        return (
+          <div className="diagnostic-item" key={diagnostic.relativePath}>
+            <span>
+              {diagnostic.relativePath}: {diagnostic.byteCount} bytes{sizeStatus}
+            </span>
+            <small>
+              {diagnostic.characterCount} characters / warning{' '}
+              {diagnostic.warningThresholdBytes} bytes / hard {diagnostic.hardLimitBytes} bytes
+            </small>
+          </div>
+        )
+      })}
     </div>
   )
 }
