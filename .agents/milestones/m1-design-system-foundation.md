@@ -2,13 +2,13 @@
 
 ## Tracking
 
-- [ ] Milestone complete
+- [x] Milestone complete
 - [x] Workstream 1.1: Token System
 - [x] Workstream 1.2: Typography
 - [x] Workstream 1.3: Shared Primitives
 - [x] Workstream 1.4: Status Language
 - [x] Workstream 1.5: Apply Theme Without Layout Migration
-- [ ] Certification complete
+- [x] Certification complete
 
 Goal: establish the dark operational visual system without changing information architecture.
 
@@ -103,15 +103,15 @@ Cover:
 
 ## Workstream 1.5: Apply Theme Without Layout Migration
 
-- [ ] Convert current surfaces to the new tokens and primitives.
-- [ ] Preserve current component hierarchy and user workflows.
-- [ ] Avoid introducing sidebar, header, command palette, workflow rail changes, or tab changes in this milestone.
+- [x] Convert current surfaces to the new tokens and primitives.
+- [x] Preserve current component hierarchy and user workflows.
+- [x] Avoid introducing sidebar, header, command palette, workflow rail changes, or tab changes in this milestone.
 
 ### Certification
 
-- [ ] The app is visibly on the dark console theme.
-- [ ] Existing interactions are unchanged.
-- [ ] `npm run lint`, `npm run build`, and frontend characterization tests pass.
+- [x] The app is visibly on the dark console theme.
+- [x] Existing interactions are unchanged.
+- [x] `npm run lint`, `npm run build`, and frontend characterization tests pass.
 
 ## Slice Notes
 
@@ -129,3 +129,4 @@ Cover:
 - 2026-06-21: Verification passed after the second primitive adoption pass: `npm run lint`, `npm run test`, `npm run build`, `npm run test:e2e`, and `dotnet test CommandCenter.slnx`.
 - 2026-06-21: Completed the final Workstream 1.5 implementation pass by adopting `Button` only for non-workflow shell/workspace controls and adopting `Panel`/`SectionHeader` for the extracted execution repository snapshot panel; workflow authority buttons remain native pending later feature migration.
 - 2026-06-21: Verification passed after the final Workstream 1.5 pass: `npm run lint`, `npm run test`, `npm run build`, `npm run test:e2e`, and `dotnet test CommandCenter.slnx`.
+- 2026-06-21: Certified Milestone 1 complete. The app is on the dark console theme through shared tokens, current workflows and hierarchy remain unchanged, primitive authority remains render-only, and verification passed: `npm run lint`, `npm run test`, `npm run build`, `npm run test:e2e`, and `dotnet test CommandCenter.slnx`.

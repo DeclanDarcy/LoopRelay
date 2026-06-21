@@ -2,25 +2,23 @@
 
 ## Slice Summary
 
-Completed the final Milestone 1 Workstream 1.5 implementation pass with a deliberately narrow primitive-adoption slice.
+Certified Milestone 1 complete after verifying the completed design-system foundation against the requested M1 gate.
 
 ## New State
 
-- Marked Workstream 1.5 complete in `.agents/milestones/m1-design-system-foundation.md`; Milestone 1 certification remains unchecked.
-- Imported shared `Button` in `src/CommandCenter.UI/src/App.tsx`.
-- Converted only non-workflow shell/workspace controls to `Button`: top-level repository refresh, add repository, and workspace refresh.
-- Left workflow-authority controls native: execution launch, proposal review/promote, commit/push, handoff accept/reject, artifact save/rotate, repository removal, repository selection, and artifact selection.
-- Converted `ExecutionRepositorySnapshotPanel` to shared `Panel` and `SectionHeader` while preserving `dirty-state`, projected content, and no-interaction behavior.
-- Rotated the previous handoff to `.agents/handoffs/handoff.0052.md`.
+- Marked Milestone 1 complete in `.agents/milestones/m1-design-system-foundation.md`.
+- Marked Workstream 1.5 implementation and certification complete.
+- Added a Milestone 1 certification slice note recording that the dark console theme is active, hierarchy/workflows remain unchanged, and primitive authority remains render-only.
+- Rotated the previous handoff to `.agents/handoffs/handoff.0053.md`.
 
 ## Verification
 
 - Passed `npm run lint`.
-- Passed `npm run test`.
+- Passed `npm run test` with 32 test files and 111 tests.
 - Passed `npm run build`.
-- Passed `npm run test:e2e`.
-- Passed `dotnet test CommandCenter.slnx`.
+- Passed `npm run test:e2e` with 2 Playwright tests.
+- Passed `dotnet test CommandCenter.slnx` with 192 backend tests.
 
 ## Next Slice
 
-Run Milestone 1 certification/review rather than continuing primitive adoption by default. Confirm the app remains visibly dark, interactions are unchanged, and the current native workflow buttons are an intentional deferral for later feature migration rather than unfinished Workstream 1.5 work.
+Open Milestone 2: Application Shell. Start with shell architecture and navigation-state boundaries before introducing visible shell changes, because M1 is now closed and the remaining modernization work is layout/application-shell work rather than visual-system work.
