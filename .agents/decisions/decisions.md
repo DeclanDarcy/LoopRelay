@@ -2,29 +2,23 @@
 
 ## Newly Authorized
 
-- Treat the latest milestone-selection characterization as architectural boundary protection, not ordinary UI behavior coverage.
-- Preserve the certified boundary that milestone selection is navigation state while execution-context preview is an explicit backend workflow action.
-- Continue prioritizing governance-boundary characterization over further component extraction for the next M0 slices.
-- Treat commit preparation, commit scope selection, commit readiness, and push gating as the next highest-risk certification targets.
-- Characterize commit workflow boundaries before touching structure.
+- Treat M0.6 as frontend authority certification, not merely UI regression coverage.
+- Treat the removed automatic `prepare_commit` on repository selection as a genuine authority leak and architectural correction.
+- Preserve the boundary that repository selection is navigation authority only and must not initiate workflow preparation.
+- Use the emerging authority matrix in future audits:
+  - Navigation authority must never invoke workflow actions.
+  - Draft authority must never trigger workflow execution.
+  - Workflow authority must require explicit workflow actions.
+  - Projection authority may retrieve projections but must not initiate workflow.
+- Continue prioritizing workflow authority characterization over presentation extraction while M0.6 is finding real boundary violations.
+- Make operational-context proposal workflow gating the next highest-leverage M0.6 target.
 
-## Suggested Characterization Sequence
+## Next Characterization Target
 
-1. Commit preparation trigger:
-   - Editing commit message must not prepare commit.
-   - Selecting files must not prepare commit.
-   - Only the explicit prepare action prepares commit.
-2. Commit scope authority:
-   - Scope selection remains user driven.
-   - Frontend must not silently expand or shrink commit scope.
-3. Commit readiness:
-   - Readiness must remain tied to existing authority.
-   - Presentation helpers must not become readiness authority.
-4. Push gating:
-   - Push availability follows existing authority.
-   - UI state changes alone must not enable push.
+Characterize operational-context proposal workflow authority:
 
-## Avoid
-
-- Do not resume extraction-first work immediately.
-- Do not move JSX merely to continue decomposition when the higher-value remaining work is authority characterization, boundary certification, and workflow regression protection.
+- Generate must not be triggered by repository selection, proposal selection, tab changes, or navigation changes.
+- Loading or viewing proposal metadata/content must not generate a proposal.
+- Editing proposal content must not implicitly accept or promote a proposal.
+- Accept and reject must only run through explicit actions.
+- Promotion is highest risk and must only run through explicit promotion; proposal selection, viewing, and editing must not invoke promotion.

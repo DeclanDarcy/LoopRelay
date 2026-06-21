@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '../../App'
 import { certificationExecutionStates } from '../fixtures/certification'
@@ -224,5 +224,201 @@ describe('workspace certification mock', () => {
       ).toBe(true),
     )
     expect(await screen.findByText('Continuity milestone.')).toBeInTheDocument()
+  })
+
+  it('keeps commit preparation and commit execution behind explicit workflow actions', async () => {
+    installWorkspaceCertificationMock()
+
+    const invoke = window.__TAURI_INTERNALS__?.invoke
+    expect(invoke).toBeDefined()
+    if (!invoke) {
+      return
+    }
+
+    const invokeSpy = vi.fn(invoke)
+    window.__TAURI_INTERNALS__!.invoke = invokeSpy
+
+    render(<App />)
+
+    await screen.findAllByRole('heading', { name: 'AlphaRepo' })
+
+    fireEvent.click(screen.getByRole('button', { name: /CertificationAwaitingCommit/ }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'CertificationAwaitingCommit' })).toBeInTheDocument(),
+    )
+    await waitFor(() =>
+      expect(
+        invokeSpy.mock.calls.some(
+          ([command, args]) =>
+            command === 'get_repository_workspace' &&
+            typeof args === 'object' &&
+            args !== null &&
+            'repositoryId' in args &&
+            args.repositoryId === 'repo-cert-awaiting-commit',
+        ),
+      ).toBe(true),
+    )
+    await screen.findByText('Commit preparation is not loaded.')
+    expect(invokeSpy.mock.calls.some(([command]) => command === 'prepare_commit')).toBe(false)
+    expect(invokeSpy.mock.calls.some(([command]) => command === 'commit_execution')).toBe(false)
+
+    const commitWorkflowPanel = screen.getByText('Git Workflow').closest('section')
+    expect(commitWorkflowPanel).not.toBeNull()
+    if (!commitWorkflowPanel) {
+      return
+    }
+
+    fireEvent.click(within(commitWorkflowPanel as HTMLElement).getByRole('button', { name: 'Refresh' }))
+
+    await waitFor(() =>
+      expect(
+        invokeSpy.mock.calls.some(
+          ([command, args]) =>
+            command === 'prepare_commit' &&
+            typeof args === 'object' &&
+            args !== null &&
+            'sessionId' in args &&
+            args.sessionId === 'cert-repo-cert-awaiting-commit',
+        ),
+      ).toBe(true),
+    )
+    await waitFor(() =>
+      expect(screen.getByText('Preparation: prep-cert-repo-cert-awaiting-commit')).toBeInTheDocument(),
+    )
+    const commitMessageEditor = screen
+      .getAllByRole('textbox')
+      .find((textbox) => !textbox.classList.contains('artifact-editor'))
+    expect(commitMessageEditor).toBeDefined()
+    if (!commitMessageEditor) {
+      return
+    }
+    expect(commitMessageEditor).toHaveValue('m5\n\n- 2 files changed')
+
+    const prepareCallCount = invokeSpy.mock.calls.filter(([command]) => command === 'prepare_commit').length
+    const commitCallCount = invokeSpy.mock.calls.filter(([command]) => command === 'commit_execution').length
+
+    fireEvent.change(commitMessageEditor, {
+      target: { value: 'Reviewed commit boundary' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Select None' }))
+
+    await waitFor(() => expect(screen.getByText('Selected: 0')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'Commit Selected' })).toBeDisabled()
+    expect(invokeSpy.mock.calls.filter(([command]) => command === 'prepare_commit')).toHaveLength(
+      prepareCallCount,
+    )
+    expect(invokeSpy.mock.calls.filter(([command]) => command === 'commit_execution')).toHaveLength(
+      commitCallCount,
+    )
+
+    const commitScope = screen.getByLabelText('Commit scope')
+    fireEvent.click(within(commitScope).getByLabelText(/src\/CommandCenter\.UI\/src\/App\.tsx/))
+
+    await waitFor(() => expect(screen.getByText('Selected: 1')).toBeInTheDocument())
+    expect(invokeSpy.mock.calls.filter(([command]) => command === 'prepare_commit')).toHaveLength(
+      prepareCallCount,
+    )
+    expect(invokeSpy.mock.calls.filter(([command]) => command === 'commit_execution')).toHaveLength(
+      commitCallCount,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Commit Selected' }))
+
+    await waitFor(() =>
+      expect(
+        invokeSpy.mock.calls.some(
+          ([command, args]) =>
+            command === 'commit_execution' &&
+            typeof args === 'object' &&
+            args !== null &&
+            'sessionId' in args &&
+            args.sessionId === 'cert-repo-cert-awaiting-commit' &&
+            'message' in args &&
+            args.message === 'Reviewed commit boundary' &&
+            'statusSnapshotId' in args &&
+            args.statusSnapshotId === 'snapshot-cert-repo-cert-awaiting-commit' &&
+            'selectedPaths' in args &&
+            Array.isArray(args.selectedPaths) &&
+            args.selectedPaths.length === 1 &&
+            args.selectedPaths[0] === 'src/CommandCenter.UI/src/App.tsx',
+        ),
+      ).toBe(true),
+    )
+  })
+
+  it('keeps push execution behind the explicit push action', async () => {
+    installWorkspaceCertificationMock()
+
+    const invoke = window.__TAURI_INTERNALS__?.invoke
+    expect(invoke).toBeDefined()
+    if (!invoke) {
+      return
+    }
+
+    const invokeSpy = vi.fn(invoke)
+    window.__TAURI_INTERNALS__!.invoke = invokeSpy
+
+    render(<App />)
+
+    await screen.findAllByRole('heading', { name: 'AlphaRepo' })
+
+    fireEvent.click(screen.getByRole('button', { name: /CertificationAwaitingPush/ }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'CertificationAwaitingPush' })).toBeInTheDocument(),
+    )
+    await waitFor(() =>
+      expect(
+        invokeSpy.mock.calls.some(
+          ([command, args]) =>
+            command === 'get_repository_workspace' &&
+            typeof args === 'object' &&
+            args !== null &&
+            'repositoryId' in args &&
+            args.repositoryId === 'repo-cert-awaiting-push',
+        ),
+      ).toBe(true),
+    )
+    await screen.findByRole('button', { name: 'Push Commit' })
+    await new Promise((resolve) => window.setTimeout(resolve, 0))
+    expect(invokeSpy.mock.calls.some(([command]) => command === 'push_execution')).toBe(false)
+
+    const pushWorkflowPanel = screen.getByText('Git Workflow').closest('section')
+    expect(pushWorkflowPanel).not.toBeNull()
+    if (!pushWorkflowPanel) {
+      return
+    }
+
+    fireEvent.click(within(pushWorkflowPanel as HTMLElement).getByRole('button', { name: 'Refresh' }))
+
+    await waitFor(() =>
+      expect(
+        invokeSpy.mock.calls.some(
+          ([command, args]) =>
+            command === 'get_git_status' &&
+            typeof args === 'object' &&
+            args !== null &&
+            'repositoryId' in args &&
+            args.repositoryId === 'repo-cert-awaiting-push',
+        ),
+      ).toBe(true),
+    )
+    expect(invokeSpy.mock.calls.some(([command]) => command === 'push_execution')).toBe(false)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Push Commit' }))
+
+    await waitFor(() =>
+      expect(
+        invokeSpy.mock.calls.some(
+          ([command, args]) =>
+            command === 'push_execution' &&
+            typeof args === 'object' &&
+            args !== null &&
+            'sessionId' in args &&
+            args.sessionId === 'cert-repo-cert-awaiting-push',
+        ),
+      ).toBe(true),
+    )
   })
 })

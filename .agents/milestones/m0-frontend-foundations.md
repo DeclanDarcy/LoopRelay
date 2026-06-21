@@ -201,7 +201,7 @@ Minimum scenarios:
 - [x] Execution events merge by sequence and preserve ordering.
 - [x] SSE cleanup occurs when session changes or unmounts.
 - [ ] Proposal generation, load, edit, accept, reject, and promote keep current gating.
-- [ ] Commit preparation, selection, commit, and push keep current gating.
+- [x] Commit preparation, selection, commit, and push keep current gating.
 - [ ] Continuity diagnostics and report generation remain read-only except for explicit report generation.
 
 Use `?mock=workspace-certification` to certify all repository execution states:
@@ -222,3 +222,5 @@ Use `?mock=workspace-certification` to certify all repository execution states:
 Closure audit note: M0 already has boundary characterization for transport, shell navigation, extracted projection hooks, execution event cleanup/order, certification fixture state coverage, and artifact-draft projection isolation. Remaining workflow characterization should be added alongside Workstream 0.5 decomposition and feature workspace migration.
 
 Slice note: `app.smoke.test.tsx` now characterizes milestone selection as navigation state only. Changing the selected milestone does not invoke `preview_execution_context`; only the explicit `Build Execution Context` action invokes the backend preview command for the selected repository and milestone.
+
+Slice note: `app.smoke.test.tsx` now characterizes commit workflow authority. Selecting an awaiting-commit repository does not invoke `prepare_commit`; only the Git Workflow refresh action prepares the commit review. Editing the commit message and changing selected paths remain local draft state and do not invoke `prepare_commit` or `commit_execution`; only `Commit Selected` invokes `commit_execution` with the selected path set and preparation snapshot. Selecting or refreshing an awaiting-push repository does not invoke `push_execution`; only `Push Commit` invokes the backend push command.

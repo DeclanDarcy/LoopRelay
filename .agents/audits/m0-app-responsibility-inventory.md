@@ -75,3 +75,7 @@ Captured after extracting `useGitStatus(repositoryId)` and updated during the M0
 
 - Milestone selection now has app-level characterization: selecting a different milestone does not call `preview_execution_context`, and the backend preview command is called only by the explicit `Build Execution Context` button with the selected repository and milestone path.
 - This protects the boundary that milestone selection is client navigation state while context preview construction remains a backend-owned projection build.
+- Commit workflow authority now has app-level characterization: selecting an awaiting-commit repository does not call `prepare_commit`, and the backend preparation command is called only through the Git Workflow refresh action for that session.
+- Commit message edits, commit scope selection, `Select All`, and `Select None` remain local draft state and do not call `prepare_commit` or `commit_execution`; `Commit Selected` calls `commit_execution` with the explicit selected path list, trimmed message, session id, and preparation snapshot id.
+- Push workflow authority now has app-level characterization: selecting or refreshing an awaiting-push repository does not call `push_execution`; only `Push Commit` invokes the backend push command for the session.
+- `App.tsx` no longer auto-loads commit preparation from an effect when a repository enters `AwaitingCommit`; the cleanup effect is limited to non-workflow selection and stale-session draft cleanup so workflow preparation remains an explicit backend action.

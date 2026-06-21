@@ -368,8 +368,9 @@ function App() {
   const gitStatusPathCount = countDirtyPaths(gitStatus?.dirtyState ?? null)
   const selectedCommitScopeItems =
     commitPreparation?.scopeItems.filter((item) => selectedCommitPaths.has(item.path)) ?? []
+  const commitPreparationSessionId = commitPreparation?.sessionId ?? null
   const isCommitPreparationCurrent =
-    commitPreparation?.sessionId === executionSessionId &&
+    commitPreparationSessionId === executionSessionId &&
     currentExecutionState === 'AwaitingCommit'
   const canCommitPreparedScope =
     Boolean(isCommitPreparationCurrent && commitPreparation) &&
@@ -1197,22 +1198,14 @@ function App() {
       return
     }
 
-    const timeoutId = window.setTimeout(() => {
-      if (currentExecutionState === 'AwaitingCommit' && executionSessionId) {
-        void loadCommitPreparation(executionSessionId)
-        return
-      }
-
+    if (commitPreparationSessionId && commitPreparationSessionId !== executionSessionId) {
       setCommitPreparation(null)
       setSelectedCommitPaths(new Set())
       setCommitMessage('')
-    }, 0)
-
-    return () => window.clearTimeout(timeoutId)
+    }
   }, [
-    currentExecutionState,
+    commitPreparationSessionId,
     executionSessionId,
-    loadCommitPreparation,
     selectedRepository,
     shouldShowGitWorkflow,
   ])
