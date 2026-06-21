@@ -1,10 +1,15 @@
-using CommandCenter.Backend.Artifacts;
-using CommandCenter.Backend.Configuration;
-using CommandCenter.Backend.Continuity;
-using CommandCenter.Backend.Execution;
-using CommandCenter.Backend.Planning;
-using CommandCenter.Backend.Projections;
-using CommandCenter.Backend.Repositories;
+using CommandCenter.Core.Artifacts;
+using CommandCenter.Core.Configuration;
+using CommandCenter.Core.Continuity;
+using CommandCenter.Execution;
+using CommandCenter.Core.Planning;
+using CommandCenter.Core.Projections;
+using CommandCenter.Core.Repositories;
+using CommandCenter.Execution.Abstractions;
+using CommandCenter.Execution.Models;
+using CommandCenter.Execution.Primitives;
+using CommandCenter.Middle.Continuity;
+using CommandCenter.Middle.Projections;
 
 namespace CommandCenter.Backend.Tests;
 

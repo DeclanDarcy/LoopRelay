@@ -1,0 +1,12 @@
+namespace CommandCenter.Core.Continuity;
+
+public sealed class ContinuityTrend
+{
+    public int AddedCount { get; init; }
+
+    public int RemovedCount { get; init; }
+
+    public int ResolvedCount { get; init; }
+
+    public int LostCount { get; init; }
+}

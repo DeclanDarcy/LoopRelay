@@ -16,9 +16,14 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <Using Include="CommandCenter.Middle.Projections" />
+    <Using Include="CommandCenter.Middle.Continuity" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\CommandCenter.Core\CommandCenter.Core.csproj" />
+    <ProjectReference Include="..\..\src\CommandCenter.Execution\CommandCenter.Execution.csproj" />
+    <ProjectReference Include="..\..\src\CommandCenter.Middle\CommandCenter.Middle.csproj" />
     <ProjectReference Include="..\..\src\CommandCenter.Backend\CommandCenter.Backend.csproj" />
   </ItemGroup>
 

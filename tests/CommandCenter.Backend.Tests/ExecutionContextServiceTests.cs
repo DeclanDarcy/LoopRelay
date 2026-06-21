@@ -1,14 +1,16 @@
 using System.Net;
 using System.Net.Http.Json;
 using CommandCenter.Backend;
-using CommandCenter.Backend.Artifacts;
-using CommandCenter.Backend.Configuration;
-using CommandCenter.Backend.Execution;
-using CommandCenter.Backend.Planning;
-using CommandCenter.Backend.Repositories;
+using CommandCenter.Core.Artifacts;
+using CommandCenter.Core.Configuration;
+using CommandCenter.Execution;
+using CommandCenter.Core.Planning;
+using CommandCenter.Core.Repositories;
+using CommandCenter.Execution.Abstractions;
+using CommandCenter.Execution.Models;
+using CommandCenter.Execution.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
-using ExecutionContext = CommandCenter.Backend.Execution.ExecutionContext;
 
 namespace CommandCenter.Backend.Tests;
 
@@ -274,7 +276,7 @@ public sealed class ExecutionContextServiceTests
                 $"/api/repositories/{repository.Id}/execution/context?milestonePath=.agents/milestones/m1.md");
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-            var context = await response.Content.ReadFromJsonAsync<CommandCenter.Backend.Execution.ExecutionContext>();
+            var context = await response.Content.ReadFromJsonAsync<Execution.Models.ExecutionContext>();
             Assert.NotNull(context);
             Assert.Contains(context.Artifacts, artifact => artifact.RelativePath == ".agents/plan.md");
             Assert.Contains(context.Artifacts, artifact => artifact.RelativePath == ".agents/operational_context.md");

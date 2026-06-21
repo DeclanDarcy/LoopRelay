@@ -3,8 +3,13 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using CommandCenter.Backend;
-using CommandCenter.Backend.Execution;
-using CommandCenter.Backend.Repositories;
+using CommandCenter.Execution;
+using CommandCenter.Core.Repositories;
+using CommandCenter.Execution.Abstractions;
+using CommandCenter.Execution.Models;
+using CommandCenter.Execution.Modules;
+using CommandCenter.Execution.Primitives;
+using CommandCenter.Execution.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 

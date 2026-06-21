@@ -1,4 +1,6 @@
-using CommandCenter.Backend.Execution;
+using CommandCenter.Execution;
+using CommandCenter.Execution.Models;
+using CommandCenter.Execution.Services;
 
 namespace CommandCenter.Backend.Tests;
 
@@ -127,7 +129,7 @@ public sealed class ExecutionPromptBuilderTests
         Assert.DoesNotContain("2026-06-19", first.Text);
     }
 
-    private static CommandCenter.Backend.Execution.ExecutionContext CreateContext(
+    private static ExecutionContext CreateContext(
         IReadOnlyList<ExecutionContextArtifact>? optionalArtifacts = null,
         RepositoryDirtyState? dirtyState = null)
     {
@@ -141,7 +143,7 @@ public sealed class ExecutionPromptBuilderTests
             artifacts.AddRange(optionalArtifacts);
         }
 
-        return new CommandCenter.Backend.Execution.ExecutionContext
+        return new ExecutionContext
         {
             RepositoryId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
             RepositoryName = "Project",

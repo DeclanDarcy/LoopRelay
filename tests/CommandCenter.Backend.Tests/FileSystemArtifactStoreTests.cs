@@ -1,4 +1,4 @@
-using CommandCenter.Backend.Artifacts;
+using CommandCenter.Core.Artifacts;
 
 namespace CommandCenter.Backend.Tests;
 

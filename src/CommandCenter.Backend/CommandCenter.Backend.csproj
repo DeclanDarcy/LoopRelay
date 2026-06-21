@@ -6,4 +6,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\CommandCenter.Core\CommandCenter.Core.csproj" />
+    <ProjectReference Include="..\CommandCenter.Execution\CommandCenter.Execution.csproj" />
+    <ProjectReference Include="..\CommandCenter.Middle\CommandCenter.Middle.csproj" />
+  </ItemGroup>
+
 </Project>

@@ -1,5 +1,8 @@
-using CommandCenter.Backend.Artifacts;
-using CommandCenter.Backend.Execution;
+using CommandCenter.Core.Artifacts;
+using CommandCenter.Execution;
+using CommandCenter.Execution.Models;
+using CommandCenter.Execution.Primitives;
+using CommandCenter.Execution.Services;
 
 namespace CommandCenter.Backend.Tests;
 
