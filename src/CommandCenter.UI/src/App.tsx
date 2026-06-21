@@ -37,6 +37,7 @@ import { ExecutionSessionPanel } from './features/execution/ExecutionSessionPane
 import { GitPathBucket } from './features/execution/GitPathBucket'
 import { OperationalContextCurrentPanel } from './features/operational-context/OperationalContextCurrentPanel'
 import { RepositoryDashboardItemContent } from './features/repositories/RepositoryDashboardItemContent'
+import { SelectedRepositorySummary } from './features/repositories/SelectedRepositorySummary'
 import {
   useArtifactContent,
   useContinuityDiagnostics,
@@ -1343,100 +1344,15 @@ function App() {
 
           {selectedRepository ? (
             <div className="details-body">
-              <div className="details-title-row">
-                <div>
-                  <p className="eyebrow">Selected repository</p>
-                  <h3>{selectedRepository.repository.name}</h3>
-                </div>
-                <span
-                  className={`availability availability-${selectedRepository.availability.toLowerCase()}`}
-                >
-                  {availabilityLabels[selectedRepository.availability]}
-                </span>
-              </div>
-
-              <dl className="details-list">
-                <div>
-                  <dt>Path</dt>
-                  <dd>{selectedRepository.repository.path}</dd>
-                </div>
-                <div>
-                  <dt>Readiness</dt>
-                  <dd>{readinessLabels[workspace?.readiness ?? selectedRepository.readiness]}</dd>
-                </div>
-                <div>
-                  <dt>Execution</dt>
-                  <dd>
-                    {executionStateLabels[currentExecutionState]}
-                  </dd>
-                </div>
-                {executionDisplay ? (
-                  <>
-                    <div>
-                      <dt>Session</dt>
-                      <dd>{executionDisplay.sessionId}</dd>
-                    </div>
-                    <div>
-                      <dt>Provider</dt>
-                      <dd>{executionDisplay.providerName || 'Unknown'}</dd>
-                    </div>
-                    <div>
-                      <dt>Started</dt>
-                      <dd>{formatDateTime(executionDisplay.startedAt)}</dd>
-                    </div>
-                    <div>
-                      <dt>Last activity</dt>
-                      <dd>{formatDateTime(executionDisplay.lastActivityAt)}</dd>
-                    </div>
-                    <div>
-                      <dt>Duration</dt>
-                      <dd>{formatDuration(executionDisplay.duration)}</dd>
-                    </div>
-                    <div>
-                      <dt>Accepted</dt>
-                      <dd>{formatDateTime(executionDisplay.acceptedAt)}</dd>
-                    </div>
-                    <div>
-                      <dt>Rejected</dt>
-                      <dd>{formatDateTime(executionDisplay.rejectedAt)}</dd>
-                    </div>
-                    <div>
-                      <dt>Decision note</dt>
-                      <dd>{executionDisplay.decisionNote || 'Not recorded'}</dd>
-                    </div>
-                    <div>
-                      <dt>PID</dt>
-                      <dd>{executionDisplay.providerProcessId ?? 'Not recorded'}</dd>
-                    </div>
-                    <div>
-                      <dt>Executable</dt>
-                      <dd>{executionDisplay.providerExecutablePath || 'Not recorded'}</dd>
-                    </div>
-                    <div>
-                      <dt>Failure</dt>
-                      <dd>{executionDisplay.failureReason || 'None'}</dd>
-                    </div>
-                    <div>
-                      <dt>Handoff</dt>
-                      <dd>{executionDisplay.handoffPath || 'Not recorded'}</dd>
-                    </div>
-                  </>
-                ) : null}
-                <div>
-                  <dt>Milestones</dt>
-                  <dd>{workspace?.milestoneCount ?? selectedRepository.milestoneCount}</dd>
-                </div>
-              </dl>
-
-              <div className="summary-grid">
-                <span>Plan: {workspace?.hasPlan ? 'Present' : 'Missing'}</span>
-                <span>
-                  Operational context:{' '}
-                  {workspace?.hasOperationalContext ? 'Present' : 'Missing'}
-                </span>
-                <span>Handoff: {workspace?.hasCurrentHandoff ? 'Present' : 'Missing'}</span>
-                <span>Decisions: {workspace?.hasCurrentDecisions ? 'Present' : 'Missing'}</span>
-              </div>
+              <SelectedRepositorySummary
+                repository={selectedRepository}
+                workspace={workspace}
+                executionDisplay={executionDisplay}
+                currentExecutionState={currentExecutionState}
+                availabilityLabels={availabilityLabels}
+                readinessLabels={readinessLabels}
+                executionStateLabels={executionStateLabels}
+              />
 
               <section className="execution-context-panel" aria-label="Current understanding">
                 <div className="context-toolbar">

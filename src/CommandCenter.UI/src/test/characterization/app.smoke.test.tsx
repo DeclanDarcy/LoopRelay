@@ -360,8 +360,12 @@ describe('workspace certification mock', () => {
     expect(invokeSpy.mock.calls.some(([command]) => command === 'reject_execution_handoff')).toBe(false)
 
     await waitFor(() => expect(screen.getByRole('combobox')).toHaveValue('.agents/milestones/m5.md'))
-    fireEvent.click(screen.getByRole('button', { name: 'Build Execution Context' }))
-    await waitFor(() => expect(screen.getByText('Launch: Ready')).toBeInTheDocument())
+    const buildContextButton = screen.getByRole('button', { name: 'Build Execution Context' })
+    await waitFor(() => expect(buildContextButton).not.toBeDisabled())
+    fireEvent.click(buildContextButton)
+    await waitFor(() => expect(screen.getByText('Launch: Ready')).toBeInTheDocument(), {
+      timeout: 3000,
+    })
     expect(invokeSpy.mock.calls.some(([command]) => command === 'start_execution')).toBe(false)
 
     fireEvent.click(screen.getByRole('button', { name: 'Start Execution' }))
