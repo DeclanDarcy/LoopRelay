@@ -92,10 +92,10 @@ Create hooks that own loading, refreshing, errors, and cleanup:
 
 Rules:
 
-- [ ] Hooks may call API modules.
-- [ ] Hooks may expose `data`, `isLoading`, `error`, and command functions.
-- [ ] Hooks must not own workflow authority.
-- [ ] Hooks must not mutate backend state except through explicit command functions called by a user action.
+- [x] Hooks may call API modules.
+- [x] Hooks may expose `data`, `isLoading`, `error`, and command functions.
+- [x] Hooks must not own workflow authority.
+- [x] Hooks must not mutate backend state except through explicit command functions called by a user action.
 
 ### Certification
 
