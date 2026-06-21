@@ -3,7 +3,7 @@
 ## Tracking
 
 - [ ] Milestone complete
-- [ ] Workstream 3.1: Workflow Rail
+- [x] Workstream 3.1: Workflow Rail
 - [ ] Workstream 3.2: Workspace Layout
 - [ ] Workstream 3.3: Execution Context Panel
 - [ ] Workstream 3.4: Live Activity Panel
@@ -56,6 +56,8 @@ Rules:
 ## Workstream 3.2: Workspace Layout
 
 Implement `features/workspace/WorkspaceTab.tsx`.
+
+Status: started. `WorkspaceTab` now owns a desktop-first main column plus right inspector rail, with the existing repository summary, workflow rail, artifact workspace, and execution history slotted through real projections. Execution context, live activity, milestones, commit/push, and operational-context inspector placement still need to move into the workspace layout before this workstream is complete.
 
 Target structure:
 

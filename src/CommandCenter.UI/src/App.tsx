@@ -52,6 +52,7 @@ import { OperationalContextSemanticChangeList } from './features/operational-con
 import { OperationalContextProposalSummaryPanel } from './features/operational-context/OperationalContextProposalSummaryPanel'
 import { OperationalContextProposalStatusPanel } from './features/operational-context/OperationalContextProposalStatusPanel'
 import { SelectedRepositorySummary } from './features/repositories/SelectedRepositorySummary'
+import { WorkspaceTab } from './features/workspace/WorkspaceTab'
 import {
   useArtifactContent,
   useContinuityDiagnostics,
@@ -1354,14 +1355,121 @@ function App() {
 
           {selectedRepository ? (
             <div className="details-body" data-active-tab={activePrimaryTab}>
-              <div className="tab-panel tab-workspace">
-                <SelectedRepositorySummary
-                  repository={selectedRepository}
-                  workspace={workspace}
-                  executionDisplay={executionDisplay}
-                  currentExecutionState={currentExecutionState}
-                />
-              </div>
+              <WorkspaceTab
+                workflowSteps={executionWorkflowSteps}
+                summary={
+                  <SelectedRepositorySummary
+                    repository={selectedRepository}
+                    workspace={workspace}
+                    executionDisplay={executionDisplay}
+                    currentExecutionState={currentExecutionState}
+                  />
+                }
+                artifactWorkspace={
+                  workspace ? (
+                    <Panel
+                      id="artifacts"
+                      className="artifact-workspace-shell"
+                      aria-label="Artifact workspace"
+                    >
+                      <SectionHeader
+                        eyebrow="Repository Artifacts"
+                        title="Explorer and Editor"
+                        headingLevel={4}
+                      />
+                      <div className="artifact-workspace">
+                        <section className="artifact-explorer" aria-label="Artifact explorer">
+                          {getArtifactCategories(workspace.artifactInventory).map((category) => (
+                            <div className="artifact-category" key={category.label}>
+                              <h4>{category.label}</h4>
+                              {category.artifacts.length === 0 ? (
+                                <p className="missing-artifact">{category.missingLabel}</p>
+                              ) : (
+                                <div className="artifact-list">
+                                  {category.artifacts.map((artifact) => (
+                                    <button
+                                      type="button"
+                                      key={artifact.relativePath}
+                                      className={`artifact-item${
+                                        artifact.relativePath === selectedArtifactPath ? ' selected' : ''
+                                      }`}
+                                      onClick={() =>
+                                        selectArtifact(
+                                          selectedRepository.repository.id,
+                                          artifact.relativePath,
+                                        )
+                                      }
+                                    >
+                                      <span>{artifact.name}</span>
+                                      <span>{artifact.versionKind}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </section>
+
+                        <section className="artifact-panel" aria-label="Artifact content">
+                          {selectedArtifact ? (
+                            <>
+                              <div className="artifact-panel-header">
+                                <ArtifactMetadata artifact={selectedArtifact} />
+                                <div className="artifact-panel-actions">
+                                  {canRotateSelectedArtifact ? (
+                                    <button
+                                      type="button"
+                                      className="secondary-action"
+                                      onClick={() => void rotateSelectedArtifact()}
+                                      disabled={
+                                        isRotating ||
+                                        isArtifactLoading ||
+                                        isSaving ||
+                                        hasDraftChanges
+                                      }
+                                      title={
+                                        hasDraftChanges
+                                          ? 'Save changes before rotating.'
+                                          : 'Archive the current artifact to the next historical file.'
+                                      }
+                                    >
+                                      {isRotating ? 'Rotating...' : 'Rotate'}
+                                    </button>
+                                  ) : null}
+                                  <button
+                                    type="button"
+                                    className="primary-action"
+                                    onClick={() => void saveArtifact()}
+                                    disabled={isSaving || isArtifactLoading || !hasDraftChanges}
+                                  >
+                                    {isSaving ? 'Saving...' : 'Save'}
+                                  </button>
+                                </div>
+                              </div>
+                              <textarea
+                                className="artifact-editor"
+                                value={draftContent}
+                                onChange={(event) => setDraftContent(event.target.value)}
+                                spellCheck={false}
+                                disabled={isArtifactLoading}
+                              />
+                              <ArtifactMarkdownPreview
+                                content={draftContent}
+                                isLoading={isArtifactLoading}
+                              />
+                            </>
+                          ) : (
+                            <EmptyState className="empty-state">No artifact selected.</EmptyState>
+                          )}
+                        </section>
+                      </div>
+                    </Panel>
+                  ) : (
+                    <EmptyState className="empty-state">Loading workspace...</EmptyState>
+                  )
+                }
+                inspector={<ExecutionHistoryPanel sessions={selectedExecutionHistory} />}
+              />
 
               <Panel
                 className="execution-context-panel tab-panel tab-operational-context"
@@ -1895,108 +2003,6 @@ function App() {
 
               {executionDisplay ? <ExecutionEventFeed events={selectedExecutionEvents} /> : null}
               </section>
-
-              {workspace ? (
-                <Panel
-                  id="artifacts"
-                  className="artifact-workspace-shell tab-panel tab-workspace"
-                  aria-label="Artifact workspace"
-                >
-                  <SectionHeader
-                    eyebrow="Repository Artifacts"
-                    title="Explorer and Editor"
-                    headingLevel={4}
-                  />
-                <div className="artifact-workspace">
-                  <section className="artifact-explorer" aria-label="Artifact explorer">
-                    {getArtifactCategories(workspace.artifactInventory).map((category) => (
-                      <div className="artifact-category" key={category.label}>
-                        <h4>{category.label}</h4>
-                        {category.artifacts.length === 0 ? (
-                          <p className="missing-artifact">{category.missingLabel}</p>
-                        ) : (
-                          <div className="artifact-list">
-                            {category.artifacts.map((artifact) => (
-                              <button
-                                type="button"
-                                key={artifact.relativePath}
-                                className={`artifact-item${
-                                  artifact.relativePath === selectedArtifactPath ? ' selected' : ''
-                                }`}
-                                onClick={() =>
-                                  selectArtifact(
-                                    selectedRepository.repository.id,
-                                    artifact.relativePath,
-                                  )
-                                }
-                              >
-                                <span>{artifact.name}</span>
-                                <span>{artifact.versionKind}</span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </section>
-
-                  <section className="artifact-panel" aria-label="Artifact content">
-                    {selectedArtifact ? (
-                      <>
-                        <div className="artifact-panel-header">
-                          <ArtifactMetadata artifact={selectedArtifact} />
-                          <div className="artifact-panel-actions">
-                            {canRotateSelectedArtifact ? (
-                              <button
-                                type="button"
-                                className="secondary-action"
-                                onClick={() => void rotateSelectedArtifact()}
-                                disabled={
-                                  isRotating ||
-                                  isArtifactLoading ||
-                                  isSaving ||
-                                  hasDraftChanges
-                                }
-                                title={
-                                  hasDraftChanges
-                                    ? 'Save changes before rotating.'
-                                    : 'Archive the current artifact to the next historical file.'
-                                }
-                              >
-                                {isRotating ? 'Rotating...' : 'Rotate'}
-                              </button>
-                            ) : null}
-                            <button
-                              type="button"
-                              className="primary-action"
-                              onClick={() => void saveArtifact()}
-                              disabled={isSaving || isArtifactLoading || !hasDraftChanges}
-                            >
-                              {isSaving ? 'Saving...' : 'Save'}
-                            </button>
-                          </div>
-                        </div>
-                        <textarea
-                          className="artifact-editor"
-                          value={draftContent}
-                          onChange={(event) => setDraftContent(event.target.value)}
-                          spellCheck={false}
-                          disabled={isArtifactLoading}
-                        />
-                        <ArtifactMarkdownPreview
-                          content={draftContent}
-                          isLoading={isArtifactLoading}
-                        />
-                      </>
-                    ) : (
-                      <EmptyState className="empty-state">No artifact selected.</EmptyState>
-                    )}
-                  </section>
-                </div>
-                </Panel>
-              ) : (
-                <EmptyState className="empty-state">Loading workspace...</EmptyState>
-              )}
 
               <div className="details-actions">
                 <button

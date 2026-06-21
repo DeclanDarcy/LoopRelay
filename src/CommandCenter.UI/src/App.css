@@ -604,6 +604,22 @@ button:focus-visible {
   gap: 14px;
 }
 
+.workspace-tab {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 364px);
+  align-items: start;
+  gap: 14px;
+}
+
+.workspace-tab-main,
+.workspace-inspector-rail {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+
 .execution-workspace-header,
 .artifact-workspace-shell > div:first-child {
   min-width: 0;
@@ -622,14 +638,16 @@ button:focus-visible {
   overflow-wrap: anywhere;
 }
 
-.execution-workflow-rail {
+.execution-workflow-rail,
+.workspace-workflow-rail {
   min-width: 0;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
 }
 
-.execution-workflow-step {
+.execution-workflow-step,
+.workspace-workflow-step {
   min-width: 0;
   display: grid;
   gap: 4px;
@@ -640,47 +658,57 @@ button:focus-visible {
 }
 
 .execution-workflow-step span,
-.execution-workflow-step small {
+.execution-workflow-step small,
+.workspace-workflow-step span,
+.workspace-workflow-step small {
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
-.execution-workflow-step span {
+.execution-workflow-step span,
+.workspace-workflow-step span {
   color: var(--fg-default);
   font-size: 0.86rem;
   font-weight: 750;
 }
 
-.execution-workflow-step small {
+.execution-workflow-step small,
+.workspace-workflow-step small {
   color: var(--fg-subtle);
   font-size: 0.76rem;
   font-weight: 700;
 }
 
-.execution-workflow-step-current {
+.execution-workflow-step-current,
+.workspace-workflow-step-current {
   border-color: var(--status-warning-emphasis);
   background: var(--status-warning-subtle);
 }
 
-.execution-workflow-step-current span {
+.execution-workflow-step-current span,
+.workspace-workflow-step-current span {
   color: var(--status-warning-fg);
 }
 
-.execution-workflow-step-complete {
+.execution-workflow-step-complete,
+.workspace-workflow-step-complete {
   border-color: var(--status-success-muted);
   background: var(--status-success-subtle);
 }
 
-.execution-workflow-step-complete span {
+.execution-workflow-step-complete span,
+.workspace-workflow-step-complete span {
   color: var(--accent-emphasis);
 }
 
-.execution-workflow-step-blocked {
+.execution-workflow-step-blocked,
+.workspace-workflow-step-blocked {
   border-color: var(--status-danger-muted);
   background: var(--status-danger-subtle);
 }
 
-.execution-workflow-step-blocked span {
+.execution-workflow-step-blocked span,
+.workspace-workflow-step-blocked span {
   color: var(--status-danger-fg);
 }
 
@@ -1321,6 +1349,7 @@ button:focus-visible {
   .app-header,
   .workspace-grid,
   .details-title-row,
+  .workspace-tab,
   .artifact-workspace {
     grid-template-columns: 1fr;
     display: grid;
@@ -1334,6 +1363,7 @@ button:focus-visible {
   .context-columns,
   .diagnostic-list,
   .execution-workflow-rail,
+  .workspace-workflow-rail,
   .execution-session-grid,
   .execution-history-row,
   .execution-event-row,
