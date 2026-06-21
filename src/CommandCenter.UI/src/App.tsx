@@ -24,6 +24,7 @@ import {
   startExecution as startExecutionCommand,
 } from './api'
 import { ExecutionContextArtifactList } from './features/execution/ExecutionContextArtifactList'
+import { ExecutionContextMissingOptionalList } from './features/execution/ExecutionContextMissingOptionalList'
 import { ExecutionContextSummaryRows } from './features/execution/ExecutionContextSummaryRows'
 import { ExecutionEventFeed } from './features/execution/ExecutionEventFeed'
 import { ExecutionHistoryPanel } from './features/execution/ExecutionHistoryPanel'
@@ -2159,15 +2160,9 @@ function App() {
                       </div>
                       <div>
                         <h5>Missing Optional</h5>
-                        {executionContext.diagnostics.missingOptionalArtifacts.length === 0 ? (
-                          <p>None</p>
-                        ) : (
-                          <ul>
-                            {executionContext.diagnostics.missingOptionalArtifacts.map((path) => (
-                              <li key={path}>{path}</li>
-                            ))}
-                          </ul>
-                        )}
+                        <ExecutionContextMissingOptionalList
+                          paths={executionContext.diagnostics.missingOptionalArtifacts}
+                        />
                       </div>
                       <div>
                         <h5>Validation</h5>

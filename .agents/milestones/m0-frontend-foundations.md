@@ -168,6 +168,7 @@ Slice progress:
 - [x] Extracted execution history rendering as presentation-only `ExecutionHistoryPanel` with characterization coverage for empty history, provided order, labels, and missing-field fallbacks.
 - [x] Extracted execution context summary row rendering as presentation-only `ExecutionContextSummaryRows` with characterization coverage for existing labels and caller-provided status strings.
 - [x] Extracted execution context artifact list rendering as presentation-only `ExecutionContextArtifactList` with characterization coverage for provided order, labels, and empty-list behavior.
+- [x] Extracted execution context missing optional list rendering as presentation-only `ExecutionContextMissingOptionalList` with characterization coverage for provided order and the existing `None` fallback.
 - [x] Left feature component extraction in `App.tsx` for later Workstream 0.5 slices.
 
 ### Certification
