@@ -2,18 +2,17 @@
 
 ## Newly Authorized
 
-- Continue treating Workstream 0.5 as structural decomposition without moving workflow authority.
-- Treat extracted artifact category, formatting, and dirty-path helpers as valid utility extractions because they remain meaningful independent of workflow logic.
-- Continue using the M0 decomposition pattern of characterize, move, then verify.
-- Proceed next with extracting markdown rendering into `src/lib/markdown.tsx`.
-- Constrain `src/lib/markdown.tsx` to markdown rendering, markdown component mapping, and markdown formatting helpers only.
-- Do not let markdown extraction own artifact loading, proposal loading, continuity interpretation, or operational-context semantics.
-- Add markdown rendering equivalence characterization before or alongside extraction.
-- Markdown characterization should protect current behavior for headings, lists, tables, links, code blocks, inline code, block quotes, and any existing custom markdown behavior.
-- Continue avoiding extraction of commit preparation, proposal review, generated handoff review, and promotion workflow until a future milestone explicitly targets workflow decomposition.
-- Treat M0 as having completed authority foundations, authority certification, navigation foundations, and projection foundations, with structural decomposition still in progress.
-- Treat remaining M0 work as primarily organization, readability, and maintainability work rather than architectural correction.
+- Treat the completed markdown extraction as valid Workstream 0.5 work because `renderMarkdown` is presentation, not projection, workflow, navigation, or draft authority.
+- Treat the remainder of M0 as organizational hardening rather than architectural correction.
+- Continue respecting the established M0 authority boundaries for projection authority, navigation authority, draft boundaries, transport authority, certification artifacts, and workflow deferrals.
+- Prefer `workflow-step display mapping` for the next Workstream 0.5 slice over execution event merge helpers.
+- Extract only pure presentation, pure formatting, and pure mapping during the remainder of Workstream 0.5.
+- Do not extract meaning during Workstream 0.5.
+- Before extracting event helpers, prove they are purely mechanical and would still exist if execution workflow semantics changed.
+- Mechanical event helpers may include deduplicating sequence ids, sorting by sequence, or replacing duplicate sequence entries.
+- Workflow-semantic event logic must remain unextracted for now, including determining execution phase, completion, readiness, or current milestone.
+- Perform a quick inventory of remaining large `App.tsx` blocks and classify them as Pure Presentation, Pure Formatting, Pure Mapping, Workflow Composition, or Workflow Authority before choosing further extractions.
 
 ## Next Authorized Slice
 
-Continue Workstream 0.5 by extracting `renderMarkdown` into `src/lib/markdown.tsx` under the constraints above, with focused rendering equivalence characterization and no workflow authority migration.
+Inventory remaining large `App.tsx` blocks by authority category, then extract workflow-step display mapping only if it is pure presentation/mapping and characterization protects current behavior.
