@@ -2,22 +2,27 @@
 
 ## Newly Authorized
 
-- Split the next proposed M0.3 work into smaller slices instead of extracting `useExecutionContextPreview`, `useExecutionSession`, and `useExecutionEvents` together.
-- M0.3A is authorized to extract `useExecutionContextPreview` only.
-- `useExecutionContextPreview` should remain a boring projection hook with data, loading, error, load, and refresh behavior.
-- M0.3B should handle `useExecutionSession` separately because session lifecycle, refresh, reattachment, and recovery deserve isolated characterization.
-- M0.3C should handle `useExecutionEvents` separately because streaming, ordering, cleanup, and repository/session switching are the highest-risk remaining M0.3 extraction.
-- `useExecutionEvents` is authorized as transport-adjacent, not workflow-adjacent.
-- `useExecutionEvents` may subscribe, unsubscribe, reconnect, expose ordered events, expose the latest event, and expose the event stream.
-- `useExecutionEvents` must not calculate execution phase, derive milestones, derive completion, derive readiness, or infer workflow status.
-- Event workflow meaning must remain backend projection authority.
-- Before extracting SSE behavior, add characterization for event ordering, cleanup on unmount, and repository/session switching without stale listeners.
+- M0.3B should extract `useExecutionSession(repositoryId, sessionId)` next.
+- Define the `useExecutionSession` responsibility boundary before implementation.
+- `useExecutionSession` may own session projection access only: load session, refresh session, reattach session, loading state, error state, session projection, and recovery projection.
+- `useExecutionSession` must not own workflow authority.
+- `useExecutionSession` must not decide whether execution can or should run.
+- `useExecutionSession` must not derive session completion, failure, health, workflow next steps, promotion decisions, or review decisions.
+- Backend projections and UI composition remain responsible for workflow meaning.
+- Characterize existing behavior before moving session behavior.
+- Required M0.3B characterization includes session refresh preserving current observable behavior.
+- Required M0.3B characterization includes reattachment from an existing session id preserving current behavior exactly.
+- Required M0.3B characterization includes existing recovery semantics across process restart or projection refresh without improving or simplifying them.
+- Required M0.3B characterization includes repository switching so repo A/session A and repo B/session B do not leak loading state, session state, or refresh state across repository boundaries.
+- During M0.3B, resist moving session orchestration out of `App.tsx`.
+- Continue using the rule: hooks own projection lifecycle; `App.tsx` owns workflow lifecycle.
 
 ## Validation Expected For Next Slice
 
-- Add characterization before moving `useExecutionContextPreview`.
-- Keep `App.tsx` as owner of navigation state, draft state, view composition, and workflow actions.
+- Add characterization before moving `useExecutionSession`.
+- Keep `App.tsx` as owner of navigation state, draft state, workflow actions, workflow gating, and view composition.
 - `npm run lint`
 - `npm run build`
 - `npm run test`
 - `npm run test:e2e`
+- `dotnet test CommandCenter.slnx`

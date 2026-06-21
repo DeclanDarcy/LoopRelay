@@ -1,7 +1,16 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { useArtifactContent, useRepositories, useRepositoryWorkspace } from '../../hooks'
-import type { RepositoryDashboardProjection, RepositoryWorkspaceProjection } from '../../types'
+import {
+  useArtifactContent,
+  useExecutionContextPreview,
+  useRepositories,
+  useRepositoryWorkspace,
+} from '../../hooks'
+import type {
+  ExecutionContextPreview,
+  RepositoryDashboardProjection,
+  RepositoryWorkspaceProjection,
+} from '../../types'
 
 const repository = { id: 'repo-alpha', name: 'AlphaRepo', path: 'C:\\workspace\\AlphaRepo' }
 
@@ -89,6 +98,42 @@ function createWorkspaceProjection(): RepositoryWorkspaceProjection {
       pendingProposalSummary: proposalSummary,
       latestReviewState: null,
       continuityWarnings: [],
+    },
+  }
+}
+
+function createExecutionContextPreview(
+  repositoryId = 'repo-alpha',
+  milestonePath = '.agents/milestones/m0.md',
+): ExecutionContextPreview {
+  return {
+    repositoryId,
+    repositoryName: 'AlphaRepo',
+    repositoryPath: 'C:\\workspace\\AlphaRepo',
+    milestonePath,
+    generatedAt: '2026-01-01T00:00:00Z',
+    artifacts: [
+      {
+        role: 'Plan',
+        relativePath: '.agents/plan.md',
+        name: 'plan.md',
+        content: '# Plan',
+        byteCount: 6,
+        characterCount: 6,
+      },
+    ],
+    repositorySnapshot: null,
+    diagnostics: {
+      totalBytes: 6,
+      totalCharacters: 6,
+      warningThresholdBytes: 100,
+      hardLimitBytes: 200,
+      warningThresholdExceeded: false,
+      hardLimitExceeded: false,
+      artifactDiagnostics: [],
+      validationErrors: [],
+      missingOptionalArtifacts: [],
+      launchBlocked: false,
     },
   }
 }
@@ -186,5 +231,60 @@ describe('projection hook characterization', () => {
 
     await waitFor(() => expect(result.current.data).toBe(''))
     expect(result.current.isLoading).toBe(false)
+  })
+
+  it('builds execution context previews only when explicitly loaded', async () => {
+    const preview = createExecutionContextPreview()
+    const invoke = vi.fn().mockResolvedValue(preview)
+    installInvokeMock(invoke)
+
+    const { result } = renderHook(() =>
+      useExecutionContextPreview('repo-alpha', '.agents/milestones/m0.md'),
+    )
+
+    expect(result.current.data).toBeNull()
+    expect(invoke).not.toHaveBeenCalled()
+
+    await act(async () => {
+      await result.current.load()
+    })
+
+    expect(result.current.data).toBe(preview)
+    expect(result.current.error).toBeNull()
+    expect(invoke).toHaveBeenCalledWith('preview_execution_context', {
+      repositoryId: 'repo-alpha',
+      milestonePath: '.agents/milestones/m0.md',
+    }, undefined)
+  })
+
+  it('keeps stale execution context previews visible across milestone changes until rebuilt or cleared', async () => {
+    const firstPreview = createExecutionContextPreview('repo-alpha', '.agents/milestones/m0.md')
+    const secondPreview = createExecutionContextPreview('repo-alpha', '.agents/milestones/m1.md')
+    const invoke = vi
+      .fn()
+      .mockResolvedValueOnce(firstPreview)
+      .mockResolvedValueOnce(secondPreview)
+    installInvokeMock(invoke)
+
+    const { result, rerender } = renderHook(
+      ({ milestonePath }: { milestonePath: string | null }) =>
+        useExecutionContextPreview('repo-alpha', milestonePath),
+      { initialProps: { milestonePath: '.agents/milestones/m0.md' as string | null } },
+    )
+
+    await act(async () => {
+      await result.current.load()
+    })
+    expect(result.current.data).toBe(firstPreview)
+
+    rerender({ milestonePath: '.agents/milestones/m1.md' })
+
+    expect(result.current.data).toBe(firstPreview)
+
+    await act(async () => {
+      await result.current.refresh()
+    })
+
+    expect(result.current.data).toBe(secondPreview)
   })
 })

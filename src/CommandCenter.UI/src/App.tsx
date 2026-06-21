@@ -14,7 +14,6 @@ import {
   getOperationalContextProposal,
   loadArtifactContent,
   prepareCommit,
-  previewExecutionContext,
   promoteOperationalContextProposal as promoteOperationalContextProposalCommand,
   pushExecution as pushExecutionCommand,
   refreshRepositoryWorkspace,
@@ -29,13 +28,17 @@ import {
   startExecution as startExecutionCommand,
   subscribeToExecutionEvents,
 } from './api'
-import { useArtifactContent, useRepositories, useRepositoryWorkspace } from './hooks'
+import {
+  useArtifactContent,
+  useExecutionContextPreview,
+  useRepositories,
+  useRepositoryWorkspace,
+} from './hooks'
 import type {
   ArtifactCategory,
   ArtifactInventory,
   CommitPreparation,
   ContinuityDiagnostics,
-  ExecutionContextPreview,
   ExecutionEvent,
   ExecutionReadiness,
   ExecutionSessionSummary,
@@ -409,7 +412,6 @@ function App() {
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<string | null>(null)
   const [selectedArtifactPath, setSelectedArtifactPath] = useState<string | null>(null)
   const [selectedMilestonePath, setSelectedMilestonePath] = useState<string | null>(null)
-  const [executionContext, setExecutionContext] = useState<ExecutionContextPreview | null>(null)
   const [backendUrl, setBackendUrl] = useState<string | null>(null)
   const [executionStatusesBySession, setExecutionStatusesBySession] = useState<Record<string, ExecutionStatus>>({})
   const [executionEventsBySession, setExecutionEventsBySession] = useState<Record<string, ExecutionEvent[]>>({})
@@ -431,7 +433,6 @@ function App() {
   const [error, setError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isRotating, setIsRotating] = useState(false)
-  const [isContextLoading, setIsContextLoading] = useState(false)
   const [isOperationalContextProposalLoading, setIsOperationalContextProposalLoading] =
     useState(false)
   const [isOperationalContextProposalSaving, setIsOperationalContextProposalSaving] =
@@ -477,6 +478,13 @@ function App() {
     isLoading: isArtifactLoading,
     error: artifactError,
   } = useArtifactContent(selectedRepository?.repository.id ?? null, selectedArtifactPath)
+  const {
+    data: executionContext,
+    setData: setExecutionContext,
+    isLoading: isContextLoading,
+    error: executionContextError,
+    load: loadExecutionContextPreview,
+  } = useExecutionContextPreview(selectedRepository?.repository.id ?? null, selectedMilestonePath)
 
   const selectedArtifact = useMemo(() => {
     if (!workspace || !selectedArtifactPath) {
@@ -733,7 +741,7 @@ function App() {
       setExecutionContext(null)
       reconcileSelectedArtifact(repositoryId, nextWorkspace)
     }
-  }, [loadWorkspaceProjection, reconcileSelectedArtifact])
+  }, [loadWorkspaceProjection, reconcileSelectedArtifact, setExecutionContext])
 
   const loadGitStatus = useCallback(async (repositoryId: string) => {
     setIsGitStatusLoading(true)
@@ -1198,20 +1206,11 @@ function App() {
       return
     }
 
-    setIsContextLoading(true)
     setError(null)
     setMessage(null)
-    try {
-      const context = await previewExecutionContext(
-        selectedRepository.repository.id,
-        selectedMilestonePath,
-      )
-      setExecutionContext(context)
+    const context = await loadExecutionContextPreview()
+    if (context) {
       setMessage('Execution context built.')
-    } catch (contextError) {
-      setError(formatError(contextError))
-    } finally {
-      setIsContextLoading(false)
     }
   }
 
@@ -1526,13 +1525,19 @@ function App() {
       setExecutionContext(null)
       setError(workspaceError)
     }
-  }, [workspaceError])
+  }, [setExecutionContext, workspaceError])
 
   useEffect(() => {
     if (artifactError) {
       setError(artifactError)
     }
   }, [artifactError])
+
+  useEffect(() => {
+    if (executionContextError) {
+      setError(executionContextError)
+    }
+  }, [executionContextError])
 
   useEffect(() => {
     if (!selectedRepository || !workspace) {
@@ -1641,7 +1646,7 @@ function App() {
       return milestones[0]?.relativePath ?? null
     })
     setExecutionContext(null)
-  }, [workspace])
+  }, [setExecutionContext, workspace])
 
   return (
     <main className="app-shell">

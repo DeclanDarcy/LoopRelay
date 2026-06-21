@@ -2,19 +2,17 @@
 
 ## Slice Summary
 
-Advanced Milestone 0 Workstream 0.3 by extracting the first three simple projection hooks without moving workflow authority into React hooks.
+Advanced Milestone 0 Workstream 0.3A by extracting `useExecutionContextPreview` only, preserving explicit user-triggered context preview behavior.
 
 ## New State
 
-- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0003.md`.
-- Added `src/CommandCenter.UI/src/hooks/useRepositories.ts`.
-- Added `src/CommandCenter.UI/src/hooks/useRepositoryWorkspace.ts`.
-- Added `src/CommandCenter.UI/src/hooks/useArtifactContent.ts`.
-- Added `src/CommandCenter.UI/src/hooks/index.ts`.
-- Updated `src/CommandCenter.UI/src/App.tsx` so repository dashboard, selected workspace, artifact content, and their loading/error state now come from the new hooks.
-- Kept artifact selection reconciliation, selected repository fallback, draft editor state, generated handoff loading, workflow mutations, and execution/event orchestration in `App.tsx`.
-- Added `src/CommandCenter.UI/src/test/characterization/projectionHooks.test.tsx` covering repository projection load/refresh, workspace get-vs-refresh command separation, and artifact content clearing on selection removal.
-- Marked only `useRepositories()`, `useRepositoryWorkspace(repositoryId)`, and `useArtifactContent(repositoryId, relativePath)` complete in `.agents/milestones/m0-frontend-foundations.md`; Workstream 0.3 remains open.
+- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0004.md`.
+- Added `src/CommandCenter.UI/src/hooks/useExecutionContextPreview.ts`.
+- Exported the hook from `src/CommandCenter.UI/src/hooks/index.ts`.
+- Updated `src/CommandCenter.UI/src/App.tsx` so execution-context preview data, loading state, error state, and the preview command now come from `useExecutionContextPreview`.
+- Preserved `App.tsx` ownership of selected milestone navigation, start-execution gating, workflow actions, and explicit preview invalidation via `setExecutionContext(null)`.
+- Added characterization in `src/CommandCenter.UI/src/test/characterization/projectionHooks.test.tsx` proving previews are not auto-built and stale previews remain visible across milestone changes until explicit rebuild or clear.
+- Marked `useExecutionContextPreview(repositoryId, milestonePath)` complete in `.agents/milestones/m0-frontend-foundations.md`; Workstream 0.3 remains open.
 
 ## Verification
 
@@ -26,4 +24,4 @@ Advanced Milestone 0 Workstream 0.3 by extracting the first three simple project
 
 ## Next Slice
 
-Continue Milestone 0 Workstream 0.3 by extracting the next read-only projection hooks with characterization first: `useExecutionContextPreview(repositoryId, milestonePath)`, `useExecutionSession(repositoryId, sessionId)`, and `useExecutionEvents(sessionId)`.
+Continue Milestone 0 Workstream 0.3 with M0.3B: extract `useExecutionSession(repositoryId, sessionId)` separately, with characterization around session lifecycle, refresh, reattachment, and recovery before moving behavior.
