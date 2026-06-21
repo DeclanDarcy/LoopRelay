@@ -2,18 +2,14 @@
 
 ## Newly Authorized
 
-- Continue using "Can it render entirely from props?" as the strongest safety test for Workstream 0.5 extraction candidates.
-- Treat `ExecutionEventFeed` as correctly classified when it remains `events -> render`, without interpreting execution meaning.
-- Preserve the ownership boundary where `useExecutionEvents` owns subscription, cleanup, ordering, duplicate replacement, and merge behavior, while `ExecutionEventFeed` remains props-to-presentation only.
-- Continue adding characterization coverage for event-feed presentation behavior such as ordering, empty states, timestamps, event formatting, and possible future grouping before moving behavior.
-- Prioritize `ExecutionSessionSummary` over execution history as the next Workstream 0.5 extraction candidate.
-- Prefer session-summary extraction because it is more likely to remain `session -> display`, while history rendering can conceal grouping, aggregation, or interpretation.
-- Keep extracting presentation, formatting, and display models during Workstream 0.5.
-- Do not extract workflow meaning during Workstream 0.5.
-- Classify safe extraction candidates as props-driven renderers that may format props but do not derive authority or make decisions.
-- Keep candidates that determine readiness, health, promotion state, workflow transitions, or review outcomes in `App.tsx`.
-- Treat the current M0 risk as presentation components accidentally absorbing workflow logic, and guard against that explicitly during each extraction.
+- Treat the `ExecutionSessionPanel` extraction as a stronger authority-boundary validation than the event-feed extraction because it sits closer to workflow concerns.
+- Treat the successful `ExecutionSessionPanel` shape as a positive signal only because it remained `props -> render` and did not absorb readiness, execution authority, workflow transitions, or review logic.
+- Recognize that remaining `App.tsx` responsibilities are increasingly concentrated in workflow actions, workflow gating, draft state, review state, and composition.
+- Before extracting execution history, audit remaining `App.tsx` render regions and classify them as pure presentation, presentation plus formatting, presentation plus interpretation, or workflow.
+- Extract only pure presentation and presentation plus formatting regions during the next Workstream 0.5 slices.
+- Use execution history only if it is genuinely `session list -> props -> render`; leave it in `App.tsx` if it contains grouping, prioritization, relevance, current-session inference, or other interpretation concerns.
+- Prefer skipping an extraction over moving ownership-sensitive logic into a component.
 
 ## Next Authorized Slice
 
-Extract an `ExecutionSessionSummary` presentation component if it can be kept as a props-only session display. Leave readiness, handoff review, commit, push, promotion, and execution-start decisions in `App.tsx`.
+Audit execution history first. Extract it only if sorting, grouping, selection, relevance, and current-session decisions already happen elsewhere. If not, leave it in `App.tsx` and select a smaller presentational target such as diagnostic cards, metadata summaries, status displays, or read-only history rows.

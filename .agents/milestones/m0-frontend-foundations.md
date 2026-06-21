@@ -164,6 +164,7 @@ Slice progress:
 - [x] Centralized execution event merge behavior in `useExecutionEvents` for both SSE streams and status snapshot composition.
 - [x] Extracted git path bucket rendering as presentation-only `GitPathBucket` with characterization coverage for empty and ordered path lists.
 - [x] Extracted execution event feed rendering as presentation-only `ExecutionEventFeed` with characterization coverage for empty and ordered event rows.
+- [x] Extracted execution session summary rendering as presentation-only `ExecutionSessionPanel` with characterization coverage for active-session labels and missing-field fallbacks.
 - [x] Left feature component extraction in `App.tsx` for later Workstream 0.5 slices.
 
 ### Certification

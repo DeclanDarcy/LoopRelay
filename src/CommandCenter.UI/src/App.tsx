@@ -24,6 +24,7 @@ import {
   startExecution as startExecutionCommand,
 } from './api'
 import { ExecutionEventFeed } from './features/execution/ExecutionEventFeed'
+import { ExecutionSessionPanel } from './features/execution/ExecutionSessionPanel'
 import { GitPathBucket } from './features/execution/GitPathBucket'
 import {
   useArtifactContent,
@@ -2426,37 +2427,10 @@ function App() {
               ) : null}
 
               {executionDisplay ? (
-                <section className="execution-session-panel" aria-label="Execution session">
-                  <div>
-                    <p className="eyebrow">
-                      {executionDisplay.repositoryState === 'Executing' ? 'Active Execution' : 'Execution Session'}
-                    </p>
-                    <h4>{executionDisplay.milestonePath ?? 'Selected milestone'}</h4>
-                  </div>
-                  <div className="execution-session-grid">
-                    <span>Session: {executionDisplay.sessionId}</span>
-                    <span>Provider: {executionDisplay.providerName || 'Unknown'}</span>
-                    <span>State: {executionDisplay.state}</span>
-                    <span>Repository state: {executionStateLabels[executionDisplay.repositoryState]}</span>
-                    <span>Started: {formatDateTime(executionDisplay.startedAt)}</span>
-                    <span>Completed: {formatDateTime(executionDisplay.completedAt)}</span>
-                    <span>Duration: {formatDuration(executionDisplay.duration)}</span>
-                    <span>Accepted: {formatDateTime(executionDisplay.acceptedAt)}</span>
-                    <span>Rejected: {formatDateTime(executionDisplay.rejectedAt)}</span>
-                    <span>Last activity: {formatDateTime(executionDisplay.lastActivityAt)}</span>
-                    <span>Provider start: {formatDateTime(executionDisplay.providerStartedAt)}</span>
-                    <span>PID: {executionDisplay.providerProcessId ?? 'Not recorded'}</span>
-                    <span>Executable: {executionDisplay.providerExecutablePath || 'Not recorded'}</span>
-                    <span>Handoff: {executionDisplay.handoffPath || 'Not recorded'}</span>
-                    <span>Commit: {executionDisplay.commitSha || 'Not recorded'}</span>
-                    <span>Committed: {formatDateTime(executionDisplay.committedAt)}</span>
-                    <span>Pushed: {formatDateTime(executionDisplay.pushedAt)}</span>
-                    <span>Pushed commit: {executionDisplay.pushedCommitSha || 'Not recorded'}</span>
-                    {executionDisplay.failureReason ? (
-                      <span className="execution-failure">Failure: {executionDisplay.failureReason}</span>
-                    ) : null}
-                  </div>
-                </section>
+                <ExecutionSessionPanel
+                  session={executionDisplay}
+                  repositoryStateLabel={executionStateLabels[executionDisplay.repositoryState]}
+                />
               ) : null}
 
               {selectedExecutionHistory.length > 0 ? (
