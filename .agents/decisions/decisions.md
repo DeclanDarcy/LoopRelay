@@ -2,17 +2,17 @@
 
 ## Newly Authorized
 
-- Treat `ExecutionContextMissingOptionalList` as a clean Milestone 0.5 presentation extraction because it renders backend-provided paths in backend order and preserves the existing `None` fallback.
-- Treat backend ordering and empty-state stability as the behavioral contracts protected by the missing optional list characterization tests.
-- Do a Milestone 0.5 inventory/audit slice before extracting additional execution context preview UI.
-- Use the inventory to classify remaining regions by presentation-only status, interpretation risk, workflow risk, and extraction candidacy.
-- Audit validation surfaces carefully because validation, warning, error, missing, and required UI can encode severity, importance, or blocking state.
-- Audit repository snapshot rendering for `snapshot -> render` versus derived health assessment.
-- Treat artifact diagnostics as the highest-risk remaining candidate because diagnostic UI can drift into user importance, continuation, and execution authority.
-- Treat artifact content previews as possible extraction candidates only when they are `content -> preview`; keep them out of presentation extraction if they answer sufficiency, completeness, or readiness questions.
-- Stop extracting a region when it answers a "should" question or a "can proceed" question.
-- Consider Milestone 0.5 near natural completion if the remaining regions prove authority-sensitive or low ROI after inventory.
+- Treat `ExecutionContextValidationList` as the next defensible Milestone 0.5 extraction candidate only if it remains a pure presentation component.
+- Limit `ExecutionContextValidationList` to `string[] -> ul/li` rendering and the existing empty fallback text `No validation errors`.
+- Preserve backend-provided validation message ordering.
+- Render validation message text verbatim.
+- Do not add warning counts, grouping, prioritization, severity assignment, derived status, readiness calculation, blocking counts, critical counts, launch impact, or count badges during validation-list extraction.
+- If validation-list extraction begins to introduce severity, grouping, launch impact, readiness, or other interpretation, stop and re-audit.
+- Treat artifact diagnostics as authority-adjacent because threshold labels are semantically close to launch readiness, execution gating, severity, and blocking.
+- Treat M0.5 success as intentional remaining `App.tsx` responsibility, not maximum file shrinkage.
+- Use this stop condition for M0.5: no remaining extraction candidates that satisfy `props -> render` without adding meaning.
+- After extracting `ExecutionContextValidationList`, perform another inventory pass before assuming there is another meaningful M0.5 extraction candidate.
 
 ## Next Authorized Slice
 
-Run a Milestone 0.5 inventory/audit over the remaining execution context preview regions before any further extraction.
+Extract `ExecutionContextValidationList` with characterization coverage for empty state, backend ordering, and verbatim message rendering; then inventory remaining candidates again before continuing decomposition.
