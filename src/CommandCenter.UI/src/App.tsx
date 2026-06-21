@@ -37,7 +37,9 @@ import { ExecutionEventFeed } from './features/execution/ExecutionEventFeed'
 import { ExecutionHistoryPanel } from './features/execution/ExecutionHistoryPanel'
 import { ExecutionSessionPanel } from './features/execution/ExecutionSessionPanel'
 import { GitPathBucket } from './features/execution/GitPathBucket'
+import { OperationalContextCompressionSummaryPanel } from './features/operational-context/OperationalContextCompressionSummaryPanel'
 import { OperationalContextCurrentPanel } from './features/operational-context/OperationalContextCurrentPanel'
+import { OperationalContextProposalSummaryPanel } from './features/operational-context/OperationalContextProposalSummaryPanel'
 import { RepositoryDashboardItemContent } from './features/repositories/RepositoryDashboardItemContent'
 import { SelectedRepositorySummary } from './features/repositories/SelectedRepositorySummary'
 import {
@@ -1438,40 +1440,12 @@ function App() {
                   </div>
                 </div>
 
-                {workspace?.operationalContextProposalSummary.latestProposalId ? (
-                  <div className="context-summary-grid">
-                    <span>
-                      Latest: {workspace.operationalContextProposalSummary.latestProposalId}
-                    </span>
-                    <span>
-                      Status: {workspace.operationalContextProposalSummary.status ?? 'Unknown'}
-                    </span>
-                    <span>
-                      Generated:{' '}
-                      {formatDateTime(workspace.operationalContextProposalSummary.generatedAt)}
-                    </span>
-                    <span>
-                      Inputs: {workspace.operationalContextProposalSummary.sourceInputCount}
-                    </span>
-                    <span>
-                      Size: {workspace.operationalContextProposalSummary.contentByteCount} bytes
-                    </span>
-                    <span>
-                      Current revisions:{' '}
-                      {workspace.operationalContext.revisionCount}
-                    </span>
-                    <span>
-                      Last promoted:{' '}
-                      {formatDateTime(workspace.operationalContextProposalSummary.lastPromotedAt)}
-                    </span>
-                    <span>
-                      Archived prior:{' '}
-                      {workspace.operationalContextProposalSummary.lastArchivedRelativePath ?? 'None'}
-                    </span>
-                  </div>
-                ) : (
-                  <p className="empty-state">No operational-context proposal has been generated.</p>
-                )}
+                {workspace ? (
+                  <OperationalContextProposalSummaryPanel
+                    operationalContext={workspace.operationalContext}
+                    proposalSummary={workspace.operationalContextProposalSummary}
+                  />
+                ) : null}
 
                 {operationalContextProposal ? (
                   <div className="context-artifact-previews">
@@ -1639,49 +1613,9 @@ function App() {
                         ))}
                       </ul>
                     )}
-                    <h5>Compression Summary</h5>
-                    <div className="context-summary-grid">
-                      <span>Preserved: {operationalContextProposal.compressionSummary.preservedItemCount}</span>
-                      <span>Added: {operationalContextProposal.compressionSummary.addedItemCount}</span>
-                      <span>Removed: {operationalContextProposal.compressionSummary.removedItemCount}</span>
-                      <span>Compressed: {operationalContextProposal.compressionSummary.compressedItemCount}</span>
-                      <span>Permanent: {operationalContextProposal.compressionSummary.permanentUnderstandingItemCount}</span>
-                      <span>Active: {operationalContextProposal.compressionSummary.activeUnderstandingItemCount}</span>
-                      <span>Historical: {operationalContextProposal.compressionSummary.historicalUnderstandingItemCount}</span>
-                      <span>Resolved: {operationalContextProposal.compressionSummary.resolvedQuestionCount}</span>
-                      <span>Retired: {operationalContextProposal.compressionSummary.retiredRiskCount}</span>
-                      <span>Warnings: {operationalContextProposal.compressionSummary.warningCount}</span>
-                    </div>
-                    {operationalContextProposal.compressionSummary.revisionSummary.length > 0 ? (
-                      <div className="proposal-warning-list proposal-revision-summary">
-                        <h5>Revision Summary</h5>
-                        <ul>
-                          {operationalContextProposal.compressionSummary.revisionSummary.map((summary) => (
-                            <li key={summary}>{summary}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : null}
-                    {operationalContextProposal.compressionSummary.stableUnderstandingRetentionWarnings.length > 0 ? (
-                      <div className="proposal-warning-list">
-                        <h5>Retention Warnings</h5>
-                        <ul>
-                          {operationalContextProposal.compressionSummary.stableUnderstandingRetentionWarnings.map((warning) => (
-                            <li key={warning}>{warning}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : null}
-                    {operationalContextProposal.compressionSummary.noiseRemovedIndicators.length > 0 ? (
-                      <div className="proposal-warning-list">
-                        <h5>Compressed Understanding</h5>
-                        <ul>
-                          {operationalContextProposal.compressionSummary.noiseRemovedIndicators.map((indicator) => (
-                            <li key={indicator}>{indicator}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : null}
+                    <OperationalContextCompressionSummaryPanel
+                      compressionSummary={operationalContextProposal.compressionSummary}
+                    />
                     <div className="proposal-comparison-grid">
                       <div>
                         <h5>Current Understanding</h5>

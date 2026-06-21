@@ -2,25 +2,24 @@
 
 ## Slice Summary
 
-Continued Milestone 0 Workstream 0.5 with a focused artifact editor presentation extraction.
+Continued Milestone 0 Workstream 0.5 with a focused operational-context proposal review presentation extraction.
 
 ## New State
 
-- Extracted selected artifact metadata rendering from `App.tsx` into `src/CommandCenter.UI/src/features/artifacts/ArtifactMetadata.tsx`.
-- Extracted selected artifact markdown preview rendering from `App.tsx` into `src/CommandCenter.UI/src/features/artifacts/ArtifactMarkdownPreview.tsx`.
-- Both components are presentation-only. Save, rotate, dirty tracking, draft ownership, textarea editing, loading disablement, and mutation gating remain in `App.tsx`.
-- Added characterization coverage in `artifactMetadata.test.tsx` and `artifactMarkdownPreview.test.tsx`.
-- Added a narrow `.gitignore` exception for `src/CommandCenter.UI/src/features/artifacts/` because the repo's broad `artifacts/` ignore rule hid the planned frontend feature folder.
-- Updated `.agents/milestones/m0-frontend-foundations.md` and `.agents/audits/m0-app-responsibility-inventory.md` with the artifact editor boundary.
-- Rotated the previous handoff to `.agents/handoffs/handoff.0039.md`.
+- Extracted latest operational-context proposal summary rendering from `App.tsx` into `src/CommandCenter.UI/src/features/operational-context/OperationalContextProposalSummaryPanel.tsx`.
+- Extracted loaded proposal compression summary rendering from `App.tsx` into `src/CommandCenter.UI/src/features/operational-context/OperationalContextCompressionSummaryPanel.tsx`.
+- Both components are presentation-only. Proposal loading, generation, draft editing, review notes, accept/reject, promotion, semantic-change review, decision-continuity review, and comparison rendering remain in `App.tsx`.
+- Added characterization coverage in `operationalContextProposalSummaryPanel.test.tsx` and `operationalContextCompressionSummaryPanel.test.tsx`.
+- Updated `.agents/milestones/m0-frontend-foundations.md` and `.agents/audits/m0-app-responsibility-inventory.md` with the new operational-context proposal boundaries.
+- Rotated the previous handoff to `.agents/handoffs/handoff.0040.md`.
 
 ## Verification
 
-- `npm run test -- artifactMetadata artifactMarkdownPreview`
+- `npm run test -- operationalContextProposalSummaryPanel operationalContextCompressionSummaryPanel`
 - `npm run lint`
 - `npm run test`
 - `npm run build`
 
 ## Next Slice
 
-Stay in M0.5. The next high-value slice is an operational-context proposal review audit, looking only for narrow read-only subregions such as semantic change display, compression summary display, proposal metadata, or review-status labels. Keep proposal loading, draft editing, review notes, accept/reject, promote, generation, and comparison-content loading in `App.tsx` unless a subregion remains coherent without callbacks.
+Stay in M0.5. The next high-value slice is to audit the remaining operational-context proposal review area for one more narrow presentation-only extraction. The best candidate is likely loaded proposal metadata plus stale/archive/write failure notices. Keep review toolbar/actions, proposal draft textarea, review-note textarea, accept/reject/promote/generate/load handlers, and comparison-content coordination in `App.tsx`.

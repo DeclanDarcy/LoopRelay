@@ -2,12 +2,12 @@
 
 ## Newly Authorized
 
-- Treat the artifact editor extraction as valid M0.5 work because `ArtifactMetadata` and `ArtifactMarkdownPreview` are purely representational `props -> render` components.
-- Keep save, rotate, dirty tracking, draft ownership, textarea editing, loading disablement, and mutation gating in `App.tsx` because moving them now would fragment workflow authority.
-- Keep the `.gitignore` exception for `src/CommandCenter.UI/src/features/artifacts/` narrow. It should allow frontend artifact UI source while preserving the original ignore rule's intent for artifact outputs.
-- Approach operational-context proposal review more cautiously than the artifact editor because many proposal displays exist to support workflow decisions.
-- For operational-context proposal review candidates, use this audit question: if accept, reject, promote, and generate disappear, does the section still have standalone meaning?
-- Treat proposal metadata, compression summary display, and review status display as likely good presentation-only extraction candidates if they only render already-derived projection data.
-- Treat semantic change display as medium risk. Extract it only if it renders backend-provided before/after/delta facts without adding interpretation logic.
-- Keep proposal loading, generation, review notes, draft ownership, accept, reject, promote, and comparison coordination in `App.tsx` unless a focused audit proves a narrower presentation boundary.
-- Expect late M0.5 slices to move fewer lines and spend more effort auditing responsibility boundaries; retaining workflow-heavy regions in `App.tsx` is acceptable when they still own draft state, workflow coordination, or mutation authority.
+- Treat `OperationalContextProposalSummaryPanel` and `OperationalContextCompressionSummaryPanel` as safe M0.5 extractions because they sit on the observation side of the proposal workflow: backend proposal/compression projections flow directly into summary display.
+- Use the same extraction test that justified `SelectedRepositorySummary`, `ArtifactMetadata`, and `ArtifactMarkdownPreview`: the component remains meaningful if generate, accept, reject, promote, edit, and note-saving actions disappear.
+- Classify remaining operational-context proposal surfaces into three groups: read-only projection, review support, and workflow authority.
+- Treat proposal summary, compression summary, proposal metadata, status display, timestamps, archive indicators, and failure notices as read-only projection surfaces and good extraction candidates when they remain `props -> render`.
+- Treat semantic changes, continuity deltas, and comparison summaries as review-support surfaces that require focused audits before extraction because they may be coupled to acceptance reasoning.
+- Keep proposal generation, proposal loading, draft ownership, review notes, accept, reject, promote, and comparison coordination centralized in `App.tsx` as workflow authority.
+- Prefer the next M0.5 slice to target proposal metadata plus stale/archive/write-failure notice surfaces rather than semantic review, decision-continuity review, or comparison rendering.
+- Apply the stricter late-M0.5 rule for proposal review extraction: if accept, reject, and promote disappear, the section must still have standalone value to be an extraction candidate.
+- Expect future late-M0.5 slices to move fewer lines while requiring more audit effort; this is acceptable evidence that remaining `App.tsx` code is increasingly legitimate coordination logic.
