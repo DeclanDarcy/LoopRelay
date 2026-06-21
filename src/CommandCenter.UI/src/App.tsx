@@ -46,6 +46,7 @@ import { OperationalContextProposalSummaryPanel } from './features/operational-c
 import { OperationalContextProposalStatusPanel } from './features/operational-context/OperationalContextProposalStatusPanel'
 import { SelectedRepositorySummary } from './features/repositories/SelectedRepositorySummary'
 import { ExecutionContextPanel } from './features/workspace/ExecutionContextPanel'
+import { WorkspaceLiveActivityPanel } from './features/workspace/WorkspaceLiveActivityPanel'
 import { WorkspaceTab } from './features/workspace/WorkspaceTab'
 import {
   useArtifactContent,
@@ -1380,6 +1381,11 @@ function App() {
                   />
                 }
                 executionContext={executionContextPanel}
+                liveActivity={
+                  executionDisplay ? (
+                    <WorkspaceLiveActivityPanel events={selectedExecutionEvents} />
+                  ) : null
+                }
                 artifactWorkspace={
                   workspace ? (
                     <Panel

@@ -6,6 +6,7 @@ type WorkspaceTabProps = {
   summary: ReactNode
   workflowSteps: ExecutionWorkflowStep[]
   executionContext: ReactNode
+  liveActivity: ReactNode
   artifactWorkspace: ReactNode
   inspector: ReactNode
   hidden?: boolean
@@ -15,6 +16,7 @@ export function WorkspaceTab({
   summary,
   workflowSteps,
   executionContext,
+  liveActivity,
   artifactWorkspace,
   inspector,
   hidden = false,
@@ -29,6 +31,7 @@ export function WorkspaceTab({
         {summary}
         <WorkflowRail steps={workflowSteps} />
         {executionContext}
+        {liveActivity}
         {artifactWorkspace}
       </div>
       <aside className="workspace-inspector-rail" aria-label="Workspace inspector">

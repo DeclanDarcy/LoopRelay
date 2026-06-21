@@ -6,7 +6,7 @@
 - [x] Workstream 3.1: Workflow Rail
 - [ ] Workstream 3.2: Workspace Layout
 - [x] Workstream 3.3: Execution Context Panel
-- [ ] Workstream 3.4: Live Activity Panel
+- [x] Workstream 3.4: Live Activity Panel
 - [ ] Workstream 3.5: Milestones Panel
 - [ ] Workstream 3.6: Inspector Rail
 - [ ] Workstream 3.7: Workspace Cross-Links
@@ -102,18 +102,20 @@ Rules:
 
 ## Workstream 3.4: Live Activity Panel
 
+Status: complete. Workspace now renders the current execution stream through a display-only live activity panel backed by the same `selectedExecutionEvents` array and `ExecutionEventFeed` row renderer used by the Execution tab.
+
 Display the current execution stream:
 
-- [ ] Timestamp.
-- [ ] Event type.
-- [ ] Provider/session context where projected.
-- [ ] Message.
+- [x] Timestamp.
+- [x] Event type.
+- [x] Provider/session context where projected.
+- [x] Message.
 
 Rules:
 
-- [ ] Reuse `useExecutionEvents`.
-- [ ] Do not create a second event store.
-- [ ] Workspace and Execution tab must see the same event data.
+- [x] Reuse `useExecutionEvents`.
+- [x] Do not create a second event store.
+- [x] Workspace and Execution tab must see the same event data.
 
 ## Workstream 3.5: Milestones Panel
 
