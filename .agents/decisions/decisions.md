@@ -2,10 +2,10 @@
 
 ## Newly Authorized
 
-- Close M0.6 based on the completed workflow authority inventory, not merely on additional smoke-test count.
-- Treat the workflow authority invariant as documented, characterized, and verified across the frontend workflow command inventory.
-- Treat the remaining M0 focus as validating foundations rather than adding more authority-foundation work.
-- Return to M0.5 cautiously with a high extraction threshold: only `props -> render` regions are candidates.
-- Before further extraction, perform a residual `App.tsx` inventory that classifies remaining regions as pure presentation, presentation plus interpretation, workflow coordination, or authority decisions.
-- Retain regions that include presentation plus interpretation, workflow coordination, or authority decisions.
-- Accept that a successful M0 outcome is deliberate ownership of remaining responsibilities, not necessarily making `App.tsx` tiny.
+- Use a stricter M0.5 extraction rule after M0.6: candidates must receive required data via props, render with no backend access, and function meaningfully as Storybook-style presentation components.
+- Treat `projection data -> render` as the highest-confidence extraction pattern.
+- Reject extraction candidates that transition from projection data into workflow meaning, workflow action, workflow coordination, command dispatch, readiness decisions, or authority decisions.
+- Consider repository summary display and tightly scoped operational-context display regions as the safest remaining M0.5 candidates.
+- Exclude accept/reject/promote/edit coordination and draft ownership from any operational-context display extraction.
+- Continue presuming commit preparation, commit readiness, push readiness, execution launch, proposal review actions, handoff acceptance, artifact mutation, and promotion workflows are authority boundaries until proven otherwise.
+- Treat remaining `App.tsx` workflow coordination, authority enforcement, draft orchestration, and projection composition as intentional ownership once clean presentation regions are harvested.

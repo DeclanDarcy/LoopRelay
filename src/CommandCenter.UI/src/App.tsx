@@ -23,6 +23,7 @@ import {
   selectRepositoryDirectory,
   startExecution as startExecutionCommand,
 } from './api'
+import { ContinuityDiagnosticsPanel } from './features/continuity/ContinuityDiagnosticsPanel'
 import { ExecutionContextArtifactDiagnosticsList } from './features/execution/ExecutionContextArtifactDiagnosticsList'
 import { ExecutionContextArtifactContentPreviews } from './features/execution/ExecutionContextArtifactContentPreviews'
 import { ExecutionContextArtifactList } from './features/execution/ExecutionContextArtifactList'
@@ -1689,85 +1690,7 @@ function App() {
                 </div>
 
                 {continuityDiagnostics ? (
-                  <div className="context-artifact-previews">
-                    <div className="context-summary">
-                      <span>Revisions: {continuityDiagnostics.revisionCount}</span>
-                      <span>Current size: {continuityDiagnostics.currentContextByteCount} bytes</span>
-                      <span>Growth: {continuityDiagnostics.contextByteGrowth} bytes</span>
-                      <span>
-                        Average:{' '}
-                        {Math.round(continuityDiagnostics.averageBytesPerRevision)} bytes/revision
-                      </span>
-                      <span>
-                        Questions resolved: {continuityDiagnostics.openQuestionTrend.resolvedCount}
-                      </span>
-                      <span>
-                        Questions lost: {continuityDiagnostics.openQuestionTrend.lostCount}
-                      </span>
-                      <span>
-                        Risks retired: {continuityDiagnostics.activeRiskTrend.resolvedCount}
-                      </span>
-                      <span>
-                        Risks lost: {continuityDiagnostics.activeRiskTrend.lostCount}
-                      </span>
-                      <span>Decisions lost: {continuityDiagnostics.decisionTrend.lostCount}</span>
-                      <span>Rationale lost: {continuityDiagnostics.rationaleTrend.lostCount}</span>
-                    </div>
-
-                    <div className="context-columns">
-                      <div>
-                        <h5>Preservation</h5>
-                        <ul>
-                          <li>Architecture lost: {continuityDiagnostics.architectureTrend.lostCount}</li>
-                          <li>Constraints lost: {continuityDiagnostics.constraintTrend.lostCount}</li>
-                          <li>Decisions added: {continuityDiagnostics.decisionTrend.addedCount}</li>
-                          <li>Decisions removed: {continuityDiagnostics.decisionTrend.removedCount}</li>
-                        </ul>
-                      </div>
-                      <div>
-                        <h5>Compression</h5>
-                        <ul>
-                          <li>Proposals observed: {continuityDiagnostics.compressionTrend.proposalCount}</li>
-                          <li>Items compressed: {continuityDiagnostics.compressionTrend.compressedItemCount}</li>
-                          <li>Items removed: {continuityDiagnostics.compressionTrend.removedItemCount}</li>
-                          <li>Warnings: {continuityDiagnostics.compressionTrend.warningCount}</li>
-                        </ul>
-                      </div>
-                      <div>
-                        <h5>Repeated Signals</h5>
-                        {continuityDiagnostics.repeatedInvestigationIndicators.length +
-                          continuityDiagnostics.repeatedQuestionIndicators.length +
-                          continuityDiagnostics.decisionReworkIndicators.length >
-                        0 ? (
-                          <ul>
-                            {continuityDiagnostics.repeatedInvestigationIndicators.map((indicator) => (
-                              <li key={`investigation-${indicator}`}>{indicator}</li>
-                            ))}
-                            {continuityDiagnostics.repeatedQuestionIndicators.map((indicator) => (
-                              <li key={`question-${indicator}`}>{indicator}</li>
-                            ))}
-                            {continuityDiagnostics.decisionReworkIndicators.map((indicator) => (
-                              <li key={`decision-${indicator}`}>{indicator}</li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p>No repeated indicators recorded.</p>
-                        )}
-                      </div>
-                      <div>
-                        <h5>Warnings</h5>
-                        {continuityDiagnostics.continuityWarnings.length > 0 ? (
-                          <ul>
-                            {continuityDiagnostics.continuityWarnings.map((warning) => (
-                              <li key={warning}>{warning}</li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p>No continuity warnings recorded.</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                  <ContinuityDiagnosticsPanel diagnostics={continuityDiagnostics} />
                 ) : (
                   <p className="empty-state">
                     {isContinuityDiagnosticsLoading

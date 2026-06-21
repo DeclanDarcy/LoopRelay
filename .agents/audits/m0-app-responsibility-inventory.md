@@ -52,6 +52,7 @@ Captured after extracting `useGitStatus(repositoryId)` and updated during the M0
 ### View Composition And Presentation
 
 - Top-level repository selection, artifact selection, milestone selection, workflow rail, context panels, git workflow panel, operational-context review, continuity diagnostics, and history rendering remain composed in `App.tsx`.
+- Continuity diagnostics body rendering is now extracted to `ContinuityDiagnosticsPanel`; the surrounding toolbar, refresh action, report generation action, loading fallback, and no-data fallback remain composed in `App.tsx`.
 
 ## Projection Ownership Audit
 
@@ -86,3 +87,16 @@ Captured after extracting `useGitStatus(repositoryId)` and updated during the M0
 - Workflow-mutating backend command inventory is now complete in `.agents/audits/m0-closure-authority-matrix.md`.
 - Artifact mutation authority now has app-level characterization: artifact draft edits do not call `save_artifact_content`, `rotate_current_handoff`, or `rotate_current_decisions`; `Save` calls `save_artifact_content` with the selected repository, selected artifact path, and current draft content; confirmed `Rotate` calls only the selected artifact-family rotation command.
 - Execution launch and generated handoff decision authority now have app-level characterization: repository display and context build do not call `start_execution`; only `Start Execution` calls `start_execution` with the selected repository and milestone path; generated handoff display does not call accept/reject commands; only `Accept Handoff` and confirmed `Reject Handoff` invoke their backend decision commands.
+
+## Residual Extraction Classification
+
+Captured before/with the continuity diagnostics extraction slice in M0.5.
+
+| Region | Classification | Extraction Disposition |
+| --- | --- | --- |
+| Continuity diagnostics body | Pure presentation of `ContinuityDiagnostics` projection values. | Extracted to `ContinuityDiagnosticsPanel`; tests pin labels, ordering, rounding, and empty fallbacks. |
+| Continuity diagnostics toolbar | Workflow action surface for explicit diagnostics refresh and report generation. | Retained in `App.tsx`; do not move without preserving explicit action authority. |
+| Continuity diagnostics loading/no-data fallback | Presentation plus hook loading-state composition. | Retained in `App.tsx` for now because it depends on selected repository and hook loading state. |
+| Operational-context proposal review | Workflow coordination plus local draft/review state and backend mutation gating. | Retain in `App.tsx` until a narrower audit separates pure subregions. |
+| Git commit/push review | Workflow coordination plus commit draft, selected paths, preparation currency, commit readiness, and push readiness. | Retain in `App.tsx`; not a presentation-only extraction candidate. |
+| Repository list and selected repository summary | Presentation plus navigation, registration/removal affordances, selection reconciliation, and availability/readiness display. | Candidate only after a focused audit splits callbacks from direct rendering. |
