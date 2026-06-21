@@ -3,8 +3,8 @@
 ## Tracking
 
 - [ ] Milestone complete
-- [ ] Workstream 0.0: Mandatory Frontend Test Infrastructure
-- [ ] Workstream 0.1: Centralize Types
+- [x] Workstream 0.0: Mandatory Frontend Test Infrastructure
+- [x] Workstream 0.1: Centralize Types
 - [ ] Workstream 0.2: Centralize Transport
 - [ ] Workstream 0.3: Extract Projection Hooks
 - [ ] Workstream 0.4: Separate State Boundaries
@@ -20,46 +20,46 @@ Add frontend test infrastructure before extracting types, APIs, hooks, or compon
 
 Required tooling:
 
-- [ ] Vitest for unit and hook tests.
-- [ ] Testing Library for component behavior tests.
-- [ ] Playwright for browser-level characterization and layout/navigation checks.
-- [ ] A stable render helper for components that need shell state, mock Tauri commands, and projection fixtures.
+- [x] Vitest for unit and hook tests.
+- [x] Testing Library for component behavior tests.
+- [x] Playwright for browser-level characterization and layout/navigation checks.
+- [x] A stable render helper for components that need shell state, mock Tauri commands, and projection fixtures.
 - [ ] Script entries:
-  - [ ] `npm run test`
-  - [ ] `npm run test:e2e`
-  - [ ] Optional `npm run test:watch`
+  - [x] `npm run test`
+  - [x] `npm run test:e2e`
+  - [x] Optional `npm run test:watch`
 
 Required setup:
 
-- [ ] Make `devTauriMock.ts` usable by tests or extract its fixtures into reusable builders.
-- [ ] Add fixtures for at least one repository in every repository execution state: `Ready`, `Executing`, `AwaitingAcceptance`, `AwaitingCommit`, `AwaitingPush`, `Failed`, and `Cancelled`.
-- [ ] Add browser tests that launch the Vite app with `?mock=workspace-certification`.
-- [ ] Add a small performance helper for client-side navigation timing in Playwright.
+- [x] Make `devTauriMock.ts` usable by tests or extract its fixtures into reusable builders.
+- [x] Add fixtures for at least one repository in every repository execution state: `Ready`, `Executing`, `AwaitingAcceptance`, `AwaitingCommit`, `AwaitingPush`, `Failed`, and `Cancelled`.
+- [x] Add browser tests that launch the Vite app with `?mock=workspace-certification`.
+- [x] Add a small performance helper for client-side navigation timing in Playwright.
 
 ### Certification
 
-- [ ] A trivial Vitest test and a trivial Playwright test pass before any M0 extraction begins.
-- [ ] `npm run lint`, `npm run build`, `npm run test`, and `npm run test:e2e` are available from `src/CommandCenter.UI`.
-- [ ] Subsequent M0 work must add or update characterization coverage before moving behavior.
+- [x] A trivial Vitest test and a trivial Playwright test pass before any M0 extraction begins.
+- [x] `npm run lint`, `npm run build`, `npm run test`, and `npm run test:e2e` are available from `src/CommandCenter.UI`.
+- [x] Subsequent M0 work must add or update characterization coverage before moving behavior.
 
 ## Workstream 0.1: Centralize Types
 
-- [ ] Move all frontend DTOs out of `App.tsx` into `src/types`.
-- [ ] Import those types from `App.tsx`, feature components, hooks, API modules, and `devTauriMock.ts`.
-- [ ] Include these type families:
-  - [ ] Repository and dashboard projections.
-  - [ ] Workspace projection and artifact inventory.
-  - [ ] Execution states, session summaries, status, events, context preview, context diagnostics.
-  - [ ] Git status, dirty state, commit preparation, commit request, push result.
-  - [ ] Operational-context projection, proposal summary, proposal, semantic change, compression summary, review state, promotion state.
-  - [ ] Continuity diagnostics, trends, compression trend, and reports.
-  - [ ] Planning projection and milestones.
+- [x] Move all frontend DTOs out of `App.tsx` into `src/types`.
+- [x] Import those types from `App.tsx`, feature components, hooks, API modules, and `devTauriMock.ts`.
+- [x] Include these type families:
+  - [x] Repository and dashboard projections.
+  - [x] Workspace projection and artifact inventory.
+  - [x] Execution states, session summaries, status, events, context preview, context diagnostics.
+  - [x] Git status, dirty state, commit preparation, commit request, push result.
+  - [x] Operational-context projection, proposal summary, proposal, semantic change, compression summary, review state, promotion state.
+  - [x] Continuity diagnostics, trends, compression trend, and reports.
+  - [x] Planning projection and milestones.
 
 ### Certification
 
-- [ ] No projection DTO definitions remain in `App.tsx`.
-- [ ] `devTauriMock.ts` imports shared DTOs instead of maintaining a parallel type universe where practical.
-- [ ] `npm run build` succeeds.
+- [x] No projection DTO definitions remain in `App.tsx`.
+- [x] `devTauriMock.ts` imports shared DTOs instead of maintaining a parallel type universe where practical.
+- [x] `npm run build` succeeds.
 
 ## Workstream 0.2: Centralize Transport
 

@@ -1,328 +1,28 @@
+import type {
+  Artifact,
+  ArtifactInventory,
+  ArtifactType,
+  ArtifactVersionKind,
+  CommitPreparation,
+  ContinuityDiagnostics,
+  ContinuityReport,
+  ContinuityTrend,
+  ExecutionContextPreview,
+  ExecutionSessionState,
+  ExecutionSession,
+  ExecutionSessionSummary,
+  OperationalContextItem,
+  OperationalContextProjection,
+  OperationalContextProposal,
+  OperationalContextProposalSummary,
+  Repository,
+  RepositoryDashboardProjection as DashboardEntry,
+  RepositoryExecutionState,
+  RepositoryGitStatus,
+  RepositoryWorkspaceProjection as Workspace,
+} from './types'
+
 type InvokeArgs = Record<string, unknown> | undefined
-
-type Repository = {
-  id: string
-  name: string
-  path: string
-}
-
-type Artifact = {
-  relativePath: string
-  name: string
-  type: string
-  family: string
-  versionKind: string
-}
-
-type ArtifactInventory = {
-  plan: Artifact | null
-  operationalContext: Artifact | null
-  historicalOperationalContexts: Artifact[]
-  milestones: Artifact[]
-  currentHandoff: Artifact | null
-  historicalHandoffs: Artifact[]
-  currentDecisions: Artifact | null
-  historicalDecisions: Artifact[]
-}
-
-type Workspace = {
-  repository: Repository
-  availability: string
-  readiness: string
-  executionState: string
-  executionSummary: ExecutionSessionSummary | null
-  executionHistory: ExecutionSessionSummary[]
-  artifactInventory: ArtifactInventory
-  milestoneCount: number
-  hasPlan: boolean
-  hasOperationalContext: boolean
-  hasCurrentHandoff: boolean
-  hasCurrentDecisions: boolean
-  operationalContextProposalSummary: OperationalContextProposalSummary
-  operationalContext: OperationalContextProjection
-}
-
-type OperationalContextProposalSummary = {
-  pendingProposalExists: boolean
-  latestProposalId: string | null
-  generatedAt: string | null
-  status: string | null
-  sourceInputCount: number
-  contentByteCount: number
-  contentCharacterCount: number
-  lastPromotedAt: string | null
-  lastArchivedRelativePath: string | null
-}
-
-type OperationalContextItem = {
-  id: string
-  kind: string
-  text: string
-  rationale: string | null
-  sourceRelativePath: string | null
-}
-
-type OperationalContextProjection = {
-  exists: boolean
-  currentRelativePath: string | null
-  revisionCount: number
-  currentRevisionNumber: number
-  lastUpdatedAt: string | null
-  lastPromotionAt: string | null
-  currentUnderstandingSummary: string[]
-  architecture: OperationalContextItem[]
-  authorityBoundaries: OperationalContextItem[]
-  constraints: OperationalContextItem[]
-  stableDecisions: OperationalContextItem[]
-  decisionRationale: OperationalContextItem[]
-  openQuestions: OperationalContextItem[]
-  activeRisks: OperationalContextItem[]
-  recentUnderstandingChanges: OperationalContextItem[]
-  pendingProposalSummary: OperationalContextProposalSummary
-  latestReviewState: string | null
-  continuityWarnings: string[]
-}
-
-type OperationalContextProposal = {
-  proposalId: string
-  repositoryId: string
-  generatedAt: string
-  status: string
-  generatedContentRelativePath: string
-  generatedContentHash: string
-  editedContentRelativePath: string | null
-  semanticChanges: Array<{
-    type: string
-    section: string
-    description: string
-    itemId: string | null
-  }>
-  compressionSummary: {
-    preservedItemCount: number
-    addedItemCount: number
-    modifiedItemCount: number
-    removedItemCount: number
-    compressedItemCount: number
-    permanentUnderstandingItemCount: number
-    activeUnderstandingItemCount: number
-    historicalUnderstandingItemCount: number
-    historicalNoiseItemCount: number
-    resolvedQuestionCount: number
-    retiredRiskCount: number
-    warningCount: number
-    warnings: string[]
-    revisionSummary: string[]
-    noiseRemovedIndicators: string[]
-    stableUnderstandingRetentionWarnings: string[]
-  }
-  review: {
-    proposalId: string
-    reviewState: string
-    baselineCurrentContextHash: string
-    reviewedContentHash: string | null
-    reviewedAt: string | null
-    reviewNote: string | null
-    staleReason: string | null
-  }
-  promotion: {
-    proposalId: string
-    promotedAt: string | null
-    promotedContentHash: string | null
-    promotedContentSourceRelativePath: string | null
-    revisionNumber: number | null
-    archivedRelativePath: string | null
-    archiveFailureReason: string | null
-    writeFailureReason: string | null
-  }
-  generatedContent: string
-  editedContent: string | null
-}
-
-type ContinuityTrend = {
-  addedCount: number
-  removedCount: number
-  resolvedCount: number
-  lostCount: number
-}
-
-type ContinuityDiagnostics = {
-  repositoryId: string
-  generatedAt: string
-  revisionCount: number
-  currentContextByteCount: number
-  currentContextCharacterCount: number
-  contextByteGrowth: number
-  averageBytesPerRevision: number
-  architectureTrend: ContinuityTrend
-  constraintTrend: ContinuityTrend
-  decisionTrend: ContinuityTrend
-  rationaleTrend: ContinuityTrend
-  openQuestionTrend: ContinuityTrend
-  activeRiskTrend: ContinuityTrend
-  compressionTrend: {
-    proposalCount: number
-    compressedItemCount: number
-    removedItemCount: number
-    resolvedQuestionCount: number
-    retiredRiskCount: number
-    warningCount: number
-    warnings: string[]
-    noiseRemovedIndicators: string[]
-  }
-  repeatedInvestigationIndicators: string[]
-  repeatedQuestionIndicators: string[]
-  decisionReworkIndicators: string[]
-  continuityWarnings: string[]
-}
-
-type ContinuityReport = {
-  reportId: string
-  repositoryId: string
-  generatedAt: string
-  relativePath: string
-  diagnostics: ContinuityDiagnostics
-}
-
-type DashboardEntry = {
-  repository: Repository
-  availability: string
-  readiness: string
-  executionState: string
-  activeExecutionSession: ExecutionSessionSummary | null
-  executionSummary: ExecutionSessionSummary | null
-  executionHistory: ExecutionSessionSummary[]
-  milestoneCount: number
-  hasCurrentHandoff: boolean
-  hasCurrentDecisions: boolean
-  continuitySummary: {
-    operationalContextExists: boolean
-    operationalContextRevisionCount: number
-    operationalContextLastUpdatedAt: string | null
-    openQuestionCount: number
-    activeRiskCount: number
-    pendingProposalExists: boolean
-  }
-}
-
-type ExecutionSessionSummary = {
-  sessionId: string
-  state: string
-  repositoryState: string
-  milestonePath: string | null
-  startedAt: string | null
-  completedAt: string | null
-  duration: string | null
-  acceptedAt: string | null
-  rejectedAt: string | null
-  decisionNote: string | null
-  lastActivityAt: string | null
-  providerName: string
-  providerExecutablePath: string | null
-  providerProcessId: number | null
-  providerStartedAt: string | null
-  handoffPath: string | null
-  commitSha: string | null
-  committedAt: string | null
-  commitMessage: string | null
-  preparationSnapshotId: string | null
-  pushAttemptedAt: string | null
-  pushedAt: string | null
-  pushedCommitSha: string | null
-  pushRemoteName: string | null
-  pushBranchName: string | null
-  failureReason: string | null
-}
-
-type ExecutionSession = ExecutionSessionSummary & {
-  id: string
-  repositoryId: string
-  repositoryPath: string
-}
-
-type ExecutionContextPreview = {
-  repositoryId: string
-  repositoryName: string
-  repositoryPath: string
-  milestonePath: string
-  generatedAt: string
-  artifacts: Array<{
-    role: string
-    relativePath: string
-    name: string
-    content: string
-    byteCount: number
-    characterCount: number
-  }>
-  repositorySnapshot: {
-    branch: string
-    dirtyState: {
-      stagedPaths: string[]
-      modifiedPaths: string[]
-      addedPaths: string[]
-      deletedPaths: string[]
-      renamedPaths: string[]
-      untrackedPaths: string[]
-      isClean: boolean
-    }
-    capturedAt: string
-  }
-  diagnostics: {
-    totalBytes: number
-    totalCharacters: number
-    warningThresholdBytes: number
-    hardLimitBytes: number
-    warningThresholdExceeded: boolean
-    hardLimitExceeded: boolean
-    artifactDiagnostics: Array<{
-      role: string
-      relativePath: string
-      byteCount: number
-      characterCount: number
-      warningThresholdBytes: number
-      hardLimitBytes: number
-      warningThresholdExceeded: boolean
-      hardLimitExceeded: boolean
-    }>
-    validationErrors: string[]
-    missingOptionalArtifacts: string[]
-    launchBlocked: boolean
-  }
-}
-
-type RepositoryGitStatus = {
-  branch: string
-  aheadCount: number
-  behindCount: number
-  dirtyState: {
-    stagedPaths: string[]
-    modifiedPaths: string[]
-    addedPaths: string[]
-    deletedPaths: string[]
-    renamedPaths: string[]
-    untrackedPaths: string[]
-    isClean: boolean
-  }
-  capturedAt: string
-}
-
-type CommitPreparation = {
-  id: string
-  sessionId: string
-  repositoryId: string
-  repositoryPath: string
-  proposedMessage: string
-  scopeItems: Array<{
-    path: string
-    changeType: string
-    origin: string
-    isSelected: boolean
-  }>
-  statusSnapshot: RepositoryGitStatus & {
-    id: string
-  }
-  generatedAt: string
-  hasPreExistingChanges: boolean
-}
 
 type MockState = {
   repositories: Repository[]
@@ -429,9 +129,9 @@ const artifacts = {
 function artifact(
   relativePath: string,
   name: string,
-  type: string,
-  family: string,
-  versionKind: string,
+  type: ArtifactType,
+  family: ArtifactType,
+  versionKind: ArtifactVersionKind,
 ): Artifact {
   return { relativePath, name, type, family, versionKind }
 }
@@ -633,8 +333,8 @@ function createInitialState(): MockState {
 function seedCertificationSession(
   state: MockState,
   repository: Repository,
-  repositoryState: string,
-  sessionState: string,
+  repositoryState: RepositoryExecutionState,
+  sessionState: ExecutionSessionState,
   overrides: Partial<ExecutionSessionSummary> = {},
 ) {
   const workspace = state.workspaces[repository.id]
@@ -872,7 +572,7 @@ function rotateCurrentArtifact(
   }
 
   const nextIndex = workspace.artifactInventory[historicalKey].length + 1
-  const historicalArtifact = {
+  const historicalArtifact: Artifact = {
     ...currentArtifact,
     relativePath: currentArtifact.relativePath.replace(
       `${filePrefix}.md`,
@@ -1304,7 +1004,7 @@ function promoteOperationalContextProposal(
   workspace.operationalContext.latestReviewState = 'Accepted'
 
   proposal.status = 'Promoted'
-  state.content['.agents/operational_context.md'] = proposal.editedContent ?? proposal.generatedContent
+  state.content['.agents/operational_context.md'] = proposal.editedContent ?? proposal.generatedContent ?? ''
   proposal.promotion = {
     proposalId,
     promotedAt,
