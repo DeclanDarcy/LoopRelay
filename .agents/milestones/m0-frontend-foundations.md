@@ -5,7 +5,7 @@
 - [ ] Milestone complete
 - [x] Workstream 0.0: Mandatory Frontend Test Infrastructure
 - [x] Workstream 0.1: Centralize Types
-- [ ] Workstream 0.2: Centralize Transport
+- [x] Workstream 0.2: Centralize Transport
 - [ ] Workstream 0.3: Extract Projection Hooks
 - [ ] Workstream 0.4: Separate State Boundaries
 - [ ] Workstream 0.5: Decompose Without Redesign
@@ -63,17 +63,17 @@ Required setup:
 
 ## Workstream 0.2: Centralize Transport
 
-- [ ] Create API modules wrapping every Tauri command currently invoked from `App.tsx`.
-- [ ] Create one low-level `invokeCommand<T>()` wrapper in `src/api/tauri.ts` to normalize unknown errors.
-- [ ] Create execution event subscription helpers that own `EventSource` construction and cleanup.
-- [ ] Keep command names and endpoint-specific knowledge inside `src/api`.
-- [ ] Keep UI components unaware of Tauri command names, backend URLs, request serialization, and SSE framing.
+- [x] Create API modules wrapping every Tauri command currently invoked from `App.tsx`.
+- [x] Create one low-level `invokeCommand<T>()` wrapper in `src/api/tauri.ts` to normalize unknown errors.
+- [x] Create execution event subscription helpers that own `EventSource` construction and cleanup.
+- [x] Keep command names and endpoint-specific knowledge inside `src/api`.
+- [x] Keep UI components unaware of Tauri command names, backend URLs, request serialization, and SSE framing.
 
 ### Certification
 
-- [ ] No direct `invoke()` imports remain in rendering components.
-- [ ] No direct `EventSource` construction remains outside the execution API or event hook.
-- [ ] Error formatting is centralized.
+- [x] No direct `invoke()` imports remain in rendering components.
+- [x] No direct `EventSource` construction remains outside the execution API or event hook.
+- [x] Error formatting is centralized.
 
 ## Workstream 0.3: Extract Projection Hooks
 

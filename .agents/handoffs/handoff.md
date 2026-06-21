@@ -2,17 +2,17 @@
 
 ## Slice Summary
 
-Completed Milestone 0 Workstream 0.1 by centralizing frontend contract types without changing runtime behavior.
+Completed Milestone 0 Workstream 0.2 by centralizing frontend transport without moving projection state, draft state, navigation state, or workflow authority.
 
 ## New State
 
-- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0001.md`.
-- Added shared frontend type modules under `src/CommandCenter.UI/src/types/` for artifacts, repositories, execution, git, operational context, continuity, and planning.
-- Added `src/CommandCenter.UI/src/types/index.ts` as the current shared type import surface.
-- Removed projection DTO definitions from `App.tsx`; it now imports shared types while keeping existing transport, hooks, helpers, and rendering in place for later M0 workstreams.
-- Updated `devTauriMock.ts` to import shared DTOs and narrowed mock fixture annotations to match backend-facing contract unions.
-- Updated the workspace certification fixture to type `executionState` as `RepositoryExecutionState`.
-- Marked Milestone 0 Workstream 0.1 complete in `.agents/milestones/m0-frontend-foundations.md`.
+- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0002.md`.
+- Added `src/CommandCenter.UI/src/api/` with thin transport modules for repositories, artifacts, execution, execution events, git, operational context, continuity, and shared exports.
+- Added `src/CommandCenter.UI/src/api/tauri.ts` with `invokeCommand<T>()` and centralized `formatError(...)`.
+- Moved all direct Tauri command names out of `App.tsx`; `App.tsx` now calls domain-named API wrappers while preserving the existing state/effect choreography.
+- Moved execution status `fetch(...)` and execution SSE `EventSource` construction/parsing into execution API modules.
+- Added `src/CommandCenter.UI/src/test/characterization/transport.test.ts` covering refresh command request/response preservation and execution event subscription parsing/cleanup.
+- Marked Milestone 0 Workstream 0.2 complete in `.agents/milestones/m0-frontend-foundations.md`.
 
 ## Verification
 
@@ -23,4 +23,4 @@ Completed Milestone 0 Workstream 0.1 by centralizing frontend contract types wit
 
 ## Next Slice
 
-Proceed with Milestone 0 Workstream 0.2: centralize transport by moving Tauri command invocation and execution event subscription details out of `App.tsx` into `src/api`.
+Proceed with Milestone 0 Workstream 0.3: extract projection hooks while preserving existing loading, refresh, error, and cleanup behavior.

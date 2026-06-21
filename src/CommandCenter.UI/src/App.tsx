@@ -1,11 +1,41 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import {
+  acceptExecutionHandoff,
+  acceptOperationalContextProposal as acceptOperationalContextProposalCommand,
+  commitExecution,
+  editOperationalContextProposal,
+  formatError,
+  generateContinuityReport as generateContinuityReportCommand,
+  generateOperationalContextProposal as generateOperationalContextProposalCommand,
+  getBackendUrl,
+  getContinuityDiagnostics,
+  getExecutionStatus,
+  getGitStatus,
+  getOperationalContextProposal,
+  getRepositoryWorkspace,
+  listRepositories,
+  loadArtifactContent,
+  prepareCommit,
+  previewExecutionContext,
+  promoteOperationalContextProposal as promoteOperationalContextProposalCommand,
+  pushExecution as pushExecutionCommand,
+  refreshRepositoryWorkspace,
+  registerRepository,
+  rejectExecutionHandoff,
+  rejectOperationalContextProposal as rejectOperationalContextProposalCommand,
+  removeRepository as removeRepositoryRegistration,
+  rotateCurrentDecisions,
+  rotateCurrentHandoff,
+  saveArtifactContent,
+  selectRepositoryDirectory,
+  startExecution as startExecutionCommand,
+  subscribeToExecutionEvents,
+} from './api'
 import type {
   ArtifactCategory,
   ArtifactInventory,
   CommitPreparation,
   ContinuityDiagnostics,
-  ContinuityReport,
   ExecutionContextPreview,
   ExecutionEvent,
   ExecutionReadiness,
@@ -45,10 +75,6 @@ const executionStateLabels: Record<RepositoryExecutionState, string> = {
   AwaitingPush: 'Awaiting push',
   Failed: 'Failed',
   Cancelled: 'Cancelled',
-}
-
-function formatError(error: unknown) {
-  return error instanceof Error ? error.message : String(error)
 }
 
 function formatDateTime(value: string | null) {
@@ -692,10 +718,7 @@ function App() {
     setIsWorkspaceLoading(true)
     setError(null)
     try {
-      const nextWorkspace = await invoke<RepositoryWorkspaceProjection>(
-        'get_repository_workspace',
-        { repositoryId },
-      )
+      const nextWorkspace = await getRepositoryWorkspace(repositoryId)
       setWorkspace(nextWorkspace)
       setExecutionContext(null)
       reconcileSelectedArtifact(repositoryId, nextWorkspace)
@@ -713,7 +736,7 @@ function App() {
   const loadGitStatus = useCallback(async (repositoryId: string) => {
     setIsGitStatusLoading(true)
     try {
-      const status = await invoke<RepositoryGitStatus>('get_git_status', { repositoryId })
+      const status = await getGitStatus(repositoryId)
       setGitStatus(status)
     } catch (statusError) {
       setGitStatus(null)
@@ -726,9 +749,7 @@ function App() {
   const loadContinuityDiagnostics = useCallback(async (repositoryId: string) => {
     setIsContinuityDiagnosticsLoading(true)
     try {
-      const diagnostics = await invoke<ContinuityDiagnostics>('get_continuity_diagnostics', {
-        repositoryId,
-      })
+      const diagnostics = await getContinuityDiagnostics(repositoryId)
       setContinuityDiagnostics(diagnostics)
     } catch (diagnosticsError) {
       setContinuityDiagnostics(null)
@@ -741,7 +762,7 @@ function App() {
   const loadCommitPreparation = useCallback(async (sessionId: string) => {
     setIsCommitPreparationLoading(true)
     try {
-      const preparation = await invoke<CommitPreparation>('prepare_commit', { sessionId })
+      const preparation = await prepareCommit(sessionId)
       setCommitPreparation(preparation)
       setCommitMessage(preparation.proposedMessage)
       setSelectedCommitPaths(
@@ -791,12 +812,12 @@ function App() {
     setError(null)
     setMessage(null)
     try {
-      const summary = await invoke<ExecutionSessionSummary>('commit_execution', {
-        sessionId: executionSessionId,
-        message: commitMessage.trim(),
-        selectedPaths: selectedCommitScopeItems.map((item) => item.path),
-        statusSnapshotId: commitPreparation.statusSnapshot.id,
-      })
+      const summary = await commitExecution(
+        executionSessionId,
+        commitMessage.trim(),
+        selectedCommitScopeItems.map((item) => item.path),
+        commitPreparation.statusSnapshot.id,
+      )
       setCommitPreparation(null)
       setSelectedCommitPaths(new Set())
       setCommitMessage('')
@@ -825,9 +846,7 @@ function App() {
     setError(null)
     setMessage(null)
     try {
-      const summary = await invoke<ExecutionSessionSummary>('push_execution', {
-        sessionId: executionSessionId,
-      })
+      const summary = await pushExecutionCommand(executionSessionId)
       setMessage(
         summary.pushedCommitSha
           ? `Pushed ${summary.pushedCommitSha}. Repository is ready.`
@@ -835,10 +854,7 @@ function App() {
       )
       await loadRepositories()
       if (selectedRepository) {
-        const nextWorkspace = await invoke<RepositoryWorkspaceProjection>(
-          'refresh_repository_workspace',
-          { repositoryId: selectedRepository.repository.id },
-        )
+        const nextWorkspace = await refreshRepositoryWorkspace(selectedRepository.repository.id)
         setWorkspace(nextWorkspace)
         setExecutionContext(null)
         reconcileSelectedArtifact(selectedRepository.repository.id, nextWorkspace)
@@ -855,9 +871,7 @@ function App() {
     setIsLoading(true)
     setError(null)
     try {
-      const nextRepositories = await invoke<RepositoryDashboardProjection[]>(
-        'list_repositories',
-      )
+      const nextRepositories = await listRepositories()
       setRepositories(nextRepositories)
       setSelectedRepositoryId((currentId) => {
         if (nextRepositories.length === 0) {
@@ -885,13 +899,13 @@ function App() {
     setError(null)
     setMessage(null)
     try {
-      const selectedPath = await invoke<string | null>('select_repository_directory')
+      const selectedPath = await selectRepositoryDirectory()
 
       if (!selectedPath) {
         return
       }
 
-      await invoke('register_repository', { path: selectedPath })
+      await registerRepository(selectedPath)
       setMessage('Repository registered.')
       await loadRepositories()
     } catch (addError) {
@@ -914,7 +928,7 @@ function App() {
     setError(null)
     setMessage(null)
     try {
-      await invoke('remove_repository', { repositoryId: repository.id })
+      await removeRepositoryRegistration(repository.id)
       setMessage('Repository registration removed.')
       delete selectedArtifactPathsByRepository.current[repository.id]
       setWorkspace(null)
@@ -938,10 +952,7 @@ function App() {
     setError(null)
     setMessage(null)
     try {
-      const nextWorkspace = await invoke<RepositoryWorkspaceProjection>(
-        'refresh_repository_workspace',
-        { repositoryId: selectedRepository.repository.id },
-      )
+      const nextWorkspace = await refreshRepositoryWorkspace(selectedRepository.repository.id)
       setWorkspace(nextWorkspace)
       setExecutionContext(null)
       reconcileSelectedArtifact(selectedRepository.repository.id, nextWorkspace)
@@ -963,15 +974,11 @@ function App() {
     setError(null)
     setMessage(null)
     try {
-      const proposal = await invoke<OperationalContextProposal>(
-        'generate_operational_context_proposal',
-        { repositoryId: selectedRepository.repository.id },
+      const proposal = await generateOperationalContextProposalCommand(
+        selectedRepository.repository.id,
       )
       await setLoadedOperationalContextProposal(proposal)
-      const nextWorkspace = await invoke<RepositoryWorkspaceProjection>(
-        'refresh_repository_workspace',
-        { repositoryId: selectedRepository.repository.id },
-      )
+      const nextWorkspace = await refreshRepositoryWorkspace(selectedRepository.repository.id)
       setWorkspace(nextWorkspace)
       setExecutionContext(null)
       reconcileSelectedArtifact(selectedRepository.repository.id, nextWorkspace)
@@ -991,10 +998,7 @@ function App() {
       return
     }
 
-    const content = await invoke<string>('load_artifact_content', {
-      repositoryId,
-      relativePath: currentContext.relativePath,
-    })
+    const content = await loadArtifactContent(repositoryId, currentContext.relativePath)
     setOperationalContextCurrentContent(content)
   }
 
@@ -1016,10 +1020,10 @@ function App() {
     setError(null)
     setMessage(null)
     try {
-      const proposal = await invoke<OperationalContextProposal>('get_operational_context_proposal', {
-        repositoryId: selectedRepository.repository.id,
-        proposalId: workspace.operationalContextProposalSummary.latestProposalId,
-      })
+      const proposal = await getOperationalContextProposal(
+        selectedRepository.repository.id,
+        workspace.operationalContextProposalSummary.latestProposalId,
+      )
       await setLoadedOperationalContextProposal(proposal)
       setMessage('Operational-context proposal loaded.')
     } catch (proposalError) {
@@ -1038,16 +1042,13 @@ function App() {
     setError(null)
     setMessage(null)
     try {
-      const proposal = await invoke<OperationalContextProposal>('edit_operational_context_proposal', {
-        repositoryId: selectedRepository.repository.id,
-        proposalId: operationalContextProposal.proposalId,
-        content: operationalContextProposalDraft,
-      })
-      await setLoadedOperationalContextProposal(proposal)
-      const nextWorkspace = await invoke<RepositoryWorkspaceProjection>(
-        'refresh_repository_workspace',
-        { repositoryId: selectedRepository.repository.id },
+      const proposal = await editOperationalContextProposal(
+        selectedRepository.repository.id,
+        operationalContextProposal.proposalId,
+        operationalContextProposalDraft,
       )
+      await setLoadedOperationalContextProposal(proposal)
+      const nextWorkspace = await refreshRepositoryWorkspace(selectedRepository.repository.id)
       setWorkspace(nextWorkspace)
       setMessage('Operational-context proposal edits saved.')
       await loadRepositories()
@@ -1067,16 +1068,13 @@ function App() {
     setError(null)
     setMessage(null)
     try {
-      const proposal = await invoke<OperationalContextProposal>('accept_operational_context_proposal', {
-        repositoryId: selectedRepository.repository.id,
-        proposalId: operationalContextProposal.proposalId,
-        reviewNote: operationalContextReviewNote || null,
-      })
-      await setLoadedOperationalContextProposal(proposal)
-      const nextWorkspace = await invoke<RepositoryWorkspaceProjection>(
-        'refresh_repository_workspace',
-        { repositoryId: selectedRepository.repository.id },
+      const proposal = await acceptOperationalContextProposalCommand(
+        selectedRepository.repository.id,
+        operationalContextProposal.proposalId,
+        operationalContextReviewNote || null,
       )
+      await setLoadedOperationalContextProposal(proposal)
+      const nextWorkspace = await refreshRepositoryWorkspace(selectedRepository.repository.id)
       setWorkspace(nextWorkspace)
       setMessage('Operational-context proposal accepted for later promotion.')
       await loadRepositories()
@@ -1096,16 +1094,13 @@ function App() {
     setError(null)
     setMessage(null)
     try {
-      const proposal = await invoke<OperationalContextProposal>('reject_operational_context_proposal', {
-        repositoryId: selectedRepository.repository.id,
-        proposalId: operationalContextProposal.proposalId,
-        reviewNote: operationalContextReviewNote || null,
-      })
-      await setLoadedOperationalContextProposal(proposal)
-      const nextWorkspace = await invoke<RepositoryWorkspaceProjection>(
-        'refresh_repository_workspace',
-        { repositoryId: selectedRepository.repository.id },
+      const proposal = await rejectOperationalContextProposalCommand(
+        selectedRepository.repository.id,
+        operationalContextProposal.proposalId,
+        operationalContextReviewNote || null,
       )
+      await setLoadedOperationalContextProposal(proposal)
+      const nextWorkspace = await refreshRepositoryWorkspace(selectedRepository.repository.id)
       setWorkspace(nextWorkspace)
       setMessage('Operational-context proposal rejected.')
       await loadRepositories()
@@ -1125,22 +1120,19 @@ function App() {
     setError(null)
     setMessage(null)
     try {
-      const proposal = await invoke<OperationalContextProposal>('promote_operational_context_proposal', {
-        repositoryId: selectedRepository.repository.id,
-        proposalId: operationalContextProposal.proposalId,
-      })
-      await setLoadedOperationalContextProposal(proposal)
-      const nextWorkspace = await invoke<RepositoryWorkspaceProjection>(
-        'refresh_repository_workspace',
-        { repositoryId: selectedRepository.repository.id },
+      const proposal = await promoteOperationalContextProposalCommand(
+        selectedRepository.repository.id,
+        operationalContextProposal.proposalId,
       )
+      await setLoadedOperationalContextProposal(proposal)
+      const nextWorkspace = await refreshRepositoryWorkspace(selectedRepository.repository.id)
       setWorkspace(nextWorkspace)
       reconcileSelectedArtifact(selectedRepository.repository.id, nextWorkspace)
       if (nextWorkspace.artifactInventory.operationalContext) {
-        const content = await invoke<string>('load_artifact_content', {
-          repositoryId: selectedRepository.repository.id,
-          relativePath: nextWorkspace.artifactInventory.operationalContext.relativePath,
-        })
+        const content = await loadArtifactContent(
+          selectedRepository.repository.id,
+          nextWorkspace.artifactInventory.operationalContext.relativePath,
+        )
         setOperationalContextCurrentContent(content)
       }
       setMessage('Operational-context proposal promoted.')
@@ -1161,9 +1153,7 @@ function App() {
     setError(null)
     setMessage(null)
     try {
-      const report = await invoke<ContinuityReport>('generate_continuity_report', {
-        repositoryId: selectedRepository.repository.id,
-      })
+      const report = await generateContinuityReportCommand(selectedRepository.repository.id)
       setContinuityDiagnostics(report.diagnostics)
       setMessage(`Continuity report generated: ${report.relativePath}`)
     } catch (reportError) {
@@ -1182,11 +1172,11 @@ function App() {
     setError(null)
     setMessage(null)
     try {
-      await invoke('save_artifact_content', {
-        repositoryId: selectedRepository.repository.id,
-        relativePath: selectedArtifact.relativePath,
-        content: draftContent,
-      })
+      await saveArtifactContent(
+        selectedRepository.repository.id,
+        selectedArtifact.relativePath,
+        draftContent,
+      )
       setArtifactContent(draftContent)
       setMessage('Artifact saved.')
       await loadWorkspace(selectedRepository.repository.id)
@@ -1214,13 +1204,10 @@ function App() {
     setError(null)
     setMessage(null)
     try {
-      const command =
+      const nextWorkspace =
         selectedArtifact.family === 'Handoff'
-          ? 'rotate_current_handoff'
-          : 'rotate_current_decisions'
-      const nextWorkspace = await invoke<RepositoryWorkspaceProjection>(command, {
-        repositoryId: selectedRepository.repository.id,
-      })
+          ? await rotateCurrentHandoff(selectedRepository.repository.id)
+          : await rotateCurrentDecisions(selectedRepository.repository.id)
       setWorkspace(nextWorkspace)
       setExecutionContext(null)
       reconcileSelectedArtifact(selectedRepository.repository.id, nextWorkspace)
@@ -1242,10 +1229,10 @@ function App() {
     setError(null)
     setMessage(null)
     try {
-      const context = await invoke<ExecutionContextPreview>('preview_execution_context', {
-        repositoryId: selectedRepository.repository.id,
-        milestonePath: selectedMilestonePath,
-      })
+      const context = await previewExecutionContext(
+        selectedRepository.repository.id,
+        selectedMilestonePath,
+      )
       setExecutionContext(context)
       setMessage('Execution context built.')
     } catch (contextError) {
@@ -1264,10 +1251,10 @@ function App() {
     setError(null)
     setMessage(null)
     try {
-      const session = await invoke<ExecutionSessionSummary>('start_execution', {
-        repositoryId: selectedRepository.repository.id,
-        milestonePath: selectedMilestonePath,
-      })
+      const session = await startExecutionCommand(
+        selectedRepository.repository.id,
+        selectedMilestonePath,
+      )
       setExecutionEventsBySession((currentEvents) => ({
         ...currentEvents,
         [session.sessionId]: currentEvents[session.sessionId] ?? [],
@@ -1337,9 +1324,7 @@ function App() {
     setError(null)
     setMessage(null)
     try {
-      const summary = await invoke<ExecutionSessionSummary>('accept_execution_handoff', {
-        sessionId: executionDisplay.sessionId,
-      })
+      const summary = await acceptExecutionHandoff(executionDisplay.sessionId)
       await refreshAfterHandoffDecision(
         summary,
         summary.repositoryState === 'AwaitingCommit'
@@ -1370,9 +1355,7 @@ function App() {
     setError(null)
     setMessage(null)
     try {
-      const summary = await invoke<ExecutionSessionSummary>('reject_execution_handoff', {
-        sessionId: executionDisplay.sessionId,
-      })
+      const summary = await rejectExecutionHandoff(executionDisplay.sessionId)
       await refreshAfterHandoffDecision(summary, 'Handoff rejected. Repository is ready.')
     } catch (rejectError) {
       setError(formatError(rejectError))
@@ -1384,15 +1367,10 @@ function App() {
   useEffect(() => {
     let isCurrent = true
 
-    invoke<string>('get_backend_url')
+    getBackendUrl()
       .then((url) => {
         if (isCurrent) {
-          setBackendUrl(url.replace(/\/$/, ''))
-        }
-      })
-      .catch(() => {
-        if (isCurrent) {
-          setBackendUrl('http://127.0.0.1:5000')
+          setBackendUrl(url)
         }
       })
 
@@ -1407,16 +1385,7 @@ function App() {
     }
 
     let isCurrent = true
-    const statusUrl = `${backendUrl}/api/execution-sessions/${executionSessionId}/status`
-
-    fetch(statusUrl)
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`execution status lookup failed with status ${response.status}`)
-        }
-
-        return response.json() as Promise<ExecutionStatus>
-      })
+    getExecutionStatus(backendUrl, executionSessionId)
       .then((status) => {
         if (!isCurrent) {
           return
@@ -1451,24 +1420,12 @@ function App() {
     }
 
     const sessionId = executionSessionId
-    const eventSource = new EventSource(
-      `${backendUrl}/api/execution-sessions/${sessionId}/events/stream`,
-    )
-
-    eventSource.addEventListener('execution-event', (event) => {
-      const executionEvent = JSON.parse(event.data) as ExecutionEvent
+    const subscription = subscribeToExecutionEvents(backendUrl, sessionId, (executionEvent) => {
       setExecutionEventsBySession((currentEvents) => ({
         ...currentEvents,
         [sessionId]: mergeExecutionEvents(currentEvents[sessionId] ?? [], [executionEvent]),
       }))
-      fetch(`${backendUrl}/api/execution-sessions/${sessionId}/status`)
-        .then((response) => {
-          if (!response.ok) {
-            throw new Error(`execution status lookup failed with status ${response.status}`)
-          }
-
-          return response.json() as Promise<ExecutionStatus>
-        })
+      getExecutionStatus(backendUrl, sessionId)
         .then((status) => {
           setExecutionStatusesBySession((currentStatuses) => ({
             ...currentStatuses,
@@ -1485,13 +1442,7 @@ function App() {
         .catch(() => undefined)
     })
 
-    eventSource.onerror = () => {
-      if (eventSource.readyState === EventSource.CLOSED) {
-        return
-      }
-    }
-
-    return () => eventSource.close()
+    return () => subscription.close()
   }, [backendUrl, executionSessionId])
 
   useEffect(() => {
@@ -1645,10 +1596,7 @@ function App() {
       setIsArtifactLoading(true)
       setError(null)
 
-      invoke<string>('load_artifact_content', {
-        repositoryId: selectedRepository.repository.id,
-        relativePath: selectedArtifactPath,
-      })
+      loadArtifactContent(selectedRepository.repository.id, selectedArtifactPath)
         .then((content) => {
           if (!isCurrent) {
             return
@@ -1685,10 +1633,7 @@ function App() {
     let isCurrent = true
     setIsGeneratedHandoffLoading(true)
     setError(null)
-    invoke<string>('load_artifact_content', {
-      repositoryId: selectedRepository.repository.id,
-      relativePath: executionDisplay.handoffPath,
-    })
+    loadArtifactContent(selectedRepository.repository.id, executionDisplay.handoffPath)
       .then((content) => {
         if (isCurrent) {
           setGeneratedHandoffContent(content)

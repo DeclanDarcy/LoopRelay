@@ -2,23 +2,25 @@
 
 ## Newly Authorized
 
-- M0 Workstream 0.2 is authorized as a transport-only extraction.
-- The M0.2 objective is to move transport ownership out of `App.tsx`, not to create better APIs, introduce React Query, reorganize projections, or move state.
-- The intended dependency direction is `Backend Contracts -> src/types -> api -> hooks -> views`.
-- `src/api` may depend on `src/types`.
-- `src/types` must depend on nothing.
-- `App.tsx` may depend on `src/api`.
-- `src/api` must not depend on React.
-- Tauri `invoke(...)` calls should leave `App.tsx` and move into framework-independent API modules such as `src/api/tauriClient.ts`.
-- `EventSource` construction should leave `App.tsx` and move into a framework-independent execution event transport module such as `src/api/executionEvents.ts`.
-- M0.2 must not move loading state, selection state, projection state, render state, caching, interpretation, or frontend workflow authority.
-- M0.2 should avoid introducing a frontend service layer that interprets backend projections.
+- M0.3 should continue the bottom-up layering trajectory: test infrastructure, type authority, transport authority, then projection hooks.
+- M0.3 should begin with simple projection hooks only: `useRepositories()`, `useRepositoryWorkspace(repositoryId)`, and `useArtifactContent(repositoryId, relativePath)`.
+- Projection hooks are authorized to own projection fetch, projection refresh, loading state, error state, projection value, and a boring `refresh` function.
+- Projection hooks must not introduce frontend interpretation, derived workflow meaning, recommendations, diagnostics reinterpretation, or domain service behavior.
+- Projection hook shape should remain minimal, such as `{ data, isLoading, error, refresh }`.
+- Workflow hooks are not yet authorized for early M0.3.
+- Do not extract execution session orchestration, operational-context review/proposal workflow, continuity workflow, proposal review, or SSE orchestration during the first M0.3 slice.
+- Transport hooks are forbidden; do not create `useInvoke`, `useCommandCenterApi`, `useEventSource`, or similar transport-owning hooks.
+- Transport remains owned by `src/api`.
+- Add projection-equivalence characterization for M0.3 to prove that hook extraction changes location but not observable behavior.
+- Projection-equivalence coverage should focus on the same loading sequence, refresh sequence, error sequence, and rendered result where practical.
 
 ## Validation Expected For Next Slice
 
-- Characterization should cover repository refresh preserving request, response handling, and render outcome.
-- Characterization should cover execution event flow from event receipt to UI update, including connection open/message/reconnect/close behavior where applicable.
+- Characterization should cover repository projection behavior before and after hook extraction.
+- Characterization should cover workspace projection load/refresh equivalence.
+- Characterization should cover artifact content load equivalence.
 - `npm run lint`
 - `npm run build`
 - `npm run test`
 - `npm run test:e2e`
+- `dotnet test CommandCenter.slnx`
