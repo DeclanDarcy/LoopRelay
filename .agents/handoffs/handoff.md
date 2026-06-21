@@ -2,23 +2,23 @@
 
 ## Slice Summary
 
-Continued Milestone 0 Workstream 0.5 by performing the authorized inventory/audit of the remaining execution context preview rendering before further component extraction.
+Continued Milestone 0 Workstream 0.5 by extracting the execution context validation list into a presentation-only component.
 
 ## New State
 
-- Added `.agents/audits/m0-execution-context-preview-inventory.md`.
-- Classified the remaining execution context preview regions:
-  - validation list
-  - repository snapshot summary
-  - artifact size diagnostics
-  - artifact content previews
-- Updated `.agents/milestones/m0-frontend-foundations.md` to record the audit slice.
-- Rotated the prior handoff to `.agents/handoffs/handoff.0025.md`.
+- Added `src/CommandCenter.UI/src/features/execution/ExecutionContextValidationList.tsx`.
+- Replaced the inline validation-list JSX in `src/CommandCenter.UI/src/App.tsx` with `ExecutionContextValidationList`.
+- Added `src/CommandCenter.UI/src/test/characterization/executionContextValidationList.test.tsx`.
+- Updated `.agents/milestones/m0-frontend-foundations.md` to record the validation-list extraction and post-extraction inventory.
+- Updated `.agents/audits/m0-execution-context-preview-inventory.md` to mark validation extraction complete and recommend repository snapshot as the next candidate.
+- Rotated the previous handoff to `.agents/handoffs/handoff.0026.md`.
 
 ## Verification
 
-- Documentation-only slice; no frontend or backend test suites were run.
+- `npm run test -- executionContextValidationList`
+- `npm run lint`
+- `npm run build`
 
 ## Next Slice
 
-Extract `ExecutionContextValidationList` as the next narrow Milestone 0.5 presentation component. Keep it limited to backend-provided validation error strings, preserve the existing `No validation errors` fallback, and add characterization coverage for empty state and provided ordering.
+Extract repository snapshot rendering as a projection display component. Preserve current labels and fallbacks, keep `GitPathBucket` usage, and avoid deriving execution readiness from clean or dirty state.

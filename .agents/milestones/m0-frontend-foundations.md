@@ -170,6 +170,8 @@ Slice progress:
 - [x] Extracted execution context artifact list rendering as presentation-only `ExecutionContextArtifactList` with characterization coverage for provided order, labels, and empty-list behavior.
 - [x] Extracted execution context missing optional list rendering as presentation-only `ExecutionContextMissingOptionalList` with characterization coverage for provided order and the existing `None` fallback.
 - [x] Audited remaining execution context preview regions in `.agents/audits/m0-execution-context-preview-inventory.md` before authorizing further extraction.
+- [x] Extracted execution context validation list rendering as presentation-only `ExecutionContextValidationList` with characterization coverage for empty state, backend-provided ordering, and verbatim message text.
+- [x] Re-inventoried remaining execution context preview regions in `.agents/audits/m0-execution-context-preview-inventory.md` after validation-list extraction.
 - [x] Left feature component extraction in `App.tsx` for later Workstream 0.5 slices.
 
 ### Certification

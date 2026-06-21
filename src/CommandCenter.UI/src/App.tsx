@@ -26,6 +26,7 @@ import {
 import { ExecutionContextArtifactList } from './features/execution/ExecutionContextArtifactList'
 import { ExecutionContextMissingOptionalList } from './features/execution/ExecutionContextMissingOptionalList'
 import { ExecutionContextSummaryRows } from './features/execution/ExecutionContextSummaryRows'
+import { ExecutionContextValidationList } from './features/execution/ExecutionContextValidationList'
 import { ExecutionEventFeed } from './features/execution/ExecutionEventFeed'
 import { ExecutionHistoryPanel } from './features/execution/ExecutionHistoryPanel'
 import { ExecutionSessionPanel } from './features/execution/ExecutionSessionPanel'
@@ -2166,15 +2167,9 @@ function App() {
                       </div>
                       <div>
                         <h5>Validation</h5>
-                        {executionContext.diagnostics.validationErrors.length === 0 ? (
-                          <p>No validation errors</p>
-                        ) : (
-                          <ul>
-                            {executionContext.diagnostics.validationErrors.map((validationError) => (
-                              <li key={validationError}>{validationError}</li>
-                            ))}
-                          </ul>
-                        )}
+                        <ExecutionContextValidationList
+                          validationErrors={executionContext.diagnostics.validationErrors}
+                        />
                       </div>
                     </div>
 
