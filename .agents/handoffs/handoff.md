@@ -2,24 +2,26 @@
 
 ## Slice Summary
 
-Continued Milestone 0 Workstream 0.5 with a focused operational-context proposal review presentation extraction.
+Continued Milestone 0 Workstream 0.5 with a focused loaded operational-context proposal status extraction.
 
 ## New State
 
-- Extracted latest operational-context proposal summary rendering from `App.tsx` into `src/CommandCenter.UI/src/features/operational-context/OperationalContextProposalSummaryPanel.tsx`.
-- Extracted loaded proposal compression summary rendering from `App.tsx` into `src/CommandCenter.UI/src/features/operational-context/OperationalContextCompressionSummaryPanel.tsx`.
-- Both components are presentation-only. Proposal loading, generation, draft editing, review notes, accept/reject, promotion, semantic-change review, decision-continuity review, and comparison rendering remain in `App.tsx`.
-- Added characterization coverage in `operationalContextProposalSummaryPanel.test.tsx` and `operationalContextCompressionSummaryPanel.test.tsx`.
-- Updated `.agents/milestones/m0-frontend-foundations.md` and `.agents/audits/m0-app-responsibility-inventory.md` with the new operational-context proposal boundaries.
-- Rotated the previous handoff to `.agents/handoffs/handoff.0040.md`.
+- Extracted loaded proposal metadata/status rendering from `App.tsx` into `src/CommandCenter.UI/src/features/operational-context/OperationalContextProposalStatusPanel.tsx`.
+- The extracted component renders only backend-projected proposal id, status, review state, reviewed/promoted timestamps, archive path, stale-review reason, and promotion archive/write failure notices.
+- Proposal loading, generation, draft editing, review notes, save, accept, reject, promote, semantic-change review, decision-continuity review, and comparison rendering remain in `App.tsx`.
+- Added characterization coverage in `operationalContextProposalStatusPanel.test.tsx`.
+- Updated `.agents/milestones/m0-frontend-foundations.md` and `.agents/audits/m0-app-responsibility-inventory.md` with the new status-panel boundary.
+- Rotated the previous handoff to `.agents/handoffs/handoff.0041.md`.
 
 ## Verification
 
-- `npm run test -- operationalContextProposalSummaryPanel operationalContextCompressionSummaryPanel`
+- `npm run test -- operationalContextProposalStatusPanel`
 - `npm run lint`
 - `npm run test`
 - `npm run build`
+- `npm run test:e2e`
+- `dotnet test CommandCenter.slnx`
 
 ## Next Slice
 
-Stay in M0.5. The next high-value slice is to audit the remaining operational-context proposal review area for one more narrow presentation-only extraction. The best candidate is likely loaded proposal metadata plus stale/archive/write failure notices. Keep review toolbar/actions, proposal draft textarea, review-note textarea, accept/reject/promote/generate/load handlers, and comparison-content coordination in `App.tsx`.
+Stay in M0.5. The next high-value slice is to audit the remaining operational-context proposal review area for another narrow presentation-only extraction. Best candidates are semantic-change list rendering or decision-continuity review rendering, but only if they remain meaningful as `props -> render` with all accept/reject/promote/edit handlers removed.

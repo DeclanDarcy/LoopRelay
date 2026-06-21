@@ -2,12 +2,15 @@
 
 ## Newly Authorized
 
-- Treat `OperationalContextProposalSummaryPanel` and `OperationalContextCompressionSummaryPanel` as safe M0.5 extractions because they sit on the observation side of the proposal workflow: backend proposal/compression projections flow directly into summary display.
-- Use the same extraction test that justified `SelectedRepositorySummary`, `ArtifactMetadata`, and `ArtifactMarkdownPreview`: the component remains meaningful if generate, accept, reject, promote, edit, and note-saving actions disappear.
-- Classify remaining operational-context proposal surfaces into three groups: read-only projection, review support, and workflow authority.
-- Treat proposal summary, compression summary, proposal metadata, status display, timestamps, archive indicators, and failure notices as read-only projection surfaces and good extraction candidates when they remain `props -> render`.
-- Treat semantic changes, continuity deltas, and comparison summaries as review-support surfaces that require focused audits before extraction because they may be coupled to acceptance reasoning.
-- Keep proposal generation, proposal loading, draft ownership, review notes, accept, reject, promote, and comparison coordination centralized in `App.tsx` as workflow authority.
-- Prefer the next M0.5 slice to target proposal metadata plus stale/archive/write-failure notice surfaces rather than semantic review, decision-continuity review, or comparison rendering.
-- Apply the stricter late-M0.5 rule for proposal review extraction: if accept, reject, and promote disappear, the section must still have standalone value to be an extraction candidate.
-- Expect future late-M0.5 slices to move fewer lines while requiring more audit effort; this is acceptable evidence that remaining `App.tsx` code is increasingly legitimate coordination logic.
+- Treat the current late-M0.5 operational-context extraction sequence as valid because `OperationalContextCurrentPanel`, `OperationalContextProposalSummaryPanel`, `OperationalContextCompressionSummaryPanel`, and `OperationalContextProposalStatusPanel` all preserve the invariant `backend projection -> props -> render`.
+- Continue excluding loading, generation, drafts, review notes, acceptance, rejection, promotion, and comparison orchestration from extracted operational-context presentation components.
+- Classify the remaining operational-context proposal-review surface into read-only status/metadata, review evidence, and workflow authority.
+- Treat read-only status/metadata as mostly harvested for this area.
+- Treat review evidence as potentially harvestable only after explicit audit.
+- Use semantic-change rendering as the highest-probability next M0.5 audit target.
+- Apply the stricter semantic-change audit question: does the candidate merely render an already-derived list of changes, or does it perform grouping, classification, severity assignment, readiness interpretation, or change-significance determination?
+- Extract semantic-change rendering only if it remains pure `props -> render`; leave it in `App.tsx` or a future authority owner if it participates in acceptance interpretation, readiness determination, or decision-support logic.
+- Treat decision-continuity review as higher risk than semantic-change rendering because it directly supports workflow decisions.
+- Apply the standalone-report test to decision-continuity review: if accept/reject/promote disappear and the section remains useful as evidence display, it may be an extraction candidate; otherwise keep it centralized.
+- Consider clean `npm run test:e2e` and `dotnet test CommandCenter.slnx` after small presentation-only extractions as evidence that M0.6 characterization is doing its job.
+- Recognize that late M0.5 is approaching completion when remaining extraction candidates require authority-boundary audits rather than straightforward component movement.

@@ -40,6 +40,7 @@ import { GitPathBucket } from './features/execution/GitPathBucket'
 import { OperationalContextCompressionSummaryPanel } from './features/operational-context/OperationalContextCompressionSummaryPanel'
 import { OperationalContextCurrentPanel } from './features/operational-context/OperationalContextCurrentPanel'
 import { OperationalContextProposalSummaryPanel } from './features/operational-context/OperationalContextProposalSummaryPanel'
+import { OperationalContextProposalStatusPanel } from './features/operational-context/OperationalContextProposalStatusPanel'
 import { RepositoryDashboardItemContent } from './features/repositories/RepositoryDashboardItemContent'
 import { SelectedRepositorySummary } from './features/repositories/SelectedRepositorySummary'
 import {
@@ -1449,35 +1450,7 @@ function App() {
 
                 {operationalContextProposal ? (
                   <div className="context-artifact-previews">
-                    <div className="context-summary-grid">
-                      <span>Proposal: {operationalContextProposal.proposalId}</span>
-                      <span>Status: {operationalContextProposal.status}</span>
-                      <span>Review: {operationalContextProposal.review.reviewState}</span>
-                      <span>
-                        Reviewed: {formatDateTime(operationalContextProposal.review.reviewedAt)}
-                      </span>
-                      <span>
-                        Promoted: {formatDateTime(operationalContextProposal.promotion.promotedAt)}
-                      </span>
-                      <span>
-                        Archived: {operationalContextProposal.promotion.archivedRelativePath ?? 'None'}
-                      </span>
-                    </div>
-                    {operationalContextProposal.review.staleReason ? (
-                      <p className="empty-state">
-                        Review blocked: {operationalContextProposal.review.staleReason}
-                      </p>
-                    ) : null}
-                    {operationalContextProposal.promotion.archiveFailureReason ? (
-                      <p className="empty-state">
-                        Promotion archive failed: {operationalContextProposal.promotion.archiveFailureReason}
-                      </p>
-                    ) : null}
-                    {operationalContextProposal.promotion.writeFailureReason ? (
-                      <p className="empty-state">
-                        Promotion write failed: {operationalContextProposal.promotion.writeFailureReason}
-                      </p>
-                    ) : null}
+                    <OperationalContextProposalStatusPanel proposal={operationalContextProposal} />
                     <div className="proposal-review-toolbar">
                       <button
                         type="button"
