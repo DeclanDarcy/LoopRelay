@@ -41,15 +41,15 @@ function sessionSummary(overrides: Partial<ExecutionSessionSummary> = {}): Execu
 
 describe('execution session panel rendering characterization', () => {
   it('renders the active execution session summary fields', () => {
-    render(<ExecutionSessionPanel session={sessionSummary()} repositoryStateLabel="Executing" />)
+    render(<ExecutionSessionPanel session={sessionSummary()} />)
 
     expect(screen.getByRole('region', { name: 'Execution session' })).toBeInTheDocument()
     expect(screen.getByText('Active Execution')).toHaveClass('eyebrow')
     expect(screen.getByRole('heading', { level: 4, name: '.agents/milestones/m0.md' })).toBeInTheDocument()
     expect(screen.getByText('Session: session-alpha')).toBeInTheDocument()
     expect(screen.getByText('Provider: codex')).toBeInTheDocument()
-    expect(screen.getByText('State: Executing')).toBeInTheDocument()
-    expect(screen.getByText('Repository state: Executing')).toBeInTheDocument()
+    expect(screen.getAllByText('Executing')[0]).toHaveClass('cc-badge', 'cc-badge-warning')
+    expect(screen.getAllByText('Executing')[1]).toHaveClass('cc-badge', 'cc-badge-warning')
     expect(screen.getByText('PID: 42')).toBeInTheDocument()
     expect(screen.getByText('Executable: C:\\tools\\codex.exe')).toBeInTheDocument()
     expect(screen.getByText('Handoff: .agents/handoffs/handoff.md')).toBeInTheDocument()
@@ -70,14 +70,13 @@ describe('execution session panel rendering characterization', () => {
           pushedCommitSha: null,
           failureReason: 'Commit preparation failed',
         })}
-        repositoryStateLabel="Awaiting commit"
       />,
     )
 
     expect(screen.getByText('Execution Session')).toHaveClass('eyebrow')
     expect(screen.getByRole('heading', { level: 4, name: 'Selected milestone' })).toBeInTheDocument()
     expect(screen.getByText('Provider: Unknown')).toBeInTheDocument()
-    expect(screen.getByText('Repository state: Awaiting commit')).toBeInTheDocument()
+    expect(screen.getByText('Awaiting commit')).toHaveClass('cc-badge', 'cc-badge-warning')
     expect(screen.getByText('Duration: Not recorded')).toBeInTheDocument()
     expect(screen.getByText('PID: Not recorded')).toBeInTheDocument()
     expect(screen.getByText('Executable: Not recorded')).toBeInTheDocument()

@@ -1,40 +1,11 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { RepositoryDashboardItemContent } from '../../features/repositories/RepositoryDashboardItemContent'
-import type {
-  ExecutionReadiness,
-  ExecutionSessionSummary,
-  RepositoryAvailability,
-  RepositoryDashboardProjection,
-  RepositoryExecutionState,
-} from '../../types'
+import type { ExecutionSessionSummary, RepositoryDashboardProjection } from '../../types'
 
 afterEach(() => {
   cleanup()
 })
-
-const availabilityLabels: Record<RepositoryAvailability, string> = {
-  Available: 'Available',
-  Missing: 'Missing',
-  AccessDenied: 'Access denied',
-}
-
-const readinessLabels: Record<ExecutionReadiness, string> = {
-  MissingPlan: 'Missing plan',
-  MissingMilestones: 'Missing milestones',
-  Ready: 'Ready',
-}
-
-const executionStateLabels: Record<RepositoryExecutionState, string> = {
-  Ready: 'Ready',
-  Executing: 'Executing',
-  AwaitingAcceptance: 'Awaiting acceptance',
-  Accepted: 'Accepted',
-  AwaitingCommit: 'Awaiting commit',
-  AwaitingPush: 'Awaiting push',
-  Failed: 'Failed',
-  Cancelled: 'Cancelled',
-}
 
 function executionSummary(overrides: Partial<ExecutionSessionSummary> = {}): ExecutionSessionSummary {
   return {
@@ -99,14 +70,7 @@ function repositoryDashboard(
 }
 
 function renderItem(repository: RepositoryDashboardProjection) {
-  render(
-    <RepositoryDashboardItemContent
-      repository={repository}
-      availabilityLabels={availabilityLabels}
-      readinessLabels={readinessLabels}
-      executionStateLabels={executionStateLabels}
-    />,
-  )
+  render(<RepositoryDashboardItemContent repository={repository} />)
 }
 
 describe('repository dashboard item content rendering characterization', () => {
@@ -115,10 +79,10 @@ describe('repository dashboard item content rendering characterization', () => {
 
     expect(screen.getByText('AlphaRepo')).toHaveClass('repository-name')
     expect(screen.getByText('C:/work/AlphaRepo')).toHaveClass('repository-path')
-    expect(screen.getByText('Available')).toHaveClass('availability', 'availability-available')
+    expect(screen.getByText('Available')).toHaveClass('cc-badge', 'cc-badge-success')
     const readyLabels = screen.getAllByText('Ready')
-    expect(readyLabels[0]).toHaveClass('readiness', 'readiness-ready')
-    expect(readyLabels[1]).toHaveClass('execution-state', 'execution-state-ready')
+    expect(readyLabels[0]).toHaveClass('cc-badge', 'cc-badge-success')
+    expect(readyLabels[1]).toHaveClass('cc-badge', 'cc-badge-success')
     expect(screen.getByText('3 milestones')).toHaveClass('repository-metadata')
     expect(screen.getByText('Handoff present')).toBeInTheDocument()
     expect(screen.getByText('Decisions missing')).toBeInTheDocument()
@@ -165,9 +129,9 @@ describe('repository dashboard item content rendering characterization', () => {
       }),
     )
 
-    expect(screen.getByText('Access denied')).toHaveClass('availability-accessdenied')
-    expect(screen.getByText('Missing plan')).toHaveClass('readiness-missingplan')
-    expect(screen.getByText('Failed')).toHaveClass('execution-state-failed')
+    expect(screen.getByText('Access denied')).toHaveClass('cc-badge', 'cc-badge-danger')
+    expect(screen.getByText('Missing plan')).toHaveClass('cc-badge', 'cc-badge-warning')
+    expect(screen.getByText('Failed')).toHaveClass('cc-badge', 'cc-badge-danger')
     expect(screen.getByText('Handoff missing')).toBeInTheDocument()
     expect(screen.getByText('Decisions missing')).toBeInTheDocument()
     expect(screen.getByText('Context missing')).toBeInTheDocument()

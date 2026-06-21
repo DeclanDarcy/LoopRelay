@@ -1,12 +1,13 @@
 import { formatDateTime, formatDuration } from '../../lib'
+import { StatusBadge } from '../../components/design'
+import { executionSessionStatus, repositoryExecutionStatus } from '../../lib/status'
 import type { ExecutionSessionSummary } from '../../types'
 
 type ExecutionSessionPanelProps = {
   session: ExecutionSessionSummary
-  repositoryStateLabel: string
 }
 
-export function ExecutionSessionPanel({ session, repositoryStateLabel }: ExecutionSessionPanelProps) {
+export function ExecutionSessionPanel({ session }: ExecutionSessionPanelProps) {
   return (
     <section className="execution-session-panel" aria-label="Execution session">
       <div>
@@ -16,8 +17,12 @@ export function ExecutionSessionPanel({ session, repositoryStateLabel }: Executi
       <div className="execution-session-grid">
         <span>Session: {session.sessionId}</span>
         <span>Provider: {session.providerName || 'Unknown'}</span>
-        <span>State: {session.state}</span>
-        <span>Repository state: {repositoryStateLabel}</span>
+        <span>
+          State: <StatusBadge status={executionSessionStatus[session.state]} />
+        </span>
+        <span>
+          Repository state: <StatusBadge status={repositoryExecutionStatus[session.repositoryState]} />
+        </span>
         <span>Started: {formatDateTime(session.startedAt)}</span>
         <span>Completed: {formatDateTime(session.completedAt)}</span>
         <span>Duration: {formatDuration(session.duration)}</span>

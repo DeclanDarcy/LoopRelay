@@ -25,6 +25,7 @@ import {
 } from './api'
 import { ArtifactMarkdownPreview } from './features/artifacts/ArtifactMarkdownPreview'
 import { ArtifactMetadata } from './features/artifacts/ArtifactMetadata'
+import { StatusBadge } from './components/design'
 import { ContinuityDiagnosticsPanel } from './features/continuity/ContinuityDiagnosticsPanel'
 import { ExecutionContextArtifactDiagnosticsList } from './features/execution/ExecutionContextArtifactDiagnosticsList'
 import { ExecutionContextArtifactContentPreviews } from './features/execution/ExecutionContextArtifactContentPreviews'
@@ -71,42 +72,17 @@ import {
   getExecutionWorkflowSteps,
   getOperationalContextSectionItems,
 } from './lib'
+import { executionReadinessStatus, repositoryExecutionStatus } from './lib/status'
 import { useShellState } from './state/shellState'
 import type {
   CommitPreparation,
-  ExecutionReadiness,
   ExecutionSessionSummary,
   OperationalContextCompressionSummary,
   OperationalContextProposal,
   Repository,
-  RepositoryAvailability,
-  RepositoryExecutionState,
   RepositoryWorkspaceProjection,
 } from './types'
 import './App.css'
-
-const availabilityLabels: Record<RepositoryAvailability, string> = {
-  Available: 'Available',
-  Missing: 'Missing',
-  AccessDenied: 'Access denied',
-}
-
-const readinessLabels: Record<ExecutionReadiness, string> = {
-  MissingPlan: 'Missing plan',
-  MissingMilestones: 'Missing milestones',
-  Ready: 'Ready',
-}
-
-const executionStateLabels: Record<RepositoryExecutionState, string> = {
-  Ready: 'Ready',
-  Executing: 'Executing',
-  AwaitingAcceptance: 'Awaiting acceptance',
-  Accepted: 'Accepted',
-  AwaitingCommit: 'Awaiting commit',
-  AwaitingPush: 'Awaiting push',
-  Failed: 'Failed',
-  Cancelled: 'Cancelled',
-}
 
 const decisionSemanticChangeTypes = new Set([
   'ImportantDecisionIntroduced',
@@ -417,7 +393,7 @@ function App() {
     }
 
     if (workspace.readiness !== 'Ready') {
-      return `Repository readiness is ${readinessLabels[workspace.readiness]}.`
+      return `Repository readiness is ${executionReadinessStatus[workspace.readiness].label}.`
     }
 
     if (!selectedMilestonePath) {
@@ -1326,12 +1302,7 @@ function App() {
                     className={`repository-item${isSelected ? ' selected' : ''}`}
                     onClick={() => selectRepository(entry.repository.id)}
                   >
-                    <RepositoryDashboardItemContent
-                      repository={entry}
-                      availabilityLabels={availabilityLabels}
-                      readinessLabels={readinessLabels}
-                      executionStateLabels={executionStateLabels}
-                    />
+                    <RepositoryDashboardItemContent repository={entry} />
                   </button>
                 )
               })}
@@ -1361,9 +1332,6 @@ function App() {
                 workspace={workspace}
                 executionDisplay={executionDisplay}
                 currentExecutionState={currentExecutionState}
-                availabilityLabels={availabilityLabels}
-                readinessLabels={readinessLabels}
-                executionStateLabels={executionStateLabels}
               />
 
               <section className="execution-context-panel" aria-label="Current understanding">
@@ -1601,9 +1569,7 @@ function App() {
                     <p className="eyebrow">Execution Workspace</p>
                     <h4>{executionDisplay?.milestonePath ?? selectedMilestonePath ?? 'Select a milestone'}</h4>
                   </div>
-                  <span className={`execution-state execution-state-${currentExecutionState.toLowerCase()}`}>
-                    {executionStateLabels[currentExecutionState]}
-                  </span>
+                  <StatusBadge status={repositoryExecutionStatus[currentExecutionState]} />
                 </div>
 
                 <ExecutionWorkflowRail steps={executionWorkflowSteps} />
@@ -1706,7 +1672,7 @@ function App() {
                   <div className="git-status-header">
                     <div>
                       <p className="eyebrow">Git Workflow</p>
-                      <h4>{executionStateLabels[currentExecutionState]}</h4>
+                      <h4>{repositoryExecutionStatus[currentExecutionState].label}</h4>
                     </div>
                     <button
                       type="button"
@@ -1825,16 +1791,10 @@ function App() {
               ) : null}
 
               {executionDisplay ? (
-                <ExecutionSessionPanel
-                  session={executionDisplay}
-                  repositoryStateLabel={executionStateLabels[executionDisplay.repositoryState]}
-                />
+                <ExecutionSessionPanel session={executionDisplay} />
               ) : null}
 
-              <ExecutionHistoryPanel
-                sessions={selectedExecutionHistory}
-                repositoryStateLabels={executionStateLabels}
-              />
+              <ExecutionHistoryPanel sessions={selectedExecutionHistory} />
 
               {canReviewGeneratedHandoff && executionDisplay ? (
                 <section className="handoff-review-panel" aria-label="Generated handoff review">
@@ -1844,7 +1804,7 @@ function App() {
                       <h4>{executionDisplay.handoffPath}</h4>
                     </div>
                     <div className="handoff-review-metadata">
-                      <span>State: {executionStateLabels[executionDisplay.repositoryState]}</span>
+                      <span>State: {repositoryExecutionStatus[executionDisplay.repositoryState].label}</span>
                       <span>Completed: {formatDateTime(executionDisplay.completedAt)}</span>
                       <span>Duration: {formatDuration(executionDisplay.duration)}</span>
                       <span>Decision: Awaiting review</span>

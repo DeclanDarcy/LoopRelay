@@ -6,7 +6,7 @@
 - [x] Workstream 1.1: Token System
 - [x] Workstream 1.2: Typography
 - [x] Workstream 1.3: Shared Primitives
-- [ ] Workstream 1.4: Status Language
+- [x] Workstream 1.4: Status Language
 - [ ] Workstream 1.5: Apply Theme Without Layout Migration
 - [ ] Certification complete
 
@@ -99,7 +99,7 @@ Cover:
 
 ### Certification
 
-- [ ] Equivalent states render with the same label, color, and badge style across repository list, header, workspace, execution, operational context, and continuity.
+- [x] Equivalent states render with the same label, color, and badge style across repository list, header, workspace, execution, operational context, and continuity.
 
 ## Workstream 1.5: Apply Theme Without Layout Migration
 
@@ -119,5 +119,7 @@ Cover:
 - 2026-06-21: Added render-only design primitives under `src/components/design`.
 - 2026-06-21: Added `src/lib/status.ts` with centralized status presentation metadata for the projected status types.
 - 2026-06-21: Converted the existing `App.css` surfaces from hard-coded light colors to tokens without changing hierarchy, navigation, workflow ownership, or `App.tsx` behavior.
-- 2026-06-21: Status helper adoption in existing render branches remains pending; until that is wired, Workstream 1.4 certification and Milestone 1.5 remain open.
+- 2026-06-21: Status helper adoption in existing render branches remained pending after the initial tokenization slice.
 - 2026-06-21: Verification passed: `npm run lint`, `npm run build`, `npm run test`, and `npm run test:e2e`.
+- 2026-06-21: Adopted centralized status metadata and `StatusBadge` across repository dashboard rows, selected repository summary, execution workspace/session/history surfaces, operational-context proposal review status, and continuity diagnostics. Workstream 1.4 is complete.
+- 2026-06-21: Verification passed after status adoption: `npm run lint`, `npm run test`, `npm run build`, `npm run test:e2e`, and `dotnet test CommandCenter.slnx`.

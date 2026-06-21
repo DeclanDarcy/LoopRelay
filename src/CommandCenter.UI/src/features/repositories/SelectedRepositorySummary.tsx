@@ -1,8 +1,12 @@
 import { formatDateTime, formatDuration } from '../../lib'
+import { StatusBadge } from '../../components/design'
+import {
+  executionReadinessStatus,
+  repositoryAvailabilityStatus,
+  repositoryExecutionStatus,
+} from '../../lib/status'
 import type {
-  ExecutionReadiness,
   ExecutionSessionSummary,
-  RepositoryAvailability,
   RepositoryDashboardProjection,
   RepositoryExecutionState,
   RepositoryWorkspaceProjection,
@@ -13,9 +17,6 @@ type SelectedRepositorySummaryProps = {
   workspace: RepositoryWorkspaceProjection | null
   executionDisplay: ExecutionSessionSummary | null
   currentExecutionState: RepositoryExecutionState
-  availabilityLabels: Record<RepositoryAvailability, string>
-  readinessLabels: Record<ExecutionReadiness, string>
-  executionStateLabels: Record<RepositoryExecutionState, string>
 }
 
 export function SelectedRepositorySummary({
@@ -23,10 +24,9 @@ export function SelectedRepositorySummary({
   workspace,
   executionDisplay,
   currentExecutionState,
-  availabilityLabels,
-  readinessLabels,
-  executionStateLabels,
 }: SelectedRepositorySummaryProps) {
+  const readiness = workspace?.readiness ?? repository.readiness
+
   return (
     <>
       <div className="details-title-row">
@@ -34,9 +34,7 @@ export function SelectedRepositorySummary({
           <p className="eyebrow">Selected repository</p>
           <h3>{repository.repository.name}</h3>
         </div>
-        <span className={`availability availability-${repository.availability.toLowerCase()}`}>
-          {availabilityLabels[repository.availability]}
-        </span>
+        <StatusBadge status={repositoryAvailabilityStatus[repository.availability]} />
       </div>
 
       <dl className="details-list">
@@ -46,11 +44,15 @@ export function SelectedRepositorySummary({
         </div>
         <div>
           <dt>Readiness</dt>
-          <dd>{readinessLabels[workspace?.readiness ?? repository.readiness]}</dd>
+          <dd>
+            <StatusBadge status={executionReadinessStatus[readiness]} />
+          </dd>
         </div>
         <div>
           <dt>Execution</dt>
-          <dd>{executionStateLabels[currentExecutionState]}</dd>
+          <dd>
+            <StatusBadge status={repositoryExecutionStatus[currentExecutionState]} />
+          </dd>
         </div>
         {executionDisplay ? (
           <>

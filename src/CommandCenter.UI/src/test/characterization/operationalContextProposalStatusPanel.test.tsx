@@ -69,8 +69,9 @@ describe('operational context proposal status panel rendering characterization',
     renderPanel()
 
     expect(screen.getByText('Proposal: proposal-42')).toBeInTheDocument()
-    expect(screen.getByText('Status: Accepted')).toBeInTheDocument()
-    expect(screen.getByText('Review: Accepted')).toBeInTheDocument()
+    const acceptedBadges = screen.getAllByText('Accepted')
+    expect(acceptedBadges[0]).toHaveClass('cc-badge', 'cc-badge-done')
+    expect(acceptedBadges[1]).toHaveClass('cc-badge', 'cc-badge-done')
     expect(screen.getByText('Reviewed: 1/2/2026, 8:05:06 PM')).toBeInTheDocument()
     expect(screen.getByText('Promoted: 1/3/2026, 9:06:07 PM')).toBeInTheDocument()
     expect(screen.getByText('Archived: .agents/operational_context.0001.md')).toBeInTheDocument()

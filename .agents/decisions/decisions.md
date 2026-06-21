@@ -2,17 +2,13 @@
 
 ## Newly Authorized
 
-- Treat the current Milestone 1 continuation as clean and aligned with the certified Milestone 0 closure conditions.
-- Keep Milestone 1 changes constrained to tokens, theme, base styling, render-only primitives, presentation-only status metadata, and CSS tokenization.
-- Continue to prohibit movement of workflow authority, navigation authority, draft authority, readiness authority, mutation authority, or projection authority during Milestone 1.
-- Audit `src/lib/status.ts` carefully so it remains presentation metadata only.
-- Allow status helpers to answer how a status renders: label, tone, badge style, icon, or appearance.
-- Do not allow `src/lib/status.ts` or design primitives to answer workflow questions such as readiness for promotion, commit, push, accept, or reject.
-- For Workstream 1.4, adopt status metadata and primitives into existing render branches before evaluating broader duplication or refactors.
-- Replace existing badges first while leaving readiness and workflow computation exactly where it currently lives.
-- Replace panels, cards, and surfaces only as presentation wrappers without changing hierarchy.
-- Replace spacing and layout primitives only when the render tree and workflow behavior remain equivalent.
-- Do not consolidate repository status, execution status, proposal status, and continuity status into a single workflow-aware status engine during Milestone 1.
-- Do not create workflow-aware design components such as proposal or readiness cards that interpret domain state.
-- Do not move readiness decisions into buttons or primitives; existing workflow code must continue to provide disabled/readiness inputs.
-- Certify Workstream 1.4 with the question: if every design primitive were replaced by plain elements, workflow behavior would remain identical.
+- Treat Workstream 1.4 as successful because status standardization did not centralize workflow meaning.
+- Continue to define `src/lib/status.ts` as presentation-only ownership for labels, tones, and presentation metadata.
+- Continue to prohibit `src/lib/status.ts` from owning readiness, promotion eligibility, acceptance logic, execution authority, or workflow decisions.
+- Treat the current layering as `Workflow Authority -> Domain Status Values -> status.ts -> StatusBadge`.
+- Proceed with Milestone 1 Workstream 1.5 as a render-only primitive adoption pass.
+- Treat primitive adoption as a mechanical replacement exercise that preserves existing `onClick`, `disabled`, and visibility conditions exactly.
+- Prioritize primitive adoption in this order where mappings are clean: `Panel`, `SectionHeader`, `EmptyState`, `Metric`, `Table`, then `Button`.
+- Keep `Button` visual, interaction, and accessibility focused only; do not move workflow semantics, readiness rules, or permission checks into it.
+- Certify Workstream 1.5 with the question: can every primitive be replaced with a `div`, `button`, or `table` without changing application behavior?
+- Continue treating any proposal that moves workflow decisions into primitives as out of scope for Milestone 1.

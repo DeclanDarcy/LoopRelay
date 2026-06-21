@@ -1,3 +1,5 @@
+import { StatusBadge } from '../../components/design'
+import { continuityWarningStatus } from '../../lib/status'
 import type { ContinuityDiagnostics } from '../../types'
 
 type ContinuityDiagnosticsPanelProps = {
@@ -25,6 +27,9 @@ export function ContinuityDiagnosticsPanel({
         <span>Risks lost: {diagnostics.activeRiskTrend.lostCount}</span>
         <span>Decisions lost: {diagnostics.decisionTrend.lostCount}</span>
         <span>Rationale lost: {diagnostics.rationaleTrend.lostCount}</span>
+        <span>
+          Continuity: <StatusBadge status={continuityWarningStatus(diagnostics)} />
+        </span>
       </div>
 
       <div className="context-columns">

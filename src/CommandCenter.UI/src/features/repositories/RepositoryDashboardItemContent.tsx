@@ -1,37 +1,24 @@
 import { formatDateTime } from '../../lib'
-import type {
-  ExecutionReadiness,
-  RepositoryAvailability,
-  RepositoryDashboardProjection,
-  RepositoryExecutionState,
-} from '../../types'
+import { StatusBadge } from '../../components/design'
+import {
+  executionReadinessStatus,
+  repositoryAvailabilityStatus,
+  repositoryExecutionStatus,
+} from '../../lib/status'
+import type { RepositoryDashboardProjection } from '../../types'
 
 type RepositoryDashboardItemContentProps = {
   repository: RepositoryDashboardProjection
-  availabilityLabels: Record<RepositoryAvailability, string>
-  readinessLabels: Record<ExecutionReadiness, string>
-  executionStateLabels: Record<RepositoryExecutionState, string>
 }
 
-export function RepositoryDashboardItemContent({
-  repository,
-  availabilityLabels,
-  readinessLabels,
-  executionStateLabels,
-}: RepositoryDashboardItemContentProps) {
+export function RepositoryDashboardItemContent({ repository }: RepositoryDashboardItemContentProps) {
   return (
     <>
       <span className="repository-name">{repository.repository.name}</span>
       <span className="repository-path">{repository.repository.path}</span>
-      <span className={`availability availability-${repository.availability.toLowerCase()}`}>
-        {availabilityLabels[repository.availability]}
-      </span>
-      <span className={`readiness readiness-${repository.readiness.toLowerCase()}`}>
-        {readinessLabels[repository.readiness]}
-      </span>
-      <span className={`execution-state execution-state-${repository.executionState.toLowerCase()}`}>
-        {executionStateLabels[repository.executionState]}
-      </span>
+      <StatusBadge status={repositoryAvailabilityStatus[repository.availability]} />
+      <StatusBadge status={executionReadinessStatus[repository.readiness]} />
+      <StatusBadge status={repositoryExecutionStatus[repository.executionState]} />
       <span className="repository-metadata">{repository.milestoneCount} milestones</span>
       {repository.executionSummary ? (
         <>

@@ -1,4 +1,9 @@
 import { formatDateTime } from '../../lib'
+import { StatusBadge } from '../../components/design'
+import {
+  operationalContextProposalStatus,
+  operationalContextReviewStatus,
+} from '../../lib/status'
 import type { OperationalContextProposal } from '../../types'
 
 type OperationalContextProposalStatusPanelProps = {
@@ -12,8 +17,12 @@ export function OperationalContextProposalStatusPanel({
     <>
       <div className="context-summary-grid">
         <span>Proposal: {proposal.proposalId}</span>
-        <span>Status: {proposal.status}</span>
-        <span>Review: {proposal.review.reviewState}</span>
+        <span>
+          Status: <StatusBadge status={operationalContextProposalStatus[proposal.status]} />
+        </span>
+        <span>
+          Review: <StatusBadge status={operationalContextReviewStatus[proposal.review.reviewState]} />
+        </span>
         <span>Reviewed: {formatDateTime(proposal.review.reviewedAt)}</span>
         <span>Promoted: {formatDateTime(proposal.promotion.promotedAt)}</span>
         <span>Archived: {proposal.promotion.archivedRelativePath ?? 'None'}</span>

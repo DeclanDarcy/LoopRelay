@@ -1,12 +1,13 @@
 import { formatDateTime, formatDuration } from '../../lib'
-import type { ExecutionSessionSummary, RepositoryExecutionState } from '../../types'
+import { StatusBadge } from '../../components/design'
+import { repositoryExecutionStatus } from '../../lib/status'
+import type { ExecutionSessionSummary } from '../../types'
 
 type ExecutionHistoryPanelProps = {
   sessions: ExecutionSessionSummary[]
-  repositoryStateLabels: Record<RepositoryExecutionState, string>
 }
 
-export function ExecutionHistoryPanel({ sessions, repositoryStateLabels }: ExecutionHistoryPanelProps) {
+export function ExecutionHistoryPanel({ sessions }: ExecutionHistoryPanelProps) {
   if (sessions.length === 0) {
     return null
   }
@@ -21,7 +22,9 @@ export function ExecutionHistoryPanel({ sessions, repositoryStateLabels }: Execu
         {sessions.map((session) => (
           <div className="execution-history-row" key={session.sessionId}>
             <span>{session.milestonePath ?? 'Milestone not recorded'}</span>
-            <small>{repositoryStateLabels[session.repositoryState]}</small>
+            <small>
+              <StatusBadge status={repositoryExecutionStatus[session.repositoryState]} />
+            </small>
             <small>Started {formatDateTime(session.startedAt)}</small>
             <small>Duration {formatDuration(session.duration)}</small>
             <small>Commit {session.commitSha ?? 'Not recorded'}</small>

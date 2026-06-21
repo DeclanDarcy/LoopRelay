@@ -1,22 +1,11 @@
 import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { ExecutionHistoryPanel } from '../../features/execution/ExecutionHistoryPanel'
-import type { ExecutionSessionSummary, RepositoryExecutionState } from '../../types'
+import type { ExecutionSessionSummary } from '../../types'
 
 afterEach(() => {
   cleanup()
 })
-
-const repositoryStateLabels: Record<RepositoryExecutionState, string> = {
-  Ready: 'Ready',
-  Executing: 'Executing',
-  AwaitingAcceptance: 'Awaiting acceptance',
-  Accepted: 'Accepted',
-  AwaitingCommit: 'Awaiting commit',
-  AwaitingPush: 'Awaiting push',
-  Failed: 'Failed',
-  Cancelled: 'Cancelled',
-}
 
 function sessionSummary(overrides: Partial<ExecutionSessionSummary> = {}): ExecutionSessionSummary {
   return {
@@ -52,7 +41,7 @@ function sessionSummary(overrides: Partial<ExecutionSessionSummary> = {}): Execu
 
 describe('execution history panel rendering characterization', () => {
   it('omits the panel when no sessions are provided', () => {
-    render(<ExecutionHistoryPanel sessions={[]} repositoryStateLabels={repositoryStateLabels} />)
+    render(<ExecutionHistoryPanel sessions={[]} />)
 
     expect(screen.queryByRole('region', { name: 'Execution history' })).not.toBeInTheDocument()
   })
@@ -78,7 +67,6 @@ describe('execution history panel rendering characterization', () => {
             pushedAt: null,
           }),
         ]}
-        repositoryStateLabels={repositoryStateLabels}
       />,
     )
 

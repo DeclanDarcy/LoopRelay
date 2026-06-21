@@ -2,9 +2,7 @@ import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { SelectedRepositorySummary } from '../../features/repositories/SelectedRepositorySummary'
 import type {
-  ExecutionReadiness,
   ExecutionSessionSummary,
-  RepositoryAvailability,
   RepositoryDashboardProjection,
   RepositoryExecutionState,
   RepositoryWorkspaceProjection,
@@ -13,29 +11,6 @@ import type {
 afterEach(() => {
   cleanup()
 })
-
-const availabilityLabels: Record<RepositoryAvailability, string> = {
-  Available: 'Available',
-  Missing: 'Missing',
-  AccessDenied: 'Access denied',
-}
-
-const readinessLabels: Record<ExecutionReadiness, string> = {
-  MissingPlan: 'Missing plan',
-  MissingMilestones: 'Missing milestones',
-  Ready: 'Ready',
-}
-
-const executionStateLabels: Record<RepositoryExecutionState, string> = {
-  Ready: 'Ready',
-  Executing: 'Executing',
-  AwaitingAcceptance: 'Awaiting acceptance',
-  Accepted: 'Accepted',
-  AwaitingCommit: 'Awaiting commit',
-  AwaitingPush: 'Awaiting push',
-  Failed: 'Failed',
-  Cancelled: 'Cancelled',
-}
 
 function executionSummary(overrides: Partial<ExecutionSessionSummary> = {}): ExecutionSessionSummary {
   return {
@@ -192,9 +167,6 @@ function renderSummary({
       workspace={workspace}
       executionDisplay={executionDisplay}
       currentExecutionState={currentExecutionState}
-      availabilityLabels={availabilityLabels}
-      readinessLabels={readinessLabels}
-      executionStateLabels={executionStateLabels}
     />,
   )
 }
@@ -205,7 +177,7 @@ describe('selected repository summary rendering characterization', () => {
 
     expect(screen.getByText('Selected repository')).toHaveClass('eyebrow')
     expect(screen.getByRole('heading', { level: 3, name: 'AlphaRepo' })).toBeInTheDocument()
-    expect(screen.getByText('Available')).toHaveClass('availability', 'availability-available')
+    expect(screen.getByText('Available')).toHaveClass('cc-badge', 'cc-badge-success')
     expect(screen.getByText('Path').nextElementSibling).toHaveTextContent('C:/work/AlphaRepo')
     expect(screen.getByText('Readiness').nextElementSibling).toHaveTextContent('Ready')
     expect(screen.getByText('Execution').nextElementSibling).toHaveTextContent('Ready')
