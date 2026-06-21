@@ -2,19 +2,29 @@
 
 ## Newly Authorized
 
-- Treat the execution-context preview decomposition effort as complete unless a new audit produces unexpectedly clean `props -> render` candidates.
-- Preserve the current burden of proof: remaining execution-context code in `App.tsx` is presumed intentional until demonstrated otherwise.
-- Do not continue extracting execution-context preview surfaces automatically.
-- Treat M0.5 execution-context preview work as complete because the extracted components reduced presentation density without moving workflow, readiness, commit, promotion, or execution authority.
-- Make the next high-value activity authority inventory and characterization rather than further decomposition.
-- Audit remaining large `App.tsx` regions by responsibility category:
-  - Category A: pure presentation, candidate for extraction.
-  - Category B: presentation plus interpretation, likely retain.
-  - Category C: workflow coordination, must retain.
-  - Category D: authority decisions, must retain.
-- Prefer Workstream 0.6 characterization around milestone selection, proposal gating, commit gating, and review gating.
-- Shift the key M0 question from `Can this move?` to `What must never change?`.
+- Treat the latest milestone-selection characterization as architectural boundary protection, not ordinary UI behavior coverage.
+- Preserve the certified boundary that milestone selection is navigation state while execution-context preview is an explicit backend workflow action.
+- Continue prioritizing governance-boundary characterization over further component extraction for the next M0 slices.
+- Treat commit preparation, commit scope selection, commit readiness, and push gating as the next highest-risk certification targets.
+- Characterize commit workflow boundaries before touching structure.
 
-## Next Authorized Slice
+## Suggested Characterization Sequence
 
-Start with an authority inventory of remaining large `App.tsx` regions, then add focused M0.6 characterization for the highest-risk authority boundaries instead of continuing extraction-first work.
+1. Commit preparation trigger:
+   - Editing commit message must not prepare commit.
+   - Selecting files must not prepare commit.
+   - Only the explicit prepare action prepares commit.
+2. Commit scope authority:
+   - Scope selection remains user driven.
+   - Frontend must not silently expand or shrink commit scope.
+3. Commit readiness:
+   - Readiness must remain tied to existing authority.
+   - Presentation helpers must not become readiness authority.
+4. Push gating:
+   - Push availability follows existing authority.
+   - UI state changes alone must not enable push.
+
+## Avoid
+
+- Do not resume extraction-first work immediately.
+- Do not move JSX merely to continue decomposition when the higher-value remaining work is authority characterization, boundary certification, and workflow regression protection.

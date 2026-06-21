@@ -70,3 +70,8 @@ Captured after extracting `useGitStatus(repositoryId)` and updated during the M0
 - Generated handoff content loading remains in `App.tsx`.
 - Direct workspace refresh calls remain in workflow action handlers where backend mutation results need immediate reconciliation.
 - Commit preparation remains in `App.tsx` because it is workflow-coupled and not part of the read-only git status projection.
+
+## Characterization Added After Inventory
+
+- Milestone selection now has app-level characterization: selecting a different milestone does not call `preview_execution_context`, and the backend preview command is called only by the explicit `Build Execution Context` button with the selected repository and milestone path.
+- This protects the boundary that milestone selection is client navigation state while context preview construction remains a backend-owned projection build.

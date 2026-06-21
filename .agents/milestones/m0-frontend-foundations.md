@@ -197,7 +197,7 @@ Minimum scenarios:
 - [x] Markdown preview rendering preserves current headings, lists, paragraphs, fenced code blocks, and literal unsupported markdown behavior.
 - [x] Execution workflow rail mapping preserves current ready, previewed, executing, review, commit, push, completed, and failed display states.
 - [x] Operational-context section parsing preserves h2 section matching, list ordering, trimming, flattened nested bullets, section omission, and empty-state behavior.
-- [ ] Milestone selection builds execution context only when requested.
+- [x] Milestone selection builds execution context only when requested.
 - [x] Execution events merge by sequence and preserve ordering.
 - [x] SSE cleanup occurs when session changes or unmounts.
 - [ ] Proposal generation, load, edit, accept, reject, and promote keep current gating.
@@ -220,3 +220,5 @@ Use `?mock=workspace-certification` to certify all repository execution states:
 - [ ] `npm run lint`, `npm run build`, `npm run test`, `npm run test:e2e`, and `dotnet test CommandCenter.slnx` pass.
 
 Closure audit note: M0 already has boundary characterization for transport, shell navigation, extracted projection hooks, execution event cleanup/order, certification fixture state coverage, and artifact-draft projection isolation. Remaining workflow characterization should be added alongside Workstream 0.5 decomposition and feature workspace migration.
+
+Slice note: `app.smoke.test.tsx` now characterizes milestone selection as navigation state only. Changing the selected milestone does not invoke `preview_execution_context`; only the explicit `Build Execution Context` action invokes the backend preview command for the selected repository and milestone.

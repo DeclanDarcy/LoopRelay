@@ -163,4 +163,66 @@ describe('workspace certification mock', () => {
       ),
     ).toBe(true)
   })
+
+  it('builds execution context only after an explicit request for the selected milestone', async () => {
+    installWorkspaceCertificationMock()
+
+    const state = window.__COMMAND_CENTER_MOCK_STATE__
+    expect(state).toBeDefined()
+    if (!state) {
+      return
+    }
+
+    const alternateMilestone = {
+      relativePath: '.agents/milestones/m6.md',
+      name: 'm6.md',
+      type: 'Milestone' as const,
+      family: 'Milestone' as const,
+      versionKind: 'Current' as const,
+    }
+    state.workspaces['repo-alpha'].artifactInventory.milestones.push(alternateMilestone)
+    state.workspaces['repo-alpha'].milestoneCount += 1
+    state.content[alternateMilestone.relativePath] = '# M6\n\nContinuity milestone.'
+
+    const invoke = window.__TAURI_INTERNALS__?.invoke
+    expect(invoke).toBeDefined()
+    if (!invoke) {
+      return
+    }
+
+    const invokeSpy = vi.fn(invoke)
+    window.__TAURI_INTERNALS__!.invoke = invokeSpy
+
+    render(<App />)
+
+    const milestoneSelector = await screen.findByRole('combobox')
+    await waitFor(() => expect(milestoneSelector).toHaveValue('.agents/milestones/m5.md'))
+    expect(invokeSpy.mock.calls.some(([command]) => command === 'preview_execution_context')).toBe(false)
+
+    fireEvent.change(milestoneSelector, {
+      target: { value: alternateMilestone.relativePath },
+    })
+
+    await waitFor(() => expect(milestoneSelector).toHaveValue(alternateMilestone.relativePath))
+    await new Promise((resolve) => window.setTimeout(resolve, 0))
+    expect(invokeSpy.mock.calls.some(([command]) => command === 'preview_execution_context')).toBe(false)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Build Execution Context' }))
+
+    await waitFor(() =>
+      expect(
+        invokeSpy.mock.calls.some(
+          ([command, args]) =>
+            command === 'preview_execution_context' &&
+            typeof args === 'object' &&
+            args !== null &&
+            'repositoryId' in args &&
+            args.repositoryId === 'repo-alpha' &&
+            'milestonePath' in args &&
+            args.milestonePath === alternateMilestone.relativePath,
+        ),
+      ).toBe(true),
+    )
+    expect(await screen.findByText('Continuity milestone.')).toBeInTheDocument()
+  })
 })
