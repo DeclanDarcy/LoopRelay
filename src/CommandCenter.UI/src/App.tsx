@@ -23,6 +23,7 @@ import {
   selectRepositoryDirectory,
   startExecution as startExecutionCommand,
 } from './api'
+import { ExecutionContextArtifactList } from './features/execution/ExecutionContextArtifactList'
 import { ExecutionContextSummaryRows } from './features/execution/ExecutionContextSummaryRows'
 import { ExecutionEventFeed } from './features/execution/ExecutionEventFeed'
 import { ExecutionHistoryPanel } from './features/execution/ExecutionHistoryPanel'
@@ -2154,13 +2155,7 @@ function App() {
                     <div className="context-columns">
                       <div>
                         <h5>Artifacts</h5>
-                        <ul>
-                          {executionContext.artifacts.map((artifact) => (
-                            <li key={artifact.relativePath}>
-                              {artifact.role}: {artifact.relativePath} ({artifact.byteCount} bytes)
-                            </li>
-                          ))}
-                        </ul>
+                        <ExecutionContextArtifactList artifacts={executionContext.artifacts} />
                       </div>
                       <div>
                         <h5>Missing Optional</h5>

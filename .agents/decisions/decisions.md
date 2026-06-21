@@ -2,20 +2,15 @@
 
 ## Newly Authorized
 
-- Continue Milestone 0.5 with the audit, characterize, classify, extract, verify loop.
-- Treat the `ExecutionContextSummaryRows` extraction as safe because it renders a backend preview projection plus caller-provided display strings without deciding readiness, sufficiency, staleness, warning impact, or launch behavior.
-- Keep launch readiness in `App.tsx`.
-- Keep stale-preview interpretation in `App.tsx`.
-- Keep operational-context inclusion status derivation in `App.tsx`.
-- Keep size-status derivation in `App.tsx`.
-- Treat launch diagnostics as authority-sensitive until audited because blocking, warning, recommendation, severity, and required-action meanings may be backend-provided or frontend-derived.
-- Prioritize artifact list rendering as the next extraction candidate.
-- Extract artifact list rendering only if it is genuinely `artifacts -> render`.
-- Do not extract artifact list rendering if it includes importance, blocking, requiredness, or recommendation interpretation.
-- Treat missing optional list rendering as likely safe only after checking for importance ranking, priority ordering, or recommendation wording.
-- Treat validation list rendering as more suspicious because validation UI may contain error categorization, severity derivation, blocking logic, or recommendation generation.
-- Continue using the guiding rule: extract presentation, retain meaning.
+- Continue Milestone 0.5 with the `backend projection -> render` extraction boundary.
+- Treat the `ExecutionContextArtifactList` extraction as correctly scoped because it renders authoritative backend values only: `role`, `relativePath`, and `byteCount`.
+- Continue avoiding frontend interpretation of readiness, priority, validation, size-limit meaning, recommendations, importance, requiredness, context sufficiency, relevance, severity, and blocking.
+- Audit `ExecutionContextMissingOptionalList` next.
+- Extract the missing optional list only if the current implementation is limited to backend-provided paths rendered directly plus the existing empty-state text `None`.
+- Do not extract the missing optional list if it answers whether an artifact should be included, whether an omission is important or risky, or whether execution should be blocked.
+- Keep validation, artifact diagnostics, and artifact content previews under stricter authority review before any extraction.
+- After the missing optional list candidate, consider a quick Milestone 0.5 inventory before continuing because the remaining candidates may be less pure and the marginal value of extraction may be diminishing.
 
 ## Next Authorized Slice
 
-Audit artifact list rendering. Extract it only if it is a direct collection rendering surface with no hidden interpretation.
+Audit missing optional list rendering. Extract it only if it remains `paths -> render` plus `empty -> "None"`.
