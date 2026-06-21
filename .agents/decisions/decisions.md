@@ -2,13 +2,14 @@
 
 ## Newly Authorized
 
-- Treat the `GitWorkflowEvidence` extraction as more important for the ownership conclusion it supports than for the amount of code it moved.
-- Use `remove callbacks -> still meaningful` as the operational test for presentation components in this codebase.
-- Perform exactly one more deliberate `App.tsx` scan for M0.5.
-- Classify remaining `App.tsx` blocks as Presentation, Navigation Authority, Draft Ownership, Workflow Coordination, Workflow Mutation, Selection Reconciliation, or Readiness Evaluation.
-- Extract a remaining block only if it is meaningful in isolation and contains no authority.
-- Close M0.5 if the final scan finds no additional high-value `props -> render` extraction candidates.
-- Do not continue extracting merely because JSX remains in `App.tsx`.
-- Avoid fragmenting workflow authority in response to late-stage line-count pressure.
-- Consider M0.5 complete when all significant presentation-only islands have been audited, extracted where valuable, and remaining `App.tsx` responsibilities are intentionally centralized authority, draft, readiness, selection, or mutation coordination.
-- After M0.5 closure, shift to certification that remaining responsibilities are intentionally centralized and aligned with the M0.0-M0.6 authority model.
+- Treat `ExecutionWorkflowRail` as the final valid M0.5 extraction because it remains meaningful after removing workflow authority.
+- Consider M0.5 complete because the final scan found no additional high-value presentation-only islands.
+- Do not reopen M0.5 or continue searching for presentation decomposition.
+- Treat the remaining `App.tsx` responsibilities as intentionally centralized when they own navigation authority, draft ownership, workflow coordination, readiness evaluation, or mutation authority.
+- Shift the next work to final Milestone 0 certification rather than further decomposition.
+- Reconcile M0.3 projection authority, M0.4 navigation authority, M0.5 presentation decomposition, and M0.6 authority certification against the current implementation.
+- Classify every remaining responsibility as Projection, Navigation, Presentation, Draft Ownership, Workflow Coordination, or Workflow Mutation and verify that its current owner is intentional.
+- Explicitly document deferred centralized boundaries such as decision continuity review, proposal acceptance workflow, Git readiness workflow, handoff acceptance workflow, and artifact mutation workflow.
+- For each deferred boundary, document why it remains centralized, why extraction was rejected, and which authority it owns.
+- Add a Milestone 0 closure note if checklist items remain technically open, making clear that authority objectives are achieved and further extraction would risk fragmenting workflow authority.
+- Move to Milestone 1 only after final M0 certification and accepted centralized boundaries are documented.

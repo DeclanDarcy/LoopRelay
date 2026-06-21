@@ -8,7 +8,7 @@
 - [x] Workstream 0.2: Centralize Transport
 - [ ] Workstream 0.3: Extract Projection Hooks
 - [ ] Workstream 0.4: Separate State Boundaries
-- [ ] Workstream 0.5: Decompose Without Redesign
+- [x] Workstream 0.5: Decompose Without Redesign
 - [x] Workstream 0.6: Add Characterization Protection
 - [ ] Certification complete
 
@@ -192,12 +192,14 @@ Slice progress:
 - [x] Left generated-handoff path metadata, accept/reject buttons, decision pending state, confirmation, generated-handoff loading ownership, and backend decision commands in `App.tsx`.
 - [x] Audited Git commit/push review and extracted only neutral evidence summaries as `CommitPreparationSummary`, `PushReviewSummary`, and `GitStatusDetails` with characterization coverage for metadata labels, fallbacks, and dirty-path buckets.
 - [x] Left commit preparation loading, commit message draft, selected commit paths, commit readiness, push readiness, refresh, commit, and push command ownership in `App.tsx`.
-- [x] Left feature component extraction in `App.tsx` for later Workstream 0.5 slices.
+- [x] Extracted execution workflow rail rendering as presentation-only `ExecutionWorkflowRail` with characterization coverage for caller-provided ordering, state classes, and detail text.
+- [x] Completed the final M0.5 `App.tsx` responsibility scan. Remaining JSX blocks are retained because they carry navigation ownership, draft ownership, workflow command surfaces, workflow readiness, review guidance, mutation reconciliation, or selection composition.
+- [x] Closed M0.5 without further extraction because no additional high-value `props -> render` island remains.
 
 ### Certification
 
-- [ ] Existing UI behavior is unchanged.
-- [ ] The old layout still renders while `App.tsx` becomes substantially smaller.
+- [x] Existing UI behavior is unchanged.
+- [x] The old layout still renders while `App.tsx` becomes substantially smaller.
 
 ## Workstream 0.6: Add Characterization Protection
 
@@ -233,7 +235,7 @@ Use `?mock=workspace-certification` to certify all repository execution states:
 ### Certification
 
 - [x] Frontend tests cover the behavior above.
-- [ ] `npm run lint`, `npm run build`, `npm run test`, `npm run test:e2e`, and `dotnet test CommandCenter.slnx` pass.
+- [x] `npm run lint`, `npm run build`, `npm run test`, `npm run test:e2e`, and `dotnet test CommandCenter.slnx` pass.
 
 Closure audit note: M0 already has boundary characterization for transport, shell navigation, extracted projection hooks, execution event cleanup/order, certification fixture state coverage, and artifact-draft projection isolation. Remaining workflow characterization should be added alongside Workstream 0.5 decomposition and feature workspace migration.
 

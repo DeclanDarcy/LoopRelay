@@ -36,6 +36,7 @@ import { ExecutionContextValidationList } from './features/execution/ExecutionCo
 import { ExecutionEventFeed } from './features/execution/ExecutionEventFeed'
 import { ExecutionHistoryPanel } from './features/execution/ExecutionHistoryPanel'
 import { ExecutionSessionPanel } from './features/execution/ExecutionSessionPanel'
+import { ExecutionWorkflowRail } from './features/execution/ExecutionWorkflowRail'
 import { GeneratedHandoffContent } from './features/execution/GeneratedHandoffContent'
 import {
   CommitPreparationSummary,
@@ -1605,17 +1606,7 @@ function App() {
                   </span>
                 </div>
 
-                <div className="execution-workflow-rail" aria-label="Execution lifecycle">
-                  {executionWorkflowSteps.map((step) => (
-                    <div
-                      className={`execution-workflow-step execution-workflow-step-${step.state}`}
-                      key={step.key}
-                    >
-                      <span>{step.label}</span>
-                      <small>{step.detail}</small>
-                    </div>
-                  ))}
-                </div>
+                <ExecutionWorkflowRail steps={executionWorkflowSteps} />
 
               <section className="execution-context-panel" aria-label="Execution context preview">
                 <div className="context-toolbar">
