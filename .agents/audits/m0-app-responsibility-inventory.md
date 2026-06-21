@@ -53,6 +53,7 @@ Captured after extracting `useGitStatus(repositoryId)` and updated during the M0
 
 - Top-level repository selection, artifact selection, milestone selection, workflow rail, context panels, git workflow panel, operational-context review, continuity diagnostics, and history rendering remain composed in `App.tsx`.
 - Continuity diagnostics body rendering is now extracted to `ContinuityDiagnosticsPanel`; the surrounding toolbar, refresh action, report generation action, loading fallback, and no-data fallback remain composed in `App.tsx`.
+- Current operational-context display rendering is now extracted to `OperationalContextCurrentPanel`; proposal review toolbar/actions, proposal draft editing, review note ownership, proposal semantic/compression display, comparison rendering, and promotion/review command gating remain composed in `App.tsx`.
 
 ## Projection Ownership Audit
 
@@ -97,6 +98,7 @@ Captured before/with the continuity diagnostics extraction slice in M0.5.
 | Continuity diagnostics body | Pure presentation of `ContinuityDiagnostics` projection values. | Extracted to `ContinuityDiagnosticsPanel`; tests pin labels, ordering, rounding, and empty fallbacks. |
 | Continuity diagnostics toolbar | Workflow action surface for explicit diagnostics refresh and report generation. | Retained in `App.tsx`; do not move without preserving explicit action authority. |
 | Continuity diagnostics loading/no-data fallback | Presentation plus hook loading-state composition. | Retained in `App.tsx` for now because it depends on selected repository and hook loading state. |
+| Current operational-context display | Pure presentation of `OperationalContextProjection`, proposal summary status, and caller-computed execution/review status strings. | Extracted to `OperationalContextCurrentPanel`; tests pin summary labels, section ordering, item rendering, empty fallbacks, missing-context fallback, and proposal status fallback. |
 | Operational-context proposal review | Workflow coordination plus local draft/review state and backend mutation gating. | Retain in `App.tsx` until a narrower audit separates pure subregions. |
 | Git commit/push review | Workflow coordination plus commit draft, selected paths, preparation currency, commit readiness, and push readiness. | Retain in `App.tsx`; not a presentation-only extraction candidate. |
 | Repository list and selected repository summary | Presentation plus navigation, registration/removal affordances, selection reconciliation, and availability/readiness display. | Candidate only after a focused audit splits callbacks from direct rendering. |

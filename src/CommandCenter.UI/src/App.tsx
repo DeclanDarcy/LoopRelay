@@ -35,6 +35,7 @@ import { ExecutionEventFeed } from './features/execution/ExecutionEventFeed'
 import { ExecutionHistoryPanel } from './features/execution/ExecutionHistoryPanel'
 import { ExecutionSessionPanel } from './features/execution/ExecutionSessionPanel'
 import { GitPathBucket } from './features/execution/GitPathBucket'
+import { OperationalContextCurrentPanel } from './features/operational-context/OperationalContextCurrentPanel'
 import {
   useArtifactContent,
   useContinuityDiagnostics,
@@ -1495,173 +1496,14 @@ function App() {
                   </div>
                 </div>
 
-                {workspace?.operationalContext.exists ? (
-                  <div className="context-artifact-previews">
-                    <div className="context-summary">
-                      <span>Path: {workspace.operationalContext.currentRelativePath}</span>
-                      <span>Execution context: {operationalContextExecutionStatus}</span>
-                      <span>Revisions: {workspace.operationalContext.revisionCount}</span>
-                      <span>
-                        Current revision: {workspace.operationalContext.currentRevisionNumber}
-                      </span>
-                      <span>
-                        Updated: {formatDateTime(workspace.operationalContext.lastUpdatedAt)}
-                      </span>
-                      <span>
-                        Last promoted:{' '}
-                        {formatDateTime(workspace.operationalContext.lastPromotionAt)}
-                      </span>
-                      <span>Questions: {workspace.operationalContext.openQuestions.length}</span>
-                      <span>Risks: {workspace.operationalContext.activeRisks.length}</span>
-                      <span>
-                        Review: {operationalContextReviewStatus}
-                      </span>
-                      <span>
-                        Proposal:{' '}
-                        {workspace.operationalContextProposalSummary.latestProposalId
-                          ? workspace.operationalContextProposalSummary.status ?? 'Unknown'
-                          : 'None'}
-                      </span>
-                    </div>
-
-                    <div className="context-columns">
-                      <div>
-                        <h5>Current Model</h5>
-                        {workspace.operationalContext.currentUnderstandingSummary.length > 0 ? (
-                          <ul>
-                            {workspace.operationalContext.currentUnderstandingSummary.map((item) => (
-                              <li key={item}>{item}</li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p>No current model items recorded.</p>
-                        )}
-                      </div>
-                      <div>
-                        <h5>Stable Decisions</h5>
-                        {workspace.operationalContext.stableDecisions.length > 0 ? (
-                          <ul>
-                            {workspace.operationalContext.stableDecisions.map((item) => (
-                              <li key={item.id}>{item.text}</li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p>No stable decisions recorded.</p>
-                        )}
-                      </div>
-                      <div>
-                        <h5>Decision Rationale</h5>
-                        {workspace.operationalContext.decisionRationale.length > 0 ? (
-                          <ul>
-                            {workspace.operationalContext.decisionRationale.map((item) => (
-                              <li key={item.id}>{item.text}</li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p>No decision rationale recorded.</p>
-                        )}
-                      </div>
-                      <div>
-                        <h5>Architecture</h5>
-                        {workspace.operationalContext.architecture.length > 0 ? (
-                          <ul>
-                            {workspace.operationalContext.architecture.map((item) => (
-                              <li key={item.id}>{item.text}</li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p>No architecture items recorded.</p>
-                        )}
-                      </div>
-                      <div>
-                        <h5>Authority Boundaries</h5>
-                        {workspace.operationalContext.authorityBoundaries.length > 0 ? (
-                          <ul>
-                            {workspace.operationalContext.authorityBoundaries.map((item) => (
-                              <li key={item.id}>{item.text}</li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p>No authority boundaries recorded.</p>
-                        )}
-                      </div>
-                      <div>
-                        <h5>Constraints</h5>
-                        {workspace.operationalContext.constraints.length > 0 ? (
-                          <ul>
-                            {workspace.operationalContext.constraints.map((item) => (
-                              <li key={item.id}>{item.text}</li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p>No constraints recorded.</p>
-                        )}
-                      </div>
-                      <div>
-                        <h5>Open Questions</h5>
-                        {workspace.operationalContext.openQuestions.length > 0 ? (
-                          <ul>
-                            {workspace.operationalContext.openQuestions.map((item) => (
-                              <li key={item.id}>{item.text}</li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p>No open questions recorded.</p>
-                        )}
-                      </div>
-                      <div>
-                        <h5>Active Risks</h5>
-                        {workspace.operationalContext.activeRisks.length > 0 ? (
-                          <ul>
-                            {workspace.operationalContext.activeRisks.map((item) => (
-                              <li key={item.id}>{item.text}</li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p>No active risks recorded.</p>
-                        )}
-                      </div>
-                      <div>
-                        <h5>Recent Changes</h5>
-                        {workspace.operationalContext.recentUnderstandingChanges.length > 0 ? (
-                          <ul>
-                            {workspace.operationalContext.recentUnderstandingChanges.map((item) => (
-                              <li key={item.id}>{item.text}</li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p>No recent understanding changes recorded.</p>
-                        )}
-                      </div>
-                      <div>
-                        <h5>Continuity Warnings</h5>
-                        {workspace.operationalContext.continuityWarnings.length > 0 ? (
-                          <ul>
-                            {workspace.operationalContext.continuityWarnings.map((warning) => (
-                              <li key={warning}>{warning}</li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p>No continuity warnings recorded.</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="context-artifact-previews">
-                    <div className="context-summary">
-                      <span>Execution context: {operationalContextExecutionStatus}</span>
-                      <span>Review: {operationalContextReviewStatus}</span>
-                      <span>
-                        Proposal:{' '}
-                        {workspace?.operationalContextProposalSummary.latestProposalId
-                          ? workspace.operationalContextProposalSummary.status ?? 'Unknown'
-                          : 'None'}
-                      </span>
-                    </div>
-                    <p className="empty-state">No current operational context exists.</p>
-                  </div>
-                )}
+                {workspace ? (
+                  <OperationalContextCurrentPanel
+                    operationalContext={workspace.operationalContext}
+                    proposalSummary={workspace.operationalContextProposalSummary}
+                    executionStatus={operationalContextExecutionStatus}
+                    reviewStatus={operationalContextReviewStatus}
+                  />
+                ) : null}
               </section>
 
               <section className="execution-context-panel" aria-label="Continuity diagnostics">

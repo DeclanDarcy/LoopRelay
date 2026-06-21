@@ -2,10 +2,12 @@
 
 ## Newly Authorized
 
-- Use a stricter M0.5 extraction rule after M0.6: candidates must receive required data via props, render with no backend access, and function meaningfully as Storybook-style presentation components.
-- Treat `projection data -> render` as the highest-confidence extraction pattern.
-- Reject extraction candidates that transition from projection data into workflow meaning, workflow action, workflow coordination, command dispatch, readiness decisions, or authority decisions.
-- Consider repository summary display and tightly scoped operational-context display regions as the safest remaining M0.5 candidates.
-- Exclude accept/reject/promote/edit coordination and draft ownership from any operational-context display extraction.
-- Continue presuming commit preparation, commit readiness, push readiness, execution launch, proposal review actions, handoff acceptance, artifact mutation, and promotion workflows are authority boundaries until proven otherwise.
-- Treat remaining `App.tsx` workflow coordination, authority enforcement, draft orchestration, and projection composition as intentional ownership once clean presentation regions are harvested.
+- Treat the `OperationalContextCurrentPanel` extraction as satisfying the stricter post-M0.6 standard because it is bounded around `current operational context -> display`, not operational-context workflow.
+- Continue requiring remaining M0.5 extraction candidates to pass these tests: all data arrives through props, no backend commands are required, and the component remains meaningful when rendered in isolation.
+- Treat `projection -> presentation` regions as the preferred late-M0.5 extraction category.
+- Keep workflow transitions, workflow mutations, draft coordination, authority decisions, proposal generation/loading/review/promotion, review notes, and comparison workflows out of presentation components.
+- Audit the repository summary region next by distinguishing `repository projection -> display` from selection coordination and repository lifecycle responsibilities.
+- Consider repository name, path, metadata, counts, and status text likely safe only when rendered exactly as projected.
+- Treat repository selection, selection reconciliation, repository registration, repository removal, and repository refresh orchestration as unsafe for presentation extraction because they participate in state coordination.
+- Use this heuristic for repository-summary candidates: if every callback prop were removed, the component should still be useful; otherwise it is probably a coordination component.
+- Continue assuming most remaining `App.tsx` code is intentional until a focused audit proves a presentation-only boundary.

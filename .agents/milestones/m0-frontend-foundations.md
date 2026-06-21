@@ -179,6 +179,7 @@ Slice progress:
 - [x] Extracted artifact content preview rendering as presentation-only `ExecutionContextArtifactContentPreviews` with characterization coverage for provided order, summary labels, `OperationalContext` default-open behavior, markdown rendering, and the `Empty artifact.` fallback.
 - [x] Completed the authorized execution-context preview extraction inventory for M0.5.
 - [x] Extracted continuity diagnostics body rendering as presentation-only `ContinuityDiagnosticsPanel` with characterization coverage for existing summary labels, rounded average text, preservation/compression labels, repeated-signal ordering, and empty repeated/warning fallbacks.
+- [x] Extracted current operational-context display rendering as presentation-only `OperationalContextCurrentPanel` with characterization coverage for summary labels, section ordering, item text, empty section fallbacks, missing-context fallback, and proposal status fallbacks.
 - [x] Left feature component extraction in `App.tsx` for later Workstream 0.5 slices.
 
 ### Certification
