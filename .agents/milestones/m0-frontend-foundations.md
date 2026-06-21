@@ -85,7 +85,7 @@ Create hooks that own loading, refreshing, errors, and cleanup:
 - [x] `useExecutionContextPreview(repositoryId, milestonePath)`
 - [x] `useExecutionSession(repositoryId, sessionId)`
 - [x] `useExecutionEvents(sessionId)`
-- [ ] `useGitStatus(repositoryId)`
+- [x] `useGitStatus(repositoryId)`
 - [ ] `useCommitPreparation(sessionId)`
 - [ ] `useOperationalContextProposal(repositoryId, proposalId)`
 - [ ] `useContinuityDiagnostics(repositoryId)`

@@ -8,7 +8,6 @@ import {
   generateContinuityReport as generateContinuityReportCommand,
   generateOperationalContextProposal as generateOperationalContextProposalCommand,
   getContinuityDiagnostics,
-  getGitStatus,
   getOperationalContextProposal,
   loadArtifactContent,
   prepareCommit,
@@ -30,6 +29,7 @@ import {
   useExecutionContextPreview,
   useExecutionEvents,
   useExecutionSession,
+  useGitStatus,
   useRepositories,
   useRepositoryWorkspace,
 } from './hooks'
@@ -48,7 +48,6 @@ import type {
   RepositoryAvailability,
   RepositoryDirtyState,
   RepositoryExecutionState,
-  RepositoryGitStatus,
   RepositoryWorkspaceProjection,
 } from './types'
 import './App.css'
@@ -410,7 +409,6 @@ function App() {
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<string | null>(null)
   const [selectedArtifactPath, setSelectedArtifactPath] = useState<string | null>(null)
   const [selectedMilestonePath, setSelectedMilestonePath] = useState<string | null>(null)
-  const [gitStatus, setGitStatus] = useState<RepositoryGitStatus | null>(null)
   const [commitPreparation, setCommitPreparation] = useState<CommitPreparation | null>(null)
   const [selectedCommitPaths, setSelectedCommitPaths] = useState<Set<string>>(new Set())
   const [commitMessage, setCommitMessage] = useState('')
@@ -438,7 +436,6 @@ function App() {
   const [isGeneratedHandoffLoading, setIsGeneratedHandoffLoading] = useState(false)
   const [isAcceptingHandoff, setIsAcceptingHandoff] = useState(false)
   const [isRejectingHandoff, setIsRejectingHandoff] = useState(false)
-  const [isGitStatusLoading, setIsGitStatusLoading] = useState(false)
   const [isCommitPreparationLoading, setIsCommitPreparationLoading] = useState(false)
   const [isCommitting, setIsCommitting] = useState(false)
   const [isPushing, setIsPushing] = useState(false)
@@ -639,6 +636,16 @@ function App() {
     currentExecutionState === 'Ready' ||
     currentExecutionState === 'AwaitingCommit' ||
     currentExecutionState === 'AwaitingPush'
+  const {
+    data: gitStatus,
+    isLoading: isGitStatusLoading,
+    error: gitStatusError,
+    refresh: refreshGitStatus,
+  } = useGitStatus(
+    selectedRepository && shouldShowGitWorkflow && currentExecutionState !== 'AwaitingCommit'
+      ? selectedRepository.repository.id
+      : null,
+  )
   const gitStatusPathCount = countDirtyPaths(gitStatus?.dirtyState ?? null)
   const selectedCommitScopeItems =
     commitPreparation?.scopeItems.filter((item) => selectedCommitPaths.has(item.path)) ?? []
@@ -747,19 +754,6 @@ function App() {
       reconcileSelectedArtifact(repositoryId, nextWorkspace)
     }
   }, [loadWorkspaceProjection, reconcileSelectedArtifact, setExecutionContext])
-
-  const loadGitStatus = useCallback(async (repositoryId: string) => {
-    setIsGitStatusLoading(true)
-    try {
-      const status = await getGitStatus(repositoryId)
-      setGitStatus(status)
-    } catch (statusError) {
-      setGitStatus(null)
-      setError(formatError(statusError))
-    } finally {
-      setIsGitStatusLoading(false)
-    }
-  }, [])
 
   const loadContinuityDiagnostics = useCallback(async (repositoryId: string) => {
     setIsContinuityDiagnosticsLoading(true)
@@ -873,7 +867,7 @@ function App() {
         setWorkspace(nextWorkspace)
         setExecutionContext(null)
         reconcileSelectedArtifact(selectedRepository.repository.id, nextWorkspace)
-        await loadGitStatus(selectedRepository.repository.id)
+        await refreshGitStatus()
       }
     } catch (pushError) {
       setError(formatError(pushError))
@@ -1474,6 +1468,12 @@ function App() {
   }, [executionEventsError])
 
   useEffect(() => {
+    if (gitStatusError) {
+      setError(gitStatusError)
+    }
+  }, [gitStatusError])
+
+  useEffect(() => {
     if (!selectedRepository || !workspace) {
       return
     }
@@ -1485,7 +1485,6 @@ function App() {
 
   useEffect(() => {
     if (!selectedRepository) {
-      setGitStatus(null)
       setContinuityDiagnostics(null)
       return
     }
@@ -1499,7 +1498,6 @@ function App() {
 
   useEffect(() => {
     if (!selectedRepository || !shouldShowGitWorkflow) {
-      setGitStatus(null)
       setCommitPreparation(null)
       setSelectedCommitPaths(new Set())
       setCommitMessage('')
@@ -1508,7 +1506,6 @@ function App() {
 
     const timeoutId = window.setTimeout(() => {
       if (currentExecutionState === 'AwaitingCommit' && executionSessionId) {
-        setGitStatus(null)
         void loadCommitPreparation(executionSessionId)
         return
       }
@@ -1516,7 +1513,6 @@ function App() {
       setCommitPreparation(null)
       setSelectedCommitPaths(new Set())
       setCommitMessage('')
-      void loadGitStatus(selectedRepository.repository.id)
     }, 0)
 
     return () => window.clearTimeout(timeoutId)
@@ -1524,7 +1520,6 @@ function App() {
     currentExecutionState,
     executionSessionId,
     loadCommitPreparation,
-    loadGitStatus,
     selectedRepository,
     shouldShowGitWorkflow,
   ])
@@ -2591,7 +2586,7 @@ function App() {
                         currentExecutionState === 'AwaitingCommit' && executionSessionId
                           ? void loadCommitPreparation(executionSessionId)
                           : selectedRepository
-                          ? void loadGitStatus(selectedRepository.repository.id)
+                          ? void refreshGitStatus()
                           : undefined
                       }
                       disabled={

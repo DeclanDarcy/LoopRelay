@@ -5,6 +5,7 @@ import {
   useExecutionContextPreview,
   useExecutionEvents,
   useExecutionSession,
+  useGitStatus,
   useRepositories,
   useRepositoryWorkspace,
 } from '../../hooks'
@@ -12,6 +13,7 @@ import type {
   ExecutionContextPreview,
   ExecutionStatus,
   RepositoryDashboardProjection,
+  RepositoryGitStatus,
   RepositoryWorkspaceProjection,
 } from '../../types'
 
@@ -176,6 +178,24 @@ function createExecutionEvent(sequence: number, message = `Event ${sequence}`) {
     timestamp: `2026-01-01T00:0${sequence}:00Z`,
     type: 'status',
     message,
+  }
+}
+
+function createGitStatus(branch = 'main'): RepositoryGitStatus {
+  return {
+    branch,
+    aheadCount: 1,
+    behindCount: 0,
+    dirtyState: {
+      isClean: false,
+      stagedPaths: ['src/app.ts'],
+      modifiedPaths: ['README.md'],
+      addedPaths: [],
+      deletedPaths: [],
+      renamedPaths: [],
+      untrackedPaths: ['notes.md'],
+    },
+    capturedAt: '2026-01-01T00:00:00Z',
   }
 }
 
@@ -545,5 +565,47 @@ describe('projection hook characterization', () => {
 
     expect(result.current.data).toBe(status)
     expect(result.current.error).toBeNull()
+  })
+
+  it('loads and refreshes git status as a read-only projection', async () => {
+    const initialStatus = createGitStatus('main')
+    const refreshedStatus = createGitStatus('feature/m0')
+    const invoke = vi
+      .fn()
+      .mockResolvedValueOnce(initialStatus)
+      .mockResolvedValueOnce(refreshedStatus)
+    installInvokeMock(invoke)
+
+    const { result } = renderHook(() => useGitStatus('repo-alpha'))
+
+    await waitFor(() => expect(result.current.data).toBe(initialStatus))
+    expect(invoke).toHaveBeenCalledWith('get_git_status', {
+      repositoryId: 'repo-alpha',
+    }, undefined)
+
+    await act(async () => {
+      await result.current.refresh()
+    })
+
+    expect(result.current.data).toBe(refreshedStatus)
+    expect(invoke).toHaveBeenCalledTimes(2)
+  })
+
+  it('clears git status when the repository selection is removed', async () => {
+    const status = createGitStatus()
+    const invoke = vi.fn().mockResolvedValue(status)
+    installInvokeMock(invoke)
+
+    const { result, rerender } = renderHook(
+      ({ repositoryId }: { repositoryId: string | null }) => useGitStatus(repositoryId),
+      { initialProps: { repositoryId: 'repo-alpha' as string | null } },
+    )
+
+    await waitFor(() => expect(result.current.data).toBe(status))
+
+    rerender({ repositoryId: null })
+
+    await waitFor(() => expect(result.current.data).toBeNull())
+    expect(result.current.isLoading).toBe(false)
   })
 })

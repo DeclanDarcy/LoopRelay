@@ -2,19 +2,18 @@
 
 ## Slice Summary
 
-Completed Milestone 0 Workstream 0.3C by extracting `useExecutionEvents(sessionId)` while preserving workflow interpretation and lifecycle authority in `App.tsx`.
+Continued Milestone 0 Workstream 0.3 by extracting `useGitStatus(repositoryId)` as a read-only projection hook and recording the authorized `App.tsx` remaining-responsibility inventory.
 
 ## New State
 
-- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0006.md`.
-- Added `src/CommandCenter.UI/src/hooks/useExecutionEvents.ts`.
+- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0007.md`.
+- Added `src/CommandCenter.UI/src/hooks/useGitStatus.ts`.
 - Exported the hook from `src/CommandCenter.UI/src/hooks/index.ts`.
-- Updated `src/CommandCenter.UI/src/App.tsx` so SSE subscription, cleanup, stream event ordering, duplicate sequence replacement, and session-bound event clearing are owned by `useExecutionEvents`.
-- Preserved `App.tsx` ownership of execution workflow decisions, execution status reconciliation, workflow display interpretation, and silent execution-status refresh after streamed events.
-- `App.tsx` now displays execution events by merging backend status `recentEvents` with raw streamed events.
-- Added a stale-callback guard in `useExecutionEvents` so closed or superseded subscriptions cannot mutate active event state after session changes.
-- Added characterization in `src/CommandCenter.UI/src/test/characterization/projectionHooks.test.tsx` for event ordering, duplicate sequence replacement, session change cleanup, unmount cleanup, stale session isolation, and silent status-refresh failure behavior.
-- Marked `useExecutionEvents(sessionId)`, event merge ordering, and SSE cleanup complete in `.agents/milestones/m0-frontend-foundations.md`; Workstream 0.3 remains open.
+- Updated `src/CommandCenter.UI/src/App.tsx` so git status data, loading state, error state, automatic load, explicit refresh, and selection clearing are owned by `useGitStatus`.
+- Preserved `App.tsx` ownership of commit preparation, commit readiness, push readiness, commit execution, push execution, and workflow interpretation.
+- Added characterization coverage in `src/CommandCenter.UI/src/test/characterization/projectionHooks.test.tsx` for git status load/refresh and clearing when repository selection is removed.
+- Marked `useGitStatus(repositoryId)` complete in `.agents/milestones/m0-frontend-foundations.md`.
+- Added `.agents/audits/m0-app-responsibility-inventory.md` capturing remaining `App.tsx` navigation, projection, draft, workflow action, workflow gating, and presentation responsibilities.
 
 ## Verification
 
@@ -26,4 +25,4 @@ Completed Milestone 0 Workstream 0.3C by extracting `useExecutionEvents(sessionI
 
 ## Next Slice
 
-Continue Milestone 0 Workstream 0.3 with `useGitStatus(repositoryId)`. Keep git status as read-only projection loading plus explicit refresh, and leave commit preparation, commit gating, push gating, and workflow transitions in `App.tsx` until their dedicated slices.
+Continue Milestone 0 Workstream 0.3 with `useOperationalContextProposal(repositoryId, proposalId)` or `useContinuityDiagnostics(repositoryId)`. Prefer `useContinuityDiagnostics(repositoryId)` first because it is read-mostly and lower risk; keep continuity report generation in `App.tsx` as an explicit user action until a dedicated mutation hook slice is authorized.
