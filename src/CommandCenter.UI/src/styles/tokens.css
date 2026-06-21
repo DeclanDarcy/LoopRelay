@@ -1,0 +1,66 @@
+:root {
+  --bg-canvas: #080b10;
+  --bg-inset: #0c1118;
+  --surface-1: #111821;
+  --surface-2: #16202b;
+  --surface-3: #1d2a36;
+  --surface-overlay: #202d3b;
+
+  --border-subtle: #223040;
+  --border-default: #314154;
+  --border-strong: #4b6076;
+
+  --fg-default: #e6edf3;
+  --fg-muted: #b6c2cf;
+  --fg-subtle: #8795a6;
+  --fg-faint: #607184;
+
+  --status-success-subtle: #0d2a22;
+  --status-success-muted: #164334;
+  --status-success-fg: #85d7b4;
+  --status-success-emphasis: #27b17d;
+
+  --status-warning-subtle: #31240d;
+  --status-warning-muted: #4a3512;
+  --status-warning-fg: #f0c56e;
+  --status-warning-emphasis: #d99b22;
+
+  --status-danger-subtle: #351719;
+  --status-danger-muted: #542326;
+  --status-danger-fg: #f29b9f;
+  --status-danger-emphasis: #e45b61;
+
+  --status-info-subtle: #10263a;
+  --status-info-muted: #183b58;
+  --status-info-fg: #8bc7f2;
+  --status-info-emphasis: #3b99d8;
+
+  --status-done-subtle: #17243b;
+  --status-done-muted: #22375a;
+  --status-done-fg: #a9c4ff;
+  --status-done-emphasis: #7198ee;
+
+  --accent-subtle: #102826;
+  --accent-muted: #19423d;
+  --accent-fg: #8dd8cd;
+  --accent-emphasis: #31b4a4;
+
+  --radius-4: 4px;
+  --radius-6: 6px;
+  --radius-8: 8px;
+  --radius-12: 12px;
+
+  --shadow-panel: 0 10px 30px rgba(0, 0, 0, 0.24);
+  --shadow-popover: 0 18px 44px rgba(0, 0, 0, 0.34);
+  --shadow-modal: 0 28px 72px rgba(0, 0, 0, 0.45);
+
+  --font-body: 0.875rem/1.45 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-body-large: 1rem/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-small: 0.8125rem/1.4 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-caption: 0.75rem/1.35 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-micro: 0.6875rem/1.2 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-h2: 1.375rem/1.2 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-h3: 1.125rem/1.25 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-h4: 0.9375rem/1.3 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono-small: 0.75rem/1.45 ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+}

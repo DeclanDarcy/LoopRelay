@@ -1,0 +1,12 @@
+body {
+  background: var(--bg-canvas);
+  color: var(--fg-default);
+  font: var(--font-body);
+}
+
+button,
+input,
+select,
+textarea {
+  color-scheme: dark;
+}

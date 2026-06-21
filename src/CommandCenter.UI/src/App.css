@@ -4,8 +4,8 @@
   grid-template-rows: auto auto 1fr;
   gap: 16px;
   padding: 28px;
-  background: #f6f7f8;
-  color: #1d252c;
+  background: var(--bg-canvas);
+  color: var(--fg-default);
 }
 
 .app-header {
@@ -19,7 +19,7 @@
 .section-heading h2,
 .details-title-row h3 {
   margin: 0;
-  color: #121820;
+  color: var(--fg-default);
   font-weight: 650;
   letter-spacing: 0;
 }
@@ -41,7 +41,7 @@
 
 .eyebrow {
   margin: 0;
-  color: #65717d;
+  color: var(--fg-subtle);
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -59,7 +59,7 @@
 
 button {
   min-height: 38px;
-  border-radius: 6px;
+  border-radius: var(--radius-6);
   font: inherit;
   font-weight: 650;
   letter-spacing: 0;
@@ -72,7 +72,7 @@ button:disabled {
 }
 
 button:focus-visible {
-  outline: 3px solid #8bb8ff;
+  outline: 3px solid var(--status-info-emphasis);
   outline-offset: 2px;
 }
 
@@ -83,39 +83,39 @@ button:focus-visible {
 }
 
 .primary-action {
-  border: 1px solid #145c4b;
-  color: #ffffff;
-  background: #145c4b;
+  border: 1px solid var(--accent-emphasis);
+  color: var(--surface-1);
+  background: var(--accent-emphasis);
 }
 
 .secondary-action {
-  border: 1px solid #c8d0d8;
-  color: #1d252c;
-  background: #ffffff;
+  border: 1px solid var(--border-default);
+  color: var(--fg-default);
+  background: var(--surface-1);
 }
 
 .danger-action {
-  border: 1px solid #b33a32;
-  color: #ffffff;
-  background: #b33a32;
+  border: 1px solid var(--status-danger-emphasis);
+  color: var(--surface-1);
+  background: var(--status-danger-emphasis);
 }
 
 .notice {
   padding: 12px 14px;
-  border-radius: 6px;
+  border-radius: var(--radius-6);
   font-weight: 600;
 }
 
 .notice.error {
-  border: 1px solid #e5aaa5;
-  color: #8a211b;
-  background: #fff3f1;
+  border: 1px solid var(--status-danger-muted);
+  color: var(--status-danger-fg);
+  background: var(--status-danger-subtle);
 }
 
 .notice.success {
-  border: 1px solid #a8d5c2;
-  color: #145c4b;
-  background: #edf8f2;
+  border: 1px solid var(--status-success-muted);
+  color: var(--accent-emphasis);
+  background: var(--status-success-subtle);
 }
 
 .workspace-grid {
@@ -133,9 +133,9 @@ button:focus-visible {
   grid-template-rows: auto 1fr;
   gap: 12px;
   padding: 18px;
-  border: 1px solid #d9e0e6;
-  border-radius: 8px;
-  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-8);
+  background: var(--surface-1);
 }
 
 .repository-details {
@@ -147,7 +147,7 @@ button:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  color: #65717d;
+  color: var(--fg-subtle);
   font-size: 0.9rem;
 }
 
@@ -166,22 +166,22 @@ button:focus-visible {
   grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 6px 12px;
   padding: 14px;
-  border: 1px solid #d9e0e6;
-  border-radius: 6px;
-  color: #1d252c;
-  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  color: var(--fg-default);
+  background: var(--surface-1);
   text-align: left;
 }
 
 .repository-item:hover,
 .repository-item.selected {
-  border-color: #5f8b82;
-  background: #f3f8f6;
+  border-color: var(--accent-muted);
+  background: var(--accent-subtle);
 }
 
 .repository-name {
   min-width: 0;
-  color: #121820;
+  color: var(--fg-default);
   font-weight: 750;
   overflow-wrap: anywhere;
 }
@@ -189,7 +189,7 @@ button:focus-visible {
 .repository-path {
   min-width: 0;
   grid-column: 1 / -1;
-  color: #65717d;
+  color: var(--fg-subtle);
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 0.82rem;
   overflow-wrap: anywhere;
@@ -197,7 +197,7 @@ button:focus-visible {
 
 .repository-metadata {
   min-width: 0;
-  color: #3d4650;
+  color: var(--fg-muted);
   font-size: 0.78rem;
   font-weight: 650;
   overflow-wrap: anywhere;
@@ -205,7 +205,7 @@ button:focus-visible {
 
 .failure-metadata {
   grid-column: 1 / -1;
-  color: #8a211b;
+  color: var(--status-danger-fg);
 }
 
 .availability {
@@ -222,8 +222,8 @@ button:focus-visible {
   white-space: nowrap;
   padding: 3px 8px;
   border-radius: 999px;
-  color: #3d4650;
-  background: #edf0f2;
+  color: var(--fg-muted);
+  background: var(--surface-2);
   font-size: 0.75rem;
   font-weight: 750;
 }
@@ -233,51 +233,55 @@ button:focus-visible {
   white-space: nowrap;
   padding: 3px 8px;
   border-radius: 999px;
-  color: #24496a;
-  background: #e5f1fb;
+  color: var(--status-info-fg);
+  background: var(--status-info-subtle);
   font-size: 0.75rem;
   font-weight: 750;
 }
 
 .readiness-ready {
-  color: #145c4b;
-  background: #dff3ea;
+  color: var(--accent-emphasis);
+  background: var(--status-success-subtle);
 }
 
 .readiness-missingplan,
 .readiness-missingmilestones {
-  color: #7c5200;
-  background: #fff2cc;
+  color: var(--status-warning-fg);
+  background: var(--status-warning-subtle);
 }
 
 .availability-available {
-  color: #145c4b;
-  background: #dff3ea;
+  color: var(--accent-emphasis);
+  background: var(--status-success-subtle);
 }
 
 .availability-missing {
-  color: #7c5200;
-  background: #fff2cc;
+  color: var(--status-warning-fg);
+  background: var(--status-warning-subtle);
 }
 
 .availability-accessdenied {
-  color: #8a211b;
-  background: #ffe1de;
+  color: var(--status-danger-fg);
+  background: var(--status-danger-subtle);
 }
 
 .execution-state-failed,
 .execution-state-cancelled {
-  color: #8a211b;
-  background: #ffe1de;
+  color: var(--status-danger-fg);
+  background: var(--status-danger-subtle);
 }
 
 .execution-state-executing,
 .execution-state-awaitingacceptance,
-.execution-state-accepted,
 .execution-state-awaitingcommit,
 .execution-state-awaitingpush {
-  color: #7c5200;
-  background: #fff2cc;
+  color: var(--status-warning-fg);
+  background: var(--status-warning-subtle);
+}
+
+.execution-state-accepted {
+  color: var(--status-done-fg);
+  background: var(--status-done-subtle);
 }
 
 .details-body {
@@ -307,18 +311,18 @@ button:focus-visible {
   grid-template-columns: 120px minmax(0, 1fr);
   gap: 16px;
   padding-bottom: 12px;
-  border-bottom: 1px solid #edf0f2;
+  border-bottom: 1px solid var(--surface-2);
 }
 
 .details-list dt {
-  color: #65717d;
+  color: var(--fg-subtle);
   font-weight: 700;
 }
 
 .details-list dd {
   min-width: 0;
   margin: 0;
-  color: #1d252c;
+  color: var(--fg-default);
   overflow-wrap: anywhere;
 }
 
@@ -326,10 +330,10 @@ button:focus-visible {
   margin: 0;
   align-self: start;
   padding: 24px;
-  border: 1px dashed #c8d0d8;
-  border-radius: 6px;
-  color: #65717d;
-  background: #fafbfc;
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-6);
+  color: var(--fg-subtle);
+  background: var(--bg-inset);
 }
 
 .summary-grid {
@@ -341,10 +345,10 @@ button:focus-visible {
 .summary-grid span {
   min-width: 0;
   padding: 10px 12px;
-  border: 1px solid #d9e0e6;
-  border-radius: 6px;
-  color: #3d4650;
-  background: #fafbfc;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  color: var(--fg-muted);
+  background: var(--bg-inset);
   font-size: 0.88rem;
   font-weight: 650;
   overflow-wrap: anywhere;
@@ -369,7 +373,7 @@ button:focus-visible {
 .execution-workspace-header h4,
 .artifact-workspace-shell h4 {
   margin: 4px 0 0;
-  color: #121820;
+  color: var(--fg-default);
   font-size: 1rem;
   letter-spacing: 0;
   overflow-wrap: anywhere;
@@ -387,9 +391,9 @@ button:focus-visible {
   display: grid;
   gap: 4px;
   padding: 10px 12px;
-  border: 1px solid #d9e0e6;
-  border-radius: 6px;
-  background: #fafbfc;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--bg-inset);
 }
 
 .execution-workflow-step span,
@@ -399,42 +403,42 @@ button:focus-visible {
 }
 
 .execution-workflow-step span {
-  color: #121820;
+  color: var(--fg-default);
   font-size: 0.86rem;
   font-weight: 750;
 }
 
 .execution-workflow-step small {
-  color: #65717d;
+  color: var(--fg-subtle);
   font-size: 0.76rem;
   font-weight: 700;
 }
 
 .execution-workflow-step-current {
-  border-color: #b98b19;
-  background: #fff8e6;
+  border-color: var(--status-warning-emphasis);
+  background: var(--status-warning-subtle);
 }
 
 .execution-workflow-step-current span {
-  color: #7c5200;
+  color: var(--status-warning-fg);
 }
 
 .execution-workflow-step-complete {
-  border-color: #a8d5c2;
-  background: #edf8f2;
+  border-color: var(--status-success-muted);
+  background: var(--status-success-subtle);
 }
 
 .execution-workflow-step-complete span {
-  color: #145c4b;
+  color: var(--accent-emphasis);
 }
 
 .execution-workflow-step-blocked {
-  border-color: #e5aaa5;
-  background: #fff3f1;
+  border-color: var(--status-danger-muted);
+  background: var(--status-danger-subtle);
 }
 
 .execution-workflow-step-blocked span {
-  color: #8a211b;
+  color: var(--status-danger-fg);
 }
 
 .execution-context-panel,
@@ -447,9 +451,9 @@ button:focus-visible {
   display: grid;
   gap: 12px;
   padding: 14px;
-  border: 1px solid #d9e0e6;
-  border-radius: 6px;
-  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--surface-1);
 }
 
 .context-toolbar,
@@ -469,7 +473,7 @@ button:focus-visible {
 .git-status-panel h4,
 .handoff-review-header h4 {
   margin: 4px 0 0;
-  color: #121820;
+  color: var(--fg-default);
   letter-spacing: 0;
   overflow-wrap: anywhere;
 }
@@ -483,11 +487,11 @@ button:focus-visible {
   min-height: 38px;
   min-width: 220px;
   max-width: 340px;
-  border: 1px solid #c8d0d8;
-  border-radius: 6px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-6);
   padding: 0 10px;
-  color: #1d252c;
-  background: #ffffff;
+  color: var(--fg-default);
+  background: var(--surface-1);
   font: inherit;
 }
 
@@ -506,10 +510,10 @@ button:focus-visible {
 .diagnostic-list span {
   min-width: 0;
   padding: 9px 10px;
-  border: 1px solid #d9e0e6;
-  border-radius: 6px;
-  background: #fafbfc;
-  color: #3d4650;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--bg-inset);
+  color: var(--fg-muted);
   font-size: 0.82rem;
   font-weight: 650;
   overflow-wrap: anywhere;
@@ -534,7 +538,7 @@ button:focus-visible {
 .context-columns ul,
 .context-columns p {
   margin: 0;
-  color: #3d4650;
+  color: var(--fg-muted);
   font-size: 0.86rem;
 }
 
@@ -557,7 +561,7 @@ button:focus-visible {
 
 .commit-message-editor span,
 .proposal-editor span {
-  color: #3d4650;
+  color: var(--fg-muted);
   font-size: 0.82rem;
   font-weight: 750;
 }
@@ -566,11 +570,11 @@ button:focus-visible {
 .proposal-editor textarea {
   min-height: 88px;
   resize: vertical;
-  border: 1px solid #c8d0d8;
-  border-radius: 6px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-6);
   padding: 10px;
-  color: #1d252c;
-  background: #ffffff;
+  color: var(--fg-default);
+  background: var(--surface-1);
   font: inherit;
   font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
   overflow-wrap: anywhere;
@@ -597,15 +601,15 @@ button:focus-visible {
   display: grid;
   gap: 6px;
   padding: 10px;
-  border: 1px solid #d9e0e6;
-  border-radius: 6px;
-  background: #fffdf7;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--status-warning-subtle);
 }
 
 .proposal-warning-list ul {
   margin: 0;
   padding-left: 18px;
-  color: #3d4650;
+  color: var(--fg-muted);
   font-size: 0.86rem;
 }
 
@@ -614,22 +618,22 @@ button:focus-visible {
 }
 
 .proposal-revision-summary {
-  background: #f7fbff;
+  background: var(--status-info-subtle);
 }
 
 .proposal-decision-review {
-  background: #f8fbf8;
+  background: var(--status-success-subtle);
 }
 
 .proposal-decision-review p {
   margin: 0;
-  color: #4b5661;
+  color: var(--fg-muted);
   font-size: 0.86rem;
 }
 
 .proposal-decision-review h6 {
   margin: 0 0 6px;
-  color: #1d252c;
+  color: var(--fg-default);
   font-size: 0.78rem;
   font-weight: 800;
   text-transform: uppercase;
@@ -666,20 +670,20 @@ button:focus-visible {
   align-items: center;
   gap: 10px;
   padding: 9px 10px;
-  border: 1px solid #d9e0e6;
-  border-radius: 6px;
-  background: #fafbfc;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--bg-inset);
 }
 
 .commit-scope-item span {
   overflow-wrap: anywhere;
-  color: #1d252c;
+  color: var(--fg-default);
   font-size: 0.86rem;
   font-weight: 700;
 }
 
 .commit-scope-item small {
-  color: #5d6873;
+  color: var(--fg-subtle);
   font-size: 0.78rem;
   font-weight: 750;
   white-space: nowrap;
@@ -693,22 +697,22 @@ button:focus-visible {
 
 .context-artifact-previews details {
   min-width: 0;
-  border: 1px solid #d9e0e6;
-  border-radius: 6px;
-  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--surface-1);
 }
 
 .context-artifact-previews summary {
   cursor: pointer;
   padding: 9px 10px;
-  color: #1d252c;
+  color: var(--fg-default);
   font-size: 0.84rem;
   font-weight: 750;
   overflow-wrap: anywhere;
 }
 
 .context-artifact-content {
-  border-top: 1px solid #e8edf2;
+  border-top: 1px solid var(--border-subtle);
   border-radius: 0;
   max-height: 260px;
   overflow: auto;
@@ -723,10 +727,10 @@ button:focus-visible {
 .execution-session-grid span {
   min-width: 0;
   padding: 9px 10px;
-  border: 1px solid #d9e0e6;
-  border-radius: 6px;
-  color: #3d4650;
-  background: #fafbfc;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  color: var(--fg-muted);
+  background: var(--bg-inset);
   font-size: 0.82rem;
   font-weight: 650;
   overflow-wrap: anywhere;
@@ -734,9 +738,9 @@ button:focus-visible {
 
 .execution-session-grid .execution-failure {
   grid-column: 1 / -1;
-  border-color: #e5aaa5;
-  color: #8a211b;
-  background: #fff3f1;
+  border-color: var(--status-danger-muted);
+  color: var(--status-danger-fg);
+  background: var(--status-danger-subtle);
 }
 
 .execution-history-list {
@@ -752,9 +756,9 @@ button:focus-visible {
   gap: 8px;
   align-items: center;
   padding: 9px 10px;
-  border: 1px solid #d9e0e6;
-  border-radius: 6px;
-  background: #fafbfc;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--bg-inset);
 }
 
 .execution-history-row span,
@@ -764,19 +768,19 @@ button:focus-visible {
 }
 
 .execution-history-row span {
-  color: #1d252c;
+  color: var(--fg-default);
   font-size: 0.84rem;
   font-weight: 750;
 }
 
 .execution-history-row small {
-  color: #5d6873;
+  color: var(--fg-subtle);
   font-size: 0.76rem;
   font-weight: 700;
 }
 
 .handoff-review-panel {
-  background: #fbfcfd;
+  background: var(--bg-inset);
 }
 
 .handoff-review-header {
@@ -803,10 +807,10 @@ button:focus-visible {
 .handoff-review-metadata span {
   min-width: 0;
   padding: 8px 10px;
-  border: 1px solid #d9e0e6;
-  border-radius: 6px;
-  color: #3d4650;
-  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  color: var(--fg-muted);
+  background: var(--surface-1);
   font-size: 0.8rem;
   font-weight: 650;
   overflow-wrap: anywhere;
@@ -814,9 +818,9 @@ button:focus-visible {
 
 .handoff-review-content {
   max-height: 460px;
-  border: 1px solid #d9e0e6;
-  border-radius: 6px;
-  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--surface-1);
 }
 
 .execution-event-feed {
@@ -827,9 +831,9 @@ button:focus-visible {
   gap: 8px;
   overflow: auto;
   padding: 10px;
-  border: 1px solid #d9e0e6;
-  border-radius: 6px;
-  background: #fbfcfd;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--bg-inset);
 }
 
 .execution-event-row {
@@ -839,22 +843,22 @@ button:focus-visible {
   align-items: start;
   gap: 8px;
   padding: 8px;
-  border: 1px solid #edf0f2;
-  border-radius: 6px;
-  background: #ffffff;
+  border: 1px solid var(--surface-2);
+  border-radius: var(--radius-6);
+  background: var(--surface-1);
 }
 
 .execution-event-sequence,
 .execution-event-time,
 .execution-event-type {
-  color: #65717d;
+  color: var(--fg-subtle);
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 0.76rem;
   font-weight: 700;
 }
 
 .execution-event-type {
-  color: #24496a;
+  color: var(--status-info-fg);
 }
 
 .execution-event-row pre {
@@ -862,7 +866,7 @@ button:focus-visible {
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  color: #1d252c;
+  color: var(--fg-default);
   font: 0.8rem/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 
@@ -878,9 +882,9 @@ button:focus-visible {
 .artifact-panel {
   min-width: 0;
   min-height: 0;
-  border: 1px solid #d9e0e6;
-  border-radius: 6px;
-  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--surface-1);
 }
 
 .artifact-explorer {
@@ -903,7 +907,7 @@ button:focus-visible {
 .markdown-preview h3,
 .markdown-preview h4 {
   margin: 0;
-  color: #121820;
+  color: var(--fg-default);
   letter-spacing: 0;
 }
 
@@ -924,17 +928,17 @@ button:focus-visible {
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
-  border: 1px solid #d9e0e6;
-  border-radius: 6px;
-  color: #1d252c;
-  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  color: var(--fg-default);
+  background: var(--surface-1);
   text-align: left;
 }
 
 .artifact-item:hover,
 .artifact-item.selected {
-  border-color: #5f8b82;
-  background: #f3f8f6;
+  border-color: var(--accent-muted);
+  background: var(--accent-subtle);
 }
 
 .artifact-item span:first-child {
@@ -943,17 +947,17 @@ button:focus-visible {
 }
 
 .artifact-item span:last-child {
-  color: #65717d;
+  color: var(--fg-subtle);
   font-size: 0.76rem;
 }
 
 .missing-artifact {
   margin: 0;
   padding: 10px;
-  border: 1px dashed #c8d0d8;
-  border-radius: 6px;
-  color: #65717d;
-  background: #fafbfc;
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-6);
+  color: var(--fg-subtle);
+  background: var(--bg-inset);
   font-size: 0.86rem;
 }
 
@@ -970,7 +974,7 @@ button:focus-visible {
   align-items: start;
   gap: 12px;
   padding: 14px;
-  border-bottom: 1px solid #edf0f2;
+  border-bottom: 1px solid var(--surface-2);
 }
 
 .artifact-panel-actions {
@@ -992,7 +996,7 @@ button:focus-visible {
 .artifact-panel-header span {
   display: block;
   margin-top: 4px;
-  color: #65717d;
+  color: var(--fg-subtle);
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 0.78rem;
   overflow-wrap: anywhere;
@@ -1005,14 +1009,14 @@ button:focus-visible {
   resize: none;
   padding: 14px;
   border: 0;
-  border-bottom: 1px solid #edf0f2;
-  color: #1d252c;
-  background: #fbfcfd;
+  border-bottom: 1px solid var(--surface-2);
+  color: var(--fg-default);
+  background: var(--bg-inset);
   font: 0.88rem/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 
 .artifact-editor:focus {
-  outline: 3px solid #8bb8ff;
+  outline: 3px solid var(--status-info-emphasis);
   outline-offset: -3px;
 }
 
@@ -1020,7 +1024,7 @@ button:focus-visible {
   min-width: 0;
   overflow: auto;
   padding: 14px;
-  color: #1d252c;
+  color: var(--fg-default);
   line-height: 1.55;
 }
 
@@ -1045,9 +1049,9 @@ button:focus-visible {
   overflow: auto;
   margin: 0 0 10px;
   padding: 12px;
-  border-radius: 6px;
-  background: #121820;
-  color: #f6f7f8;
+  border-radius: var(--radius-6);
+  background: var(--fg-default);
+  color: var(--bg-canvas);
 }
 
 .markdown-preview code {

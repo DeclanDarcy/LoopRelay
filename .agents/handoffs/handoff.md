@@ -2,21 +2,25 @@
 
 ## Slice Summary
 
-Closed Milestone 0 after reconciling the remaining M0.3/M0.4 checklist items against the existing closure authority matrix and final M0.5 scan.
+Started Milestone 1 and completed the foundation portion for dark console tokens, dense typography tokens, render-only design primitives, and centralized status metadata.
 
 ## New State
 
-- Marked Milestone 0, Workstream 0.3, Workstream 0.4, and final certification complete in `.agents/milestones/m0-frontend-foundations.md`.
-- Converted the remaining `useCommitPreparation(sessionId)` and `useOperationalContextProposal(repositoryId, proposalId)` checklist gaps into explicit deferred workflow-review boundaries.
-- Recorded that optional section anchors/expanded sections are omitted from M0 because no current shell behavior requires them.
-- Added the final Milestone 0 closure note documenting accepted centralized boundaries for commit preparation, operational-context proposal review, generated handoff review, Git workflow review, artifact mutation controls, execution launch controls, continuity report generation, and proposal review actions.
-- Updated `.agents/audits/m0-closure-authority-matrix.md` to state that Milestone 0 is closed and that further decomposition should move with later feature workspace migrations.
-- Rotated the previous handoff to `.agents/handoffs/handoff.0047.md`.
+- Added `src/CommandCenter.UI/src/styles/tokens.css`, `base.css`, and `theme.css`.
+- Added render-only primitives under `src/CommandCenter.UI/src/components/design`: `Button`, `IconButton`, `Badge`, `StatusBadge`, `Panel`, `InspectorSection`, `Metric`, `Table`, `Tabs`, `EmptyState`, and `SectionHeader`.
+- Added `src/CommandCenter.UI/src/lib/status.ts` with centralized status presentation metadata for repository availability, execution readiness/state, session state, operational-context proposal/review state, and continuity warnings.
+- Converted existing `src/CommandCenter.UI/src/App.css` from hard-coded light colors to the new dark console tokens without changing `App.tsx` workflow behavior, navigation, or hierarchy.
+- Updated `.agents/milestones/m1-design-system-foundation.md`: Workstreams 1.1, 1.2, and 1.3 are complete; Workstreams 1.4 and 1.5 remain open because existing render branches still need to adopt the centralized status helper and primitives.
+- Rotated the previous handoff to `.agents/handoffs/handoff.0048.md`.
 
 ## Verification
 
-- Not run. This slice changed only `.agents` planning/audit/handoff documentation.
+- Passed `npm run lint`.
+- Passed `npm run build`.
+- Passed `npm run test`.
+- Passed `npm run test:e2e`.
+- Re-ran `npm run build` after the final CSS correction; passed.
 
 ## Next Slice
 
-Start Milestone 1: Design System Foundation. Begin by reading `.agents/milestones/m1-design-system-foundation.md`, then introduce tokenized dark operational styling and reusable design primitives without redesigning workflow behavior or moving backend authority into React.
+Continue Milestone 1 by wiring `src/lib/status.ts` and the design primitives into the existing render branches in `App.tsx`, preserving current workflows and component hierarchy. Prioritize equivalent status badges across repository list, header/workspace summaries, execution panels, operational-context proposal views, and continuity surfaces so Workstream 1.4 certification can close before broader primitive adoption for Workstream 1.5.
