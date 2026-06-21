@@ -182,6 +182,7 @@ Slice progress:
 - [x] Extracted current operational-context display rendering as presentation-only `OperationalContextCurrentPanel` with characterization coverage for summary labels, section ordering, item text, empty section fallbacks, missing-context fallback, and proposal status fallbacks.
 - [x] Extracted repository dashboard item content rendering as presentation-only `RepositoryDashboardItemContent` with characterization coverage for projected labels, execution summary metadata, and missing/null continuity fallbacks.
 - [x] Extracted selected repository summary rendering as presentation-only `SelectedRepositorySummary` with characterization coverage for repository identity, workspace-over-dashboard facts, execution detail fallbacks, and artifact presence summary labels.
+- [x] Extracted artifact editor metadata and markdown preview rendering as presentation-only `ArtifactMetadata` and `ArtifactMarkdownPreview` with characterization coverage for existing labels, loading fallback, markdown rendering, and empty fallback.
 - [x] Left feature component extraction in `App.tsx` for later Workstream 0.5 slices.
 
 ### Certification

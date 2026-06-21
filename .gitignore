@@ -78,6 +78,8 @@ artifacts/
 !schemas/artifacts/**
 !src/CommandCenter.Backend/Artifacts/
 !src/CommandCenter.Backend/Artifacts/**
+!src/CommandCenter.UI/src/features/artifacts/
+!src/CommandCenter.UI/src/features/artifacts/**
 **/debugging/
 **/performance-results/
 **/reports/

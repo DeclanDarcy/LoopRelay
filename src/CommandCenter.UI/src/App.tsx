@@ -23,6 +23,8 @@ import {
   selectRepositoryDirectory,
   startExecution as startExecutionCommand,
 } from './api'
+import { ArtifactMarkdownPreview } from './features/artifacts/ArtifactMarkdownPreview'
+import { ArtifactMetadata } from './features/artifacts/ArtifactMetadata'
 import { ContinuityDiagnosticsPanel } from './features/continuity/ContinuityDiagnosticsPanel'
 import { ExecutionContextArtifactDiagnosticsList } from './features/execution/ExecutionContextArtifactDiagnosticsList'
 import { ExecutionContextArtifactContentPreviews } from './features/execution/ExecutionContextArtifactContentPreviews'
@@ -2079,11 +2081,7 @@ function App() {
                     {selectedArtifact ? (
                       <>
                         <div className="artifact-panel-header">
-                          <div>
-                            <p className="eyebrow">{selectedArtifact.family}</p>
-                            <h4>{selectedArtifact.name}</h4>
-                            <span>{selectedArtifact.relativePath}</span>
-                          </div>
+                          <ArtifactMetadata artifact={selectedArtifact} />
                           <div className="artifact-panel-actions">
                             {canRotateSelectedArtifact ? (
                               <button
@@ -2122,15 +2120,10 @@ function App() {
                           spellCheck={false}
                           disabled={isArtifactLoading}
                         />
-                        <div className="markdown-preview">
-                          {isArtifactLoading ? (
-                            <p>Loading artifact...</p>
-                          ) : draftContent.trim() ? (
-                            renderMarkdown(draftContent)
-                          ) : (
-                            <p>Empty artifact.</p>
-                          )}
-                        </div>
+                        <ArtifactMarkdownPreview
+                          content={draftContent}
+                          isLoading={isArtifactLoading}
+                        />
                       </>
                     ) : (
                       <p className="empty-state">No artifact selected.</p>
