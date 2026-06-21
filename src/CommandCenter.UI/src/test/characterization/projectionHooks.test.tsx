@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   useArtifactContent,
+  useContinuityDiagnostics,
   useExecutionContextPreview,
   useExecutionEvents,
   useExecutionSession,
@@ -12,6 +13,7 @@ import {
 import type {
   ExecutionContextPreview,
   ExecutionStatus,
+  ContinuityDiagnostics,
   RepositoryDashboardProjection,
   RepositoryGitStatus,
   RepositoryWorkspaceProjection,
@@ -196,6 +198,45 @@ function createGitStatus(branch = 'main'): RepositoryGitStatus {
       untrackedPaths: ['notes.md'],
     },
     capturedAt: '2026-01-01T00:00:00Z',
+  }
+}
+
+function createContinuityDiagnostics(repositoryId = 'repo-alpha'): ContinuityDiagnostics {
+  const emptyTrend = {
+    addedCount: 0,
+    removedCount: 0,
+    resolvedCount: 0,
+    lostCount: 0,
+  }
+
+  return {
+    repositoryId,
+    generatedAt: '2026-01-01T00:00:00Z',
+    revisionCount: 2,
+    currentContextByteCount: 1024,
+    currentContextCharacterCount: 900,
+    contextByteGrowth: 128,
+    averageBytesPerRevision: 512,
+    architectureTrend: emptyTrend,
+    constraintTrend: emptyTrend,
+    decisionTrend: emptyTrend,
+    rationaleTrend: emptyTrend,
+    openQuestionTrend: emptyTrend,
+    activeRiskTrend: emptyTrend,
+    compressionTrend: {
+      proposalCount: 1,
+      compressedItemCount: 2,
+      removedItemCount: 0,
+      resolvedQuestionCount: 1,
+      retiredRiskCount: 0,
+      warningCount: 0,
+      warnings: [],
+      noiseRemovedIndicators: [],
+    },
+    repeatedInvestigationIndicators: [],
+    repeatedQuestionIndicators: [],
+    decisionReworkIndicators: [],
+    continuityWarnings: [],
   }
 }
 
@@ -602,6 +643,51 @@ describe('projection hook characterization', () => {
     )
 
     await waitFor(() => expect(result.current.data).toBe(status))
+
+    rerender({ repositoryId: null })
+
+    await waitFor(() => expect(result.current.data).toBeNull())
+    expect(result.current.isLoading).toBe(false)
+  })
+
+  it('loads and refreshes continuity diagnostics as a read-only projection', async () => {
+    const initialDiagnostics = createContinuityDiagnostics('repo-alpha')
+    const refreshedDiagnostics = {
+      ...initialDiagnostics,
+      revisionCount: 3,
+    } satisfies ContinuityDiagnostics
+    const invoke = vi
+      .fn()
+      .mockResolvedValueOnce(initialDiagnostics)
+      .mockResolvedValueOnce(refreshedDiagnostics)
+    installInvokeMock(invoke)
+
+    const { result } = renderHook(() => useContinuityDiagnostics('repo-alpha'))
+
+    await waitFor(() => expect(result.current.data).toBe(initialDiagnostics))
+    expect(invoke).toHaveBeenCalledWith('get_continuity_diagnostics', {
+      repositoryId: 'repo-alpha',
+    }, undefined)
+
+    await act(async () => {
+      await result.current.refresh()
+    })
+
+    expect(result.current.data).toBe(refreshedDiagnostics)
+    expect(invoke).toHaveBeenCalledTimes(2)
+  })
+
+  it('clears continuity diagnostics when the repository selection is removed', async () => {
+    const diagnostics = createContinuityDiagnostics()
+    const invoke = vi.fn().mockResolvedValue(diagnostics)
+    installInvokeMock(invoke)
+
+    const { result, rerender } = renderHook(
+      ({ repositoryId }: { repositoryId: string | null }) => useContinuityDiagnostics(repositoryId),
+      { initialProps: { repositoryId: 'repo-alpha' as string | null } },
+    )
+
+    await waitFor(() => expect(result.current.data).toBe(diagnostics))
 
     rerender({ repositoryId: null })
 

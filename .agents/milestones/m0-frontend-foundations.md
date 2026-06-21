@@ -88,7 +88,7 @@ Create hooks that own loading, refreshing, errors, and cleanup:
 - [x] `useGitStatus(repositoryId)`
 - [ ] `useCommitPreparation(sessionId)`
 - [ ] `useOperationalContextProposal(repositoryId, proposalId)`
-- [ ] `useContinuityDiagnostics(repositoryId)`
+- [x] `useContinuityDiagnostics(repositoryId)`
 
 Rules:
 

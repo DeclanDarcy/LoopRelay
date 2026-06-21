@@ -7,7 +7,6 @@ import {
   formatError,
   generateContinuityReport as generateContinuityReportCommand,
   generateOperationalContextProposal as generateOperationalContextProposalCommand,
-  getContinuityDiagnostics,
   getOperationalContextProposal,
   loadArtifactContent,
   prepareCommit,
@@ -26,6 +25,7 @@ import {
 } from './api'
 import {
   useArtifactContent,
+  useContinuityDiagnostics,
   useExecutionContextPreview,
   useExecutionEvents,
   useExecutionSession,
@@ -37,7 +37,6 @@ import type {
   ArtifactCategory,
   ArtifactInventory,
   CommitPreparation,
-  ContinuityDiagnostics,
   ExecutionEvent,
   ExecutionReadiness,
   ExecutionSessionSummary,
@@ -418,7 +417,6 @@ function App() {
   const [generatedHandoffContent, setGeneratedHandoffContent] = useState('')
   const [operationalContextProposal, setOperationalContextProposal] =
     useState<OperationalContextProposal | null>(null)
-  const [continuityDiagnostics, setContinuityDiagnostics] = useState<ContinuityDiagnostics | null>(null)
   const [operationalContextCurrentContent, setOperationalContextCurrentContent] = useState('')
   const [operationalContextProposalDraft, setOperationalContextProposalDraft] = useState('')
   const [operationalContextReviewNote, setOperationalContextReviewNote] = useState('')
@@ -430,7 +428,6 @@ function App() {
     useState(false)
   const [isOperationalContextProposalSaving, setIsOperationalContextProposalSaving] =
     useState(false)
-  const [isContinuityDiagnosticsLoading, setIsContinuityDiagnosticsLoading] = useState(false)
   const [isContinuityReportGenerating, setIsContinuityReportGenerating] = useState(false)
   const [isStartingExecution, setIsStartingExecution] = useState(false)
   const [isGeneratedHandoffLoading, setIsGeneratedHandoffLoading] = useState(false)
@@ -501,6 +498,13 @@ function App() {
     error: executionContextError,
     load: loadExecutionContextPreview,
   } = useExecutionContextPreview(selectedRepository?.repository.id ?? null, selectedMilestonePath)
+  const {
+    data: continuityDiagnostics,
+    setData: setContinuityDiagnostics,
+    isLoading: isContinuityDiagnosticsLoading,
+    error: continuityDiagnosticsError,
+    refresh: refreshContinuityDiagnostics,
+  } = useContinuityDiagnostics(selectedRepository?.repository.id ?? null)
 
   const selectedArtifact = useMemo(() => {
     if (!workspace || !selectedArtifactPath) {
@@ -711,15 +715,18 @@ function App() {
     workspace,
   ])
 
-  const selectRepository = useCallback((repositoryId: string) => {
-    setSelectedRepositoryId(repositoryId)
-    setSelectedArtifactPath(selectedArtifactPathsByRepository.current[repositoryId] ?? null)
-    setOperationalContextProposal(null)
-    setContinuityDiagnostics(null)
-    setOperationalContextCurrentContent('')
-    setOperationalContextProposalDraft('')
-    setOperationalContextReviewNote('')
-  }, [])
+  const selectRepository = useCallback(
+    (repositoryId: string) => {
+      setSelectedRepositoryId(repositoryId)
+      setSelectedArtifactPath(selectedArtifactPathsByRepository.current[repositoryId] ?? null)
+      setOperationalContextProposal(null)
+      setContinuityDiagnostics(null)
+      setOperationalContextCurrentContent('')
+      setOperationalContextProposalDraft('')
+      setOperationalContextReviewNote('')
+    },
+    [setContinuityDiagnostics],
+  )
 
   const selectArtifact = useCallback((repositoryId: string, relativePath: string) => {
     selectedArtifactPathsByRepository.current[repositoryId] = relativePath
@@ -754,19 +761,6 @@ function App() {
       reconcileSelectedArtifact(repositoryId, nextWorkspace)
     }
   }, [loadWorkspaceProjection, reconcileSelectedArtifact, setExecutionContext])
-
-  const loadContinuityDiagnostics = useCallback(async (repositoryId: string) => {
-    setIsContinuityDiagnosticsLoading(true)
-    try {
-      const diagnostics = await getContinuityDiagnostics(repositoryId)
-      setContinuityDiagnostics(diagnostics)
-    } catch (diagnosticsError) {
-      setContinuityDiagnostics(null)
-      setError(formatError(diagnosticsError))
-    } finally {
-      setIsContinuityDiagnosticsLoading(false)
-    }
-  }, [])
 
   const loadCommitPreparation = useCallback(async (sessionId: string) => {
     setIsCommitPreparationLoading(true)
@@ -1474,6 +1468,12 @@ function App() {
   }, [gitStatusError])
 
   useEffect(() => {
+    if (continuityDiagnosticsError) {
+      setError(continuityDiagnosticsError)
+    }
+  }, [continuityDiagnosticsError])
+
+  useEffect(() => {
     if (!selectedRepository || !workspace) {
       return
     }
@@ -1482,19 +1482,6 @@ function App() {
       reconcileSelectedArtifact(selectedRepository.repository.id, workspace)
     }
   }, [reconcileSelectedArtifact, selectedRepository, workspace])
-
-  useEffect(() => {
-    if (!selectedRepository) {
-      setContinuityDiagnostics(null)
-      return
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      void loadContinuityDiagnostics(selectedRepository.repository.id)
-    }, 0)
-
-    return () => window.clearTimeout(timeoutId)
-  }, [loadContinuityDiagnostics, selectedRepository])
 
   useEffect(() => {
     if (!selectedRepository || !shouldShowGitWorkflow) {
@@ -1988,11 +1975,7 @@ function App() {
                     <button
                       type="button"
                       className="secondary-action"
-                      onClick={() =>
-                        selectedRepository
-                          ? void loadContinuityDiagnostics(selectedRepository.repository.id)
-                          : undefined
-                      }
+                      onClick={() => void refreshContinuityDiagnostics()}
                       disabled={!selectedRepository || isContinuityDiagnosticsLoading}
                     >
                       {isContinuityDiagnosticsLoading ? 'Loading...' : 'Refresh Diagnostics'}

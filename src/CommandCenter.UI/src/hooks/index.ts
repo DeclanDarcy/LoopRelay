@@ -1,4 +1,5 @@
 export * from './useArtifactContent'
+export * from './useContinuityDiagnostics'
 export * from './useExecutionContextPreview'
 export * from './useExecutionEvents'
 export * from './useExecutionSession'
