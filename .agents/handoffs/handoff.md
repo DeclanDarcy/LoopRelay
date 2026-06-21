@@ -2,18 +2,19 @@
 
 ## Slice Summary
 
-Completed Milestone 0 Workstream 0.3B by extracting `useExecutionSession(repositoryId, sessionId)` while leaving workflow authority and event-stream ownership in `App.tsx`.
+Completed Milestone 0 Workstream 0.3C by extracting `useExecutionEvents(sessionId)` while preserving workflow interpretation and lifecycle authority in `App.tsx`.
 
 ## New State
 
-- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0005.md`.
-- Added `src/CommandCenter.UI/src/hooks/useExecutionSession.ts`.
+- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0006.md`.
+- Added `src/CommandCenter.UI/src/hooks/useExecutionEvents.ts`.
 - Exported the hook from `src/CommandCenter.UI/src/hooks/index.ts`.
-- Updated `src/CommandCenter.UI/src/App.tsx` so selected execution status, backend URL discovery for the selected session, initial session status loading, manual status refresh, and session status errors come from `useExecutionSession`.
-- Preserved `App.tsx` ownership of execution workflow decisions, start/accept/reject/commit/push orchestration, workspace/repository projection reconciliation after status changes, and SSE event subscription until the separate `useExecutionEvents(sessionId)` slice.
-- Preserved current SSE behavior by using a silent session-status refresh after streamed events and keeping failed SSE-triggered refreshes out of global error state.
-- Added characterization in `src/CommandCenter.UI/src/test/characterization/projectionHooks.test.tsx` for session status load/refresh, reattachment from an existing session id, and stale repository/session load isolation.
-- Marked `useExecutionSession(repositoryId, sessionId)` complete in `.agents/milestones/m0-frontend-foundations.md`; Workstream 0.3 remains open.
+- Updated `src/CommandCenter.UI/src/App.tsx` so SSE subscription, cleanup, stream event ordering, duplicate sequence replacement, and session-bound event clearing are owned by `useExecutionEvents`.
+- Preserved `App.tsx` ownership of execution workflow decisions, execution status reconciliation, workflow display interpretation, and silent execution-status refresh after streamed events.
+- `App.tsx` now displays execution events by merging backend status `recentEvents` with raw streamed events.
+- Added a stale-callback guard in `useExecutionEvents` so closed or superseded subscriptions cannot mutate active event state after session changes.
+- Added characterization in `src/CommandCenter.UI/src/test/characterization/projectionHooks.test.tsx` for event ordering, duplicate sequence replacement, session change cleanup, unmount cleanup, stale session isolation, and silent status-refresh failure behavior.
+- Marked `useExecutionEvents(sessionId)`, event merge ordering, and SSE cleanup complete in `.agents/milestones/m0-frontend-foundations.md`; Workstream 0.3 remains open.
 
 ## Verification
 
@@ -25,4 +26,4 @@ Completed Milestone 0 Workstream 0.3B by extracting `useExecutionSession(reposit
 
 ## Next Slice
 
-Continue Milestone 0 Workstream 0.3 with M0.3C: extract `useExecutionEvents(sessionId)` separately. Characterize event merge ordering, duplicate sequence replacement, SSE cleanup on session change/unmount, and silent status-refresh recovery before moving event-stream ownership out of `App.tsx`.
+Continue Milestone 0 Workstream 0.3 with `useGitStatus(repositoryId)`. Keep git status as read-only projection loading plus explicit refresh, and leave commit preparation, commit gating, push gating, and workflow transitions in `App.tsx` until their dedicated slices.

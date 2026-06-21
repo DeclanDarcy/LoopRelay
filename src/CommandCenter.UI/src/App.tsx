@@ -24,11 +24,11 @@ import {
   saveArtifactContent,
   selectRepositoryDirectory,
   startExecution as startExecutionCommand,
-  subscribeToExecutionEvents,
 } from './api'
 import {
   useArtifactContent,
   useExecutionContextPreview,
+  useExecutionEvents,
   useExecutionSession,
   useRepositories,
   useRepositoryWorkspace,
@@ -410,7 +410,6 @@ function App() {
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<string | null>(null)
   const [selectedArtifactPath, setSelectedArtifactPath] = useState<string | null>(null)
   const [selectedMilestonePath, setSelectedMilestonePath] = useState<string | null>(null)
-  const [executionEventsBySession, setExecutionEventsBySession] = useState<Record<string, ExecutionEvent[]>>({})
   const [gitStatus, setGitStatus] = useState<RepositoryGitStatus | null>(null)
   const [commitPreparation, setCommitPreparation] = useState<CommitPreparation | null>(null)
   const [selectedCommitPaths, setSelectedCommitPaths] = useState<Set<string>>(new Set())
@@ -485,10 +484,13 @@ function App() {
   const {
     data: executionSessionStatus,
     setData: setExecutionSessionStatus,
-    backendUrl,
     error: executionSessionError,
     refresh: refreshExecutionSessionStatus,
   } = useExecutionSession(selectedRepository?.repository.id ?? null, executionSessionId)
+  const {
+    data: streamedExecutionEvents,
+    error: executionEventsError,
+  } = useExecutionEvents(executionSessionId)
   const {
     data: artifactContent,
     setData: setArtifactContent,
@@ -563,9 +565,7 @@ function App() {
       : null
     : null
   const selectedExecutionEvents = executionSummary
-    ? executionEventsBySession[executionSummary.sessionId] ??
-      selectedExecutionStatus?.recentEvents ??
-      []
+    ? mergeExecutionEvents(selectedExecutionStatus?.recentEvents ?? [], streamedExecutionEvents)
     : []
   const currentExecutionState = workspace?.executionState ?? selectedRepository?.executionState ?? 'Ready'
   const executionContextMatchesSelection =
@@ -1232,10 +1232,6 @@ function App() {
         selectedRepository.repository.id,
         selectedMilestonePath,
       )
-      setExecutionEventsBySession((currentEvents) => ({
-        ...currentEvents,
-        [session.sessionId]: currentEvents[session.sessionId] ?? [],
-      }))
       setWorkspace((currentWorkspace) =>
         currentWorkspace && currentWorkspace.repository.id === selectedRepository.repository.id
           ? {
@@ -1336,35 +1332,12 @@ function App() {
   }
 
   useEffect(() => {
-    if (!executionSessionId || !backendUrl || backendUrl === 'mock') {
+    if (!executionSessionId || streamedExecutionEvents.length === 0) {
       return
     }
 
-    const sessionId = executionSessionId
-    const subscription = subscribeToExecutionEvents(backendUrl, sessionId, (executionEvent) => {
-      setExecutionEventsBySession((currentEvents) => ({
-        ...currentEvents,
-        [sessionId]: mergeExecutionEvents(currentEvents[sessionId] ?? [], [executionEvent]),
-      }))
-      void refreshExecutionSessionStatus({ silent: true })
-    })
-
-    return () => subscription.close()
-  }, [backendUrl, executionSessionId, refreshExecutionSessionStatus])
-
-  useEffect(() => {
-    if (!selectedExecutionStatus) {
-      return
-    }
-
-    setExecutionEventsBySession((currentEvents) => ({
-      ...currentEvents,
-      [selectedExecutionStatus.sessionId]: mergeExecutionEvents(
-        currentEvents[selectedExecutionStatus.sessionId] ?? [],
-        selectedExecutionStatus.recentEvents,
-      ),
-    }))
-  }, [selectedExecutionStatus])
+    void refreshExecutionSessionStatus({ silent: true })
+  }, [executionSessionId, refreshExecutionSessionStatus, streamedExecutionEvents])
 
   useEffect(() => {
     if (!selectedExecutionStatus || !executionSummary) {
@@ -1493,6 +1466,12 @@ function App() {
       setError(executionSessionError)
     }
   }, [executionSessionError])
+
+  useEffect(() => {
+    if (executionEventsError) {
+      setError(executionEventsError)
+    }
+  }, [executionEventsError])
 
   useEffect(() => {
     if (!selectedRepository || !workspace) {

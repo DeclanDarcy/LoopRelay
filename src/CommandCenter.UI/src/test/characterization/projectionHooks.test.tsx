@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   useArtifactContent,
   useExecutionContextPreview,
+  useExecutionEvents,
   useExecutionSession,
   useRepositories,
   useRepositoryWorkspace,
@@ -169,6 +170,15 @@ function createExecutionStatus(sessionId = 'session-alpha'): ExecutionStatus {
   }
 }
 
+function createExecutionEvent(sequence: number, message = `Event ${sequence}`) {
+  return {
+    sequence,
+    timestamp: `2026-01-01T00:0${sequence}:00Z`,
+    type: 'status',
+    message,
+  }
+}
+
 function createFetchResponse(value: unknown) {
   return {
     ok: true,
@@ -193,6 +203,43 @@ function installInvokeMock(invoke: unknown) {
     callbacks: {},
     convertFileSrc: vi.fn(),
   }
+}
+
+type MockEventListener = (event: { data: string }) => void
+
+function installEventSourceMock() {
+  class MockEventSource {
+    static CLOSED = 2
+    static instances: MockEventSource[] = []
+
+    readyState = 0
+    listeners = new Map<string, MockEventListener[]>()
+    onerror: (() => void) | null = null
+
+    readonly url: string
+
+    constructor(url: string) {
+      this.url = url
+      MockEventSource.instances.push(this)
+    }
+
+    addEventListener(type: string, listener: MockEventListener) {
+      this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener])
+    }
+
+    emitExecutionEvent(event: unknown) {
+      for (const listener of this.listeners.get('execution-event') ?? []) {
+        listener({ data: JSON.stringify(event) })
+      }
+    }
+
+    close() {
+      this.readyState = MockEventSource.CLOSED
+    }
+  }
+
+  vi.stubGlobal('EventSource', MockEventSource)
+  return MockEventSource
 }
 
 afterEach(() => {
@@ -418,5 +465,85 @@ describe('projection hook characterization', () => {
     })
 
     expect(result.current.data).toBe(betaStatus)
+  })
+
+  it('stores streamed execution events by sequence order and replaces duplicate sequences', async () => {
+    const invoke = vi.fn().mockResolvedValue('http://backend.test')
+    const MockEventSource = installEventSourceMock()
+    installInvokeMock(invoke)
+
+    const { result } = renderHook(() => useExecutionEvents('session-alpha'))
+
+    await waitFor(() => expect(MockEventSource.instances).toHaveLength(1))
+    expect(MockEventSource.instances[0].url).toBe(
+      'http://backend.test/api/execution-sessions/session-alpha/events/stream',
+    )
+
+    act(() => {
+      MockEventSource.instances[0].emitExecutionEvent(createExecutionEvent(3))
+      MockEventSource.instances[0].emitExecutionEvent(createExecutionEvent(1))
+      MockEventSource.instances[0].emitExecutionEvent(createExecutionEvent(2))
+      MockEventSource.instances[0].emitExecutionEvent(createExecutionEvent(2, 'Event 2 replaced'))
+    })
+
+    expect(result.current.data.map((event) => event.sequence)).toEqual([1, 2, 3])
+    expect(result.current.data[1].message).toBe('Event 2 replaced')
+  })
+
+  it('closes streamed execution event subscriptions on session change and unmount', async () => {
+    const invoke = vi.fn().mockResolvedValue('http://backend.test')
+    const MockEventSource = installEventSourceMock()
+    installInvokeMock(invoke)
+
+    const { result, rerender, unmount } = renderHook(
+      ({ sessionId }: { sessionId: string }) => useExecutionEvents(sessionId),
+      { initialProps: { sessionId: 'session-alpha' } },
+    )
+
+    await waitFor(() => expect(MockEventSource.instances).toHaveLength(1))
+
+    act(() => {
+      MockEventSource.instances[0].emitExecutionEvent(createExecutionEvent(1, 'Alpha event'))
+    })
+    expect(result.current.data).toHaveLength(1)
+
+    rerender({ sessionId: 'session-beta' })
+
+    await waitFor(() => expect(MockEventSource.instances).toHaveLength(2))
+    expect(MockEventSource.instances[0].readyState).toBe(MockEventSource.CLOSED)
+    expect(result.current.data).toEqual([])
+
+    act(() => {
+      MockEventSource.instances[0].emitExecutionEvent(createExecutionEvent(2, 'Stale alpha event'))
+      MockEventSource.instances[1].emitExecutionEvent(createExecutionEvent(1, 'Beta event'))
+    })
+
+    expect(result.current.data).toEqual([createExecutionEvent(1, 'Beta event')])
+
+    unmount()
+
+    expect(MockEventSource.instances[1].readyState).toBe(MockEventSource.CLOSED)
+  })
+
+  it('keeps silent execution status refresh failures out of hook error state', async () => {
+    const status = createExecutionStatus('session-alpha')
+    const invoke = vi.fn().mockResolvedValue('http://backend.test')
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(createFetchResponse(status))
+      .mockRejectedValueOnce(new Error('refresh failed'))
+    installInvokeMock(invoke)
+    vi.stubGlobal('fetch', fetch)
+
+    const { result } = renderHook(() => useExecutionSession('repo-alpha', 'session-alpha'))
+
+    await waitFor(() => expect(result.current.data).toBe(status))
+
+    await act(async () => {
+      await result.current.refresh({ silent: true })
+    })
+
+    expect(result.current.data).toBe(status)
+    expect(result.current.error).toBeNull()
   })
 })

@@ -84,7 +84,7 @@ Create hooks that own loading, refreshing, errors, and cleanup:
 - [x] `useArtifactContent(repositoryId, relativePath)`
 - [x] `useExecutionContextPreview(repositoryId, milestonePath)`
 - [x] `useExecutionSession(repositoryId, sessionId)`
-- [ ] `useExecutionEvents(sessionId)`
+- [x] `useExecutionEvents(sessionId)`
 - [ ] `useGitStatus(repositoryId)`
 - [ ] `useCommitPreparation(sessionId)`
 - [ ] `useOperationalContextProposal(repositoryId, proposalId)`
@@ -160,8 +160,8 @@ Minimum scenarios:
 - [ ] Selecting a repository loads the same workspace projection.
 - [ ] Refresh reloads workspace and reconciles selected artifacts.
 - [ ] Milestone selection builds execution context only when requested.
-- [ ] Execution events merge by sequence and preserve ordering.
-- [ ] SSE cleanup occurs when session changes or unmounts.
+- [x] Execution events merge by sequence and preserve ordering.
+- [x] SSE cleanup occurs when session changes or unmounts.
 - [ ] Proposal generation, load, edit, accept, reject, and promote keep current gating.
 - [ ] Commit preparation, selection, commit, and push keep current gating.
 - [ ] Continuity diagnostics and report generation remain read-only except for explicit report generation.
