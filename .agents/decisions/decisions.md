@@ -2,18 +2,16 @@
 
 ## Newly Authorized
 
-- Treat the choice not to extract `getDecisionContinuityWarnings` as an important M0 authority-boundary validation.
-- Keep `getDecisionContinuityWarnings` out of `src/lib` unless a later backend-owned projection makes decision-specific warning relevance explicit.
-- Classify warning filtering that decides which generic warnings are decision-relevant as frontend interpretation, not presentation mapping.
-- Continue allowing `getOperationalContextSectionItems` in `src/lib` because it parses proposal content into section display items without deriving semantic authority.
-- Do not begin the next `mergeExecutionEvents` slice by asking only whether it can be extracted; begin by determining who should own the merge behavior.
-- Audit `mergeExecutionEvents` against three ownership candidates: `App.tsx`, `src/lib`, and `useExecutionEvents`.
-- Prefer `useExecutionEvents` as the likely owner if merge behavior guarantees stream correctness, ordering, duplicate sequence replacement, session isolation, or other subscription lifecycle behavior.
-- Consider `src/lib` only if `mergeExecutionEvents` is pure event-list-to-event-list transformation with no lifecycle assumptions.
-- Treat `App.tsx` as the weakest owner for `mergeExecutionEvents` now that `useExecutionEvents` owns subscription, cleanup, ordering, duplicate replacement, and session isolation concerns.
-- Characterize ordering, duplicate replacement, sequence gaps, session boundaries, empty state, and append behavior before moving `mergeExecutionEvents`.
-- Decide the destination for `mergeExecutionEvents` only after classification determines whether it is stream lifecycle support or display transformation.
+- Classify `mergeExecutionEvents` as stream correctness logic, not display logic and not workflow logic.
+- Keep `mergeExecutionEvents` beside `useExecutionEvents` subscription, cleanup, ordering, duplicate replacement, and session isolation behavior.
+- Continue treating the retained M0.5 responsibilities as important ownership findings, not merely unextracted code.
+- Use the question "If git workflow semantics changed, would this helper still exist?" before extracting git path bucket rendering.
+- Extract git path bucket rendering only if classification shows it is presentation, formatting, or grouping.
+- Do not extract git path bucket rendering if it embeds staged/unstaged meaning, commit readiness, review meaning, or workflow grouping.
+- Continue refusing extraction of commit readiness, proposal readiness, promotion readiness, and execution readiness.
+- Treat remaining M0 closure less as an `App.tsx` size target and more as an intentional ownership audit.
+- Continue the M0.5 decomposition rule: extract presentation, formatting, and grouping; move stream correctness to stream authority; keep meaning, readiness, and workflow review with their current authority.
 
 ## Next Authorized Slice
 
-Classify `mergeExecutionEvents` ownership before extraction. If it guarantees stream correctness, move ownership toward `useExecutionEvents`; if it transforms already-correct events for display, consider `src/lib`.
+Continue Workstream 0.5 with classification-first decomposition. The likely next candidate remains git path bucket rendering, but only after confirming it is pure presentation/formatting/grouping rather than workflow meaning or readiness.

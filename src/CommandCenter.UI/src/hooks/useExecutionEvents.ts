@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react'
 import { formatError, getBackendUrl, subscribeToExecutionEvents } from '../api'
 import type { ExecutionEvent } from '../types'
 
-function mergeExecutionEvents(currentEvents: ExecutionEvent[], incomingEvents: ExecutionEvent[]) {
+export function mergeExecutionEvents(
+  currentEvents: ExecutionEvent[],
+  incomingEvents: ExecutionEvent[],
+) {
   const eventsBySequence = new Map<number, ExecutionEvent>()
   currentEvents.forEach((event) => eventsBySequence.set(event.sequence, event))
   incomingEvents.forEach((event) => eventsBySequence.set(event.sequence, event))

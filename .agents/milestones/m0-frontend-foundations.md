@@ -161,6 +161,7 @@ Slice progress:
 - [x] Added `src/lib/markdown.tsx` extraction for current markdown preview rendering.
 - [x] Added `src/lib/executionWorkflow.ts` extraction for current execution workflow rail display mapping.
 - [x] Added `src/lib/operationalContext.ts` extraction for current operational-context section item display parsing.
+- [x] Centralized execution event merge behavior in `useExecutionEvents` for both SSE streams and status snapshot composition.
 - [x] Left feature component extraction in `App.tsx` for later Workstream 0.5 slices.
 
 ### Certification

@@ -30,6 +30,7 @@ import {
   useExecutionEvents,
   useExecutionSession,
   useGitStatus,
+  mergeExecutionEvents,
   useRepositories,
   useRepositoryWorkspace,
 } from './hooks'
@@ -46,7 +47,6 @@ import {
 import { useShellState } from './state/shellState'
 import type {
   CommitPreparation,
-  ExecutionEvent,
   ExecutionReadiness,
   ExecutionSessionSummary,
   OperationalContextCompressionSummary,
@@ -98,13 +98,6 @@ function getDecisionContinuityWarnings(summary: OperationalContextCompressionSum
     .filter((warning, index, warnings) =>
       warning.toLowerCase().includes('decision') && warnings.indexOf(warning) === index,
     )
-}
-
-function mergeExecutionEvents(currentEvents: ExecutionEvent[], incomingEvents: ExecutionEvent[]) {
-  const eventsBySequence = new Map<number, ExecutionEvent>()
-  currentEvents.forEach((event) => eventsBySequence.set(event.sequence, event))
-  incomingEvents.forEach((event) => eventsBySequence.set(event.sequence, event))
-  return Array.from(eventsBySequence.values()).sort((left, right) => left.sequence - right.sequence)
 }
 
 function renderPathBucket(label: string, paths: string[]) {

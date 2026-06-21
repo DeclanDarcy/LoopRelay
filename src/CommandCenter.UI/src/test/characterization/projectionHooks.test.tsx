@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  mergeExecutionEvents,
   useArtifactContent,
   useContinuityDiagnostics,
   useExecutionContextPreview,
@@ -549,6 +550,26 @@ describe('projection hook characterization', () => {
 
     expect(result.current.data.map((event) => event.sequence)).toEqual([1, 2, 3])
     expect(result.current.data[1].message).toBe('Event 2 replaced')
+  })
+
+  it('merges execution status snapshots with streamed events by replacing duplicate sequences', () => {
+    const snapshotEvents = [
+      createExecutionEvent(1, 'Snapshot event 1'),
+      createExecutionEvent(3, 'Snapshot event 3'),
+    ]
+    const streamedEvents = [
+      createExecutionEvent(2, 'Streamed event 2'),
+      createExecutionEvent(3, 'Streamed event 3 replaced'),
+    ]
+
+    const mergedEvents = mergeExecutionEvents(snapshotEvents, streamedEvents)
+
+    expect(mergedEvents.map((event) => event.sequence)).toEqual([1, 2, 3])
+    expect(mergedEvents.map((event) => event.message)).toEqual([
+      'Snapshot event 1',
+      'Streamed event 2',
+      'Streamed event 3 replaced',
+    ])
   })
 
   it('closes streamed execution event subscriptions on session change and unmount', async () => {
