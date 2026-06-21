@@ -188,6 +188,8 @@ Slice progress:
 - [x] Extracted operational-context semantic change rendering as presentation-only `OperationalContextSemanticChangeList` with characterization coverage for the existing heading, empty fallback, backend-provided ordering, and type/description labels.
 - [x] Audited decision-continuity review and deliberately left it in `App.tsx` because the block carries acceptance guidance and sits inside proposal review coordination.
 - [x] Extracted operational-context proposal comparison rendering as presentation-only `OperationalContextProposalComparison` with characterization coverage for headings, empty fallbacks, and existing markdown rendering.
+- [x] Audited generated-handoff review and extracted only neutral generated-content rendering as `GeneratedHandoffContent` with characterization coverage for loading, empty, and markdown behavior.
+- [x] Left generated-handoff path metadata, accept/reject buttons, decision pending state, confirmation, generated-handoff loading ownership, and backend decision commands in `App.tsx`.
 - [x] Left feature component extraction in `App.tsx` for later Workstream 0.5 slices.
 
 ### Certification

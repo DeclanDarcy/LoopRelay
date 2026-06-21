@@ -57,6 +57,7 @@ Captured after extracting `useGitStatus(repositoryId)` and updated during the M0
 - Repository dashboard item content rendering is now extracted to `RepositoryDashboardItemContent`; selectable button ownership, selected-state class composition, repository selection callback, list loading/empty state, registration, removal, and selection reconciliation remain composed in `App.tsx`.
 - Selected repository summary rendering is now extracted to `SelectedRepositorySummary`; workspace refresh, continuity actions, operational-context actions, artifact/editor actions, execution workflows, git workflows, and repository removal remain composed in `App.tsx`.
 - Artifact editor metadata and markdown preview rendering are now extracted to `ArtifactMetadata` and `ArtifactMarkdownPreview`; textarea draft ownership, save/rotate buttons, dirty tracking, loading disablement, and mutation gating remain composed in `App.tsx`.
+- Generated handoff content rendering is now extracted to `GeneratedHandoffContent`; generated-handoff path metadata, accept/reject actions, decision pending state, confirmation, loading ownership, and backend decision commands remain composed in `App.tsx`.
 
 ## Projection Ownership Audit
 
@@ -117,3 +118,5 @@ Captured before/with the continuity diagnostics extraction slice in M0.5.
 | Artifact editor metadata | Pure presentation of selected artifact family, name, and relative path. | Extracted to `ArtifactMetadata`; tests pin existing eyebrow, heading, and path rendering. |
 | Artifact markdown preview | Pure presentation of selected artifact draft content as markdown or existing loading/empty fallbacks. | Extracted to `ArtifactMarkdownPreview`; tests pin loading, markdown, and empty states. |
 | Artifact editor controls | Draft mutation, save/rotate command surfaces, dirty tracking, loading disablement, and rotation eligibility. | Retain in `App.tsx`; removing callbacks would erase the user-facing workflow concept. |
+| Generated handoff content | Pure presentation of caller-owned generated handoff markdown plus existing loading and empty fallbacks. | Extracted to `GeneratedHandoffContent`; tests pin loading, markdown rendering, and empty generated-handoff fallback. |
+| Generated handoff review controls | Workflow decision support around generated handoff path metadata, review readiness, accept/reject buttons, confirmation, loading ownership, and backend decision commands. | Retain in `App.tsx`; removing callbacks would erase the accept/reject workflow and the pending-decision authority boundary. |

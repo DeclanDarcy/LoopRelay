@@ -36,6 +36,7 @@ import { ExecutionContextValidationList } from './features/execution/ExecutionCo
 import { ExecutionEventFeed } from './features/execution/ExecutionEventFeed'
 import { ExecutionHistoryPanel } from './features/execution/ExecutionHistoryPanel'
 import { ExecutionSessionPanel } from './features/execution/ExecutionSessionPanel'
+import { GeneratedHandoffContent } from './features/execution/GeneratedHandoffContent'
 import { GitPathBucket } from './features/execution/GitPathBucket'
 import { OperationalContextCompressionSummaryPanel } from './features/operational-context/OperationalContextCompressionSummaryPanel'
 import { OperationalContextCurrentPanel } from './features/operational-context/OperationalContextCurrentPanel'
@@ -64,7 +65,6 @@ import {
   getAvailableArtifactPaths,
   getExecutionWorkflowSteps,
   getOperationalContextSectionItems,
-  renderMarkdown,
 } from './lib'
 import { useShellState } from './state/shellState'
 import type {
@@ -1909,15 +1909,10 @@ function App() {
                       {isRejectingHandoff ? 'Rejecting...' : 'Reject Handoff'}
                     </button>
                   </div>
-                  <div className="markdown-preview handoff-review-content">
-                    {isGeneratedHandoffLoading ? (
-                      <p>Loading generated handoff...</p>
-                    ) : generatedHandoffContent.trim() ? (
-                      renderMarkdown(generatedHandoffContent)
-                    ) : (
-                      <p>Generated handoff is empty.</p>
-                    )}
-                  </div>
+                  <GeneratedHandoffContent
+                    content={generatedHandoffContent}
+                    isLoading={isGeneratedHandoffLoading}
+                  />
                 </section>
               ) : null}
 
