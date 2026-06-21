@@ -190,6 +190,8 @@ Slice progress:
 - [x] Extracted operational-context proposal comparison rendering as presentation-only `OperationalContextProposalComparison` with characterization coverage for headings, empty fallbacks, and existing markdown rendering.
 - [x] Audited generated-handoff review and extracted only neutral generated-content rendering as `GeneratedHandoffContent` with characterization coverage for loading, empty, and markdown behavior.
 - [x] Left generated-handoff path metadata, accept/reject buttons, decision pending state, confirmation, generated-handoff loading ownership, and backend decision commands in `App.tsx`.
+- [x] Audited Git commit/push review and extracted only neutral evidence summaries as `CommitPreparationSummary`, `PushReviewSummary`, and `GitStatusDetails` with characterization coverage for metadata labels, fallbacks, and dirty-path buckets.
+- [x] Left commit preparation loading, commit message draft, selected commit paths, commit readiness, push readiness, refresh, commit, and push command ownership in `App.tsx`.
 - [x] Left feature component extraction in `App.tsx` for later Workstream 0.5 slices.
 
 ### Certification

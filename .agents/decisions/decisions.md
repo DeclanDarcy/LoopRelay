@@ -2,9 +2,13 @@
 
 ## Newly Authorized
 
-- Treat the generated-handoff extraction as further evidence that M0.5 is entering its final phase.
-- Preserve the successful M0.5 split: evidence/content display components render caller-owned state, while `App.tsx` retains decisions, mutations, readiness, draft ownership, and workflow coordination.
-- For the next Git review audit, ask how much unaudited presentation remains rather than searching for extraction for its own sake.
-- Expect the Git review audit to have lower extraction yield than operational-context review; a conclusion that the area is mostly workflow authority is a valid M0.5 outcome.
-- Consider M0.5 complete once remaining `App.tsx` responsibilities are audited and classified as workflow authority, draft ownership, navigation ownership, selection reconciliation, readiness evaluation, or mutation coordination, with no significant `props -> render` islands left.
-- Do not require zero JSX in `App.tsx` for M0.5 closure; require deliberate presentation ownership and deliberate authority ownership.
+- Treat the `GitWorkflowEvidence` extraction as more important for the ownership conclusion it supports than for the amount of code it moved.
+- Use `remove callbacks -> still meaningful` as the operational test for presentation components in this codebase.
+- Perform exactly one more deliberate `App.tsx` scan for M0.5.
+- Classify remaining `App.tsx` blocks as Presentation, Navigation Authority, Draft Ownership, Workflow Coordination, Workflow Mutation, Selection Reconciliation, or Readiness Evaluation.
+- Extract a remaining block only if it is meaningful in isolation and contains no authority.
+- Close M0.5 if the final scan finds no additional high-value `props -> render` extraction candidates.
+- Do not continue extracting merely because JSX remains in `App.tsx`.
+- Avoid fragmenting workflow authority in response to late-stage line-count pressure.
+- Consider M0.5 complete when all significant presentation-only islands have been audited, extracted where valuable, and remaining `App.tsx` responsibilities are intentionally centralized authority, draft, readiness, selection, or mutation coordination.
+- After M0.5 closure, shift to certification that remaining responsibilities are intentionally centralized and aligned with the M0.0-M0.6 authority model.

@@ -37,7 +37,11 @@ import { ExecutionEventFeed } from './features/execution/ExecutionEventFeed'
 import { ExecutionHistoryPanel } from './features/execution/ExecutionHistoryPanel'
 import { ExecutionSessionPanel } from './features/execution/ExecutionSessionPanel'
 import { GeneratedHandoffContent } from './features/execution/GeneratedHandoffContent'
-import { GitPathBucket } from './features/execution/GitPathBucket'
+import {
+  CommitPreparationSummary,
+  GitStatusDetails,
+  PushReviewSummary,
+} from './features/execution/GitWorkflowEvidence'
 import { OperationalContextCompressionSummaryPanel } from './features/operational-context/OperationalContextCompressionSummaryPanel'
 import { OperationalContextCurrentPanel } from './features/operational-context/OperationalContextCurrentPanel'
 import { OperationalContextProposalComparison } from './features/operational-context/OperationalContextProposalComparison'
@@ -1735,19 +1739,10 @@ function App() {
                   {currentExecutionState === 'AwaitingCommit' ? (
                     isCommitPreparationCurrent && commitPreparation ? (
                       <div className="commit-review-panel">
-                        <div className="context-summary">
-                          <span>Preparation: {commitPreparation.id}</span>
-                          <span>Snapshot: {commitPreparation.statusSnapshot.id}</span>
-                          <span>Branch: {commitPreparation.statusSnapshot.branch || '(detached)'}</span>
-                          <span>Generated: {formatDateTime(commitPreparation.generatedAt)}</span>
-                          <span>Changed paths: {commitPreparation.scopeItems.length}</span>
-                          <span>Selected: {selectedCommitScopeItems.length}</span>
-                          <span>
-                            Pre-existing:{' '}
-                            {commitPreparation.hasPreExistingChanges ? 'Present' : 'None detected'}
-                          </span>
-                          <span>Captured: {formatDateTime(commitPreparation.statusSnapshot.capturedAt)}</span>
-                        </div>
+                        <CommitPreparationSummary
+                          preparation={commitPreparation}
+                          selectedPathCount={selectedCommitScopeItems.length}
+                        />
                         <label className="commit-message-editor">
                           <span>Commit message</span>
                           <textarea
@@ -1816,14 +1811,7 @@ function App() {
                     )
                   ) : currentExecutionState === 'AwaitingPush' && executionDisplay?.commitSha ? (
                     <div className="commit-review-panel">
-                      <div className="context-summary">
-                        <span>Commit: {executionDisplay.commitSha}</span>
-                        <span>Committed: {formatDateTime(executionDisplay.committedAt)}</span>
-                        <span>Snapshot: {executionDisplay.preparationSnapshotId ?? 'Not recorded'}</span>
-                        <span>Branch: {gitStatus?.branch || executionDisplay.pushBranchName || '(unknown)'}</span>
-                        <span>Ahead: {gitStatus?.aheadCount ?? 'Not loaded'}</span>
-                        <span>State: Awaiting push</span>
-                      </div>
+                      <PushReviewSummary execution={executionDisplay} gitStatus={gitStatus} />
                       <div className="commit-scope-toolbar">
                         <button
                           type="button"
@@ -1836,26 +1824,7 @@ function App() {
                       </div>
                     </div>
                   ) : gitStatus ? (
-                    <>
-                      <div className="context-summary">
-                        <span>Branch: {gitStatus.branch || '(detached)'}</span>
-                        <span>
-                          State: {gitStatus.dirtyState.isClean ? 'Clean' : 'Dirty'}
-                        </span>
-                        <span>Ahead: {gitStatus.aheadCount}</span>
-                        <span>Behind: {gitStatus.behindCount}</span>
-                        <span>Changed paths: {gitStatusPathCount}</span>
-                        <span>Captured: {formatDateTime(gitStatus.capturedAt)}</span>
-                      </div>
-                      <div className="context-columns">
-                        <GitPathBucket label="Staged" paths={gitStatus.dirtyState.stagedPaths} />
-                        <GitPathBucket label="Modified" paths={gitStatus.dirtyState.modifiedPaths} />
-                        <GitPathBucket label="Added" paths={gitStatus.dirtyState.addedPaths} />
-                        <GitPathBucket label="Deleted" paths={gitStatus.dirtyState.deletedPaths} />
-                        <GitPathBucket label="Renamed" paths={gitStatus.dirtyState.renamedPaths} />
-                        <GitPathBucket label="Untracked" paths={gitStatus.dirtyState.untrackedPaths} />
-                      </div>
-                    </>
+                    <GitStatusDetails gitStatus={gitStatus} changedPathCount={gitStatusPathCount} />
                   ) : (
                     <p className="empty-state">
                       {isGitStatusLoading ? 'Loading Git status...' : 'Git status is not loaded.'}
