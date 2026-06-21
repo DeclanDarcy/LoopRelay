@@ -9,7 +9,7 @@ public sealed class PlanningServiceTests
     [Fact]
     public async Task PlanPresenceReflectsPlanArtifact()
     {
-        var repository = CreateRepository();
+        Repository repository = CreateRepository();
         var service = new PlanningService(new FileSystemArtifactStore());
 
         Assert.False(await service.HasPlanAsync(repository));
@@ -22,10 +22,10 @@ public sealed class PlanningServiceTests
     [Fact]
     public async Task MissingMilestoneDirectoryReturnsNoMilestones()
     {
-        var repository = CreateRepository();
+        Repository repository = CreateRepository();
         var service = new PlanningService(new FileSystemArtifactStore());
 
-        var milestones = await service.GetMilestonesAsync(repository);
+        IReadOnlyList<Milestone> milestones = await service.GetMilestonesAsync(repository);
 
         Assert.Empty(milestones);
     }
@@ -33,11 +33,11 @@ public sealed class PlanningServiceTests
     [Fact]
     public async Task EmptyMilestoneDirectoryReturnsNoMilestones()
     {
-        var repository = CreateRepository();
+        Repository repository = CreateRepository();
         Directory.CreateDirectory(Path.Combine(repository.Path, ".agents", "milestones"));
         var service = new PlanningService(new FileSystemArtifactStore());
 
-        var milestones = await service.GetMilestonesAsync(repository);
+        IReadOnlyList<Milestone> milestones = await service.GetMilestonesAsync(repository);
 
         Assert.Empty(milestones);
     }
@@ -45,13 +45,13 @@ public sealed class PlanningServiceTests
     [Fact]
     public async Task DiscoversMilestoneMarkdownFilesWithoutParsingContent()
     {
-        var repository = CreateRepository();
+        Repository repository = CreateRepository();
         await WriteAsync(repository, ".agents/milestones/m2.md", "not structured milestone content");
         await WriteAsync(repository, ".agents/milestones/m1.md", "# M1");
         await WriteAsync(repository, ".agents/milestones/notes.txt", "not a milestone");
         var service = new PlanningService(new FileSystemArtifactStore());
 
-        var milestones = await service.GetMilestonesAsync(repository);
+        IReadOnlyList<Milestone> milestones = await service.GetMilestonesAsync(repository);
 
         Assert.Collection(
             milestones,
@@ -70,11 +70,11 @@ public sealed class PlanningServiceTests
     [Fact]
     public async Task MissingPlanReturnsMissingPlanReadiness()
     {
-        var repository = CreateRepository();
+        Repository repository = CreateRepository();
         await WriteAsync(repository, ".agents/milestones/m1.md", "# M1");
         var service = new PlanningService(new FileSystemArtifactStore());
 
-        var readiness = await service.DetermineReadinessAsync(repository);
+        ExecutionReadiness readiness = await service.DetermineReadinessAsync(repository);
 
         Assert.Equal(ExecutionReadiness.MissingPlan, readiness);
     }
@@ -82,11 +82,11 @@ public sealed class PlanningServiceTests
     [Fact]
     public async Task PlanWithoutMilestonesReturnsMissingMilestonesReadiness()
     {
-        var repository = CreateRepository();
+        Repository repository = CreateRepository();
         await WriteAsync(repository, ".agents/plan.md", "plan");
         var service = new PlanningService(new FileSystemArtifactStore());
 
-        var readiness = await service.DetermineReadinessAsync(repository);
+        ExecutionReadiness readiness = await service.DetermineReadinessAsync(repository);
 
         Assert.Equal(ExecutionReadiness.MissingMilestones, readiness);
     }
@@ -94,20 +94,20 @@ public sealed class PlanningServiceTests
     [Fact]
     public async Task PlanWithMilestonesReturnsReadyReadiness()
     {
-        var repository = CreateRepository();
+        Repository repository = CreateRepository();
         await WriteAsync(repository, ".agents/plan.md", "plan");
         await WriteAsync(repository, ".agents/milestones/m1.md", "# M1");
         var service = new PlanningService(new FileSystemArtifactStore());
 
-        var readiness = await service.DetermineReadinessAsync(repository);
+        ExecutionReadiness readiness = await service.DetermineReadinessAsync(repository);
 
         Assert.Equal(ExecutionReadiness.Ready, readiness);
     }
 
     private static async Task WriteAsync(Repository repository, string relativePath, string content)
     {
-        var path = Path.Combine(repository.Path, relativePath.Replace('/', Path.DirectorySeparatorChar));
-        var directory = Path.GetDirectoryName(path);
+        string path = Path.Combine(repository.Path, relativePath.Replace('/', Path.DirectorySeparatorChar));
+        string? directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrWhiteSpace(directory))
         {
             Directory.CreateDirectory(directory);
@@ -118,7 +118,7 @@ public sealed class PlanningServiceTests
 
     private static Repository CreateRepository()
     {
-        var directory = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"));
+        string directory = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         Directory.CreateDirectory(Path.Combine(directory, ".git"));
 

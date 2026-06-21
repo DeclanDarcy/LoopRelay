@@ -13,14 +13,14 @@ public sealed class RepositoryProjectionServiceTests
     [Fact]
     public async Task DashboardReturnsRegisteredRepositoryAvailability()
     {
-        var repositoryPath = CreateGitRepositoryDirectory();
-        var repositoryService = CreateRepositoryService();
-        var repository = await repositoryService.RegisterAsync(repositoryPath);
-        var projectionService = CreateProjectionService(repositoryService);
+        string repositoryPath = CreateGitRepositoryDirectory();
+        RepositoryService repositoryService = CreateRepositoryService();
+        Repository repository = await repositoryService.RegisterAsync(repositoryPath);
+        RepositoryProjectionService projectionService = CreateProjectionService(repositoryService);
 
-        var dashboard = await projectionService.GetDashboardAsync();
+        IReadOnlyList<RepositoryDashboardProjection> dashboard = await projectionService.GetDashboardAsync();
 
-        var projection = Assert.Single(dashboard);
+        RepositoryDashboardProjection projection = Assert.Single(dashboard);
         Assert.Equal(repository.Id, projection.Repository.Id);
         Assert.Equal(RepositoryAvailability.Available, projection.Availability);
     }
@@ -28,15 +28,15 @@ public sealed class RepositoryProjectionServiceTests
     [Fact]
     public async Task MissingRegisteredRepositoryReportsMissing()
     {
-        var repositoryPath = CreateGitRepositoryDirectory();
-        var repositoryService = CreateRepositoryService();
-        var repository = await repositoryService.RegisterAsync(repositoryPath);
+        string repositoryPath = CreateGitRepositoryDirectory();
+        RepositoryService repositoryService = CreateRepositoryService();
+        Repository repository = await repositoryService.RegisterAsync(repositoryPath);
         Directory.Delete(repositoryPath, recursive: true);
-        var projectionService = CreateProjectionService(repositoryService);
+        RepositoryProjectionService projectionService = CreateProjectionService(repositoryService);
 
-        var dashboard = await projectionService.GetDashboardAsync();
+        IReadOnlyList<RepositoryDashboardProjection> dashboard = await projectionService.GetDashboardAsync();
 
-        var projection = Assert.Single(dashboard);
+        RepositoryDashboardProjection projection = Assert.Single(dashboard);
         Assert.Equal(repository.Id, projection.Repository.Id);
         Assert.Equal(RepositoryAvailability.Missing, projection.Availability);
     }
@@ -44,32 +44,32 @@ public sealed class RepositoryProjectionServiceTests
     [Fact]
     public async Task WorkspaceRefreshDiscoversExternallyAddedArtifacts()
     {
-        var repositoryPath = CreateGitRepositoryDirectory();
-        var repositoryService = CreateRepositoryService();
-        var repository = await repositoryService.RegisterAsync(repositoryPath);
-        var projectionService = CreateProjectionService(repositoryService);
+        string repositoryPath = CreateGitRepositoryDirectory();
+        RepositoryService repositoryService = CreateRepositoryService();
+        Repository repository = await repositoryService.RegisterAsync(repositoryPath);
+        RepositoryProjectionService projectionService = CreateProjectionService(repositoryService);
 
-        var beforeRefresh = await projectionService.GetWorkspaceAsync(repository.Id);
+        RepositoryWorkspaceProjection beforeRefresh = await projectionService.GetWorkspaceAsync(repository.Id);
         await WriteAsync(repository, ".agents/milestones/m2.md", "milestone");
-        var afterRefresh = await projectionService.RefreshWorkspaceAsync(repository.Id);
+        RepositoryWorkspaceProjection afterRefresh = await projectionService.RefreshWorkspaceAsync(repository.Id);
 
         Assert.Empty(beforeRefresh.ArtifactInventory.Milestones);
-        var milestone = Assert.Single(afterRefresh.ArtifactInventory.Milestones);
+        Artifact milestone = Assert.Single(afterRefresh.ArtifactInventory.Milestones);
         Assert.Equal(".agents/milestones/m2.md", milestone.RelativePath);
     }
 
     [Fact]
     public async Task WorkspaceRefreshRemovesExternallyDeletedArtifacts()
     {
-        var repositoryPath = CreateGitRepositoryDirectory();
-        var repositoryService = CreateRepositoryService();
-        var repository = await repositoryService.RegisterAsync(repositoryPath);
+        string repositoryPath = CreateGitRepositoryDirectory();
+        RepositoryService repositoryService = CreateRepositoryService();
+        Repository repository = await repositoryService.RegisterAsync(repositoryPath);
         await WriteAsync(repository, ".agents/handoffs/handoff.md", "handoff");
-        var projectionService = CreateProjectionService(repositoryService);
+        RepositoryProjectionService projectionService = CreateProjectionService(repositoryService);
 
-        var beforeDelete = await projectionService.GetWorkspaceAsync(repository.Id);
+        RepositoryWorkspaceProjection beforeDelete = await projectionService.GetWorkspaceAsync(repository.Id);
         File.Delete(Path.Combine(repository.Path, ".agents", "handoffs", "handoff.md"));
-        var afterRefresh = await projectionService.RefreshWorkspaceAsync(repository.Id);
+        RepositoryWorkspaceProjection afterRefresh = await projectionService.RefreshWorkspaceAsync(repository.Id);
 
         Assert.NotNull(beforeDelete.ArtifactInventory.CurrentHandoff);
         Assert.Null(afterRefresh.ArtifactInventory.CurrentHandoff);
@@ -79,15 +79,15 @@ public sealed class RepositoryProjectionServiceTests
     [Fact]
     public async Task WorkspaceProjectionComposesInventoryStatus()
     {
-        var repositoryPath = CreateGitRepositoryDirectory();
-        var repositoryService = CreateRepositoryService();
-        var repository = await repositoryService.RegisterAsync(repositoryPath);
+        string repositoryPath = CreateGitRepositoryDirectory();
+        RepositoryService repositoryService = CreateRepositoryService();
+        Repository repository = await repositoryService.RegisterAsync(repositoryPath);
         await WriteAsync(repository, ".agents/plan.md", "plan");
         await WriteAsync(repository, ".agents/operational_context.md", "context");
         await WriteAsync(repository, ".agents/decisions/decisions.md", "decisions");
-        var projectionService = CreateProjectionService(repositoryService);
+        RepositoryProjectionService projectionService = CreateProjectionService(repositoryService);
 
-        var workspace = await projectionService.GetWorkspaceAsync(repository.Id);
+        RepositoryWorkspaceProjection workspace = await projectionService.GetWorkspaceAsync(repository.Id);
 
         Assert.True(workspace.HasPlan);
         Assert.True(workspace.HasOperationalContext);
@@ -100,9 +100,9 @@ public sealed class RepositoryProjectionServiceTests
     [Fact]
     public async Task WorkspaceProjectionParsesOperationalContextIntoUnderstandingSections()
     {
-        var repositoryPath = CreateGitRepositoryDirectory();
-        var repositoryService = CreateRepositoryService();
-        var repository = await repositoryService.RegisterAsync(repositoryPath);
+        string repositoryPath = CreateGitRepositoryDirectory();
+        RepositoryService repositoryService = CreateRepositoryService();
+        Repository repository = await repositoryService.RegisterAsync(repositoryPath);
         await WriteAsync(repository, ".agents/operational_context.0004.md", "historical");
         await WriteAsync(repository, ".agents/operational_context.md", """
             # Operational Context
@@ -143,9 +143,9 @@ public sealed class RepositoryProjectionServiceTests
 
             - M7 introduced a backend understanding projection.
             """);
-        var projectionService = CreateProjectionService(repositoryService);
+        RepositoryProjectionService projectionService = CreateProjectionService(repositoryService);
 
-        var workspace = await projectionService.GetWorkspaceAsync(repository.Id);
+        RepositoryWorkspaceProjection workspace = await projectionService.GetWorkspaceAsync(repository.Id);
 
         Assert.True(workspace.OperationalContext.Exists);
         Assert.Equal(".agents/operational_context.md", workspace.OperationalContext.CurrentRelativePath);
@@ -174,12 +174,12 @@ public sealed class RepositoryProjectionServiceTests
     [Fact]
     public async Task WorkspaceProjectionReportsMissingOperationalContextExplicitly()
     {
-        var repositoryPath = CreateGitRepositoryDirectory();
-        var repositoryService = CreateRepositoryService();
-        var repository = await repositoryService.RegisterAsync(repositoryPath);
-        var projectionService = CreateProjectionService(repositoryService);
+        string repositoryPath = CreateGitRepositoryDirectory();
+        RepositoryService repositoryService = CreateRepositoryService();
+        Repository repository = await repositoryService.RegisterAsync(repositoryPath);
+        RepositoryProjectionService projectionService = CreateProjectionService(repositoryService);
 
-        var workspace = await projectionService.GetWorkspaceAsync(repository.Id);
+        RepositoryWorkspaceProjection workspace = await projectionService.GetWorkspaceAsync(repository.Id);
 
         Assert.False(workspace.OperationalContext.Exists);
         Assert.Null(workspace.OperationalContext.CurrentRelativePath);
@@ -192,9 +192,9 @@ public sealed class RepositoryProjectionServiceTests
     [Fact]
     public async Task DashboardContinuitySummaryExposesRevisionQuestionAndRiskCounts()
     {
-        var repositoryPath = CreateGitRepositoryDirectory();
-        var repositoryService = CreateRepositoryService();
-        var repository = await repositoryService.RegisterAsync(repositoryPath);
+        string repositoryPath = CreateGitRepositoryDirectory();
+        RepositoryService repositoryService = CreateRepositoryService();
+        Repository repository = await repositoryService.RegisterAsync(repositoryPath);
         await WriteAsync(repository, ".agents/operational_context.0001.md", "historical");
         await WriteAsync(repository, ".agents/operational_context.md", """
             # Operational Context
@@ -208,11 +208,11 @@ public sealed class RepositoryProjectionServiceTests
 
             - Current risk.
             """);
-        var projectionService = CreateProjectionService(repositoryService);
+        RepositoryProjectionService projectionService = CreateProjectionService(repositoryService);
 
-        var dashboard = await projectionService.GetDashboardAsync();
+        IReadOnlyList<RepositoryDashboardProjection> dashboard = await projectionService.GetDashboardAsync();
 
-        var projection = Assert.Single(dashboard);
+        RepositoryDashboardProjection projection = Assert.Single(dashboard);
         Assert.True(projection.ContinuitySummary.OperationalContextExists);
         Assert.Equal(2, projection.ContinuitySummary.OperationalContextRevisionCount);
         Assert.NotNull(projection.ContinuitySummary.OperationalContextLastUpdatedAt);
@@ -223,11 +223,11 @@ public sealed class RepositoryProjectionServiceTests
     [Fact]
     public async Task WorkspaceProjectionIncludesLatestProposalReviewStateAndWarnings()
     {
-        var repositoryPath = CreateGitRepositoryDirectory();
-        var repositoryService = CreateRepositoryService();
-        var repository = await repositoryService.RegisterAsync(repositoryPath);
+        string repositoryPath = CreateGitRepositoryDirectory();
+        RepositoryService repositoryService = CreateRepositoryService();
+        Repository repository = await repositoryService.RegisterAsync(repositoryPath);
         var proposalStore = new FileSystemOperationalContextProposalStore(new FileSystemArtifactStore());
-        var generatedAt = DateTimeOffset.UtcNow;
+        DateTimeOffset generatedAt = DateTimeOffset.UtcNow;
         await proposalStore.SaveAsync(repository, new OperationalContextProposal
         {
             ProposalId = "proposal-1",
@@ -254,9 +254,9 @@ public sealed class RepositoryProjectionServiceTests
                 ReviewedAt = generatedAt
             }
         }, "# Operational Context");
-        var projectionService = CreateProjectionService(repositoryService);
+        RepositoryProjectionService projectionService = CreateProjectionService(repositoryService);
 
-        var workspace = await projectionService.GetWorkspaceAsync(repository.Id);
+        RepositoryWorkspaceProjection workspace = await projectionService.GetWorkspaceAsync(repository.Id);
 
         Assert.Equal("proposal-1", workspace.OperationalContext.PendingProposalSummary.LatestProposalId);
         Assert.Equal(OperationalContextProposalStatus.Accepted, workspace.OperationalContext.PendingProposalSummary.Status);
@@ -267,17 +267,17 @@ public sealed class RepositoryProjectionServiceTests
     [Fact]
     public async Task DashboardAndWorkspaceProjectPlanningReadiness()
     {
-        var repositoryPath = CreateGitRepositoryDirectory();
-        var repositoryService = CreateRepositoryService();
-        var repository = await repositoryService.RegisterAsync(repositoryPath);
+        string repositoryPath = CreateGitRepositoryDirectory();
+        RepositoryService repositoryService = CreateRepositoryService();
+        Repository repository = await repositoryService.RegisterAsync(repositoryPath);
         await WriteAsync(repository, ".agents/plan.md", "plan");
         await WriteAsync(repository, ".agents/milestones/m1.md", "# M1");
-        var projectionService = CreateProjectionService(repositoryService);
+        RepositoryProjectionService projectionService = CreateProjectionService(repositoryService);
 
-        var dashboard = await projectionService.GetDashboardAsync();
-        var workspace = await projectionService.GetWorkspaceAsync(repository.Id);
+        IReadOnlyList<RepositoryDashboardProjection> dashboard = await projectionService.GetDashboardAsync();
+        RepositoryWorkspaceProjection workspace = await projectionService.GetWorkspaceAsync(repository.Id);
 
-        var dashboardProjection = Assert.Single(dashboard);
+        RepositoryDashboardProjection dashboardProjection = Assert.Single(dashboard);
         Assert.Equal(ExecutionReadiness.Ready, dashboardProjection.Readiness);
         Assert.Equal(1, dashboardProjection.MilestoneCount);
         Assert.Equal(ExecutionReadiness.Ready, workspace.Readiness);
@@ -288,15 +288,15 @@ public sealed class RepositoryProjectionServiceTests
     [Fact]
     public async Task DashboardAndWorkspaceProjectDefaultExecutionState()
     {
-        var repositoryPath = CreateGitRepositoryDirectory();
-        var repositoryService = CreateRepositoryService();
-        var repository = await repositoryService.RegisterAsync(repositoryPath);
-        var projectionService = CreateProjectionService(repositoryService);
+        string repositoryPath = CreateGitRepositoryDirectory();
+        RepositoryService repositoryService = CreateRepositoryService();
+        Repository repository = await repositoryService.RegisterAsync(repositoryPath);
+        RepositoryProjectionService projectionService = CreateProjectionService(repositoryService);
 
-        var dashboard = await projectionService.GetDashboardAsync();
-        var workspace = await projectionService.GetWorkspaceAsync(repository.Id);
+        IReadOnlyList<RepositoryDashboardProjection> dashboard = await projectionService.GetDashboardAsync();
+        RepositoryWorkspaceProjection workspace = await projectionService.GetWorkspaceAsync(repository.Id);
 
-        var dashboardProjection = Assert.Single(dashboard);
+        RepositoryDashboardProjection dashboardProjection = Assert.Single(dashboard);
         Assert.Equal(RepositoryExecutionState.Ready, dashboardProjection.ExecutionState);
         Assert.Null(dashboardProjection.ActiveExecutionSession);
         Assert.Equal(RepositoryExecutionState.Ready, workspace.ExecutionState);
@@ -306,11 +306,11 @@ public sealed class RepositoryProjectionServiceTests
     [Fact]
     public async Task DashboardAndWorkspaceProjectAwaitingAcceptanceSummary()
     {
-        var repositoryPath = CreateGitRepositoryDirectory();
-        var repositoryService = CreateRepositoryService();
-        var repository = await repositoryService.RegisterAsync(repositoryPath);
+        string repositoryPath = CreateGitRepositoryDirectory();
+        RepositoryService repositoryService = CreateRepositoryService();
+        Repository repository = await repositoryService.RegisterAsync(repositoryPath);
         var sessionId = Guid.NewGuid();
-        var projectionService = CreateProjectionService(
+        RepositoryProjectionService projectionService = CreateProjectionService(
             repositoryService,
             new StaticExecutionSessionService(
                 repository.Id,
@@ -328,21 +328,21 @@ public sealed class RepositoryProjectionServiceTests
                     HandoffPath = HandoffService.CurrentHandoffPath
                 }));
 
-        var dashboard = await projectionService.GetDashboardAsync();
-        var workspace = await projectionService.GetWorkspaceAsync(repository.Id);
+        IReadOnlyList<RepositoryDashboardProjection> dashboard = await projectionService.GetDashboardAsync();
+        RepositoryWorkspaceProjection workspace = await projectionService.GetWorkspaceAsync(repository.Id);
 
-        var dashboardProjection = Assert.Single(dashboard);
+        RepositoryDashboardProjection dashboardProjection = Assert.Single(dashboard);
         Assert.Equal(RepositoryExecutionState.AwaitingAcceptance, dashboardProjection.ExecutionState);
         Assert.Null(dashboardProjection.ActiveExecutionSession);
         Assert.NotNull(dashboardProjection.ExecutionSummary);
         Assert.Equal(sessionId, dashboardProjection.ExecutionSummary.SessionId);
-        var dashboardHistory = Assert.Single(dashboardProjection.ExecutionHistory);
+        ExecutionSessionSummary dashboardHistory = Assert.Single(dashboardProjection.ExecutionHistory);
         Assert.Equal(sessionId, dashboardHistory.SessionId);
         Assert.Equal(HandoffService.CurrentHandoffPath, dashboardProjection.ExecutionSummary.HandoffPath);
         Assert.Equal(TimeSpan.FromMinutes(3), dashboardProjection.ExecutionSummary.Duration);
         Assert.Equal(RepositoryExecutionState.AwaitingAcceptance, workspace.ExecutionState);
         Assert.NotNull(workspace.ExecutionSummary);
-        var workspaceHistory = Assert.Single(workspace.ExecutionHistory);
+        ExecutionSessionSummary workspaceHistory = Assert.Single(workspace.ExecutionHistory);
         Assert.Equal(sessionId, workspaceHistory.SessionId);
         Assert.Equal(HandoffService.CurrentHandoffPath, workspace.ExecutionSummary.HandoffPath);
         Assert.Equal(TimeSpan.FromMinutes(3), workspace.ExecutionSummary.Duration);
@@ -351,15 +351,15 @@ public sealed class RepositoryProjectionServiceTests
     [Fact]
     public async Task RefreshAfterAddingMilestoneUpdatesReadiness()
     {
-        var repositoryPath = CreateGitRepositoryDirectory();
-        var repositoryService = CreateRepositoryService();
-        var repository = await repositoryService.RegisterAsync(repositoryPath);
+        string repositoryPath = CreateGitRepositoryDirectory();
+        RepositoryService repositoryService = CreateRepositoryService();
+        Repository repository = await repositoryService.RegisterAsync(repositoryPath);
         await WriteAsync(repository, ".agents/plan.md", "plan");
-        var projectionService = CreateProjectionService(repositoryService);
+        RepositoryProjectionService projectionService = CreateProjectionService(repositoryService);
 
-        var beforeRefresh = await projectionService.GetWorkspaceAsync(repository.Id);
+        RepositoryWorkspaceProjection beforeRefresh = await projectionService.GetWorkspaceAsync(repository.Id);
         await WriteAsync(repository, ".agents/milestones/m1.md", "# M1");
-        var afterRefresh = await projectionService.RefreshWorkspaceAsync(repository.Id);
+        RepositoryWorkspaceProjection afterRefresh = await projectionService.RefreshWorkspaceAsync(repository.Id);
 
         Assert.Equal(ExecutionReadiness.MissingMilestones, beforeRefresh.Readiness);
         Assert.Equal(0, beforeRefresh.MilestoneCount);
@@ -393,8 +393,8 @@ public sealed class RepositoryProjectionServiceTests
 
     private static async Task WriteAsync(Repository repository, string relativePath, string content)
     {
-        var path = Path.Combine(repository.Path, relativePath.Replace('/', Path.DirectorySeparatorChar));
-        var directory = Path.GetDirectoryName(path);
+        string path = Path.Combine(repository.Path, relativePath.Replace('/', Path.DirectorySeparatorChar));
+        string? directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrWhiteSpace(directory))
         {
             Directory.CreateDirectory(directory);
@@ -405,14 +405,14 @@ public sealed class RepositoryProjectionServiceTests
 
     private static string CreateGitRepositoryDirectory()
     {
-        var directory = CreateTemporaryDirectory();
+        string directory = CreateTemporaryDirectory();
         Directory.CreateDirectory(Path.Combine(directory, ".git"));
         return directory;
     }
 
     private static string CreateTemporaryDirectory()
     {
-        var directory = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"));
+        string directory = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         return directory;
     }

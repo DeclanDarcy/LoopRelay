@@ -8,7 +8,7 @@ public sealed class ApplicationConfigurationStoreTests
     [Fact]
     public async Task SaveAndLoadRoundTripsRepositories()
     {
-        var path = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"), "configuration.json");
+        string path = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"), "configuration.json");
         var store = new ApplicationConfigurationStore(path);
         var repository = new Repository
         {
@@ -19,7 +19,7 @@ public sealed class ApplicationConfigurationStoreTests
 
         await store.SaveAsync(new ApplicationConfiguration { Repositories = [repository] });
 
-        var loaded = await new ApplicationConfigurationStore(path).LoadAsync();
+        ApplicationConfiguration loaded = await new ApplicationConfigurationStore(path).LoadAsync();
 
         Assert.Single(loaded.Repositories);
         Assert.Equal(repository.Id, loaded.Repositories[0].Id);
@@ -30,9 +30,9 @@ public sealed class ApplicationConfigurationStoreTests
     [Fact]
     public async Task MissingConfigurationLoadsEmptyRepositoryList()
     {
-        var path = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"), "configuration.json");
+        string path = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"), "configuration.json");
 
-        var loaded = await new ApplicationConfigurationStore(path).LoadAsync();
+        ApplicationConfiguration loaded = await new ApplicationConfigurationStore(path).LoadAsync();
 
         Assert.Empty(loaded.Repositories);
     }

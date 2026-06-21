@@ -8,7 +8,7 @@ public sealed class ArtifactServiceTests
     [Fact]
     public async Task DiscoversKnownArtifactCategories()
     {
-        var repository = CreateRepository();
+        Repository repository = CreateRepository();
         await WriteAsync(repository, ".agents/plan.md", "plan");
         await WriteAsync(repository, ".agents/operational_context.md", "context");
         await WriteAsync(repository, ".agents/milestones/m1.md", "milestone");
@@ -22,7 +22,7 @@ public sealed class ArtifactServiceTests
         await WriteAsync(repository, ".agents/decisions/notes.md", "not a decision artifact");
         var service = new ArtifactService(new FileSystemArtifactStore());
 
-        var artifacts = await service.DiscoverAsync(repository);
+        IReadOnlyList<Artifact> artifacts = await service.DiscoverAsync(repository);
 
         Assert.Contains(artifacts, artifact => artifact.RelativePath == ".agents/plan.md" && artifact.Type == ArtifactType.Plan && artifact.Family == ArtifactFamily.Plan);
         Assert.Contains(artifacts, artifact => artifact.RelativePath == ".agents/operational_context.md" && artifact.Type == ArtifactType.OperationalContext && artifact.Family == ArtifactFamily.OperationalContext);
@@ -40,10 +40,10 @@ public sealed class ArtifactServiceTests
     [Fact]
     public async Task MissingArtifactsAndDirectoriesDoNotFailDiscovery()
     {
-        var repository = CreateRepository();
+        Repository repository = CreateRepository();
         var service = new ArtifactService(new FileSystemArtifactStore());
 
-        var artifacts = await service.DiscoverAsync(repository);
+        IReadOnlyList<Artifact> artifacts = await service.DiscoverAsync(repository);
 
         Assert.Empty(artifacts);
     }
@@ -51,7 +51,7 @@ public sealed class ArtifactServiceTests
     [Fact]
     public async Task LoadsAndSavesArtifactContent()
     {
-        var repository = CreateRepository();
+        Repository repository = CreateRepository();
         var service = new ArtifactService(new FileSystemArtifactStore());
 
         await service.SaveAsync(repository, ".agents/handoffs/handoff.md", "updated");
@@ -63,7 +63,7 @@ public sealed class ArtifactServiceTests
     [Fact]
     public async Task CurrentArtifactsResolveOnlyCurrentFiles()
     {
-        var repository = CreateRepository();
+        Repository repository = CreateRepository();
         await WriteAsync(repository, ".agents/handoffs/handoff.0001.md", "historical handoff");
         await WriteAsync(repository, ".agents/decisions/decisions.0001.md", "historical decisions");
         var service = new ArtifactService(new FileSystemArtifactStore());
@@ -84,7 +84,7 @@ public sealed class ArtifactServiceTests
     [Fact]
     public async Task RejectsRelativePathTraversal()
     {
-        var repository = CreateRepository();
+        Repository repository = CreateRepository();
         var service = new ArtifactService(new FileSystemArtifactStore());
 
         await Assert.ThrowsAsync<ArgumentException>(() => service.LoadAsync(repository, "../outside.md"));
@@ -94,8 +94,8 @@ public sealed class ArtifactServiceTests
 
     private static async Task WriteAsync(Repository repository, string relativePath, string content)
     {
-        var path = Path.Combine(repository.Path, relativePath.Replace('/', Path.DirectorySeparatorChar));
-        var directory = Path.GetDirectoryName(path);
+        string path = Path.Combine(repository.Path, relativePath.Replace('/', Path.DirectorySeparatorChar));
+        string? directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrWhiteSpace(directory))
         {
             Directory.CreateDirectory(directory);
@@ -106,7 +106,7 @@ public sealed class ArtifactServiceTests
 
     private static Repository CreateRepository()
     {
-        var directory = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"));
+        string directory = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         Directory.CreateDirectory(Path.Combine(directory, ".git"));
 

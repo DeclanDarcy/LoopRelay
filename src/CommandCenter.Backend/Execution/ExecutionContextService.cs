@@ -19,8 +19,8 @@ public sealed class ExecutionContextService(
 
     public async Task<ExecutionContext> BuildContextAsync(Guid repositoryId, string milestonePath)
     {
-        var repository = await GetRepositoryAsync(repositoryId);
-        var generatedAt = DateTimeOffset.UtcNow;
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        DateTimeOffset generatedAt = DateTimeOffset.UtcNow;
         var validationErrors = new List<string>();
         var missingOptionalArtifacts = new List<string>();
         var artifacts = new List<ExecutionContextArtifact>();
@@ -31,7 +31,7 @@ public sealed class ExecutionContextService(
             validationErrors.Add("Repository is not available.");
         }
 
-        var readiness = await planningService.DetermineReadinessAsync(repository);
+        ExecutionReadiness readiness = await planningService.DetermineReadinessAsync(repository);
         if (readiness != ExecutionReadiness.Ready)
         {
             validationErrors.Add($"Repository planning readiness is {readiness}.");
@@ -39,7 +39,7 @@ public sealed class ExecutionContextService(
 
         await AddRequiredArtifactAsync(repository, artifacts, "Plan", PlanPath, validationErrors);
 
-        var normalizedMilestonePath = NormalizeRelativePath(milestonePath);
+        string normalizedMilestonePath = NormalizeRelativePath(milestonePath);
         if (!IsMilestonePath(repository, normalizedMilestonePath))
         {
             validationErrors.Add("Selected milestone path must stay within .agents/milestones.");
@@ -62,7 +62,7 @@ public sealed class ExecutionContextService(
             validationErrors.Add($"Git snapshot failed: {exception.Message}");
         }
 
-        var diagnostics = BuildDiagnostics(artifacts, validationErrors, missingOptionalArtifacts);
+        ExecutionContextDiagnostics diagnostics = BuildDiagnostics(artifacts, validationErrors, missingOptionalArtifacts);
 
         return new ExecutionContext
         {
@@ -79,7 +79,7 @@ public sealed class ExecutionContextService(
 
     private async Task<Repository> GetRepositoryAsync(Guid repositoryId)
     {
-        var repository = (await repositoryService.GetAllAsync()).FirstOrDefault(repository => repository.Id == repositoryId);
+        Repository? repository = (await repositoryService.GetAllAsync()).FirstOrDefault(repository => repository.Id == repositoryId);
         return repository ?? throw new KeyNotFoundException($"Repository was not found: {repositoryId}");
     }
 
@@ -92,7 +92,7 @@ public sealed class ExecutionContextService(
     {
         try
         {
-            var content = await artifactService.LoadAsync(repository, relativePath);
+            string content = await artifactService.LoadAsync(repository, relativePath);
             artifacts.Add(CreateArtifact(role, relativePath, content));
         }
         catch (FileNotFoundException)
@@ -139,9 +139,9 @@ public sealed class ExecutionContextService(
         IReadOnlyList<string> validationErrors,
         IReadOnlyList<string> missingOptionalArtifacts)
     {
-        var totalBytes = artifacts.Sum(artifact => artifact.ByteCount);
-        var totalCharacters = artifacts.Sum(artifact => artifact.CharacterCount);
-        var artifactDiagnostics = artifacts.Select(artifact => new ExecutionContextArtifactDiagnostic
+        long totalBytes = artifacts.Sum(artifact => artifact.ByteCount);
+        long totalCharacters = artifacts.Sum(artifact => artifact.CharacterCount);
+        ExecutionContextArtifactDiagnostic[] artifactDiagnostics = artifacts.Select(artifact => new ExecutionContextArtifactDiagnostic
         {
             Role = artifact.Role,
             RelativePath = artifact.RelativePath,
@@ -152,9 +152,9 @@ public sealed class ExecutionContextService(
             WarningThresholdExceeded = artifact.ByteCount > ExecutionContextSizePolicy.ArtifactWarningThresholdBytes,
             HardLimitExceeded = artifact.ByteCount > ExecutionContextSizePolicy.ArtifactHardLimitBytes
         }).ToArray();
-        var artifactHardLimitExceeded = artifactDiagnostics.Any(diagnostic => diagnostic.HardLimitExceeded);
-        var hardLimitExceeded = totalBytes > ExecutionContextSizePolicy.AggregateHardLimitBytes ||
-            artifactHardLimitExceeded;
+        bool artifactHardLimitExceeded = artifactDiagnostics.Any(diagnostic => diagnostic.HardLimitExceeded);
+        bool hardLimitExceeded = totalBytes > ExecutionContextSizePolicy.AggregateHardLimitBytes ||
+                                 artifactHardLimitExceeded;
 
         return new ExecutionContextDiagnostics
         {
@@ -181,9 +181,9 @@ public sealed class ExecutionContextService(
 
         try
         {
-            var milestonePath = ArtifactPath.ResolveRepositoryPath(repository, relativePath);
-            var milestonesRoot = ArtifactPath.ResolveRepositoryPath(repository, MilestonesDirectory);
-            var relativeToMilestones = Path.GetRelativePath(milestonesRoot, milestonePath);
+            string milestonePath = ArtifactPath.ResolveRepositoryPath(repository, relativePath);
+            string milestonesRoot = ArtifactPath.ResolveRepositoryPath(repository, MilestonesDirectory);
+            string relativeToMilestones = Path.GetRelativePath(milestonesRoot, milestonePath);
 
             return !relativeToMilestones.StartsWith("..", StringComparison.Ordinal) &&
                 !Path.IsPathRooted(relativeToMilestones) &&
@@ -210,7 +210,7 @@ public sealed class ExecutionContextService(
         try
         {
             _ = Directory.EnumerateFileSystemEntries(repository.Path).FirstOrDefault();
-            var gitPath = Path.Combine(repository.Path, ".git");
+            string gitPath = Path.Combine(repository.Path, ".git");
             return Directory.Exists(gitPath) || File.Exists(gitPath)
                 ? RepositoryAvailability.Available
                 : RepositoryAvailability.Missing;

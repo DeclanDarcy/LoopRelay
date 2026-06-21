@@ -51,7 +51,7 @@ public sealed class ArtifactService(IArtifactStore artifactStore) : IArtifactSer
 
     public async Task<string> LoadAsync(Repository repository, string relativePath)
     {
-        var content = await artifactStore.ReadAsync(ArtifactPath.ResolveRepositoryPath(repository, relativePath));
+        string? content = await artifactStore.ReadAsync(ArtifactPath.ResolveRepositoryPath(repository, relativePath));
         return content ?? throw new FileNotFoundException("Artifact was not found.", relativePath);
     }
 
@@ -67,8 +67,8 @@ public sealed class ArtifactService(IArtifactStore artifactStore) : IArtifactSer
         ArtifactType type,
         ArtifactFamily family)
     {
-        var relativePath = ArtifactPath.CombineRelative(AgentsDirectory, fileName);
-        var fullPath = ArtifactPath.ResolveRepositoryPath(repository, relativePath);
+        string relativePath = ArtifactPath.CombineRelative(AgentsDirectory, fileName);
+        string fullPath = ArtifactPath.ResolveRepositoryPath(repository, relativePath);
         if (await artifactStore.ExistsAsync(fullPath))
         {
             artifacts.Add(CreateArtifact(repository, fullPath, type, family));
@@ -82,8 +82,8 @@ public sealed class ArtifactService(IArtifactStore artifactStore) : IArtifactSer
         ArtifactType type,
         ArtifactFamily family)
     {
-        var directoryPath = ArtifactPath.ResolveRepositoryPath(repository, ArtifactPath.CombineRelative(AgentsDirectory, directoryName));
-        var files = await artifactStore.ListAsync(directoryPath, "*.md");
+        string directoryPath = ArtifactPath.ResolveRepositoryPath(repository, ArtifactPath.CombineRelative(AgentsDirectory, directoryName));
+        IReadOnlyList<string> files = await artifactStore.ListAsync(directoryPath, "*.md");
         artifacts.AddRange(files
             .Where(file => ShouldIncludeDirectoryArtifact(family, Path.GetFileName(file)))
             .Select(file => CreateArtifact(repository, file, type, family)));
@@ -145,7 +145,7 @@ public sealed class ArtifactService(IArtifactStore artifactStore) : IArtifactSer
             return true;
         }
 
-        var prefix = $"{baseName}.";
+        string prefix = $"{baseName}.";
         const string suffix = ".md";
 
         if (!fileName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
@@ -154,10 +154,10 @@ public sealed class ArtifactService(IArtifactStore artifactStore) : IArtifactSer
             return false;
         }
 
-        var sequenceText = fileName[prefix.Length..^suffix.Length];
+        string sequenceText = fileName[prefix.Length..^suffix.Length];
         return sequenceText.Length == 4 &&
             sequenceText.All(char.IsDigit) &&
-            int.TryParse(sequenceText, out var sequence) &&
+            int.TryParse(sequenceText, out int sequence) &&
             sequence > 0;
     }
 

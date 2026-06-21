@@ -10,7 +10,7 @@ public sealed class ContinuityDiagnosticsServiceTests
     [Fact]
     public async Task RevisionTrackingReadsCurrentAndHistoricalOperationalContexts()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/operational_context.0004.md", """
             # Operational Context
 
@@ -30,7 +30,7 @@ public sealed class ContinuityDiagnosticsServiceTests
             - Metrics remain observational.
             """);
 
-        var diagnostics = await harness.DiagnosticsService.GetDiagnosticsAsync(harness.Repository.Id);
+        ContinuityDiagnostics diagnostics = await harness.DiagnosticsService.GetDiagnosticsAsync(harness.Repository.Id);
 
         Assert.Equal(2, diagnostics.RevisionCount);
         Assert.Equal(5, diagnostics.EvolutionLedger.CurrentRevision?.RevisionNumber);
@@ -43,7 +43,7 @@ public sealed class ContinuityDiagnosticsServiceTests
     [Fact]
     public async Task ConstraintDecisionAndRationaleLossAreDetected()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/operational_context.0001.md", """
             # Operational Context
 
@@ -65,7 +65,7 @@ public sealed class ContinuityDiagnosticsServiceTests
             ## Stable Decisions
             """);
 
-        var diagnostics = await harness.DiagnosticsService.GetDiagnosticsAsync(harness.Repository.Id);
+        ContinuityDiagnostics diagnostics = await harness.DiagnosticsService.GetDiagnosticsAsync(harness.Repository.Id);
 
         Assert.Equal(1, diagnostics.ConstraintTrend.LostCount);
         Assert.Equal(1, diagnostics.DecisionTrend.LostCount);
@@ -75,7 +75,7 @@ public sealed class ContinuityDiagnosticsServiceTests
     [Fact]
     public async Task OpenQuestionResolutionIsDistinguishedFromDisappearance()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/operational_context.0001.md", """
             # Operational Context
 
@@ -92,7 +92,7 @@ public sealed class ContinuityDiagnosticsServiceTests
             - Resolved question: Should diagnostics include growth trends?
             """);
 
-        var diagnostics = await harness.DiagnosticsService.GetDiagnosticsAsync(harness.Repository.Id);
+        ContinuityDiagnostics diagnostics = await harness.DiagnosticsService.GetDiagnosticsAsync(harness.Repository.Id);
 
         Assert.Equal(2, diagnostics.OpenQuestionTrend.RemovedCount);
         Assert.Equal(1, diagnostics.OpenQuestionTrend.ResolvedCount);
@@ -102,7 +102,7 @@ public sealed class ContinuityDiagnosticsServiceTests
     [Fact]
     public async Task ActiveRiskResolutionIsDistinguishedFromDisappearance()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/operational_context.0001.md", """
             # Operational Context
 
@@ -119,7 +119,7 @@ public sealed class ContinuityDiagnosticsServiceTests
             - Retired risk: Metrics could become workflow gates.
             """);
 
-        var diagnostics = await harness.DiagnosticsService.GetDiagnosticsAsync(harness.Repository.Id);
+        ContinuityDiagnostics diagnostics = await harness.DiagnosticsService.GetDiagnosticsAsync(harness.Repository.Id);
 
         Assert.Equal(2, diagnostics.ActiveRiskTrend.RemovedCount);
         Assert.Equal(1, diagnostics.ActiveRiskTrend.ResolvedCount);
@@ -129,7 +129,7 @@ public sealed class ContinuityDiagnosticsServiceTests
     [Fact]
     public async Task CompressionMetricsAreCalculatedFromProposalSummaries()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await harness.ProposalStore.SaveAsync(harness.Repository, new OperationalContextProposal
         {
             ProposalId = "proposal-1",
@@ -148,7 +148,7 @@ public sealed class ContinuityDiagnosticsServiceTests
             }
         }, "# Operational Context");
 
-        var diagnostics = await harness.DiagnosticsService.GetDiagnosticsAsync(harness.Repository.Id);
+        ContinuityDiagnostics diagnostics = await harness.DiagnosticsService.GetDiagnosticsAsync(harness.Repository.Id);
 
         Assert.Equal(1, diagnostics.CompressionTrend.ProposalCount);
         Assert.Equal(3, diagnostics.CompressionTrend.CompressedItemCount);
@@ -162,7 +162,7 @@ public sealed class ContinuityDiagnosticsServiceTests
     [Fact]
     public async Task RepeatedInvestigationQuestionAndDecisionReworkIndicatorsCanBeObserved()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/operational_context.0001.md", """
             # Operational Context
 
@@ -188,7 +188,7 @@ public sealed class ContinuityDiagnosticsServiceTests
             - Decision rework: diagnostics wording changed.
             """);
 
-        var diagnostics = await harness.DiagnosticsService.GetDiagnosticsAsync(harness.Repository.Id);
+        ContinuityDiagnostics diagnostics = await harness.DiagnosticsService.GetDiagnosticsAsync(harness.Repository.Id);
 
         Assert.Contains("Investigation repeated for context drift.", diagnostics.RepeatedInvestigationIndicators);
         Assert.Contains("Should reports include trend deltas?", diagnostics.RepeatedQuestionIndicators);
@@ -198,7 +198,7 @@ public sealed class ContinuityDiagnosticsServiceTests
     [Fact]
     public async Task ReportGenerationWritesDiagnosticArtifactWithoutMutatingCurrentContext()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/operational_context.md", """
             # Operational Context
 
@@ -206,11 +206,11 @@ public sealed class ContinuityDiagnosticsServiceTests
 
             - Reports are read-only diagnostics.
             """);
-        var before = await ReadAsync(harness.Repository, ".agents/operational_context.md");
+        string before = await ReadAsync(harness.Repository, ".agents/operational_context.md");
 
-        var report = await harness.ReportService.GenerateReportAsync(harness.Repository.Id);
-        var reports = await harness.ReportService.ListReportsAsync(harness.Repository.Id);
-        var after = await ReadAsync(harness.Repository, ".agents/operational_context.md");
+        ContinuityReport report = await harness.ReportService.GenerateReportAsync(harness.Repository.Id);
+        IReadOnlyList<ContinuityReport> reports = await harness.ReportService.ListReportsAsync(harness.Repository.Id);
+        string after = await ReadAsync(harness.Repository, ".agents/operational_context.md");
 
         Assert.Equal(before, after);
         Assert.StartsWith(".agents/operational_context/reports/continuity.", report.RelativePath, StringComparison.Ordinal);
@@ -222,14 +222,14 @@ public sealed class ContinuityDiagnosticsServiceTests
     [Fact]
     public async Task ReportListingSkipsCorruptReportArtifacts()
     {
-        var harness = await CreateHarnessAsync();
-        var report = await harness.ReportService.GenerateReportAsync(harness.Repository.Id);
+        Harness harness = await CreateHarnessAsync();
+        ContinuityReport report = await harness.ReportService.GenerateReportAsync(harness.Repository.Id);
         await WriteAsync(
             harness.Repository,
             ".agents/operational_context/reports/continuity.19990101000000000.json",
             "{ not valid json");
 
-        var reports = await harness.ReportService.ListReportsAsync(harness.Repository.Id);
+        IReadOnlyList<ContinuityReport> reports = await harness.ReportService.ListReportsAsync(harness.Repository.Id);
 
         Assert.Single(reports);
         Assert.Equal(report.ReportId, reports[0].ReportId);
@@ -237,10 +237,10 @@ public sealed class ContinuityDiagnosticsServiceTests
 
     private static async Task<Harness> CreateHarnessAsync()
     {
-        var repositoryPath = CreateGitRepositoryDirectory();
+        string repositoryPath = CreateGitRepositoryDirectory();
         var repositoryService = new RepositoryService(
             new ApplicationConfigurationStore(Path.Combine(CreateTemporaryDirectory(), "configuration.json")));
-        var repository = await repositoryService.RegisterAsync(repositoryPath);
+        Repository repository = await repositoryService.RegisterAsync(repositoryPath);
         var artifactStore = new FileSystemArtifactStore();
         var artifactService = new ArtifactService(artifactStore);
         var proposalStore = new FileSystemOperationalContextProposalStore(artifactStore);
@@ -265,8 +265,8 @@ public sealed class ContinuityDiagnosticsServiceTests
 
     private static async Task WriteAsync(Repository repository, string relativePath, string content)
     {
-        var path = Path.Combine(repository.Path, relativePath.Replace('/', Path.DirectorySeparatorChar));
-        var directory = Path.GetDirectoryName(path);
+        string path = Path.Combine(repository.Path, relativePath.Replace('/', Path.DirectorySeparatorChar));
+        string? directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrWhiteSpace(directory))
         {
             Directory.CreateDirectory(directory);
@@ -283,14 +283,14 @@ public sealed class ContinuityDiagnosticsServiceTests
 
     private static string CreateGitRepositoryDirectory()
     {
-        var directory = CreateTemporaryDirectory();
+        string directory = CreateTemporaryDirectory();
         Directory.CreateDirectory(Path.Combine(directory, ".git"));
         return directory;
     }
 
     private static string CreateTemporaryDirectory()
     {
-        var directory = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"));
+        string directory = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         return directory;
     }

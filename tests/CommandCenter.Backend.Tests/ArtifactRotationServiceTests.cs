@@ -13,12 +13,12 @@ public sealed class ArtifactRotationServiceTests
     [Fact]
     public async Task FirstAndSecondHandoffRotationsCreateSequentialHistoricalFiles()
     {
-        var repository = CreateRepository();
+        Repository repository = CreateRepository();
         await WriteAsync(repository, ".agents/handoffs/handoff.md", "handoff");
-        var service = CreateRotationService();
+        ArtifactRotationService service = CreateRotationService();
 
-        var first = await service.RotateCurrentHandoffAsync(repository);
-        var second = await service.RotateCurrentHandoffAsync(repository);
+        Artifact first = await service.RotateCurrentHandoffAsync(repository);
+        Artifact second = await service.RotateCurrentHandoffAsync(repository);
 
         Assert.Equal(".agents/handoffs/handoff.0001.md", first.RelativePath);
         Assert.Equal(".agents/handoffs/handoff.0002.md", second.RelativePath);
@@ -30,12 +30,12 @@ public sealed class ArtifactRotationServiceTests
     [Fact]
     public async Task FirstAndSecondDecisionRotationsCreateSequentialHistoricalFiles()
     {
-        var repository = CreateRepository();
+        Repository repository = CreateRepository();
         await WriteAsync(repository, ".agents/decisions/decisions.md", "decisions");
-        var service = CreateRotationService();
+        ArtifactRotationService service = CreateRotationService();
 
-        var first = await service.RotateCurrentDecisionsAsync(repository);
-        var second = await service.RotateCurrentDecisionsAsync(repository);
+        Artifact first = await service.RotateCurrentDecisionsAsync(repository);
+        Artifact second = await service.RotateCurrentDecisionsAsync(repository);
 
         Assert.Equal(".agents/decisions/decisions.0001.md", first.RelativePath);
         Assert.Equal(".agents/decisions/decisions.0002.md", second.RelativePath);
@@ -47,12 +47,12 @@ public sealed class ArtifactRotationServiceTests
     [Fact]
     public async Task RotationPreservesExistingHistoricalFiles()
     {
-        var repository = CreateRepository();
+        Repository repository = CreateRepository();
         await WriteAsync(repository, ".agents/handoffs/handoff.md", "current");
         await WriteAsync(repository, ".agents/handoffs/handoff.0001.md", "first historical");
-        var service = CreateRotationService();
+        ArtifactRotationService service = CreateRotationService();
 
-        var rotated = await service.RotateCurrentHandoffAsync(repository);
+        Artifact rotated = await service.RotateCurrentHandoffAsync(repository);
 
         Assert.Equal(".agents/handoffs/handoff.0002.md", rotated.RelativePath);
         Assert.Equal("first historical", await ReadAsync(repository, ".agents/handoffs/handoff.0001.md"));
@@ -62,8 +62,8 @@ public sealed class ArtifactRotationServiceTests
     [Fact]
     public async Task RotationFailsWhenCurrentArtifactIsMissing()
     {
-        var repository = CreateRepository();
-        var service = CreateRotationService();
+        Repository repository = CreateRepository();
+        ArtifactRotationService service = CreateRotationService();
 
         await Assert.ThrowsAsync<FileNotFoundException>(() => service.RotateCurrentHandoffAsync(repository));
         await Assert.ThrowsAsync<FileNotFoundException>(() => service.RotateCurrentDecisionsAsync(repository));
@@ -72,8 +72,8 @@ public sealed class ArtifactRotationServiceTests
     [Fact]
     public async Task RotationFailsForUnsupportedFamilies()
     {
-        var repository = CreateRepository();
-        var service = CreateRotationService();
+        Repository repository = CreateRepository();
+        ArtifactRotationService service = CreateRotationService();
 
         await Assert.ThrowsAsync<NotSupportedException>(() => service.RotateAsync(repository, ArtifactFamily.Plan));
     }
@@ -81,9 +81,9 @@ public sealed class ArtifactRotationServiceTests
     [Fact]
     public async Task RotationFailsInsteadOfOverwritingTarget()
     {
-        var repository = CreateRepository();
-        var currentPath = Path.Combine(repository.Path, ".agents", "handoffs", "handoff.md");
-        var targetPath = Path.Combine(repository.Path, ".agents", "handoffs", "handoff.0001.md");
+        Repository repository = CreateRepository();
+        string currentPath = Path.Combine(repository.Path, ".agents", "handoffs", "handoff.md");
+        string targetPath = Path.Combine(repository.Path, ".agents", "handoffs", "handoff.0001.md");
         var store = new CollisionArtifactStore(new FileSystemArtifactStore(), targetPath);
         await store.WriteAsync(currentPath, "handoff");
         var artifactService = new ArtifactService(store);
@@ -95,10 +95,10 @@ public sealed class ArtifactRotationServiceTests
     [Fact]
     public async Task RefreshAfterRotationUpdatesArtifactInventory()
     {
-        var repositoryPath = CreateGitRepositoryDirectory();
+        string repositoryPath = CreateGitRepositoryDirectory();
         var repositoryService = new RepositoryService(
             new ApplicationConfigurationStore(Path.Combine(CreateTemporaryDirectory(), "configuration.json")));
-        var repository = await repositoryService.RegisterAsync(repositoryPath);
+        Repository repository = await repositoryService.RegisterAsync(repositoryPath);
         await WriteAsync(repository, ".agents/handoffs/handoff.md", "handoff");
         var artifactStore = new FileSystemArtifactStore();
         var artifactService = new ArtifactService(artifactStore);
@@ -112,12 +112,12 @@ public sealed class ArtifactRotationServiceTests
             new MarkdownOperationalContextParser(),
             artifactStore);
 
-        var beforeRotation = await projectionService.GetWorkspaceAsync(repository.Id);
+        RepositoryWorkspaceProjection beforeRotation = await projectionService.GetWorkspaceAsync(repository.Id);
         await rotationService.RotateCurrentHandoffAsync(repository);
-        var afterRotation = await projectionService.RefreshWorkspaceAsync(repository.Id);
+        RepositoryWorkspaceProjection afterRotation = await projectionService.RefreshWorkspaceAsync(repository.Id);
 
         Assert.Empty(beforeRotation.ArtifactInventory.HistoricalHandoffs);
-        var historical = Assert.Single(afterRotation.ArtifactInventory.HistoricalHandoffs);
+        Artifact historical = Assert.Single(afterRotation.ArtifactInventory.HistoricalHandoffs);
         Assert.Equal(".agents/handoffs/handoff.0001.md", historical.RelativePath);
         Assert.NotNull(afterRotation.ArtifactInventory.CurrentHandoff);
     }
@@ -131,8 +131,8 @@ public sealed class ArtifactRotationServiceTests
 
     private static async Task WriteAsync(Repository repository, string relativePath, string content)
     {
-        var path = Path.Combine(repository.Path, relativePath.Replace('/', Path.DirectorySeparatorChar));
-        var directory = Path.GetDirectoryName(path);
+        string path = Path.Combine(repository.Path, relativePath.Replace('/', Path.DirectorySeparatorChar));
+        string? directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrWhiteSpace(directory))
         {
             Directory.CreateDirectory(directory);
@@ -148,7 +148,7 @@ public sealed class ArtifactRotationServiceTests
 
     private static Repository CreateRepository()
     {
-        var directory = CreateGitRepositoryDirectory();
+        string directory = CreateGitRepositoryDirectory();
 
         return new Repository
         {
@@ -160,14 +160,14 @@ public sealed class ArtifactRotationServiceTests
 
     private static string CreateGitRepositoryDirectory()
     {
-        var directory = CreateTemporaryDirectory();
+        string directory = CreateTemporaryDirectory();
         Directory.CreateDirectory(Path.Combine(directory, ".git"));
         return directory;
     }
 
     private static string CreateTemporaryDirectory()
     {
-        var directory = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"));
+        string directory = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         return directory;
     }

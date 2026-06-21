@@ -21,25 +21,25 @@ public sealed class HandoffService(
         await gate.WaitAsync();
         try
         {
-            var sessions = (await sessionStore.LoadAsync()).ToList();
-            var index = sessions.FindIndex(session => session.Id == sessionId);
+            List<ExecutionSession> sessions = (await sessionStore.LoadAsync()).ToList();
+            int index = sessions.FindIndex(session => session.Id == sessionId);
             if (index < 0)
             {
                 return;
             }
 
-            var session = sessions[index];
+            ExecutionSession session = sessions[index];
             if (session.State != ExecutionSessionState.Completed ||
                 session.RepositoryState != RepositoryExecutionState.Executing)
             {
                 return;
             }
 
-            var processedAt = DateTimeOffset.UtcNow;
-            var handoffPath = Path.Combine(
+            DateTimeOffset processedAt = DateTimeOffset.UtcNow;
+            string handoffPath = Path.Combine(
                 session.RepositoryPath,
                 CurrentHandoffPath.Replace('/', Path.DirectorySeparatorChar));
-            var currentHandoff = await artifactStore.ReadAsync(handoffPath);
+            string? currentHandoff = await artifactStore.ReadAsync(handoffPath);
             if (currentHandoff is null)
             {
                 sessions[index] = CopySession(
@@ -55,7 +55,7 @@ public sealed class HandoffService(
                 return;
             }
 
-            var archiveFailure = false;
+            bool archiveFailure = false;
             if (ShouldArchivePreviousHandoff(session, currentHandoff))
             {
                 try
@@ -91,16 +91,16 @@ public sealed class HandoffService(
 
     private async Task ArchivePreviousHandoffAsync(ExecutionSession session)
     {
-        var directory = Path.Combine(session.RepositoryPath, ".agents", "handoffs");
-        var files = await artifactStore.ListAsync(directory, "*.md");
-        var nextSequence = files
+        string directory = Path.Combine(session.RepositoryPath, ".agents", "handoffs");
+        IReadOnlyList<string> files = await artifactStore.ListAsync(directory, "*.md");
+        int nextSequence = files
             .Select(file => TryParseHistoricalHandoffSequence(Path.GetFileName(file)))
             .Where(sequence => sequence.HasValue)
             .Select(sequence => sequence!.Value)
             .DefaultIfEmpty(0)
             .Max() + 1;
-        var targetRelativePath = $".agents/handoffs/handoff.{nextSequence:0000}.md";
-        var targetPath = Path.Combine(
+        string targetRelativePath = $".agents/handoffs/handoff.{nextSequence:0000}.md";
+        string targetPath = Path.Combine(
             session.RepositoryPath,
             targetRelativePath.Replace('/', Path.DirectorySeparatorChar));
 
@@ -130,10 +130,10 @@ public sealed class HandoffService(
             return null;
         }
 
-        var sequenceText = fileName[prefix.Length..^suffix.Length];
+        string sequenceText = fileName[prefix.Length..^suffix.Length];
         if (sequenceText.Length != 4 ||
             !sequenceText.All(char.IsDigit) ||
-            !int.TryParse(sequenceText, out var sequence) ||
+            !int.TryParse(sequenceText, out int sequence) ||
             sequence <= 0)
         {
             return null;

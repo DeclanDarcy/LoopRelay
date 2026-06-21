@@ -34,20 +34,20 @@ public sealed class FileSystemExecutionSessionStore : IExecutionSessionStore
             return [];
         }
 
-        await using var stream = File.OpenRead(storePath);
+        await using FileStream stream = File.OpenRead(storePath);
         return await JsonSerializer.DeserializeAsync<ExecutionSession[]>(stream, SerializerOptions)
             ?? [];
     }
 
     public async Task SaveAsync(IReadOnlyList<ExecutionSession> sessions)
     {
-        var directory = Path.GetDirectoryName(storePath);
+        string? directory = Path.GetDirectoryName(storePath);
         if (!string.IsNullOrWhiteSpace(directory))
         {
             Directory.CreateDirectory(directory);
         }
 
-        await using var stream = File.Create(storePath);
+        await using FileStream stream = File.Create(storePath);
         await JsonSerializer.SerializeAsync(stream, sessions, SerializerOptions);
     }
 }

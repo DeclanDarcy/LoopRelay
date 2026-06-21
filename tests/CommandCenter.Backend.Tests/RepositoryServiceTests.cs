@@ -8,10 +8,10 @@ public sealed class RepositoryServiceTests
     [Fact]
     public async Task ValidRepositoryRegistersSuccessfully()
     {
-        var repositoryPath = CreateGitRepositoryDirectory();
-        var service = CreateService();
+        string repositoryPath = CreateGitRepositoryDirectory();
+        RepositoryService service = CreateService();
 
-        var repository = await service.RegisterAsync(repositoryPath);
+        Repository repository = await service.RegisterAsync(repositoryPath);
 
         Assert.NotEqual(Guid.Empty, repository.Id);
         Assert.Equal(new DirectoryInfo(repositoryPath).Name, repository.Name);
@@ -21,10 +21,10 @@ public sealed class RepositoryServiceTests
     [Fact]
     public async Task InvalidNonDirectoryPathFails()
     {
-        var directory = CreateTemporaryDirectory();
-        var filePath = Path.Combine(directory, "not-a-directory");
+        string directory = CreateTemporaryDirectory();
+        string filePath = Path.Combine(directory, "not-a-directory");
         await File.WriteAllTextAsync(filePath, "");
-        var service = CreateService();
+        RepositoryService service = CreateService();
 
         await Assert.ThrowsAsync<DirectoryNotFoundException>(() => service.RegisterAsync(filePath));
     }
@@ -32,8 +32,8 @@ public sealed class RepositoryServiceTests
     [Fact]
     public async Task DirectoryWithoutGitFails()
     {
-        var directory = CreateTemporaryDirectory();
-        var service = CreateService();
+        string directory = CreateTemporaryDirectory();
+        RepositoryService service = CreateService();
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.RegisterAsync(directory));
     }
@@ -41,10 +41,10 @@ public sealed class RepositoryServiceTests
     [Fact]
     public async Task DuplicateRegistrationFailsForEquivalentPaths()
     {
-        var repositoryPath = CreateGitRepositoryDirectory();
-        var service = CreateService();
+        string repositoryPath = CreateGitRepositoryDirectory();
+        RepositoryService service = CreateService();
         await service.RegisterAsync(repositoryPath);
-        var equivalentPath = Path.Combine(repositoryPath, ".");
+        string equivalentPath = Path.Combine(repositoryPath, ".");
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.RegisterAsync(equivalentPath));
     }
@@ -52,8 +52,8 @@ public sealed class RepositoryServiceTests
     [Fact]
     public async Task DuplicateRegistrationFailsForCaseDifferences()
     {
-        var repositoryPath = CreateGitRepositoryDirectory();
-        var service = CreateService();
+        string repositoryPath = CreateGitRepositoryDirectory();
+        RepositoryService service = CreateService();
         await service.RegisterAsync(repositoryPath);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.RegisterAsync(repositoryPath.ToUpperInvariant()));
@@ -62,10 +62,10 @@ public sealed class RepositoryServiceTests
     [Fact]
     public async Task DuplicateRegistrationFailsForMixedSeparators()
     {
-        var repositoryPath = CreateGitRepositoryDirectory();
-        var service = CreateService();
+        string repositoryPath = CreateGitRepositoryDirectory();
+        RepositoryService service = CreateService();
         await service.RegisterAsync(repositoryPath);
-        var mixedSeparatorPath = repositoryPath.Replace(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        string mixedSeparatorPath = repositoryPath.Replace(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.RegisterAsync(mixedSeparatorPath));
     }
@@ -73,8 +73,8 @@ public sealed class RepositoryServiceTests
     [Fact]
     public async Task AgentsDirectoryIsCreatedWhenMissing()
     {
-        var repositoryPath = CreateGitRepositoryDirectory();
-        var service = CreateService();
+        string repositoryPath = CreateGitRepositoryDirectory();
+        RepositoryService service = CreateService();
 
         await service.RegisterAsync(repositoryPath);
 
@@ -84,12 +84,12 @@ public sealed class RepositoryServiceTests
     [Fact]
     public async Task ExistingAgentsDirectoryIsNotModified()
     {
-        var repositoryPath = CreateGitRepositoryDirectory();
-        var agentsPath = Path.Combine(repositoryPath, ".agents");
+        string repositoryPath = CreateGitRepositoryDirectory();
+        string agentsPath = Path.Combine(repositoryPath, ".agents");
         Directory.CreateDirectory(agentsPath);
-        var sentinelPath = Path.Combine(agentsPath, "sentinel.txt");
+        string sentinelPath = Path.Combine(agentsPath, "sentinel.txt");
         await File.WriteAllTextAsync(sentinelPath, "keep");
-        var service = CreateService();
+        RepositoryService service = CreateService();
 
         await service.RegisterAsync(repositoryPath);
 
@@ -99,14 +99,14 @@ public sealed class RepositoryServiceTests
     [Fact]
     public async Task RegisteredRepositoriesSurviveConfigurationReload()
     {
-        var repositoryPath = CreateGitRepositoryDirectory();
-        var configurationPath = CreateConfigurationPath();
-        var service = CreateService(configurationPath);
-        var repository = await service.RegisterAsync(repositoryPath);
+        string repositoryPath = CreateGitRepositoryDirectory();
+        string configurationPath = CreateConfigurationPath();
+        RepositoryService service = CreateService(configurationPath);
+        Repository repository = await service.RegisterAsync(repositoryPath);
 
-        var reloaded = await CreateService(configurationPath).GetAllAsync();
+        IReadOnlyList<Repository> reloaded = await CreateService(configurationPath).GetAllAsync();
 
-        var loadedRepository = Assert.Single(reloaded);
+        Repository loadedRepository = Assert.Single(reloaded);
         Assert.Equal(repository.Id, loadedRepository.Id);
         Assert.Equal(repository.Name, loadedRepository.Name);
         Assert.Equal(repository.Path, loadedRepository.Path);
@@ -115,11 +115,11 @@ public sealed class RepositoryServiceTests
     [Fact]
     public async Task RemovingRepositoryUpdatesConfigurationAndLeavesFilesUntouched()
     {
-        var repositoryPath = CreateGitRepositoryDirectory();
-        var trackedFile = Path.Combine(repositoryPath, "tracked.txt");
+        string repositoryPath = CreateGitRepositoryDirectory();
+        string trackedFile = Path.Combine(repositoryPath, "tracked.txt");
         await File.WriteAllTextAsync(trackedFile, "content");
-        var service = CreateService();
-        var repository = await service.RegisterAsync(repositoryPath);
+        RepositoryService service = CreateService();
+        Repository repository = await service.RegisterAsync(repositoryPath);
 
         await service.RemoveAsync(repository.Id);
 
@@ -137,7 +137,7 @@ public sealed class RepositoryServiceTests
 
     private static string CreateGitRepositoryDirectory()
     {
-        var directory = CreateTemporaryDirectory();
+        string directory = CreateTemporaryDirectory();
         Directory.CreateDirectory(Path.Combine(directory, ".git"));
         return directory;
     }
@@ -149,7 +149,7 @@ public sealed class RepositoryServiceTests
 
     private static string CreateTemporaryDirectory()
     {
-        var directory = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"));
+        string directory = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         return directory;
     }

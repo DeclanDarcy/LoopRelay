@@ -20,12 +20,12 @@ public sealed class FileSystemOperationalContextProposalStore(IArtifactStore art
         OperationalContextProposal proposal,
         string generatedContent)
     {
-        var proposalId = NormalizeProposalId(proposal.ProposalId);
-        var generatedRelativePath = ArtifactPath.CombineRelative(
+        string proposalId = NormalizeProposalId(proposal.ProposalId);
+        string generatedRelativePath = ArtifactPath.CombineRelative(
             ProposalsRelativePath,
             proposalId,
             ProposedFileName);
-        var metadataRelativePath = ArtifactPath.CombineRelative(
+        string metadataRelativePath = ArtifactPath.CombineRelative(
             ProposalsRelativePath,
             proposalId,
             MetadataFileName);
@@ -63,13 +63,13 @@ public sealed class FileSystemOperationalContextProposalStore(IArtifactStore art
         Repository repository,
         bool includeContent = false)
     {
-        var proposalRoot = ArtifactPath.ResolveRepositoryPath(repository, ProposalsRelativePath);
+        string proposalRoot = ArtifactPath.ResolveRepositoryPath(repository, ProposalsRelativePath);
         var proposals = new List<OperationalContextProposal>();
 
-        foreach (var directory in await artifactStore.ListDirectoriesAsync(proposalRoot))
+        foreach (string directory in await artifactStore.ListDirectoriesAsync(proposalRoot))
         {
-            var proposalId = Path.GetFileName(directory);
-            var proposal = await GetAsync(repository, proposalId, includeContent);
+            string proposalId = Path.GetFileName(directory);
+            OperationalContextProposal? proposal = await GetAsync(repository, proposalId, includeContent);
             if (proposal is not null)
             {
                 proposals.Add(proposal);
@@ -88,10 +88,10 @@ public sealed class FileSystemOperationalContextProposalStore(IArtifactStore art
         bool includeContent = false)
     {
         proposalId = NormalizeProposalId(proposalId);
-        var metadataPath = ArtifactPath.ResolveRepositoryPath(
+        string metadataPath = ArtifactPath.ResolveRepositoryPath(
             repository,
             ArtifactPath.CombineRelative(ProposalsRelativePath, proposalId, MetadataFileName));
-        var metadata = await artifactStore.ReadAsync(metadataPath);
+        string? metadata = await artifactStore.ReadAsync(metadataPath);
         if (metadata is null)
         {
             return null;
@@ -117,7 +117,7 @@ public sealed class FileSystemOperationalContextProposalStore(IArtifactStore art
             return proposal;
         }
 
-        var content = await artifactStore.ReadAsync(
+        string? content = await artifactStore.ReadAsync(
             ArtifactPath.ResolveRepositoryPath(repository, proposal.GeneratedContentRelativePath));
         string? editedContent = null;
         if (!string.IsNullOrWhiteSpace(proposal.EditedContentRelativePath))
@@ -135,8 +135,8 @@ public sealed class FileSystemOperationalContextProposalStore(IArtifactStore art
         string? editedContent = null,
         bool includeContent = false)
     {
-        var proposalId = NormalizeProposalId(proposal.ProposalId);
-        var editedRelativePath = proposal.EditedContentRelativePath;
+        string proposalId = NormalizeProposalId(proposal.ProposalId);
+        string? editedRelativePath = proposal.EditedContentRelativePath;
         if (editedContent is not null)
         {
             editedRelativePath = ArtifactPath.CombineRelative(
@@ -175,8 +175,8 @@ public sealed class FileSystemOperationalContextProposalStore(IArtifactStore art
 
     public async Task SupersedePendingAsync(Repository repository)
     {
-        var proposals = await ListAsync(repository);
-        foreach (var proposal in proposals.Where(proposal => proposal.Status == OperationalContextProposalStatus.Pending))
+        IReadOnlyList<OperationalContextProposal> proposals = await ListAsync(repository);
+        foreach (OperationalContextProposal proposal in proposals.Where(proposal => proposal.Status == OperationalContextProposalStatus.Pending))
         {
             await WriteMetadataAsync(repository, new OperationalContextProposal
             {
@@ -208,7 +208,7 @@ public sealed class FileSystemOperationalContextProposalStore(IArtifactStore art
 
     private async Task WriteMetadataAsync(Repository repository, OperationalContextProposal proposal)
     {
-        var metadataRelativePath = ArtifactPath.CombineRelative(
+        string metadataRelativePath = ArtifactPath.CombineRelative(
             ProposalsRelativePath,
             NormalizeProposalId(proposal.ProposalId),
             MetadataFileName);

@@ -15,22 +15,22 @@ public sealed class OperationalContextLifecycleService(
 
     public async Task<OperationalContextProposal> PromoteAsync(Guid repositoryId, string proposalId)
     {
-        var repository = await GetRepositoryAsync(repositoryId);
-        var proposal = await GetRequiredProposalAsync(repository, proposalId);
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        OperationalContextProposal proposal = await GetRequiredProposalAsync(repository, proposalId);
         await EnsurePromotableLatestAsync(repository, proposal);
 
-        var acceptedContent = GetAcceptedContent(proposal);
-        var acceptedContentHash = HashContent(acceptedContent);
+        string acceptedContent = GetAcceptedContent(proposal);
+        string acceptedContentHash = HashContent(acceptedContent);
         if (!string.Equals(acceptedContentHash, proposal.Review.ReviewedContentHash, StringComparison.Ordinal))
         {
             throw new InvalidOperationException("Cannot promote operational-context proposal because accepted content no longer matches review metadata.");
         }
 
-        var currentContent = await ReadCurrentOperationalContextAsync(repository);
-        var currentHash = HashOptionalContent(currentContent);
+        string? currentContent = await ReadCurrentOperationalContextAsync(repository);
+        string currentHash = HashOptionalContent(currentContent);
         if (!string.Equals(currentHash, proposal.Review.BaselineCurrentContextHash, StringComparison.Ordinal))
         {
-            var staleProposal = WithReviewState(
+            OperationalContextProposal staleProposal = WithReviewState(
                 proposal,
                 OperationalContextReviewState.Stale,
                 "Current operational context changed after this proposal was accepted.");
@@ -80,7 +80,7 @@ public sealed class OperationalContextLifecycleService(
 
     private async Task<Repository> GetRepositoryAsync(Guid repositoryId)
     {
-        var repository = (await repositoryService.GetAllAsync()).FirstOrDefault(repository => repository.Id == repositoryId);
+        Repository? repository = (await repositoryService.GetAllAsync()).FirstOrDefault(repository => repository.Id == repositoryId);
         return repository ?? throw new KeyNotFoundException($"Repository was not found: {repositoryId}");
     }
 
@@ -99,7 +99,7 @@ public sealed class OperationalContextLifecycleService(
             throw new InvalidOperationException($"Operational-context proposal cannot be promoted from status {proposal.Status}.");
         }
 
-        var latest = (await proposalStore.ListAsync(repository)).FirstOrDefault();
+        OperationalContextProposal? latest = (await proposalStore.ListAsync(repository)).FirstOrDefault();
         if (latest is not null && !string.Equals(latest.ProposalId, proposal.ProposalId, StringComparison.Ordinal))
         {
             throw new InvalidOperationException("Cannot promote a superseded operational-context proposal.");
@@ -239,7 +239,7 @@ public sealed class OperationalContextLifecycleService(
             return null;
         }
 
-        return int.TryParse(fileName[prefix.Length..^suffix.Length], out var revision)
+        return int.TryParse(fileName[prefix.Length..^suffix.Length], out int revision)
             ? revision
             : null;
     }

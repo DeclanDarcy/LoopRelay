@@ -7,7 +7,7 @@ public sealed class CodexExecutionProviderTests
     [Fact]
     public async Task LaunchesCodexExecFromRepositoryRootWithPromptOnStandardInput()
     {
-        var repositoryPath = CreateTemporaryDirectory();
+        string repositoryPath = CreateTemporaryDirectory();
         var processRunner = new RecordingProcessRunner(new ProcessStartResult
         {
             ProcessId = 1234,
@@ -17,7 +17,7 @@ public sealed class CodexExecutionProviderTests
             new StaticCodexExecutableResolver("C:\\tools\\codex.exe"),
             processRunner);
 
-        var result = await provider.StartAsync(
+        ExecutionProviderStartResult result = await provider.StartAsync(
             CreatePrompt(),
             CreateSession(repositoryPath),
             new RecordingObserver());
@@ -85,7 +85,7 @@ public sealed class CodexExecutionProviderTests
             new StaticCodexExecutableResolver("C:\\tools\\codex.exe"),
             new RecordingProcessRunner(new ProcessStartResult()));
 
-        var reattached = await provider.TryReattachAsync(
+        bool reattached = await provider.TryReattachAsync(
             CreateSession(CreateTemporaryDirectory()),
             new RecordingObserver());
 
@@ -121,7 +121,7 @@ public sealed class CodexExecutionProviderTests
 
     private static string CreateTemporaryDirectory()
     {
-        var directory = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"));
+        string directory = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         return directory;
     }

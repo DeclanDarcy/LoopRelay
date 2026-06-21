@@ -9,12 +9,12 @@ public sealed class UnderstandingCompressionService : IUnderstandingCompressionS
         OperationalContextDocument proposed)
     {
         var noiseRemovedIndicators = new List<string>();
-        var compressedRecentChanges = CompressRecentChanges(proposed.RecentUnderstandingChanges, noiseRemovedIndicators);
-        var resolvedQuestions = SelectItemsWithExplicitOutcome(
+        IReadOnlyList<OperationalContextItem> compressedRecentChanges = CompressRecentChanges(proposed.RecentUnderstandingChanges, noiseRemovedIndicators);
+        OperationalContextItem[] resolvedQuestions = SelectItemsWithExplicitOutcome(
             proposed.OpenQuestions,
             compressedRecentChanges,
             IsQuestionResolutionEvidence).ToArray();
-        var retiredRisks = SelectItemsWithExplicitOutcome(
+        OperationalContextItem[] retiredRisks = SelectItemsWithExplicitOutcome(
             proposed.ActiveRisks,
             compressedRecentChanges,
             IsRiskRetirementEvidence).ToArray();
@@ -37,8 +37,8 @@ public sealed class UnderstandingCompressionService : IUnderstandingCompressionS
             RecentUnderstandingChanges = compressedRecentChanges
         };
 
-        var warnings = BuildRetentionWarnings(current, compressedDocument, resolvedQuestions, retiredRisks).ToList();
-        var stableWarnings = warnings
+        List<string> warnings = BuildRetentionWarnings(current, compressedDocument, resolvedQuestions, retiredRisks).ToList();
+        string[] stableWarnings = warnings
             .Where(warning =>
                 warning.Contains("Architecture", StringComparison.OrdinalIgnoreCase) ||
                 warning.Contains("Constraint", StringComparison.OrdinalIgnoreCase) ||
@@ -54,14 +54,14 @@ public sealed class UnderstandingCompressionService : IUnderstandingCompressionS
             warnings.Add("Proposal growth indicates possible historical replay; review recent understanding changes for transient execution detail.");
         }
 
-        var currentTexts = AllItems(current)
+        HashSet<string> currentTexts = AllItems(current)
             .Select(item => Normalize(item.Text))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var proposedTexts = AllItems(compressedDocument)
+        HashSet<string> proposedTexts = AllItems(compressedDocument)
             .Select(item => Normalize(item.Text))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var compressedNoiseCount = proposed.RecentUnderstandingChanges.Count - compressedDocument.RecentUnderstandingChanges.Count;
-        var revisionSummary = BuildRevisionSummary(
+        int compressedNoiseCount = proposed.RecentUnderstandingChanges.Count - compressedDocument.RecentUnderstandingChanges.Count;
+        string[] revisionSummary = BuildRevisionSummary(
             compressedDocument,
             currentTexts,
             resolvedQuestions,
@@ -103,9 +103,9 @@ public sealed class UnderstandingCompressionService : IUnderstandingCompressionS
         var retained = new List<OperationalContextItem>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var item in recentChanges.AsEnumerable().Reverse())
+        foreach (OperationalContextItem item in recentChanges.AsEnumerable().Reverse())
         {
-            var normalized = Normalize(item.Text);
+            string normalized = Normalize(item.Text);
             if (!seen.Add(normalized))
             {
                 noiseRemovedIndicators.Add($"Repeated recent-change detail removed: {item.Text}");
@@ -127,7 +127,7 @@ public sealed class UnderstandingCompressionService : IUnderstandingCompressionS
             return retained;
         }
 
-        foreach (var removed in retained.Take(retained.Count - RecentUnderstandingChangeLimit))
+        foreach (OperationalContextItem removed in retained.Take(retained.Count - RecentUnderstandingChangeLimit))
         {
             noiseRemovedIndicators.Add($"Older recent-change detail compressed: {removed.Text}");
         }
@@ -151,17 +151,17 @@ public sealed class UnderstandingCompressionService : IUnderstandingCompressionS
         IReadOnlyList<OperationalContextItem> explicitlyResolvedQuestions,
         IReadOnlyList<OperationalContextItem> explicitlyRetiredRisks)
     {
-        foreach (var warning in MissingWarnings("Architecture", current.Architecture, proposed.Architecture))
+        foreach (string warning in MissingWarnings("Architecture", current.Architecture, proposed.Architecture))
         {
             yield return warning;
         }
 
-        foreach (var warning in MissingWarnings("Constraint", current.Constraints, proposed.Constraints))
+        foreach (string warning in MissingWarnings("Constraint", current.Constraints, proposed.Constraints))
         {
             yield return warning;
         }
 
-        foreach (var warning in MissingWarnings(
+        foreach (string warning in MissingWarnings(
             "Open question",
             current.OpenQuestions.Where(item => !ContainsEquivalent(explicitlyResolvedQuestions, item)).ToArray(),
             proposed.OpenQuestions))
@@ -169,7 +169,7 @@ public sealed class UnderstandingCompressionService : IUnderstandingCompressionS
             yield return warning;
         }
 
-        foreach (var warning in MissingWarnings(
+        foreach (string warning in MissingWarnings(
             "Active risk",
             current.ActiveRisks.Where(item => !ContainsEquivalent(explicitlyRetiredRisks, item)).ToArray(),
             proposed.ActiveRisks))
@@ -177,12 +177,12 @@ public sealed class UnderstandingCompressionService : IUnderstandingCompressionS
             yield return warning;
         }
 
-        foreach (var warning in MissingWarnings("Stable decision", current.StableDecisions, proposed.StableDecisions))
+        foreach (string warning in MissingWarnings("Stable decision", current.StableDecisions, proposed.StableDecisions))
         {
             yield return warning;
         }
 
-        foreach (var warning in MissingWarnings("Decision rationale", current.DecisionRationale, proposed.DecisionRationale))
+        foreach (string warning in MissingWarnings("Decision rationale", current.DecisionRationale, proposed.DecisionRationale))
         {
             yield return warning;
         }
@@ -198,11 +198,11 @@ public sealed class UnderstandingCompressionService : IUnderstandingCompressionS
         IReadOnlyList<OperationalContextItem> current,
         IReadOnlyList<OperationalContextItem> proposed)
     {
-        var proposedTexts = proposed
+        HashSet<string> proposedTexts = proposed
             .Select(item => Normalize(item.Text))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var item in current.Where(item => !proposedTexts.Contains(Normalize(item.Text))))
+        foreach (OperationalContextItem item in current.Where(item => !proposedTexts.Contains(Normalize(item.Text))))
         {
             yield return $"{label} disappeared without explicit resolution: {item.Text}";
         }
@@ -213,9 +213,9 @@ public sealed class UnderstandingCompressionService : IUnderstandingCompressionS
         IReadOnlyList<OperationalContextItem> evidenceItems,
         Func<string, bool> isOutcomeEvidence)
     {
-        foreach (var candidate in candidates)
+        foreach (OperationalContextItem candidate in candidates)
         {
-            var candidateTokens = MeaningfulTokens(candidate.Text).ToArray();
+            string[] candidateTokens = MeaningfulTokens(candidate.Text).ToArray();
             if (candidateTokens.Length == 0)
             {
                 continue;
@@ -239,11 +239,11 @@ public sealed class UnderstandingCompressionService : IUnderstandingCompressionS
         int compressedNoiseCount,
         IReadOnlyList<string> warnings)
     {
-        var addedPermanent = AllItems(compressedDocument)
+        int addedPermanent = AllItems(compressedDocument)
             .Count(item =>
                 !currentTexts.Contains(Normalize(item.Text)) &&
                 Classify(item) == OperationalContextInformationTier.PermanentUnderstanding);
-        var addedActive = AllItems(compressedDocument)
+        int addedActive = AllItems(compressedDocument)
             .Count(item =>
                 !currentTexts.Contains(Normalize(item.Text)) &&
                 Classify(item) == OperationalContextInformationTier.ActiveUnderstanding);
@@ -339,7 +339,7 @@ public sealed class UnderstandingCompressionService : IUnderstandingCompressionS
             "with"
         };
 
-        foreach (var token in Normalize(text)
+        foreach (string token in Normalize(text)
             .Split(' ', StringSplitOptions.RemoveEmptyEntries)
             .Select(token => token.Trim('`', '.', ',', ':', ';', '?', '!', '"', '\'')))
         {

@@ -6,7 +6,9 @@ using CommandCenter.Backend.Configuration;
 using CommandCenter.Backend.Execution;
 using CommandCenter.Backend.Planning;
 using CommandCenter.Backend.Repositories;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
+using ExecutionContext = CommandCenter.Backend.Execution.ExecutionContext;
 
 namespace CommandCenter.Backend.Tests;
 
@@ -15,11 +17,11 @@ public sealed class ExecutionContextServiceTests
     [Fact]
     public async Task ContextBuildsWithPlanAndSelectedMilestone()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/plan.md", "plan");
         await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
 
-        var context = await harness.ContextService.BuildContextAsync(
+        ExecutionContext context = await harness.ContextService.BuildContextAsync(
             harness.Repository.Id,
             ".agents/milestones/m1.md");
 
@@ -34,16 +36,16 @@ public sealed class ExecutionContextServiceTests
     [Fact]
     public async Task OperationalContextIsIncludedWhenPresent()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/plan.md", "plan");
         await WriteAsync(harness.Repository, ".agents/operational_context.md", "operational context");
         await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
 
-        var context = await harness.ContextService.BuildContextAsync(
+        ExecutionContext context = await harness.ContextService.BuildContextAsync(
             harness.Repository.Id,
             ".agents/milestones/m1.md");
 
-        var artifact = Assert.Single(
+        ExecutionContextArtifact artifact = Assert.Single(
             context.Artifacts,
             artifact => artifact.Role == "OperationalContext");
         Assert.Equal(".agents/operational_context.md", artifact.RelativePath);
@@ -54,16 +56,16 @@ public sealed class ExecutionContextServiceTests
     [Fact]
     public async Task EmptyOperationalContextIsAllowed()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/plan.md", "plan");
         await WriteAsync(harness.Repository, ".agents/operational_context.md", string.Empty);
         await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
 
-        var context = await harness.ContextService.BuildContextAsync(
+        ExecutionContext context = await harness.ContextService.BuildContextAsync(
             harness.Repository.Id,
             ".agents/milestones/m1.md");
 
-        var artifact = Assert.Single(
+        ExecutionContextArtifact artifact = Assert.Single(
             context.Artifacts,
             artifact => artifact.Role == "OperationalContext");
         Assert.Equal(0, artifact.ByteCount);
@@ -75,11 +77,11 @@ public sealed class ExecutionContextServiceTests
     [Fact]
     public async Task MissingOptionalArtifactsSucceedAndAreReported()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/plan.md", "plan");
         await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
 
-        var context = await harness.ContextService.BuildContextAsync(
+        ExecutionContext context = await harness.ContextService.BuildContextAsync(
             harness.Repository.Id,
             ".agents/milestones/m1.md");
 
@@ -92,10 +94,10 @@ public sealed class ExecutionContextServiceTests
     [Fact]
     public async Task MissingPlanFailsValidation()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
 
-        var context = await harness.ContextService.BuildContextAsync(
+        ExecutionContext context = await harness.ContextService.BuildContextAsync(
             harness.Repository.Id,
             ".agents/milestones/m1.md");
 
@@ -106,11 +108,11 @@ public sealed class ExecutionContextServiceTests
     [Fact]
     public async Task MissingSelectedMilestoneFailsValidation()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/plan.md", "plan");
         await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
 
-        var context = await harness.ContextService.BuildContextAsync(
+        ExecutionContext context = await harness.ContextService.BuildContextAsync(
             harness.Repository.Id,
             ".agents/milestones/missing.md");
 
@@ -121,11 +123,11 @@ public sealed class ExecutionContextServiceTests
     [Fact]
     public async Task NonMilestonePathFailsValidation()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/plan.md", "plan");
         await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
 
-        var context = await harness.ContextService.BuildContextAsync(
+        ExecutionContext context = await harness.ContextService.BuildContextAsync(
             harness.Repository.Id,
             ".agents/plan.md");
 
@@ -136,11 +138,11 @@ public sealed class ExecutionContextServiceTests
     [Fact]
     public async Task WarningThresholdProducesWarningWithoutHardFailure()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/plan.md", new string('a', 100 * 1024));
         await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
 
-        var context = await harness.ContextService.BuildContextAsync(
+        ExecutionContext context = await harness.ContextService.BuildContextAsync(
             harness.Repository.Id,
             ".agents/milestones/m1.md");
 
@@ -152,11 +154,11 @@ public sealed class ExecutionContextServiceTests
     [Fact]
     public async Task HardLimitProducesLaunchBlockingDiagnostics()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/plan.md", new string('a', 260 * 1024));
         await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
 
-        var context = await harness.ContextService.BuildContextAsync(
+        ExecutionContext context = await harness.ContextService.BuildContextAsync(
             harness.Repository.Id,
             ".agents/milestones/m1.md");
 
@@ -167,16 +169,16 @@ public sealed class ExecutionContextServiceTests
     [Fact]
     public async Task OperationalContextContributesToSizeDiagnostics()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/plan.md", "plan");
         await WriteAsync(harness.Repository, ".agents/operational_context.md", new string('c', 100 * 1024));
         await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
 
-        var context = await harness.ContextService.BuildContextAsync(
+        ExecutionContext context = await harness.ContextService.BuildContextAsync(
             harness.Repository.Id,
             ".agents/milestones/m1.md");
 
-        var diagnostic = Assert.Single(
+        ExecutionContextArtifactDiagnostic diagnostic = Assert.Single(
             context.Diagnostics.ArtifactDiagnostics,
             diagnostic => diagnostic.Role == "OperationalContext");
         Assert.Equal(".agents/operational_context.md", diagnostic.RelativePath);
@@ -190,16 +192,16 @@ public sealed class ExecutionContextServiceTests
     [Fact]
     public async Task OversizedOperationalContextBlocksLaunch()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/plan.md", "plan");
         await WriteAsync(harness.Repository, ".agents/operational_context.md", new string('c', 260 * 1024));
         await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
 
-        var context = await harness.ContextService.BuildContextAsync(
+        ExecutionContext context = await harness.ContextService.BuildContextAsync(
             harness.Repository.Id,
             ".agents/milestones/m1.md");
 
-        var diagnostic = Assert.Single(
+        ExecutionContextArtifactDiagnostic diagnostic = Assert.Single(
             context.Diagnostics.ArtifactDiagnostics,
             diagnostic => diagnostic.Role == "OperationalContext");
         Assert.True(diagnostic.HardLimitExceeded);
@@ -215,11 +217,11 @@ public sealed class ExecutionContextServiceTests
             ModifiedPaths = ["src/file.cs"],
             IsClean = false
         };
-        var harness = await CreateHarnessAsync(dirtyState);
+        Harness harness = await CreateHarnessAsync(dirtyState);
         await WriteAsync(harness.Repository, ".agents/plan.md", "plan");
         await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
 
-        var context = await harness.ContextService.BuildContextAsync(
+        ExecutionContext context = await harness.ContextService.BuildContextAsync(
             harness.Repository.Id,
             ".agents/milestones/m1.md");
 
@@ -232,11 +234,11 @@ public sealed class ExecutionContextServiceTests
     [Fact]
     public async Task GitSnapshotFailureIsReportedAsValidationError()
     {
-        var harness = await CreateHarnessAsync(gitFailure: "git unavailable");
+        Harness harness = await CreateHarnessAsync(gitFailure: "git unavailable");
         await WriteAsync(harness.Repository, ".agents/plan.md", "plan");
         await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
 
-        var context = await harness.ContextService.BuildContextAsync(
+        ExecutionContext context = await harness.ContextService.BuildContextAsync(
             harness.Repository.Id,
             ".agents/milestones/m1.md");
 
@@ -247,27 +249,27 @@ public sealed class ExecutionContextServiceTests
     [Fact]
     public async Task ContextEndpointReturnsDiagnostics()
     {
-        var configurationPath = Path.Combine(CreateTemporaryDirectory(), "configuration.json");
-        var previousConfigurationPath = Environment.GetEnvironmentVariable("COMMAND_CENTER_CONFIGURATION_PATH");
+        string configurationPath = Path.Combine(CreateTemporaryDirectory(), "configuration.json");
+        string? previousConfigurationPath = Environment.GetEnvironmentVariable("COMMAND_CENTER_CONFIGURATION_PATH");
         Environment.SetEnvironmentVariable("COMMAND_CENTER_CONFIGURATION_PATH", configurationPath);
 
         try
         {
-            var repositoryPath = CreateGitRepositoryDirectory();
+            string repositoryPath = CreateGitRepositoryDirectory();
             var repositoryService = new RepositoryService(new ApplicationConfigurationStore(configurationPath));
-            var repository = await repositoryService.RegisterAsync(repositoryPath);
+            Repository repository = await repositoryService.RegisterAsync(repositoryPath);
             await WriteAsync(repository, ".agents/plan.md", "plan");
             await WriteAsync(repository, ".agents/operational_context.md", "context");
             await WriteAsync(repository, ".agents/milestones/m1.md", "milestone");
 
-            await using var app = Program.CreateApp(
+            await using WebApplication app = Program.CreateApp(
                 [],
                 services => services.AddSingleton<IGitService>(new FakeGitService(null, null)));
             app.Urls.Add("http://127.0.0.1:0");
             await app.StartAsync();
 
             using var client = new HttpClient();
-            var response = await client.GetAsync(
+            HttpResponseMessage response = await client.GetAsync(
                 app.Urls.Single() +
                 $"/api/repositories/{repository.Id}/execution/context?milestonePath=.agents/milestones/m1.md");
 
@@ -291,7 +293,7 @@ public sealed class ExecutionContextServiceTests
     {
         var repositoryService = new RepositoryService(
             new ApplicationConfigurationStore(Path.Combine(CreateTemporaryDirectory(), "configuration.json")));
-        var repository = await repositoryService.RegisterAsync(CreateGitRepositoryDirectory());
+        Repository repository = await repositoryService.RegisterAsync(CreateGitRepositoryDirectory());
         var artifactStore = new FileSystemArtifactStore();
         var contextService = new ExecutionContextService(
             repositoryService,
@@ -304,8 +306,8 @@ public sealed class ExecutionContextServiceTests
 
     private static async Task WriteAsync(Repository repository, string relativePath, string content)
     {
-        var path = Path.Combine(repository.Path, relativePath.Replace('/', Path.DirectorySeparatorChar));
-        var directory = Path.GetDirectoryName(path);
+        string path = Path.Combine(repository.Path, relativePath.Replace('/', Path.DirectorySeparatorChar));
+        string? directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrWhiteSpace(directory))
         {
             Directory.CreateDirectory(directory);
@@ -316,14 +318,14 @@ public sealed class ExecutionContextServiceTests
 
     private static string CreateGitRepositoryDirectory()
     {
-        var directory = CreateTemporaryDirectory();
+        string directory = CreateTemporaryDirectory();
         Directory.CreateDirectory(Path.Combine(directory, ".git"));
         return directory;
     }
 
     private static string CreateTemporaryDirectory()
     {
-        var directory = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"));
+        string directory = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         return directory;
     }

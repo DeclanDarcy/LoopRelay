@@ -24,16 +24,16 @@ public sealed class OperationalContextGenerationService(
 
     public async Task<OperationalContextProposal> GenerateAsync(Guid repositoryId)
     {
-        var repository = await GetRepositoryAsync(repositoryId);
-        var inputSet = await BuildInputSetAsync(repository);
-        var currentDocument = parser.Parse(inputSet.CurrentOperationalContext ?? string.Empty);
-        var decisionAnalysis = decisionAnalysisService.Analyze(inputSet.DecisionArtifacts);
-        var proposedDocument = BuildProposedDocument(inputSet, currentDocument, decisionAnalysis);
-        var compression = compressionService.Compress(currentDocument, proposedDocument);
-        var generatedContent = parser.Render(compression.Document);
-        var generatedDocument = parser.Parse(generatedContent);
-        var generatedContentHash = HashContent(generatedContent);
-        var compressionSummary = AppendDecisionWarnings(compression.Summary, decisionAnalysis.Warnings);
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        OperationalContextInputSet inputSet = await BuildInputSetAsync(repository);
+        OperationalContextDocument currentDocument = parser.Parse(inputSet.CurrentOperationalContext ?? string.Empty);
+        DecisionAnalysisResult decisionAnalysis = decisionAnalysisService.Analyze(inputSet.DecisionArtifacts);
+        OperationalContextDocument proposedDocument = BuildProposedDocument(inputSet, currentDocument, decisionAnalysis);
+        OperationalContextCompressionResult compression = compressionService.Compress(currentDocument, proposedDocument);
+        string generatedContent = parser.Render(compression.Document);
+        OperationalContextDocument generatedDocument = parser.Parse(generatedContent);
+        string generatedContentHash = HashContent(generatedContent);
+        OperationalContextCompressionSummary compressionSummary = AppendDecisionWarnings(compression.Summary, decisionAnalysis.Warnings);
 
         await proposalStore.SupersedePendingAsync(repository);
 
@@ -55,14 +55,14 @@ public sealed class OperationalContextGenerationService(
 
     private async Task<Repository> GetRepositoryAsync(Guid repositoryId)
     {
-        var repository = (await repositoryService.GetAllAsync()).FirstOrDefault(repository => repository.Id == repositoryId);
+        Repository? repository = (await repositoryService.GetAllAsync()).FirstOrDefault(repository => repository.Id == repositoryId);
         return repository ?? throw new KeyNotFoundException($"Repository was not found: {repositoryId}");
     }
 
     private async Task<OperationalContextInputSet> BuildInputSetAsync(Repository repository)
     {
-        var artifacts = await artifactService.DiscoverAsync(repository);
-        var decisionArtifacts = await ReadDecisionArtifactsAsync(repository, artifacts);
+        IReadOnlyList<Artifact> artifacts = await artifactService.DiscoverAsync(repository);
+        IReadOnlyList<DecisionArtifactInput> decisionArtifacts = await ReadDecisionArtifactsAsync(repository, artifacts);
         return new OperationalContextInputSet
         {
             Repository = repository,
@@ -92,7 +92,7 @@ public sealed class OperationalContextGenerationService(
         Repository repository,
         IReadOnlyList<Artifact> artifacts)
     {
-        var selectedArtifacts = artifacts
+        Artifact[] selectedArtifacts = artifacts
             .Where(artifact => artifact.Type == ArtifactType.Decision)
             .OrderByDescending(artifact => artifact.VersionKind == ArtifactVersionKind.Current)
             .ThenByDescending(artifact => artifact.RelativePath, StringComparer.OrdinalIgnoreCase)
@@ -100,7 +100,7 @@ public sealed class OperationalContextGenerationService(
             .ToArray();
 
         var decisionArtifacts = new List<DecisionArtifactInput>();
-        foreach (var artifact in selectedArtifacts)
+        foreach (Artifact artifact in selectedArtifacts)
         {
             decisionArtifacts.Add(new DecisionArtifactInput
             {
@@ -118,7 +118,7 @@ public sealed class OperationalContextGenerationService(
         OperationalContextDocument current,
         DecisionAnalysisResult decisionAnalysis)
     {
-        var currentMentalModel = current.CurrentMentalModel.ToList();
+        List<OperationalContextItem> currentMentalModel = current.CurrentMentalModel.ToList();
         AddUnique(
             currentMentalModel,
             OperationalContextItemKind.MentalModel,
@@ -132,12 +132,12 @@ public sealed class OperationalContextGenerationService(
                 : "Planning state is partial because `.agents/plan.md` is not present.",
             ".agents/plan.md");
 
-        var stableDecisions = current.StableDecisions.ToList();
-        var decisionRationale = current.DecisionRationale.ToList();
-        var constraints = current.Constraints.ToList();
-        var openQuestions = current.OpenQuestions.ToList();
+        List<OperationalContextItem> stableDecisions = current.StableDecisions.ToList();
+        List<OperationalContextItem> decisionRationale = current.DecisionRationale.ToList();
+        List<OperationalContextItem> constraints = current.Constraints.ToList();
+        List<OperationalContextItem> openQuestions = current.OpenQuestions.ToList();
 
-        foreach (var decision in decisionAnalysis.Signals.Where(IsAssimilatedDecision).Take(8))
+        foreach (DecisionSignal decision in decisionAnalysis.Signals.Where(IsAssimilatedDecision).Take(8))
         {
             AddUnique(stableDecisions, OperationalContextItemKind.StableDecision, $"Decision: {decision.Statement}", decision.SourceRelativePath);
 
@@ -150,27 +150,27 @@ public sealed class OperationalContextGenerationService(
                     decision.SourceRelativePath);
             }
 
-            foreach (var constraint in decision.ConstraintsIntroduced.Take(3))
+            foreach (string constraint in decision.ConstraintsIntroduced.Take(3))
             {
                 AddUnique(constraints, OperationalContextItemKind.Constraint, constraint, decision.SourceRelativePath);
             }
 
-            foreach (var openQuestion in decision.OpenQuestions.Take(3))
+            foreach (string openQuestion in decision.OpenQuestions.Take(3))
             {
                 AddUnique(openQuestions, OperationalContextItemKind.OpenQuestion, $"Open decision: {openQuestion}", decision.SourceRelativePath);
             }
         }
 
-        var recentChanges = current.RecentUnderstandingChanges.ToList();
-        foreach (var change in ExtractHandoffSignals(inputSet.CurrentHandoff).Take(8))
+        List<OperationalContextItem> recentChanges = current.RecentUnderstandingChanges.ToList();
+        foreach (string change in ExtractHandoffSignals(inputSet.CurrentHandoff).Take(8))
         {
             AddUnique(recentChanges, OperationalContextItemKind.RecentChange, change, CurrentHandoffPath);
         }
 
-        foreach (var session in inputSet.ExecutionHistory.Take(5))
+        foreach (ExecutionSessionSummary session in inputSet.ExecutionHistory.Take(5))
         {
-            var status = session.State.ToString();
-            var milestone = string.IsNullOrWhiteSpace(session.MilestonePath) ? "unknown milestone" : session.MilestonePath;
+            string status = session.State.ToString();
+            string? milestone = string.IsNullOrWhiteSpace(session.MilestonePath) ? "unknown milestone" : session.MilestonePath;
             AddUnique(
                 recentChanges,
                 OperationalContextItemKind.RecentChange,
@@ -214,14 +214,14 @@ public sealed class OperationalContextGenerationService(
             yield break;
         }
 
-        foreach (var rawLine in markdown.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n'))
+        foreach (string rawLine in markdown.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n'))
         {
-            var line = rawLine.Trim();
+            string line = rawLine.Trim();
             if (line.Length > 2 &&
                 (line[0] == '-' || line[0] == '*' || line[0] == '+') &&
                 char.IsWhiteSpace(line[1]))
             {
-                var text = line[2..].Trim();
+                string text = line[2..].Trim();
                 if (!string.IsNullOrWhiteSpace(text))
                 {
                     yield return text;
@@ -254,10 +254,10 @@ public sealed class OperationalContextGenerationService(
         OperationalContextInputSet inputSet,
         string generatedContent)
     {
-        var executionHistoryContent = string.Join(
+        string executionHistoryContent = string.Join(
             Environment.NewLine,
             inputSet.ExecutionHistory.Select(session => $"{session.SessionId}|{session.State}|{session.MilestonePath}|{session.CompletedAt:O}"));
-        var planningContent = string.Join(
+        string planningContent = string.Join(
             Environment.NewLine,
             inputSet.MilestonePaths.Prepend($"PlanningReadiness={inputSet.PlanningReadiness}").Prepend($"HasPlan={inputSet.HasPlan}"));
 
@@ -274,9 +274,9 @@ public sealed class OperationalContextGenerationService(
 
     private static OperationalContextInputFingerprint Fingerprint(string name, string relativePath, string? content)
     {
-        var present = content is not null;
-        var normalizedContent = content ?? "<absent>";
-        var bytes = Encoding.UTF8.GetByteCount(normalizedContent);
+        bool present = content is not null;
+        string normalizedContent = content ?? "<absent>";
+        int bytes = Encoding.UTF8.GetByteCount(normalizedContent);
         return new OperationalContextInputFingerprint
         {
             Name = name,
@@ -297,14 +297,14 @@ public sealed class OperationalContextGenerationService(
             return summary;
         }
 
-        var warnings = summary.Warnings.Concat(decisionWarnings.Select(warning => $"Decision analysis warning: {warning}")).ToArray();
-        var stableWarnings = summary.StableUnderstandingRetentionWarnings
+        string[] warnings = summary.Warnings.Concat(decisionWarnings.Select(warning => $"Decision analysis warning: {warning}")).ToArray();
+        string[] stableWarnings = summary.StableUnderstandingRetentionWarnings
             .Concat(decisionWarnings
                 .Where(warning => warning.Contains("rationale", StringComparison.OrdinalIgnoreCase) ||
                     warning.Contains("Contradictory", StringComparison.OrdinalIgnoreCase))
                 .Select(warning => $"Decision analysis warning: {warning}"))
             .ToArray();
-        var revisionSummary = summary.RevisionSummary
+        string[] revisionSummary = summary.RevisionSummary
             .Concat([$"{decisionWarnings.Count} decision-continuity warning(s) require review."])
             .ToArray();
 
@@ -346,8 +346,8 @@ public sealed class OperationalContextGenerationService(
 
     private static string CreateItemId(string section, string text)
     {
-        var normalized = Normalize($"{section}:{text}");
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(normalized));
+        string normalized = Normalize($"{section}:{text}");
+        byte[] bytes = SHA256.HashData(Encoding.UTF8.GetBytes(normalized));
         return $"{Normalize(section).Replace(' ', '-')}-{Convert.ToHexString(bytes)[..12].ToLowerInvariant()}";
     }
 

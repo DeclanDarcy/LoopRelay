@@ -10,6 +10,7 @@ using CommandCenter.Backend.Execution;
 using CommandCenter.Backend.Planning;
 using CommandCenter.Backend.Projections;
 using CommandCenter.Backend.Repositories;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CommandCenter.Backend.Tests;
@@ -19,10 +20,10 @@ public sealed class ExecutionSessionServiceTests
     [Fact]
     public async Task ReadyRepositoryLaunchesWithFakeProvider()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteReadyArtifactsAsync(harness.Repository);
 
-        var summary = await harness.SessionService.StartAsync(
+        ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
             harness.Repository.Id,
             new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
 
@@ -35,7 +36,7 @@ public sealed class ExecutionSessionServiceTests
     [Fact]
     public async Task MissingPlanBlocksLaunch()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/milestones/m2.md", "milestone");
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -50,7 +51,7 @@ public sealed class ExecutionSessionServiceTests
     [Fact]
     public async Task MissingMilestoneBlocksLaunch()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/plan.md", "plan");
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -65,7 +66,7 @@ public sealed class ExecutionSessionServiceTests
     [Fact]
     public async Task ContextHardLimitBlocksLaunch()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/plan.md", new string('a', 260 * 1024));
         await WriteAsync(harness.Repository, ".agents/milestones/m2.md", "milestone");
 
@@ -86,13 +87,13 @@ public sealed class ExecutionSessionServiceTests
             ModifiedPaths = ["src/changed.cs"],
             IsClean = false
         };
-        var harness = await CreateHarnessAsync(dirtyState);
+        Harness harness = await CreateHarnessAsync(dirtyState);
         await WriteReadyArtifactsAsync(harness.Repository);
 
-        var summary = await harness.SessionService.StartAsync(
+        ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
             harness.Repository.Id,
             new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
-        var session = (await harness.Store.LoadAsync()).Single(session => session.Id == summary.SessionId);
+        ExecutionSession session = (await harness.Store.LoadAsync()).Single(session => session.Id == summary.SessionId);
 
         Assert.False(session.RepositorySnapshot!.DirtyState.IsClean);
         Assert.Contains("src/changed.cs", session.RepositorySnapshot.DirtyState.ModifiedPaths);
@@ -101,7 +102,7 @@ public sealed class ExecutionSessionServiceTests
     [Fact]
     public async Task DuplicateLaunchBlocks()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteReadyArtifactsAsync(harness.Repository);
 
         await harness.SessionService.StartAsync(
@@ -121,13 +122,13 @@ public sealed class ExecutionSessionServiceTests
     public async Task FakeProviderFailureLeavesRepositoryReadyAndRecordsFailure()
     {
         var provider = new FakeExecutionProvider { FailOnStart = true };
-        var harness = await CreateHarnessAsync(provider: provider);
+        Harness harness = await CreateHarnessAsync(provider: provider);
         await WriteReadyArtifactsAsync(harness.Repository);
 
-        var summary = await harness.SessionService.StartAsync(
+        ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
             harness.Repository.Id,
             new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
-        var session = (await harness.Store.LoadAsync()).Single();
+        ExecutionSession session = (await harness.Store.LoadAsync()).Single();
 
         Assert.Equal(ExecutionSessionState.Failed, summary.State);
         Assert.Equal(RepositoryExecutionState.Ready, summary.RepositoryState);
@@ -141,13 +142,13 @@ public sealed class ExecutionSessionServiceTests
         var provider = new FailingExecutionProvider(new ExecutionProviderException(
             "ProviderLaunchFailed",
             "Codex process failed to start."));
-        var harness = await CreateHarnessAsync(provider: provider);
+        Harness harness = await CreateHarnessAsync(provider: provider);
         await WriteReadyArtifactsAsync(harness.Repository);
 
-        var summary = await harness.SessionService.StartAsync(
+        ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
             harness.Repository.Id,
             new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
-        var session = (await harness.Store.LoadAsync()).Single();
+        ExecutionSession session = (await harness.Store.LoadAsync()).Single();
 
         Assert.Equal(ExecutionSessionState.Failed, summary.State);
         Assert.Equal(RepositoryExecutionState.Ready, summary.RepositoryState);
@@ -159,9 +160,9 @@ public sealed class ExecutionSessionServiceTests
     public async Task StartupRecoveryFailsPersistedExecutingSessionAfterStoreReload()
     {
         var provider = new MetadataExecutionProvider();
-        var harness = await CreateHarnessAsync(provider: provider);
+        Harness harness = await CreateHarnessAsync(provider: provider);
         await WriteReadyArtifactsAsync(harness.Repository);
-        var summary = await harness.SessionService.StartAsync(
+        ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
             harness.Repository.Id,
             new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
 
@@ -174,9 +175,9 @@ public sealed class ExecutionSessionServiceTests
             new FakeGitService(null, null));
 
         await reloadedService.RecoverAsync();
-        var active = await reloadedService.GetActiveSessionAsync(harness.Repository.Id);
-        var repositorySummary = await reloadedService.GetRepositorySessionSummaryAsync(harness.Repository.Id);
-        var recoveredSession = await reloadedService.GetSessionAsync(summary.SessionId);
+        ExecutionSessionSummary? active = await reloadedService.GetActiveSessionAsync(harness.Repository.Id);
+        ExecutionSessionSummary? repositorySummary = await reloadedService.GetRepositorySessionSummaryAsync(harness.Repository.Id);
+        ExecutionSession? recoveredSession = await reloadedService.GetSessionAsync(summary.SessionId);
 
         Assert.Null(active);
         Assert.NotNull(repositorySummary);
@@ -200,9 +201,9 @@ public sealed class ExecutionSessionServiceTests
     public async Task StartupRecoveryKeepsExecutingSessionActiveWhenProviderReattachSucceeds()
     {
         var provider = new MetadataExecutionProvider();
-        var harness = await CreateHarnessAsync(provider: provider);
+        Harness harness = await CreateHarnessAsync(provider: provider);
         await WriteReadyArtifactsAsync(harness.Repository);
-        var summary = await harness.SessionService.StartAsync(
+        ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
             harness.Repository.Id,
             new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
         var reattachProvider = new FakeExecutionProvider
@@ -221,10 +222,10 @@ public sealed class ExecutionSessionServiceTests
             new FakeGitService(null, null));
 
         await reloadedService.RecoverAsync();
-        var active = await reloadedService.GetActiveSessionAsync(harness.Repository.Id);
-        var repositorySummary = await reloadedService.GetRepositorySessionSummaryAsync(harness.Repository.Id);
-        var recoveredSession = await reloadedService.GetSessionAsync(summary.SessionId);
-        var events = await reloadedMonitoringService.GetEventsAsync(summary.SessionId);
+        ExecutionSessionSummary? active = await reloadedService.GetActiveSessionAsync(harness.Repository.Id);
+        ExecutionSessionSummary? repositorySummary = await reloadedService.GetRepositorySessionSummaryAsync(harness.Repository.Id);
+        ExecutionSession? recoveredSession = await reloadedService.GetSessionAsync(summary.SessionId);
+        IReadOnlyList<ExecutionEvent> events = await reloadedMonitoringService.GetEventsAsync(summary.SessionId);
 
         Assert.NotNull(active);
         Assert.Equal(ExecutionSessionState.Executing, active.State);
@@ -234,7 +235,7 @@ public sealed class ExecutionSessionServiceTests
         Assert.NotNull(recoveredSession);
         Assert.Equal(ExecutionSessionState.Executing, recoveredSession.State);
         Assert.Equal(RepositoryExecutionState.Executing, await reloadedService.GetRepositoryStateAsync(harness.Repository.Id));
-        var recoveryEvent = Assert.Single(events, executionEvent => executionEvent.Type == ExecutionEventType.Recovery);
+        ExecutionEvent recoveryEvent = Assert.Single(events, executionEvent => executionEvent.Type == ExecutionEventType.Recovery);
         Assert.Equal(ExecutionEventType.Recovery, recoveryEvent.Type);
         Assert.Equal(ExecutionSessionService.ReattachedProviderRecoveryMessage, recoveryEvent.Message);
     }
@@ -242,7 +243,7 @@ public sealed class ExecutionSessionServiceTests
     [Fact]
     public async Task DashboardProjectionShowsRecoveredFailedStateAfterStoreReload()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteReadyArtifactsAsync(harness.Repository);
         await harness.SessionService.StartAsync(
             harness.Repository.Id,
@@ -265,10 +266,10 @@ public sealed class ExecutionSessionServiceTests
             new MarkdownOperationalContextParser(),
             artifactStore);
 
-        var dashboard = await projectionService.GetDashboardAsync();
-        var workspace = await projectionService.GetWorkspaceAsync(harness.Repository.Id);
+        IReadOnlyList<RepositoryDashboardProjection> dashboard = await projectionService.GetDashboardAsync();
+        RepositoryWorkspaceProjection workspace = await projectionService.GetWorkspaceAsync(harness.Repository.Id);
 
-        var dashboardProjection = Assert.Single(dashboard);
+        RepositoryDashboardProjection dashboardProjection = Assert.Single(dashboard);
         Assert.Equal(RepositoryExecutionState.Failed, dashboardProjection.ExecutionState);
         Assert.Null(dashboardProjection.ActiveExecutionSession);
         Assert.NotNull(dashboardProjection.ExecutionSummary);
@@ -286,14 +287,14 @@ public sealed class ExecutionSessionServiceTests
         var provider = new FailingExecutionProvider(new ExecutionProviderException(
             "ProviderLaunchFailed",
             "Codex process failed to start."));
-        var harness = await CreateHarnessAsync(provider: provider);
+        Harness harness = await CreateHarnessAsync(provider: provider);
         await WriteReadyArtifactsAsync(harness.Repository);
 
-        var summary = await harness.SessionService.StartAsync(
+        ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
             harness.Repository.Id,
             new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
-        var active = await harness.SessionService.GetActiveSessionAsync(harness.Repository.Id);
-        var repositorySummary = await harness.SessionService.GetRepositorySessionSummaryAsync(harness.Repository.Id);
+        ExecutionSessionSummary? active = await harness.SessionService.GetActiveSessionAsync(harness.Repository.Id);
+        ExecutionSessionSummary? repositorySummary = await harness.SessionService.GetRepositorySessionSummaryAsync(harness.Repository.Id);
 
         Assert.Equal(ExecutionSessionState.Failed, summary.State);
         Assert.Equal(RepositoryExecutionState.Ready, summary.RepositoryState);
@@ -307,8 +308,8 @@ public sealed class ExecutionSessionServiceTests
     [Fact]
     public async Task StartupRecoveryDoesNotMutateNonExecutingSessions()
     {
-        var harness = await CreateHarnessAsync();
-        var startedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
+        Harness harness = await CreateHarnessAsync();
+        DateTimeOffset startedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
         var failedSession = new ExecutionSession
         {
             Id = Guid.NewGuid(),
@@ -335,7 +336,7 @@ public sealed class ExecutionSessionServiceTests
         await harness.Store.SaveAsync([failedSession]);
 
         await harness.SessionService.RecoverAsync();
-        var recoveredSession = (await harness.Store.LoadAsync()).Single();
+        ExecutionSession recoveredSession = (await harness.Store.LoadAsync()).Single();
 
         Assert.Equal(ExecutionSessionState.Failed, recoveredSession.State);
         Assert.Equal(RepositoryExecutionState.Failed, recoveredSession.RepositoryState);
@@ -349,14 +350,14 @@ public sealed class ExecutionSessionServiceTests
     [Fact]
     public async Task PreviousCurrentHandoffSnapshotIsCapturedBeforeProviderStart()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteReadyArtifactsAsync(harness.Repository);
         await WriteAsync(harness.Repository, ".agents/handoffs/handoff.md", "previous handoff");
 
-        var summary = await harness.SessionService.StartAsync(
+        ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
             harness.Repository.Id,
             new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
-        var session = (await harness.Store.LoadAsync()).Single(session => session.Id == summary.SessionId);
+        ExecutionSession session = (await harness.Store.LoadAsync()).Single(session => session.Id == summary.SessionId);
 
         Assert.Equal("previous handoff", session.PreviousHandoffContent);
         Assert.NotNull(session.PreviousHandoffCapturedAt);
@@ -366,7 +367,7 @@ public sealed class ExecutionSessionServiceTests
     public async Task ProviderReceivesExecutionPrompt()
     {
         var provider = new FakeExecutionProvider();
-        var harness = await CreateHarnessAsync(provider: provider);
+        Harness harness = await CreateHarnessAsync(provider: provider);
         await WriteReadyArtifactsAsync(harness.Repository);
 
         await harness.SessionService.StartAsync(
@@ -382,15 +383,15 @@ public sealed class ExecutionSessionServiceTests
     public async Task ProviderLaunchMetadataPersistsAfterStoreReload()
     {
         var provider = new MetadataExecutionProvider();
-        var harness = await CreateHarnessAsync(provider: provider);
+        Harness harness = await CreateHarnessAsync(provider: provider);
         await WriteReadyArtifactsAsync(harness.Repository);
 
-        var summary = await harness.SessionService.StartAsync(
+        ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
             harness.Repository.Id,
             new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
 
-        var sessions = await new FileSystemExecutionSessionStore(harness.StorePath).LoadAsync();
-        var session = sessions.Single(session => session.Id == summary.SessionId);
+        IReadOnlyList<ExecutionSession> sessions = await new FileSystemExecutionSessionStore(harness.StorePath).LoadAsync();
+        ExecutionSession session = sessions.Single(session => session.Id == summary.SessionId);
 
         Assert.Equal("codex", session.ProviderName);
         Assert.Equal("C:\\tools\\codex.exe", session.ProviderExecutablePath);
@@ -409,13 +410,13 @@ public sealed class ExecutionSessionServiceTests
             ModifiedPaths = ["src/changed.cs"],
             IsClean = false
         };
-        var harness = await CreateHarnessAsync(dirtyState);
-        var session = await StoreAwaitingAcceptanceSessionAsync(harness);
+        Harness harness = await CreateHarnessAsync(dirtyState);
+        ExecutionSession session = await StoreAwaitingAcceptanceSessionAsync(harness);
 
-        var summary = await harness.SessionService.AcceptAsync(
+        ExecutionSessionSummary summary = await harness.SessionService.AcceptAsync(
             session.Id,
             new ExecutionAcceptanceRequest { DecisionNote = " Reviewed and accepted. " });
-        var storedSession = (await harness.Store.LoadAsync()).Single(storedSession => storedSession.Id == session.Id);
+        ExecutionSession storedSession = (await harness.Store.LoadAsync()).Single(storedSession => storedSession.Id == session.Id);
 
         Assert.Equal(ExecutionSessionState.Completed, summary.State);
         Assert.Equal(RepositoryExecutionState.AwaitingCommit, summary.RepositoryState);
@@ -430,10 +431,10 @@ public sealed class ExecutionSessionServiceTests
     [Fact]
     public async Task AcceptFromAwaitingAcceptanceWithCleanWorkingTreeTransitionsToReady()
     {
-        var harness = await CreateHarnessAsync();
-        var session = await StoreAwaitingAcceptanceSessionAsync(harness);
+        Harness harness = await CreateHarnessAsync();
+        ExecutionSession session = await StoreAwaitingAcceptanceSessionAsync(harness);
 
-        var summary = await harness.SessionService.AcceptAsync(session.Id, new ExecutionAcceptanceRequest());
+        ExecutionSessionSummary summary = await harness.SessionService.AcceptAsync(session.Id, new ExecutionAcceptanceRequest());
 
         Assert.Equal(ExecutionSessionState.Completed, summary.State);
         Assert.Equal(RepositoryExecutionState.Ready, summary.RepositoryState);
@@ -445,13 +446,13 @@ public sealed class ExecutionSessionServiceTests
     [Fact]
     public async Task RejectFromAwaitingAcceptanceTransitionsToReadyAndPreservesHandoff()
     {
-        var harness = await CreateHarnessAsync();
-        var session = await StoreAwaitingAcceptanceSessionAsync(harness);
+        Harness harness = await CreateHarnessAsync();
+        ExecutionSession session = await StoreAwaitingAcceptanceSessionAsync(harness);
 
-        var summary = await harness.SessionService.RejectAsync(
+        ExecutionSessionSummary summary = await harness.SessionService.RejectAsync(
             session.Id,
             new ExecutionAcceptanceRequest { DecisionNote = "Not sufficient" });
-        var storedSession = (await harness.Store.LoadAsync()).Single(storedSession => storedSession.Id == session.Id);
+        ExecutionSession storedSession = (await harness.Store.LoadAsync()).Single(storedSession => storedSession.Id == session.Id);
 
         Assert.Equal(ExecutionSessionState.Completed, summary.State);
         Assert.Equal(RepositoryExecutionState.Ready, summary.RepositoryState);
@@ -465,9 +466,9 @@ public sealed class ExecutionSessionServiceTests
     [Fact]
     public async Task AcceptOutsideAwaitingAcceptanceFails()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteReadyArtifactsAsync(harness.Repository);
-        var summary = await harness.SessionService.StartAsync(
+        ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
             harness.Repository.Id,
             new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
 
@@ -480,9 +481,9 @@ public sealed class ExecutionSessionServiceTests
     [Fact]
     public async Task RejectOutsideAwaitingAcceptanceFails()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteReadyArtifactsAsync(harness.Repository);
-        var summary = await harness.SessionService.StartAsync(
+        ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
             harness.Repository.Id,
             new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
 
@@ -500,11 +501,11 @@ public sealed class ExecutionSessionServiceTests
             ModifiedPaths = ["src/changed.cs"],
             IsClean = false
         };
-        var harness = await CreateHarnessAsync(dirtyState);
-        var session = await StoreAwaitingAcceptanceSessionAsync(harness);
+        Harness harness = await CreateHarnessAsync(dirtyState);
+        ExecutionSession session = await StoreAwaitingAcceptanceSessionAsync(harness);
 
         await harness.SessionService.AcceptAsync(session.Id, new ExecutionAcceptanceRequest { DecisionNote = "accepted" });
-        var reloadedSession = (await new FileSystemExecutionSessionStore(harness.StorePath).LoadAsync()).Single();
+        ExecutionSession reloadedSession = (await new FileSystemExecutionSessionStore(harness.StorePath).LoadAsync()).Single();
 
         Assert.Equal(ExecutionSessionState.Completed, reloadedSession.State);
         Assert.Equal(RepositoryExecutionState.AwaitingCommit, reloadedSession.RepositoryState);
@@ -524,10 +525,10 @@ public sealed class ExecutionSessionServiceTests
                 IsClean = false
             },
             null);
-        var harness = await CreateHarnessAsync(gitService: gitService);
-        var session = await StoreAwaitingCommitSessionWithPreparationAsync(harness);
+        Harness harness = await CreateHarnessAsync(gitService: gitService);
+        ExecutionSession session = await StoreAwaitingCommitSessionWithPreparationAsync(harness);
 
-        var summary = await harness.SessionService.CommitAsync(
+        ExecutionSessionSummary summary = await harness.SessionService.CommitAsync(
             session.Id,
             new CommitRequest
             {
@@ -535,7 +536,7 @@ public sealed class ExecutionSessionServiceTests
                 SelectedPaths = ["src/changed.cs"],
                 StatusSnapshotId = "snapshot"
             });
-        var storedSession = (await harness.Store.LoadAsync()).Single(storedSession => storedSession.Id == session.Id);
+        ExecutionSession storedSession = (await harness.Store.LoadAsync()).Single(storedSession => storedSession.Id == session.Id);
 
         Assert.Equal(RepositoryExecutionState.AwaitingPush, summary.RepositoryState);
         Assert.Equal("commit-sha", summary.CommitSha);
@@ -549,13 +550,13 @@ public sealed class ExecutionSessionServiceTests
     [Fact]
     public async Task CommitRejectsEmptySelectedPaths()
     {
-        var harness = await CreateHarnessAsync(
+        Harness harness = await CreateHarnessAsync(
             new RepositoryDirtyState
             {
                 ModifiedPaths = ["src/changed.cs"],
                 IsClean = false
             });
-        var session = await StoreAwaitingCommitSessionWithPreparationAsync(harness);
+        ExecutionSession session = await StoreAwaitingCommitSessionWithPreparationAsync(harness);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             harness.SessionService.CommitAsync(
@@ -573,13 +574,13 @@ public sealed class ExecutionSessionServiceTests
     [Fact]
     public async Task CommitRejectsStaleReviewedSnapshot()
     {
-        var harness = await CreateHarnessAsync(
+        Harness harness = await CreateHarnessAsync(
             new RepositoryDirtyState
             {
                 ModifiedPaths = ["src/changed.cs"],
                 IsClean = false
             });
-        var session = await StoreAwaitingCommitSessionWithPreparationAsync(harness);
+        ExecutionSession session = await StoreAwaitingCommitSessionWithPreparationAsync(harness);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             harness.SessionService.CommitAsync(
@@ -607,8 +608,8 @@ public sealed class ExecutionSessionServiceTests
         {
             CurrentSnapshotId = "changed-snapshot"
         };
-        var harness = await CreateHarnessAsync(gitService: gitService);
-        var session = await StoreAwaitingCommitSessionWithPreparationAsync(harness);
+        Harness harness = await CreateHarnessAsync(gitService: gitService);
+        ExecutionSession session = await StoreAwaitingCommitSessionWithPreparationAsync(harness);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             harness.SessionService.CommitAsync(
@@ -626,13 +627,13 @@ public sealed class ExecutionSessionServiceTests
     [Fact]
     public async Task CommitRejectsUnknownOrUnsafePaths()
     {
-        var harness = await CreateHarnessAsync(
+        Harness harness = await CreateHarnessAsync(
             new RepositoryDirtyState
             {
                 ModifiedPaths = ["src/changed.cs"],
                 IsClean = false
             });
-        var session = await StoreAwaitingCommitSessionWithPreparationAsync(harness);
+        ExecutionSession session = await StoreAwaitingCommitSessionWithPreparationAsync(harness);
 
         var unknown = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             harness.SessionService.CommitAsync(
@@ -670,8 +671,8 @@ public sealed class ExecutionSessionServiceTests
         {
             CommitFailure = "git commit failed"
         };
-        var harness = await CreateHarnessAsync(gitService: gitService);
-        var session = await StoreAwaitingCommitSessionWithPreparationAsync(harness);
+        Harness harness = await CreateHarnessAsync(gitService: gitService);
+        ExecutionSession session = await StoreAwaitingCommitSessionWithPreparationAsync(harness);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             harness.SessionService.CommitAsync(
@@ -682,7 +683,7 @@ public sealed class ExecutionSessionServiceTests
                     SelectedPaths = ["src/changed.cs"],
                     StatusSnapshotId = "snapshot"
                 }));
-        var storedSession = (await harness.Store.LoadAsync()).Single(storedSession => storedSession.Id == session.Id);
+        ExecutionSession storedSession = (await harness.Store.LoadAsync()).Single(storedSession => storedSession.Id == session.Id);
 
         Assert.Contains("git commit failed", exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(RepositoryExecutionState.AwaitingCommit, storedSession.RepositoryState);
@@ -693,11 +694,11 @@ public sealed class ExecutionSessionServiceTests
     public async Task PushFromAwaitingPushPersistsMetadataAndTransitionsToReady()
     {
         var gitService = new FakeGitService(new RepositoryDirtyState { IsClean = true }, null);
-        var harness = await CreateHarnessAsync(gitService: gitService);
-        var session = await StoreAwaitingPushSessionAsync(harness);
+        Harness harness = await CreateHarnessAsync(gitService: gitService);
+        ExecutionSession session = await StoreAwaitingPushSessionAsync(harness);
 
-        var summary = await harness.SessionService.PushAsync(session.Id, new PushRequest());
-        var storedSession = (await harness.Store.LoadAsync()).Single(storedSession => storedSession.Id == session.Id);
+        ExecutionSessionSummary summary = await harness.SessionService.PushAsync(session.Id, new PushRequest());
+        ExecutionSession storedSession = (await harness.Store.LoadAsync()).Single(storedSession => storedSession.Id == session.Id);
 
         Assert.Equal(RepositoryExecutionState.Ready, summary.RepositoryState);
         Assert.Equal("commit-sha", summary.PushedCommitSha);
@@ -709,11 +710,11 @@ public sealed class ExecutionSessionServiceTests
         Assert.NotNull(storedSession.RepositorySnapshot);
         Assert.Equal("commit-sha", gitService.LastPushedCommitSha);
         Assert.Null(await harness.SessionService.GetActiveSessionAsync(harness.Repository.Id));
-        var latestSummary = await harness.SessionService.GetRepositorySessionSummaryAsync(harness.Repository.Id);
+        ExecutionSessionSummary? latestSummary = await harness.SessionService.GetRepositorySessionSummaryAsync(harness.Repository.Id);
         Assert.NotNull(latestSummary);
         Assert.Equal(session.Id, latestSummary.SessionId);
-        var history = await harness.SessionService.GetRepositorySessionHistoryAsync(harness.Repository.Id);
-        var historySummary = Assert.Single(history);
+        IReadOnlyList<ExecutionSessionSummary> history = await harness.SessionService.GetRepositorySessionHistoryAsync(harness.Repository.Id);
+        ExecutionSessionSummary historySummary = Assert.Single(history);
         Assert.Equal(session.Id, historySummary.SessionId);
         Assert.Equal(RepositoryExecutionState.Ready, historySummary.RepositoryState);
     }
@@ -721,9 +722,9 @@ public sealed class ExecutionSessionServiceTests
     [Fact]
     public async Task RepositorySessionHistoryReturnsNewestSessionsFirst()
     {
-        var harness = await CreateHarnessAsync();
-        var firstStartedAt = DateTimeOffset.UtcNow.AddMinutes(-10);
-        var secondStartedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
+        Harness harness = await CreateHarnessAsync();
+        DateTimeOffset firstStartedAt = DateTimeOffset.UtcNow.AddMinutes(-10);
+        DateTimeOffset secondStartedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
         var firstSession = new ExecutionSession
         {
             Id = Guid.NewGuid(),
@@ -756,9 +757,9 @@ public sealed class ExecutionSessionServiceTests
         };
         await harness.Store.SaveAsync([firstSession, secondSession]);
 
-        var history = await harness.SessionService.GetRepositorySessionHistoryAsync(harness.Repository.Id, limit: 1);
+        IReadOnlyList<ExecutionSessionSummary> history = await harness.SessionService.GetRepositorySessionHistoryAsync(harness.Repository.Id, limit: 1);
 
-        var summary = Assert.Single(history);
+        ExecutionSessionSummary summary = Assert.Single(history);
         Assert.Equal(secondSession.Id, summary.SessionId);
         Assert.Equal(".agents/milestones/m8.md", summary.MilestonePath);
         Assert.Equal("second-sha", summary.PushedCommitSha);
@@ -769,13 +770,13 @@ public sealed class ExecutionSessionServiceTests
     {
         var providerA = new FakeExecutionProvider();
         var gitService = new StatefulFakeGitService();
-        var harness = await CreateHarnessAsync(provider: providerA, gitService: gitService);
+        Harness harness = await CreateHarnessAsync(provider: providerA, gitService: gitService);
         await WriteAsync(harness.Repository, ".agents/plan.md", "plan");
         await WriteAsync(harness.Repository, ".agents/milestones/m8-a.md", "milestone A");
         await WriteAsync(harness.Repository, ".agents/milestones/m8-b.md", "milestone B");
         await WriteAsync(harness.Repository, ".agents/handoffs/handoff.md", "initial handoff");
 
-        var first = await ExecuteLoopAsync(
+        ExecutionSessionSummary first = await ExecuteLoopAsync(
             harness.SessionService,
             harness.MonitoringService,
             harness.Repository,
@@ -793,7 +794,7 @@ public sealed class ExecutionSessionServiceTests
 
         var providerB = new FakeExecutionProvider();
         var reloadedStore = new FileSystemExecutionSessionStore(harness.StorePath);
-        var reloadedMonitoringService = CreateMonitoringService(reloadedStore);
+        ExecutionMonitoringService reloadedMonitoringService = CreateMonitoringService(reloadedStore);
         var reloadedService = new ExecutionSessionService(
             harness.ContextService,
             reloadedStore,
@@ -806,15 +807,15 @@ public sealed class ExecutionSessionServiceTests
         Assert.Null(await reloadedService.GetActiveSessionAsync(harness.Repository.Id));
         Assert.Single(await reloadedService.GetRepositorySessionHistoryAsync(harness.Repository.Id));
 
-        var second = await ExecuteLoopAsync(
+        ExecutionSessionSummary second = await ExecuteLoopAsync(
             reloadedService,
             reloadedMonitoringService,
             harness.Repository,
             ".agents/milestones/m8-b.md",
             "handoff B",
             "provider output B");
-        var history = await reloadedService.GetRepositorySessionHistoryAsync(harness.Repository.Id);
-        var secondEvents = await reloadedMonitoringService.GetEventsAsync(second.SessionId);
+        IReadOnlyList<ExecutionSessionSummary> history = await reloadedService.GetRepositorySessionHistoryAsync(harness.Repository.Id);
+        IReadOnlyList<ExecutionEvent> secondEvents = await reloadedMonitoringService.GetEventsAsync(second.SessionId);
 
         Assert.Equal(RepositoryExecutionState.Ready, second.RepositoryState);
         Assert.Null(await reloadedService.GetActiveSessionAsync(harness.Repository.Id));
@@ -840,12 +841,12 @@ public sealed class ExecutionSessionServiceTests
         {
             PushFailure = "git push failed"
         };
-        var harness = await CreateHarnessAsync(gitService: gitService);
-        var session = await StoreAwaitingPushSessionAsync(harness);
+        Harness harness = await CreateHarnessAsync(gitService: gitService);
+        ExecutionSession session = await StoreAwaitingPushSessionAsync(harness);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             harness.SessionService.PushAsync(session.Id, new PushRequest()));
-        var storedSession = (await harness.Store.LoadAsync()).Single(storedSession => storedSession.Id == session.Id);
+        ExecutionSession storedSession = (await harness.Store.LoadAsync()).Single(storedSession => storedSession.Id == session.Id);
 
         Assert.Contains("git push failed", exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(RepositoryExecutionState.AwaitingPush, storedSession.RepositoryState);
@@ -858,21 +859,21 @@ public sealed class ExecutionSessionServiceTests
     [Fact]
     public async Task LaunchEndpointReturnsSessionMetadata()
     {
-        var configurationPath = Path.Combine(CreateTemporaryDirectory(), "configuration.json");
-        var storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");
-        var previousConfigurationPath = Environment.GetEnvironmentVariable("COMMAND_CENTER_CONFIGURATION_PATH");
-        var previousStorePath = Environment.GetEnvironmentVariable("COMMAND_CENTER_EXECUTION_SESSIONS_PATH");
+        string configurationPath = Path.Combine(CreateTemporaryDirectory(), "configuration.json");
+        string storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");
+        string? previousConfigurationPath = Environment.GetEnvironmentVariable("COMMAND_CENTER_CONFIGURATION_PATH");
+        string? previousStorePath = Environment.GetEnvironmentVariable("COMMAND_CENTER_EXECUTION_SESSIONS_PATH");
         Environment.SetEnvironmentVariable("COMMAND_CENTER_CONFIGURATION_PATH", configurationPath);
         Environment.SetEnvironmentVariable("COMMAND_CENTER_EXECUTION_SESSIONS_PATH", storePath);
 
         try
         {
-            var repositoryPath = CreateGitRepositoryDirectory();
+            string repositoryPath = CreateGitRepositoryDirectory();
             var repositoryService = new RepositoryService(new ApplicationConfigurationStore(configurationPath));
-            var repository = await repositoryService.RegisterAsync(repositoryPath);
+            Repository repository = await repositoryService.RegisterAsync(repositoryPath);
             await WriteReadyArtifactsAsync(repository);
 
-            await using var app = Program.CreateApp(
+            await using WebApplication app = Program.CreateApp(
                 [],
                 services =>
                 {
@@ -884,7 +885,7 @@ public sealed class ExecutionSessionServiceTests
             await app.StartAsync();
 
             using var client = new HttpClient();
-            var response = await client.PostAsJsonAsync(
+            HttpResponseMessage response = await client.PostAsJsonAsync(
                 app.Urls.Single() + $"/api/repositories/{repository.Id}/execution/start",
                 new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
 
@@ -906,18 +907,18 @@ public sealed class ExecutionSessionServiceTests
     [Fact]
     public async Task AppStartupRunsExecutionRecovery()
     {
-        var configurationPath = Path.Combine(CreateTemporaryDirectory(), "configuration.json");
-        var storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");
-        var previousConfigurationPath = Environment.GetEnvironmentVariable("COMMAND_CENTER_CONFIGURATION_PATH");
-        var previousStorePath = Environment.GetEnvironmentVariable("COMMAND_CENTER_EXECUTION_SESSIONS_PATH");
+        string configurationPath = Path.Combine(CreateTemporaryDirectory(), "configuration.json");
+        string storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");
+        string? previousConfigurationPath = Environment.GetEnvironmentVariable("COMMAND_CENTER_CONFIGURATION_PATH");
+        string? previousStorePath = Environment.GetEnvironmentVariable("COMMAND_CENTER_EXECUTION_SESSIONS_PATH");
         Environment.SetEnvironmentVariable("COMMAND_CENTER_CONFIGURATION_PATH", configurationPath);
         Environment.SetEnvironmentVariable("COMMAND_CENTER_EXECUTION_SESSIONS_PATH", storePath);
 
         try
         {
-            var repositoryPath = CreateGitRepositoryDirectory();
+            string repositoryPath = CreateGitRepositoryDirectory();
             var repositoryService = new RepositoryService(new ApplicationConfigurationStore(configurationPath));
-            var repository = await repositoryService.RegisterAsync(repositoryPath);
+            Repository repository = await repositoryService.RegisterAsync(repositoryPath);
             var session = new ExecutionSession
             {
                 Id = Guid.NewGuid(),
@@ -941,7 +942,7 @@ public sealed class ExecutionSessionServiceTests
             };
             await new FileSystemExecutionSessionStore(storePath).SaveAsync([session]);
 
-            await using var app = Program.CreateApp(
+            await using WebApplication app = Program.CreateApp(
                 [],
                 services =>
                 {
@@ -953,7 +954,7 @@ public sealed class ExecutionSessionServiceTests
             await app.StartAsync();
 
             using var client = new HttpClient();
-            var response = await client.GetAsync(app.Urls.Single() + $"/api/execution-sessions/{session.Id}");
+            HttpResponseMessage response = await client.GetAsync(app.Urls.Single() + $"/api/execution-sessions/{session.Id}");
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             var recoveredSession = await response.Content.ReadFromJsonAsync<ExecutionSession>(new JsonSerializerOptions(JsonSerializerDefaults.Web)
@@ -978,23 +979,23 @@ public sealed class ExecutionSessionServiceTests
     [Fact]
     public async Task AcceptAndRejectEndpointsReturnTransitionedSessionMetadata()
     {
-        var configurationPath = Path.Combine(CreateTemporaryDirectory(), "configuration.json");
-        var storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");
-        var previousConfigurationPath = Environment.GetEnvironmentVariable("COMMAND_CENTER_CONFIGURATION_PATH");
-        var previousStorePath = Environment.GetEnvironmentVariable("COMMAND_CENTER_EXECUTION_SESSIONS_PATH");
+        string configurationPath = Path.Combine(CreateTemporaryDirectory(), "configuration.json");
+        string storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");
+        string? previousConfigurationPath = Environment.GetEnvironmentVariable("COMMAND_CENTER_CONFIGURATION_PATH");
+        string? previousStorePath = Environment.GetEnvironmentVariable("COMMAND_CENTER_EXECUTION_SESSIONS_PATH");
         Environment.SetEnvironmentVariable("COMMAND_CENTER_CONFIGURATION_PATH", configurationPath);
         Environment.SetEnvironmentVariable("COMMAND_CENTER_EXECUTION_SESSIONS_PATH", storePath);
 
         try
         {
-            var repositoryPath = CreateGitRepositoryDirectory();
+            string repositoryPath = CreateGitRepositoryDirectory();
             var repositoryService = new RepositoryService(new ApplicationConfigurationStore(configurationPath));
-            var repository = await repositoryService.RegisterAsync(repositoryPath);
-            var acceptSession = CreateAwaitingAcceptanceSession(repository, ".agents/milestones/m5-accept.md");
-            var rejectSession = CreateAwaitingAcceptanceSession(repository, ".agents/milestones/m5-reject.md");
+            Repository repository = await repositoryService.RegisterAsync(repositoryPath);
+            ExecutionSession acceptSession = CreateAwaitingAcceptanceSession(repository, ".agents/milestones/m5-accept.md");
+            ExecutionSession rejectSession = CreateAwaitingAcceptanceSession(repository, ".agents/milestones/m5-reject.md");
             await new FileSystemExecutionSessionStore(storePath).SaveAsync([acceptSession, rejectSession]);
 
-            await using var app = Program.CreateApp(
+            await using WebApplication app = Program.CreateApp(
                 [],
                 services =>
                 {
@@ -1012,10 +1013,10 @@ public sealed class ExecutionSessionServiceTests
             await app.StartAsync();
 
             using var client = new HttpClient();
-            var acceptResponse = await client.PostAsJsonAsync(
+            HttpResponseMessage acceptResponse = await client.PostAsJsonAsync(
                 app.Urls.Single() + $"/api/execution-sessions/{acceptSession.Id}/accept",
                 new ExecutionAcceptanceRequest { DecisionNote = "accepted" });
-            var rejectResponse = await client.PostAsJsonAsync(
+            HttpResponseMessage rejectResponse = await client.PostAsJsonAsync(
                 app.Urls.Single() + $"/api/execution-sessions/{rejectSession.Id}/reject",
                 new ExecutionAcceptanceRequest { DecisionNote = "rejected" });
 
@@ -1052,16 +1053,16 @@ public sealed class ExecutionSessionServiceTests
     {
         var repositoryService = new RepositoryService(
             new ApplicationConfigurationStore(Path.Combine(CreateTemporaryDirectory(), "configuration.json")));
-        var repository = await repositoryService.RegisterAsync(CreateGitRepositoryDirectory());
+        Repository repository = await repositoryService.RegisterAsync(CreateGitRepositoryDirectory());
         var artifactStore = new FileSystemArtifactStore();
         var contextService = new ExecutionContextService(
             repositoryService,
             new ArtifactService(artifactStore),
             new PlanningService(artifactStore),
             gitService ?? new FakeGitService(dirtyState, gitFailure));
-        var storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");
+        string storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");
         var store = new FileSystemExecutionSessionStore(storePath);
-        var monitoringService = CreateMonitoringService(store);
+        ExecutionMonitoringService monitoringService = CreateMonitoringService(store);
         var sessionService = new ExecutionSessionService(
             contextService,
             store,
@@ -1088,7 +1089,7 @@ public sealed class ExecutionSessionServiceTests
         string generatedHandoff,
         string providerOutput)
     {
-        var started = await sessionService.StartAsync(
+        ExecutionSessionSummary started = await sessionService.StartAsync(
             repository.Id,
             new ExecutionStartRequest { MilestonePath = milestonePath });
         var duplicate = await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -1097,20 +1098,20 @@ public sealed class ExecutionSessionServiceTests
                 new ExecutionStartRequest { MilestonePath = milestonePath }));
         Assert.Contains("active execution", duplicate.Message, StringComparison.OrdinalIgnoreCase);
 
-        var observer = monitoringService.CreateProviderObserver(started.SessionId);
+        IExecutionProviderObserver observer = monitoringService.CreateProviderObserver(started.SessionId);
         await observer.OnStdOutAsync(providerOutput);
         await WriteAsync(repository, ".agents/handoffs/handoff.md", generatedHandoff);
         await observer.OnProviderExitedAsync(0);
 
-        var completed = await sessionService.GetSessionAsync(started.SessionId);
+        ExecutionSession? completed = await sessionService.GetSessionAsync(started.SessionId);
         Assert.NotNull(completed);
         Assert.Equal(RepositoryExecutionState.AwaitingAcceptance, completed.RepositoryState);
         Assert.Equal(".agents/handoffs/handoff.md", completed.HandoffPath);
 
-        var accepted = await sessionService.AcceptAsync(started.SessionId, new ExecutionAcceptanceRequest());
+        ExecutionSessionSummary accepted = await sessionService.AcceptAsync(started.SessionId, new ExecutionAcceptanceRequest());
         Assert.Equal(RepositoryExecutionState.AwaitingCommit, accepted.RepositoryState);
-        var preparation = await sessionService.PrepareCommitAsync(started.SessionId);
-        var committed = await sessionService.CommitAsync(
+        CommitPreparation preparation = await sessionService.PrepareCommitAsync(started.SessionId);
+        ExecutionSessionSummary committed = await sessionService.CommitAsync(
             started.SessionId,
             new CommitRequest
             {
@@ -1134,7 +1135,7 @@ public sealed class ExecutionSessionServiceTests
 
     private static async Task<ExecutionSession> StoreAwaitingAcceptanceSessionAsync(Harness harness)
     {
-        var session = CreateAwaitingAcceptanceSession(harness.Repository, ".agents/milestones/m5.md");
+        ExecutionSession session = CreateAwaitingAcceptanceSession(harness.Repository, ".agents/milestones/m5.md");
         await harness.Store.SaveAsync([session]);
         return session;
     }
@@ -1216,8 +1217,8 @@ public sealed class ExecutionSessionServiceTests
     private static ExecutionSession CreateAwaitingAcceptanceSession(Repository repository, string milestonePath)
     {
         var sessionId = Guid.NewGuid();
-        var startedAt = DateTimeOffset.UtcNow.AddMinutes(-2);
-        var completedAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+        DateTimeOffset startedAt = DateTimeOffset.UtcNow.AddMinutes(-2);
+        DateTimeOffset completedAt = DateTimeOffset.UtcNow.AddMinutes(-1);
         return new ExecutionSession
         {
             Id = sessionId,
@@ -1246,8 +1247,8 @@ public sealed class ExecutionSessionServiceTests
 
     private static async Task WriteAsync(Repository repository, string relativePath, string content)
     {
-        var path = Path.Combine(repository.Path, relativePath.Replace('/', Path.DirectorySeparatorChar));
-        var directory = Path.GetDirectoryName(path);
+        string path = Path.Combine(repository.Path, relativePath.Replace('/', Path.DirectorySeparatorChar));
+        string? directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrWhiteSpace(directory))
         {
             Directory.CreateDirectory(directory);
@@ -1265,14 +1266,14 @@ public sealed class ExecutionSessionServiceTests
 
     private static string CreateGitRepositoryDirectory()
     {
-        var directory = CreateTemporaryDirectory();
+        string directory = CreateTemporaryDirectory();
         Directory.CreateDirectory(Path.Combine(directory, ".git"));
         return directory;
     }
 
     private static string CreateTemporaryDirectory()
     {
-        var directory = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"));
+        string directory = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         return directory;
     }

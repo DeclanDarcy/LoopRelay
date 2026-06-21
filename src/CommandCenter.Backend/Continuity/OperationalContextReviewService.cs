@@ -17,16 +17,16 @@ public sealed class OperationalContextReviewService(
 
     public async Task<OperationalContextProposal> EditAsync(Guid repositoryId, string proposalId, string content)
     {
-        var repository = await GetRepositoryAsync(repositoryId);
-        var proposal = await GetRequiredProposalAsync(repository, proposalId, includeContent: false);
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        OperationalContextProposal proposal = await GetRequiredProposalAsync(repository, proposalId, includeContent: false);
         EnsureReviewable(proposal);
 
-        var currentContent = await ReadCurrentOperationalContextAsync(repository);
-        var currentDocument = parser.Parse(currentContent ?? string.Empty);
-        var editedDocument = parser.Parse(content);
-        var semanticChanges = diffService.Compare(currentDocument, editedDocument);
-        var compression = compressionService.Compress(currentDocument, editedDocument);
-        var contentHash = HashContent(content);
+        string? currentContent = await ReadCurrentOperationalContextAsync(repository);
+        OperationalContextDocument currentDocument = parser.Parse(currentContent ?? string.Empty);
+        OperationalContextDocument editedDocument = parser.Parse(content);
+        IReadOnlyList<OperationalContextSemanticChange> semanticChanges = diffService.Compare(currentDocument, editedDocument);
+        OperationalContextCompressionResult compression = compressionService.Compress(currentDocument, editedDocument);
+        string contentHash = HashContent(content);
 
         return await proposalStore.UpdateAsync(
             repository,
@@ -48,14 +48,14 @@ public sealed class OperationalContextReviewService(
         string proposalId,
         string? reviewNote)
     {
-        var repository = await GetRepositoryAsync(repositoryId);
-        var proposal = await GetRequiredProposalAsync(repository, proposalId, includeContent: true);
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        OperationalContextProposal proposal = await GetRequiredProposalAsync(repository, proposalId, includeContent: true);
         await EnsureLatestReviewableAsync(repository, proposal);
 
-        var currentHash = HashOptionalContent(await ReadCurrentOperationalContextAsync(repository));
+        string currentHash = HashOptionalContent(await ReadCurrentOperationalContextAsync(repository));
         if (!string.Equals(currentHash, proposal.BaselineCurrentContextHash, StringComparison.Ordinal))
         {
-            var staleProposal = WithReview(
+            OperationalContextProposal staleProposal = WithReview(
                 proposal,
                 proposal.Status,
                 OperationalContextReviewState.Stale,
@@ -87,8 +87,8 @@ public sealed class OperationalContextReviewService(
         string proposalId,
         string? reviewNote)
     {
-        var repository = await GetRepositoryAsync(repositoryId);
-        var proposal = await GetRequiredProposalAsync(repository, proposalId, includeContent: true);
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        OperationalContextProposal proposal = await GetRequiredProposalAsync(repository, proposalId, includeContent: true);
         await EnsureLatestReviewableAsync(repository, proposal);
 
         return await proposalStore.UpdateAsync(
@@ -107,7 +107,7 @@ public sealed class OperationalContextReviewService(
 
     private async Task<Repository> GetRepositoryAsync(Guid repositoryId)
     {
-        var repository = (await repositoryService.GetAllAsync()).FirstOrDefault(repository => repository.Id == repositoryId);
+        Repository? repository = (await repositoryService.GetAllAsync()).FirstOrDefault(repository => repository.Id == repositoryId);
         return repository ?? throw new KeyNotFoundException($"Repository was not found: {repositoryId}");
     }
 
@@ -123,10 +123,10 @@ public sealed class OperationalContextReviewService(
     private async Task EnsureLatestReviewableAsync(Repository repository, OperationalContextProposal proposal)
     {
         EnsureReviewable(proposal);
-        var latest = (await proposalStore.ListAsync(repository)).FirstOrDefault();
+        OperationalContextProposal? latest = (await proposalStore.ListAsync(repository)).FirstOrDefault();
         if (latest is not null && !string.Equals(latest.ProposalId, proposal.ProposalId, StringComparison.Ordinal))
         {
-            var staleProposal = WithReview(
+            OperationalContextProposal staleProposal = WithReview(
                 proposal,
                 proposal.Status,
                 OperationalContextReviewState.Stale,

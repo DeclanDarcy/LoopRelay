@@ -15,21 +15,21 @@ public sealed class OperationalContextGenerationTests
     {
         var parser = new MarkdownOperationalContextParser();
 
-        var document = parser.Parse("""
-            # Operational Context
+        OperationalContextDocument document = parser.Parse("""
+                                                           # Operational Context
 
-            ## Current Mental Model
+                                                           ## Current Mental Model
 
-            - The repository owns continuity artifacts.
+                                                           - The repository owns continuity artifacts.
 
-            ## Constraints
+                                                           ## Constraints
 
-            - Human review is required before promotion.
+                                                           - Human review is required before promotion.
 
-            ## Active Risks
+                                                           ## Active Risks
 
-            - Context growth can hide durable decisions.
-            """);
+                                                           - Context growth can hide durable decisions.
+                                                           """);
 
         Assert.Equal("Operational Context", document.Title);
         Assert.Single(document.CurrentMentalModel);
@@ -45,23 +45,23 @@ public sealed class OperationalContextGenerationTests
     {
         var parser = new MarkdownOperationalContextParser();
 
-        var document = parser.Parse("""
-            # Operational Context
+        OperationalContextDocument document = parser.Parse("""
+                                                           # Operational Context
 
-            ## Architecture
+                                                           ## Architecture
 
-            - Backend services own workflow authority.
+                                                           - Backend services own workflow authority.
 
-            ## Hand Written Notes
+                                                           ## Hand Written Notes
 
-            Preserve this note exactly enough for reviewer inspection.
-            """);
+                                                           Preserve this note exactly enough for reviewer inspection.
+                                                           """);
 
-        var additionalSection = Assert.Single(document.AdditionalSections);
+        OperationalContextSection additionalSection = Assert.Single(document.AdditionalSections);
         Assert.Equal("Hand Written Notes", additionalSection.Heading);
         Assert.Contains("Preserve this note", additionalSection.Content);
 
-        var rendered = parser.Render(document);
+        string rendered = parser.Render(document);
 
         Assert.Contains("## Hand Written Notes", rendered);
         Assert.Contains("Preserve this note exactly enough for reviewer inspection.", rendered);
@@ -72,7 +72,7 @@ public sealed class OperationalContextGenerationTests
     {
         var parser = new MarkdownOperationalContextParser();
 
-        var rendered = parser.Render(new OperationalContextDocument
+        string rendered = parser.Render(new OperationalContextDocument
         {
             Constraints =
             [
@@ -98,23 +98,23 @@ public sealed class OperationalContextGenerationTests
     {
         var parser = new MarkdownOperationalContextParser();
         var diff = new UnderstandingDiffService();
-        var current = parser.Parse("""
-            # Operational Context
+        OperationalContextDocument current = parser.Parse("""
+                                                          # Operational Context
 
-            ## Constraints
+                                                          ## Constraints
 
-            - Existing constraint.
-            """);
-        var proposed = parser.Parse("""
-            # Operational Context
+                                                          - Existing constraint.
+                                                          """);
+        OperationalContextDocument proposed = parser.Parse("""
+                                                           # Operational Context
 
-            ## Constraints
+                                                           ## Constraints
 
-            - Existing constraint.
-            - New constraint.
-            """);
+                                                           - Existing constraint.
+                                                           - New constraint.
+                                                           """);
 
-        var changes = diff.Compare(current, proposed);
+        IReadOnlyList<OperationalContextSemanticChange> changes = diff.Compare(current, proposed);
 
         Assert.Contains(changes, change =>
             change.Type == OperationalContextSemanticChangeType.ConstraintAdded &&
@@ -126,39 +126,39 @@ public sealed class OperationalContextGenerationTests
     {
         var parser = new MarkdownOperationalContextParser();
         var diff = new UnderstandingDiffService();
-        var current = parser.Parse("""
-            # Operational Context
+        OperationalContextDocument current = parser.Parse("""
+                                                          # Operational Context
 
-            ## Stable Decisions
+                                                          ## Stable Decisions
 
-            - Decision: Retired durable decision.
+                                                          - Decision: Retired durable decision.
 
-            ## Decision Rationale
+                                                          ## Decision Rationale
 
-            - Rationale for `Existing decision`: old reason.
-            - Rationale for `Dropped decision`: important reason.
+                                                          - Rationale for `Existing decision`: old reason.
+                                                          - Rationale for `Dropped decision`: important reason.
 
-            ## Open Questions
+                                                          ## Open Questions
 
-            - Open decision: Should stale proposals be auto-rejected?
-            """);
-        var proposed = parser.Parse("""
-            # Operational Context
+                                                          - Open decision: Should stale proposals be auto-rejected?
+                                                          """);
+        OperationalContextDocument proposed = parser.Parse("""
+                                                           # Operational Context
 
-            ## Stable Decisions
+                                                           ## Stable Decisions
 
-            - Decision: New durable decision.
+                                                           - Decision: New durable decision.
 
-            ## Decision Rationale
+                                                           ## Decision Rationale
 
-            - Rationale for `Existing decision`: new reason.
+                                                           - Rationale for `Existing decision`: new reason.
 
-            ## Open Questions
+                                                           ## Open Questions
 
-            - Open decision: Should diagnostics show decision retention?
-            """);
+                                                           - Open decision: Should diagnostics show decision retention?
+                                                           """);
 
-        var changes = diff.Compare(current, proposed);
+        IReadOnlyList<OperationalContextSemanticChange> changes = diff.Compare(current, proposed);
 
         Assert.Contains(changes, change =>
             change.Type == OperationalContextSemanticChangeType.ImportantDecisionIntroduced &&
@@ -183,7 +183,7 @@ public sealed class OperationalContextGenerationTests
     [Fact]
     public async Task GenerationSucceedsWithoutExistingOperationalContext()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/plan.md", "plan");
         await WriteAsync(harness.Repository, ".agents/milestones/m2.md", "# M2");
         await WriteAsync(harness.Repository, ".agents/handoffs/handoff.md", """
@@ -192,7 +192,7 @@ public sealed class OperationalContextGenerationTests
             - Proposal persistence was added.
             """);
 
-        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
 
         Assert.Equal(OperationalContextProposalStatus.Pending, proposal.Status);
         Assert.NotNull(proposal.GeneratedContent);
@@ -204,7 +204,7 @@ public sealed class OperationalContextGenerationTests
     [Fact]
     public async Task GenerationUsesExistingContextAndPreservesUnknownSections()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/operational_context.md", """
             # Operational Context
 
@@ -222,7 +222,7 @@ public sealed class OperationalContextGenerationTests
             - Proposal infrastructure has priority over generation quality.
             """);
 
-        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
 
         Assert.Contains("Existing architecture survives.", proposal.GeneratedContent);
         Assert.Contains("Proposal infrastructure has priority over generation quality.", proposal.GeneratedContent);
@@ -233,14 +233,14 @@ public sealed class OperationalContextGenerationTests
     [Fact]
     public async Task ArchitecturalDecisionAndRationaleAreAssimilated()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/decisions/decisions.md", """
             # Decisions
 
             - Backend service boundaries must own workflow authority because client state cannot be authoritative.
             """);
 
-        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
 
         Assert.Contains("Decision: Backend service boundaries must own workflow authority", proposal.GeneratedContent);
         Assert.Contains("Rationale for `Backend service boundaries must own workflow authority because client state cannot be authoritative.`: client state cannot be authoritative", proposal.GeneratedContent);
@@ -250,14 +250,14 @@ public sealed class OperationalContextGenerationTests
     [Fact]
     public async Task StrategicDecisionSurvivesWhileRelevant()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/decisions/decisions.md", """
             # Decisions
 
             - Reviewable deterministic classification should remain the default for future continuity work because automatic semantic authority is premature.
             """);
 
-        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
 
         Assert.Contains("Decision: Reviewable deterministic classification should remain the default for future continuity work", proposal.GeneratedContent);
         Assert.Contains("automatic semantic authority is premature", proposal.GeneratedContent);
@@ -270,7 +270,7 @@ public sealed class OperationalContextGenerationTests
     [Fact]
     public async Task TacticalDecisionsDoNotBloatOperationalContext()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/decisions/decisions.md", """
             # Decisions
 
@@ -279,7 +279,7 @@ public sealed class OperationalContextGenerationTests
             - Temporary workaround was approved for this slice.
             """);
 
-        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
 
         Assert.DoesNotContain("M5 build passed.", proposal.GeneratedContent);
         Assert.DoesNotContain("Stage and commit the current slice.", proposal.GeneratedContent);
@@ -290,14 +290,14 @@ public sealed class OperationalContextGenerationTests
     [Fact]
     public async Task OpenDecisionAppearsAsOpenQuestion()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/decisions/decisions.md", """
             # Decisions
 
             - Should operational context diagnostics include decision retention trends?
             """);
 
-        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
 
         Assert.Contains("Open decision: Should operational context diagnostics include decision retention trends?", proposal.GeneratedContent);
     }
@@ -305,7 +305,7 @@ public sealed class OperationalContextGenerationTests
     [Fact]
     public async Task ContradictoryDurableDecisionsAreFlagged()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/decisions/decisions.md", """
             # Decisions
 
@@ -313,7 +313,7 @@ public sealed class OperationalContextGenerationTests
             - Operational context generation must not mutate current context.
             """);
 
-        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
 
         Assert.Contains(proposal.CompressionSummary.Warnings, warning =>
             warning.Contains("Contradictory decision signals", StringComparison.OrdinalIgnoreCase));
@@ -322,7 +322,7 @@ public sealed class OperationalContextGenerationTests
     [Fact]
     public async Task CompressionPreservesDurableUnderstandingAndReportsTiers()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/operational_context.md", """
             # Operational Context
 
@@ -351,7 +351,7 @@ public sealed class OperationalContextGenerationTests
             - Context growth can hide important constraints.
             """);
 
-        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
 
         Assert.Contains("Backend services own workflow authority.", proposal.GeneratedContent);
         Assert.Contains("Human review is mandatory before promotion.", proposal.GeneratedContent);
@@ -367,28 +367,28 @@ public sealed class OperationalContextGenerationTests
     {
         var parser = new MarkdownOperationalContextParser();
         var compression = new UnderstandingCompressionService();
-        var current = parser.Parse("""
-            # Operational Context
+        OperationalContextDocument current = parser.Parse("""
+                                                          # Operational Context
 
-            ## Architecture
+                                                          ## Architecture
 
-            - Backend services own workflow authority.
+                                                          - Backend services own workflow authority.
 
-            ## Constraints
+                                                          ## Constraints
 
-            - Human review is mandatory before promotion.
+                                                          - Human review is mandatory before promotion.
 
-            ## Open Questions
+                                                          ## Open Questions
 
-            - Should diagnostics include growth trends?
+                                                          - Should diagnostics include growth trends?
 
-            ## Active Risks
+                                                          ## Active Risks
 
-            - Context growth can hide important constraints.
-            """);
-        var proposed = parser.Parse("# Operational Context");
+                                                          - Context growth can hide important constraints.
+                                                          """);
+        OperationalContextDocument proposed = parser.Parse("# Operational Context");
 
-        var result = compression.Compress(current, proposed);
+        OperationalContextCompressionResult result = compression.Compress(current, proposed);
 
         Assert.Contains(result.Summary.StableUnderstandingRetentionWarnings, warning =>
             warning.Contains("Architecture disappeared", StringComparison.Ordinal));
@@ -403,8 +403,8 @@ public sealed class OperationalContextGenerationTests
     [Fact]
     public async Task HistoricalNoiseDoesNotAccumulateInGeneratedProposal()
     {
-        var harness = await CreateHarnessAsync();
-        var recentChanges = string.Join(
+        Harness harness = await CreateHarnessAsync();
+        string recentChanges = string.Join(
             Environment.NewLine,
             Enumerable.Range(1, 20).Select(index => $"- Recent execution for `.agents/milestones/m{index}.md` is recorded with state `Completed`."));
         await WriteAsync(harness.Repository, ".agents/operational_context.md", $"""
@@ -415,8 +415,8 @@ public sealed class OperationalContextGenerationTests
             {recentChanges}
             """);
 
-        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
-        var generated = new MarkdownOperationalContextParser().Parse(proposal.GeneratedContent ?? string.Empty);
+        OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        OperationalContextDocument generated = new MarkdownOperationalContextParser().Parse(proposal.GeneratedContent ?? string.Empty);
 
         Assert.True(generated.RecentUnderstandingChanges.Count <= 12);
         Assert.True(proposal.CompressionSummary.CompressedItemCount > 0);
@@ -426,7 +426,7 @@ public sealed class OperationalContextGenerationTests
     [Fact]
     public async Task DurableUnderstandingSurvivesRepeatedGeneratedRevisions()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/operational_context.md", """
             # Operational Context
 
@@ -455,7 +455,7 @@ public sealed class OperationalContextGenerationTests
             - Context growth can hide important constraints.
             """);
 
-        for (var index = 0; index < 3; index++)
+        for (int index = 0; index < 3; index++)
         {
             await WriteAsync(harness.Repository, ".agents/handoffs/handoff.md", $"""
                 # Handoff
@@ -464,12 +464,12 @@ public sealed class OperationalContextGenerationTests
                 - Recent execution for `.agents/milestones/m5.md` is recorded with state `Completed`.
                 """);
 
-            var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
-            var accepted = await harness.ReviewService.AcceptAsync(harness.Repository.Id, proposal.ProposalId, null);
+            OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+            OperationalContextProposal accepted = await harness.ReviewService.AcceptAsync(harness.Repository.Id, proposal.ProposalId, null);
             await harness.LifecycleService.PromoteAsync(harness.Repository.Id, accepted.ProposalId);
         }
 
-        var current = new MarkdownOperationalContextParser().Parse(
+        OperationalContextDocument current = new MarkdownOperationalContextParser().Parse(
             await ReadAsync(harness.Repository, ".agents/operational_context.md"));
 
         Assert.Contains(current.Architecture, item =>
@@ -489,7 +489,7 @@ public sealed class OperationalContextGenerationTests
     [Fact]
     public async Task LongHorizonCertificationPreservesBoundedReviewableUnderstandingAcrossCyclesAndRestart()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/plan.md", """
             # Plan
 
@@ -538,9 +538,9 @@ public sealed class OperationalContextGenerationTests
             - Context growth can hide important constraints.
             """);
 
-        var previousLength = (await ReadAsync(harness.Repository, ".agents/operational_context.md")).Length;
+        int previousLength = (await ReadAsync(harness.Repository, ".agents/operational_context.md")).Length;
         OperationalContextProposal? latestProposal = null;
-        for (var cycle = 1; cycle <= 3; cycle++)
+        for (int cycle = 1; cycle <= 3; cycle++)
         {
             await WriteAsync(harness.Repository, ".agents/handoffs/handoff.md", BuildCycleHandoff(cycle));
             await WriteAsync(harness.Repository, ".agents/decisions/decisions.md", $"""
@@ -563,18 +563,18 @@ public sealed class OperationalContextGenerationTests
                 }
             ]);
 
-            var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+            OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
             Assert.Contains(proposal.SemanticChanges, change =>
                 change.Description.Contains($"Cycle {cycle}", StringComparison.OrdinalIgnoreCase));
 
-            var accepted = await harness.ReviewService.AcceptAsync(
+            OperationalContextProposal accepted = await harness.ReviewService.AcceptAsync(
                 harness.Repository.Id,
                 proposal.ProposalId,
                 $"Cycle {cycle} review accepted.");
             latestProposal = await harness.LifecycleService.PromoteAsync(harness.Repository.Id, accepted.ProposalId);
 
-            var currentContent = await ReadAsync(harness.Repository, ".agents/operational_context.md");
-            var current = new MarkdownOperationalContextParser().Parse(currentContent);
+            string currentContent = await ReadAsync(harness.Repository, ".agents/operational_context.md");
+            OperationalContextDocument current = new MarkdownOperationalContextParser().Parse(currentContent);
 
             Assert.Contains(current.Architecture, item =>
                 item.Text.Contains("Backend continuity services generate proposals", StringComparison.Ordinal));
@@ -604,13 +604,13 @@ public sealed class OperationalContextGenerationTests
         }
 
         Assert.NotNull(latestProposal);
-        var restarted = await RecreateHarnessAsync(harness);
-        var reloadedProposal = await restarted.ProposalStore.GetAsync(
+        Harness restarted = await RecreateHarnessAsync(harness);
+        OperationalContextProposal? reloadedProposal = await restarted.ProposalStore.GetAsync(
             restarted.Repository,
             latestProposal.ProposalId,
             includeContent: true);
-        var projectionService = CreateProjectionService(restarted);
-        var workspace = await projectionService.GetWorkspaceAsync(restarted.Repository.Id);
+        RepositoryProjectionService projectionService = CreateProjectionService(restarted);
+        RepositoryWorkspaceProjection workspace = await projectionService.GetWorkspaceAsync(restarted.Repository.Id);
 
         Assert.Equal(OperationalContextProposalStatus.Promoted, reloadedProposal?.Status);
         Assert.NotNull(reloadedProposal?.Promotion.PromotedAt);
@@ -629,7 +629,7 @@ public sealed class OperationalContextGenerationTests
     [Fact]
     public async Task FreshParticipantCanReconstructMentalModelWithoutHistoricalArchives()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/plan.md", """
             # Plan
 
@@ -681,10 +681,10 @@ public sealed class OperationalContextGenerationTests
             - Drift could hide a missing constraint.
             """);
 
-        var plan = await ReadAsync(harness.Repository, ".agents/plan.md");
-        var milestone = await ReadAsync(harness.Repository, ".agents/milestones/m8-long-horizon-certification.md");
-        var currentContext = await ReadAsync(harness.Repository, ".agents/operational_context.md");
-        var reconstructionInput = $"{plan}\n{milestone}\n{currentContext}";
+        string plan = await ReadAsync(harness.Repository, ".agents/plan.md");
+        string milestone = await ReadAsync(harness.Repository, ".agents/milestones/m8-long-horizon-certification.md");
+        string currentContext = await ReadAsync(harness.Repository, ".agents/operational_context.md");
+        string reconstructionInput = $"{plan}\n{milestone}\n{currentContext}";
 
         Assert.Contains("Backend projections expose understanding", reconstructionInput);
         Assert.Contains("Review is mandatory", reconstructionInput);
@@ -701,38 +701,38 @@ public sealed class OperationalContextGenerationTests
     {
         var parser = new MarkdownOperationalContextParser();
         var compression = new UnderstandingCompressionService();
-        var current = parser.Parse("""
-            # Operational Context
+        OperationalContextDocument current = parser.Parse("""
+                                                          # Operational Context
 
-            ## Architecture
+                                                          ## Architecture
 
-            - Backend services own operational-context promotion.
+                                                          - Backend services own operational-context promotion.
 
-            ## Constraints
+                                                          ## Constraints
 
-            - Promotion requires accepted review metadata.
+                                                          - Promotion requires accepted review metadata.
 
-            ## Stable Decisions
+                                                          ## Stable Decisions
 
-            - Proposal artifacts survive process restart.
+                                                          - Proposal artifacts survive process restart.
 
-            ## Decision Rationale
+                                                          ## Decision Rationale
 
-            - Rationale for `Proposal artifacts survive process restart.`: proposal metadata is repository-owned.
+                                                          - Rationale for `Proposal artifacts survive process restart.`: proposal metadata is repository-owned.
 
-            ## Open Questions
+                                                          ## Open Questions
 
-            - Should reports include drift trends?
-            """);
-        var proposed = parser.Parse("""
-            # Operational Context
+                                                          - Should reports include drift trends?
+                                                          """);
+        OperationalContextDocument proposed = parser.Parse("""
+                                                           # Operational Context
 
-            ## Stable Decisions
+                                                           ## Stable Decisions
 
-            - Proposal artifacts survive process restart.
-            """);
+                                                           - Proposal artifacts survive process restart.
+                                                           """);
 
-        var result = compression.Compress(current, proposed);
+        OperationalContextCompressionResult result = compression.Compress(current, proposed);
 
         Assert.Contains(result.Summary.StableUnderstandingRetentionWarnings, warning =>
             warning.Contains("Architecture disappeared", StringComparison.Ordinal));
@@ -747,7 +747,7 @@ public sealed class OperationalContextGenerationTests
     [Fact]
     public async Task WorkspaceAndDashboardRemainScannableAfterMultipleRevisions()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/operational_context.md", """
             # Operational Context
 
@@ -768,21 +768,21 @@ public sealed class OperationalContextGenerationTests
             - Review warnings could be missed if summaries grow too large.
             """);
 
-        for (var cycle = 1; cycle <= 3; cycle++)
+        for (int cycle = 1; cycle <= 3; cycle++)
         {
             await WriteAsync(harness.Repository, ".agents/handoffs/handoff.md", $"""
                 # Handoff
 
                 - Workspace certification cycle {cycle} preserved the existing read model.
                 """);
-            var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
-            var accepted = await harness.ReviewService.AcceptAsync(harness.Repository.Id, proposal.ProposalId, null);
+            OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+            OperationalContextProposal accepted = await harness.ReviewService.AcceptAsync(harness.Repository.Id, proposal.ProposalId, null);
             await harness.LifecycleService.PromoteAsync(harness.Repository.Id, accepted.ProposalId);
         }
 
-        var projectionService = CreateProjectionService(harness);
-        var workspace = await projectionService.GetWorkspaceAsync(harness.Repository.Id);
-        var dashboard = Assert.Single(await projectionService.GetDashboardAsync());
+        RepositoryProjectionService projectionService = CreateProjectionService(harness);
+        RepositoryWorkspaceProjection workspace = await projectionService.GetWorkspaceAsync(harness.Repository.Id);
+        RepositoryDashboardProjection dashboard = Assert.Single(await projectionService.GetDashboardAsync());
 
         Assert.True(workspace.OperationalContext.CurrentUnderstandingSummary.Count <= 3);
         Assert.NotEmpty(workspace.OperationalContext.StableDecisions);
@@ -799,34 +799,34 @@ public sealed class OperationalContextGenerationTests
     {
         var parser = new MarkdownOperationalContextParser();
         var compression = new UnderstandingCompressionService();
-        var current = parser.Parse("""
-            # Operational Context
+        OperationalContextDocument current = parser.Parse("""
+                                                          # Operational Context
 
-            ## Open Questions
+                                                          ## Open Questions
 
-            - Should diagnostics include growth trends?
-            """);
-        var proposedWithoutEvidence = parser.Parse("""
-            # Operational Context
+                                                          - Should diagnostics include growth trends?
+                                                          """);
+        OperationalContextDocument proposedWithoutEvidence = parser.Parse("""
+                                                                          # Operational Context
 
-            ## Recent Understanding Changes
+                                                                          ## Recent Understanding Changes
 
-            - Diagnostics were discussed.
-            """);
-        var proposedWithEvidence = parser.Parse("""
-            # Operational Context
+                                                                          - Diagnostics were discussed.
+                                                                          """);
+        OperationalContextDocument proposedWithEvidence = parser.Parse("""
+                                                                       # Operational Context
 
-            ## Open Questions
+                                                                       ## Open Questions
 
-            - Should diagnostics include growth trends?
+                                                                       - Should diagnostics include growth trends?
 
-            ## Recent Understanding Changes
+                                                                       ## Recent Understanding Changes
 
-            - Resolved question: diagnostics include growth trends.
-            """);
+                                                                       - Resolved question: diagnostics include growth trends.
+                                                                       """);
 
-        var missingWithoutEvidence = compression.Compress(current, proposedWithoutEvidence);
-        var resolvedWithEvidence = compression.Compress(current, proposedWithEvidence);
+        OperationalContextCompressionResult missingWithoutEvidence = compression.Compress(current, proposedWithoutEvidence);
+        OperationalContextCompressionResult resolvedWithEvidence = compression.Compress(current, proposedWithEvidence);
 
         Assert.Contains(missingWithoutEvidence.Summary.StableUnderstandingRetentionWarnings, warning =>
             warning.Contains("Open question disappeared", StringComparison.Ordinal));
@@ -843,34 +843,34 @@ public sealed class OperationalContextGenerationTests
     {
         var parser = new MarkdownOperationalContextParser();
         var compression = new UnderstandingCompressionService();
-        var current = parser.Parse("""
-            # Operational Context
+        OperationalContextDocument current = parser.Parse("""
+                                                          # Operational Context
 
-            ## Active Risks
+                                                          ## Active Risks
 
-            - Context growth can hide important constraints.
-            """);
-        var proposedWithoutEvidence = parser.Parse("""
-            # Operational Context
+                                                          - Context growth can hide important constraints.
+                                                          """);
+        OperationalContextDocument proposedWithoutEvidence = parser.Parse("""
+                                                                          # Operational Context
 
-            ## Recent Understanding Changes
+                                                                          ## Recent Understanding Changes
 
-            - Compression warnings were improved.
-            """);
-        var proposedWithEvidence = parser.Parse("""
-            # Operational Context
+                                                                          - Compression warnings were improved.
+                                                                          """);
+        OperationalContextDocument proposedWithEvidence = parser.Parse("""
+                                                                       # Operational Context
 
-            ## Active Risks
+                                                                       ## Active Risks
 
-            - Context growth can hide important constraints.
+                                                                       - Context growth can hide important constraints.
 
-            ## Recent Understanding Changes
+                                                                       ## Recent Understanding Changes
 
-            - Retired risk: context growth can hide important constraints because retention warnings now surface it.
-            """);
+                                                                       - Retired risk: context growth can hide important constraints because retention warnings now surface it.
+                                                                       """);
 
-        var missingWithoutEvidence = compression.Compress(current, proposedWithoutEvidence);
-        var retiredWithEvidence = compression.Compress(current, proposedWithEvidence);
+        OperationalContextCompressionResult missingWithoutEvidence = compression.Compress(current, proposedWithoutEvidence);
+        OperationalContextCompressionResult retiredWithEvidence = compression.Compress(current, proposedWithEvidence);
 
         Assert.Contains(missingWithoutEvidence.Summary.StableUnderstandingRetentionWarnings, warning =>
             warning.Contains("Active risk disappeared", StringComparison.Ordinal));
@@ -885,7 +885,7 @@ public sealed class OperationalContextGenerationTests
     [Fact]
     public async Task EditingProposalRecomputesCompressionWarnings()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/operational_context.md", """
             # Operational Context
 
@@ -893,9 +893,9 @@ public sealed class OperationalContextGenerationTests
 
             - Human review is mandatory before promotion.
             """);
-        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
 
-        var edited = await harness.ReviewService.EditAsync(harness.Repository.Id, proposal.ProposalId, "# Operational Context");
+        OperationalContextProposal edited = await harness.ReviewService.EditAsync(harness.Repository.Id, proposal.ProposalId, "# Operational Context");
 
         Assert.Contains(edited.CompressionSummary.StableUnderstandingRetentionWarnings, warning =>
             warning.Contains("Constraint disappeared", StringComparison.Ordinal));
@@ -904,11 +904,11 @@ public sealed class OperationalContextGenerationTests
     [Fact]
     public async Task ProposalPersistsAcrossStoreRecreation()
     {
-        var harness = await CreateHarnessAsync();
-        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        Harness harness = await CreateHarnessAsync();
+        OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
 
         var reloadedStore = new FileSystemOperationalContextProposalStore(new FileSystemArtifactStore());
-        var reloaded = await reloadedStore.GetAsync(harness.Repository, proposal.ProposalId, includeContent: true);
+        OperationalContextProposal? reloaded = await reloadedStore.GetAsync(harness.Repository, proposal.ProposalId, includeContent: true);
 
         Assert.NotNull(reloaded);
         Assert.Equal(proposal.ProposalId, reloaded.ProposalId);
@@ -919,14 +919,14 @@ public sealed class OperationalContextGenerationTests
     [Fact]
     public async Task ProposalListingSkipsCorruptMetadataArtifacts()
     {
-        var harness = await CreateHarnessAsync();
-        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        Harness harness = await CreateHarnessAsync();
+        OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
         await WriteAsync(
             harness.Repository,
             ".agents/operational_context/proposals/corrupt-proposal/metadata.json",
             "{ not valid json");
 
-        var proposals = await harness.ProposalStore.ListAsync(harness.Repository);
+        IReadOnlyList<OperationalContextProposal> proposals = await harness.ProposalStore.ListAsync(harness.Repository);
 
         Assert.Single(proposals);
         Assert.Equal(proposal.ProposalId, proposals[0].ProposalId);
@@ -935,11 +935,11 @@ public sealed class OperationalContextGenerationTests
     [Fact]
     public async Task RegenerationSupersedesPreviousPendingProposal()
     {
-        var harness = await CreateHarnessAsync();
-        var first = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
-        var second = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        Harness harness = await CreateHarnessAsync();
+        OperationalContextProposal first = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        OperationalContextProposal second = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
 
-        var proposals = await harness.ProposalStore.ListAsync(harness.Repository);
+        IReadOnlyList<OperationalContextProposal> proposals = await harness.ProposalStore.ListAsync(harness.Repository);
 
         Assert.NotEqual(first.ProposalId, second.ProposalId);
         Assert.Contains(proposals, proposal =>
@@ -953,10 +953,10 @@ public sealed class OperationalContextGenerationTests
     [Fact]
     public async Task WorkspaceProjectionSurfacesLatestProposalSummary()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/plan.md", "plan");
         await WriteAsync(harness.Repository, ".agents/milestones/m2.md", "# M2");
-        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
 
         var projectionService = new RepositoryProjectionService(
             harness.RepositoryService,
@@ -967,7 +967,7 @@ public sealed class OperationalContextGenerationTests
             new MarkdownOperationalContextParser(),
             new FileSystemArtifactStore());
 
-        var workspace = await projectionService.GetWorkspaceAsync(harness.Repository.Id);
+        RepositoryWorkspaceProjection workspace = await projectionService.GetWorkspaceAsync(harness.Repository.Id);
 
         Assert.True(workspace.OperationalContextProposalSummary.PendingProposalExists);
         Assert.Equal(proposal.ProposalId, workspace.OperationalContextProposalSummary.LatestProposalId);
@@ -979,10 +979,10 @@ public sealed class OperationalContextGenerationTests
     [Fact]
     public async Task PendingProposalIsReviewableAndLoadsContent()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
 
-        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
-        var loaded = await harness.ProposalStore.GetAsync(harness.Repository, proposal.ProposalId, includeContent: true);
+        OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        OperationalContextProposal? loaded = await harness.ProposalStore.GetAsync(harness.Repository, proposal.ProposalId, includeContent: true);
 
         Assert.NotNull(loaded);
         Assert.Equal(OperationalContextReviewState.PendingReview, loaded.Review.ReviewState);
@@ -993,7 +993,7 @@ public sealed class OperationalContextGenerationTests
     [Fact]
     public async Task EditingPersistsReviewerContentAndRecomputesSemanticChanges()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/operational_context.md", """
             # Operational Context
 
@@ -1001,9 +1001,9 @@ public sealed class OperationalContextGenerationTests
 
             - Existing constraint.
             """);
-        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
 
-        var edited = await harness.ReviewService.EditAsync(harness.Repository.Id, proposal.ProposalId, """
+        OperationalContextProposal edited = await harness.ReviewService.EditAsync(harness.Repository.Id, proposal.ProposalId, """
             # Operational Context
 
             ## Constraints
@@ -1023,18 +1023,18 @@ public sealed class OperationalContextGenerationTests
     [Fact]
     public async Task AcceptRecordsReviewStateWithoutChangingCurrentContext()
     {
-        var harness = await CreateHarnessAsync();
-        var currentContext = """
-            # Operational Context
+        Harness harness = await CreateHarnessAsync();
+        string currentContext = """
+                                # Operational Context
 
-            ## Architecture
+                                ## Architecture
 
-            - Existing architecture.
-            """;
+                                - Existing architecture.
+                                """;
         await WriteAsync(harness.Repository, ".agents/operational_context.md", currentContext);
-        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
 
-        var accepted = await harness.ReviewService.AcceptAsync(harness.Repository.Id, proposal.ProposalId, "Looks right.");
+        OperationalContextProposal accepted = await harness.ReviewService.AcceptAsync(harness.Repository.Id, proposal.ProposalId, "Looks right.");
 
         Assert.Equal(OperationalContextProposalStatus.Accepted, accepted.Status);
         Assert.Equal(OperationalContextReviewState.Accepted, accepted.Review.ReviewState);
@@ -1046,10 +1046,10 @@ public sealed class OperationalContextGenerationTests
     [Fact]
     public async Task RejectRecordsReviewStateAndLeavesContentForAudit()
     {
-        var harness = await CreateHarnessAsync();
-        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        Harness harness = await CreateHarnessAsync();
+        OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
 
-        var rejected = await harness.ReviewService.RejectAsync(harness.Repository.Id, proposal.ProposalId, "Not enough signal.");
+        OperationalContextProposal rejected = await harness.ReviewService.RejectAsync(harness.Repository.Id, proposal.ProposalId, "Not enough signal.");
 
         Assert.Equal(OperationalContextProposalStatus.Rejected, rejected.Status);
         Assert.Equal(OperationalContextReviewState.Rejected, rejected.Review.ReviewState);
@@ -1060,18 +1060,18 @@ public sealed class OperationalContextGenerationTests
     [Fact]
     public async Task AcceptFailsForMissingSupersededOrStaleProposal()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await Assert.ThrowsAsync<KeyNotFoundException>(() =>
             harness.ReviewService.AcceptAsync(harness.Repository.Id, "missing", null));
 
-        var first = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        OperationalContextProposal first = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
         _ = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             harness.ReviewService.AcceptAsync(harness.Repository.Id, first.ProposalId, null));
 
-        var staleHarness = await CreateHarnessAsync();
+        Harness staleHarness = await CreateHarnessAsync();
         await WriteAsync(staleHarness.Repository, ".agents/operational_context.md", "# Operational Context");
-        var staleProposal = await staleHarness.GenerationService.GenerateAsync(staleHarness.Repository.Id);
+        OperationalContextProposal staleProposal = await staleHarness.GenerationService.GenerateAsync(staleHarness.Repository.Id);
         await WriteAsync(staleHarness.Repository, ".agents/operational_context.md", """
             # Operational Context
 
@@ -1082,19 +1082,19 @@ public sealed class OperationalContextGenerationTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             staleHarness.ReviewService.AcceptAsync(staleHarness.Repository.Id, staleProposal.ProposalId, null));
-        var reloaded = await staleHarness.ProposalStore.GetAsync(staleHarness.Repository, staleProposal.ProposalId);
+        OperationalContextProposal? reloaded = await staleHarness.ProposalStore.GetAsync(staleHarness.Repository, staleProposal.ProposalId);
         Assert.Equal(OperationalContextReviewState.Stale, reloaded?.Review.ReviewState);
     }
 
     [Fact]
     public async Task ReviewStateSurvivesStoreRecreation()
     {
-        var harness = await CreateHarnessAsync();
-        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
-        var edited = await harness.ReviewService.EditAsync(harness.Repository.Id, proposal.ProposalId, "# Operational Context");
+        Harness harness = await CreateHarnessAsync();
+        OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        OperationalContextProposal edited = await harness.ReviewService.EditAsync(harness.Repository.Id, proposal.ProposalId, "# Operational Context");
 
         var reloadedStore = new FileSystemOperationalContextProposalStore(new FileSystemArtifactStore());
-        var reloaded = await reloadedStore.GetAsync(harness.Repository, edited.ProposalId, includeContent: true);
+        OperationalContextProposal? reloaded = await reloadedStore.GetAsync(harness.Repository, edited.ProposalId, includeContent: true);
 
         Assert.NotNull(reloaded);
         Assert.Equal(OperationalContextProposalStatus.Edited, reloaded.Status);
@@ -1105,11 +1105,11 @@ public sealed class OperationalContextGenerationTests
     [Fact]
     public async Task BootstrapPromotionCreatesCurrentOperationalContext()
     {
-        var harness = await CreateHarnessAsync();
-        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
-        var accepted = await harness.ReviewService.AcceptAsync(harness.Repository.Id, proposal.ProposalId, "Promote it.");
+        Harness harness = await CreateHarnessAsync();
+        OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        OperationalContextProposal accepted = await harness.ReviewService.AcceptAsync(harness.Repository.Id, proposal.ProposalId, "Promote it.");
 
-        var promoted = await harness.LifecycleService.PromoteAsync(harness.Repository.Id, accepted.ProposalId);
+        OperationalContextProposal promoted = await harness.LifecycleService.PromoteAsync(harness.Repository.Id, accepted.ProposalId);
 
         Assert.Equal(OperationalContextProposalStatus.Promoted, promoted.Status);
         Assert.NotNull(promoted.Promotion.PromotedAt);
@@ -1122,16 +1122,16 @@ public sealed class OperationalContextGenerationTests
     [Fact]
     public async Task RevisionPromotionArchivesPriorCurrentContextBeforeReplacement()
     {
-        var harness = await CreateHarnessAsync();
-        var originalContext = """
-            # Operational Context
+        Harness harness = await CreateHarnessAsync();
+        string originalContext = """
+                                 # Operational Context
 
-            ## Architecture
+                                 ## Architecture
 
-            - Prior architecture.
-            """;
+                                 - Prior architecture.
+                                 """;
         await WriteAsync(harness.Repository, ".agents/operational_context.md", originalContext);
-        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
         await harness.ReviewService.EditAsync(harness.Repository.Id, proposal.ProposalId, """
             # Operational Context
 
@@ -1139,9 +1139,9 @@ public sealed class OperationalContextGenerationTests
 
             - Replacement architecture.
             """);
-        var accepted = await harness.ReviewService.AcceptAsync(harness.Repository.Id, proposal.ProposalId, null);
+        OperationalContextProposal accepted = await harness.ReviewService.AcceptAsync(harness.Repository.Id, proposal.ProposalId, null);
 
-        var promoted = await harness.LifecycleService.PromoteAsync(harness.Repository.Id, accepted.ProposalId);
+        OperationalContextProposal promoted = await harness.LifecycleService.PromoteAsync(harness.Repository.Id, accepted.ProposalId);
 
         Assert.Equal(".agents/operational_context.0001.md", promoted.Promotion.ArchivedRelativePath);
         Assert.Equal(1, promoted.Promotion.RevisionNumber);
@@ -1164,7 +1164,7 @@ public sealed class OperationalContextGenerationTests
             new FileSystemArtifactStore(),
             new ArtifactService(new FileSystemArtifactStore()));
 
-        var archived = await rotationService.RotateCurrentOperationalContextAsync(repository);
+        Artifact archived = await rotationService.RotateCurrentOperationalContextAsync(repository);
 
         Assert.Equal(".agents/operational_context.0005.md", archived.RelativePath);
         Assert.Equal("current", await ReadAsync(repository, ".agents/operational_context.0005.md"));
@@ -1173,32 +1173,32 @@ public sealed class OperationalContextGenerationTests
     [Fact]
     public async Task PromotionRejectsPendingRejectedSupersededAndStaleProposals()
     {
-        var pendingHarness = await CreateHarnessAsync();
-        var pending = await pendingHarness.GenerationService.GenerateAsync(pendingHarness.Repository.Id);
+        Harness pendingHarness = await CreateHarnessAsync();
+        OperationalContextProposal pending = await pendingHarness.GenerationService.GenerateAsync(pendingHarness.Repository.Id);
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             pendingHarness.LifecycleService.PromoteAsync(pendingHarness.Repository.Id, pending.ProposalId));
 
-        var rejectedHarness = await CreateHarnessAsync();
-        var rejectedProposal = await rejectedHarness.GenerationService.GenerateAsync(rejectedHarness.Repository.Id);
-        var rejected = await rejectedHarness.ReviewService.RejectAsync(rejectedHarness.Repository.Id, rejectedProposal.ProposalId, null);
+        Harness rejectedHarness = await CreateHarnessAsync();
+        OperationalContextProposal rejectedProposal = await rejectedHarness.GenerationService.GenerateAsync(rejectedHarness.Repository.Id);
+        OperationalContextProposal rejected = await rejectedHarness.ReviewService.RejectAsync(rejectedHarness.Repository.Id, rejectedProposal.ProposalId, null);
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             rejectedHarness.LifecycleService.PromoteAsync(rejectedHarness.Repository.Id, rejected.ProposalId));
 
-        var supersededHarness = await CreateHarnessAsync();
-        var first = await supersededHarness.GenerationService.GenerateAsync(supersededHarness.Repository.Id);
-        var acceptedFirst = await supersededHarness.ReviewService.AcceptAsync(supersededHarness.Repository.Id, first.ProposalId, null);
+        Harness supersededHarness = await CreateHarnessAsync();
+        OperationalContextProposal first = await supersededHarness.GenerationService.GenerateAsync(supersededHarness.Repository.Id);
+        OperationalContextProposal acceptedFirst = await supersededHarness.ReviewService.AcceptAsync(supersededHarness.Repository.Id, first.ProposalId, null);
         _ = await supersededHarness.GenerationService.GenerateAsync(supersededHarness.Repository.Id);
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             supersededHarness.LifecycleService.PromoteAsync(supersededHarness.Repository.Id, acceptedFirst.ProposalId));
 
-        var staleHarness = await CreateHarnessAsync();
+        Harness staleHarness = await CreateHarnessAsync();
         await WriteAsync(staleHarness.Repository, ".agents/operational_context.md", "# Operational Context");
-        var staleProposal = await staleHarness.GenerationService.GenerateAsync(staleHarness.Repository.Id);
-        var acceptedStale = await staleHarness.ReviewService.AcceptAsync(staleHarness.Repository.Id, staleProposal.ProposalId, null);
+        OperationalContextProposal staleProposal = await staleHarness.GenerationService.GenerateAsync(staleHarness.Repository.Id);
+        OperationalContextProposal acceptedStale = await staleHarness.ReviewService.AcceptAsync(staleHarness.Repository.Id, staleProposal.ProposalId, null);
         await WriteAsync(staleHarness.Repository, ".agents/operational_context.md", "# Operational Context\n\nChanged.");
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             staleHarness.LifecycleService.PromoteAsync(staleHarness.Repository.Id, acceptedStale.ProposalId));
-        var reloaded = await staleHarness.ProposalStore.GetAsync(staleHarness.Repository, acceptedStale.ProposalId);
+        OperationalContextProposal? reloaded = await staleHarness.ProposalStore.GetAsync(staleHarness.Repository, acceptedStale.ProposalId);
         Assert.Equal(OperationalContextReviewState.Stale, reloaded?.Review.ReviewState);
     }
 
@@ -1208,16 +1208,16 @@ public sealed class OperationalContextGenerationTests
         var artifactStore = new PathFailingArtifactStore(
             new FileSystemArtifactStore(),
             path => Path.GetFileName(path).Equals("operational_context.0001.md", StringComparison.OrdinalIgnoreCase));
-        var harness = await CreateHarnessAsync(artifactStore: artifactStore);
+        Harness harness = await CreateHarnessAsync(artifactStore: artifactStore);
         await WriteAsync(harness.Repository, ".agents/operational_context.md", "current");
-        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
-        var accepted = await harness.ReviewService.AcceptAsync(harness.Repository.Id, proposal.ProposalId, null);
+        OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        OperationalContextProposal accepted = await harness.ReviewService.AcceptAsync(harness.Repository.Id, proposal.ProposalId, null);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             harness.LifecycleService.PromoteAsync(harness.Repository.Id, accepted.ProposalId));
 
         Assert.Equal("current", await ReadAsync(harness.Repository, ".agents/operational_context.md"));
-        var reloaded = await harness.ProposalStore.GetAsync(harness.Repository, accepted.ProposalId);
+        OperationalContextProposal? reloaded = await harness.ProposalStore.GetAsync(harness.Repository, accepted.ProposalId);
         Assert.Equal(OperationalContextProposalStatus.Accepted, reloaded?.Status);
         Assert.NotNull(reloaded?.Promotion.ArchiveFailureReason);
     }
@@ -1228,17 +1228,17 @@ public sealed class OperationalContextGenerationTests
         var artifactStore = new PathFailingArtifactStore(
             new FileSystemArtifactStore(),
             path => Path.GetFileName(path).Equals("operational_context.md", StringComparison.OrdinalIgnoreCase));
-        var harness = await CreateHarnessAsync(artifactStore: artifactStore);
+        Harness harness = await CreateHarnessAsync(artifactStore: artifactStore);
         await WriteAsync(harness.Repository, ".agents/operational_context.md", "current");
-        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
-        var accepted = await harness.ReviewService.AcceptAsync(harness.Repository.Id, proposal.ProposalId, null);
+        OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        OperationalContextProposal accepted = await harness.ReviewService.AcceptAsync(harness.Repository.Id, proposal.ProposalId, null);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             harness.LifecycleService.PromoteAsync(harness.Repository.Id, accepted.ProposalId));
 
         Assert.Equal("current", await ReadAsync(harness.Repository, ".agents/operational_context.md"));
         Assert.Equal("current", await ReadAsync(harness.Repository, ".agents/operational_context.0001.md"));
-        var reloaded = await harness.ProposalStore.GetAsync(harness.Repository, accepted.ProposalId);
+        OperationalContextProposal? reloaded = await harness.ProposalStore.GetAsync(harness.Repository, accepted.ProposalId);
         Assert.Equal(".agents/operational_context.0001.md", reloaded?.Promotion.ArchivedRelativePath);
         Assert.NotNull(reloaded?.Promotion.WriteFailureReason);
     }
@@ -1246,10 +1246,10 @@ public sealed class OperationalContextGenerationTests
     [Fact]
     public async Task ArtifactInventoryIncludesHistoricalOperationalContextRevisions()
     {
-        var repositoryPath = CreateGitRepositoryDirectory();
+        string repositoryPath = CreateGitRepositoryDirectory();
         var repositoryService = new RepositoryService(
             new ApplicationConfigurationStore(Path.Combine(CreateTemporaryDirectory(), "configuration.json")));
-        var repository = await repositoryService.RegisterAsync(repositoryPath);
+        Repository repository = await repositoryService.RegisterAsync(repositoryPath);
         await WriteAsync(repository, ".agents/operational_context.md", "current");
         await WriteAsync(repository, ".agents/operational_context.0001.md", "historical");
         var projectionService = new RepositoryProjectionService(
@@ -1261,23 +1261,23 @@ public sealed class OperationalContextGenerationTests
             new MarkdownOperationalContextParser(),
             new FileSystemArtifactStore());
 
-        var workspace = await projectionService.GetWorkspaceAsync(repository.Id);
+        RepositoryWorkspaceProjection workspace = await projectionService.GetWorkspaceAsync(repository.Id);
 
         Assert.NotNull(workspace.ArtifactInventory.OperationalContext);
-        var historical = Assert.Single(workspace.ArtifactInventory.HistoricalOperationalContexts);
+        Artifact historical = Assert.Single(workspace.ArtifactInventory.HistoricalOperationalContexts);
         Assert.Equal(".agents/operational_context.0001.md", historical.RelativePath);
     }
 
     [Fact]
     public async Task PromotionStateSurvivesStoreRecreation()
     {
-        var harness = await CreateHarnessAsync();
-        var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
-        var accepted = await harness.ReviewService.AcceptAsync(harness.Repository.Id, proposal.ProposalId, null);
-        var promoted = await harness.LifecycleService.PromoteAsync(harness.Repository.Id, accepted.ProposalId);
+        Harness harness = await CreateHarnessAsync();
+        OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+        OperationalContextProposal accepted = await harness.ReviewService.AcceptAsync(harness.Repository.Id, proposal.ProposalId, null);
+        OperationalContextProposal promoted = await harness.LifecycleService.PromoteAsync(harness.Repository.Id, accepted.ProposalId);
 
         var reloadedStore = new FileSystemOperationalContextProposalStore(new FileSystemArtifactStore());
-        var reloaded = await reloadedStore.GetAsync(harness.Repository, promoted.ProposalId);
+        OperationalContextProposal? reloaded = await reloadedStore.GetAsync(harness.Repository, promoted.ProposalId);
 
         Assert.Equal(OperationalContextProposalStatus.Promoted, reloaded?.Status);
         Assert.NotNull(reloaded?.Promotion.PromotedAt);
@@ -1287,7 +1287,7 @@ public sealed class OperationalContextGenerationTests
     [Fact]
     public async Task RepeatedProposalCyclesDoNotReplayLargeDecisionArchiveIntoOperationalContext()
     {
-        var harness = await CreateHarnessAsync();
+        Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/decisions/decisions.md", """
             # Decisions
 
@@ -1306,14 +1306,14 @@ public sealed class OperationalContextGenerationTests
             - Completed cleanup from M4.
             """);
 
-        for (var index = 0; index < 3; index++)
+        for (int index = 0; index < 3; index++)
         {
-            var proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
-            var accepted = await harness.ReviewService.AcceptAsync(harness.Repository.Id, proposal.ProposalId, null);
+            OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+            OperationalContextProposal accepted = await harness.ReviewService.AcceptAsync(harness.Repository.Id, proposal.ProposalId, null);
             await harness.LifecycleService.PromoteAsync(harness.Repository.Id, accepted.ProposalId);
         }
 
-        var current = new MarkdownOperationalContextParser().Parse(
+        OperationalContextDocument current = new MarkdownOperationalContextParser().Parse(
             await ReadAsync(harness.Repository, ".agents/operational_context.md"));
 
         Assert.Single(current.StableDecisions);
@@ -1329,10 +1329,10 @@ public sealed class OperationalContextGenerationTests
         IReadOnlyList<ExecutionSessionSummary>? executionHistory = null,
         IArtifactStore? artifactStore = null)
     {
-        var repositoryPath = CreateGitRepositoryDirectory();
-        var configurationPath = Path.Combine(CreateTemporaryDirectory(), "configuration.json");
+        string repositoryPath = CreateGitRepositoryDirectory();
+        string configurationPath = Path.Combine(CreateTemporaryDirectory(), "configuration.json");
         var repositoryService = new RepositoryService(new ApplicationConfigurationStore(configurationPath));
-        var repository = await repositoryService.RegisterAsync(repositoryPath);
+        Repository repository = await repositoryService.RegisterAsync(repositoryPath);
         artifactStore ??= new FileSystemArtifactStore();
         return CreateHarness(
             repository,
@@ -1345,7 +1345,7 @@ public sealed class OperationalContextGenerationTests
     private static async Task<Harness> RecreateHarnessAsync(Harness harness)
     {
         var repositoryService = new RepositoryService(new ApplicationConfigurationStore(harness.ConfigurationPath));
-        var repository = (await repositoryService.GetAllAsync()).Single(repository => repository.Id == harness.Repository.Id);
+        Repository repository = (await repositoryService.GetAllAsync()).Single(repository => repository.Id == harness.Repository.Id);
         return CreateHarness(
             repository,
             repositoryService,
@@ -1414,7 +1414,7 @@ public sealed class OperationalContextGenerationTests
 
     private static string BuildCycleHandoff(int cycle)
     {
-        var outcomeEvidence = cycle switch
+        string outcomeEvidence = cycle switch
         {
             1 => "- Cycle 1 preserved backend workflow authority.",
             2 => """
@@ -1435,8 +1435,8 @@ public sealed class OperationalContextGenerationTests
 
     private static async Task WriteAsync(Repository repository, string relativePath, string content)
     {
-        var path = Path.Combine(repository.Path, relativePath.Replace('/', Path.DirectorySeparatorChar));
-        var directory = Path.GetDirectoryName(path);
+        string path = Path.Combine(repository.Path, relativePath.Replace('/', Path.DirectorySeparatorChar));
+        string? directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrWhiteSpace(directory))
         {
             Directory.CreateDirectory(directory);
@@ -1453,14 +1453,14 @@ public sealed class OperationalContextGenerationTests
 
     private static string CreateGitRepositoryDirectory()
     {
-        var directory = CreateTemporaryDirectory();
+        string directory = CreateTemporaryDirectory();
         Directory.CreateDirectory(Path.Combine(directory, ".git"));
         return directory;
     }
 
     private static string CreateTemporaryDirectory()
     {
-        var directory = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"));
+        string directory = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         return directory;
     }

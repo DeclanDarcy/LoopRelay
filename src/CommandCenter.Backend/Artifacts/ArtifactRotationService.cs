@@ -23,8 +23,8 @@ public sealed class ArtifactRotationService(
 
     public async Task<Artifact> RotateAsync(Repository repository, ArtifactFamily family)
     {
-        var definition = GetDefinition(family);
-        var currentArtifact = family switch
+        RotationDefinition definition = GetDefinition(family);
+        Artifact? currentArtifact = family switch
         {
             ArtifactFamily.Handoff => await artifactService.GetCurrentHandoffAsync(repository),
             ArtifactFamily.Decision => await artifactService.GetCurrentDecisionsAsync(repository),
@@ -37,26 +37,26 @@ public sealed class ArtifactRotationService(
             throw new FileNotFoundException("Current artifact was not found.", definition.CurrentRelativePath);
         }
 
-        var currentPath = ArtifactPath.ResolveRepositoryPath(repository, definition.CurrentRelativePath);
-        var currentContent = await artifactStore.ReadAsync(currentPath);
+        string currentPath = ArtifactPath.ResolveRepositoryPath(repository, definition.CurrentRelativePath);
+        string? currentContent = await artifactStore.ReadAsync(currentPath);
         if (currentContent is null)
         {
             throw new FileNotFoundException("Current artifact was not found.", definition.CurrentRelativePath);
         }
 
-        var historicalDirectory = ArtifactPath.ResolveRepositoryPath(repository, definition.DirectoryRelativePath);
-        var files = await artifactStore.ListAsync(historicalDirectory, "*.md");
-        var nextSequence = files
+        string historicalDirectory = ArtifactPath.ResolveRepositoryPath(repository, definition.DirectoryRelativePath);
+        IReadOnlyList<string> files = await artifactStore.ListAsync(historicalDirectory, "*.md");
+        int nextSequence = files
             .Select(file => TryParseHistoricalSequence(definition.BaseName, Path.GetFileName(file)))
             .Where(sequence => sequence.HasValue)
             .Select(sequence => sequence!.Value)
             .DefaultIfEmpty(0)
             .Max() + 1;
 
-        var targetRelativePath = ArtifactPath.CombineRelative(
+        string targetRelativePath = ArtifactPath.CombineRelative(
             definition.DirectoryRelativePath,
             $"{definition.BaseName}.{nextSequence:0000}.md");
-        var targetPath = ArtifactPath.ResolveRepositoryPath(repository, targetRelativePath);
+        string targetPath = ArtifactPath.ResolveRepositoryPath(repository, targetRelativePath);
 
         if (await artifactStore.ExistsAsync(targetPath))
         {
@@ -100,7 +100,7 @@ public sealed class ArtifactRotationService(
 
     private static int? TryParseHistoricalSequence(string baseName, string fileName)
     {
-        var prefix = $"{baseName}.";
+        string prefix = $"{baseName}.";
         const string suffix = ".md";
 
         if (!fileName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
@@ -110,10 +110,10 @@ public sealed class ArtifactRotationService(
             return null;
         }
 
-        var sequenceText = fileName[prefix.Length..^suffix.Length];
+        string sequenceText = fileName[prefix.Length..^suffix.Length];
         if (sequenceText.Length != 4 ||
             !sequenceText.All(char.IsDigit) ||
-            !int.TryParse(sequenceText, out var sequence) ||
+            !int.TryParse(sequenceText, out int sequence) ||
             sequence <= 0)
         {
             return null;

@@ -90,7 +90,7 @@ public sealed class ExecutionPromptBuilder : IExecutionPromptBuilder
     private static void AppendArtifacts(StringBuilder builder, IReadOnlyList<ExecutionContextArtifact> artifacts)
     {
         builder.AppendLine("## Context Artifacts");
-        foreach (var artifact in OrderedArtifacts(artifacts))
+        foreach (ExecutionContextArtifact artifact in OrderedArtifacts(artifacts))
         {
             builder.AppendLine();
             builder.AppendLine($"### {artifact.Role}: {artifact.RelativePath}");
@@ -104,7 +104,7 @@ public sealed class ExecutionPromptBuilder : IExecutionPromptBuilder
     {
         return artifacts.OrderBy(artifact =>
             {
-                var index = Array.IndexOf(ArtifactRoleOrder, artifact.Role);
+                int index = Array.IndexOf(ArtifactRoleOrder, artifact.Role);
                 return index < 0 ? ArtifactRoleOrder.Length : index;
             })
             .ThenBy(artifact => artifact.RelativePath, StringComparer.Ordinal);
@@ -124,7 +124,7 @@ public sealed class ExecutionPromptBuilder : IExecutionPromptBuilder
             return;
         }
 
-        foreach (var value in values)
+        foreach (string value in values)
         {
             builder.AppendLine($"- {value}");
         }

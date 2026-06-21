@@ -85,13 +85,13 @@ public sealed class ExecutionMonitoringService : IExecutionMonitoringService
 
     public async Task<ExecutionStatus?> GetStatusAsync(Guid sessionId)
     {
-        var session = (await sessionStore.LoadAsync()).FirstOrDefault(session => session.Id == sessionId);
+        ExecutionSession? session = (await sessionStore.LoadAsync()).FirstOrDefault(session => session.Id == sessionId);
         return session is null ? null : ToStatus(session);
     }
 
     public async Task<IReadOnlyList<ExecutionEvent>> GetEventsAsync(Guid sessionId)
     {
-        var session = (await sessionStore.LoadAsync()).FirstOrDefault(session => session.Id == sessionId);
+        ExecutionSession? session = (await sessionStore.LoadAsync()).FirstOrDefault(session => session.Id == sessionId);
         return session?.Events ?? [];
     }
 
@@ -104,7 +104,7 @@ public sealed class ExecutionMonitoringService : IExecutionMonitoringService
         await gate.WaitAsync(cancellationToken);
         try
         {
-            var session = (await sessionStore.LoadAsync()).FirstOrDefault(session => session.Id == sessionId);
+            ExecutionSession? session = (await sessionStore.LoadAsync()).FirstOrDefault(session => session.Id == sessionId);
             if (session is null)
             {
                 yield break;
@@ -116,7 +116,7 @@ public sealed class ExecutionMonitoringService : IExecutionMonitoringService
                 SingleReader = true,
                 SingleWriter = false
             });
-            if (!subscribers.TryGetValue(sessionId, out var sessionSubscribers))
+            if (!subscribers.TryGetValue(sessionId, out List<Channel<ExecutionEvent>>? sessionSubscribers))
             {
                 sessionSubscribers = [];
                 subscribers[sessionId] = sessionSubscribers;
@@ -131,13 +131,13 @@ public sealed class ExecutionMonitoringService : IExecutionMonitoringService
 
         try
         {
-            foreach (var executionEvent in retainedEvents)
+            foreach (ExecutionEvent executionEvent in retainedEvents)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 yield return executionEvent;
             }
 
-            await foreach (var executionEvent in channel.Reader.ReadAllAsync(cancellationToken))
+            await foreach (ExecutionEvent executionEvent in channel.Reader.ReadAllAsync(cancellationToken))
             {
                 yield return executionEvent;
             }
@@ -147,7 +147,7 @@ public sealed class ExecutionMonitoringService : IExecutionMonitoringService
             await gate.WaitAsync(CancellationToken.None);
             try
             {
-                if (subscribers.TryGetValue(sessionId, out var sessionSubscribers))
+                if (subscribers.TryGetValue(sessionId, out List<Channel<ExecutionEvent>>? sessionSubscribers))
                 {
                     sessionSubscribers.Remove(channel);
                     if (sessionSubscribers.Count == 0)
@@ -172,7 +172,7 @@ public sealed class ExecutionMonitoringService : IExecutionMonitoringService
 
     private Task RecordProviderExitAsync(Guid sessionId, int? exitCode)
     {
-        var message = exitCode is null
+        string message = exitCode is null
             ? "Provider process exited."
             : $"Provider process exited with code {exitCode}.";
 
@@ -209,7 +209,7 @@ public sealed class ExecutionMonitoringService : IExecutionMonitoringService
         if (handoffService is not null)
         {
             await handoffService.ProcessProviderCompletionAsync(sessionId);
-            var status = await GetStatusAsync(sessionId);
+            ExecutionStatus? status = await GetStatusAsync(sessionId);
             if (status?.RepositoryState == RepositoryExecutionState.AwaitingAcceptance)
             {
                 await AppendEventAsync(
@@ -240,15 +240,15 @@ public sealed class ExecutionMonitoringService : IExecutionMonitoringService
         await gate.WaitAsync();
         try
         {
-            var sessions = (await sessionStore.LoadAsync()).ToList();
-            var index = sessions.FindIndex(session => session.Id == sessionId);
+            List<ExecutionSession> sessions = (await sessionStore.LoadAsync()).ToList();
+            int index = sessions.FindIndex(session => session.Id == sessionId);
             if (index < 0)
             {
                 return;
             }
 
-            var session = sessions[index];
-            var nextSequence = session.Events.Count == 0
+            ExecutionSession session = sessions[index];
+            long nextSequence = session.Events.Count == 0
                 ? 1
                 : session.Events.Max(executionEvent => executionEvent.Sequence) + 1;
             var executionEvent = new ExecutionEvent
@@ -258,8 +258,8 @@ public sealed class ExecutionMonitoringService : IExecutionMonitoringService
                 Type = eventType,
                 Message = message
             };
-            var events = ApplyRetention([.. session.Events, executionEvent]);
-            var updatedSession = CopySession(
+            IReadOnlyList<ExecutionEvent> events = ApplyRetention([.. session.Events, executionEvent]);
+            ExecutionSession updatedSession = CopySession(
                 mutateSession?.Invoke(session) ?? session,
                 lastActivityAt: activityAt ?? session.LastActivityAt,
                 events: events);
@@ -275,7 +275,7 @@ public sealed class ExecutionMonitoringService : IExecutionMonitoringService
 
     private IReadOnlyList<ExecutionEvent> ApplyRetention(IReadOnlyList<ExecutionEvent> events)
     {
-        var retained = events
+        List<ExecutionEvent> retained = events
             .TakeLast(retentionPolicy.MaximumEventCount)
             .ToList();
 
@@ -298,12 +298,12 @@ public sealed class ExecutionMonitoringService : IExecutionMonitoringService
 
     private void BroadcastEvent(Guid sessionId, ExecutionEvent executionEvent)
     {
-        if (!subscribers.TryGetValue(sessionId, out var sessionSubscribers))
+        if (!subscribers.TryGetValue(sessionId, out List<Channel<ExecutionEvent>>? sessionSubscribers))
         {
             return;
         }
 
-        foreach (var subscriber in sessionSubscribers.ToArray())
+        foreach (Channel<ExecutionEvent> subscriber in sessionSubscribers.ToArray())
         {
             subscriber.Writer.TryWrite(executionEvent);
         }

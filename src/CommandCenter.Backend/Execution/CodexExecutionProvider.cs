@@ -13,8 +13,8 @@ public sealed class CodexExecutionProvider(
         ExecutionSession session,
         IExecutionProviderObserver observer)
     {
-        var executable = executableResolver.Resolve();
-        var startedAt = DateTimeOffset.UtcNow;
+        CodexExecutable executable = executableResolver.Resolve();
+        DateTimeOffset startedAt = DateTimeOffset.UtcNow;
         ProcessStartResult result;
 
         try
@@ -37,7 +37,7 @@ public sealed class CodexExecutionProvider(
 
         if (result.HasExited)
         {
-            var exitCode = result.ExitCode?.ToString() ?? "unknown";
+            string exitCode = result.ExitCode?.ToString() ?? "unknown";
             throw new ExecutionProviderException(
                 "ProviderImmediateExit",
                 $"Codex process exited immediately with exit code {exitCode}.");

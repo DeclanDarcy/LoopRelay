@@ -11,9 +11,9 @@ internal static class ArtifactPath
             throw new ArgumentException("Artifact path must be repository-relative.", nameof(relativePath));
         }
 
-        var repositoryRoot = Path.GetFullPath(repository.Path);
-        var resolvedPath = Path.GetFullPath(Path.Combine(repositoryRoot, relativePath));
-        var rootWithSeparator = repositoryRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        string repositoryRoot = Path.GetFullPath(repository.Path);
+        string resolvedPath = Path.GetFullPath(Path.Combine(repositoryRoot, relativePath));
+        string rootWithSeparator = repositoryRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
 
         if (!resolvedPath.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(resolvedPath, repositoryRoot, StringComparison.OrdinalIgnoreCase))

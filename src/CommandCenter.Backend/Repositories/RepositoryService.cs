@@ -18,7 +18,7 @@ public sealed class RepositoryService(IApplicationConfigurationStore configurati
             throw new ArgumentException("Repository path is required.", nameof(repositoryPath));
         }
 
-        var normalizedPath = NormalizePath(repositoryPath);
+        string normalizedPath = NormalizePath(repositoryPath);
 
         if (!Directory.Exists(normalizedPath))
         {
@@ -30,7 +30,7 @@ public sealed class RepositoryService(IApplicationConfigurationStore configurati
             throw new InvalidOperationException($"Directory is not a Git repository: {normalizedPath}");
         }
 
-        var configuration = await configurationStore.LoadAsync();
+        ApplicationConfiguration configuration = await configurationStore.LoadAsync();
         if (configuration.Repositories.Any(repository => PathComparer.Equals(NormalizePath(repository.Path), normalizedPath)))
         {
             throw new InvalidOperationException($"Repository is already registered: {normalizedPath}");
@@ -55,8 +55,8 @@ public sealed class RepositoryService(IApplicationConfigurationStore configurati
 
     public async Task RemoveAsync(Guid repositoryId)
     {
-        var configuration = await configurationStore.LoadAsync();
-        var repositories = configuration.Repositories
+        ApplicationConfiguration configuration = await configurationStore.LoadAsync();
+        Repository[] repositories = configuration.Repositories
             .Where(repository => repository.Id != repositoryId)
             .ToArray();
 
@@ -73,7 +73,7 @@ public sealed class RepositoryService(IApplicationConfigurationStore configurati
 
     private static bool ContainsGitDirectory(string repositoryPath)
     {
-        var gitPath = Path.Combine(repositoryPath, ".git");
+        string gitPath = Path.Combine(repositoryPath, ".git");
         return Directory.Exists(gitPath) || File.Exists(gitPath);
     }
 }

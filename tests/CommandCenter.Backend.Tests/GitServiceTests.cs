@@ -6,6 +6,7 @@ using CommandCenter.Backend;
 using CommandCenter.Backend.Configuration;
 using CommandCenter.Backend.Execution;
 using CommandCenter.Backend.Repositories;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CommandCenter.Backend.Tests;
@@ -24,7 +25,7 @@ public sealed class GitServiceTests
             });
         var service = new GitService(runner);
 
-        var status = await service.GetStatusAsync(new Repository
+        RepositoryGitStatus status = await service.GetStatusAsync(new Repository
         {
             Id = Guid.NewGuid(),
             Name = "Repo",
@@ -56,7 +57,7 @@ public sealed class GitServiceTests
             });
         var service = new GitService(runner);
 
-        var snapshot = await service.GetSnapshotAsync(new Repository
+        ExecutionRepositorySnapshot snapshot = await service.GetSnapshotAsync(new Repository
         {
             Id = Guid.NewGuid(),
             Name = "Repo",
@@ -73,9 +74,9 @@ public sealed class GitServiceTests
     {
         var repositoryService = new RepositoryService(
             new ApplicationConfigurationStore(Path.Combine(CreateTemporaryDirectory(), "configuration.json")));
-        var repository = await repositoryService.RegisterAsync(CreateGitRepositoryDirectory());
+        Repository repository = await repositoryService.RegisterAsync(CreateGitRepositoryDirectory());
 
-        await using var app = Program.CreateApp(
+        await using WebApplication app = Program.CreateApp(
             [],
             services =>
             {
@@ -86,7 +87,7 @@ public sealed class GitServiceTests
         await app.StartAsync();
 
         using var client = new HttpClient();
-        var response = await client.GetAsync(app.Urls.Single() + $"/api/repositories/{repository.Id}/git/status");
+        HttpResponseMessage response = await client.GetAsync(app.Urls.Single() + $"/api/repositories/{repository.Id}/git/status");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var status = await response.Content.ReadFromJsonAsync<RepositoryGitStatus>();
@@ -125,7 +126,7 @@ public sealed class GitServiceTests
             }
         };
 
-        var preparation = await service.PrepareCommitAsync(
+        CommitPreparation preparation = await service.PrepareCommitAsync(
             new Repository
             {
                 Id = session.RepositoryId,
@@ -143,11 +144,11 @@ public sealed class GitServiceTests
         Assert.Equal(2, preparation.ScopeItems.Count);
         Assert.All(preparation.ScopeItems, item => Assert.True(item.IsSelected));
 
-        var preExisting = Assert.Single(preparation.ScopeItems, item => item.Path == "src/pre-existing.cs");
+        CommitScopeItem preExisting = Assert.Single(preparation.ScopeItems, item => item.Path == "src/pre-existing.cs");
         Assert.Equal(CommitChangeType.Modified, preExisting.ChangeType);
         Assert.Equal(CommitChangeOrigin.PreExisting, preExisting.Origin);
 
-        var generated = Assert.Single(preparation.ScopeItems, item => item.Path == "src/new.cs");
+        CommitScopeItem generated = Assert.Single(preparation.ScopeItems, item => item.Path == "src/new.cs");
         Assert.Equal(CommitChangeType.Untracked, generated.ChangeType);
         Assert.Equal(CommitChangeOrigin.ExecutionGenerated, generated.Origin);
     }
@@ -155,10 +156,10 @@ public sealed class GitServiceTests
     [Fact]
     public async Task PrepareCommitEndpointPersistsPreparationOnSession()
     {
-        var storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");
+        string storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");
         var repositoryService = new RepositoryService(
             new ApplicationConfigurationStore(Path.Combine(CreateTemporaryDirectory(), "configuration.json")));
-        var repository = await repositoryService.RegisterAsync(CreateGitRepositoryDirectory());
+        Repository repository = await repositoryService.RegisterAsync(CreateGitRepositoryDirectory());
         var session = new ExecutionSession
         {
             Id = Guid.NewGuid(),
@@ -184,7 +185,7 @@ public sealed class GitServiceTests
         var store = new FileSystemExecutionSessionStore(storePath);
         await store.SaveAsync([session]);
 
-        await using var app = Program.CreateApp(
+        await using WebApplication app = Program.CreateApp(
             [],
             services =>
             {
@@ -196,7 +197,7 @@ public sealed class GitServiceTests
         await app.StartAsync();
 
         using var client = new HttpClient();
-        var response = await client.PostAsync(
+        HttpResponseMessage response = await client.PostAsync(
             app.Urls.Single() + $"/api/execution-sessions/{session.Id}/git/prepare-commit",
             null);
 
@@ -207,7 +208,7 @@ public sealed class GitServiceTests
         Assert.NotNull(preparation);
         Assert.Equal("snapshot", preparation.StatusSnapshot.Id);
 
-        var reloadedSession = Assert.Single(await new FileSystemExecutionSessionStore(storePath).LoadAsync());
+        ExecutionSession reloadedSession = Assert.Single(await new FileSystemExecutionSessionStore(storePath).LoadAsync());
         Assert.NotNull(reloadedSession.CommitPreparation);
         Assert.Equal("snapshot", reloadedSession.CommitPreparation.StatusSnapshot.Id);
     }
@@ -227,7 +228,7 @@ public sealed class GitServiceTests
             Path = CreateTemporaryDirectory()
         };
 
-        var result = await service.CommitAsync(
+        CommitResult result = await service.CommitAsync(
             repository,
             "Reviewed commit",
             ["src/selected.cs", "docs/notes.md"],
@@ -263,7 +264,7 @@ public sealed class GitServiceTests
             Path = CreateTemporaryDirectory()
         };
 
-        var result = await service.PushAsync(repository, "abc123");
+        PushResult result = await service.PushAsync(repository, "abc123");
 
         Assert.Equal("abc123", result.PushedCommitSha);
         Assert.Equal("main", result.BranchName);
@@ -277,14 +278,14 @@ public sealed class GitServiceTests
 
     private static string CreateTemporaryDirectory()
     {
-        var directory = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"));
+        string directory = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         return directory;
     }
 
     private static string CreateGitRepositoryDirectory()
     {
-        var directory = CreateTemporaryDirectory();
+        string directory = CreateTemporaryDirectory();
         Directory.CreateDirectory(Path.Combine(directory, ".git"));
         return directory;
     }

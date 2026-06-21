@@ -21,16 +21,16 @@ public sealed class ProcessRunner : IProcessRunner
             CreateNoWindow = true
         };
 
-        foreach (var argument in arguments)
+        foreach (string argument in arguments)
         {
             startInfo.ArgumentList.Add(argument);
         }
 
         var stopwatch = Stopwatch.StartNew();
-        using var process = Process.Start(startInfo)
-            ?? throw new InvalidOperationException($"Failed to start process: {fileName}");
-        var standardOutputTask = process.StandardOutput.ReadToEndAsync();
-        var standardErrorTask = process.StandardError.ReadToEndAsync();
+        using Process process = Process.Start(startInfo)
+                                ?? throw new InvalidOperationException($"Failed to start process: {fileName}");
+        Task<string> standardOutputTask = process.StandardOutput.ReadToEndAsync();
+        Task<string> standardErrorTask = process.StandardError.ReadToEndAsync();
 
         await process.WaitForExitAsync();
         stopwatch.Stop();
@@ -64,13 +64,13 @@ public sealed class ProcessRunner : IProcessRunner
             CreateNoWindow = true
         };
 
-        foreach (var argument in arguments)
+        foreach (string argument in arguments)
         {
             startInfo.ArgumentList.Add(argument);
         }
 
-        var process = Process.Start(startInfo)
-            ?? throw new InvalidOperationException($"Failed to start process: {fileName}");
+        Process process = Process.Start(startInfo)
+                          ?? throw new InvalidOperationException($"Failed to start process: {fileName}");
 
         if (onStandardOutput is not null)
         {

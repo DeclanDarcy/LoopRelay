@@ -19,7 +19,7 @@ public sealed class FileSystemArtifactStore : IArtifactStore
 
     public async Task WriteAsync(string path, string content)
     {
-        var directory = Path.GetDirectoryName(path);
+        string? directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrWhiteSpace(directory))
         {
             Directory.CreateDirectory(directory);
@@ -45,7 +45,7 @@ public sealed class FileSystemArtifactStore : IArtifactStore
             return Task.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
         }
 
-        var files = Directory.GetFiles(path, searchPattern)
+        string[] files = Directory.GetFiles(path, searchPattern)
             .Order(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
@@ -59,7 +59,7 @@ public sealed class FileSystemArtifactStore : IArtifactStore
             return Task.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
         }
 
-        var directories = Directory.GetDirectories(path)
+        string[] directories = Directory.GetDirectories(path)
             .Order(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 

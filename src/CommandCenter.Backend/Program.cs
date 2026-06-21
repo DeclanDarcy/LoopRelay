@@ -16,7 +16,7 @@ public static class Program
         string[] args,
         Action<IServiceCollection>? configureServices = null)
     {
-        var builder = WebApplication.CreateBuilder(args);
+        WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
         builder.Services.AddSingleton<IApplicationConfigurationStore, ApplicationConfigurationStore>();
         builder.Services.AddSingleton<IArtifactStore, FileSystemArtifactStore>();
@@ -62,7 +62,7 @@ public static class Program
         builder.Services.ConfigureHttpJsonOptions(options =>
             options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
-        var app = builder.Build();
+        WebApplication app = builder.Build();
         app.UseCors();
 
         app.MapGet("/api/ping", () => "Pong");
@@ -72,7 +72,7 @@ public static class Program
         {
             try
             {
-                var repository = await repositoryService.RegisterAsync(request.Path);
+                Repository repository = await repositoryService.RegisterAsync(request.Path);
                 return Results.Created($"/api/repositories/{repository.Id}", repository);
             }
             catch (ArgumentException exception)
@@ -120,7 +120,7 @@ public static class Program
         {
             try
             {
-                var workspace = await projectionService.GetWorkspaceAsync(repositoryId);
+                RepositoryWorkspaceProjection workspace = await projectionService.GetWorkspaceAsync(repositoryId);
                 return Results.Ok(workspace.ArtifactInventory);
             }
             catch (KeyNotFoundException exception)
@@ -136,7 +136,7 @@ public static class Program
         {
             try
             {
-                var repository = await GetRepositoryAsync(repositoryService, repositoryId);
+                Repository repository = await GetRepositoryAsync(repositoryService, repositoryId);
                 return Results.Text(await artifactService.LoadAsync(repository, relativePath), "text/markdown");
             }
             catch (KeyNotFoundException exception)
@@ -161,7 +161,7 @@ public static class Program
         {
             try
             {
-                var repository = await GetRepositoryAsync(repositoryService, repositoryId);
+                Repository repository = await GetRepositoryAsync(repositoryService, repositoryId);
                 await artifactService.SaveAsync(repository, request.RelativePath, request.Content);
                 await projectionService.RefreshWorkspaceAsync(repositoryId);
                 return Results.NoContent();
@@ -183,7 +183,7 @@ public static class Program
         {
             try
             {
-                var repository = await GetRepositoryAsync(repositoryService, repositoryId);
+                Repository repository = await GetRepositoryAsync(repositoryService, repositoryId);
                 await rotationService.RotateCurrentHandoffAsync(repository);
                 return Results.Ok(await projectionService.RefreshWorkspaceAsync(repositoryId));
             }
@@ -208,7 +208,7 @@ public static class Program
         {
             try
             {
-                var repository = await GetRepositoryAsync(repositoryService, repositoryId);
+                Repository repository = await GetRepositoryAsync(repositoryService, repositoryId);
                 await rotationService.RotateCurrentDecisionsAsync(repository);
                 return Results.Ok(await projectionService.RefreshWorkspaceAsync(repositoryId));
             }
@@ -232,8 +232,8 @@ public static class Program
         {
             try
             {
-                var repository = await GetRepositoryAsync(repositoryService, repositoryId);
-                var milestones = await planningService.GetMilestonesAsync(repository);
+                Repository repository = await GetRepositoryAsync(repositoryService, repositoryId);
+                IReadOnlyList<Milestone> milestones = await planningService.GetMilestonesAsync(repository);
                 return Results.Ok(new PlanningProjection
                 {
                     HasPlan = await planningService.HasPlanAsync(repository),
@@ -271,7 +271,7 @@ public static class Program
         {
             try
             {
-                var proposal = await generationService.GenerateAsync(repositoryId);
+                OperationalContextProposal proposal = await generationService.GenerateAsync(repositoryId);
                 await projectionService.RefreshWorkspaceAsync(repositoryId);
                 return Results.Ok(proposal);
             }
@@ -295,7 +295,7 @@ public static class Program
         {
             try
             {
-                var repository = await GetRepositoryAsync(repositoryService, repositoryId);
+                Repository repository = await GetRepositoryAsync(repositoryService, repositoryId);
                 return Results.Ok(await proposalStore.ListAsync(repository));
             }
             catch (KeyNotFoundException exception)
@@ -315,8 +315,8 @@ public static class Program
         {
             try
             {
-                var repository = await GetRepositoryAsync(repositoryService, repositoryId);
-                var proposal = await proposalStore.GetAsync(repository, proposalId, includeContent: true);
+                Repository repository = await GetRepositoryAsync(repositoryService, repositoryId);
+                OperationalContextProposal? proposal = await proposalStore.GetAsync(repository, proposalId, includeContent: true);
                 return proposal is null
                     ? Results.NotFound(new { error = $"Operational-context proposal was not found: {proposalId}" })
                     : Results.Ok(proposal);
@@ -339,7 +339,7 @@ public static class Program
         {
             try
             {
-                var proposal = await reviewService.EditAsync(repositoryId, proposalId, request.Content);
+                OperationalContextProposal proposal = await reviewService.EditAsync(repositoryId, proposalId, request.Content);
                 await projectionService.RefreshWorkspaceAsync(repositoryId);
                 return Results.Ok(proposal);
             }
@@ -365,7 +365,7 @@ public static class Program
         {
             try
             {
-                var proposal = await reviewService.AcceptAsync(repositoryId, proposalId, request.ReviewNote);
+                OperationalContextProposal proposal = await reviewService.AcceptAsync(repositoryId, proposalId, request.ReviewNote);
                 await projectionService.RefreshWorkspaceAsync(repositoryId);
                 return Results.Ok(proposal);
             }
@@ -391,7 +391,7 @@ public static class Program
         {
             try
             {
-                var proposal = await reviewService.RejectAsync(repositoryId, proposalId, request.ReviewNote);
+                OperationalContextProposal proposal = await reviewService.RejectAsync(repositoryId, proposalId, request.ReviewNote);
                 await projectionService.RefreshWorkspaceAsync(repositoryId);
                 return Results.Ok(proposal);
             }
@@ -416,7 +416,7 @@ public static class Program
         {
             try
             {
-                var proposal = await lifecycleService.PromoteAsync(repositoryId, proposalId);
+                OperationalContextProposal proposal = await lifecycleService.PromoteAsync(repositoryId, proposalId);
                 await projectionService.RefreshWorkspaceAsync(repositoryId);
                 return Results.Ok(proposal);
             }
@@ -518,7 +518,7 @@ public static class Program
             Guid repositoryId,
             IExecutionSessionService executionSessionService) =>
         {
-            var session = await executionSessionService.GetActiveSessionAsync(repositoryId);
+            ExecutionSessionSummary? session = await executionSessionService.GetActiveSessionAsync(repositoryId);
             return session is null ? Results.NotFound(new { error = "No active execution session." }) : Results.Ok(session);
         });
         app.MapGet("/api/repositories/{repositoryId:guid}/git/status", async (
@@ -528,7 +528,7 @@ public static class Program
         {
             try
             {
-                var repository = await GetRepositoryAsync(repositoryService, repositoryId);
+                Repository repository = await GetRepositoryAsync(repositoryService, repositoryId);
                 return Results.Ok(await gitService.GetStatusAsync(repository));
             }
             catch (KeyNotFoundException exception)
@@ -597,21 +597,21 @@ public static class Program
             Guid sessionId,
             IExecutionSessionService executionSessionService) =>
         {
-            var session = await executionSessionService.GetSessionAsync(sessionId);
+            ExecutionSession? session = await executionSessionService.GetSessionAsync(sessionId);
             return session is null ? Results.NotFound(new { error = "Execution session was not found." }) : Results.Ok(session);
         });
         app.MapGet("/api/execution-sessions/{sessionId:guid}/status", async (
             Guid sessionId,
             IExecutionMonitoringService monitoringService) =>
         {
-            var status = await monitoringService.GetStatusAsync(sessionId);
+            ExecutionStatus? status = await monitoringService.GetStatusAsync(sessionId);
             return status is null ? Results.NotFound(new { error = "Execution session was not found." }) : Results.Ok(status);
         });
         app.MapGet("/api/execution-sessions/{sessionId:guid}/events", async (
             Guid sessionId,
             IExecutionMonitoringService monitoringService) =>
         {
-            var status = await monitoringService.GetStatusAsync(sessionId);
+            ExecutionStatus? status = await monitoringService.GetStatusAsync(sessionId);
             return status is null ? Results.NotFound(new { error = "Execution session was not found." }) : Results.Ok(await monitoringService.GetEventsAsync(sessionId));
         });
         app.MapGet("/api/execution-sessions/{sessionId:guid}/events/stream", async Task<IResult> (
@@ -619,7 +619,7 @@ public static class Program
             HttpContext httpContext,
             IExecutionMonitoringService monitoringService) =>
         {
-            var status = await monitoringService.GetStatusAsync(sessionId);
+            ExecutionStatus? status = await monitoringService.GetStatusAsync(sessionId);
             if (status is null)
             {
                 return Results.NotFound(new { error = "Execution session was not found." });
@@ -633,7 +633,7 @@ public static class Program
 
             try
             {
-                await foreach (var executionEvent in monitoringService.StreamEventsAsync(sessionId, httpContext.RequestAborted))
+                await foreach (ExecutionEvent executionEvent in monitoringService.StreamEventsAsync(sessionId, httpContext.RequestAborted))
                 {
                     await httpContext.Response.WriteAsync($"id: {executionEvent.Sequence}\n", httpContext.RequestAborted);
                     await httpContext.Response.WriteAsync("event: execution-event\n", httpContext.RequestAborted);
@@ -702,7 +702,7 @@ public static class Program
 
     private static async Task<Repository> GetRepositoryAsync(IRepositoryService repositoryService, Guid repositoryId)
     {
-        var repository = (await repositoryService.GetAllAsync()).FirstOrDefault(repository => repository.Id == repositoryId);
+        Repository? repository = (await repositoryService.GetAllAsync()).FirstOrDefault(repository => repository.Id == repositoryId);
         return repository ?? throw new KeyNotFoundException($"Repository was not found: {repositoryId}");
     }
 

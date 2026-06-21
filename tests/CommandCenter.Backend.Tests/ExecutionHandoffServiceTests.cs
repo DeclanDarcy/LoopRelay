@@ -8,14 +8,14 @@ public sealed class ExecutionHandoffServiceTests
     [Fact]
     public async Task ProviderCompletionWithCurrentHandoffTransitionsToAwaitingAcceptance()
     {
-        var repositoryPath = CreateTemporaryDirectory();
+        string repositoryPath = CreateTemporaryDirectory();
         await WriteAsync(repositoryPath, ".agents/handoffs/handoff.md", "generated handoff");
-        var store = await CreateStoreWithExecutingSessionAsync(repositoryPath);
-        var session = (await store.LoadAsync()).Single();
-        var monitoringService = CreateMonitoringService(store);
+        FileSystemExecutionSessionStore store = await CreateStoreWithExecutingSessionAsync(repositoryPath);
+        ExecutionSession session = (await store.LoadAsync()).Single();
+        ExecutionMonitoringService monitoringService = CreateMonitoringService(store);
 
         await monitoringService.CreateProviderObserver(session.Id).OnProviderExitedAsync(0);
-        var status = await monitoringService.GetStatusAsync(session.Id);
+        ExecutionStatus? status = await monitoringService.GetStatusAsync(session.Id);
 
         Assert.NotNull(status);
         Assert.Equal(ExecutionSessionState.Completed, status.State);
@@ -28,13 +28,13 @@ public sealed class ExecutionHandoffServiceTests
     [Fact]
     public async Task ProviderCompletionWithoutCurrentHandoffTransitionsToFailed()
     {
-        var repositoryPath = CreateTemporaryDirectory();
-        var store = await CreateStoreWithExecutingSessionAsync(repositoryPath);
-        var session = (await store.LoadAsync()).Single();
-        var monitoringService = CreateMonitoringService(store);
+        string repositoryPath = CreateTemporaryDirectory();
+        FileSystemExecutionSessionStore store = await CreateStoreWithExecutingSessionAsync(repositoryPath);
+        ExecutionSession session = (await store.LoadAsync()).Single();
+        ExecutionMonitoringService monitoringService = CreateMonitoringService(store);
 
         await monitoringService.CreateProviderObserver(session.Id).OnProviderExitedAsync(0);
-        var status = await monitoringService.GetStatusAsync(session.Id);
+        ExecutionStatus? status = await monitoringService.GetStatusAsync(session.Id);
 
         Assert.NotNull(status);
         Assert.Equal(ExecutionSessionState.Failed, status.State);
@@ -47,13 +47,13 @@ public sealed class ExecutionHandoffServiceTests
     [Fact]
     public async Task NonZeroProviderExitDoesNotValidateHandoff()
     {
-        var repositoryPath = CreateTemporaryDirectory();
-        var store = await CreateStoreWithExecutingSessionAsync(repositoryPath);
-        var session = (await store.LoadAsync()).Single();
-        var monitoringService = CreateMonitoringService(store);
+        string repositoryPath = CreateTemporaryDirectory();
+        FileSystemExecutionSessionStore store = await CreateStoreWithExecutingSessionAsync(repositoryPath);
+        ExecutionSession session = (await store.LoadAsync()).Single();
+        ExecutionMonitoringService monitoringService = CreateMonitoringService(store);
 
         await monitoringService.CreateProviderObserver(session.Id).OnProviderExitedAsync(2);
-        var status = await monitoringService.GetStatusAsync(session.Id);
+        ExecutionStatus? status = await monitoringService.GetStatusAsync(session.Id);
 
         Assert.NotNull(status);
         Assert.Equal(ExecutionSessionState.Failed, status.State);
@@ -65,18 +65,18 @@ public sealed class ExecutionHandoffServiceTests
     [Fact]
     public async Task AwaitingAcceptanceStateSurvivesStoreReload()
     {
-        var repositoryPath = CreateTemporaryDirectory();
+        string repositoryPath = CreateTemporaryDirectory();
         await WriteAsync(repositoryPath, ".agents/handoffs/handoff.md", "generated handoff");
-        var storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");
-        var store = await CreateStoreWithExecutingSessionAsync(repositoryPath, storePath);
-        var session = (await store.LoadAsync()).Single();
-        var monitoringService = CreateMonitoringService(store);
+        string storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");
+        FileSystemExecutionSessionStore store = await CreateStoreWithExecutingSessionAsync(repositoryPath, storePath);
+        ExecutionSession session = (await store.LoadAsync()).Single();
+        ExecutionMonitoringService monitoringService = CreateMonitoringService(store);
 
         await monitoringService.CreateProviderObserver(session.Id).OnProviderExitedAsync(0);
         var reloadedMonitoringService = new ExecutionMonitoringService(new FileSystemExecutionSessionStore(storePath));
-        var status = await reloadedMonitoringService.GetStatusAsync(session.Id);
-        var reloadedSession = (await new FileSystemExecutionSessionStore(storePath).LoadAsync()).Single();
-        var summary = reloadedSession.ToSummary();
+        ExecutionStatus? status = await reloadedMonitoringService.GetStatusAsync(session.Id);
+        ExecutionSession reloadedSession = (await new FileSystemExecutionSessionStore(storePath).LoadAsync()).Single();
+        ExecutionSessionSummary summary = reloadedSession.ToSummary();
 
         Assert.NotNull(status);
         Assert.Equal(ExecutionSessionState.Completed, status.State);
@@ -91,17 +91,17 @@ public sealed class ExecutionHandoffServiceTests
     [Fact]
     public async Task PreviousHandoffSnapshotIsArchivedToNextHistoricalSequence()
     {
-        var repositoryPath = CreateTemporaryDirectory();
+        string repositoryPath = CreateTemporaryDirectory();
         await WriteAsync(repositoryPath, ".agents/handoffs/handoff.md", "generated handoff");
         await WriteAsync(repositoryPath, ".agents/handoffs/handoff.0004.md", "historical handoff");
-        var store = await CreateStoreWithExecutingSessionAsync(
+        FileSystemExecutionSessionStore store = await CreateStoreWithExecutingSessionAsync(
             repositoryPath,
             previousHandoffContent: "previous handoff");
-        var session = (await store.LoadAsync()).Single();
-        var monitoringService = CreateMonitoringService(store);
+        ExecutionSession session = (await store.LoadAsync()).Single();
+        ExecutionMonitoringService monitoringService = CreateMonitoringService(store);
 
         await monitoringService.CreateProviderObserver(session.Id).OnProviderExitedAsync(0);
-        var status = await monitoringService.GetStatusAsync(session.Id);
+        ExecutionStatus? status = await monitoringService.GetStatusAsync(session.Id);
 
         Assert.NotNull(status);
         Assert.Equal(ExecutionSessionState.Completed, status.State);
@@ -113,16 +113,16 @@ public sealed class ExecutionHandoffServiceTests
     [Fact]
     public async Task PreviousHandoffSnapshotIsNotArchivedWhenCurrentHandoffIsUnchanged()
     {
-        var repositoryPath = CreateTemporaryDirectory();
+        string repositoryPath = CreateTemporaryDirectory();
         await WriteAsync(repositoryPath, ".agents/handoffs/handoff.md", "same handoff");
-        var store = await CreateStoreWithExecutingSessionAsync(
+        FileSystemExecutionSessionStore store = await CreateStoreWithExecutingSessionAsync(
             repositoryPath,
             previousHandoffContent: "same handoff");
-        var session = (await store.LoadAsync()).Single();
-        var monitoringService = CreateMonitoringService(store);
+        ExecutionSession session = (await store.LoadAsync()).Single();
+        ExecutionMonitoringService monitoringService = CreateMonitoringService(store);
 
         await monitoringService.CreateProviderObserver(session.Id).OnProviderExitedAsync(0);
-        var status = await monitoringService.GetStatusAsync(session.Id);
+        ExecutionStatus? status = await monitoringService.GetStatusAsync(session.Id);
 
         Assert.NotNull(status);
         Assert.Equal(ExecutionSessionState.Completed, status.State);
@@ -133,14 +133,14 @@ public sealed class ExecutionHandoffServiceTests
     [Fact]
     public async Task NoHistoricalHandoffIsCreatedWhenNoPreviousSnapshotWasCaptured()
     {
-        var repositoryPath = CreateTemporaryDirectory();
+        string repositoryPath = CreateTemporaryDirectory();
         await WriteAsync(repositoryPath, ".agents/handoffs/handoff.md", "generated handoff");
-        var store = await CreateStoreWithExecutingSessionAsync(repositoryPath);
-        var session = (await store.LoadAsync()).Single();
-        var monitoringService = CreateMonitoringService(store);
+        FileSystemExecutionSessionStore store = await CreateStoreWithExecutingSessionAsync(repositoryPath);
+        ExecutionSession session = (await store.LoadAsync()).Single();
+        ExecutionMonitoringService monitoringService = CreateMonitoringService(store);
 
         await monitoringService.CreateProviderObserver(session.Id).OnProviderExitedAsync(0);
-        var status = await monitoringService.GetStatusAsync(session.Id);
+        ExecutionStatus? status = await monitoringService.GetStatusAsync(session.Id);
 
         Assert.NotNull(status);
         Assert.Equal(ExecutionSessionState.Completed, status.State);
@@ -151,19 +151,19 @@ public sealed class ExecutionHandoffServiceTests
     [Fact]
     public async Task ArchiveFailureTransitionsToFailedAndKeepsCurrentHandoff()
     {
-        var repositoryPath = CreateTemporaryDirectory();
+        string repositoryPath = CreateTemporaryDirectory();
         var artifactStore = new ArchiveWriteFailureArtifactStore(new FileSystemArtifactStore());
         await artifactStore.WriteAsync(
             Path.Combine(repositoryPath, ".agents", "handoffs", "handoff.md"),
             "generated handoff");
-        var store = await CreateStoreWithExecutingSessionAsync(
+        FileSystemExecutionSessionStore store = await CreateStoreWithExecutingSessionAsync(
             repositoryPath,
             previousHandoffContent: "previous handoff");
-        var session = (await store.LoadAsync()).Single();
-        var monitoringService = CreateMonitoringService(store, artifactStore);
+        ExecutionSession session = (await store.LoadAsync()).Single();
+        ExecutionMonitoringService monitoringService = CreateMonitoringService(store, artifactStore);
 
         await monitoringService.CreateProviderObserver(session.Id).OnProviderExitedAsync(0);
-        var status = await monitoringService.GetStatusAsync(session.Id);
+        ExecutionStatus? status = await monitoringService.GetStatusAsync(session.Id);
 
         Assert.NotNull(status);
         Assert.Equal(ExecutionSessionState.Failed, status.State);
@@ -190,7 +190,7 @@ public sealed class ExecutionHandoffServiceTests
     {
         var store = new FileSystemExecutionSessionStore(
             storePath ?? Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json"));
-        var startedAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+        DateTimeOffset startedAt = DateTimeOffset.UtcNow.AddMinutes(-1);
         await store.SaveAsync(
             [
                 new ExecutionSession
@@ -215,8 +215,8 @@ public sealed class ExecutionHandoffServiceTests
 
     private static async Task WriteAsync(string repositoryPath, string relativePath, string content)
     {
-        var path = Path.Combine(repositoryPath, relativePath.Replace('/', Path.DirectorySeparatorChar));
-        var directory = Path.GetDirectoryName(path);
+        string path = Path.Combine(repositoryPath, relativePath.Replace('/', Path.DirectorySeparatorChar));
+        string? directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrWhiteSpace(directory))
         {
             Directory.CreateDirectory(directory);
@@ -232,7 +232,7 @@ public sealed class ExecutionHandoffServiceTests
 
     private static string CreateTemporaryDirectory()
     {
-        var directory = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"));
+        string directory = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         return directory;
     }
@@ -251,7 +251,7 @@ public sealed class ExecutionHandoffServiceTests
 
         public Task WriteAsync(string path, string content)
         {
-            var fileName = Path.GetFileName(path);
+            string fileName = Path.GetFileName(path);
             if (fileName.Length == "handoff.0001.md".Length &&
                 fileName.StartsWith("handoff.", StringComparison.OrdinalIgnoreCase) &&
                 fileName.EndsWith(".md", StringComparison.OrdinalIgnoreCase))

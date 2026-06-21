@@ -8,7 +8,7 @@ public sealed class GitService(IProcessRunner processRunner) : IGitService
 {
     public async Task<ExecutionRepositorySnapshot> GetSnapshotAsync(Repository repository)
     {
-        var status = await GetStatusAsync(repository);
+        RepositoryGitStatus status = await GetStatusAsync(repository);
         return new ExecutionRepositorySnapshot
         {
             Branch = status.Branch,
@@ -19,7 +19,7 @@ public sealed class GitService(IProcessRunner processRunner) : IGitService
 
     public async Task<RepositoryGitStatus> GetStatusAsync(Repository repository)
     {
-        var branchResult = await processRunner.RunAsync(
+        ProcessRunResult branchResult = await processRunner.RunAsync(
             "git",
             ["branch", "--show-current"],
             repository.Path);
@@ -28,7 +28,7 @@ public sealed class GitService(IProcessRunner processRunner) : IGitService
             throw new InvalidOperationException($"git branch failed: {branchResult.StandardError}");
         }
 
-        var statusResult = await processRunner.RunAsync(
+        ProcessRunResult statusResult = await processRunner.RunAsync(
             "git",
             ["status", "--porcelain=v1", "--branch", "-z"],
             repository.Path);
@@ -37,7 +37,7 @@ public sealed class GitService(IProcessRunner processRunner) : IGitService
             throw new InvalidOperationException($"git status failed: {statusResult.StandardError}");
         }
 
-        var parsedStatus = ParseStatus(statusResult.StandardOutput);
+        ParsedGitStatus parsedStatus = ParseStatus(statusResult.StandardOutput);
 
         return new RepositoryGitStatus
         {
@@ -51,10 +51,10 @@ public sealed class GitService(IProcessRunner processRunner) : IGitService
 
     public async Task<CommitPreparation> PrepareCommitAsync(Repository repository, ExecutionSession session)
     {
-        var status = await GetStatusAsync(repository);
-        var preExistingPaths = GetAllDirtyPaths(session.RepositorySnapshot?.DirtyState);
-        var scopeItems = BuildScopeItems(status.DirtyState, preExistingPaths);
-        var snapshot = CreateCommitStatusSnapshot(status);
+        RepositoryGitStatus status = await GetStatusAsync(repository);
+        ISet<string> preExistingPaths = GetAllDirtyPaths(session.RepositorySnapshot?.DirtyState);
+        IReadOnlyList<CommitScopeItem> scopeItems = BuildScopeItems(status.DirtyState, preExistingPaths);
+        CommitStatusSnapshot snapshot = CreateCommitStatusSnapshot(status);
 
         return new CommitPreparation
         {
@@ -83,13 +83,13 @@ public sealed class GitService(IProcessRunner processRunner) : IGitService
     {
         var addArguments = new List<string> { "add", "-A", "--" };
         addArguments.AddRange(selectedPaths);
-        var addResult = await processRunner.RunAsync("git", addArguments, repository.Path);
+        ProcessRunResult addResult = await processRunner.RunAsync("git", addArguments, repository.Path);
         if (addResult.ExitCode != 0)
         {
             throw new InvalidOperationException($"git add failed: {addResult.StandardError}");
         }
 
-        var commitResult = await processRunner.RunAsync(
+        ProcessRunResult commitResult = await processRunner.RunAsync(
             "git",
             ["commit", "-m", message],
             repository.Path);
@@ -98,7 +98,7 @@ public sealed class GitService(IProcessRunner processRunner) : IGitService
             throw new InvalidOperationException($"git commit failed: {commitResult.StandardError}");
         }
 
-        var shaResult = await processRunner.RunAsync(
+        ProcessRunResult shaResult = await processRunner.RunAsync(
             "git",
             ["rev-parse", "HEAD"],
             repository.Path);
@@ -119,8 +119,8 @@ public sealed class GitService(IProcessRunner processRunner) : IGitService
 
     public async Task<PushResult> PushAsync(Repository repository, string? commitSha)
     {
-        var attemptedAt = DateTimeOffset.UtcNow;
-        var pushResult = await processRunner.RunAsync(
+        DateTimeOffset attemptedAt = DateTimeOffset.UtcNow;
+        ProcessRunResult pushResult = await processRunner.RunAsync(
             "git",
             ["push"],
             repository.Path);
@@ -129,7 +129,7 @@ public sealed class GitService(IProcessRunner processRunner) : IGitService
             throw new InvalidOperationException($"git push failed: {pushResult.StandardError}");
         }
 
-        var status = await GetStatusAsync(repository);
+        RepositoryGitStatus status = await GetStatusAsync(repository);
 
         return new PushResult
         {
@@ -144,19 +144,19 @@ public sealed class GitService(IProcessRunner processRunner) : IGitService
     private static ParsedGitStatus ParseStatus(string porcelainOutput)
     {
         string? branch = null;
-        var aheadCount = 0;
-        var behindCount = 0;
+        int aheadCount = 0;
+        int behindCount = 0;
         var staged = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
         var modified = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
         var added = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
         var deleted = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
         var renamed = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
         var untracked = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
-        var entries = porcelainOutput.Split('\0', StringSplitOptions.RemoveEmptyEntries);
+        string[] entries = porcelainOutput.Split('\0', StringSplitOptions.RemoveEmptyEntries);
 
-        for (var index = 0; index < entries.Length; index++)
+        for (int index = 0; index < entries.Length; index++)
         {
-            var entry = entries[index];
+            string entry = entries[index];
             if (entry.StartsWith("## ", StringComparison.Ordinal))
             {
                 (branch, aheadCount, behindCount) = ParseBranchHeader(entry);
@@ -168,9 +168,9 @@ public sealed class GitService(IProcessRunner processRunner) : IGitService
                 continue;
             }
 
-            var indexStatus = entry[0];
-            var workTreeStatus = entry[1];
-            var path = NormalizeGitPath(entry[3..]);
+            char indexStatus = entry[0];
+            char workTreeStatus = entry[1];
+            string path = NormalizeGitPath(entry[3..]);
 
             if (indexStatus == '?' && workTreeStatus == '?')
             {
@@ -216,31 +216,31 @@ public sealed class GitService(IProcessRunner processRunner) : IGitService
 
     private static (string? Branch, int AheadCount, int BehindCount) ParseBranchHeader(string header)
     {
-        var body = header[3..];
-        var branchSegment = body.Split(' ', 2)[0];
-        var branch = branchSegment.Split("...", 2, StringSplitOptions.None)[0];
-        var aheadCount = ParseCount(body, "ahead ");
-        var behindCount = ParseCount(body, "behind ");
+        string body = header[3..];
+        string branchSegment = body.Split(' ', 2)[0];
+        string branch = branchSegment.Split("...", 2, StringSplitOptions.None)[0];
+        int aheadCount = ParseCount(body, "ahead ");
+        int behindCount = ParseCount(body, "behind ");
 
         return (branch == "HEAD" ? string.Empty : branch, aheadCount, behindCount);
     }
 
     private static int ParseCount(string value, string marker)
     {
-        var markerIndex = value.IndexOf(marker, StringComparison.Ordinal);
+        int markerIndex = value.IndexOf(marker, StringComparison.Ordinal);
         if (markerIndex < 0)
         {
             return 0;
         }
 
-        var start = markerIndex + marker.Length;
-        var end = start;
+        int start = markerIndex + marker.Length;
+        int end = start;
         while (end < value.Length && char.IsDigit(value[end]))
         {
             end++;
         }
 
-        return int.TryParse(value[start..end], out var count) ? count : 0;
+        return int.TryParse(value[start..end], out int count) ? count : 0;
     }
 
     private static void AddByStatus(
@@ -309,7 +309,7 @@ public sealed class GitService(IProcessRunner processRunner) : IGitService
         CommitChangeType changeType,
         ISet<string> preExistingPaths)
     {
-        foreach (var path in paths.Select(NormalizeGitPath))
+        foreach (string path in paths.Select(NormalizeGitPath))
         {
             if (items.ContainsKey(path))
             {
@@ -336,7 +336,7 @@ public sealed class GitService(IProcessRunner processRunner) : IGitService
             return paths;
         }
 
-        foreach (var path in dirtyState.StagedPaths
+        foreach (string path in dirtyState.StagedPaths
             .Concat(dirtyState.ModifiedPaths)
             .Concat(dirtyState.AddedPaths)
             .Concat(dirtyState.DeletedPaths)
@@ -351,13 +351,13 @@ public sealed class GitService(IProcessRunner processRunner) : IGitService
 
     private static string BuildProposedCommitMessage(string milestonePath, int changedFileCount)
     {
-        var milestoneName = Path.GetFileNameWithoutExtension(milestonePath);
+        string milestoneName = Path.GetFileNameWithoutExtension(milestonePath);
         if (string.IsNullOrWhiteSpace(milestoneName))
         {
             milestoneName = "Execute selected milestone";
         }
 
-        var fileLabel = changedFileCount == 1 ? "file" : "files";
+        string fileLabel = changedFileCount == 1 ? "file" : "files";
         return $"{milestoneName}\n\n- {changedFileCount} {fileLabel} changed";
     }
 
@@ -374,7 +374,7 @@ public sealed class GitService(IProcessRunner processRunner) : IGitService
         AppendPaths(builder, "renamed", status.DirtyState.RenamedPaths);
         AppendPaths(builder, "untracked", status.DirtyState.UntrackedPaths);
 
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(builder.ToString()));
+        byte[] bytes = SHA256.HashData(Encoding.UTF8.GetBytes(builder.ToString()));
         return Convert.ToHexString(bytes).ToLowerInvariant();
     }
 
@@ -393,7 +393,7 @@ public sealed class GitService(IProcessRunner processRunner) : IGitService
 
     private static void AppendPaths(StringBuilder builder, string label, IEnumerable<string> paths)
     {
-        foreach (var path in paths.Select(NormalizeGitPath).OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+        foreach (string path in paths.Select(NormalizeGitPath).OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
         {
             builder.Append(label);
             builder.Append(':');

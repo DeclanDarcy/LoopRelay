@@ -17,9 +17,9 @@ public sealed class UnderstandingDiffService : IUnderstandingDiffService
         CompareSection(changes, "Active Risks", current.ActiveRisks, proposed.ActiveRisks);
         CompareSection(changes, "Recent Understanding Changes", current.RecentUnderstandingChanges, proposed.RecentUnderstandingChanges);
 
-        var currentAdditional = current.AdditionalSections.Select(section => section.Heading).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var proposedAdditional = proposed.AdditionalSections.Select(section => section.Heading).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var heading in proposedAdditional.Except(currentAdditional, StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase))
+        HashSet<string> currentAdditional = current.AdditionalSections.Select(section => section.Heading).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> proposedAdditional = proposed.AdditionalSections.Select(section => section.Heading).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (string heading in proposedAdditional.Except(currentAdditional, StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase))
         {
             changes.Add(new OperationalContextSemanticChange
             {
@@ -29,7 +29,7 @@ public sealed class UnderstandingDiffService : IUnderstandingDiffService
             });
         }
 
-        foreach (var heading in currentAdditional.Except(proposedAdditional, StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase))
+        foreach (string heading in currentAdditional.Except(proposedAdditional, StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase))
         {
             changes.Add(new OperationalContextSemanticChange
             {
@@ -67,10 +67,10 @@ public sealed class UnderstandingDiffService : IUnderstandingDiffService
             });
         }
 
-        var currentByText = current.ToDictionary(item => Normalize(item.Text), item => item, StringComparer.OrdinalIgnoreCase);
-        var proposedByText = proposed.ToDictionary(item => Normalize(item.Text), item => item, StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, OperationalContextItem> currentByText = current.ToDictionary(item => Normalize(item.Text), item => item, StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, OperationalContextItem> proposedByText = proposed.ToDictionary(item => Normalize(item.Text), item => item, StringComparer.OrdinalIgnoreCase);
 
-        foreach (var item in proposedByText.Values.Where(item => !currentByText.ContainsKey(Normalize(item.Text))).OrderBy(item => item.Text, StringComparer.OrdinalIgnoreCase))
+        foreach (OperationalContextItem item in proposedByText.Values.Where(item => !currentByText.ContainsKey(Normalize(item.Text))).OrderBy(item => item.Text, StringComparer.OrdinalIgnoreCase))
         {
             changes.Add(new OperationalContextSemanticChange
             {
@@ -81,7 +81,7 @@ public sealed class UnderstandingDiffService : IUnderstandingDiffService
             });
         }
 
-        foreach (var item in currentByText.Values.Where(item => !proposedByText.ContainsKey(Normalize(item.Text))).OrderBy(item => item.Text, StringComparer.OrdinalIgnoreCase))
+        foreach (OperationalContextItem item in currentByText.Values.Where(item => !proposedByText.ContainsKey(Normalize(item.Text))).OrderBy(item => item.Text, StringComparer.OrdinalIgnoreCase))
         {
             changes.Add(new OperationalContextSemanticChange
             {
@@ -103,17 +103,17 @@ public sealed class UnderstandingDiffService : IUnderstandingDiffService
         IReadOnlyList<OperationalContextItem> current,
         IReadOnlyList<OperationalContextItem> proposed)
     {
-        var proposedByDecision = proposed
+        Dictionary<string, OperationalContextItem> proposedByDecision = proposed
             .Select(item => (Item: item, DecisionKey: DecisionRationaleKey(item.Text)))
             .Where(entry => !string.IsNullOrWhiteSpace(entry.DecisionKey))
             .GroupBy(entry => entry.DecisionKey!, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.First().Item, StringComparer.OrdinalIgnoreCase);
 
-        foreach (var item in current.OrderBy(item => item.Text, StringComparer.OrdinalIgnoreCase))
+        foreach (OperationalContextItem item in current.OrderBy(item => item.Text, StringComparer.OrdinalIgnoreCase))
         {
-            var decisionKey = DecisionRationaleKey(item.Text);
+            string? decisionKey = DecisionRationaleKey(item.Text);
             if (string.IsNullOrWhiteSpace(decisionKey) ||
-                !proposedByDecision.TryGetValue(decisionKey, out var proposedItem) ||
+                !proposedByDecision.TryGetValue(decisionKey, out OperationalContextItem? proposedItem) ||
                 string.Equals(Normalize(item.Text), Normalize(proposedItem.Text), StringComparison.OrdinalIgnoreCase))
             {
                 continue;
@@ -185,7 +185,7 @@ public sealed class UnderstandingDiffService : IUnderstandingDiffService
             return null;
         }
 
-        var end = text.IndexOf("`:", prefix.Length, StringComparison.Ordinal);
+        int end = text.IndexOf("`:", prefix.Length, StringComparison.Ordinal);
         return end <= prefix.Length ? null : text[prefix.Length..end].Trim();
     }
 

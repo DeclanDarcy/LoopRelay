@@ -8,18 +8,18 @@ public sealed class CodexExecutableResolver : ICodexExecutableResolver
 
     public CodexExecutable Resolve()
     {
-        var configuredPath = Environment.GetEnvironmentVariable(ConfiguredCodexPathVariable);
+        string? configuredPath = Environment.GetEnvironmentVariable(ConfiguredCodexPathVariable);
         if (!string.IsNullOrWhiteSpace(configuredPath))
         {
             return ResolveConfiguredPath(configuredPath);
         }
 
-        var pathValue = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
-        foreach (var directory in pathValue.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        string pathValue = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+        foreach (string directory in pathValue.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
         {
-            foreach (var candidateName in CandidateExecutableNames())
+            foreach (string candidateName in CandidateExecutableNames())
             {
-                var candidate = Path.Combine(directory, candidateName);
+                string candidate = Path.Combine(directory, candidateName);
                 if (File.Exists(candidate) && IsExecutable(candidate))
                 {
                     return new CodexExecutable { Path = candidate };
@@ -34,7 +34,7 @@ public sealed class CodexExecutableResolver : ICodexExecutableResolver
 
     private static CodexExecutable ResolveConfiguredPath(string configuredPath)
     {
-        var fullPath = Path.GetFullPath(configuredPath);
+        string fullPath = Path.GetFullPath(configuredPath);
         if (!File.Exists(fullPath))
         {
             throw new ExecutionProviderException(
@@ -60,9 +60,9 @@ public sealed class CodexExecutableResolver : ICodexExecutableResolver
             yield break;
         }
 
-        var pathExtensions = (Environment.GetEnvironmentVariable("PATHEXT") ?? ".COM;.EXE;.BAT;.CMD")
+        string[] pathExtensions = (Environment.GetEnvironmentVariable("PATHEXT") ?? ".COM;.EXE;.BAT;.CMD")
             .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        foreach (var extension in pathExtensions)
+        foreach (string extension in pathExtensions)
         {
             yield return "codex" + extension.ToLowerInvariant();
         }
@@ -74,14 +74,14 @@ public sealed class CodexExecutableResolver : ICodexExecutableResolver
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            var extension = Path.GetExtension(path);
+            string extension = Path.GetExtension(path);
             return extension.Equals(".exe", StringComparison.OrdinalIgnoreCase) ||
                 extension.Equals(".cmd", StringComparison.OrdinalIgnoreCase) ||
                 extension.Equals(".bat", StringComparison.OrdinalIgnoreCase) ||
                 extension.Equals(".com", StringComparison.OrdinalIgnoreCase);
         }
 
-        var mode = File.GetUnixFileMode(path);
+        UnixFileMode mode = File.GetUnixFileMode(path);
         return mode.HasFlag(UnixFileMode.UserExecute) ||
             mode.HasFlag(UnixFileMode.GroupExecute) ||
             mode.HasFlag(UnixFileMode.OtherExecute);

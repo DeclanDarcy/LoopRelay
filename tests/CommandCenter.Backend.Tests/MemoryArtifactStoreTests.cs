@@ -8,7 +8,7 @@ public sealed class MemoryArtifactStoreTests
     public async Task WriteReadExistsAndDelete()
     {
         var store = new MemoryArtifactStore();
-        var path = Path.Combine("repo", ".agents", "plan.md");
+        string path = Path.Combine("repo", ".agents", "plan.md");
 
         await store.WriteAsync(path, "plan");
 

@@ -24,14 +24,14 @@ public sealed class ExecutionSessionService(
         await gate.WaitAsync();
         try
         {
-            var sessions = (await sessionStore.LoadAsync()).ToList();
-            var recoveredAt = DateTimeOffset.UtcNow;
-            var changed = false;
+            List<ExecutionSession> sessions = (await sessionStore.LoadAsync()).ToList();
+            DateTimeOffset recoveredAt = DateTimeOffset.UtcNow;
+            bool changed = false;
             var reattachedSessionIds = new List<Guid>();
 
-            for (var index = 0; index < sessions.Count; index++)
+            for (int index = 0; index < sessions.Count; index++)
             {
-                var session = sessions[index];
+                ExecutionSession session = sessions[index];
                 if (session.RepositoryState != RepositoryExecutionState.Executing ||
                     session.State != ExecutionSessionState.Executing)
                 {
@@ -64,12 +64,12 @@ public sealed class ExecutionSessionService(
             if (changed)
             {
                 await sessionStore.SaveAsync(sessions);
-                foreach (var sessionId in reattachedSessionIds)
+                foreach (Guid sessionId in reattachedSessionIds)
                 {
                     await monitoringService.RecordRecoveryAsync(sessionId, ReattachedProviderRecoveryMessage);
                 }
 
-                foreach (var session in sessions.Where(session => session.FailureReason == OrphanedProviderFailureReason))
+                foreach (ExecutionSession session in sessions.Where(session => session.FailureReason == OrphanedProviderFailureReason))
                 {
                     await monitoringService.RecordRecoveryAsync(session.Id, OrphanedProviderFailureReason);
                 }
@@ -83,7 +83,7 @@ public sealed class ExecutionSessionService(
 
     public async Task<RepositoryExecutionState> GetRepositoryStateAsync(Guid repositoryId)
     {
-        var session = (await sessionStore.LoadAsync())
+        ExecutionSession? session = (await sessionStore.LoadAsync())
             .Where(session => session.RepositoryId == repositoryId)
             .OrderByDescending(session => session.StartedAt)
             .FirstOrDefault();
@@ -93,7 +93,7 @@ public sealed class ExecutionSessionService(
 
     public async Task<ExecutionSessionSummary?> GetActiveSessionAsync(Guid repositoryId)
     {
-        var session = (await sessionStore.LoadAsync())
+        ExecutionSession? session = (await sessionStore.LoadAsync())
             .Where(session => session.RepositoryId == repositoryId && IsActiveRepositoryState(session.RepositoryState))
             .OrderByDescending(session => session.StartedAt)
             .FirstOrDefault();
@@ -103,7 +103,7 @@ public sealed class ExecutionSessionService(
 
     public async Task<ExecutionSessionSummary?> GetRepositorySessionSummaryAsync(Guid repositoryId)
     {
-        var session = (await sessionStore.LoadAsync())
+        ExecutionSession? session = (await sessionStore.LoadAsync())
             .Where(session => session.RepositoryId == repositoryId)
             .OrderByDescending(session => session.StartedAt)
             .FirstOrDefault();
@@ -139,16 +139,16 @@ public sealed class ExecutionSessionService(
         await gate.WaitAsync();
         try
         {
-            var sessions = (await sessionStore.LoadAsync()).ToList();
+            List<ExecutionSession> sessions = (await sessionStore.LoadAsync()).ToList();
             if (sessions.Any(session => session.RepositoryId == repositoryId && IsActiveRepositoryState(session.RepositoryState)))
             {
                 throw new InvalidOperationException("Repository already has an active execution session.");
             }
 
-            var context = await executionContextService.BuildContextAsync(repositoryId, request.MilestonePath);
+            ExecutionContext context = await executionContextService.BuildContextAsync(repositoryId, request.MilestonePath);
             if (context.Diagnostics.LaunchBlocked)
             {
-                var reasons = context.Diagnostics.ValidationErrors.ToList();
+                List<string> reasons = context.Diagnostics.ValidationErrors.ToList();
                 if (context.Diagnostics.HardLimitExceeded)
                 {
                     reasons.Add("Execution context size hard limit was exceeded.");
@@ -158,7 +158,7 @@ public sealed class ExecutionSessionService(
                     $"Execution launch is blocked: {string.Join(" ", reasons)}");
             }
 
-            var startedAt = DateTimeOffset.UtcNow;
+            DateTimeOffset startedAt = DateTimeOffset.UtcNow;
             var session = new ExecutionSession
             {
                 Id = Guid.NewGuid(),
@@ -182,7 +182,7 @@ public sealed class ExecutionSessionService(
             sessions.Add(session);
             await sessionStore.SaveAsync(sessions);
 
-            var prompt = promptBuilder.Build(context);
+            ExecutionPrompt prompt = promptBuilder.Build(context);
 
             ExecutionProviderStartResult startResult;
             try
@@ -194,7 +194,7 @@ public sealed class ExecutionSessionService(
             }
             catch (Exception exception) when (exception is InvalidOperationException or IOException)
             {
-                var failedSession = session.WithState(
+                ExecutionSession failedSession = session.WithState(
                     ExecutionSessionState.Failed,
                     RepositoryExecutionState.Ready,
                     completedAt: DateTimeOffset.UtcNow,
@@ -204,9 +204,9 @@ public sealed class ExecutionSessionService(
                 return failedSession.ToSummary();
             }
 
-            var latestSession = (await sessionStore.LoadAsync()).FirstOrDefault(storedSession => storedSession.Id == session.Id) ?? session;
-            var providerStartedAt = startResult.StartedAt == default ? DateTimeOffset.UtcNow : startResult.StartedAt;
-            var executingSession = latestSession.WithState(
+            ExecutionSession latestSession = (await sessionStore.LoadAsync()).FirstOrDefault(storedSession => storedSession.Id == session.Id) ?? session;
+            DateTimeOffset providerStartedAt = startResult.StartedAt == default ? DateTimeOffset.UtcNow : startResult.StartedAt;
+            ExecutionSession executingSession = latestSession.WithState(
                 ExecutionSessionState.Executing,
                 RepositoryExecutionState.Executing,
                 lastActivityAt: DateTimeOffset.UtcNow,
@@ -234,26 +234,26 @@ public sealed class ExecutionSessionService(
         await gate.WaitAsync();
         try
         {
-            var sessions = (await sessionStore.LoadAsync()).ToList();
-            var session = sessions.FirstOrDefault(session => session.Id == sessionId)
-                ?? throw new KeyNotFoundException($"Execution session was not found: {sessionId}");
+            List<ExecutionSession> sessions = (await sessionStore.LoadAsync()).ToList();
+            ExecutionSession session = sessions.FirstOrDefault(session => session.Id == sessionId)
+                                       ?? throw new KeyNotFoundException($"Execution session was not found: {sessionId}");
             if (session.RepositoryState != RepositoryExecutionState.AwaitingAcceptance)
             {
                 throw new InvalidOperationException("Execution can only be accepted while awaiting acceptance.");
             }
 
-            var acceptedAt = DateTimeOffset.UtcNow;
+            DateTimeOffset acceptedAt = DateTimeOffset.UtcNow;
             var repository = new Repository
             {
                 Id = session.RepositoryId,
                 Name = Path.GetFileName(session.RepositoryPath),
                 Path = session.RepositoryPath
             };
-            var snapshot = await gitService.GetSnapshotAsync(repository);
-            var repositoryState = snapshot.DirtyState.IsClean
+            ExecutionRepositorySnapshot snapshot = await gitService.GetSnapshotAsync(repository);
+            RepositoryExecutionState repositoryState = snapshot.DirtyState.IsClean
                 ? RepositoryExecutionState.Ready
                 : RepositoryExecutionState.AwaitingCommit;
-            var acceptedSession = session.WithDecision(
+            ExecutionSession acceptedSession = session.WithDecision(
                 repositoryState,
                 acceptedAt: acceptedAt,
                 lastActivityAt: acceptedAt,
@@ -274,16 +274,16 @@ public sealed class ExecutionSessionService(
         await gate.WaitAsync();
         try
         {
-            var sessions = (await sessionStore.LoadAsync()).ToList();
-            var session = sessions.FirstOrDefault(session => session.Id == sessionId)
-                ?? throw new KeyNotFoundException($"Execution session was not found: {sessionId}");
+            List<ExecutionSession> sessions = (await sessionStore.LoadAsync()).ToList();
+            ExecutionSession session = sessions.FirstOrDefault(session => session.Id == sessionId)
+                                       ?? throw new KeyNotFoundException($"Execution session was not found: {sessionId}");
             if (session.RepositoryState != RepositoryExecutionState.AwaitingAcceptance)
             {
                 throw new InvalidOperationException("Execution can only be rejected while awaiting acceptance.");
             }
 
-            var rejectedAt = DateTimeOffset.UtcNow;
-            var rejectedSession = session.WithDecision(
+            DateTimeOffset rejectedAt = DateTimeOffset.UtcNow;
+            ExecutionSession rejectedSession = session.WithDecision(
                 RepositoryExecutionState.Ready,
                 rejectedAt: rejectedAt,
                 lastActivityAt: rejectedAt,
@@ -303,9 +303,9 @@ public sealed class ExecutionSessionService(
         await gate.WaitAsync();
         try
         {
-            var sessions = (await sessionStore.LoadAsync()).ToList();
-            var session = sessions.FirstOrDefault(session => session.Id == sessionId)
-                ?? throw new KeyNotFoundException($"Execution session was not found: {sessionId}");
+            List<ExecutionSession> sessions = (await sessionStore.LoadAsync()).ToList();
+            ExecutionSession session = sessions.FirstOrDefault(session => session.Id == sessionId)
+                                       ?? throw new KeyNotFoundException($"Execution session was not found: {sessionId}");
             if (session.RepositoryState != RepositoryExecutionState.AwaitingCommit)
             {
                 throw new InvalidOperationException("Commit can only be prepared while awaiting commit.");
@@ -317,8 +317,8 @@ public sealed class ExecutionSessionService(
                 Name = Path.GetFileName(session.RepositoryPath),
                 Path = session.RepositoryPath
             };
-            var preparation = await gitService.PrepareCommitAsync(repository, session);
-            var preparedSession = session.WithCommitPreparation(preparation, DateTimeOffset.UtcNow);
+            CommitPreparation preparation = await gitService.PrepareCommitAsync(repository, session);
+            ExecutionSession preparedSession = session.WithCommitPreparation(preparation, DateTimeOffset.UtcNow);
             await ReplaceSessionAsync(sessions, preparedSession);
             return preparation;
         }
@@ -333,16 +333,16 @@ public sealed class ExecutionSessionService(
         await gate.WaitAsync();
         try
         {
-            var sessions = (await sessionStore.LoadAsync()).ToList();
-            var session = sessions.FirstOrDefault(session => session.Id == sessionId)
-                ?? throw new KeyNotFoundException($"Execution session was not found: {sessionId}");
+            List<ExecutionSession> sessions = (await sessionStore.LoadAsync()).ToList();
+            ExecutionSession session = sessions.FirstOrDefault(session => session.Id == sessionId)
+                                       ?? throw new KeyNotFoundException($"Execution session was not found: {sessionId}");
             if (session.RepositoryState != RepositoryExecutionState.AwaitingCommit)
             {
                 throw new InvalidOperationException("Commit can only run while awaiting commit.");
             }
 
-            var preparation = session.CommitPreparation
-                ?? throw new InvalidOperationException("Commit preparation is required before commit.");
+            CommitPreparation preparation = session.CommitPreparation
+                                            ?? throw new InvalidOperationException("Commit preparation is required before commit.");
             if (!string.Equals(
                     request.StatusSnapshotId,
                     preparation.StatusSnapshot.Id,
@@ -356,16 +356,16 @@ public sealed class ExecutionSessionService(
                 throw new InvalidOperationException("Commit message is required.");
             }
 
-            var selectedPaths = NormalizeSelectedPaths(request.SelectedPaths, session.RepositoryPath);
+            IReadOnlyList<string> selectedPaths = NormalizeSelectedPaths(request.SelectedPaths, session.RepositoryPath);
             if (selectedPaths.Count == 0)
             {
                 throw new InvalidOperationException("At least one path must be selected for commit.");
             }
 
-            var preparedPaths = preparation.ScopeItems
+            HashSet<string> preparedPaths = preparation.ScopeItems
                 .Select(item => item.Path)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var unknownPath = selectedPaths.FirstOrDefault(path => !preparedPaths.Contains(path));
+            string? unknownPath = selectedPaths.FirstOrDefault(path => !preparedPaths.Contains(path));
             if (unknownPath is not null)
             {
                 throw new InvalidOperationException($"Selected path was not in the prepared commit scope: {unknownPath}");
@@ -377,7 +377,7 @@ public sealed class ExecutionSessionService(
                 Name = Path.GetFileName(session.RepositoryPath),
                 Path = session.RepositoryPath
             };
-            var currentSnapshot = await gitService.GetCommitStatusSnapshotAsync(repository);
+            CommitStatusSnapshot currentSnapshot = await gitService.GetCommitStatusSnapshotAsync(repository);
             if (!string.Equals(currentSnapshot.Id, preparation.StatusSnapshot.Id, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException("Repository status changed after commit preparation. Refresh commit review before committing.");
@@ -397,7 +397,7 @@ public sealed class ExecutionSessionService(
                 throw;
             }
 
-            var committedSession = session.WithCommitResult(result, DateTimeOffset.UtcNow);
+            ExecutionSession committedSession = session.WithCommitResult(result, DateTimeOffset.UtcNow);
             await ReplaceSessionAsync(sessions, committedSession);
             return committedSession.ToSummary();
         }
@@ -412,9 +412,9 @@ public sealed class ExecutionSessionService(
         await gate.WaitAsync();
         try
         {
-            var sessions = (await sessionStore.LoadAsync()).ToList();
-            var session = sessions.FirstOrDefault(session => session.Id == sessionId)
-                ?? throw new KeyNotFoundException($"Execution session was not found: {sessionId}");
+            List<ExecutionSession> sessions = (await sessionStore.LoadAsync()).ToList();
+            ExecutionSession session = sessions.FirstOrDefault(session => session.Id == sessionId)
+                                       ?? throw new KeyNotFoundException($"Execution session was not found: {sessionId}");
             if (session.RepositoryState != RepositoryExecutionState.AwaitingPush)
             {
                 throw new InvalidOperationException("Push can only run while awaiting push.");
@@ -434,14 +434,14 @@ public sealed class ExecutionSessionService(
             }
             catch (InvalidOperationException exception)
             {
-                var failedAttemptAt = DateTimeOffset.UtcNow;
-                var retryableSession = session.WithPushFailure(failedAttemptAt, exception.Message);
+                DateTimeOffset failedAttemptAt = DateTimeOffset.UtcNow;
+                ExecutionSession retryableSession = session.WithPushFailure(failedAttemptAt, exception.Message);
                 await ReplaceSessionAsync(sessions, retryableSession);
                 throw;
             }
 
-            var snapshot = await gitService.GetSnapshotAsync(repository);
-            var pushedSession = session.WithPushResult(result, DateTimeOffset.UtcNow, snapshot);
+            ExecutionRepositorySnapshot snapshot = await gitService.GetSnapshotAsync(repository);
+            ExecutionSession pushedSession = session.WithPushResult(result, DateTimeOffset.UtcNow, snapshot);
             await ReplaceSessionAsync(sessions, pushedSession);
             return pushedSession.ToSummary();
         }
@@ -458,7 +458,7 @@ public sealed class ExecutionSessionService(
 
     private async Task ReplaceSessionAsync(List<ExecutionSession> sessions, ExecutionSession replacement)
     {
-        var index = sessions.FindIndex(session => session.Id == replacement.Id);
+        int index = sessions.FindIndex(session => session.Id == replacement.Id);
         if (index < 0)
         {
             sessions.Add(replacement);
@@ -481,25 +481,25 @@ public sealed class ExecutionSessionService(
         string repositoryPath)
     {
         var normalizedPaths = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
-        var repositoryRoot = Path.GetFullPath(repositoryPath)
-            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
-            Path.DirectorySeparatorChar;
+        string repositoryRoot = Path.GetFullPath(repositoryPath)
+                                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
+                                Path.DirectorySeparatorChar;
 
-        foreach (var selectedPath in selectedPaths ?? Array.Empty<string>())
+        foreach (string selectedPath in selectedPaths ?? Array.Empty<string>())
         {
             if (string.IsNullOrWhiteSpace(selectedPath))
             {
                 throw new InvalidOperationException("Selected paths must be repository-relative paths.");
             }
 
-            var normalizedPath = selectedPath.Replace('\\', '/').Trim();
+            string normalizedPath = selectedPath.Replace('\\', '/').Trim();
             if (Path.IsPathRooted(normalizedPath) ||
                 normalizedPath.Split('/').Any(segment => segment is ".." or "."))
             {
                 throw new InvalidOperationException($"Selected path is not a safe repository-relative path: {selectedPath}");
             }
 
-            var fullPath = Path.GetFullPath(Path.Combine(repositoryPath, normalizedPath));
+            string fullPath = Path.GetFullPath(Path.Combine(repositoryPath, normalizedPath));
             if (!fullPath.StartsWith(repositoryRoot, StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException($"Selected path escapes the repository: {selectedPath}");

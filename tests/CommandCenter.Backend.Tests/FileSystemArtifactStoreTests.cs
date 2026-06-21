@@ -7,8 +7,8 @@ public sealed class FileSystemArtifactStoreTests
     [Fact]
     public async Task WriteReadExistsAndDelete()
     {
-        var directory = CreateTemporaryDirectory();
-        var path = Path.Combine(directory, ".agents", "handoffs", "handoff.md");
+        string directory = CreateTemporaryDirectory();
+        string path = Path.Combine(directory, ".agents", "handoffs", "handoff.md");
         var store = new FileSystemArtifactStore();
 
         await store.WriteAsync(path, "handoff");
@@ -24,8 +24,8 @@ public sealed class FileSystemArtifactStoreTests
     [Fact]
     public async Task WrittenContentPersistsAcrossStoreInstances()
     {
-        var directory = CreateTemporaryDirectory();
-        var path = Path.Combine(directory, ".agents", "decisions", "decisions.md");
+        string directory = CreateTemporaryDirectory();
+        string path = Path.Combine(directory, ".agents", "decisions", "decisions.md");
 
         await new FileSystemArtifactStore().WriteAsync(path, "decisions");
 
@@ -34,7 +34,7 @@ public sealed class FileSystemArtifactStoreTests
 
     private static string CreateTemporaryDirectory()
     {
-        var directory = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"));
+        string directory = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         return directory;
     }

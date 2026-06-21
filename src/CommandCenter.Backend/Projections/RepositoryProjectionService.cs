@@ -20,13 +20,13 @@ public sealed class RepositoryProjectionService(
 
     public async Task<IReadOnlyList<RepositoryDashboardProjection>> GetDashboardAsync()
     {
-        var repositories = await repositoryService.GetAllAsync();
+        IReadOnlyList<Repository> repositories = await repositoryService.GetAllAsync();
         var projections = new List<RepositoryDashboardProjection>();
 
-        foreach (var repository in repositories)
+        foreach (Repository repository in repositories)
         {
-            var inventory = await GetOrBuildInventoryAsync(repository);
-            var operationalContext = await BuildOperationalContextProjectionAsync(repository, inventory);
+            ArtifactInventory inventory = await GetOrBuildInventoryAsync(repository);
+            OperationalContextProjection operationalContext = await BuildOperationalContextProjectionAsync(repository, inventory);
             projections.Add(new RepositoryDashboardProjection
             {
                 Repository = repository,
@@ -56,21 +56,21 @@ public sealed class RepositoryProjectionService(
 
     public async Task<RepositoryWorkspaceProjection> GetWorkspaceAsync(Guid repositoryId)
     {
-        var repository = await GetRepositoryAsync(repositoryId);
+        Repository repository = await GetRepositoryAsync(repositoryId);
         return await BuildWorkspaceProjectionAsync(repository, await GetOrBuildInventoryAsync(repository));
     }
 
     public async Task<RepositoryWorkspaceProjection> RefreshWorkspaceAsync(Guid repositoryId)
     {
-        var repository = await GetRepositoryAsync(repositoryId);
-        var inventory = await BuildInventoryAsync(repository);
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        ArtifactInventory inventory = await BuildInventoryAsync(repository);
         inventoryCache[repository.Id] = inventory;
         return await BuildWorkspaceProjectionAsync(repository, inventory);
     }
 
     private async Task<Repository> GetRepositoryAsync(Guid repositoryId)
     {
-        var repository = (await repositoryService.GetAllAsync()).FirstOrDefault(repository => repository.Id == repositoryId);
+        Repository? repository = (await repositoryService.GetAllAsync()).FirstOrDefault(repository => repository.Id == repositoryId);
         return repository ?? throw new KeyNotFoundException($"Repository was not found: {repositoryId}");
     }
 
@@ -78,7 +78,7 @@ public sealed class RepositoryProjectionService(
         Repository repository,
         ArtifactInventory inventory)
     {
-        var operationalContext = await BuildOperationalContextProjectionAsync(repository, inventory);
+        OperationalContextProjection operationalContext = await BuildOperationalContextProjectionAsync(repository, inventory);
         return new RepositoryWorkspaceProjection
         {
             Repository = repository,
@@ -102,11 +102,11 @@ public sealed class RepositoryProjectionService(
         Repository repository,
         ArtifactInventory inventory)
     {
-        var latestProposal = (await operationalContextProposalStore.ListAsync(repository)).FirstOrDefault();
-        var proposalSummary = BuildOperationalContextProposalSummary(latestProposal);
-        var current = inventory.OperationalContext;
-        var revisionCount = inventory.HistoricalOperationalContexts.Count + (current is null ? 0 : 1);
-        var currentRevisionNumber = current is null
+        OperationalContextProposal? latestProposal = (await operationalContextProposalStore.ListAsync(repository)).FirstOrDefault();
+        OperationalContextProposalSummary proposalSummary = BuildOperationalContextProposalSummary(latestProposal);
+        Artifact? current = inventory.OperationalContext;
+        int revisionCount = inventory.HistoricalOperationalContexts.Count + (current is null ? 0 : 1);
+        int currentRevisionNumber = current is null
             ? 0
             : GetHighestHistoricalRevisionNumber(inventory.HistoricalOperationalContexts) + 1;
 
@@ -124,9 +124,9 @@ public sealed class RepositoryProjectionService(
             };
         }
 
-        var currentPath = ArtifactPath.ResolveRepositoryPath(repository, current.RelativePath);
-        var content = await artifactStore.ReadAsync(currentPath) ?? string.Empty;
-        var document = operationalContextParser.Parse(content);
+        string currentPath = ArtifactPath.ResolveRepositoryPath(repository, current.RelativePath);
+        string content = await artifactStore.ReadAsync(currentPath) ?? string.Empty;
+        OperationalContextDocument document = operationalContextParser.Parse(content);
 
         return new OperationalContextProjection
         {
@@ -159,7 +159,7 @@ public sealed class RepositoryProjectionService(
             return new OperationalContextProposalSummary();
         }
 
-        var generatedFingerprint = latestProposal.InputFingerprints
+        OperationalContextInputFingerprint? generatedFingerprint = latestProposal.InputFingerprints
             .FirstOrDefault(fingerprint => fingerprint.Name == "GeneratedProposal");
         return new OperationalContextProposalSummary
         {
@@ -189,14 +189,14 @@ public sealed class RepositoryProjectionService(
             .Select(name => name.LastIndexOf('.') is var index && index >= 0
                 ? name[(index + 1)..]
                 : string.Empty)
-            .Select(text => int.TryParse(text, out var number) ? number : 0)
+            .Select(text => int.TryParse(text, out int number) ? number : 0)
             .DefaultIfEmpty(0)
             .Max();
     }
 
     private async Task<ArtifactInventory> GetOrBuildInventoryAsync(Repository repository)
     {
-        if (inventoryCache.TryGetValue(repository.Id, out var inventory))
+        if (inventoryCache.TryGetValue(repository.Id, out ArtifactInventory? inventory))
         {
             return inventory;
         }
@@ -208,7 +208,7 @@ public sealed class RepositoryProjectionService(
 
     private async Task<ArtifactInventory> BuildInventoryAsync(Repository repository)
     {
-        var artifacts = await artifactService.DiscoverAsync(repository);
+        IReadOnlyList<Artifact> artifacts = await artifactService.DiscoverAsync(repository);
 
         return new ArtifactInventory
         {
@@ -257,7 +257,7 @@ public sealed class RepositoryProjectionService(
         try
         {
             _ = Directory.EnumerateFileSystemEntries(repository.Path).FirstOrDefault();
-            var gitPath = Path.Combine(repository.Path, ".git");
+            string gitPath = Path.Combine(repository.Path, ".git");
             return Directory.Exists(gitPath) || File.Exists(gitPath)
                 ? RepositoryAvailability.Available
                 : RepositoryAvailability.Missing;

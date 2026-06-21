@@ -12,8 +12,8 @@ public sealed class PlanningService(IArtifactStore artifactStore) : IPlanningSer
 
     public async Task<IReadOnlyList<Milestone>> GetMilestonesAsync(Repository repository)
     {
-        var milestonesPath = ArtifactPath.ResolveRepositoryPath(repository, ".agents/milestones");
-        var files = await artifactStore.ListAsync(milestonesPath, "*.md");
+        string milestonesPath = ArtifactPath.ResolveRepositoryPath(repository, ".agents/milestones");
+        IReadOnlyList<string> files = await artifactStore.ListAsync(milestonesPath, "*.md");
 
         return files
             .Select(file => new Milestone

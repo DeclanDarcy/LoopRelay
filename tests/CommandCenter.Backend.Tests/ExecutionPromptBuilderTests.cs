@@ -7,7 +7,7 @@ public sealed class ExecutionPromptBuilderTests
     [Fact]
     public void PromptIncludesRequiredInputsAndInstructions()
     {
-        var prompt = new ExecutionPromptBuilder().Build(CreateContext());
+        ExecutionPrompt prompt = new ExecutionPromptBuilder().Build(CreateContext());
 
         Assert.Contains(@"C:\repos\Project", prompt.Text);
         Assert.Contains(".agents/milestones/m2.md", prompt.Text);
@@ -26,7 +26,7 @@ public sealed class ExecutionPromptBuilderTests
     [Fact]
     public void PromptIncludesOptionalArtifactsWhenPresent()
     {
-        var prompt = new ExecutionPromptBuilder().Build(CreateContext(
+        ExecutionPrompt prompt = new ExecutionPromptBuilder().Build(CreateContext(
             optionalArtifacts:
             [
                 Artifact("OperationalContext", ".agents/operational_context.md", "context content"),
@@ -48,7 +48,7 @@ public sealed class ExecutionPromptBuilderTests
     [Fact]
     public void PromptOrdersOperationalContextBetweenMilestoneAndHandoff()
     {
-        var prompt = new ExecutionPromptBuilder().Build(CreateContext(
+        ExecutionPrompt prompt = new ExecutionPromptBuilder().Build(CreateContext(
             optionalArtifacts:
             [
                 Artifact("CurrentDecisions", ".agents/decisions/decisions.md", "decisions content"),
@@ -76,7 +76,7 @@ public sealed class ExecutionPromptBuilderTests
     [Fact]
     public void PromptReportsMissingOptionalArtifactsWithoutBlockingPromptCreation()
     {
-        var prompt = new ExecutionPromptBuilder().Build(CreateContext());
+        ExecutionPrompt prompt = new ExecutionPromptBuilder().Build(CreateContext());
 
         Assert.Contains("Missing optional artifacts:", prompt.Text);
         Assert.Contains(".agents/operational_context.md", prompt.Text);
@@ -87,7 +87,7 @@ public sealed class ExecutionPromptBuilderTests
     [Fact]
     public void PromptIncludesDirtyRepositoryDiagnostics()
     {
-        var prompt = new ExecutionPromptBuilder().Build(CreateContext(dirtyState: new RepositoryDirtyState
+        ExecutionPrompt prompt = new ExecutionPromptBuilder().Build(CreateContext(dirtyState: new RepositoryDirtyState
         {
             IsClean = false,
             StagedPaths = ["z-staged.cs", "a-staged.cs"],
@@ -111,12 +111,12 @@ public sealed class ExecutionPromptBuilderTests
     public void PromptOutputIsStableForEquivalentContext()
     {
         var builder = new ExecutionPromptBuilder();
-        var first = builder.Build(CreateContext(dirtyState: new RepositoryDirtyState
+        ExecutionPrompt first = builder.Build(CreateContext(dirtyState: new RepositoryDirtyState
         {
             IsClean = false,
             ModifiedPaths = ["b.cs", "a.cs"]
         }));
-        var second = builder.Build(CreateContext(dirtyState: new RepositoryDirtyState
+        ExecutionPrompt second = builder.Build(CreateContext(dirtyState: new RepositoryDirtyState
         {
             IsClean = false,
             ModifiedPaths = ["b.cs", "a.cs"]

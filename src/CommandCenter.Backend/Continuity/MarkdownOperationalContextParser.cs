@@ -21,13 +21,13 @@ public sealed class MarkdownOperationalContextParser : IOperationalContextParser
 
     public OperationalContextDocument Parse(string markdown)
     {
-        var title = "Operational Context";
+        string title = "Operational Context";
         var sections = new List<ParsedSection>();
         ParsedSection? currentSection = null;
 
-        foreach (var rawLine in SplitLines(markdown))
+        foreach (string rawLine in SplitLines(markdown))
         {
-            var line = rawLine.TrimEnd('\r');
+            string line = rawLine.TrimEnd('\r');
             if (line.StartsWith("# ", StringComparison.Ordinal))
             {
                 title = line[2..].Trim();
@@ -83,7 +83,7 @@ public sealed class MarkdownOperationalContextParser : IOperationalContextParser
         AppendSection(builder, "Active Risks", document.ActiveRisks);
         AppendSection(builder, "Recent Understanding Changes", document.RecentUnderstandingChanges);
 
-        foreach (var section in document.AdditionalSections)
+        foreach (OperationalContextSection section in document.AdditionalSections)
         {
             if (string.IsNullOrWhiteSpace(section.Heading))
             {
@@ -100,7 +100,7 @@ public sealed class MarkdownOperationalContextParser : IOperationalContextParser
             else if (section.Items.Count > 0)
             {
                 builder.AppendLine();
-                foreach (var item in section.Items)
+                foreach (OperationalContextItem item in section.Items)
                 {
                     builder.Append("- ").AppendLine(item.Text.Trim());
                 }
@@ -114,7 +114,7 @@ public sealed class MarkdownOperationalContextParser : IOperationalContextParser
         IReadOnlyList<ParsedSection> sections,
         string heading)
     {
-        if (!KnownSections.TryGetValue(heading, out var definition))
+        if (!KnownSections.TryGetValue(heading, out SectionDefinition? definition))
         {
             return [];
         }
@@ -144,7 +144,7 @@ public sealed class MarkdownOperationalContextParser : IOperationalContextParser
 
     private static string? TryExtractListItem(string line)
     {
-        var trimmed = line.Trim();
+        string trimmed = line.Trim();
         if (trimmed.Length < 3)
         {
             return null;
@@ -171,7 +171,7 @@ public sealed class MarkdownOperationalContextParser : IOperationalContextParser
         }
 
         builder.AppendLine();
-        foreach (var item in items)
+        foreach (OperationalContextItem item in items)
         {
             if (!string.IsNullOrWhiteSpace(item.Text))
             {
@@ -182,8 +182,8 @@ public sealed class MarkdownOperationalContextParser : IOperationalContextParser
 
     private static string CreateItemId(string heading, string text)
     {
-        var normalized = NormalizeForIdentity($"{heading}:{text}");
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(normalized));
+        string normalized = NormalizeForIdentity($"{heading}:{text}");
+        byte[] bytes = SHA256.HashData(Encoding.UTF8.GetBytes(normalized));
         return $"{NormalizeForIdentity(heading).Replace(' ', '-')}-{Convert.ToHexString(bytes)[..12].ToLowerInvariant()}";
     }
 
@@ -199,8 +199,8 @@ public sealed class MarkdownOperationalContextParser : IOperationalContextParser
 
     private static IReadOnlyList<string> TrimOuterBlankLines(IReadOnlyList<string> lines)
     {
-        var start = 0;
-        var end = lines.Count - 1;
+        int start = 0;
+        int end = lines.Count - 1;
         while (start <= end && string.IsNullOrWhiteSpace(lines[start]))
         {
             start++;

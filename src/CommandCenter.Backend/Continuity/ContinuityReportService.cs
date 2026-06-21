@@ -15,10 +15,10 @@ public sealed class ContinuityReportService(
 
     public async Task<ContinuityReport> GenerateReportAsync(Guid repositoryId)
     {
-        var repository = await GetRepositoryAsync(repositoryId);
-        var diagnostics = await diagnosticsService.GetDiagnosticsAsync(repositoryId);
-        var reportId = $"continuity.{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}";
-        var relativePath = ArtifactPath.CombineRelative(ReportsRelativePath, $"{reportId}.json");
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        ContinuityDiagnostics diagnostics = await diagnosticsService.GetDiagnosticsAsync(repositoryId);
+        string reportId = $"continuity.{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}";
+        string relativePath = ArtifactPath.CombineRelative(ReportsRelativePath, $"{reportId}.json");
         var report = new ContinuityReport
         {
             ReportId = reportId,
@@ -36,12 +36,12 @@ public sealed class ContinuityReportService(
 
     public async Task<IReadOnlyList<ContinuityReport>> ListReportsAsync(Guid repositoryId)
     {
-        var repository = await GetRepositoryAsync(repositoryId);
-        var reportsPath = ArtifactPath.ResolveRepositoryPath(repository, ReportsRelativePath);
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        string reportsPath = ArtifactPath.ResolveRepositoryPath(repository, ReportsRelativePath);
         var reports = new List<ContinuityReport>();
-        foreach (var file in await artifactStore.ListAsync(reportsPath, "continuity.*.json"))
+        foreach (string file in await artifactStore.ListAsync(reportsPath, "continuity.*.json"))
         {
-            var content = await artifactStore.ReadAsync(file);
+            string? content = await artifactStore.ReadAsync(file);
             if (content is null)
             {
                 continue;
@@ -71,7 +71,7 @@ public sealed class ContinuityReportService(
 
     private async Task<Repository> GetRepositoryAsync(Guid repositoryId)
     {
-        var repository = (await repositoryService.GetAllAsync()).FirstOrDefault(repository => repository.Id == repositoryId);
+        Repository? repository = (await repositoryService.GetAllAsync()).FirstOrDefault(repository => repository.Id == repositoryId);
         return repository ?? throw new KeyNotFoundException($"Repository was not found: {repositoryId}");
     }
 

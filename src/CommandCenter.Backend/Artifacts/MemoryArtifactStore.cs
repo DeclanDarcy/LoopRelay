@@ -13,7 +13,7 @@ public sealed class MemoryArtifactStore : IArtifactStore
 
     public Task<string?> ReadAsync(string path)
     {
-        files.TryGetValue(Normalize(path), out var content);
+        files.TryGetValue(Normalize(path), out string? content);
         return Task.FromResult(content);
     }
 
@@ -31,8 +31,8 @@ public sealed class MemoryArtifactStore : IArtifactStore
 
     public Task<IReadOnlyList<string>> ListAsync(string path, string searchPattern)
     {
-        var prefix = Normalize(path).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-        var matches = files.Keys
+        string prefix = Normalize(path).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        string[] matches = files.Keys
             .Where(key => key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
             .Where(key => GlobMatches(Path.GetFileName(key), searchPattern))
             .Order(StringComparer.OrdinalIgnoreCase)
@@ -43,13 +43,13 @@ public sealed class MemoryArtifactStore : IArtifactStore
 
     public Task<IReadOnlyList<string>> ListDirectoriesAsync(string path)
     {
-        var prefix = Normalize(path).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-        var directories = files.Keys
+        string prefix = Normalize(path).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        string[] directories = files.Keys
             .Where(key => key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
             .Select(key =>
             {
-                var remainder = key[prefix.Length..];
-                var separator = remainder.IndexOf(Path.DirectorySeparatorChar);
+                string remainder = key[prefix.Length..];
+                int separator = remainder.IndexOf(Path.DirectorySeparatorChar);
                 return separator < 0 ? null : prefix + remainder[..separator];
             })
             .Where(directory => directory is not null)

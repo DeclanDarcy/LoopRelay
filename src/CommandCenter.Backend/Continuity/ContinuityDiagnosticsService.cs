@@ -13,17 +13,17 @@ public sealed class ContinuityDiagnosticsService(
 {
     public async Task<ContinuityDiagnostics> GetDiagnosticsAsync(Guid repositoryId)
     {
-        var repository = await GetRepositoryAsync(repositoryId);
-        var revisions = await LoadRevisionEntriesAsync(repository);
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        IReadOnlyList<RevisionEntry> revisions = await LoadRevisionEntriesAsync(repository);
         var ledger = new UnderstandingEvolutionLedger
         {
             Revisions = revisions
                 .Select(entry => entry.Snapshot)
                 .ToArray()
         };
-        var first = ledger.Revisions.FirstOrDefault();
-        var current = ledger.CurrentRevision;
-        var proposals = await proposalStore.ListAsync(repository);
+        UnderstandingRevisionSnapshot? first = ledger.Revisions.FirstOrDefault();
+        UnderstandingRevisionSnapshot? current = ledger.CurrentRevision;
+        IReadOnlyList<OperationalContextProposal> proposals = await proposalStore.ListAsync(repository);
         var warnings = new List<string>();
         warnings.AddRange(proposals.SelectMany(proposal => proposal.CompressionSummary.Warnings));
         warnings.AddRange(proposals.SelectMany(proposal => proposal.CompressionSummary.StableUnderstandingRetentionWarnings));
@@ -65,7 +65,7 @@ public sealed class ContinuityDiagnosticsService(
 
     private async Task<Repository> GetRepositoryAsync(Guid repositoryId)
     {
-        var repository = (await repositoryService.GetAllAsync()).FirstOrDefault(repository => repository.Id == repositoryId);
+        Repository? repository = (await repositoryService.GetAllAsync()).FirstOrDefault(repository => repository.Id == repositoryId);
         return repository ?? throw new KeyNotFoundException($"Repository was not found: {repositoryId}");
     }
 
@@ -84,7 +84,7 @@ public sealed class ContinuityDiagnosticsService(
             .OrderBy(entry => entry.RevisionNumber)
             .ToArray();
 
-        var highestHistoricalRevision = artifacts
+        int highestHistoricalRevision = artifacts
             .Where(entry => entry.Artifact.VersionKind == ArtifactVersionKind.Historical)
             .Select(entry => entry.RevisionNumber)
             .DefaultIfEmpty(0)
@@ -92,12 +92,12 @@ public sealed class ContinuityDiagnosticsService(
         var entries = new List<RevisionEntry>();
         foreach (var entry in artifacts)
         {
-            var content = await artifactStore.ReadAsync(ArtifactPath.ResolveRepositoryPath(repository, entry.Artifact.RelativePath)) ?? string.Empty;
-            var bytes = Encoding.UTF8.GetByteCount(content);
-            var revisionNumber = entry.Artifact.VersionKind == ArtifactVersionKind.Current
+            string content = await artifactStore.ReadAsync(ArtifactPath.ResolveRepositoryPath(repository, entry.Artifact.RelativePath)) ?? string.Empty;
+            int bytes = Encoding.UTF8.GetByteCount(content);
+            int revisionNumber = entry.Artifact.VersionKind == ArtifactVersionKind.Current
                 ? highestHistoricalRevision + 1
                 : entry.RevisionNumber;
-            var document = parser.Parse(content);
+            OperationalContextDocument document = parser.Parse(content);
             entries.Add(new RevisionEntry(
                 document,
                 new UnderstandingRevisionSnapshot
@@ -128,8 +128,8 @@ public sealed class ContinuityDiagnosticsService(
             return new ContinuityTrend();
         }
 
-        var previous = ToNormalizedSet(getItems(revisions[^2].Document));
-        var current = ToNormalizedSet(getItems(revisions[^1].Document));
+        HashSet<string> previous = ToNormalizedSet(getItems(revisions[^2].Document));
+        HashSet<string> current = ToNormalizedSet(getItems(revisions[^1].Document));
         return new ContinuityTrend
         {
             AddedCount = current.Except(previous, StringComparer.OrdinalIgnoreCase).Count(),
@@ -164,12 +164,12 @@ public sealed class ContinuityDiagnosticsService(
             return new ContinuityTrend();
         }
 
-        var previous = ToNormalizedSet(getItems(revisions[^2].Document));
-        var current = ToNormalizedSet(getItems(revisions[^1].Document));
-        var removed = previous.Except(current, StringComparer.OrdinalIgnoreCase).ToArray();
-        var resolutionEvidence = ToNormalizedSet(revisions[^1].Document.RecentUnderstandingChanges
+        HashSet<string> previous = ToNormalizedSet(getItems(revisions[^2].Document));
+        HashSet<string> current = ToNormalizedSet(getItems(revisions[^1].Document));
+        string[] removed = previous.Except(current, StringComparer.OrdinalIgnoreCase).ToArray();
+        HashSet<string> resolutionEvidence = ToNormalizedSet(revisions[^1].Document.RecentUnderstandingChanges
             .Where(item => item.Text.StartsWith(resolutionPrefix, StringComparison.OrdinalIgnoreCase)));
-        var resolved = removed.Count(item => resolutionEvidence.Any(evidence => evidence.Contains(item, StringComparison.OrdinalIgnoreCase)));
+        int resolved = removed.Count(item => resolutionEvidence.Any(evidence => evidence.Contains(item, StringComparison.OrdinalIgnoreCase)));
         return new ContinuityTrend
         {
             AddedCount = current.Except(previous, StringComparer.OrdinalIgnoreCase).Count(),
@@ -181,7 +181,7 @@ public sealed class ContinuityDiagnosticsService(
 
     private static CompressionTrend BuildCompressionTrend(IReadOnlyList<OperationalContextProposal> proposals)
     {
-        var warnings = proposals.SelectMany(proposal => proposal.CompressionSummary.Warnings)
+        string[] warnings = proposals.SelectMany(proposal => proposal.CompressionSummary.Warnings)
             .Concat(proposals.SelectMany(proposal => proposal.CompressionSummary.StableUnderstandingRetentionWarnings))
             .Where(warning => !string.IsNullOrWhiteSpace(warning))
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -243,8 +243,8 @@ public sealed class ContinuityDiagnosticsService(
 
     private static string Normalize(string value)
     {
-        var normalized = value.Trim().ToLowerInvariant();
-        foreach (var prefix in new[] { "resolved question:", "retired risk:", "decision:", "rationale for" })
+        string normalized = value.Trim().ToLowerInvariant();
+        foreach (string prefix in new[] { "resolved question:", "retired risk:", "decision:", "rationale for" })
         {
             if (normalized.StartsWith(prefix, StringComparison.Ordinal))
             {
@@ -257,7 +257,7 @@ public sealed class ContinuityDiagnosticsService(
 
     private static TimeSpan? CalculateRevisionFrequency(IReadOnlyList<UnderstandingRevisionSnapshot> revisions)
     {
-        var timestamps = revisions
+        DateTimeOffset[] timestamps = revisions
             .Select(revision => revision.LastUpdatedAt)
             .Where(timestamp => timestamp.HasValue)
             .Select(timestamp => timestamp!.Value)
@@ -286,7 +286,7 @@ public sealed class ContinuityDiagnosticsService(
             return 0;
         }
 
-        return int.TryParse(fileName[prefix.Length..^suffix.Length], out var revision) ? revision : 0;
+        return int.TryParse(fileName[prefix.Length..^suffix.Length], out int revision) ? revision : 0;
     }
 
     private sealed record RevisionEntry(

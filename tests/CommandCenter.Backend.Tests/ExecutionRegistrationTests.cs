@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
+using Microsoft.AspNetCore.Builder;
 
 namespace CommandCenter.Backend.Tests;
 
@@ -13,7 +14,7 @@ public sealed class ExecutionRegistrationTests
     [Fact]
     public async Task ProgramRegistersExecutionBoundaryServices()
     {
-        await using var app = Program.CreateApp([]);
+        await using WebApplication app = Program.CreateApp([]);
 
         Assert.IsAssignableFrom<IExecutionContextService>(
             app.Services.GetRequiredService<IExecutionContextService>());
@@ -46,10 +47,10 @@ public sealed class ExecutionRegistrationTests
     [Fact]
     public async Task ExecutionStateEnumsSerializeAsHttpJsonStrings()
     {
-        await using var app = Program.CreateApp([]);
-        var jsonOptions = app.Services.GetRequiredService<IOptions<JsonOptions>>().Value;
+        await using WebApplication app = Program.CreateApp([]);
+        JsonOptions jsonOptions = app.Services.GetRequiredService<IOptions<JsonOptions>>().Value;
 
-        var json = JsonSerializer.Serialize(
+        string json = JsonSerializer.Serialize(
             new { executionState = RepositoryExecutionState.Ready },
             jsonOptions.SerializerOptions);
 

@@ -32,20 +32,20 @@ public sealed class ApplicationConfigurationStore : IApplicationConfigurationSto
             return new ApplicationConfiguration();
         }
 
-        await using var stream = File.OpenRead(configurationPath);
+        await using FileStream stream = File.OpenRead(configurationPath);
         return await JsonSerializer.DeserializeAsync<ApplicationConfiguration>(stream, SerializerOptions)
             ?? new ApplicationConfiguration();
     }
 
     public async Task SaveAsync(ApplicationConfiguration configuration)
     {
-        var directory = Path.GetDirectoryName(configurationPath);
+        string? directory = Path.GetDirectoryName(configurationPath);
         if (!string.IsNullOrWhiteSpace(directory))
         {
             Directory.CreateDirectory(directory);
         }
 
-        await using var stream = File.Create(configurationPath);
+        await using FileStream stream = File.Create(configurationPath);
         await JsonSerializer.SerializeAsync(stream, configuration, SerializerOptions);
     }
 }
