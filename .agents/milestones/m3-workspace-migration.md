@@ -9,7 +9,7 @@
 - [x] Workstream 3.4: Live Activity Panel
 - [x] Workstream 3.5: Milestones Panel
 - [x] Workstream 3.6: Inspector Rail
-- [ ] Workstream 3.7: Workspace Cross-Links
+- [x] Workstream 3.7: Workspace Cross-Links
 - [ ] Certification complete
 
 Goal: make Workspace the primary operational surface with simultaneous visibility.
@@ -167,22 +167,24 @@ Rules:
 
 ## Workstream 3.7: Workspace Cross-Links
 
+Status: complete. Workspace now provides navigation-only cross-links for operational context sections, continuity warning snippets when projected, live activity, execution history, and milestone-to-context navigation. Historic execution history rows navigate to the Execution workspace without loading alternate sessions, preserving the no-extra-backend-load rule for cross-links.
+
 Add the cross-workspace links introduced by the Workspace tab:
 
-- [ ] Operational-context summary navigates to the Operational Context tab and proposal/current-understanding section.
-- [ ] Continuity warning snippets, if shown in the inspector, navigate to the Continuity tab and warning section.
-- [ ] Execution activity and execution history rows navigate to the Execution tab for the selected session.
-- [ ] Milestone rows update selected milestone navigation state and can navigate to the execution context panel.
-- [ ] Pending handoff, commit, and push summary states navigate to the corresponding Workspace inspector section only.
+- [x] Operational-context summary navigates to the Operational Context tab and proposal/current-understanding section.
+- [x] Continuity warning snippets, if shown in the inspector, navigate to the Continuity tab and warning section.
+- [x] Execution activity and execution history rows navigate to the Execution tab for the selected session.
+- [x] Milestone rows update selected milestone navigation state and can navigate to the execution context panel.
+- [x] Pending handoff, commit, and push summary states navigate to the corresponding Workspace inspector section only.
 
 Rules:
 
-- [ ] Links update navigation state and optional section anchors only.
-- [ ] Links do not refresh projections, start execution, accept handoffs, commit, push, generate proposals, or promote proposals.
+- [x] Links update navigation state and optional section anchors only.
+- [x] Links do not refresh projections, start execution, accept handoffs, commit, push, generate proposals, or promote proposals.
 
 ### Certification
 
-- [ ] Execution context, activity, milestones, commit/push, operational context, and history are co-visible on desktop.
-- [ ] Existing artifact editing, execution start, handoff review, commit, push, operational-context review, and continuity actions remain reachable.
-- [ ] Workspace links navigate without backend mutation.
-- [ ] The Workspace tab can answer what is planned, what is happening, what changed, what understanding exists, and what comes next without requiring tab hopping.
+- [x] Execution context, activity, milestones, commit/push, operational context, and history are co-visible on desktop.
+- [x] Existing artifact editing, execution start, handoff review, commit, push, operational-context review, and continuity actions remain reachable.
+- [x] Workspace links navigate without backend mutation.
+- [x] The Workspace tab can answer what is planned, what is happening, what changed, what understanding exists, and what comes next without requiring tab hopping.

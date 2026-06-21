@@ -24,7 +24,9 @@ type WorkspaceInspectorRailProps = {
   operationalContext: OperationalContextProjection | null
   proposalSummary: OperationalContextProposalSummary | null
   executionHistory: ExecutionSessionSummary[]
-  onOpenOperationalContext: () => void
+  onOpenOperationalContext: (sectionId: 'operational-current' | 'proposal-review') => void
+  onOpenContinuityWarnings?: () => void
+  onOpenExecutionSession?: (session: ExecutionSessionSummary) => void
 }
 
 export function WorkspaceInspectorRail({
@@ -41,6 +43,8 @@ export function WorkspaceInspectorRail({
   proposalSummary,
   executionHistory,
   onOpenOperationalContext,
+  onOpenContinuityWarnings,
+  onOpenExecutionSession,
 }: WorkspaceInspectorRailProps) {
   return (
     <>
@@ -74,9 +78,9 @@ export function WorkspaceInspectorRail({
               type="button"
               variant="secondary"
               className="secondary-action"
-              onClick={onOpenOperationalContext}
+              onClick={() => onOpenOperationalContext('operational-current')}
             >
-              Open
+              Current
             </Button>
           }
         />
@@ -84,9 +88,37 @@ export function WorkspaceInspectorRail({
           operationalContext={operationalContext}
           proposalSummary={proposalSummary}
         />
+        {operationalContext?.continuityWarnings.length ? (
+          <div className="workspace-cross-link-list" aria-label="Continuity warnings">
+            {operationalContext.continuityWarnings.slice(0, 3).map((warning) => (
+              <button
+                type="button"
+                className="workspace-cross-link warning-link"
+                key={warning}
+                onClick={onOpenContinuityWarnings}
+                disabled={!onOpenContinuityWarnings}
+              >
+                {warning}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        <div className="workspace-inspector-actions">
+          <Button
+            type="button"
+            variant="secondary"
+            className="secondary-action"
+            onClick={() => onOpenOperationalContext('proposal-review')}
+          >
+            Proposal
+          </Button>
+        </div>
       </Panel>
 
-      <ExecutionHistoryPanel sessions={executionHistory} />
+      <ExecutionHistoryPanel
+        sessions={executionHistory}
+        onOpenSession={onOpenExecutionSession}
+      />
     </>
   )
 }

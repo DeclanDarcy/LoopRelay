@@ -5,12 +5,14 @@ type WorkspaceMilestonesPanelProps = {
   milestones: Artifact[]
   selectedMilestonePath: string | null
   onSelectMilestone: (milestonePath: string | null) => void
+  onOpenExecutionContext?: (milestonePath: string) => void
 }
 
 export function WorkspaceMilestonesPanel({
   milestones,
   selectedMilestonePath,
   onSelectMilestone,
+  onOpenExecutionContext,
 }: WorkspaceMilestonesPanelProps) {
   const selectedMilestone = milestones.find(
     (milestone) => milestone.relativePath === selectedMilestonePath,
@@ -38,7 +40,10 @@ export function WorkspaceMilestonesPanel({
                 key={milestone.relativePath}
                 className={`workspace-milestone-item${isSelected ? ' selected' : ''}`}
                 aria-current={isSelected ? 'true' : undefined}
-                onClick={() => onSelectMilestone(milestone.relativePath)}
+                onClick={() => {
+                  onSelectMilestone(milestone.relativePath)
+                  onOpenExecutionContext?.(milestone.relativePath)
+                }}
               >
                 <span>{milestone.name}</span>
                 <small>{milestone.relativePath}</small>

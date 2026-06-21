@@ -1,5 +1,5 @@
-import { cleanup, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ExecutionHistoryPanel } from '../../features/execution/ExecutionHistoryPanel'
 import type { ExecutionSessionSummary } from '../../types'
 
@@ -88,5 +88,17 @@ describe('execution history panel rendering characterization', () => {
     expect(within(rows[1] as HTMLElement).getByText('Duration Not recorded')).toBeInTheDocument()
     expect(within(rows[1] as HTMLElement).getByText('Commit Not recorded')).toBeInTheDocument()
     expect(within(rows[1] as HTMLElement).getByText('Push Not recorded')).toBeInTheDocument()
+  })
+
+  it('can render rows as navigation-only controls when a session callback is supplied', () => {
+    const session = sessionSummary({ sessionId: 'session-link' })
+    const onOpenSession = vi.fn()
+
+    render(<ExecutionHistoryPanel sessions={[session]} onOpenSession={onOpenSession} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /m0\.md/ }))
+
+    expect(onOpenSession).toHaveBeenCalledTimes(1)
+    expect(onOpenSession).toHaveBeenCalledWith(session)
   })
 })

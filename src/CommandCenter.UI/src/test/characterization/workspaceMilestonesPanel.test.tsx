@@ -64,6 +64,25 @@ describe('workspace milestones panel characterization', () => {
     expect(onSelectMilestone).toHaveBeenCalledWith('.agents/milestones/m4-execution-workspace.md')
   })
 
+  it('can additionally request navigation to the execution context panel after selection', () => {
+    const onSelectMilestone = vi.fn()
+    const onOpenExecutionContext = vi.fn()
+
+    render(
+      <WorkspaceMilestonesPanel
+        milestones={milestones}
+        selectedMilestonePath=".agents/milestones/m3-workspace-migration.md"
+        onSelectMilestone={onSelectMilestone}
+        onOpenExecutionContext={onOpenExecutionContext}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /m4-execution-workspace\.md/ }))
+
+    expect(onSelectMilestone).toHaveBeenCalledWith('.agents/milestones/m4-execution-workspace.md')
+    expect(onOpenExecutionContext).toHaveBeenCalledWith('.agents/milestones/m4-execution-workspace.md')
+  })
+
   it('renders the empty inventory state without a synthetic selected milestone', () => {
     render(
       <WorkspaceMilestonesPanel

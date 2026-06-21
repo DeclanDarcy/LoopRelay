@@ -2,30 +2,35 @@
 
 ## Slice Summary
 
-Continued Milestone 3 by completing Workstream 3.6: Inspector Rail.
+Completed Milestone 3 Workstream 3.7: Workspace Cross-Links.
 
 ## New State
 
-- Added `features/workspace/WorkspaceInspectorRail.tsx`.
-- Workspace inspector now summarizes existing git status, commit-preparation evidence, push evidence, operational-context counts, pending proposal status, and execution history.
-- `App.tsx` wires the inspector from existing `gitStatus`, `commitPreparation`, selected commit scope count, `executionDisplay`, workspace operational-context projection, proposal summary, and execution history.
-- The inspector's Operational Context `Open` button only updates navigation state to the Operational Context tab and `proposal-review` section target.
-- Commit and push mutation controls remain in the Execution workspace; the Workspace inspector exposes no commit or push action buttons.
-- Added `workspaceInspectorRail.test.tsx` to characterize read-only summary rendering and navigation-only operational-context behavior.
-- Updated `.agents/milestones/m3-workspace-migration.md` to mark Workstream 3.6 complete.
-- Rotated the prior handoff to `.agents/handoffs/handoff.0060.md`.
+- Added navigation-only Workspace cross-links:
+  - Operational Context inspector buttons navigate to current understanding or proposal review sections.
+  - Continuity warning snippets, when projected in the inspector, navigate to Continuity diagnostics.
+  - Workspace live activity exposes an `Open in Execution` navigation control.
+  - Workspace execution history rows can navigate to the Execution workspace.
+  - Workspace milestone rows update selected milestone state and scroll to the Workspace execution context panel.
+- `ExecutionHistoryPanel` now accepts an optional `onOpenSession` callback; without it, existing static history rendering remains unchanged.
+- `ExecutionContextPanel` now accepts an optional `id` for section-anchor navigation.
+- `App.tsx` wires cross-links through `activePrimaryTab`, `sectionTarget`, and existing selected milestone navigation state only.
+- Historic execution history row clicks do not load alternate execution sessions; this is intentional to preserve the authorized no-extra-backend-load rule for cross-links.
+- Added characterization coverage for cross-link callbacks and App-level proof that Workspace cross-link navigation does not call backend projection or workflow commands.
+- Updated `.agents/milestones/m3-workspace-migration.md` to mark Workstream 3.7 complete.
+- Rotated the prior handoff to `.agents/handoffs/handoff.0061.md`.
 
 ## Verification
 
-- Passed focused `npm run test -- workspaceInspectorRail`.
-- Passed `npm run test` with 35 test files and 119 tests.
+- Passed focused `npm run test -- workspaceLiveActivityPanel workspaceMilestonesPanel executionHistoryPanel workspaceInspectorRail app.smoke`.
+- Passed `npm run test` with 35 test files and 124 tests.
+- Passed `npm run lint`.
 - Passed `npm run build`.
 - Passed `npm run test:e2e` with 6 Playwright tests.
 - Passed `dotnet test CommandCenter.slnx` with 192 backend tests.
-- Initial parallel `npm run lint` failed because ESLint scanned `test-results` while Playwright had not created it yet; rerunning `npm run lint` after e2e passed.
 
 ## Remaining Work
 
-- Continue M3 with Workstream 3.7: Workspace Cross-Links.
-- Workstream 3.2 remains open until all Workspace layout placements and final density integration are complete.
-- Final M3 certification remains open.
+- Continue Milestone 3 with a final Workspace layout/density/certification pass.
+- Workstream 3.2 remains open until final Workspace layout integration is explicitly accepted.
+- Top-level M3 certification remains open.

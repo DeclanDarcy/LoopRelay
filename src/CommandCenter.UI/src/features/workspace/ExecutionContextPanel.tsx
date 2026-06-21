@@ -11,6 +11,7 @@ import { ExecutionRepositorySnapshotPanel } from '../execution/ExecutionReposito
 import type { ExecutionContextPreview, PlanningMilestone } from '../../types'
 
 type ExecutionContextPanelProps = {
+  id?: string
   executionContext: ExecutionContextPreview | null
   milestoneOptions: PlanningMilestone[]
   selectedMilestonePath: string | null
@@ -26,6 +27,7 @@ type ExecutionContextPanelProps = {
 }
 
 export function ExecutionContextPanel({
+  id,
   executionContext,
   milestoneOptions,
   selectedMilestonePath,
@@ -40,7 +42,7 @@ export function ExecutionContextPanel({
   onStartExecution,
 }: ExecutionContextPanelProps) {
   return (
-    <Panel className="execution-context-panel" aria-label="Execution context preview">
+    <Panel id={id} className="execution-context-panel" aria-label="Execution context preview">
       <SectionHeader
         className="context-toolbar"
         eyebrow="Execution Context"

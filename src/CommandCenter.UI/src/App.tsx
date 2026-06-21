@@ -1267,24 +1267,52 @@ function App() {
     setSectionTarget(null)
   }, [sectionTarget, setSectionTarget])
 
-  const executionContextPanel = selectedRepository ? (
-    <ExecutionContextPanel
-      executionContext={executionContext}
-      milestoneOptions={milestoneOptions}
-      selectedMilestonePath={selectedMilestonePath}
-      isContextLoading={isContextLoading}
-      canStartExecution={canStartExecution}
-      isStartingExecution={isStartingExecution}
-      startExecutionBlockedReason={startExecutionBlockedReason}
-      operationalContextExecutionStatus={operationalContextExecutionStatus}
-      executionContextSizeStatus={executionContextSizeStatus}
-      onSelectMilestone={(milestonePath) =>
-        selectMilestone(selectedRepository.repository.id, milestonePath)
-      }
-      onBuildExecutionContext={() => void buildExecutionContext()}
-      onStartExecution={() => void startExecution()}
-    />
-  ) : null
+  const renderExecutionContextPanel = (panelId?: string) =>
+    selectedRepository ? (
+      <ExecutionContextPanel
+        id={panelId}
+        executionContext={executionContext}
+        milestoneOptions={milestoneOptions}
+        selectedMilestonePath={selectedMilestonePath}
+        isContextLoading={isContextLoading}
+        canStartExecution={canStartExecution}
+        isStartingExecution={isStartingExecution}
+        startExecutionBlockedReason={startExecutionBlockedReason}
+        operationalContextExecutionStatus={operationalContextExecutionStatus}
+        executionContextSizeStatus={executionContextSizeStatus}
+        onSelectMilestone={(milestonePath) =>
+          selectMilestone(selectedRepository.repository.id, milestonePath)
+        }
+        onBuildExecutionContext={() => void buildExecutionContext()}
+        onStartExecution={() => void startExecution()}
+      />
+    ) : null
+
+  const openExecutionSection = (sectionId = 'execution-context') => {
+    setActivePrimaryTab('execution')
+    setSectionTarget(sectionId)
+  }
+
+  const openOperationalContextSection = (
+    sectionId: 'operational-current' | 'proposal-review',
+  ) => {
+    setActivePrimaryTab('operational-context')
+    setSectionTarget(sectionId)
+  }
+
+  const openContinuityWarnings = () => {
+    setActivePrimaryTab('continuity')
+    setSectionTarget('continuity-diagnostics')
+  }
+
+  const openWorkspaceExecutionContext = (milestonePath: string) => {
+    if (selectedRepository) {
+      selectMilestone(selectedRepository.repository.id, milestonePath)
+    }
+
+    setActivePrimaryTab('workspace')
+    setSectionTarget('workspace-execution-context')
+  }
 
   return (
     <AppShell
@@ -1382,10 +1410,13 @@ function App() {
                     currentExecutionState={currentExecutionState}
                   />
                 }
-                executionContext={executionContextPanel}
+                executionContext={renderExecutionContextPanel('workspace-execution-context')}
                 liveActivity={
                   executionDisplay ? (
-                    <WorkspaceLiveActivityPanel events={selectedExecutionEvents} />
+                    <WorkspaceLiveActivityPanel
+                      events={selectedExecutionEvents}
+                      onOpenExecutionActivity={() => openExecutionSection('execution-events')}
+                    />
                   ) : null
                 }
                 milestones={
@@ -1396,6 +1427,7 @@ function App() {
                       onSelectMilestone={(milestonePath) =>
                         selectMilestone(selectedRepository.repository.id, milestonePath)
                       }
+                      onOpenExecutionContext={openWorkspaceExecutionContext}
                     />
                   ) : null
                 }
@@ -1516,15 +1548,15 @@ function App() {
                     operationalContext={workspace?.operationalContext ?? null}
                     proposalSummary={workspace?.operationalContextProposalSummary ?? null}
                     executionHistory={selectedExecutionHistory}
-                    onOpenOperationalContext={() => {
-                      setActivePrimaryTab('operational-context')
-                      setSectionTarget('proposal-review')
-                    }}
+                    onOpenOperationalContext={openOperationalContextSection}
+                    onOpenContinuityWarnings={openContinuityWarnings}
+                    onOpenExecutionSession={() => openExecutionSection('execution-context')}
                   />
                 }
               />
 
               <Panel
+                id="operational-current"
                 className="execution-context-panel tab-panel tab-operational-context"
                 aria-label="Current understanding"
               >
@@ -1783,7 +1815,7 @@ function App() {
 
                 <ExecutionWorkflowRail steps={executionWorkflowSteps} />
 
-                {activePrimaryTab === 'execution' ? executionContextPanel : null}
+                {activePrimaryTab === 'execution' ? renderExecutionContextPanel() : null}
 
               {shouldShowGitWorkflow ? (
                 <Panel className="git-status-panel" aria-label="Git status">
@@ -1959,7 +1991,11 @@ function App() {
                 </Panel>
               ) : null}
 
-              {executionDisplay ? <ExecutionEventFeed events={selectedExecutionEvents} /> : null}
+              {executionDisplay ? (
+                <div id="execution-events">
+                  <ExecutionEventFeed events={selectedExecutionEvents} />
+                </div>
+              ) : null}
               </section>
 
               <div className="details-actions">

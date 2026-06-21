@@ -155,6 +155,8 @@ function renderRail(
   overrides: Partial<Parameters<typeof WorkspaceInspectorRail>[0]> = {},
 ) {
   const onOpenOperationalContext = vi.fn()
+  const onOpenContinuityWarnings = vi.fn()
+  const onOpenExecutionSession = vi.fn()
 
   render(
     <WorkspaceInspectorRail
@@ -171,11 +173,13 @@ function renderRail(
       proposalSummary={proposalSummary}
       executionHistory={[executionSummary]}
       onOpenOperationalContext={onOpenOperationalContext}
+      onOpenContinuityWarnings={onOpenContinuityWarnings}
+      onOpenExecutionSession={onOpenExecutionSession}
       {...overrides}
     />,
   )
 
-  return { onOpenOperationalContext }
+  return { onOpenOperationalContext, onOpenContinuityWarnings, onOpenExecutionSession }
 }
 
 describe('WorkspaceInspectorRail', () => {
@@ -207,7 +211,7 @@ describe('WorkspaceInspectorRail', () => {
     expect(screen.getByText('Snapshot summary: snapshot-1')).toBeInTheDocument()
     expect(screen.getByText('Changed paths: 2')).toBeInTheDocument()
     expect(screen.getByText('Selected scope: 1')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /commit/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /commit selected/i })).not.toBeInTheDocument()
   })
 
   it('renders push evidence without exposing push actions', () => {
@@ -220,14 +224,32 @@ describe('WorkspaceInspectorRail', () => {
     expect(screen.getByText('Snapshot: snapshot-1')).toBeInTheDocument()
     expect(screen.getByText('Branch: feature/workspace')).toBeInTheDocument()
     expect(screen.getByText('Ahead: Not loaded')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /push/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /push commit/i })).not.toBeInTheDocument()
   })
 
-  it('uses the supplied navigation callback for operational context', () => {
+  it('uses the supplied navigation callbacks for operational context sections', () => {
     const { onOpenOperationalContext } = renderRail()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Current' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Proposal' }))
 
-    expect(onOpenOperationalContext).toHaveBeenCalledTimes(1)
+    expect(onOpenOperationalContext).toHaveBeenCalledTimes(2)
+    expect(onOpenOperationalContext).toHaveBeenNthCalledWith(1, 'operational-current')
+    expect(onOpenOperationalContext).toHaveBeenNthCalledWith(2, 'proposal-review')
+  })
+
+  it('uses navigation callbacks for continuity warning snippets and execution history', () => {
+    const { onOpenContinuityWarnings, onOpenExecutionSession } = renderRail({
+      operationalContext: {
+        ...operationalContext,
+        continuityWarnings: ['Decision continuity warning'],
+      },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Decision continuity warning' }))
+    fireEvent.click(screen.getByRole('button', { name: /m3\.md/ }))
+
+    expect(onOpenContinuityWarnings).toHaveBeenCalledTimes(1)
+    expect(onOpenExecutionSession).toHaveBeenCalledWith(executionSummary)
   })
 })

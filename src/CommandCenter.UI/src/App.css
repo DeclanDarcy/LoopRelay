@@ -636,6 +636,35 @@ button:focus-visible {
   gap: 8px;
 }
 
+.workspace-inspector-actions,
+.workspace-cross-link-list,
+.workspace-cross-link-panel {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.workspace-inspector-actions {
+  justify-items: start;
+}
+
+.workspace-cross-link {
+  min-width: 0;
+  width: 100%;
+  text-align: left;
+}
+
+.warning-link {
+  min-height: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--status-warning-muted);
+  border-radius: var(--radius-6);
+  color: var(--status-warning-fg);
+  background: var(--status-warning-subtle);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
 .workspace-inspector-summary span {
   min-width: 0;
   padding: 9px 10px;
@@ -1104,6 +1133,17 @@ button:focus-visible {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-6);
   background: var(--bg-inset);
+}
+
+.execution-history-row-button {
+  width: 100%;
+  color: inherit;
+  text-align: left;
+}
+
+.execution-history-row-button:hover {
+  border-color: var(--accent-muted);
+  background: var(--accent-subtle);
 }
 
 .execution-history-row span,

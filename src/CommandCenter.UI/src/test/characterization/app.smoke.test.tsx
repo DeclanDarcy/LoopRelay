@@ -885,6 +885,65 @@ describe('workspace certification mock', () => {
     await waitFor(() => expect(screen.getByText('Proposal: mock-proposal-1')).toBeInTheDocument())
   })
 
+  it('keeps Workspace cross-links navigation-only without backend calls', async () => {
+    installWorkspaceCertificationMock()
+
+    const invoke = window.__TAURI_INTERNALS__?.invoke
+    expect(invoke).toBeDefined()
+    if (!invoke) {
+      return
+    }
+
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+    const invokeSpy = vi.fn(invoke)
+    window.__TAURI_INTERNALS__!.invoke = invokeSpy
+
+    render(<App />)
+
+    await screen.findAllByRole('heading', { name: 'AlphaRepo' })
+    const editor = await screen.findByRole('textbox')
+    await waitFor(() => expect(editor).toHaveValue('# Plan\n\nInitial plan content.'))
+    await screen.findByRole('button', { name: 'Proposal' })
+    await new Promise((resolve) => window.setTimeout(resolve, 0))
+
+    const commandCounts = () =>
+      new Map(
+        invokeSpy.mock.calls.map(([command]) => [
+          command,
+          invokeSpy.mock.calls.filter(([calledCommand]) => calledCommand === command).length,
+        ]),
+      )
+    const beforeNavigation = commandCounts()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Proposal' }))
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Load Latest' })).toBeInTheDocument())
+    await new Promise((resolve) => window.setTimeout(resolve, 0))
+    expect(commandCounts()).toEqual(beforeNavigation)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Workspace' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Current' })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Current' }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Current Understanding' })).toBeInTheDocument(),
+    )
+    await new Promise((resolve) => window.setTimeout(resolve, 0))
+    expect(commandCounts()).toEqual(beforeNavigation)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Workspace' }))
+    const milestonesPanel = await screen.findByRole('region', { name: 'Workspace milestones' })
+    await waitFor(() =>
+      expect(within(milestonesPanel).getByRole('button', { name: /m5\.md/ })).toBeInTheDocument(),
+    )
+    fireEvent.click(within(milestonesPanel).getByRole('button', { name: /m5\.md/ }))
+
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled())
+    await new Promise((resolve) => window.setTimeout(resolve, 0))
+    expect(commandCounts()).toEqual(beforeNavigation)
+  })
+
   it('keeps continuity diagnostics read-only and report generation behind the explicit action', async () => {
     installWorkspaceCertificationMock()
 

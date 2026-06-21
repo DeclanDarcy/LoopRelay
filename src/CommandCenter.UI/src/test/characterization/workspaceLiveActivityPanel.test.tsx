@@ -1,5 +1,5 @@
-import { cleanup, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ExecutionEventFeed } from '../../features/execution/ExecutionEventFeed'
 import { WorkspaceLiveActivityPanel } from '../../features/workspace/WorkspaceLiveActivityPanel'
 import type { ExecutionEvent } from '../../types'
@@ -47,5 +47,28 @@ describe('workspace live activity rendering characterization', () => {
     expect(within(workspaceActivity).getByRole('heading', { level: 4, name: '2 events' })).toBeInTheDocument()
     expect(within(executionOutput).getByRole('heading', { level: 4, name: '2 events' })).toBeInTheDocument()
     expect(eventIdentities(workspaceActivity)).toEqual(eventIdentities(executionOutput))
+  })
+
+  it('uses the supplied execution navigation callback without changing event rendering', () => {
+    const onOpenExecutionActivity = vi.fn()
+
+    render(
+      <WorkspaceLiveActivityPanel
+        events={[
+          {
+            sequence: 5,
+            timestamp: '2026-06-21T16:20:00.000Z',
+            type: 'stdout',
+            message: 'Navigation event',
+          },
+        ]}
+        onOpenExecutionActivity={onOpenExecutionActivity}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open in Execution' }))
+
+    expect(onOpenExecutionActivity).toHaveBeenCalledTimes(1)
+    expect(screen.getByText('Navigation event')).toBeInTheDocument()
   })
 })
