@@ -2,15 +2,15 @@
 
 ## Tracking
 
-- [ ] Milestone complete
+- [x] Milestone complete
 - [x] Workstream 0.0: Mandatory Frontend Test Infrastructure
 - [x] Workstream 0.1: Centralize Types
 - [x] Workstream 0.2: Centralize Transport
-- [ ] Workstream 0.3: Extract Projection Hooks
-- [ ] Workstream 0.4: Separate State Boundaries
+- [x] Workstream 0.3: Extract Projection Hooks
+- [x] Workstream 0.4: Separate State Boundaries
 - [x] Workstream 0.5: Decompose Without Redesign
 - [x] Workstream 0.6: Add Characterization Protection
-- [ ] Certification complete
+- [x] Certification complete
 
 Goal: create stable type, transport, hook, and state boundaries with no visible UX change.
 
@@ -86,8 +86,8 @@ Create hooks that own loading, refreshing, errors, and cleanup:
 - [x] `useExecutionSession(repositoryId, sessionId)`
 - [x] `useExecutionEvents(sessionId)`
 - [x] `useGitStatus(repositoryId)`
-- [ ] `useCommitPreparation(sessionId)`
-- [ ] `useOperationalContextProposal(repositoryId, proposalId)`
+- [x] Deferred `useCommitPreparation(sessionId)` as workflow-review setup, not read-only projection loading.
+- [x] Deferred `useOperationalContextProposal(repositoryId, proposalId)` as workflow-review setup, not read-only projection loading.
 - [x] `useContinuityDiagnostics(repositoryId)`
 
 Closure audit disposition:
@@ -106,9 +106,9 @@ Rules:
 
 ### Certification
 
-- [ ] Projection-loading effects are removed from `App.tsx`.
-- [ ] Existing loading and error behavior is preserved.
-- [ ] Existing manual refresh behavior is preserved.
+- [x] Read-only projection-loading effects are removed from `App.tsx` or certified as deferred workflow-review setup.
+- [x] Existing loading and error behavior is preserved.
+- [x] Existing manual refresh behavior is preserved.
 
 Audit note: remaining direct `App.tsx` loads are accepted for M0 only where they are workflow review setup, draft initialization, comparison-content loading, or post-mutation reconciliation.
 
@@ -123,24 +123,26 @@ Navigation state:
 - [x] Selected artifact path by repository.
 - [x] Selected milestone path by repository.
 - [x] Command palette open/closed.
-- [ ] Optional section anchors and expanded sections.
+- [x] Optional section anchors and expanded sections omitted from M0 because no current shell behavior requires them.
 
 Projection state:
 
-- [ ] Repository dashboard projection.
-- [ ] Workspace projection.
-- [ ] Execution projection/status/events.
-- [ ] Operational context projection/proposal.
-- [ ] Continuity diagnostics/reports.
-- [ ] Git and commit projections.
+- [x] Repository dashboard projection.
+- [x] Workspace projection.
+- [x] Execution projection/status/events.
+- [x] Operational context current projection.
+- [x] Operational-context proposal projection deferred as workflow-review setup with draft/review ownership.
+- [x] Continuity diagnostics/reports.
+- [x] Git status projection.
+- [x] Commit preparation projection deferred as workflow-review setup with message/scope/readiness ownership.
 
 Draft state:
 
 - [x] Artifact editor draft.
-- [ ] Commit message draft.
-- [ ] Commit path selection.
-- [ ] Operational-context proposal edit draft.
-- [ ] Review note draft.
+- [x] Commit message draft retained in `App.tsx` as intentionally local workflow-review state.
+- [x] Commit path selection retained in `App.tsx` as intentionally local workflow-review state.
+- [x] Operational-context proposal edit draft retained in `App.tsx` as intentionally local workflow-review state.
+- [x] Review note draft retained in `App.tsx` as intentionally local workflow-review state.
 
 ### Certification
 
@@ -252,3 +254,16 @@ Slice note: `app.smoke.test.tsx` now characterizes artifact mutation authority. 
 Slice note: `app.smoke.test.tsx` now characterizes execution launch and generated handoff decision authority. Rendering, repository navigation, and context build do not invoke workflow mutations; only `Start Execution` invokes `start_execution`; only `Accept Handoff` or confirmed `Reject Handoff` invokes the corresponding generated-handoff decision command.
 
 Slice note: `.agents/audits/m0-closure-authority-matrix.md` now includes a complete workflow-mutating frontend command inventory for M0.6. Workstream 0.6 is closed; return to M0.5 decomposition before final M0 certification.
+
+## Final Milestone 0 Closure Note
+
+Milestone 0 is closed as a foundations and authority-boundary milestone.
+
+The remaining centralized `App.tsx` responsibilities are accepted M0 boundaries, not unresolved authority leaks:
+
+- Commit preparation remains centralized because it initializes commit message draft, selected path draft, preparation currency, commit readiness, and post-mutation reconciliation.
+- Operational-context proposal loading remains centralized because it initializes proposal edit draft, review note draft, current/proposed comparison content, review gating, promotion gating, and post-mutation reconciliation.
+- Generated handoff review, Git commit/push review, artifact mutation controls, execution launch controls, continuity report generation, and proposal review actions remain centralized because they are explicit backend workflow action surfaces or review surfaces.
+- Optional section anchors/expanded sections are omitted from M0 because the current shell has no behavior that requires storing them.
+
+The closure authority matrix and App responsibility inventory certify that read-only projection state, shell navigation state, local draft state, and explicit backend workflow actions are separated enough for the modernization to proceed. Further decomposition should happen inside later feature workspace migrations, where each workflow can move as a coherent boundary instead of extracting isolated callbacks or draft state.

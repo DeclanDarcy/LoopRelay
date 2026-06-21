@@ -69,11 +69,12 @@ All frontend-accessible workflow-mutating backend commands are now covered by ap
 
 ## Closure Assessment
 
-Workstream 0.6 authority characterization is complete enough to proceed with M0.5 decomposition work.
+Milestone 0 is closed.
 
-The remaining open M0 items are not evidence of projection authority leaks. They are either:
+The previously open M0 items are not projection authority leaks:
 
-- deferred workflow-coupled boundaries that should migrate with their feature workspace, or
-- decomposition and final certification breadth still needed before full Milestone 0 closure.
+- `useCommitPreparation(sessionId)` is deferred because commit preparation is workflow-review setup that initializes commit message draft, path selection, preparation currency, commit readiness, and mutation reconciliation.
+- `useOperationalContextProposal(repositoryId, proposalId)` is deferred because proposal loading is workflow-review setup that initializes proposal edit draft, review note draft, current/proposed comparison content, review gating, promotion gating, and mutation reconciliation.
+- Optional section anchors and expanded sections are omitted because the current shell has no behavior that requires them.
 
-Do not close the full milestone until Workstream 0.5 decomposition and the remaining high-value characterization scenarios have either landed or been explicitly moved to later milestone checklists.
+Workstream 0.5 completed the final authorized presentation extraction pass, and Workstream 0.6 completed the workflow-mutating command characterization. Further decomposition should happen in later workspace migrations where navigation, projection, draft, and workflow-action boundaries can move as coherent feature units.

@@ -2,26 +2,21 @@
 
 ## Slice Summary
 
-Closed Milestone 0 Workstream 0.5 after the final deliberate `App.tsx` responsibility scan.
+Closed Milestone 0 after reconciling the remaining M0.3/M0.4 checklist items against the existing closure authority matrix and final M0.5 scan.
 
 ## New State
 
-- Extracted the execution lifecycle rail into `src/CommandCenter.UI/src/features/execution/ExecutionWorkflowRail.tsx`.
-- Added characterization coverage in `executionWorkflowRail.test.tsx` for caller-provided step ordering, state classes, and detail text.
-- Replaced the inline execution workflow rail JSX in `App.tsx` with `ExecutionWorkflowRail`.
-- Updated `.agents/milestones/m0-frontend-foundations.md` to mark Workstream 0.5 and its certification checks complete.
-- Updated `.agents/audits/m0-app-responsibility-inventory.md` with the final M0.5 scan result and the execution rail extraction boundary.
-- Rotated the previous handoff to `.agents/handoffs/handoff.0046.md`.
+- Marked Milestone 0, Workstream 0.3, Workstream 0.4, and final certification complete in `.agents/milestones/m0-frontend-foundations.md`.
+- Converted the remaining `useCommitPreparation(sessionId)` and `useOperationalContextProposal(repositoryId, proposalId)` checklist gaps into explicit deferred workflow-review boundaries.
+- Recorded that optional section anchors/expanded sections are omitted from M0 because no current shell behavior requires them.
+- Added the final Milestone 0 closure note documenting accepted centralized boundaries for commit preparation, operational-context proposal review, generated handoff review, Git workflow review, artifact mutation controls, execution launch controls, continuity report generation, and proposal review actions.
+- Updated `.agents/audits/m0-closure-authority-matrix.md` to state that Milestone 0 is closed and that further decomposition should move with later feature workspace migrations.
+- Rotated the previous handoff to `.agents/handoffs/handoff.0047.md`.
 
 ## Verification
 
-- `npm run test -- executionWorkflowRail`
-- `npm run lint`
-- `npm run test`
-- `npm run build`
-- `npm run test:e2e`
-- `dotnet test CommandCenter.slnx`
+- Not run. This slice changed only `.agents` planning/audit/handoff documentation.
 
 ## Next Slice
 
-Stay in Milestone 0 for final certification/cleanup. Reconcile the remaining open M0.3/M0.4 checklist items against the existing closure authority matrix, then either mark accepted/deferred M0 boundaries explicitly or add a small closure note explaining why the full Milestone 0 remains open before moving to Milestone 1.
+Start Milestone 1: Design System Foundation. Begin by reading `.agents/milestones/m1-design-system-foundation.md`, then introduce tokenized dark operational styling and reusable design primitives without redesigning workflow behavior or moving backend authority into React.
