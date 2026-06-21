@@ -1,4 +1,5 @@
-using CommandCenter.Core.Continuity;
+using CommandCenter.Continuity;
+using CommandCenter.Continuity.Abstractions;
 
 namespace CommandCenter.Backend.Endpoints;
 

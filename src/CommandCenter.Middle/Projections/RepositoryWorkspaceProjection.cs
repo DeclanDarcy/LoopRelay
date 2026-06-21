@@ -1,4 +1,5 @@
-using CommandCenter.Core.Continuity;
+using CommandCenter.Continuity;
+using CommandCenter.Continuity.Models;
 using CommandCenter.Core.Planning;
 using CommandCenter.Core.Projections;
 using CommandCenter.Core.Repositories;

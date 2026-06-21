@@ -1,7 +1,7 @@
 using CommandCenter.Backend.Endpoints;
 using CommandCenter.Core.Artifacts;
 using CommandCenter.Core.Configuration;
-using CommandCenter.Core.Continuity;
+using CommandCenter.Continuity;
 using CommandCenter.Core.Planning;
 using CommandCenter.Core.Projections;
 using CommandCenter.Core.Repositories;
@@ -10,7 +10,9 @@ using CommandCenter.Middle.Continuity;
 using CommandCenter.Middle.Projections;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using CommandCenter.Continuity.Abstractions;
 using CommandCenter.Execution.Extensions;
+using CommandCenter.Continuity.Extensions;
 
 namespace CommandCenter.Backend;
 
@@ -27,16 +29,10 @@ public static class Program
         builder.Services.AddSingleton<IRepositoryService, RepositoryService>();
         builder.Services.AddSingleton<IArtifactService, ArtifactService>();
         builder.Services.AddSingleton<IArtifactRotationService, ArtifactRotationService>();
-        builder.Services.AddSingleton<IOperationalContextParser, MarkdownOperationalContextParser>();
-        builder.Services.AddSingleton<IUnderstandingDiffService, UnderstandingDiffService>();
-        builder.Services.AddSingleton<IUnderstandingCompressionService, UnderstandingCompressionService>();
-        builder.Services.AddSingleton<IDecisionAnalysisService, DecisionAnalysisService>();
-        builder.Services.AddSingleton<IOperationalContextProposalStore, FileSystemOperationalContextProposalStore>();
+        builder.Services.AddContinuity();
+        // Generation lives in Middle (it depends on Execution), so it is wired here
+        // rather than inside AddContinuity().
         builder.Services.AddSingleton<IOperationalContextGenerationService, OperationalContextGenerationService>();
-        builder.Services.AddSingleton<IOperationalContextReviewService, OperationalContextReviewService>();
-        builder.Services.AddSingleton<IOperationalContextLifecycleService, OperationalContextLifecycleService>();
-        builder.Services.AddSingleton<IContinuityDiagnosticsService, ContinuityDiagnosticsService>();
-        builder.Services.AddSingleton<IContinuityReportService, ContinuityReportService>();
         builder.Services.AddSingleton<IPlanningService, PlanningService>();
         builder.Services.AddExecution();
         builder.Services.AddSingleton<IRepositoryProjectionService, RepositoryProjectionService>();

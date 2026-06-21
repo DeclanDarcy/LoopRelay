@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\CommandCenter.Core\CommandCenter.Core.csproj" />
+    <ProjectReference Include="..\CommandCenter.Continuity\CommandCenter.Continuity.csproj" />
     <ProjectReference Include="..\CommandCenter.Execution\CommandCenter.Execution.csproj" />
     <ProjectReference Include="..\CommandCenter.Middle\CommandCenter.Middle.csproj" />
   </ItemGroup>

@@ -1,10 +1,13 @@
 using CommandCenter.Core.Artifacts;
-using CommandCenter.Core.Continuity;
+using CommandCenter.Continuity;
 using CommandCenter.Core.Planning;
 using CommandCenter.Core.Projections;
 using CommandCenter.Core.Repositories;
 using CommandCenter.Execution;
 using System.Collections.Concurrent;
+using CommandCenter.Continuity.Abstractions;
+using CommandCenter.Continuity.Models;
+using CommandCenter.Continuity.Primitives;
 using CommandCenter.Execution.Abstractions;
 
 namespace CommandCenter.Middle.Projections;

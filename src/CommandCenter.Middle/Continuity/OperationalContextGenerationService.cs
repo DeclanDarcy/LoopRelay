@@ -1,7 +1,10 @@
 using System.Security.Cryptography;
 using System.Text;
 using CommandCenter.Core.Artifacts;
-using CommandCenter.Core.Continuity;
+using CommandCenter.Continuity;
+using CommandCenter.Continuity.Abstractions;
+using CommandCenter.Continuity.Models;
+using CommandCenter.Continuity.Primitives;
 using CommandCenter.Core.Planning;
 using CommandCenter.Core.Repositories;
 using CommandCenter.Execution;

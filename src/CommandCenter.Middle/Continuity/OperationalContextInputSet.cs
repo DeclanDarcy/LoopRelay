@@ -1,4 +1,5 @@
-using CommandCenter.Core.Continuity;
+using CommandCenter.Continuity;
+using CommandCenter.Continuity.Models;
 using CommandCenter.Core.Repositories;
 using CommandCenter.Execution;
 using CommandCenter.Execution.Models;

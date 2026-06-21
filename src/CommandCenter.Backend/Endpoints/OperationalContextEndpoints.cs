@@ -1,4 +1,6 @@
-using CommandCenter.Core.Continuity;
+using CommandCenter.Continuity;
+using CommandCenter.Continuity.Abstractions;
+using CommandCenter.Continuity.Models;
 using CommandCenter.Core.Projections;
 using CommandCenter.Core.Repositories;
 using CommandCenter.Middle.Projections;
