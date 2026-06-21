@@ -25,6 +25,7 @@ import {
 } from './api'
 import { ExecutionContextArtifactList } from './features/execution/ExecutionContextArtifactList'
 import { ExecutionContextMissingOptionalList } from './features/execution/ExecutionContextMissingOptionalList'
+import { ExecutionRepositorySnapshotPanel } from './features/execution/ExecutionRepositorySnapshotPanel'
 import { ExecutionContextSummaryRows } from './features/execution/ExecutionContextSummaryRows'
 import { ExecutionContextValidationList } from './features/execution/ExecutionContextValidationList'
 import { ExecutionEventFeed } from './features/execution/ExecutionEventFeed'
@@ -2173,48 +2174,9 @@ function App() {
                       </div>
                     </div>
 
-                    {executionContext.repositorySnapshot ? (
-                      <div className="dirty-state">
-                        <h5>Repository Snapshot</h5>
-                        <div className="context-summary">
-                          <span>Branch: {executionContext.repositorySnapshot.branch || '(detached)'}</span>
-                          <span>
-                            State:{' '}
-                            {executionContext.repositorySnapshot.dirtyState.isClean ? 'Clean' : 'Dirty'}
-                          </span>
-                          <span>
-                            Captured:{' '}
-                            {new Date(executionContext.repositorySnapshot.capturedAt).toLocaleString()}
-                          </span>
-                        </div>
-                        <div className="context-columns">
-                          <GitPathBucket
-                            label="Staged"
-                            paths={executionContext.repositorySnapshot.dirtyState.stagedPaths}
-                          />
-                          <GitPathBucket
-                            label="Modified"
-                            paths={executionContext.repositorySnapshot.dirtyState.modifiedPaths}
-                          />
-                          <GitPathBucket
-                            label="Added"
-                            paths={executionContext.repositorySnapshot.dirtyState.addedPaths}
-                          />
-                          <GitPathBucket
-                            label="Deleted"
-                            paths={executionContext.repositorySnapshot.dirtyState.deletedPaths}
-                          />
-                          <GitPathBucket
-                            label="Renamed"
-                            paths={executionContext.repositorySnapshot.dirtyState.renamedPaths}
-                          />
-                          <GitPathBucket
-                            label="Untracked"
-                            paths={executionContext.repositorySnapshot.dirtyState.untrackedPaths}
-                          />
-                        </div>
-                      </div>
-                    ) : null}
+                    <ExecutionRepositorySnapshotPanel
+                      repositorySnapshot={executionContext.repositorySnapshot}
+                    />
 
                     <div className="artifact-diagnostics">
                       <h5>Artifact Sizes</h5>

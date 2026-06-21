@@ -2,21 +2,16 @@
 
 ## Newly Authorized
 
-- Treat the completed `ExecutionContextValidationList` extraction as conforming to the M0.5 authority boundary because it preserves `string[] -> list` and empty input -> `No validation errors`.
-- Keep validation meaning in the backend and validation rendering in the frontend.
-- Continue using characterization tests that target provided ordering and empty-state fallback rather than semantic interpretation.
-- Treat repository snapshot rendering as the next likely safe M0.5 extraction only if it remains `projection -> JSX`, preserves backend-provided values exactly, uses existing labels and `GitPathBucket`, and preserves existing fallbacks.
-- Before extracting repository snapshot rendering, apply this audit gate:
-  - If the candidate does more than `projection -> JSX`, stop.
-  - If the candidate can answer `Should I care?`, stop.
-  - If the candidate can answer `Can execution proceed?`, stop.
-  - If the candidate can answer `How risky is this?`, stop.
-- Treat labels such as `Modified Files`, `Untracked Files`, `Staged Files`, and `Current Branch` as safe only when rendered directly from existing projection data.
-- Treat statements such as `Repository is clean`, `Repository is ready`, `Execution can start`, `Git state is healthy`, and `No blocking changes` as unsafe because they are interpretations.
-- For remaining M0.5 work, use the posture `retain unless clearly presentation-only`.
-- Treat artifact diagnostics as suspect and require a separate authority review before extraction.
-- After a narrow repository snapshot extraction, seriously evaluate whether M0.5 has harvested nearly all presentation-only opportunities inside the execution-context surface.
+- Treat `ExecutionRepositorySnapshotPanel` as the last execution-context extraction that is unambiguously justified by the M0.5 charter unless a later audit proves another remaining surface is pure `props -> render`.
+- Keep repository snapshot rendering projection-only: branch, staged paths, modified paths, untracked paths, related path buckets, and backend-provided state labels may render; repository health, readiness, blocked state, risk, or action guidance must not be inferred in UI code.
+- Treat the existing execution-context presentation components as meaningful structural progress while keeping workflow authority, execution authority, readiness authority, draft authority, and composition in `App.tsx`.
+- Proceed next with an Artifact Diagnostics Audit before considering extraction.
+- Raise the burden of proof for artifact diagnostics because byte thresholds and diagnostic labels are close to execution readiness, blocking, severity, and action semantics.
+- Artifact diagnostics may be extracted only if the component renders backend-provided labels, byte counts, paths, threshold labels, and ordering exactly as projected.
+- Stop artifact diagnostics extraction immediately if it introduces severity ranking, impact sorting, impact grouping, recommendation generation, readiness determination, blocking determination, action suggestions, or meaning-bearing labels such as `Attention Required`, `Large Artifact`, `Recommended Fix`, or `Execution Risk`.
+- Accept that a successful artifact diagnostics audit may conclude `Remain in App.tsx`; this is a valid M0.5 outcome when remaining code reflects deliberate authority placement rather than technical debt.
+- Treat M0.5 as transitioning from finding obvious render-only islands to proving that authority-adjacent surfaces should remain where they are.
 
 ## Next Authorized Slice
 
-Extract repository snapshot rendering only if it passes the audit gate above; otherwise retain it in `App.tsx` and record why.
+Perform an Artifact Diagnostics Audit. Do not assume extraction is desired; extract only if the audited surface satisfies `props -> render` without interpretation.
