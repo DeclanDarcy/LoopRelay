@@ -2,18 +2,16 @@
 
 ## Slice Summary
 
-Continued Milestone 1 Workstream 1.5 with a second mechanical render-only primitive adoption pass in `App.tsx`.
+Completed the final Milestone 1 Workstream 1.5 implementation pass with a deliberately narrow primitive-adoption slice.
 
 ## New State
 
-- Imported shared `Panel` and `SectionHeader` into `src/CommandCenter.UI/src/App.tsx`.
-- Adopted `SectionHeader` for remaining dashboard, workspace, operational-context, continuity, execution-workspace, execution-context, git-workflow, handoff-review, and artifact-shell heading blocks.
-- Adopted `Panel` for remaining render-only display panels in `App.tsx`, including operational-context, continuity diagnostics, execution context preview, git workflow, generated handoff review, repository list/details, and artifact workspace shell surfaces.
-- Kept workflow/action buttons as native `button` elements because they sit on backend-owned authority boundaries and require more careful conversion.
-- Kept artifact explorer/editor structural sections unchanged except for the surrounding shell heading/panel adoption.
-- Added `App.css` coverage for `.section-heading h3` so `SectionHeader` dashboard/workspace headings retain the existing sizing.
-- Added slice notes to `.agents/milestones/m1-design-system-foundation.md`.
-- Rotated the previous handoff to `.agents/handoffs/handoff.0051.md`.
+- Marked Workstream 1.5 complete in `.agents/milestones/m1-design-system-foundation.md`; Milestone 1 certification remains unchecked.
+- Imported shared `Button` in `src/CommandCenter.UI/src/App.tsx`.
+- Converted only non-workflow shell/workspace controls to `Button`: top-level repository refresh, add repository, and workspace refresh.
+- Left workflow-authority controls native: execution launch, proposal review/promote, commit/push, handoff accept/reject, artifact save/rotate, repository removal, repository selection, and artifact selection.
+- Converted `ExecutionRepositorySnapshotPanel` to shared `Panel` and `SectionHeader` while preserving `dirty-state`, projected content, and no-interaction behavior.
+- Rotated the previous handoff to `.agents/handoffs/handoff.0052.md`.
 
 ## Verification
 
@@ -25,4 +23,4 @@ Continued Milestone 1 Workstream 1.5 with a second mechanical render-only primit
 
 ## Next Slice
 
-Continue Milestone 1 Workstream 1.5 with a careful, narrow primitive adoption pass for remaining low-risk surfaces. Prioritize extracted feature components and any true static table/metric candidates before attempting `Button`; only convert buttons where `type`, `className`, `onClick`, `disabled`, `title`, and children can be preserved exactly.
+Run Milestone 1 certification/review rather than continuing primitive adoption by default. Confirm the app remains visibly dark, interactions are unchanged, and the current native workflow buttons are an intentional deferral for later feature migration rather than unfinished Workstream 1.5 work.

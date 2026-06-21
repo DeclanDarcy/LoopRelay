@@ -25,7 +25,7 @@ import {
 } from './api'
 import { ArtifactMarkdownPreview } from './features/artifacts/ArtifactMarkdownPreview'
 import { ArtifactMetadata } from './features/artifacts/ArtifactMetadata'
-import { EmptyState, Panel, SectionHeader, StatusBadge } from './components/design'
+import { Button, EmptyState, Panel, SectionHeader, StatusBadge } from './components/design'
 import { ContinuityDiagnosticsPanel } from './features/continuity/ContinuityDiagnosticsPanel'
 import { ExecutionContextArtifactDiagnosticsList } from './features/execution/ExecutionContextArtifactDiagnosticsList'
 import { ExecutionContextArtifactContentPreviews } from './features/execution/ExecutionContextArtifactContentPreviews'
@@ -1262,17 +1262,18 @@ function App() {
           <h1>Repositories</h1>
         </div>
         <div className="header-actions">
-          <button type="button" className="secondary-action" onClick={loadRepositories}>
+          <Button type="button" variant="secondary" className="secondary-action" onClick={loadRepositories}>
             Refresh
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="primary"
             className="primary-action"
             onClick={addRepository}
             disabled={isAdding}
           >
             {isAdding ? 'Adding...' : 'Add Repository'}
-          </button>
+          </Button>
         </div>
       </header>
 
@@ -1319,14 +1320,15 @@ function App() {
             headingLevel={3}
             actions={
               <div className="section-actions">
-              <button
-                type="button"
-                className="secondary-action"
-                onClick={() => void refreshWorkspace()}
-                disabled={!selectedRepository || isWorkspaceLoading}
-              >
-                {isWorkspaceLoading ? 'Refreshing...' : 'Refresh Workspace'}
-              </button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="secondary-action"
+                  onClick={() => void refreshWorkspace()}
+                  disabled={!selectedRepository || isWorkspaceLoading}
+                >
+                  {isWorkspaceLoading ? 'Refreshing...' : 'Refresh Workspace'}
+                </Button>
               </div>
             }
           />

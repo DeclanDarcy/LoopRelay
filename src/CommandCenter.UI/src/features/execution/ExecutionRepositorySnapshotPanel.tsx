@@ -1,4 +1,5 @@
 import type { ExecutionRepositorySnapshot } from '../../types'
+import { Panel, SectionHeader } from '../../components/design'
 import { GitPathBucket } from './GitPathBucket'
 
 type ExecutionRepositorySnapshotPanelProps = {
@@ -13,8 +14,8 @@ export function ExecutionRepositorySnapshotPanel({
   }
 
   return (
-    <div className="dirty-state">
-      <h5>Repository Snapshot</h5>
+    <Panel className="dirty-state" aria-label="Repository snapshot">
+      <SectionHeader title="Repository Snapshot" headingLevel={5} />
       <div className="context-summary">
         <span>Branch: {repositorySnapshot.branch || '(detached)'}</span>
         <span>State: {repositorySnapshot.dirtyState.isClean ? 'Clean' : 'Dirty'}</span>
@@ -28,6 +29,6 @@ export function ExecutionRepositorySnapshotPanel({
         <GitPathBucket label="Renamed" paths={repositorySnapshot.dirtyState.renamedPaths} />
         <GitPathBucket label="Untracked" paths={repositorySnapshot.dirtyState.untrackedPaths} />
       </div>
-    </div>
+    </Panel>
   )
 }

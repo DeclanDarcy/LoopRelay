@@ -7,7 +7,7 @@
 - [x] Workstream 1.2: Typography
 - [x] Workstream 1.3: Shared Primitives
 - [x] Workstream 1.4: Status Language
-- [ ] Workstream 1.5: Apply Theme Without Layout Migration
+- [x] Workstream 1.5: Apply Theme Without Layout Migration
 - [ ] Certification complete
 
 Goal: establish the dark operational visual system without changing information architecture.
@@ -127,3 +127,5 @@ Cover:
 - 2026-06-21: Verification passed after primitive adoption: `npm run lint`, `npm run test`, `npm run build`, `npm run test:e2e`, and `dotnet test CommandCenter.slnx`.
 - 2026-06-21: Continued Workstream 1.5 by adopting shared `Panel`/`SectionHeader` primitives across remaining render-only dashboard, operational-context, continuity, execution-context, git-workflow, handoff-review, and artifact-shell surfaces in `App.tsx`, while keeping workflow buttons, artifact editor controls, and backend-owned action logic unchanged.
 - 2026-06-21: Verification passed after the second primitive adoption pass: `npm run lint`, `npm run test`, `npm run build`, `npm run test:e2e`, and `dotnet test CommandCenter.slnx`.
+- 2026-06-21: Completed the final Workstream 1.5 implementation pass by adopting `Button` only for non-workflow shell/workspace controls and adopting `Panel`/`SectionHeader` for the extracted execution repository snapshot panel; workflow authority buttons remain native pending later feature migration.
+- 2026-06-21: Verification passed after the final Workstream 1.5 pass: `npm run lint`, `npm run test`, `npm run build`, `npm run test:e2e`, and `dotnet test CommandCenter.slnx`.
