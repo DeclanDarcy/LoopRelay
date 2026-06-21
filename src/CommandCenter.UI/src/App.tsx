@@ -12,8 +12,6 @@ import {
   getExecutionStatus,
   getGitStatus,
   getOperationalContextProposal,
-  getRepositoryWorkspace,
-  listRepositories,
   loadArtifactContent,
   prepareCommit,
   previewExecutionContext,
@@ -31,6 +29,7 @@ import {
   startExecution as startExecutionCommand,
   subscribeToExecutionEvents,
 } from './api'
+import { useArtifactContent, useRepositories, useRepositoryWorkspace } from './hooks'
 import type {
   ArtifactCategory,
   ArtifactInventory,
@@ -46,7 +45,6 @@ import type {
   OperationalContextProposal,
   Repository,
   RepositoryAvailability,
-  RepositoryDashboardProjection,
   RepositoryDirtyState,
   RepositoryExecutionState,
   RepositoryGitStatus,
@@ -408,9 +406,7 @@ function getExecutionWorkflowSteps(
 }
 
 function App() {
-  const [repositories, setRepositories] = useState<RepositoryDashboardProjection[]>([])
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<string | null>(null)
-  const [workspace, setWorkspace] = useState<RepositoryWorkspaceProjection | null>(null)
   const [selectedArtifactPath, setSelectedArtifactPath] = useState<string | null>(null)
   const [selectedMilestonePath, setSelectedMilestonePath] = useState<string | null>(null)
   const [executionContext, setExecutionContext] = useState<ExecutionContextPreview | null>(null)
@@ -423,7 +419,6 @@ function App() {
   const [commitMessage, setCommitMessage] = useState('')
   const selectedArtifactPathsByRepository = useRef<Record<string, string>>({})
   const refreshedCompletedSessionIds = useRef<Set<string>>(new Set())
-  const [artifactContent, setArtifactContent] = useState('')
   const [draftContent, setDraftContent] = useState('')
   const [generatedHandoffContent, setGeneratedHandoffContent] = useState('')
   const [operationalContextProposal, setOperationalContextProposal] =
@@ -434,9 +429,6 @@ function App() {
   const [operationalContextReviewNote, setOperationalContextReviewNote] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(false)
-  const [isArtifactLoading, setIsArtifactLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isRotating, setIsRotating] = useState(false)
   const [isContextLoading, setIsContextLoading] = useState(false)
@@ -456,6 +448,13 @@ function App() {
   const [isPushing, setIsPushing] = useState(false)
   const [isAdding, setIsAdding] = useState(false)
   const [removingRepositoryId, setRemovingRepositoryId] = useState<string | null>(null)
+  const {
+    data: repositories,
+    setData: setRepositories,
+    isLoading,
+    error: repositoriesError,
+    refresh: loadRepositories,
+  } = useRepositories()
 
   const selectedRepository = useMemo(
     () =>
@@ -464,6 +463,20 @@ function App() {
       null,
     [repositories, selectedRepositoryId],
   )
+  const {
+    data: workspace,
+    setData: setWorkspace,
+    isLoading: isWorkspaceLoading,
+    error: workspaceError,
+    load: loadWorkspaceProjection,
+    refresh: refreshWorkspaceProjection,
+  } = useRepositoryWorkspace(selectedRepository?.repository.id ?? null)
+  const {
+    data: artifactContent,
+    setData: setArtifactContent,
+    isLoading: isArtifactLoading,
+    error: artifactError,
+  } = useArtifactContent(selectedRepository?.repository.id ?? null, selectedArtifactPath)
 
   const selectedArtifact = useMemo(() => {
     if (!workspace || !selectedArtifactPath) {
@@ -715,23 +728,12 @@ function App() {
   )
 
   const loadWorkspace = useCallback(async (repositoryId: string) => {
-    setIsWorkspaceLoading(true)
-    setError(null)
-    try {
-      const nextWorkspace = await getRepositoryWorkspace(repositoryId)
-      setWorkspace(nextWorkspace)
+    const nextWorkspace = await loadWorkspaceProjection()
+    if (nextWorkspace && nextWorkspace.repository.id === repositoryId) {
       setExecutionContext(null)
       reconcileSelectedArtifact(repositoryId, nextWorkspace)
-    } catch (loadError) {
-      setWorkspace(null)
-      setSelectedArtifactPath(null)
-      setSelectedMilestonePath(null)
-      setExecutionContext(null)
-      setError(formatError(loadError))
-    } finally {
-      setIsWorkspaceLoading(false)
     }
-  }, [reconcileSelectedArtifact])
+  }, [loadWorkspaceProjection, reconcileSelectedArtifact])
 
   const loadGitStatus = useCallback(async (repositoryId: string) => {
     setIsGitStatusLoading(true)
@@ -867,33 +869,6 @@ function App() {
     }
   }
 
-  const loadRepositories = useCallback(async () => {
-    setIsLoading(true)
-    setError(null)
-    try {
-      const nextRepositories = await listRepositories()
-      setRepositories(nextRepositories)
-      setSelectedRepositoryId((currentId) => {
-        if (nextRepositories.length === 0) {
-          return null
-        }
-
-        if (
-          currentId &&
-          nextRepositories.some((entry) => entry.repository.id === currentId)
-        ) {
-          return currentId
-        }
-
-        return nextRepositories[0].repository.id
-      })
-    } catch (loadError) {
-      setError(formatError(loadError))
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
-
   async function addRepository() {
     setIsAdding(true)
     setError(null)
@@ -948,20 +923,18 @@ function App() {
       return
     }
 
-    setIsWorkspaceLoading(true)
     setError(null)
     setMessage(null)
     try {
-      const nextWorkspace = await refreshRepositoryWorkspace(selectedRepository.repository.id)
-      setWorkspace(nextWorkspace)
-      setExecutionContext(null)
-      reconcileSelectedArtifact(selectedRepository.repository.id, nextWorkspace)
-      setMessage('Workspace refreshed.')
-      await loadRepositories()
+      const nextWorkspace = await refreshWorkspaceProjection()
+      if (nextWorkspace) {
+        setExecutionContext(null)
+        reconcileSelectedArtifact(selectedRepository.repository.id, nextWorkspace)
+        setMessage('Workspace refreshed.')
+        await loadRepositories()
+      }
     } catch (refreshError) {
       setError(formatError(refreshError))
-    } finally {
-      setIsWorkspaceLoading(false)
     }
   }
 
@@ -1509,7 +1482,7 @@ function App() {
         }
       }),
     )
-  }, [executionSummary, selectedExecutionStatus])
+  }, [executionSummary, selectedExecutionStatus, setRepositories, setWorkspace])
 
   useEffect(() => {
     if (
@@ -1527,12 +1500,49 @@ function App() {
   }, [loadRepositories, loadWorkspace, selectedExecutionStatus, selectedRepository])
 
   useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      void loadRepositories()
-    }, 0)
+    setSelectedRepositoryId((currentId) => {
+      if (repositories.length === 0) {
+        return null
+      }
 
-    return () => window.clearTimeout(timeoutId)
-  }, [loadRepositories])
+      if (currentId && repositories.some((entry) => entry.repository.id === currentId)) {
+        return currentId
+      }
+
+      return repositories[0].repository.id
+    })
+  }, [repositories])
+
+  useEffect(() => {
+    if (repositoriesError) {
+      setError(repositoriesError)
+    }
+  }, [repositoriesError])
+
+  useEffect(() => {
+    if (workspaceError) {
+      setSelectedArtifactPath(null)
+      setSelectedMilestonePath(null)
+      setExecutionContext(null)
+      setError(workspaceError)
+    }
+  }, [workspaceError])
+
+  useEffect(() => {
+    if (artifactError) {
+      setError(artifactError)
+    }
+  }, [artifactError])
+
+  useEffect(() => {
+    if (!selectedRepository || !workspace) {
+      return
+    }
+
+    if (workspace.repository.id === selectedRepository.repository.id) {
+      reconcileSelectedArtifact(selectedRepository.repository.id, workspace)
+    }
+  }, [reconcileSelectedArtifact, selectedRepository, workspace])
 
   useEffect(() => {
     if (!selectedRepository) {
@@ -1542,12 +1552,11 @@ function App() {
     }
 
     const timeoutId = window.setTimeout(() => {
-      void loadWorkspace(selectedRepository.repository.id)
       void loadContinuityDiagnostics(selectedRepository.repository.id)
     }, 0)
 
     return () => window.clearTimeout(timeoutId)
-  }, [loadContinuityDiagnostics, loadWorkspace, selectedRepository])
+  }, [loadContinuityDiagnostics, selectedRepository])
 
   useEffect(() => {
     if (!selectedRepository || !shouldShowGitWorkflow) {
@@ -1582,46 +1591,8 @@ function App() {
   ])
 
   useEffect(() => {
-    if (!selectedRepository || !selectedArtifactPath) {
-      const timeoutId = window.setTimeout(() => {
-        setArtifactContent('')
-        setDraftContent('')
-      }, 0)
-
-      return () => window.clearTimeout(timeoutId)
-    }
-
-    let isCurrent = true
-    const timeoutId = window.setTimeout(() => {
-      setIsArtifactLoading(true)
-      setError(null)
-
-      loadArtifactContent(selectedRepository.repository.id, selectedArtifactPath)
-        .then((content) => {
-          if (!isCurrent) {
-            return
-          }
-
-          setArtifactContent(content)
-          setDraftContent(content)
-        })
-        .catch((loadError) => {
-          if (isCurrent) {
-            setError(formatError(loadError))
-          }
-        })
-        .finally(() => {
-          if (isCurrent) {
-            setIsArtifactLoading(false)
-          }
-        })
-    }, 0)
-
-    return () => {
-      isCurrent = false
-      window.clearTimeout(timeoutId)
-    }
-  }, [selectedArtifactPath, selectedRepository])
+    setDraftContent(artifactContent)
+  }, [artifactContent])
 
   useEffect(() => {
     if (!selectedRepository || !canReviewGeneratedHandoff || !executionDisplay?.handoffPath) {

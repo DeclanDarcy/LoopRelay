@@ -2,17 +2,19 @@
 
 ## Slice Summary
 
-Completed Milestone 0 Workstream 0.2 by centralizing frontend transport without moving projection state, draft state, navigation state, or workflow authority.
+Advanced Milestone 0 Workstream 0.3 by extracting the first three simple projection hooks without moving workflow authority into React hooks.
 
 ## New State
 
-- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0002.md`.
-- Added `src/CommandCenter.UI/src/api/` with thin transport modules for repositories, artifacts, execution, execution events, git, operational context, continuity, and shared exports.
-- Added `src/CommandCenter.UI/src/api/tauri.ts` with `invokeCommand<T>()` and centralized `formatError(...)`.
-- Moved all direct Tauri command names out of `App.tsx`; `App.tsx` now calls domain-named API wrappers while preserving the existing state/effect choreography.
-- Moved execution status `fetch(...)` and execution SSE `EventSource` construction/parsing into execution API modules.
-- Added `src/CommandCenter.UI/src/test/characterization/transport.test.ts` covering refresh command request/response preservation and execution event subscription parsing/cleanup.
-- Marked Milestone 0 Workstream 0.2 complete in `.agents/milestones/m0-frontend-foundations.md`.
+- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0003.md`.
+- Added `src/CommandCenter.UI/src/hooks/useRepositories.ts`.
+- Added `src/CommandCenter.UI/src/hooks/useRepositoryWorkspace.ts`.
+- Added `src/CommandCenter.UI/src/hooks/useArtifactContent.ts`.
+- Added `src/CommandCenter.UI/src/hooks/index.ts`.
+- Updated `src/CommandCenter.UI/src/App.tsx` so repository dashboard, selected workspace, artifact content, and their loading/error state now come from the new hooks.
+- Kept artifact selection reconciliation, selected repository fallback, draft editor state, generated handoff loading, workflow mutations, and execution/event orchestration in `App.tsx`.
+- Added `src/CommandCenter.UI/src/test/characterization/projectionHooks.test.tsx` covering repository projection load/refresh, workspace get-vs-refresh command separation, and artifact content clearing on selection removal.
+- Marked only `useRepositories()`, `useRepositoryWorkspace(repositoryId)`, and `useArtifactContent(repositoryId, relativePath)` complete in `.agents/milestones/m0-frontend-foundations.md`; Workstream 0.3 remains open.
 
 ## Verification
 
@@ -20,7 +22,8 @@ Completed Milestone 0 Workstream 0.2 by centralizing frontend transport without 
 - `npm run build` passed from `src/CommandCenter.UI`.
 - `npm run test` passed from `src/CommandCenter.UI`.
 - `npm run test:e2e` passed from `src/CommandCenter.UI`.
+- `dotnet test CommandCenter.slnx` passed from repo root.
 
 ## Next Slice
 
-Proceed with Milestone 0 Workstream 0.3: extract projection hooks while preserving existing loading, refresh, error, and cleanup behavior.
+Continue Milestone 0 Workstream 0.3 by extracting the next read-only projection hooks with characterization first: `useExecutionContextPreview(repositoryId, milestonePath)`, `useExecutionSession(repositoryId, sessionId)`, and `useExecutionEvents(sessionId)`.

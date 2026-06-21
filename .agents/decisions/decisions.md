@@ -2,25 +2,22 @@
 
 ## Newly Authorized
 
-- M0.3 should continue the bottom-up layering trajectory: test infrastructure, type authority, transport authority, then projection hooks.
-- M0.3 should begin with simple projection hooks only: `useRepositories()`, `useRepositoryWorkspace(repositoryId)`, and `useArtifactContent(repositoryId, relativePath)`.
-- Projection hooks are authorized to own projection fetch, projection refresh, loading state, error state, projection value, and a boring `refresh` function.
-- Projection hooks must not introduce frontend interpretation, derived workflow meaning, recommendations, diagnostics reinterpretation, or domain service behavior.
-- Projection hook shape should remain minimal, such as `{ data, isLoading, error, refresh }`.
-- Workflow hooks are not yet authorized for early M0.3.
-- Do not extract execution session orchestration, operational-context review/proposal workflow, continuity workflow, proposal review, or SSE orchestration during the first M0.3 slice.
-- Transport hooks are forbidden; do not create `useInvoke`, `useCommandCenterApi`, `useEventSource`, or similar transport-owning hooks.
-- Transport remains owned by `src/api`.
-- Add projection-equivalence characterization for M0.3 to prove that hook extraction changes location but not observable behavior.
-- Projection-equivalence coverage should focus on the same loading sequence, refresh sequence, error sequence, and rendered result where practical.
+- Split the next proposed M0.3 work into smaller slices instead of extracting `useExecutionContextPreview`, `useExecutionSession`, and `useExecutionEvents` together.
+- M0.3A is authorized to extract `useExecutionContextPreview` only.
+- `useExecutionContextPreview` should remain a boring projection hook with data, loading, error, load, and refresh behavior.
+- M0.3B should handle `useExecutionSession` separately because session lifecycle, refresh, reattachment, and recovery deserve isolated characterization.
+- M0.3C should handle `useExecutionEvents` separately because streaming, ordering, cleanup, and repository/session switching are the highest-risk remaining M0.3 extraction.
+- `useExecutionEvents` is authorized as transport-adjacent, not workflow-adjacent.
+- `useExecutionEvents` may subscribe, unsubscribe, reconnect, expose ordered events, expose the latest event, and expose the event stream.
+- `useExecutionEvents` must not calculate execution phase, derive milestones, derive completion, derive readiness, or infer workflow status.
+- Event workflow meaning must remain backend projection authority.
+- Before extracting SSE behavior, add characterization for event ordering, cleanup on unmount, and repository/session switching without stale listeners.
 
 ## Validation Expected For Next Slice
 
-- Characterization should cover repository projection behavior before and after hook extraction.
-- Characterization should cover workspace projection load/refresh equivalence.
-- Characterization should cover artifact content load equivalence.
+- Add characterization before moving `useExecutionContextPreview`.
+- Keep `App.tsx` as owner of navigation state, draft state, view composition, and workflow actions.
 - `npm run lint`
 - `npm run build`
 - `npm run test`
 - `npm run test:e2e`
-- `dotnet test CommandCenter.slnx`
