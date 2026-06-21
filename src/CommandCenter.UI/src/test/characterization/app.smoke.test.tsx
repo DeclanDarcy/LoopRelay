@@ -421,4 +421,258 @@ describe('workspace certification mock', () => {
       ).toBe(true),
     )
   })
+
+  it('keeps operational-context proposal generation, loading, editing, acceptance, and promotion behind explicit actions', async () => {
+    installWorkspaceCertificationMock()
+
+    const invoke = window.__TAURI_INTERNALS__?.invoke
+    expect(invoke).toBeDefined()
+    if (!invoke) {
+      return
+    }
+
+    await invoke('generate_operational_context_proposal', { repositoryId: 'repo-alpha' })
+
+    const invokeSpy = vi.fn(invoke)
+    window.__TAURI_INTERNALS__!.invoke = invokeSpy
+
+    render(<App />)
+
+    await screen.findAllByRole('heading', { name: 'AlphaRepo' })
+    await screen.findByText('Latest: mock-proposal-1')
+    await new Promise((resolve) => window.setTimeout(resolve, 0))
+
+    const proposalWorkflowCommands = [
+      'generate_operational_context_proposal',
+      'get_operational_context_proposal',
+      'edit_operational_context_proposal',
+      'accept_operational_context_proposal',
+      'reject_operational_context_proposal',
+      'promote_operational_context_proposal',
+    ]
+    const proposalWorkflowCallCounts = () =>
+      Object.fromEntries(
+        proposalWorkflowCommands.map((command) => [
+          command,
+          invokeSpy.mock.calls.filter(([calledCommand]) => calledCommand === command).length,
+        ]),
+      )
+
+    expect(proposalWorkflowCallCounts()).toEqual({
+      generate_operational_context_proposal: 0,
+      get_operational_context_proposal: 0,
+      edit_operational_context_proposal: 0,
+      accept_operational_context_proposal: 0,
+      reject_operational_context_proposal: 0,
+      promote_operational_context_proposal: 0,
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /operational_context\.md/ }))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'operational_context.md' })).toBeInTheDocument())
+    expect(proposalWorkflowCallCounts()).toEqual({
+      generate_operational_context_proposal: 0,
+      get_operational_context_proposal: 0,
+      edit_operational_context_proposal: 0,
+      accept_operational_context_proposal: 0,
+      reject_operational_context_proposal: 0,
+      promote_operational_context_proposal: 0,
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load Latest' }))
+
+    await waitFor(() =>
+      expect(
+        screen.getByText((_, element) => element?.textContent === 'Proposal: mock-proposal-1'),
+      ).toBeInTheDocument(),
+    )
+    expect(
+      invokeSpy.mock.calls.some(
+        ([command, args]) =>
+          command === 'get_operational_context_proposal' &&
+          typeof args === 'object' &&
+          args !== null &&
+          'repositoryId' in args &&
+          args.repositoryId === 'repo-alpha' &&
+          'proposalId' in args &&
+          args.proposalId === 'mock-proposal-1',
+      ),
+    ).toBe(true)
+
+    const beforeDraftEdits = proposalWorkflowCallCounts()
+    const proposalEditor = screen.getByLabelText('Proposed markdown')
+    const reviewNoteEditor = screen.getByLabelText('Review note')
+
+    fireEvent.change(proposalEditor, {
+      target: { value: '# Operational Context\n\n## Constraints\n\n- Reviewer edited proposal.' },
+    })
+    fireEvent.change(reviewNoteEditor, {
+      target: { value: 'Reviewed proposal boundary.' },
+    })
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save Edits' })).not.toBeDisabled())
+    await new Promise((resolve) => window.setTimeout(resolve, 0))
+    expect(proposalWorkflowCallCounts()).toEqual(beforeDraftEdits)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Edits' }))
+
+    await waitFor(() =>
+      expect(
+        invokeSpy.mock.calls.some(
+          ([command, args]) =>
+            command === 'edit_operational_context_proposal' &&
+            typeof args === 'object' &&
+            args !== null &&
+            'repositoryId' in args &&
+            args.repositoryId === 'repo-alpha' &&
+            'proposalId' in args &&
+            args.proposalId === 'mock-proposal-1' &&
+            'content' in args &&
+            args.content === '# Operational Context\n\n## Constraints\n\n- Reviewer edited proposal.',
+        ),
+      ).toBe(true),
+    )
+
+    const beforeAccept = proposalWorkflowCallCounts()
+    expect(beforeAccept.accept_operational_context_proposal).toBe(0)
+    expect(beforeAccept.promote_operational_context_proposal).toBe(0)
+
+    fireEvent.change(screen.getByLabelText('Review note'), {
+      target: { value: 'Reviewed proposal boundary.' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }))
+
+    await waitFor(() =>
+      expect(
+        invokeSpy.mock.calls.some(
+          ([command, args]) =>
+            command === 'accept_operational_context_proposal' &&
+            typeof args === 'object' &&
+            args !== null &&
+            'repositoryId' in args &&
+            args.repositoryId === 'repo-alpha' &&
+            'proposalId' in args &&
+            args.proposalId === 'mock-proposal-1' &&
+            'reviewNote' in args &&
+            args.reviewNote === 'Reviewed proposal boundary.',
+        ),
+      ).toBe(true),
+    )
+    expect(invokeSpy.mock.calls.some(([command]) => command === 'promote_operational_context_proposal')).toBe(
+      false,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Promote' }))
+
+    await waitFor(() =>
+      expect(
+        invokeSpy.mock.calls.some(
+          ([command, args]) =>
+            command === 'promote_operational_context_proposal' &&
+            typeof args === 'object' &&
+            args !== null &&
+            'repositoryId' in args &&
+            args.repositoryId === 'repo-alpha' &&
+            'proposalId' in args &&
+            args.proposalId === 'mock-proposal-1',
+        ),
+      ).toBe(true),
+    )
+  })
+
+  it('keeps operational-context proposal rejection behind the explicit reject action', async () => {
+    installWorkspaceCertificationMock()
+
+    const invoke = window.__TAURI_INTERNALS__?.invoke
+    expect(invoke).toBeDefined()
+    if (!invoke) {
+      return
+    }
+
+    await invoke('generate_operational_context_proposal', { repositoryId: 'repo-alpha' })
+
+    const invokeSpy = vi.fn(invoke)
+    window.__TAURI_INTERNALS__!.invoke = invokeSpy
+
+    render(<App />)
+
+    await screen.findAllByRole('heading', { name: 'AlphaRepo' })
+    await screen.findByText('Latest: mock-proposal-1')
+    fireEvent.click(screen.getByRole('button', { name: 'Load Latest' }))
+    await waitFor(() =>
+      expect(
+        screen.getByText((_, element) => element?.textContent === 'Proposal: mock-proposal-1'),
+      ).toBeInTheDocument(),
+    )
+
+    fireEvent.change(screen.getByLabelText('Review note'), {
+      target: { value: 'Rejecting after explicit review.' },
+    })
+    await new Promise((resolve) => window.setTimeout(resolve, 0))
+    expect(invokeSpy.mock.calls.some(([command]) => command === 'reject_operational_context_proposal')).toBe(
+      false,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
+
+    await waitFor(() =>
+      expect(
+        invokeSpy.mock.calls.some(
+          ([command, args]) =>
+            command === 'reject_operational_context_proposal' &&
+            typeof args === 'object' &&
+            args !== null &&
+            'repositoryId' in args &&
+            args.repositoryId === 'repo-alpha' &&
+            'proposalId' in args &&
+            args.proposalId === 'mock-proposal-1' &&
+            'reviewNote' in args &&
+            args.reviewNote === 'Rejecting after explicit review.',
+        ),
+      ).toBe(true),
+    )
+    expect(invokeSpy.mock.calls.some(([command]) => command === 'accept_operational_context_proposal')).toBe(
+      false,
+    )
+    expect(invokeSpy.mock.calls.some(([command]) => command === 'promote_operational_context_proposal')).toBe(
+      false,
+    )
+  })
+
+  it('keeps operational-context proposal generation behind the explicit generate action', async () => {
+    installWorkspaceCertificationMock()
+
+    const invoke = window.__TAURI_INTERNALS__?.invoke
+    expect(invoke).toBeDefined()
+    if (!invoke) {
+      return
+    }
+
+    const invokeSpy = vi.fn(invoke)
+    window.__TAURI_INTERNALS__!.invoke = invokeSpy
+
+    render(<App />)
+
+    await screen.findAllByRole('heading', { name: 'AlphaRepo' })
+    await screen.findByText('No operational-context proposal has been generated.')
+    await new Promise((resolve) => window.setTimeout(resolve, 0))
+    expect(invokeSpy.mock.calls.some(([command]) => command === 'generate_operational_context_proposal')).toBe(
+      false,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Generate Proposal' }))
+
+    await waitFor(() =>
+      expect(
+        invokeSpy.mock.calls.some(
+          ([command, args]) =>
+            command === 'generate_operational_context_proposal' &&
+            typeof args === 'object' &&
+            args !== null &&
+            'repositoryId' in args &&
+            args.repositoryId === 'repo-alpha',
+        ),
+      ).toBe(true),
+    )
+    await waitFor(() => expect(screen.getByText('Proposal: mock-proposal-1')).toBeInTheDocument())
+  })
 })
