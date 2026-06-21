@@ -2,21 +2,25 @@
 
 ## Scope
 
-Captured after extracting `useGitStatus(repositoryId)`. This is an inventory only; no refactor is authorized by this artifact.
+Captured after extracting `useGitStatus(repositoryId)` and updated during the M0 closure authority audit after `useContinuityDiagnostics(repositoryId)` and shell navigation state were in place. This is an inventory only; no refactor is authorized by this artifact.
 
 ## Remaining `App.tsx` Responsibilities
 
 ### Navigation State
 
-- `selectedRepositoryId`
-- `selectedArtifactPath`
-- `selectedMilestonePath`
-- `selectedArtifactPathsByRepository`
+- Hook-owned in `useShellState()`:
+  - `selectedRepositoryId`
+  - `selectedArtifactPath`
+  - `selectedMilestonePath`
+  - selected artifact paths by repository
+  - selected milestone paths by repository
+  - active primary tab
+  - command palette open/closed state
 
 ### Projection State
 
-- Hook-owned: repositories, workspace, artifact content, execution context preview, execution session status, execution events, git status.
-- Still `App.tsx`-owned: operational-context proposal, continuity diagnostics, generated handoff content, operational-context current content used while reviewing proposals.
+- Hook-owned: repositories, workspace, artifact content, execution context preview, execution session status, execution events, git status, continuity diagnostics.
+- Still `App.tsx`-owned: operational-context proposal, generated handoff content, operational-context current content used while reviewing proposals.
 - Action-coupled refreshes still in `App.tsx`: workspace refresh after save, rotate, accept/reject, commit, and push workflows.
 
 ### Draft State
@@ -58,11 +62,11 @@ Captured after extracting `useGitStatus(repositoryId)`. This is an inventory onl
 - `useExecutionSession(repositoryId, sessionId)` owns execution status loading and refresh.
 - `useExecutionEvents(sessionId)` owns SSE subscription, cleanup, event ordering, and duplicate sequence replacement.
 - `useGitStatus(repositoryId)` owns git status loading, explicit refresh, loading state, error state, and projection clearing.
+- `useContinuityDiagnostics(repositoryId)` owns continuity diagnostics loading, explicit refresh, loading state, error state, projection clearing, and report-result projection injection through `setData`.
 
 ## Remaining Projection Loading Paths In `App.tsx`
 
 - Operational-context proposal loading remains in `App.tsx`.
-- Continuity diagnostics loading remains in `App.tsx`.
 - Generated handoff content loading remains in `App.tsx`.
 - Direct workspace refresh calls remain in workflow action handlers where backend mutation results need immediate reconciliation.
 - Commit preparation remains in `App.tsx` because it is workflow-coupled and not part of the read-only git status projection.

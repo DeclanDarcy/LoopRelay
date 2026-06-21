@@ -90,6 +90,13 @@ Create hooks that own loading, refreshing, errors, and cleanup:
 - [ ] `useOperationalContextProposal(repositoryId, proposalId)`
 - [x] `useContinuityDiagnostics(repositoryId)`
 
+Closure audit disposition:
+
+- [x] Certified extracted read-only projection hooks have one frontend loading authority.
+- [x] Deferred `useCommitPreparation(sessionId)` because current commit preparation is workflow-review setup that initializes commit message draft, path selection, and commit readiness.
+- [x] Deferred `useOperationalContextProposal(repositoryId, proposalId)` because current proposal loading initializes proposal edit draft, review note draft, and operational-context comparison content.
+- [x] Recorded authority matrix in `.agents/audits/m0-closure-authority-matrix.md`.
+
 Rules:
 
 - [x] Hooks may call API modules.
@@ -102,6 +109,8 @@ Rules:
 - [ ] Projection-loading effects are removed from `App.tsx`.
 - [ ] Existing loading and error behavior is preserved.
 - [ ] Existing manual refresh behavior is preserved.
+
+Audit note: remaining direct `App.tsx` loads are accepted for M0 only where they are workflow review setup, draft initialization, comparison-content loading, or post-mutation reconciliation.
 
 ## Workstream 0.4: Separate State Boundaries
 
@@ -138,6 +147,7 @@ Draft state:
 - [x] Changing artifact draft state does not trigger projection reloads.
 - [x] Changing tabs does not trigger backend mutations.
 - [x] Navigation state never stores projection objects.
+- [x] M0 closure audit classifies remaining commit/proposal/review draft state as intentionally local and not shell/navigation state.
 
 ## Workstream 0.5: Decompose Without Redesign
 
@@ -180,3 +190,5 @@ Use `?mock=workspace-certification` to certify all repository execution states:
 
 - [ ] Frontend tests cover the behavior above.
 - [ ] `npm run lint`, `npm run build`, `npm run test`, `npm run test:e2e`, and `dotnet test CommandCenter.slnx` pass.
+
+Closure audit note: M0 already has boundary characterization for transport, shell navigation, extracted projection hooks, execution event cleanup/order, certification fixture state coverage, and artifact-draft projection isolation. Remaining workflow characterization should be added alongside Workstream 0.5 decomposition and feature workspace migration.

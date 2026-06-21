@@ -2,34 +2,32 @@
 
 ## Slice Summary
 
-Continued Milestone 0 boundary certification by proving artifact editor draft changes remain local and do not reload repository, workspace, refresh, or artifact projections.
+Continued Milestone 0 with the closure authority audit requested by the prior decisions file.
 
 ## New State
 
-- Added an App-level characterization in `src/CommandCenter.UI/src/test/characterization/app.smoke.test.tsx`.
-- The test installs the workspace-certification Tauri mock, wraps mock `invoke`, waits for initial projection calls to settle, edits the artifact textarea, and asserts these projection commands do not fire again:
-  - `list_repositories`
-  - `get_repository_workspace`
-  - `refresh_repository_workspace`
-  - `load_artifact_content`
-- Updated `.agents/milestones/m0-frontend-foundations.md` to mark the artifact editor draft boundary and artifact-draft projection-reload certification as complete.
-- No production frontend code changed in this slice.
+- Added `.agents/audits/m0-closure-authority-matrix.md`.
+- Updated `.agents/audits/m0-app-responsibility-inventory.md` to reflect current ownership:
+  - `useShellState()` owns navigation state.
+  - `useContinuityDiagnostics(repositoryId)` owns continuity diagnostics projection loading.
+  - Operational-context proposal, generated handoff content, and operational-context comparison content remain `App.tsx` workflow/review responsibilities.
+- Updated `.agents/audits/m0-projection-authority-certification.md` with the closure audit outcome.
+- Updated `.agents/milestones/m0-frontend-foundations.md` with audit disposition notes:
+  - extracted read-only projection hooks are certified as single loading authorities;
+  - commit preparation is deferred because it is workflow-review setup coupled to commit draft and path selection;
+  - operational-context proposal loading is deferred because it initializes proposal draft, review note, and comparison content;
+  - remaining direct `App.tsx` loads are accepted for M0 only where they are workflow review setup, draft initialization, comparison-content loading, or post-mutation reconciliation.
+- Rotated the prior handoff to `.agents/handoffs/handoff.0012.md`.
 
 ## Verification
 
-- `cd src\CommandCenter.UI; npm run lint`
-- `cd src\CommandCenter.UI; npm run build`
-- `cd src\CommandCenter.UI; npm run test -- app.smoke.test.tsx`
-- `cd src\CommandCenter.UI; npm run test`
-- `cd src\CommandCenter.UI; npm run test:e2e`
-- `dotnet test CommandCenter.slnx`
-
-All commands passed.
+- Documentation-only slice.
+- No code tests were run.
 
 ## Next Slice
 
-Continue Milestone 0 closure by auditing remaining authority boundaries before extracting more code:
+Begin Milestone 0 Workstream 0.5 with low-risk decomposition:
 
-- Confirm whether commit draft state, operational-context proposal draft state, and review note draft state need characterization now or can remain documented gaps for later workflow/component migration.
-- Re-run projection authority review for hooks still unchecked in M0, especially commit preparation and operational-context proposal loading.
-- Decide whether Workstream 0.5 should begin with pure helper extraction from `App.tsx` or whether M0 should close with documented deferred items.
+- Add characterization around repository selection/workspace load and refresh reconciliation before moving rendering sections.
+- Extract pure helpers from `App.tsx` into `src/lib` first where behavior is easiest to preserve.
+- Then extract feature components without changing class names or layout.

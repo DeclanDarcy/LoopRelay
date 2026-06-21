@@ -50,3 +50,9 @@ The extracted projection hooks now have one frontend authority per certified pro
 - Extract commit preparation only as a workflow-review loading boundary, not as general git projection authority.
 - Extract operational-context proposal only if the proposal projection can be separated from draft/review/comparison state first.
 - Otherwise proceed to Workstream 0.4 state-boundary separation, where navigation, projection, and draft ownership can be made explicit before additional decomposition.
+
+## Closure Audit Update
+
+The later closure matrix in `.agents/audits/m0-closure-authority-matrix.md` confirms that the remaining unextracted candidates are workflow-review boundaries rather than duplicate read-only projection authorities.
+
+M0 should proceed to decomposition work from the certified authority map instead of extracting `useCommitPreparation(sessionId)` or `useOperationalContextProposal(repositoryId, proposalId)` as simple projection hooks.
