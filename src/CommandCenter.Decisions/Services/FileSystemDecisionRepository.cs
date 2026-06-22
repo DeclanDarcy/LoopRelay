@@ -25,6 +25,21 @@ public sealed class FileSystemDecisionRepository(IArtifactStore artifactStore) :
         return await AllocateIdAsync(repository, DecisionArtifactKind.Proposal, "PROP");
     }
 
+    public async Task<string> AllocateProposalRevisionIdAsync(Repository repository, string proposalId)
+    {
+        string id = DecisionArtifactPaths.ValidateId(proposalId, "PROP");
+        string revisionsRoot = DecisionArtifactPaths.Resolve(repository, DecisionArtifactPaths.ProposalRevisionsDirectory(id));
+        IReadOnlyList<string> files = await artifactStore.ListAsync(revisionsRoot, "REV-*.json");
+        int next = files
+            .Select(Path.GetFileNameWithoutExtension)
+            .Where(revisionId => !string.IsNullOrWhiteSpace(revisionId))
+            .Select(revisionId => ParseSequence(revisionId!, "REV"))
+            .DefaultIfEmpty(0)
+            .Max() + 1;
+
+        return $"REV-{next:0000}";
+    }
+
     public async Task<IReadOnlyList<Decision>> ListDecisionsAsync(Repository repository)
     {
         IReadOnlyList<string> directories = await ListArtifactDirectoriesAsync(repository, DecisionArtifactKind.Decision);
@@ -146,6 +161,53 @@ public sealed class FileSystemDecisionRepository(IArtifactStore artifactStore) :
         await WriteDocumentAsync(repository, relativePath, proposal, createdAt, now);
         await WriteHistoryAsync(repository, directory, proposal.History);
         return proposal;
+    }
+
+    public async Task<IReadOnlyList<DecisionProposalRevision>> ListProposalRevisionsAsync(Repository repository, string proposalId)
+    {
+        string id = DecisionArtifactPaths.ValidateId(proposalId, "PROP");
+        string revisionsRoot = DecisionArtifactPaths.Resolve(repository, DecisionArtifactPaths.ProposalRevisionsDirectory(id));
+        IReadOnlyList<string> files = await artifactStore.ListAsync(revisionsRoot, "REV-*.json");
+        var revisions = new List<DecisionProposalRevision>();
+
+        foreach (string file in files
+            .Where(file => string.Equals(Path.GetExtension(file), ".json", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(file => file, StringComparer.Ordinal))
+        {
+            string revisionId = Path.GetFileNameWithoutExtension(file);
+            if (string.IsNullOrWhiteSpace(revisionId))
+            {
+                continue;
+            }
+
+            DecisionProposalRevision? revision = await ReadPayloadAsync<DecisionProposalRevision>(
+                repository,
+                DecisionArtifactPaths.ProposalRevisionJson(id, revisionId));
+            if (revision is not null)
+            {
+                revisions.Add(revision);
+            }
+        }
+
+        return revisions.OrderBy(revision => revision.Id, StringComparer.Ordinal).ToArray();
+    }
+
+    public async Task<DecisionProposalRevision> SaveProposalRevisionAsync(Repository repository, DecisionProposalRevision revision)
+    {
+        string proposalId = DecisionArtifactPaths.ValidateId(revision.ProposalId, "PROP");
+        string revisionId = DecisionArtifactPaths.ValidateId(revision.Id, "REV");
+        if (revision.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException("Decision proposal revision belongs to a different repository.");
+        }
+
+        await WriteDocumentAsync(
+            repository,
+            DecisionArtifactPaths.ProposalRevisionJson(proposalId, revisionId),
+            revision,
+            revision.CreatedAt,
+            revision.CreatedAt);
+        return revision;
     }
 
     private async Task<string> AllocateIdAsync(Repository repository, DecisionArtifactKind kind, string prefix)

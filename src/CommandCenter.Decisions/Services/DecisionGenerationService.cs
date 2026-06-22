@@ -1,7 +1,11 @@
 using CommandCenter.Core.Repositories;
 using CommandCenter.Decisions.Abstractions;
 using CommandCenter.Decisions.Models;
+using CommandCenter.Decisions.Persistence;
 using CommandCenter.Decisions.Primitives;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 
 namespace CommandCenter.Decisions.Services;
 
@@ -124,6 +128,102 @@ public sealed class DecisionGenerationService(
             DecisionProposalState.ReadyForResolution,
             "ReadyForResolution",
             reason ?? "Proposal marked ready for resolution by explicit review operation.");
+    }
+
+    public async Task<IReadOnlyList<DecisionProposalRevision>> ListProposalRevisionsAsync(Guid repositoryId, string proposalId)
+    {
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        _ = await GetProposalAsync(repositoryId, proposalId);
+        return await decisionRepository.ListProposalRevisionsAsync(repository, proposalId);
+    }
+
+    public async Task<DecisionProposal> RefineProposalAsync(
+        Guid repositoryId,
+        string proposalId,
+        DecisionRefinementRequest request)
+    {
+        if (request is null)
+        {
+            throw new ArgumentException("Refinement request is required.", nameof(request));
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Reason))
+        {
+            throw new ArgumentException("Refinement reason is required.", nameof(request));
+        }
+
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        DecisionProposal proposal = await GetProposalAsync(repositoryId, proposalId);
+        DecisionTransitionResult transition = DecisionLifecycleRules.ValidateProposalTransition(
+            proposal.State,
+            DecisionProposalState.Refined);
+        if (!transition.IsValid)
+        {
+            throw new InvalidOperationException(transition.Error);
+        }
+
+        DecisionOption[] options = request.Options?.ToArray() ?? proposal.Options.ToArray();
+        if (options.Length == 0)
+        {
+            throw new ArgumentException("Refined proposals require at least one option.", nameof(request));
+        }
+
+        DecisionTradeoff[] tradeoffs = request.Tradeoffs?.ToArray() ?? proposal.Tradeoffs.ToArray();
+        DecisionAssumption[] assumptions = request.Assumptions?.ToArray() ?? proposal.Assumptions.ToArray();
+        DecisionRecommendation? recommendation = request.Recommendation ?? proposal.Recommendation;
+        string context = request.Context ?? proposal.Context;
+        string[] changedFields = ChangedFields(proposal, context, options, tradeoffs, recommendation, assumptions);
+        if (changedFields.Length == 0)
+        {
+            throw new ArgumentException("Refinement must change proposal content.", nameof(request));
+        }
+
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        string revisionId = await decisionRepository.AllocateProposalRevisionIdAsync(repository, proposal.Id);
+        var source = new DecisionSourceReference("DecisionProposal", ProposalPath(proposal.Id), ProposalId: proposal.Id);
+        var revision = new DecisionProposalRevision(
+            revisionId,
+            repository.Id,
+            proposal.Id,
+            now,
+            request.Reason.Trim(),
+            changedFields,
+            Fingerprint(proposal),
+            [source]);
+
+        DecisionProposal updated = proposal with
+        {
+            State = DecisionProposalState.Refined,
+            Context = context,
+            Options = options,
+            Tradeoffs = tradeoffs,
+            Recommendation = recommendation,
+            Assumptions = assumptions,
+            History = proposal.History
+                .Concat([
+                    new DecisionHistoryEntry(
+                        now,
+                        "Refined",
+                        proposal.State.ToString(),
+                        DecisionProposalState.Refined.ToString(),
+                        request.Reason.Trim(),
+                        [
+                            source,
+                            new DecisionSourceReference(
+                                "DecisionProposalRevision",
+                                $".agents/decisions/proposals/{proposal.Id}/revisions/{revisionId}.json",
+                                ProposalId: proposal.Id)
+                        ])
+                ])
+                .ToArray()
+        };
+
+        await decisionRepository.SaveProposalRevisionAsync(repository, revision);
+        await projectionService.ProjectProposalRevisionAsync(repository, revision);
+        await decisionRepository.SaveProposalAsync(repository, updated);
+        await projectionService.ProjectProposalAsync(repository, updated);
+        await projectionService.RefreshDecisionIndexAsync(repository);
+        return updated;
     }
 
     private async Task<DecisionProposal> TransitionProposalAsync(
@@ -262,6 +362,42 @@ public sealed class DecisionGenerationService(
             .OrderBy(item => item.Summary, StringComparer.Ordinal)
             .Take(4)
             .ToArray();
+    }
+
+    private static string[] ChangedFields(
+        DecisionProposal proposal,
+        string context,
+        IReadOnlyList<DecisionOption> options,
+        IReadOnlyList<DecisionTradeoff> tradeoffs,
+        DecisionRecommendation? recommendation,
+        IReadOnlyList<DecisionAssumption> assumptions)
+    {
+        var changed = new List<string>();
+        AddIfChanged("Context", proposal.Context, context);
+        AddIfChanged("Options", proposal.Options, options);
+        AddIfChanged("Tradeoffs", proposal.Tradeoffs, tradeoffs);
+        AddIfChanged("Recommendation", proposal.Recommendation, recommendation);
+        AddIfChanged("Assumptions", proposal.Assumptions, assumptions);
+        return changed.ToArray();
+
+        void AddIfChanged<T>(string field, T before, T after)
+        {
+            if (!string.Equals(Serialize(before), Serialize(after), StringComparison.Ordinal))
+            {
+                changed.Add(field);
+            }
+        }
+    }
+
+    private static string Fingerprint(DecisionProposal proposal)
+    {
+        byte[] bytes = Encoding.UTF8.GetBytes(Serialize(proposal));
+        return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+    }
+
+    private static string Serialize<T>(T value)
+    {
+        return JsonSerializer.Serialize(value, DecisionJson.Options);
     }
 
     private static string CandidatePath(string candidateId)

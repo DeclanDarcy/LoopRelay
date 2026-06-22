@@ -211,6 +211,80 @@ public sealed class DecisionGenerationServiceTests
     }
 
     [Fact]
+    public async Task RefinementCreatesRevisionArtifactBeforeProposalCanBecomeRefined()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var service = CreateGenerationService(repository, store, decisionRepository);
+        DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
+        await service.MarkProposalViewedAsync(repository.Id, proposal.Id, null);
+        await service.MarkProposalNeedsRefinementAsync(repository.Id, proposal.Id, "Needs clearer scope.");
+
+        DecisionProposal refined = await service.RefineProposalAsync(
+            repository.Id,
+            proposal.Id,
+            new DecisionRefinementRequest(
+                "Clarify context for reviewer.",
+                Context: "Refined context with clearer decision scope."));
+
+        Assert.Equal(DecisionProposalState.Refined, refined.State);
+        Assert.Equal("Refined context with clearer decision scope.", refined.Context);
+        Assert.True(File.Exists(Path.Combine(repository.Path, ".agents", "decisions", "proposals", "PROP-0001", "revisions", "REV-0001.json")));
+        Assert.True(File.Exists(Path.Combine(repository.Path, ".agents", "decisions", "proposals", "PROP-0001", "revisions", "REV-0001.md")));
+
+        DecisionProposalRevision revision = Assert.Single(await service.ListProposalRevisionsAsync(repository.Id, proposal.Id));
+        Assert.Equal("REV-0001", revision.Id);
+        Assert.Equal(proposal.Id, revision.ProposalId);
+        Assert.Contains("Context", revision.ChangedFields);
+        Assert.False(string.IsNullOrWhiteSpace(revision.SourceProposalFingerprint));
+        Assert.Contains(refined.History, entry =>
+            entry.Event == "Refined" &&
+            entry.FromState == DecisionProposalState.NeedsRefinement.ToString() &&
+            entry.ToState == DecisionProposalState.Refined.ToString() &&
+            entry.Sources.Any(source => source.RelativePath == ".agents/decisions/proposals/PROP-0001/revisions/REV-0001.json"));
+
+        string proposalMarkdown = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/proposal.md");
+        string revisionMarkdown = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/revisions/REV-0001.md");
+        string index = await ReadAsync(repository, ".agents/decisions/decisions.md");
+        Assert.Contains("- State: Refined", proposalMarkdown);
+        Assert.Contains("Clarify context for reviewer.", revisionMarkdown);
+        Assert.Contains("- PROP-0001 | Refined | CAND-0001 | Decide persistence schema", index);
+    }
+
+    [Fact]
+    public async Task RefinementRequiresNeedsRefinementStateAndChangedContent()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var service = CreateGenerationService(repository, store, decisionRepository);
+        DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
+
+        InvalidOperationException stateException = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.RefineProposalAsync(
+                repository.Id,
+                proposal.Id,
+                new DecisionRefinementRequest("Try refining too early.", Context: "Changed context.")));
+
+        await service.MarkProposalViewedAsync(repository.Id, proposal.Id, null);
+        await service.MarkProposalNeedsRefinementAsync(repository.Id, proposal.Id, null);
+        ArgumentException unchangedException = await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.RefineProposalAsync(
+                repository.Id,
+                proposal.Id,
+                new DecisionRefinementRequest("No content changed.")));
+
+        Assert.Equal("Proposal transition from Generated to Refined is not allowed.", stateException.Message);
+        Assert.Equal("Refinement must change proposal content. (Parameter 'request')", unchangedException.Message);
+        Assert.Empty(await service.ListProposalRevisionsAsync(repository.Id, proposal.Id));
+    }
+
+    [Fact]
     public async Task ReadyForResolutionCanBeMarkedFromGeneratedOrViewedProposal()
     {
         Repository repository = CreateRepository();
@@ -285,6 +359,9 @@ public sealed class DecisionGenerationServiceTests
         HttpResponseMessage readyResponse = await client.PostAsJsonAsync(
             $"{root}/api/repositories/{repository.Id}/decisions/proposals/{regenerated.Id}/review/ready-for-resolution",
             new DecisionProposalTransitionRequest("Ready for human resolution."));
+        HttpResponseMessage refineTooLateResponse = await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/proposals/{regenerated.Id}/refinements",
+            new DecisionRefinementRequest("Attempt after ready.", Context: "Changed context."));
 
         Assert.Equal(HttpStatusCode.OK, generateResponse.StatusCode);
         Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
@@ -293,6 +370,7 @@ public sealed class DecisionGenerationServiceTests
         Assert.Equal(HttpStatusCode.OK, regenerateResponse.StatusCode);
         Assert.Equal(HttpStatusCode.OK, viewedResponse.StatusCode);
         Assert.Equal(HttpStatusCode.OK, readyResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, refineTooLateResponse.StatusCode);
         Assert.Single(listed);
         Assert.Equal(generated.Id, listed[0].Id);
         Assert.Equal(DecisionProposalState.Viewed, (await viewedResponse.Content.ReadFromJsonAsync<DecisionProposal>(jsonOptions))!.State);
@@ -332,6 +410,50 @@ public sealed class DecisionGenerationServiceTests
             null);
 
         Assert.Equal(HttpStatusCode.Conflict, readyResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task ProposalRefinementEndpointPersistsRevisionAndListsIt()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services => services.AddSingleton<IRepositoryService>(new StubRepositoryService(repository)));
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+        using var client = new HttpClient();
+        string root = app.Urls.Single();
+        JsonSerializerOptions jsonOptions = CreateJsonOptions();
+
+        DecisionProposal proposal = (await (await client.PostAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/candidates/{candidate.Id}/proposals",
+            null)).Content.ReadFromJsonAsync<DecisionProposal>(jsonOptions))!;
+        await client.PostAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/proposals/{proposal.Id}/review/viewed",
+            null);
+        await client.PostAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/proposals/{proposal.Id}/review/needs-refinement",
+            null);
+
+        HttpResponseMessage refineResponse = await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/proposals/{proposal.Id}/refinements",
+            new DecisionRefinementRequest("Refine endpoint context.", Context: "Endpoint-refined context."));
+        HttpResponseMessage revisionsResponse = await client.GetAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/proposals/{proposal.Id}/revisions");
+
+        DecisionProposal refined = (await refineResponse.Content.ReadFromJsonAsync<DecisionProposal>(jsonOptions))!;
+        DecisionProposalRevision[] revisions = (await revisionsResponse.Content.ReadFromJsonAsync<DecisionProposalRevision[]>(jsonOptions))!;
+        Assert.Equal(HttpStatusCode.OK, refineResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, revisionsResponse.StatusCode);
+        Assert.Equal(DecisionProposalState.Refined, refined.State);
+        DecisionProposalRevision revision = Assert.Single(revisions);
+        Assert.Equal("REV-0001", revision.Id);
+        Assert.Contains("Context", revision.ChangedFields);
     }
 
     [Fact]

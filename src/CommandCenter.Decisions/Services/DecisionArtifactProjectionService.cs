@@ -29,6 +29,13 @@ public sealed class DecisionArtifactProjectionService(
         await WriteAsync(repository, DecisionArtifactPaths.ProposalMarkdown(id), RenderProposal(proposal));
     }
 
+    public async Task ProjectProposalRevisionAsync(Repository repository, DecisionProposalRevision revision)
+    {
+        string proposalId = DecisionArtifactPaths.ValidateId(revision.ProposalId, "PROP");
+        string revisionId = DecisionArtifactPaths.ValidateId(revision.Id, "REV");
+        await WriteAsync(repository, DecisionArtifactPaths.ProposalRevisionMarkdown(proposalId, revisionId), RenderProposalRevision(revision));
+    }
+
     public async Task RefreshDecisionIndexAsync(Repository repository)
     {
         IReadOnlyList<Decision> decisions = await decisionRepository.ListDecisionsAsync(repository);
@@ -239,6 +246,29 @@ public sealed class DecisionArtifactProjectionService(
         markdown.EvidenceList(proposal.Evidence);
         markdown.H2("History");
         markdown.HistoryList(proposal.History);
+        return markdown.ToString();
+    }
+
+    private static string RenderProposalRevision(DecisionProposalRevision revision)
+    {
+        var markdown = new MarkdownProjectionBuilder();
+        markdown.H1($"{revision.Id}: {revision.ProposalId}");
+        markdown.Fields(
+            ("Proposal", revision.ProposalId),
+            ("Repository", revision.RepositoryId.ToString()),
+            ("Created", FormatTimestamp(revision.CreatedAt)),
+            ("Source proposal fingerprint", revision.SourceProposalFingerprint));
+        markdown.H2("Reason");
+        markdown.Paragraph(revision.Reason);
+        markdown.H2("Changed Fields");
+        foreach (string field in revision.ChangedFields.Order(StringComparer.Ordinal))
+        {
+            markdown.Bullet(field);
+        }
+
+        markdown.EmptyListIf(revision.ChangedFields.Count == 0);
+        markdown.H2("Sources");
+        markdown.SourceList(revision.Sources);
         return markdown.ToString();
     }
 

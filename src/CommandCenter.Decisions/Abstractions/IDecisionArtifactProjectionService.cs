@@ -11,6 +11,8 @@ public interface IDecisionArtifactProjectionService
 
     Task ProjectProposalAsync(Repository repository, DecisionProposal proposal);
 
+    Task ProjectProposalRevisionAsync(Repository repository, DecisionProposalRevision revision);
+
     Task RefreshDecisionIndexAsync(Repository repository);
 
     Task RefreshAllAsync(Repository repository);

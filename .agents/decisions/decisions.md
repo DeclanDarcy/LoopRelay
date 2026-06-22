@@ -2,19 +2,19 @@
 
 ## Newly Authorized
 
-- The M3 review-transition slice is accepted as aligned with the roadmap.
-- The lifecycle distinction remains authoritative: `ProposalState`, review content, and decision authority are separate concepts.
-- Review transitions for `Generated -> Viewed`, `Viewed -> NeedsRefinement`, and `Viewed -> ReadyForResolution` belong in M3 and do not require refinement artifacts, review notes, or resolution to exist first.
-- Invalid proposal transitions must continue to be centrally enforced by backend lifecycle rules so endpoints, future UI, and future Tauri commands cannot drift.
-- Authoritative proposal state changes must refresh repository projections.
-- `ReadyForResolution` must remain non-expirable under the current transition matrix; weakening that path would blur proposal review completion with human decision authority.
-- Review notes must remain separate from proposal lifecycle state and should not be embedded into proposal state.
-- The next M3 slice should implement refinement before resolution.
-- Refinement work should introduce `DecisionProposalRevision` and `DecisionRefinementRequest` before implementing refinement transitions.
-- Proposal revisions should persist as separate `revisions/REV-*.json` and `revisions/REV-*.md` artifacts.
-- `NeedsRefinement -> Refined` should occur only through explicit refinement operations, not direct state mutation.
-- Revisions should record reason, changed fields, source proposal, and timestamp.
-- Tests should prove that `NeedsRefinement -> Refined` requires a revision artifact.
+- The M3 refinement slice is accepted as aligned with the roadmap.
+- Refinement remains proposal evolution, not decision authority.
+- `REV-*` artifacts are repository-backed authority for proposal evolution.
+- Candidate authority, proposal authority, revision authority, and decision authority must remain separate layers.
+- `NeedsRefinement -> Refined` must continue to require an explicit content-bearing refinement operation.
+- `ReadyForResolution` must remain protected from refinement and expiration shortcuts.
+- The next authorized proposal path after `ReadyForResolution` is `Resolve`.
+- The next M3 slice should proceed to resolution, kept narrow.
+- Resolution work should introduce `ResolveDecisionCommand`, `DecisionResolution`, `DecisionResolutionRationale`, and `DecisionResolutionHistory`.
+- Resolution should implement `ReadyForResolution -> Resolved`.
+- Resolution should create authoritative `DEC-*` records and refresh `decision.json`, `decision.md`, and `decisions.md`.
+- Resolution tests should prove non-ready proposals cannot resolve, rationale is required, resolver metadata is required, selected option is recorded, recommendation divergence is recorded, proposal resolution does not mutate operational context, and proposal resolution does not project into execution.
+- No operational-context assimilation should be implemented in the resolution slice.
 
 ## Current Milestone Status
 
