@@ -2,23 +2,28 @@
 
 ## New State From This Slice
 
-- Completed the final M4 review-workspace closure pass.
-- Marked `.agents/milestones/m4-review-workspace.md` complete for read models, with review diagnostics accepted as discoverable in the proposal viewer instead of requiring a redundant diagnostics panel.
-- Patched `src/CommandCenter.UI/src/App.css` so Decisions review-workspace grids collapse on narrow screens for:
-  - evidence/source inspection
-  - review diagnostics
-  - option comparison
-  - review notes and revisions
-- Rotated the previous handoff to `.agents/handoffs/handoff.0019.md`.
+- Began M5 refinement workflow backend implementation.
+- Added first-class refinement models:
+  - `DecisionConstraint`
+  - `DecisionAssumptionRevision`
+  - `DecisionOptionRevision`
+  - `DecisionTradeoffRevision`
+- Expanded `DecisionRefinementRequest` with requested-by attribution, base proposal fingerprint, constraints, explicit assumption/option/tradeoff revision payloads, and rejected changes.
+- Expanded `DecisionProposalRevision` with requested-by attribution, accepted/rejected changes, diagnostics, previous and retired options/assumptions, constraints, explicit revision payloads, and recommendation rationale before/after fields.
+- Added `IDecisionRefinementService` and `DecisionRefinementService`.
+- Moved refinement endpoints to depend on `IDecisionRefinementService` instead of `IDecisionGenerationService`.
+- Registered the refinement service in Decisions DI.
+- Added stale-base protection: refinement requests with a mismatched `BaseProposalFingerprint` now fail with a conflict-level `InvalidOperationException`.
+- Revision markdown now projects attribution, accepted/rejected changes, constraints, retired options, retired assumptions, explicit revision records, recommendation rationale before/after, diagnostics, and sources.
+- Added backend tests covering stale-base rejection, retired option/assumption preservation, attribution, diagnostics, constraints, rejected changes, and recommendation-rationale evolution.
+- Updated `.agents/milestones/m5-refinement-workflow.md` to mark completed backend and test items from this slice.
+- Rotated the previous handoff to `.agents/handoffs/handoff.0020.md`.
 
 ## Verification
 
-- `npm run test --prefix src/CommandCenter.UI -- decisionProposalViewer decisionOptionComparison decisionEvidenceSourcePanel decisionLifecycleNavigation` passes.
-- `npm run lint --prefix src/CommandCenter.UI` passes.
-- `npm run test --prefix src/CommandCenter.UI` passes with 42 files and 151 tests.
-- `npm run build --prefix src/CommandCenter.UI` succeeds.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes with 293 tests.
 
 ## Next Slice
 
-- Begin M5 refinement workflow planning and implementation.
-- Focus first on backend/domain support for refinement requests, proposal revisions, stale-base protection, and revision history read models before adding mutation controls to React.
+- Continue M5 by adding explicit revision comparison/read models before UI mutation controls.
+- Focus on current-versus-previous proposal comparison, revision-history API/read model shape, and tests for tradeoff expansion and priority changes.

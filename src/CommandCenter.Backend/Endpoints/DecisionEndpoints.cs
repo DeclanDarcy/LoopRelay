@@ -640,7 +640,7 @@ public static class DecisionEndpoints
             Guid repositoryId,
             string proposalId,
             DecisionRefinementRequest? request,
-            IDecisionGenerationService generationService) =>
+            IDecisionRefinementService refinementService) =>
         {
             try
             {
@@ -649,7 +649,7 @@ public static class DecisionEndpoints
                     return Results.BadRequest(new { error = "Refinement request is required." });
                 }
 
-                return Results.Ok(await generationService.RefineProposalAsync(repositoryId, proposalId, request));
+                return Results.Ok(await refinementService.RefineProposalAsync(repositoryId, proposalId, request));
             }
             catch (KeyNotFoundException exception)
             {
@@ -669,11 +669,11 @@ public static class DecisionEndpoints
         app.MapGet("/api/repositories/{repositoryId:guid}/decisions/proposals/{proposalId}/revisions", async (
             Guid repositoryId,
             string proposalId,
-            IDecisionGenerationService generationService) =>
+            IDecisionRefinementService refinementService) =>
         {
             try
             {
-                return Results.Ok(await generationService.ListProposalRevisionsAsync(repositoryId, proposalId));
+                return Results.Ok(await refinementService.ListProposalRevisionsAsync(repositoryId, proposalId));
             }
             catch (KeyNotFoundException exception)
             {
