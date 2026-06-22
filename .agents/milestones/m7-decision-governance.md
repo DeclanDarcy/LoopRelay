@@ -8,20 +8,24 @@ detect decision ecosystem health issues before decisions are projected into exec
 
 - [x] Add governance findings, categories, severities, reports, diagnostics, and health assessment models.
 - [x] Implement `IDecisionGovernanceService`.
-- [ ] Add analyzers for:
+- [x] Add analyzers for:
   - [x] consistency
   - [x] supersession lineage
   - [x] dependency integrity
   - [x] authority metadata
   - [x] authority boundary integrity
   - [x] resolved decision snapshot integrity
-  - [ ] decision coverage
+  - [x] decision coverage
   - [x] proposal quality
   - [x] execution projection readiness
-- [ ] Decision coverage analysis detects repeated ambiguity, repeated blockers, repeated governance findings, repeated forks, stale candidates, and repeated unresolved questions.
+- [x] Decision coverage analysis detects repeated ambiguity, repeated blockers, repeated governance findings, repeated forks, stale candidates, and repeated unresolved questions.
   - [x] Stale candidates.
   - [x] Repeated unresolved questions from structured candidate signals.
-- [ ] Detect contradictory resolved decisions, conflicting directives, circular supersession, broken dependencies, missing resolver metadata, unresolved stale proposals, decisions not ready for projection, and projection failures.
+  - [x] Repeated ambiguity from structured candidate signals.
+  - [x] Repeated blockers from structured candidate signals.
+  - [x] Repeated forks from structured candidate signals.
+  - [x] Repeated governance findings from persisted governance reports.
+- [x] Detect contradictory resolved decisions, conflicting directives, circular supersession, broken dependencies, missing resolver metadata, unresolved stale proposals, decisions not ready for projection, and projection failures.
   - [x] Contradictory resolved decisions.
   - [x] Circular supersession.
   - [x] Missing relationship targets.

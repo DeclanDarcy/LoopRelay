@@ -49,6 +49,8 @@ public sealed class DecisionGovernanceService(
         IReadOnlyList<DecisionProposal> proposals = await decisionRepository.ListProposalsAsync(repository);
         IReadOnlyList<DecisionAssimilationRecommendation> assimilationRecommendations =
             await ListAssimilationRecommendationsAsync(repository, decisions);
+        IReadOnlyList<DecisionGovernanceReport> priorGovernanceReports =
+            await decisionRepository.ListGovernanceReportsAsync(repository);
         var findings = new List<DecisionGovernanceFinding>();
         var diagnostics = new List<string>();
 
@@ -63,6 +65,7 @@ public sealed class DecisionGovernanceService(
         AnalyzeAuthorityBoundaries(decisions, proposals, assimilationRecommendations, findings);
         AnalyzeProjectionIntegrity(repository, decisions, candidates, proposals, findings);
         AnalyzeCoverage(candidates, proposals, findings, diagnostics);
+        AnalyzeRepeatedGovernanceFindings(priorGovernanceReports, findings);
 
         IReadOnlyList<DecisionGovernanceFinding> orderedFindings = findings
             .OrderByDescending(finding => finding.Severity)
@@ -802,7 +805,30 @@ public sealed class DecisionGovernanceService(
         List<DecisionGovernanceFinding> findings,
         List<string> diagnostics)
     {
-        AnalyzeRepeatedUnresolvedQuestionSignals(candidates, findings);
+        AnalyzeRepeatedSignalCoverage(
+            candidates,
+            findings,
+            "Repeated ambiguity signal",
+            "ambiguity",
+            ["Ambiguity"]);
+        AnalyzeRepeatedSignalCoverage(
+            candidates,
+            findings,
+            "Repeated blocker signal",
+            "blocker",
+            ["BlockedExecution"]);
+        AnalyzeRepeatedSignalCoverage(
+            candidates,
+            findings,
+            "Repeated architectural fork signal",
+            "architectural-fork",
+            ["ArchitecturalFork"]);
+        AnalyzeRepeatedSignalCoverage(
+            candidates,
+            findings,
+            "Repeated unresolved question signal",
+            "unresolved-question",
+            ["MissingDirection", "RepeatedContinuityUncertainty", "StaleOpenDecision"]);
 
         foreach (DecisionCandidate candidate in candidates.Where(candidate => candidate.State == DecisionCandidateState.Promoted))
         {
@@ -826,21 +852,68 @@ public sealed class DecisionGovernanceService(
             }
         }
 
-        diagnostics.Add("Repeated ambiguity, repeated blocker, and repeated fork analysis is limited to structured candidate/proposal evidence in this slice.");
+        diagnostics.Add("Repeated decision coverage analysis is limited to structured active-candidate signal kinds and exact source references.");
     }
 
-    private static void AnalyzeRepeatedUnresolvedQuestionSignals(
-        IReadOnlyList<DecisionCandidate> candidates,
+    private static void AnalyzeRepeatedGovernanceFindings(
+        IReadOnlyList<DecisionGovernanceReport> priorReports,
         List<DecisionGovernanceFinding> findings)
     {
-        foreach (IGrouping<string, CandidateSignalReference> repeatedQuestion in candidates
+        GovernanceFindingOccurrence[] occurrences = priorReports
+            .SelectMany(report => report.Findings
+                .Where(finding => finding.Title != "Repeated governance finding")
+                .Select(finding => new GovernanceFindingOccurrence(report.Id, finding)))
+            .Concat(findings
+                .Where(finding => finding.Title != "Repeated governance finding")
+                .Select(finding => new GovernanceFindingOccurrence("current", finding)))
+            .ToArray();
+
+        foreach (IGrouping<string, GovernanceFindingOccurrence> repeatedFinding in occurrences
+                     .GroupBy(occurrence => GovernanceFindingKey(occurrence.Finding), StringComparer.Ordinal)
+                     .Where(group => group.Select(occurrence => occurrence.ReportId).Distinct(StringComparer.Ordinal).Count() > 1))
+        {
+            GovernanceFindingOccurrence[] repeatedOccurrences = repeatedFinding.ToArray();
+            DecisionGovernanceFinding representative = repeatedOccurrences[0].Finding;
+            string[] reportIds = repeatedOccurrences
+                .Select(occurrence => occurrence.ReportId)
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+            AddFinding(
+                findings,
+                DecisionGovernanceCategory.DecisionCoverage,
+                DecisionGovernanceSeverity.Warning,
+                false,
+                "Repeated governance finding",
+                $"Governance finding '{representative.Title}' appears in multiple reports: {string.Join(", ", reportIds)}.",
+                repeatedOccurrences
+                    .Where(occurrence => occurrence.ReportId != "current")
+                    .Select(occurrence => new DecisionSourceReference(
+                        "DecisionGovernanceReport",
+                        $".agents/decisions/governance/{occurrence.ReportId}.json"))
+                    .Concat(repeatedOccurrences.SelectMany(occurrence => occurrence.Finding.Sources))
+                    .ToArray(),
+                repeatedOccurrences.SelectMany(occurrence => occurrence.Finding.RelatedDecisionIds).ToArray(),
+                repeatedOccurrences.SelectMany(occurrence => occurrence.Finding.RelatedCandidateIds).ToArray(),
+                repeatedOccurrences.SelectMany(occurrence => occurrence.Finding.RelatedProposalIds).ToArray());
+        }
+    }
+
+    private static void AnalyzeRepeatedSignalCoverage(
+        IReadOnlyList<DecisionCandidate> candidates,
+        List<DecisionGovernanceFinding> findings,
+        string title,
+        string signalLabel,
+        IReadOnlyCollection<string> signalKinds)
+    {
+        foreach (IGrouping<string, CandidateSignalReference> repeatedSignal in candidates
                      .Where(IsActiveCandidate)
                      .SelectMany(CandidateSignalReferences)
-                     .Where(reference => IsUnresolvedQuestionSignal(reference.SignalKind))
+                     .Where(reference => signalKinds.Contains(reference.SignalKind))
                      .GroupBy(reference => $"{reference.SignalKind}|{SourceKey(reference.Source)}", StringComparer.Ordinal)
                      .Where(group => group.Select(reference => reference.Candidate.Id).Distinct(StringComparer.Ordinal).Count() > 1))
         {
-            CandidateSignalReference[] references = repeatedQuestion.ToArray();
+            CandidateSignalReference[] references = repeatedSignal.ToArray();
             DecisionCandidate[] relatedCandidates = references
                 .Select(reference => reference.Candidate)
                 .DistinctBy(candidate => candidate.Id)
@@ -851,8 +924,8 @@ public sealed class DecisionGovernanceService(
                 DecisionGovernanceCategory.DecisionCoverage,
                 DecisionGovernanceSeverity.Warning,
                 false,
-                "Repeated unresolved question signal",
-                $"Active candidates {string.Join(", ", relatedCandidates.Select(candidate => candidate.Id))} repeat unresolved-question signal {references[0].SignalKind} from the same structured source reference.",
+                title,
+                $"Active candidates {string.Join(", ", relatedCandidates.Select(candidate => candidate.Id))} repeat {signalLabel} signal {references[0].SignalKind} from the same structured source reference.",
                 references.Select(reference => reference.Source).Concat(relatedCandidates.Select(CandidateSource)).ToArray(),
                 [],
                 relatedCandidates.Select(candidate => candidate.Id).ToArray(),
@@ -875,11 +948,6 @@ public sealed class DecisionGovernanceService(
         }
     }
 
-    private static bool IsUnresolvedQuestionSignal(string signalKind)
-    {
-        return signalKind is "Ambiguity" or "MissingDirection" or "RepeatedContinuityUncertainty" or "StaleOpenDecision";
-    }
-
     private static string SourceKey(DecisionSourceReference source)
     {
         return string.Join(
@@ -888,6 +956,17 @@ public sealed class DecisionGovernanceService(
             source.RelativePath ?? string.Empty,
             source.Section ?? string.Empty,
             source.ItemId ?? string.Empty);
+    }
+
+    private static string GovernanceFindingKey(DecisionGovernanceFinding finding)
+    {
+        return string.Join(
+            "|",
+            finding.Category,
+            finding.Title,
+            string.Join(",", finding.RelatedDecisionIds.Order(StringComparer.Ordinal)),
+            string.Join(",", finding.RelatedCandidateIds.Order(StringComparer.Ordinal)),
+            string.Join(",", finding.RelatedProposalIds.Order(StringComparer.Ordinal)));
     }
 
     private static bool IsActiveCandidate(DecisionCandidate candidate)
@@ -1166,6 +1245,10 @@ public sealed class DecisionGovernanceService(
         DecisionCandidate Candidate,
         string SignalKind,
         DecisionSourceReference Source);
+
+    private sealed record GovernanceFindingOccurrence(
+        string ReportId,
+        DecisionGovernanceFinding Finding);
 
     private static DecisionSourceReference DecisionSource(Decision decision)
     {

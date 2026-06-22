@@ -160,6 +160,48 @@ public sealed class DecisionGovernanceServiceTests
     }
 
     [Fact]
+    public async Task RepeatedGovernanceFindingsCreateCoverageFinding()
+    {
+        Repository repository = CreateRepository();
+        var decisionRepository = new InMemoryDecisionRepository();
+        await decisionRepository.SaveCandidateAsync(repository, CreateCandidate(repository.Id));
+        await decisionRepository.SaveGovernanceReportAsync(
+            repository,
+            new DecisionGovernanceReport(
+                "governance.202606220000000000000",
+                repository.Id,
+                DateTimeOffset.UtcNow.AddMinutes(-5),
+                "prior-input",
+                DecisionHealthAssessment.AdvisoryFindings,
+                new DecisionGovernanceSummary(0, 0, 1, 0, 0, 1, 0),
+                [
+                    new DecisionGovernanceFinding(
+                        "GOV-0001",
+                        DecisionGovernanceCategory.DecisionCoverage,
+                        DecisionGovernanceSeverity.Warning,
+                        false,
+                        "Promoted candidate has no proposal",
+                        "Candidate CAND-0001 is promoted but has no active or resolved proposal.",
+                        [new DecisionSourceReference("DecisionCandidate", ".agents/decisions/candidates/CAND-0001/candidate.json", CandidateId: "CAND-0001")],
+                        [],
+                        ["CAND-0001"],
+                        [])
+                ],
+                []));
+        var service = CreateService(repository, decisionRepository);
+
+        DecisionGovernanceReport report = await service.GetCurrentReportAsync(repository.Id);
+
+        Assert.Equal(DecisionHealthAssessment.AdvisoryFindings, report.Health);
+        Assert.Contains(report.Findings, finding =>
+            finding.Category == DecisionGovernanceCategory.DecisionCoverage &&
+            finding.Title == "Repeated governance finding" &&
+            finding.Severity == DecisionGovernanceSeverity.Warning &&
+            !finding.BlocksExecutionProjection &&
+            finding.RelatedCandidateIds.SequenceEqual(["CAND-0001"]));
+    }
+
+    [Fact]
     public async Task ActiveProposalForTerminalCandidateCreatesStaleProposalFinding()
     {
         Repository repository = CreateRepository();
@@ -284,7 +326,7 @@ public sealed class DecisionGovernanceServiceTests
     }
 
     [Fact]
-    public async Task RepeatedUnresolvedQuestionSignalsCreateCoverageFinding()
+    public async Task RepeatedAmbiguitySignalsCreateCoverageFinding()
     {
         Repository repository = CreateRepository();
         var decisionRepository = new InMemoryDecisionRepository();
@@ -302,6 +344,105 @@ public sealed class DecisionGovernanceServiceTests
                 state: DecisionCandidateState.Discovered,
                 sourceFingerprint: "different-source-fingerprint",
                 signalKind: "Ambiguity",
+                sourceItemId: "milestone-7-coverage"));
+        var service = CreateService(repository, decisionRepository);
+
+        DecisionGovernanceReport report = await service.GetCurrentReportAsync(repository.Id);
+
+        Assert.Equal(DecisionHealthAssessment.AdvisoryFindings, report.Health);
+        Assert.Contains(report.Findings, finding =>
+            finding.Category == DecisionGovernanceCategory.DecisionCoverage &&
+            finding.Title == "Repeated ambiguity signal" &&
+            finding.Severity == DecisionGovernanceSeverity.Warning &&
+            !finding.BlocksExecutionProjection &&
+            finding.RelatedCandidateIds.SequenceEqual(["CAND-0001", "CAND-0002"]));
+    }
+
+    [Fact]
+    public async Task RepeatedBlockerSignalsCreateCoverageFinding()
+    {
+        Repository repository = CreateRepository();
+        var decisionRepository = new InMemoryDecisionRepository();
+        await decisionRepository.SaveCandidateAsync(
+            repository,
+            CreateCandidate(
+                repository.Id,
+                signalKind: "BlockedExecution",
+                sourceItemId: "milestone-7-coverage"));
+        await decisionRepository.SaveCandidateAsync(
+            repository,
+            CreateCandidate(
+                repository.Id,
+                candidateId: "CAND-0002",
+                state: DecisionCandidateState.Discovered,
+                sourceFingerprint: "different-source-fingerprint",
+                signalKind: "BlockedExecution",
+                sourceItemId: "milestone-7-coverage"));
+        var service = CreateService(repository, decisionRepository);
+
+        DecisionGovernanceReport report = await service.GetCurrentReportAsync(repository.Id);
+
+        Assert.Equal(DecisionHealthAssessment.AdvisoryFindings, report.Health);
+        Assert.Contains(report.Findings, finding =>
+            finding.Category == DecisionGovernanceCategory.DecisionCoverage &&
+            finding.Title == "Repeated blocker signal" &&
+            finding.Severity == DecisionGovernanceSeverity.Warning &&
+            !finding.BlocksExecutionProjection &&
+            finding.RelatedCandidateIds.SequenceEqual(["CAND-0001", "CAND-0002"]));
+    }
+
+    [Fact]
+    public async Task RepeatedArchitecturalForkSignalsCreateCoverageFinding()
+    {
+        Repository repository = CreateRepository();
+        var decisionRepository = new InMemoryDecisionRepository();
+        await decisionRepository.SaveCandidateAsync(
+            repository,
+            CreateCandidate(
+                repository.Id,
+                signalKind: "ArchitecturalFork",
+                sourceItemId: "milestone-7-coverage"));
+        await decisionRepository.SaveCandidateAsync(
+            repository,
+            CreateCandidate(
+                repository.Id,
+                candidateId: "CAND-0002",
+                state: DecisionCandidateState.Discovered,
+                sourceFingerprint: "different-source-fingerprint",
+                signalKind: "ArchitecturalFork",
+                sourceItemId: "milestone-7-coverage"));
+        var service = CreateService(repository, decisionRepository);
+
+        DecisionGovernanceReport report = await service.GetCurrentReportAsync(repository.Id);
+
+        Assert.Equal(DecisionHealthAssessment.AdvisoryFindings, report.Health);
+        Assert.Contains(report.Findings, finding =>
+            finding.Category == DecisionGovernanceCategory.DecisionCoverage &&
+            finding.Title == "Repeated architectural fork signal" &&
+            finding.Severity == DecisionGovernanceSeverity.Warning &&
+            !finding.BlocksExecutionProjection &&
+            finding.RelatedCandidateIds.SequenceEqual(["CAND-0001", "CAND-0002"]));
+    }
+
+    [Fact]
+    public async Task RepeatedUnresolvedQuestionSignalsCreateCoverageFinding()
+    {
+        Repository repository = CreateRepository();
+        var decisionRepository = new InMemoryDecisionRepository();
+        await decisionRepository.SaveCandidateAsync(
+            repository,
+            CreateCandidate(
+                repository.Id,
+                signalKind: "MissingDirection",
+                sourceItemId: "milestone-7-coverage"));
+        await decisionRepository.SaveCandidateAsync(
+            repository,
+            CreateCandidate(
+                repository.Id,
+                candidateId: "CAND-0002",
+                state: DecisionCandidateState.Discovered,
+                sourceFingerprint: "different-source-fingerprint",
+                signalKind: "MissingDirection",
                 sourceItemId: "milestone-7-coverage"));
         var service = CreateService(repository, decisionRepository);
 
