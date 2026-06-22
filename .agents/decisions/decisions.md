@@ -2,13 +2,9 @@
 
 ## Newly Authorized
 
-- Treat M4 as closed.
-- Preserve the M4 Execution boundary: `ExecutionTab` owns composition and presentation, while `App.tsx` and backend-owned surfaces retain workflow authority, readiness authority, and mutation authority.
-- Preserve the existing `useExecutionEvents` event stream as the single event source; do not introduce client replay, client persistence, client event caching, or a secondary event store.
-- Source Execution stream provider, status, and session id from the projected session model rather than inferring them from execution events.
-- Keep Abort absent unless and until a backend-owned abort capability exists.
-- Keep Execution cross-links navigation-only; they must not mutate workflow state.
-- Begin M5 with an Operational Context inventory before extraction.
-- Treat Operational Context as the most authority-sensitive remaining surface because proposal generation, review, comparison, acceptance, rejection, promotion, draft ownership, and readiness ownership are tightly coupled.
-- For M5, separate presentation/composition from authority before implementation.
-- Ensure `OperationalContextTab` owns composition and presentation only; proposal decisions and workflow authority must remain with `App.tsx` and backend-owned commands/projections.
+- Proceed with M5 Workstream 5.7 next, focused on Operational Context cross-links.
+- Treat Operational Context cross-links as navigation-only: tab selection, section targeting, focus navigation, and view switching are allowed.
+- Forbid Operational Context cross-links from generating, accepting, rejecting, promoting, refreshing projections, loading sessions, or invoking backend commands.
+- Before closing M5, audit `OperationalContextTab` for no draft ownership, no readiness ownership, and no mutation ownership.
+- Preserve the current M5 authority boundary: `OperationalContextTab` owns presentation/composition only, while `App.tsx` continues to own draft authority, readiness authority, workflow authority, mutation dispatch, refresh lifecycle, selected repository state, and backend command invocation.
+- If Workstream 5.7 passes the navigation-only audit and no authority ownership leaked into `OperationalContextTab`, M5 is eligible for certification and closure.

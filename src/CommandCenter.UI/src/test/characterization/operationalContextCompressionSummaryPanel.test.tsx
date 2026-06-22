@@ -42,11 +42,13 @@ describe('operational context compression summary panel rendering characterizati
     expect(screen.getByRole('heading', { name: 'Compression Summary' })).toBeInTheDocument()
     expect(screen.getByText('Preserved: 10')).toBeInTheDocument()
     expect(screen.getByText('Added: 2')).toBeInTheDocument()
+    expect(screen.getByText('Modified: 3')).toBeInTheDocument()
     expect(screen.getByText('Removed: 4')).toBeInTheDocument()
     expect(screen.getByText('Compressed: 5')).toBeInTheDocument()
     expect(screen.getByText('Permanent: 6')).toBeInTheDocument()
     expect(screen.getByText('Active: 7')).toBeInTheDocument()
     expect(screen.getByText('Historical: 8')).toBeInTheDocument()
+    expect(screen.getByText('Noise: 9')).toBeInTheDocument()
     expect(screen.getByText('Resolved: 1')).toBeInTheDocument()
     expect(screen.getByText('Retired: 2')).toBeInTheDocument()
     expect(screen.getByText('Warnings: 3')).toBeInTheDocument()
@@ -59,18 +61,24 @@ describe('operational context compression summary panel rendering characterizati
 
     expect(headings).toEqual([
       'Compression Summary',
+      'Compression Warnings',
       'Revision Summary',
       'Retention Warnings',
       'Compressed Understanding',
     ])
 
+    const compressionWarnings = screen.getByRole('heading', { name: 'Compression Warnings' }).closest('div')
     const revisionSummary = screen.getByRole('heading', { name: 'Revision Summary' }).closest('div')
     const retentionWarnings = screen.getByRole('heading', { name: 'Retention Warnings' }).closest('div')
     const compressedUnderstanding = screen.getByRole('heading', { name: 'Compressed Understanding' }).closest('div')
 
+    expect(compressionWarnings).not.toBeNull()
     expect(revisionSummary).not.toBeNull()
     expect(retentionWarnings).not.toBeNull()
     expect(compressedUnderstanding).not.toBeNull()
+    expect(within(compressionWarnings as HTMLElement).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+      'General warning',
+    ])
     expect(within(revisionSummary as HTMLElement).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
       'Revision one',
       'Revision two',
@@ -89,11 +97,13 @@ describe('operational context compression summary panel rendering characterizati
     renderPanel(
       createCompressionSummary({
         revisionSummary: [],
+        warnings: [],
         stableUnderstandingRetentionWarnings: [],
         noiseRemovedIndicators: [],
       }),
     )
 
+    expect(screen.queryByRole('heading', { name: 'Compression Warnings' })).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Revision Summary' })).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Retention Warnings' })).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Compressed Understanding' })).not.toBeInTheDocument()

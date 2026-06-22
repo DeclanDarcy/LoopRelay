@@ -35,12 +35,7 @@ import {
   GitStatusDetails,
   PushReviewSummary,
 } from './features/execution/GitWorkflowEvidence'
-import { OperationalContextCompressionSummaryPanel } from './features/operational-context/OperationalContextCompressionSummaryPanel'
-import { OperationalContextCurrentPanel } from './features/operational-context/OperationalContextCurrentPanel'
-import { OperationalContextProposalComparison } from './features/operational-context/OperationalContextProposalComparison'
-import { OperationalContextSemanticChangeList } from './features/operational-context/OperationalContextSemanticChangeList'
-import { OperationalContextProposalSummaryPanel } from './features/operational-context/OperationalContextProposalSummaryPanel'
-import { OperationalContextProposalStatusPanel } from './features/operational-context/OperationalContextProposalStatusPanel'
+import { OperationalContextTab } from './features/operational-context/OperationalContextTab'
 import { SelectedRepositorySummary } from './features/repositories/SelectedRepositorySummary'
 import { ExecutionContextPanel } from './features/workspace/ExecutionContextPanel'
 import { WorkspaceLiveActivityPanel } from './features/workspace/WorkspaceLiveActivityPanel'
@@ -65,38 +60,17 @@ import {
   getArtifactCategories,
   getAvailableArtifactPaths,
   getExecutionWorkflowSteps,
-  getOperationalContextSectionItems,
 } from './lib'
 import { executionReadinessStatus, repositoryExecutionStatus } from './lib/status'
 import { useShellState } from './state/shellState'
 import type {
   CommitPreparation,
   ExecutionSessionSummary,
-  OperationalContextCompressionSummary,
   OperationalContextProposal,
   Repository,
   RepositoryWorkspaceProjection,
 } from './types'
 import './App.css'
-
-const decisionSemanticChangeTypes = new Set([
-  'ImportantDecisionIntroduced',
-  'DecisionRetired',
-  'DecisionAdded',
-  'DecisionRemoved',
-  'RationaleChanged',
-  'RationaleLostWarning',
-  'OpenDecisionPreserved',
-  'OpenDecisionResolved',
-])
-
-function getDecisionContinuityWarnings(summary: OperationalContextCompressionSummary) {
-  return summary.warnings
-    .concat(summary.stableUnderstandingRetentionWarnings)
-    .filter((warning, index, warnings) =>
-      warning.toLowerCase().includes('decision') && warnings.indexOf(warning) === index,
-    )
-}
 
 function App() {
   const {
@@ -248,25 +222,6 @@ function App() {
   const hasOperationalContextProposalDraftChanges =
     operationalContextProposal !== null &&
     operationalContextProposalDraft !== operationalContextCandidateContent
-  const proposedStableDecisions = getOperationalContextSectionItems(
-    operationalContextProposalDraft,
-    'Stable Decisions',
-  )
-  const proposedOpenDecisions = getOperationalContextSectionItems(
-    operationalContextProposalDraft,
-    'Open Questions',
-  ).filter((item) => item.toLowerCase().startsWith('open decision:'))
-  const proposedDecisionRationale = getOperationalContextSectionItems(
-    operationalContextProposalDraft,
-    'Decision Rationale',
-  )
-  const decisionSemanticChanges =
-    operationalContextProposal?.semanticChanges.filter((change) =>
-      decisionSemanticChangeTypes.has(change.type),
-    ) ?? []
-  const decisionContinuityWarnings = operationalContextProposal
-    ? getDecisionContinuityWarnings(operationalContextProposal.compressionSummary)
-    : []
   const milestoneOptions = workspace?.artifactInventory.milestones ?? []
   const selectedExecutionStatus = executionSummary
     ? executionSessionStatus?.sessionId === executionSessionId
@@ -1732,27 +1687,29 @@ function App() {
                 }
               />
 
-              <Panel
-                id="operational-current"
-                className="execution-context-panel tab-panel tab-operational-context"
-                aria-label="Current understanding"
-              >
-                <SectionHeader
-                  className="context-toolbar"
-                  eyebrow="Operational Context"
-                  title="Current Understanding"
-                  headingLevel={4}
-                />
-
-                {workspace ? (
-                  <OperationalContextCurrentPanel
-                    operationalContext={workspace.operationalContext}
-                    proposalSummary={workspace.operationalContextProposalSummary}
-                    executionStatus={operationalContextExecutionStatus}
-                    reviewStatus={operationalContextReviewStatus}
-                  />
-                ) : null}
-              </Panel>
+              <OperationalContextTab
+                workspace={workspace}
+                proposal={operationalContextProposal}
+                currentContent={operationalContextCurrentContent}
+                proposalDraft={operationalContextProposalDraft}
+                reviewNote={operationalContextReviewNote}
+                executionStatus={operationalContextExecutionStatus}
+                reviewStatus={operationalContextReviewStatus}
+                isProposalLoading={isOperationalContextProposalLoading}
+                isProposalSaving={isOperationalContextProposalSaving}
+                isReviewBlocked={isOperationalContextReviewBlocked}
+                canPromoteProposal={canPromoteOperationalContextProposal}
+                hasProposalDraftChanges={hasOperationalContextProposalDraftChanges}
+                hasSelectedRepository={Boolean(selectedRepository)}
+                onLoadLatestProposal={() => void loadLatestOperationalContextProposal()}
+                onGenerateProposal={() => void generateOperationalContextProposal()}
+                onSaveProposalEdit={() => void saveOperationalContextProposalEdit()}
+                onAcceptProposal={() => void acceptOperationalContextProposal()}
+                onRejectProposal={() => void rejectOperationalContextProposal()}
+                onPromoteProposal={() => void promoteOperationalContextProposal()}
+                onProposalDraftChange={setOperationalContextProposalDraft}
+                onReviewNoteChange={setOperationalContextReviewNote}
+              />
 
               <Panel
                 className="execution-context-panel tab-panel tab-continuity"
@@ -1794,187 +1751,6 @@ function App() {
                       : 'No continuity diagnostics loaded.'}
                   </EmptyState>
                 )}
-              </Panel>
-
-              <Panel
-                className="execution-context-panel tab-panel tab-operational-context"
-                id="proposal-review"
-                aria-label="Operational context proposals"
-              >
-                <SectionHeader
-                  className="context-toolbar"
-                  eyebrow="Operational Context"
-                  title="Proposal Review"
-                  headingLevel={4}
-                  actions={
-                    <div className="context-controls">
-                    <button
-                      type="button"
-                      className="secondary-action"
-                      onClick={() => void loadLatestOperationalContextProposal()}
-                      disabled={
-                        !workspace?.operationalContextProposalSummary.latestProposalId ||
-                        isOperationalContextProposalLoading
-                      }
-                    >
-                      Load Latest
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void generateOperationalContextProposal()}
-                      disabled={!selectedRepository || isOperationalContextProposalLoading}
-                    >
-                      {isOperationalContextProposalLoading ? 'Working...' : 'Generate Proposal'}
-                    </button>
-                    </div>
-                  }
-                />
-
-                {workspace ? (
-                  <OperationalContextProposalSummaryPanel
-                    operationalContext={workspace.operationalContext}
-                    proposalSummary={workspace.operationalContextProposalSummary}
-                  />
-                ) : null}
-
-                {operationalContextProposal ? (
-                  <div className="context-artifact-previews">
-                    <OperationalContextProposalStatusPanel proposal={operationalContextProposal} />
-                    <div className="proposal-review-toolbar">
-                      <button
-                        type="button"
-                        className="secondary-action"
-                        onClick={() => void saveOperationalContextProposalEdit()}
-                        disabled={
-                          isOperationalContextReviewBlocked ||
-                          !hasOperationalContextProposalDraftChanges ||
-                          isOperationalContextProposalSaving
-                        }
-                      >
-                        {isOperationalContextProposalSaving ? 'Saving...' : 'Save Edits'}
-                      </button>
-                      <button
-                        type="button"
-                        className="primary-action"
-                        onClick={() => void acceptOperationalContextProposal()}
-                        disabled={isOperationalContextReviewBlocked || isOperationalContextProposalSaving}
-                      >
-                        Accept
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary-action"
-                        onClick={() => void rejectOperationalContextProposal()}
-                        disabled={isOperationalContextReviewBlocked || isOperationalContextProposalSaving}
-                      >
-                        Reject
-                      </button>
-                      <button
-                        type="button"
-                        className="primary-action"
-                        onClick={() => void promoteOperationalContextProposal()}
-                        disabled={!canPromoteOperationalContextProposal || isOperationalContextProposalSaving}
-                      >
-                        Promote
-                      </button>
-                    </div>
-                    <label className="commit-message-editor">
-                      <span>Review note</span>
-                      <textarea
-                        value={operationalContextReviewNote}
-                        onChange={(event) => setOperationalContextReviewNote(event.target.value)}
-                        spellCheck={false}
-                      />
-                    </label>
-                    <label className="proposal-editor">
-                      <span>Proposed markdown</span>
-                      <textarea
-                        value={operationalContextProposalDraft}
-                        onChange={(event) => setOperationalContextProposalDraft(event.target.value)}
-                        disabled={isOperationalContextReviewBlocked}
-                        spellCheck={false}
-                      />
-                    </label>
-                    <div className="proposal-warning-list proposal-decision-review">
-                      <h5>Decision Continuity Review</h5>
-                      <p>
-                        Confirm important decisions, unresolved decisions, and rationale remain present before accepting.
-                      </p>
-                      <div className="proposal-decision-grid">
-                        <div>
-                          <h6>Stable Decisions</h6>
-                          {proposedStableDecisions.length > 0 ? (
-                            <ul>
-                              {proposedStableDecisions.map((decision) => (
-                                <li key={decision}>{decision}</li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p>No stable decisions in the proposal.</p>
-                          )}
-                        </div>
-                        <div>
-                          <h6>Open Decisions</h6>
-                          {proposedOpenDecisions.length > 0 ? (
-                            <ul>
-                              {proposedOpenDecisions.map((decision) => (
-                                <li key={decision}>{decision}</li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p>No open decisions in the proposal.</p>
-                          )}
-                        </div>
-                        <div>
-                          <h6>Decision Rationale</h6>
-                          {proposedDecisionRationale.length > 0 ? (
-                            <ul>
-                              {proposedDecisionRationale.map((rationale) => (
-                                <li key={rationale}>{rationale}</li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p>No decision rationale in the proposal.</p>
-                          )}
-                        </div>
-                        <div>
-                          <h6>Decision Changes</h6>
-                          {decisionSemanticChanges.length > 0 ? (
-                            <ul>
-                              {decisionSemanticChanges.map((change, index) => (
-                                <li key={`${change.type}-${change.itemId ?? index}`}>
-                                  {change.type}: {change.description}
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p>No decision-specific semantic changes detected.</p>
-                          )}
-                        </div>
-                      </div>
-                      {decisionContinuityWarnings.length > 0 ? (
-                        <>
-                          <h6>Decision Warnings</h6>
-                          <ul>
-                            {decisionContinuityWarnings.map((warning) => (
-                              <li key={warning}>{warning}</li>
-                            ))}
-                          </ul>
-                        </>
-                      ) : null}
-                    </div>
-                    <OperationalContextSemanticChangeList
-                      semanticChanges={operationalContextProposal.semanticChanges}
-                    />
-                    <OperationalContextCompressionSummaryPanel
-                      compressionSummary={operationalContextProposal.compressionSummary}
-                    />
-                    <OperationalContextProposalComparison
-                      currentContent={operationalContextCurrentContent}
-                      proposedContent={operationalContextProposalDraft}
-                    />
-                  </div>
-                ) : null}
               </Panel>
 
               <ExecutionTab

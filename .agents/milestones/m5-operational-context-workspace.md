@@ -3,12 +3,12 @@
 ## Tracking
 
 - [ ] Milestone complete
-- [ ] Workstream 5.1: Current Understanding
-- [ ] Workstream 5.2: Proposed Revision
-- [ ] Workstream 5.3: Semantic Changes
-- [ ] Workstream 5.4: Compression Effects
-- [ ] Workstream 5.5: Decision Continuity
-- [ ] Workstream 5.6: Review Actions
+- [x] Workstream 5.1: Current Understanding
+- [x] Workstream 5.2: Proposed Revision
+- [x] Workstream 5.3: Semantic Changes
+- [x] Workstream 5.4: Compression Effects
+- [x] Workstream 5.5: Decision Continuity
+- [x] Workstream 5.6: Review Actions
 - [ ] Workstream 5.7: Operational Context Cross-Links
 - [ ] Certification complete
 
@@ -18,35 +18,35 @@ Goal: make operational context review a first-class workspace without changing b
 
 Display from `OperationalContextProjection`:
 
-- [ ] Current understanding summary.
-- [ ] Architecture.
-- [ ] Authority boundaries.
-- [ ] Constraints.
-- [ ] Stable decisions.
-- [ ] Decision rationale.
-- [ ] Open questions.
-- [ ] Active risks.
-- [ ] Recent understanding changes.
-- [ ] Continuity warnings.
-- [ ] Revision number, revision count, current path, last updated, and last promotion.
+- [x] Current understanding summary.
+- [x] Architecture.
+- [x] Authority boundaries.
+- [x] Constraints.
+- [x] Stable decisions.
+- [x] Decision rationale.
+- [x] Open questions.
+- [x] Active risks.
+- [x] Recent understanding changes.
+- [x] Continuity warnings.
+- [x] Revision number, revision count, current path, last updated, and last promotion.
 
 Rules:
 
-- [ ] Sections come from projection fields.
-- [ ] Do not parse Markdown client-side to reconstruct understanding.
+- [x] Sections come from projection fields.
+- [x] Do not parse Markdown client-side to reconstruct understanding.
 
 ## Workstream 5.2: Proposed Revision
 
 Display from `OperationalContextProposal`:
 
-- [ ] Proposal id.
-- [ ] Status.
-- [ ] Generated at.
-- [ ] Generated content location.
-- [ ] Edited content location.
-- [ ] Review state.
-- [ ] Promotion state.
-- [ ] Current vs proposed understanding where practical.
+- [x] Proposal id.
+- [x] Status.
+- [x] Generated at.
+- [x] Generated content location.
+- [x] Edited content location.
+- [x] Review state.
+- [x] Promotion state.
+- [x] Current vs proposed understanding where practical.
 
 Reviewers should be able to evaluate understanding changes without relying only on raw Markdown. Keep the raw Markdown editor available for edits.
 
@@ -54,35 +54,35 @@ Reviewers should be able to evaluate understanding changes without relying only 
 
 Group `OperationalContextSemanticChange` records by semantic category:
 
-- [ ] Decision added/removed/warning.
-- [ ] Constraint added/removed.
-- [ ] Question added/resolved/removed.
-- [ ] Risk added/retired/removed.
-- [ ] Rationale changed/warning.
-- [ ] Section added/removed/changed.
-- [ ] Preservation warning.
+- [x] Decision added/removed/warning.
+- [x] Constraint added/removed.
+- [x] Question added/resolved/removed.
+- [x] Risk added/retired/removed.
+- [x] Rationale changed/warning.
+- [x] Section added/removed/changed.
+- [x] Preservation warning.
 
 Rules:
 
-- [ ] Show projected semantic changes.
-- [ ] Do not compute a new diff in React.
+- [x] Show projected semantic changes.
+- [x] Do not compute a new diff in React.
 
 ## Workstream 5.4: Compression Effects
 
 Display from `OperationalContextCompressionSummary`:
 
-- [ ] Preserved item count.
-- [ ] Added item count.
-- [ ] Modified item count.
-- [ ] Removed item count.
-- [ ] Compressed item count.
-- [ ] Permanent/active/historical/noise item counts.
-- [ ] Resolved question count.
-- [ ] Retired risk count.
-- [ ] Warnings.
-- [ ] Revision summary.
-- [ ] Noise removed indicators.
-- [ ] Stable-understanding retention warnings.
+- [x] Preserved item count.
+- [x] Added item count.
+- [x] Modified item count.
+- [x] Removed item count.
+- [x] Compressed item count.
+- [x] Permanent/active/historical/noise item counts.
+- [x] Resolved question count.
+- [x] Retired risk count.
+- [x] Warnings.
+- [x] Revision summary.
+- [x] Noise removed indicators.
+- [x] Stable-understanding retention warnings.
 
 Compression is review metadata. It must not block actions unless backend state already does.
 
@@ -90,11 +90,11 @@ Compression is review metadata. It must not block actions unless backend state a
 
 Display:
 
-- [ ] Stable decisions.
-- [ ] Open decision signals where projected.
-- [ ] Decision rationale.
-- [ ] Decision warnings from semantic changes and compression warnings.
-- [ ] Missing rationale warnings where projected.
+- [x] Stable decisions.
+- [x] Open decision signals where projected.
+- [x] Decision rationale.
+- [x] Decision warnings from semantic changes and compression warnings.
+- [x] Missing rationale warnings where projected.
 
 Do not turn this workspace into a decision archive viewer.
 
@@ -102,18 +102,18 @@ Do not turn this workspace into a decision archive viewer.
 
 Expose existing actions with existing gating:
 
-- [ ] Generate proposal.
-- [ ] Load latest proposal.
-- [ ] Edit/save proposed content.
-- [ ] Accept.
-- [ ] Reject.
-- [ ] Promote accepted proposal.
+- [x] Generate proposal.
+- [x] Load latest proposal.
+- [x] Edit/save proposed content.
+- [x] Accept.
+- [x] Reject.
+- [x] Promote accepted proposal.
 
 Rules:
 
-- [ ] Backend state controls whether actions are enabled.
-- [ ] UI does not invent lifecycle transitions.
-- [ ] Refresh workspace projection after lifecycle mutations, preserving selected artifact and tab state.
+- [x] Backend state controls whether actions are enabled.
+- [x] UI does not invent lifecycle transitions.
+- [x] Refresh workspace projection after lifecycle mutations, preserving selected artifact and tab state.
 
 ## Workstream 5.7: Operational Context Cross-Links
 

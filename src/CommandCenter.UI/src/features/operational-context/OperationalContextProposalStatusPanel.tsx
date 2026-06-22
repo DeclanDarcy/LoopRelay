@@ -20,11 +20,16 @@ export function OperationalContextProposalStatusPanel({
         <span>
           Status: <StatusBadge status={operationalContextProposalStatus[proposal.status]} />
         </span>
+        <span>Generated: {formatDateTime(proposal.generatedAt)}</span>
+        <span>Generated path: {proposal.generatedContentRelativePath}</span>
+        <span>Edited path: {proposal.editedContentRelativePath ?? 'None'}</span>
         <span>
           Review: <StatusBadge status={operationalContextReviewStatus[proposal.review.reviewState]} />
         </span>
         <span>Reviewed: {formatDateTime(proposal.review.reviewedAt)}</span>
         <span>Promoted: {formatDateTime(proposal.promotion.promotedAt)}</span>
+        <span>Promotion source: {proposal.promotion.promotedContentSourceRelativePath ?? 'None'}</span>
+        <span>Revision: {proposal.promotion.revisionNumber ?? 'None'}</span>
         <span>Archived: {proposal.promotion.archivedRelativePath ?? 'None'}</span>
       </div>
       {proposal.review.staleReason ? (
