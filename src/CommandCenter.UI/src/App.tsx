@@ -23,8 +23,7 @@ import {
   selectRepositoryDirectory,
   startExecution as startExecutionCommand,
 } from './api'
-import { ArtifactMarkdownPreview } from './features/artifacts/ArtifactMarkdownPreview'
-import { ArtifactMetadata } from './features/artifacts/ArtifactMetadata'
+import { ArtifactWorkspace } from './features/artifacts/ArtifactWorkspace'
 import { Button, EmptyState, Panel, SectionHeader } from './components/design'
 import { AppShell, CommandPalette, Header, Sidebar, WorkspaceTabs } from './components/shell'
 import { ContinuityTab } from './features/continuity/ContinuityTab'
@@ -1654,107 +1653,23 @@ function App() {
                   ) : null
                 }
                 artifactWorkspace={
-                  workspace ? (
-                    <Panel
-                      id="artifact-workspace"
-                      className="artifact-workspace-shell"
-                      aria-label="Artifact workspace"
-                    >
-                      <SectionHeader
-                        eyebrow="Repository Artifacts"
-                        title="Explorer and Editor"
-                        headingLevel={4}
-                      />
-                      <div className="artifact-workspace">
-                        <section className="artifact-explorer" aria-label="Artifact explorer">
-                          {getArtifactCategories(workspace.artifactInventory).map((category) => (
-                            <div className="artifact-category" key={category.label}>
-                              <h4>{category.label}</h4>
-                              {category.artifacts.length === 0 ? (
-                                <p className="missing-artifact">{category.missingLabel}</p>
-                              ) : (
-                                <div className="artifact-list">
-                                  {category.artifacts.map((artifact) => (
-                                    <button
-                                      type="button"
-                                      key={artifact.relativePath}
-                                      className={`artifact-item${
-                                        artifact.relativePath === selectedArtifactPath ? ' selected' : ''
-                                      }`}
-                                      onClick={() =>
-                                        selectArtifact(
-                                          selectedRepository.repository.id,
-                                          artifact.relativePath,
-                                        )
-                                      }
-                                    >
-                                      <span>{artifact.name}</span>
-                                      <span>{artifact.versionKind}</span>
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </section>
-
-                        <section className="artifact-panel" aria-label="Artifact content">
-                          {selectedArtifact ? (
-                            <>
-                              <div className="artifact-panel-header">
-                                <ArtifactMetadata artifact={selectedArtifact} />
-                                <div className="artifact-panel-actions">
-                                  {canRotateSelectedArtifact ? (
-                                    <button
-                                      type="button"
-                                      className="secondary-action"
-                                      onClick={() => void rotateSelectedArtifact()}
-                                      disabled={
-                                        isRotating ||
-                                        isArtifactLoading ||
-                                        isSaving ||
-                                        hasDraftChanges
-                                      }
-                                      title={
-                                        hasDraftChanges
-                                          ? 'Save changes before rotating.'
-                                          : 'Archive the current artifact to the next historical file.'
-                                      }
-                                    >
-                                      {isRotating ? 'Rotating...' : 'Rotate'}
-                                    </button>
-                                  ) : null}
-                                  <button
-                                    type="button"
-                                    className="primary-action"
-                                    onClick={() => void saveArtifact()}
-                                    disabled={isSaving || isArtifactLoading || !hasDraftChanges}
-                                  >
-                                    {isSaving ? 'Saving...' : 'Save'}
-                                  </button>
-                                </div>
-                              </div>
-                              <textarea
-                                className="artifact-editor"
-                                value={draftContent}
-                                onChange={(event) => setDraftContent(event.target.value)}
-                                spellCheck={false}
-                                disabled={isArtifactLoading}
-                              />
-                              <ArtifactMarkdownPreview
-                                content={draftContent}
-                                isLoading={isArtifactLoading}
-                              />
-                            </>
-                          ) : (
-                            <EmptyState className="empty-state">No artifact selected.</EmptyState>
-                          )}
-                        </section>
-                      </div>
-                    </Panel>
-                  ) : (
-                    <EmptyState className="empty-state">Loading workspace...</EmptyState>
-                  )
+                  <ArtifactWorkspace
+                    inventory={workspace?.artifactInventory ?? null}
+                    selectedArtifact={selectedArtifact}
+                    selectedArtifactPath={selectedArtifactPath}
+                    draftContent={draftContent}
+                    canRotateSelectedArtifact={canRotateSelectedArtifact}
+                    hasDraftChanges={hasDraftChanges}
+                    isArtifactLoading={isArtifactLoading}
+                    isRotating={isRotating}
+                    isSaving={isSaving}
+                    onSelectArtifact={(relativePath) =>
+                      selectArtifact(selectedRepository.repository.id, relativePath)
+                    }
+                    onDraftContentChange={setDraftContent}
+                    onRotateSelectedArtifact={() => void rotateSelectedArtifact()}
+                    onSaveArtifact={() => void saveArtifact()}
+                  />
                 }
                 inspector={
                   <WorkspaceInspectorRail

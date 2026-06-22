@@ -2,12 +2,13 @@
 
 ## Newly Authorized
 
-- Treat Workstream 8.8 as a responsibility inventory rather than a size audit of `App.tsx`.
-- Classify each major `App.tsx` block as either authority, presentation/candidate extraction, or deviation.
-- Preserve `App.tsx` code that is genuinely authority-centric, including backend dispatch, workflow decisions, draft ownership, readiness ownership, proposal review decisions, promotion, commit, and push.
-- Treat layout helpers, display formatting, view composition, navigation glue, and section construction in `App.tsx` as candidate extraction areas when they can move without transferring authority.
-- Record an intentional deviation instead of extracting when shrinking `App.tsx` would move workflow ownership, draft ownership, or readiness ownership into feature surfaces.
-- Continue treating `devTauriMock.ts` as certification infrastructure while it consumes shared projection contracts rather than duplicating DTOs.
-- Resolve the `App.tsx` question only after UX validation across Workspace, Execution, Operational Context, Continuity, the navigation registry, command palette, and discovery surfaces.
-- Close M8 only if remaining `App.tsx` code is authority-centric, remaining deviations are documented, remaining capability gaps are backend-owned, and UX validation passes.
-- Keep M8 open if `App.tsx` still contains presentation or composition responsibilities that can be extracted without moving authority.
+- Keeping M8 open after extracting `ArtifactWorkspace` was correct because the extraction proved `App.tsx` still contained presentation responsibilities, not only authority.
+- Use the tightened M8 closure question: extract any remaining `App.tsx` code that can move without transferring authority; close M8 only when no such extractable code remains.
+- Continue the responsibility inventory on Git workflow surfaces and generated handoff surfaces.
+- Classify each remaining block by asking whether it decides or displays.
+- Extract presentation-only Git workflow rendering such as status display, commit preview display, push preview display, history display, and validation display.
+- Keep Git workflow authority in `App.tsx`, including commit dispatch, push dispatch, readiness ownership, draft ownership, and backend invocation.
+- Extract generated handoff presentation such as handoff rendering, preview, metadata display, and generated content presentation.
+- Keep generated handoff authority in `App.tsx`, including generation, refresh, save, and backend invocation.
+- Document any technically presentational block intentionally retained in `App.tsx` only when extraction would create disproportionate complexity.
+- Treat the remaining M8 question as whether `App.tsx` has reached its natural authority boundary.
