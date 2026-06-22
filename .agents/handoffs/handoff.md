@@ -2,19 +2,21 @@
 
 ## New State From This Slice
 
-- `.agents/handoffs/handoff.md` and `.agents/decisions/decisions.md` were absent at slice start, so no current handoff or decision file could be rotated.
-- Added `src/CommandCenter.Decisions` as a new solution project referencing `CommandCenter.Core` and opting out of the execution-context alias.
-- Added initial decision lifecycle domain primitives and models: decision IDs, states, outcomes, classifications, relationships, metadata, history, evidence, candidates, proposals, options, tradeoffs, recommendations, and assumptions.
-- Added `DecisionLifecycleRules` for decision, candidate, proposal, and relationship validation.
-- Wired `AddDecisions()` into backend startup and added the backend/test project references.
-- Added backend tests covering decision, candidate, and proposal transition matrices, outcome/state consistency, and relationship validation.
-- Updated M0 checklist to mark M0A and the specific completed foundation items.
+- Completed M0B for the decision lifecycle foundation.
+- Added `IDecisionRepository` with allocation, list, get, and save operations for decisions, candidates, and proposals.
+- Added `FileSystemDecisionRepository` backed by `.agents/decisions/records`, `.agents/decisions/candidates`, and `.agents/decisions/proposals`.
+- Added `InMemoryDecisionRepository` as the focused test double.
+- Structured JSON artifacts now use schema-versioned repository-owned envelopes while keeping filesystem and schema concerns in persistence adapters.
+- Decision JSON uses string enums and rejects unmapped fields so unsupported schemas fail visibly instead of being silently accepted.
+- File-system persistence validates `DEC-NNNN`, `CAND-NNNN`, and `PROP-NNNN` IDs before constructing repository paths.
+- File-system ID allocation scans existing artifact directories and chooses the next sequence number.
+- Save operations write authoritative JSON plus `history.json`; markdown projections remain deferred to M0C.
+- Updated the M0 checklist to mark M0B and its completed persistence/test items.
 
 ## Verification
 
-- `dotnet build CommandCenter.slnx` passes.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes with 226 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes with 236 tests.
 
 ## Next Slice
 
-- Continue M0B: implement repository-backed persistence contracts and file-system storage, ID allocation by scanning `.agents/decisions`, repository ownership on lifecycle records, schema version handling, and filesystem safety tests.
+- Start M0C: implement deterministic markdown projection generation for `decision.md`, `candidate.md`, `proposal.md`, and the current `.agents/decisions/decisions.md` index, while preserving existing decision artifact discovery and rotation compatibility.

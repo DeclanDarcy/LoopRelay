@@ -7,7 +7,7 @@ establish first-class decision lifecycle objects and repository-owned structured
 This is one architectural milestone with multiple implementation slices. Complete and certify each slice independently before treating M0 as done:
 
 - [x] M0A: domain primitives, state models, transition matrices, relationship rules, and in-memory tests.
-- [ ] M0B: repository-backed persistence, ID allocation, repository ownership, JSON schema versioning, and filesystem safety.
+- [x] M0B: repository-backed persistence, ID allocation, repository ownership, JSON schema versioning, and filesystem safety.
 - [ ] M0C: markdown projection generation, `decisions.md` index compatibility, artifact discovery compatibility, and rotation compatibility.
 - [ ] M0D: recovery from structured artifacts, projection regeneration, repository restart recovery, and full M0 regression tests.
 
@@ -17,10 +17,10 @@ This is one architectural milestone with multiple implementation slices. Complet
 - [x] Add primitives and models for decisions, outcomes, classifications, relationships, metadata, candidates, proposals, proposal states, candidate states, and history entries.
 - [x] Implement transition validation for decisions, candidates, and proposals.
 - [x] Implement relationship validation for duplicate relationships, self-reference rules, and unsupported relationship types.
-- [ ] Implement `IDecisionRepository` with an in-memory test double and a file-system implementation.
-- [ ] Implement ID allocation by scanning existing lifecycle artifacts.
-- [ ] Implement repository ownership on every lifecycle record.
-- [ ] Finalize `.agents/decisions` structured layout.
+- [x] Implement `IDecisionRepository` with an in-memory test double and a file-system implementation.
+- [x] Implement ID allocation by scanning existing lifecycle artifacts.
+- [x] Implement repository ownership on every lifecycle record.
+- [x] Finalize `.agents/decisions` structured layout.
 - [ ] Implement `DecisionArtifactProjectionService`.
 - [ ] Render `decision.md`, `candidate.md`, `proposal.md`, and the current `decisions.md` index from structured records.
 - [ ] Preserve existing `ArtifactService` discovery for `decisions.md` and `decisions.NNNN.md`.
@@ -36,10 +36,10 @@ This is one architectural milestone with multiple implementation slices. Complet
 - [x] Candidate state transition tests.
 - [x] Proposal state transition tests.
 - [x] Outcome/state distinction tests.
-- [ ] ID allocation tests.
+- [x] ID allocation tests.
 - [x] Relationship validation tests.
-- [ ] File-system round trip tests.
-- [ ] Repository isolation tests.
+- [x] File-system round trip tests.
+- [x] Repository isolation tests.
 - [ ] Projection generation tests.
 - [ ] Decision index rendering tests.
 - [ ] Existing decision artifact discovery compatibility tests.
@@ -50,7 +50,7 @@ This is one architectural milestone with multiple implementation slices. Complet
 - [ ] Decision aggregate is first-class and independent from markdown.
 - [ ] Candidate and proposal lifecycles are explicit.
 - [ ] Stable IDs survive reload.
-- [ ] Structured lifecycle artifacts are repository-owned and reloadable.
+- [x] Structured lifecycle artifacts are repository-owned and reloadable.
 - [ ] Human-readable projections exist.
 - [ ] Existing decision markdown discovery remains compatible.
 - [ ] Invalid transitions and relationships are rejected.

@@ -2,9 +2,10 @@
 
 ## Newly Authorized
 
-- Future services must call `DecisionLifecycleRules` rather than reimplementing lifecycle state checks.
-- M0B must keep domain entities persistence-agnostic; filesystem, JSON, repository layout, and artifact path concerns belong in persistence adapters.
-- Authoritative structured artifacts introduced in M0B must include schema versioning immediately, with repository ownership and timestamps on records.
-- Proposal lifecycle, review state, and decision state must remain separate and must not collapse into a generic status field.
-- M0B should focus exclusively on authoritative structured persistence; markdown projection generation is deferred to M0C.
-- M0B implementation order is: `IDecisionRepository`, in-memory repository, file-system repository, repository ownership metadata, schema versioning, ID allocation, filesystem safety validation, round-trip persistence tests, repository isolation tests.
+- M0B is complete for the decision lifecycle foundation; M0 remains in progress until M0C projection generation and M0D recovery/regeneration/compatibility are complete.
+- M0C should proceed next as the Decision Artifact Projection Foundation.
+- `DecisionArtifactProjectionService` must preserve the authority direction `structured JSON -> markdown`; markdown projections must not become lifecycle authority.
+- M0C should focus on deterministic projection generation and existing artifact ecosystem compatibility; recovery logic should remain deferred to M0D.
+- Projection ordering must be deterministic, including relationships, evidence, assumptions, options, and history, to support clean diffs, rotation, certification, and regeneration.
+- Generic artifact discovery/editing must exclude `decision.json`, `candidate.json`, `proposal.json`, and `history.json`; only markdown lifecycle projections should appear where artifact browser compatibility requires them.
+- M0C implementation order is: `DecisionArtifactProjectionService`, `decision.md` generation, `candidate.md` generation, `proposal.md` generation, `decisions.md` index generation, deterministic projection ordering, artifact discovery compatibility tests, decision index compatibility tests, rotation compatibility tests.
