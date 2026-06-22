@@ -2,8 +2,19 @@
 
 ## Newly Authorized
 
+- The M3 opening proposal-generation slice is accepted as aligned with the roadmap.
+- The explicit lifecycle boundary remains authoritative: candidate discovery, candidate promotion, and proposal generation are separate steps.
+- Proposal generation must continue to require `DecisionCandidateState.Promoted`; discovery and promotion must not imply proposal creation authority.
+- Proposal options must remain evidence-driven. A proposal should use one option by default and add alternatives only when conflict or fork evidence supports them.
+- M3 should remain scoped to proposal lifecycle mechanics before content evolution, refinement, resolution, governance, or execution projection.
+- The next M3 slice should prioritize proposal lifecycle state transitions before refinement work.
+- `ProposalState`, `ReviewState`, and `DecisionState` must remain separate concepts.
+- Review notes should be represented separately from proposal lifecycle state; `NeedsRefinement` must not be the only record of review activity.
+- The next implementation slice should add backend-owned review transitions for viewed, needs refinement, and ready for resolution, plus valid, invalid, terminal, persistence, success-path, and conflict-path coverage.
+
+## Current Milestone Status
+
+- M0 is complete.
+- M1 is complete.
 - M2 is complete.
-- M2 closure is based on terminal candidate hygiene, context-driven discovery, explicit promotion, persisted `CAND-*` artifacts, active rediscovery suppression for dismissed/expired/duplicate candidates, endpoint success-path coverage, and passing backend verification.
-- The `Promote Candidate != Generate Proposal` boundary remains authoritative going into M3.
-- M3 should begin with an explicit proposal-generation action from a promoted candidate rather than implicit proposal creation during discovery or promotion.
-- The recommended M3 opening slice is the minimal backend vertical slice for `IDecisionGenerationService`, proposal persistence under `.agents/decisions/proposals/PROP-*`, proposal ID allocation, promoted-candidate-only generation, source attribution, deterministic `proposal.md` rendering, `decisions.md` refresh, and focused tests for explicit generation boundaries and non-mutation of unrelated lifecycle surfaces.
+- M3 is in progress.

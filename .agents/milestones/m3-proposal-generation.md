@@ -7,29 +7,29 @@ transform validated candidates into structured decision proposals with options, 
 ## Backend Work
 
 - [ ] Add `DecisionProposal`, `DecisionProposalState`, `DecisionOption`, `DecisionTradeoff`, `DecisionRecommendation`, `DecisionAssumption`, and generation diagnostics.
-- [ ] Implement `IDecisionGenerationService`.
-- [ ] Generate deterministic first-pass proposals from `DecisionContext` and candidate evidence.
-- [ ] Require at least one viable option and a clear statement when only one option is available.
-- [ ] Avoid fake alternatives.
-- [ ] Bind every recommendation to evidence, constraints, assumptions, and tradeoffs.
-- [ ] Persist proposals under `.agents/decisions/proposals`.
-- [ ] Render `proposal.md`.
+- [x] Implement `IDecisionGenerationService`.
+- [x] Generate deterministic first-pass proposals from `DecisionContext` and candidate evidence.
+- [x] Require at least one viable option and a clear statement when only one option is available.
+- [x] Avoid fake alternatives.
+- [x] Bind every recommendation to evidence, constraints, assumptions, and tradeoffs.
+- [x] Persist proposals under `.agents/decisions/proposals`.
+- [x] Render `proposal.md`.
 - [ ] Move proposal state through draft, generated, viewed, needs refinement, refined, ready for resolution, resolved, expired, and discarded.
 
 ## Tests
 
-- [ ] Candidate-to-proposal tests.
-- [ ] Option generation tests.
-- [ ] Tradeoff modeling tests.
-- [ ] Recommendation evidence tests.
-- [ ] Assumption visibility tests.
-- [ ] Proposal persistence tests.
+- [x] Candidate-to-proposal tests.
+- [x] Option generation tests.
+- [x] Tradeoff modeling tests.
+- [x] Recommendation evidence tests.
+- [x] Assumption visibility tests.
+- [x] Proposal persistence tests.
 - [ ] Proposal state transition tests.
-- [ ] Proposal expiration tests.
+- [x] Proposal expiration tests.
 
 ## Exit Criteria
 
-- [ ] Proposals expose alternatives and tradeoffs.
-- [ ] Recommendation is advisory and traceable.
+- [x] Proposals expose alternatives and tradeoffs.
+- [x] Recommendation is advisory and traceable.
 - [ ] Proposal lifecycle is distinct from review notes and decision state.
-- [ ] Proposal generation does not mutate decisions, milestones, operational context, or execution state.
+- [x] Proposal generation does not mutate decisions, milestones, operational context, or execution state.

@@ -16,6 +16,10 @@ public static class DecisionEndpoints
         app.MapDismissDecisionCandidate();
         app.MapExpireDecisionCandidate();
         app.MapMarkDecisionCandidateDuplicate();
+        app.MapListDecisionProposals();
+        app.MapGetDecisionProposal();
+        app.MapGenerateDecisionProposal();
+        app.MapExpireDecisionProposal();
         return app;
     }
 
@@ -229,6 +233,102 @@ public static class DecisionEndpoints
                     candidateId,
                     request.DuplicateOfCandidateId,
                     request.Reason));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapListDecisionProposals(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/decisions/proposals", async (
+            Guid repositoryId,
+            IDecisionGenerationService generationService) =>
+        {
+            try
+            {
+                return Results.Ok(await generationService.ListProposalsAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGetDecisionProposal(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/decisions/proposals/{proposalId}", async (
+            Guid repositoryId,
+            string proposalId,
+            IDecisionGenerationService generationService) =>
+        {
+            try
+            {
+                return Results.Ok(await generationService.GetProposalAsync(repositoryId, proposalId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGenerateDecisionProposal(this IEndpointRouteBuilder app) =>
+        app.MapPost("/api/repositories/{repositoryId:guid}/decisions/candidates/{candidateId}/proposals", async (
+            Guid repositoryId,
+            string candidateId,
+            IDecisionGenerationService generationService) =>
+        {
+            try
+            {
+                return Results.Ok(await generationService.GenerateProposalAsync(repositoryId, candidateId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapExpireDecisionProposal(this IEndpointRouteBuilder app) =>
+        app.MapPost("/api/repositories/{repositoryId:guid}/decisions/proposals/{proposalId}/expire", async (
+            Guid repositoryId,
+            string proposalId,
+            DecisionCandidateTransitionRequest? request,
+            IDecisionGenerationService generationService) =>
+        {
+            try
+            {
+                return Results.Ok(await generationService.ExpireProposalAsync(repositoryId, proposalId, request?.Reason));
             }
             catch (KeyNotFoundException exception)
             {
