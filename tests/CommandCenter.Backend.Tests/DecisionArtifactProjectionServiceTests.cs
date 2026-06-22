@@ -107,6 +107,39 @@ public sealed class DecisionArtifactProjectionServiceTests
         Assert.Equal(generatedIndex, await ReadAsync(repository, ".agents/decisions/decisions.md"));
     }
 
+    [Fact]
+    public async Task RecoverMissingProjectionsRegeneratesMarkdownFromStructuredArtifacts()
+    {
+        Repository repository = CreateRepository();
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        var projectionService = new DecisionArtifactProjectionService(decisionRepository, store);
+        DateTimeOffset now = new(2026, 06, 22, 12, 00, 00, TimeSpan.Zero);
+
+        await decisionRepository.SaveDecisionAsync(repository, CreateDecision(repository.Id, now));
+        await decisionRepository.SaveCandidateAsync(repository, CreateCandidate(repository.Id, now));
+        await decisionRepository.SaveProposalAsync(repository, CreateProposal(repository.Id, now));
+        await projectionService.RefreshAllAsync(repository);
+
+        string expectedDecision = await ReadAsync(repository, ".agents/decisions/records/DEC-0001/decision.md");
+        string expectedCandidate = await ReadAsync(repository, ".agents/decisions/candidates/CAND-0001/candidate.md");
+        string expectedProposal = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/proposal.md");
+        string expectedIndex = await ReadAsync(repository, ".agents/decisions/decisions.md");
+        Delete(repository, ".agents/decisions/records/DEC-0001/decision.md");
+        Delete(repository, ".agents/decisions/candidates/CAND-0001/candidate.md");
+        Delete(repository, ".agents/decisions/proposals/PROP-0001/proposal.md");
+        Delete(repository, ".agents/decisions/decisions.md");
+
+        var restartedRepository = new FileSystemDecisionRepository(store);
+        var restartedProjectionService = new DecisionArtifactProjectionService(restartedRepository, store);
+        await restartedProjectionService.RecoverMissingProjectionsAsync(repository);
+
+        Assert.Equal(expectedDecision, await ReadAsync(repository, ".agents/decisions/records/DEC-0001/decision.md"));
+        Assert.Equal(expectedCandidate, await ReadAsync(repository, ".agents/decisions/candidates/CAND-0001/candidate.md"));
+        Assert.Equal(expectedProposal, await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/proposal.md"));
+        Assert.Equal(expectedIndex, await ReadAsync(repository, ".agents/decisions/decisions.md"));
+    }
+
     private static Decision CreateDecision(Guid repositoryId, DateTimeOffset now)
     {
         return new Decision(
@@ -156,6 +189,11 @@ public sealed class DecisionArtifactProjectionServiceTests
     private static async Task<string> ReadAsync(Repository repository, string relativePath)
     {
         return await File.ReadAllTextAsync(Path.Combine(repository.Path, relativePath.Replace('/', Path.DirectorySeparatorChar)));
+    }
+
+    private static void Delete(Repository repository, string relativePath)
+    {
+        File.Delete(Path.Combine(repository.Path, relativePath.Replace('/', Path.DirectorySeparatorChar)));
     }
 
     private static Repository CreateRepository()

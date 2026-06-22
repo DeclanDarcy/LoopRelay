@@ -57,9 +57,59 @@ public sealed class DecisionArtifactProjectionService(
         await RefreshDecisionIndexAsync(repository);
     }
 
+    public async Task RecoverMissingProjectionsAsync(Repository repository)
+    {
+        foreach (Decision decision in await decisionRepository.ListDecisionsAsync(repository))
+        {
+            string id = DecisionArtifactPaths.ValidateId(decision.Id.Value, "DEC");
+            await ProjectIfMissingAsync(repository, DecisionArtifactPaths.DecisionMarkdown(id), () => RenderDecision(decision));
+        }
+
+        foreach (DecisionCandidate candidate in await decisionRepository.ListCandidatesAsync(repository))
+        {
+            string id = DecisionArtifactPaths.ValidateId(candidate.Id, "CAND");
+            await ProjectIfMissingAsync(repository, DecisionArtifactPaths.CandidateMarkdown(id), () => RenderCandidate(candidate));
+        }
+
+        foreach (DecisionProposal proposal in await decisionRepository.ListProposalsAsync(repository))
+        {
+            string id = DecisionArtifactPaths.ValidateId(proposal.Id, "PROP");
+            await ProjectIfMissingAsync(repository, DecisionArtifactPaths.ProposalMarkdown(id), () => RenderProposal(proposal));
+        }
+
+        await ProjectIfMissingAsync(
+            repository,
+            DecisionArtifactPaths.DecisionsIndex(),
+            async () =>
+            {
+                IReadOnlyList<Decision> decisions = await decisionRepository.ListDecisionsAsync(repository);
+                IReadOnlyList<DecisionCandidate> candidates = await decisionRepository.ListCandidatesAsync(repository);
+                IReadOnlyList<DecisionProposal> proposals = await decisionRepository.ListProposalsAsync(repository);
+                return RenderIndex(decisions, candidates, proposals);
+            });
+    }
+
     private Task WriteAsync(Repository repository, string relativePath, string content)
     {
         return artifactStore.WriteAsync(DecisionArtifactPaths.Resolve(repository, relativePath), content);
+    }
+
+    private async Task ProjectIfMissingAsync(Repository repository, string relativePath, Func<string> render)
+    {
+        string path = DecisionArtifactPaths.Resolve(repository, relativePath);
+        if (!await artifactStore.ExistsAsync(path))
+        {
+            await artifactStore.WriteAsync(path, render());
+        }
+    }
+
+    private async Task ProjectIfMissingAsync(Repository repository, string relativePath, Func<Task<string>> render)
+    {
+        string path = DecisionArtifactPaths.Resolve(repository, relativePath);
+        if (!await artifactStore.ExistsAsync(path))
+        {
+            await artifactStore.WriteAsync(path, await render());
+        }
     }
 
     private static string RenderDecision(Decision decision)

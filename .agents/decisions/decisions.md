@@ -2,9 +2,10 @@
 
 ## Newly Authorized
 
-- M0C is accepted as complete; no projection authority leakage or lifecycle boundary violation is apparent from the completed slice.
-- M0 remains in progress and should not advance to M1 until M0D is complete and certified.
-- M0D should focus on JSON-authority recovery: structured records may regenerate missing markdown projections, but markdown must not reconstruct lifecycle authority unless explicitly designed later.
-- M0D implementation order is: structured-record discovery, projection regeneration service, missing-markdown recovery, repository restart recovery, projection equivalence verification, full M0 regression suite, and M0 certification review.
-- M0D certification should prove that creating structured artifacts, generating projections, deleting projections, restarting services, regenerating projections, and verifying equivalence succeeds.
-- Regeneration determinism is foundational for later governance and lifecycle certification work.
+- M0 is accepted as complete and certified ready based on the completed M0A-M0D foundation work.
+- M1 may begin; no remaining M0 foundation work should block decision context resolution.
+- The M0 authority model remains binding: structured JSON is canonical, markdown is generated projection, UI is presentation state only, execution has no decision authority, operational context assimilation remains separate, and human approval controls resolution.
+- Decision projection recovery is accepted because it regenerates missing markdown from structured JSON without reconstructing authority from markdown.
+- Existing generated markdown should not be overwritten during recovery reads; missing-projection regeneration should remain restorative and low-churn.
+- M1 implementation order is: `DecisionContext`, `DecisionContextSnapshot`, validation model, diagnostics model, source attribution model, fingerprinting, context persistence, context endpoints, and deterministic snapshot tests.
+- Fingerprints are first-class M1 work, not a later enhancement; establish `DecisionContextFingerprint` from the start because later discovery, proposal generation, refinement, resolution, governance, execution projection, and certification depend on it.

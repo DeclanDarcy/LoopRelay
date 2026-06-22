@@ -14,4 +14,6 @@ public interface IDecisionArtifactProjectionService
     Task RefreshDecisionIndexAsync(Repository repository);
 
     Task RefreshAllAsync(Repository repository);
+
+    Task RecoverMissingProjectionsAsync(Repository repository);
 }

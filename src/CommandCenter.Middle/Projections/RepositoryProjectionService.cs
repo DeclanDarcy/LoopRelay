@@ -8,6 +8,7 @@ using System.Collections.Concurrent;
 using CommandCenter.Continuity.Abstractions;
 using CommandCenter.Continuity.Models;
 using CommandCenter.Continuity.Primitives;
+using CommandCenter.Decisions.Abstractions;
 using CommandCenter.Execution.Abstractions;
 
 namespace CommandCenter.Middle.Projections;
@@ -19,7 +20,8 @@ public sealed class RepositoryProjectionService(
     IExecutionSessionService executionSessionService,
     IOperationalContextProposalStore operationalContextProposalStore,
     IOperationalContextParser operationalContextParser,
-    IArtifactStore artifactStore) : IRepositoryProjectionService
+    IArtifactStore artifactStore,
+    IDecisionArtifactProjectionService? decisionArtifactProjectionService = null) : IRepositoryProjectionService
 {
     private readonly ConcurrentDictionary<Guid, ArtifactInventory> inventoryCache = new();
 
@@ -213,6 +215,11 @@ public sealed class RepositoryProjectionService(
 
     private async Task<ArtifactInventory> BuildInventoryAsync(Repository repository)
     {
+        if (decisionArtifactProjectionService is not null)
+        {
+            await decisionArtifactProjectionService.RecoverMissingProjectionsAsync(repository);
+        }
+
         IReadOnlyList<Artifact> artifacts = await artifactService.DiscoverAsync(repository);
 
         return new ArtifactInventory

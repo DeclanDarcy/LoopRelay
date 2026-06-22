@@ -10,6 +10,7 @@
     <ProjectReference Include="..\CommandCenter.Execution\CommandCenter.Execution.csproj" />
     <ProjectReference Include="..\CommandCenter.Continuity\CommandCenter.Continuity.csproj" />
     <ProjectReference Include="..\CommandCenter.Core\CommandCenter.Core.csproj" />
+    <ProjectReference Include="..\CommandCenter.Decisions\CommandCenter.Decisions.csproj" />
   </ItemGroup>
 
 </Project>

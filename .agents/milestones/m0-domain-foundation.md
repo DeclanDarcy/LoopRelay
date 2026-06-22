@@ -9,7 +9,7 @@ This is one architectural milestone with multiple implementation slices. Complet
 - [x] M0A: domain primitives, state models, transition matrices, relationship rules, and in-memory tests.
 - [x] M0B: repository-backed persistence, ID allocation, repository ownership, JSON schema versioning, and filesystem safety.
 - [x] M0C: markdown projection generation, `decisions.md` index compatibility, artifact discovery compatibility, and rotation compatibility.
-- [ ] M0D: recovery from structured artifacts, projection regeneration, repository restart recovery, and full M0 regression tests.
+- [x] M0D: recovery from structured artifacts, projection regeneration, repository restart recovery, and full M0 regression tests.
 
 ## Backend Work
 
@@ -27,7 +27,7 @@ This is one architectural milestone with multiple implementation slices. Complet
 - [x] Extend artifact discovery only where markdown lifecycle projections should appear in the artifact browser.
 - [x] Keep JSON lifecycle files out of the generic artifact editor unless a typed editor exists.
 - [x] Reuse `ArtifactRotationService.RotateCurrentDecisionsAsync` for current decisions index snapshots.
-- [ ] Add safe recovery when markdown projections are missing but structured records exist.
+- [x] Add safe recovery when markdown projections are missing but structured records exist.
 - [x] Add DI extension `AddDecisions()` and register it from backend startup.
 
 ## Tests
@@ -43,14 +43,14 @@ This is one architectural milestone with multiple implementation slices. Complet
 - [x] Projection generation tests.
 - [x] Decision index rendering tests.
 - [x] Existing decision artifact discovery compatibility tests.
-- [ ] Recovery tests from structured artifacts after deleting generated markdown projections.
+- [x] Recovery tests from structured artifacts after deleting generated markdown projections.
 
 ## Exit Criteria
 
-- [ ] Decision aggregate is first-class and independent from markdown.
-- [ ] Candidate and proposal lifecycles are explicit.
-- [ ] Stable IDs survive reload.
+- [x] Decision aggregate is first-class and independent from markdown.
+- [x] Candidate and proposal lifecycles are explicit.
+- [x] Stable IDs survive reload.
 - [x] Structured lifecycle artifacts are repository-owned and reloadable.
 - [x] Human-readable projections exist.
 - [x] Existing decision markdown discovery remains compatible.
-- [ ] Invalid transitions and relationships are rejected.
+- [x] Invalid transitions and relationships are rejected.

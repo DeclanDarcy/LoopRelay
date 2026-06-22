@@ -4,6 +4,10 @@ using CommandCenter.Continuity;
 using CommandCenter.Continuity.Models;
 using CommandCenter.Continuity.Primitives;
 using CommandCenter.Continuity.Services;
+using CommandCenter.Decisions.Abstractions;
+using CommandCenter.Decisions.Models;
+using CommandCenter.Decisions.Primitives;
+using CommandCenter.Decisions.Services;
 using CommandCenter.Execution;
 using CommandCenter.Core.Planning;
 using CommandCenter.Core.Projections;
@@ -103,6 +107,38 @@ public sealed class RepositoryProjectionServiceTests
         Assert.NotNull(workspace.ArtifactInventory.Plan);
         Assert.NotNull(workspace.ArtifactInventory.OperationalContext);
         Assert.NotNull(workspace.ArtifactInventory.CurrentDecisions);
+    }
+
+    [Fact]
+    public async Task WorkspaceRefreshRecoversMissingDecisionIndexFromStructuredArtifacts()
+    {
+        string repositoryPath = CreateGitRepositoryDirectory();
+        RepositoryService repositoryService = CreateRepositoryService();
+        Repository repository = await repositoryService.RegisterAsync(repositoryPath);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        DateTimeOffset now = new(2026, 06, 22, 12, 00, 00, TimeSpan.Zero);
+        await decisionRepository.SaveDecisionAsync(repository, new Decision(
+            new DecisionId("DEC-0001"),
+            DecisionState.Open,
+            DecisionClassification.Architectural,
+            "Recover decision projections",
+            "Structured JSON remains authoritative after generated markdown is deleted.",
+            new DecisionMetadata(repository.Id, now, now),
+            null,
+            [],
+            [],
+            [new DecisionHistoryEntry(now, "Created", null, DecisionState.Open.ToString(), null, [])]));
+        var projectionRecovery = new DecisionArtifactProjectionService(decisionRepository, store);
+        RepositoryProjectionService projectionService = CreateProjectionService(repositoryService, projectionRecovery);
+
+        RepositoryWorkspaceProjection workspace = await projectionService.RefreshWorkspaceAsync(repository.Id);
+
+        Assert.True(workspace.HasCurrentDecisions);
+        Assert.NotNull(workspace.ArtifactInventory.CurrentDecisions);
+        Assert.Equal(".agents/decisions/decisions.md", workspace.ArtifactInventory.CurrentDecisions.RelativePath);
+        string generatedIndex = await File.ReadAllTextAsync(Path.Combine(repository.Path, ".agents", "decisions", "decisions.md"));
+        Assert.Contains("- DEC-0001 | Open | Architectural | Unresolved | Recover decision projections", generatedIndex);
     }
 
     [Fact]
@@ -387,7 +423,15 @@ public sealed class RepositoryProjectionServiceTests
 
     private static RepositoryProjectionService CreateProjectionService(
         IRepositoryService repositoryService,
-        IExecutionSessionService executionSessionService)
+        IDecisionArtifactProjectionService decisionArtifactProjectionService)
+    {
+        return CreateProjectionService(repositoryService, new ReadyExecutionSessionService(), decisionArtifactProjectionService);
+    }
+
+    private static RepositoryProjectionService CreateProjectionService(
+        IRepositoryService repositoryService,
+        IExecutionSessionService executionSessionService,
+        IDecisionArtifactProjectionService? decisionArtifactProjectionService = null)
     {
         return new RepositoryProjectionService(
             repositoryService,
@@ -396,7 +440,8 @@ public sealed class RepositoryProjectionServiceTests
             executionSessionService,
             new FileSystemOperationalContextProposalStore(new FileSystemArtifactStore()),
             new MarkdownOperationalContextParser(),
-            new FileSystemArtifactStore());
+            new FileSystemArtifactStore(),
+            decisionArtifactProjectionService);
     }
 
     private static async Task WriteAsync(Repository repository, string relativePath, string content)
