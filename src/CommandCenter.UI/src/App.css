@@ -1005,6 +1005,7 @@ button:focus-visible {
 }
 
 .decision-proposal-viewer,
+.decision-refinement-panel,
 .decision-revision-history,
 .decision-option-comparison,
 .decision-evidence-source-panel,
@@ -1101,6 +1102,74 @@ button:focus-visible {
 .decision-warning-list span {
   border-color: var(--status-warning-muted);
   color: var(--fg-default);
+}
+
+.decision-success-list {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.decision-success-list span {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--status-success-muted);
+  border-radius: var(--radius-6);
+  background: var(--surface-1);
+  color: var(--fg-default);
+  font-size: 0.8rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.decision-refinement-form {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.decision-refinement-form label {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.decision-refinement-form label:first-child,
+.decision-refinement-form label:nth-child(3),
+.decision-refinement-form label:nth-child(4),
+.decision-refinement-form label:nth-child(5),
+.decision-form-actions {
+  grid-column: 1 / -1;
+}
+
+.decision-refinement-form span {
+  color: var(--fg-muted);
+  font-size: 0.76rem;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.decision-refinement-form input,
+.decision-refinement-form textarea {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-6);
+  padding: 10px;
+  color: var(--fg-default);
+  background: var(--surface-1);
+  font: inherit;
+}
+
+.decision-refinement-form textarea {
+  min-height: 86px;
+  resize: vertical;
+}
+
+.decision-form-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .decision-option-grid,

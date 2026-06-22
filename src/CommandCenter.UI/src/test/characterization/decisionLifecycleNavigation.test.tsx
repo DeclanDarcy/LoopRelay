@@ -10,6 +10,7 @@ import type {
 
 const useDecisionProposalReviewMock = vi.hoisted(() => vi.fn())
 const useDecisionProposalLineageMock = vi.hoisted(() => vi.fn())
+const useDecisionProposalRefinementMock = vi.hoisted(() => vi.fn())
 const useDecisionOptionComparisonMock = vi.hoisted(() => vi.fn())
 const useDecisionEvidenceInspectionMock = vi.hoisted(() => vi.fn())
 const useDecisionSourceAttributionsMock = vi.hoisted(() => vi.fn())
@@ -19,6 +20,7 @@ vi.mock('../../hooks', () => ({
   useDecisionOptionComparison: useDecisionOptionComparisonMock,
   useDecisionProposalLineage: useDecisionProposalLineageMock,
   useDecisionProposalReview: useDecisionProposalReviewMock,
+  useDecisionProposalRefinement: useDecisionProposalRefinementMock,
   useDecisionSourceAttributions: useDecisionSourceAttributionsMock,
 }))
 
@@ -26,6 +28,7 @@ afterEach(() => {
   cleanup()
   useDecisionProposalReviewMock.mockReset()
   useDecisionProposalLineageMock.mockReset()
+  useDecisionProposalRefinementMock.mockReset()
   useDecisionOptionComparisonMock.mockReset()
   useDecisionEvidenceInspectionMock.mockReset()
   useDecisionSourceAttributionsMock.mockReset()
@@ -44,6 +47,11 @@ describe('DecisionLifecycleTab navigation', () => {
     useDecisionOptionComparisonMock.mockReturnValue({ data: null, isLoading: false })
     useDecisionEvidenceInspectionMock.mockReturnValue({ data: null, isLoading: false })
     useDecisionSourceAttributionsMock.mockReturnValue({ data: [], isLoading: false })
+    useDecisionProposalRefinementMock.mockReturnValue({
+      refine: vi.fn(),
+      isSubmitting: false,
+      error: null,
+    })
 
     render(
       <DecisionLifecycleTab

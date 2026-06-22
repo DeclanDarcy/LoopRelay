@@ -2,20 +2,27 @@
 
 ## Newly Authorized
 
-- The M5 UI transition is accepted as correct because React consumes backend lineage rather than reconstructing lineage from proposal, revision, and comparison artifacts.
-- The proposal authority boundary should remain explicit in the UI:
-  - current proposal is authoritative
-  - revision history is historical
-  - comparison models are explanatory
-  - lineage is navigation
-- M5 mutation UI should remain thin and request/response oriented.
-- React must submit structured refinement requests to the backend and must not perform local proposal mutation.
-- Backend services continue owning refinement validation, stale-base protection, revision creation, comparison generation, and lineage generation.
-- After successful refinement, the UI should refresh proposal and lineage projections from the backend instead of locally patching proposal, revision, comparison, or lineage state.
-- Mutation UI tests should cover form state, submission success/failure, stale-base rejection, proposal reload, lineage reload, comparison visibility, and preservation of authority boundaries.
-- M6 preparation should preserve the M5 decomposition:
-  - proposal is authority
-  - revision is history
-  - comparison is explanation
-  - lineage is navigation
-- M5 remaining work is mutation UI plus certification; backend domain, revision infrastructure, comparison models, lineage models, and read-only UI are considered complete.
+- M5 Refinement Workflow is complete and can be treated as the logical closure point for the milestone.
+- The final M5 UI slice is accepted because it exposes backend-established lifecycle state without introducing new lifecycle authority.
+- Refinement authority remains backend- and repository-owned; React, Tauri, and client hooks remain presentation, transport, and submission layers only.
+- Successful refinement must continue to follow:
+  - submit structured request
+  - let backend rebuild authoritative state
+  - reload backend projections
+  - avoid local proposal, revision, lineage, comparison, evidence, or source patching
+- The M5 lifecycle decomposition is accepted:
+  - proposal is current authority
+  - revision is historical evolution
+  - comparison is change explanation
+  - lineage is history navigation
+  - review is review state
+  - resolution is human authority
+- React may own selection, input, navigation, expansion, and submission, but must not own lifecycle validity, revision meaning, comparison meaning, lineage construction, or decision authority.
+- Before building M6 resolution UI, the next slice must audit the existing resolution path, especially:
+  - `ResolveDecisionCommand`
+  - decision records
+  - resolution metadata
+  - decision authority creation
+- M6 should verify whether current resolution artifacts satisfy human resolution, governance traceability, and operational adoption preparation before adding new UI.
+- M6 should inspect whether resolution captures the proposal ID, proposal fingerprint, and revision context at resolution time.
+- If resolution does not immutably capture what was resolved, introduce a resolution snapshot or equivalent rather than requiring future reconstruction by walking proposal history.

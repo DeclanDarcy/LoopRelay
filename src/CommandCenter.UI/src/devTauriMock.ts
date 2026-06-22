@@ -10,9 +10,11 @@ import type {
   DecisionCandidate,
   DecisionContextSnapshot,
   DecisionEvidenceInspection,
+  DecisionProposal,
   DecisionOptionComparison,
   DecisionProposalBrowserItem,
   DecisionProposalLineage,
+  DecisionRefinementRequest,
   DecisionReviewWorkspace,
   DecisionSourceAttribution,
   ExecutionContextPreview,
@@ -680,6 +682,118 @@ function getDecisionReviewWorkspace(
   }
 
   return workspace
+}
+
+function refineDecisionProposalMock(
+  state: MockState,
+  repositoryId: string,
+  proposalId: string,
+  request: DecisionRefinementRequest,
+): DecisionProposal {
+  const workspace = getDecisionReviewWorkspace(state, repositoryId, proposalId)
+  if (workspace.proposal.state !== 'NeedsRefinement') {
+    throw new Error(`Proposal transition from ${workspace.proposal.state} to Refined is not allowed.`)
+  }
+
+  if (!request.reason?.trim()) {
+    throw new Error('Refinement reason is required.')
+  }
+
+  const nextContext = request.context?.trim() || workspace.proposal.context
+  const nextRecommendation = request.recommendation ?? workspace.proposal.recommendation
+  if (
+    nextContext === workspace.proposal.context &&
+    nextRecommendation?.rationale === workspace.proposal.recommendation?.rationale &&
+    (request.rejectedChanges?.length ?? 0) === 0
+  ) {
+    throw new Error('Refinement must change proposal content.')
+  }
+
+  const timestamp = new Date().toISOString()
+  const revisionId = `REV-${String(workspace.revisions.length + 1).padStart(4, '0')}`
+  const source = {
+    sourceKind: 'DecisionProposal',
+    relativePath: `.agents/decisions/proposals/${proposalId}/proposal.json`,
+    section: null,
+    itemId: null,
+    decisionId: null,
+    proposalId,
+    candidateId: workspace.proposal.candidateId,
+    excerpt: 'Mock refinement request submitted through backend-shaped command.',
+  }
+  const changedFields = [
+    ...(nextContext !== workspace.proposal.context ? ['context'] : []),
+    ...(nextRecommendation?.rationale !== workspace.proposal.recommendation?.rationale ? ['recommendation'] : []),
+    ...((request.rejectedChanges?.length ?? 0) > 0 ? ['rejectedChanges'] : []),
+  ]
+  const revision = {
+    id: revisionId,
+    repositoryId,
+    proposalId,
+    createdAt: timestamp,
+    reason: request.reason.trim(),
+    changedFields,
+    sourceProposalFingerprint: request.baseProposalFingerprint ?? `mock-current-fingerprint-${proposalId}`,
+    sources: [source],
+    requestedBy: request.requestedBy?.trim() || null,
+    acceptedChanges: changedFields,
+    rejectedChanges: request.rejectedChanges ?? [],
+    diagnostics: request.baseProposalFingerprint ? [] : ['No base proposal fingerprint supplied.'],
+    previousOptions: workspace.proposal.options,
+    retiredOptions: [],
+    previousAssumptions: workspace.proposal.assumptions,
+    retiredAssumptions: [],
+    previousRecommendationRationale: workspace.proposal.recommendation?.rationale ?? null,
+    revisedRecommendationRationale: nextRecommendation?.rationale ?? null,
+    previousContext: workspace.proposal.context,
+    revisedContext: nextContext,
+    revisedOptions: workspace.proposal.options,
+    previousTradeoffs: workspace.proposal.tradeoffs,
+    revisedTradeoffs: workspace.proposal.tradeoffs,
+    revisedAssumptions: workspace.proposal.assumptions,
+  }
+  const refinedProposal: DecisionProposal = {
+    ...workspace.proposal,
+    state: 'Refined',
+    context: nextContext,
+    recommendation: nextRecommendation,
+    history: [
+      ...workspace.proposal.history,
+      {
+        at: timestamp,
+        actor: request.requestedBy?.trim() || 'reviewer',
+        action: 'Refined',
+        fromState: workspace.proposal.state,
+        toState: 'Refined',
+        reason: request.reason.trim(),
+        sources: [source],
+      },
+    ],
+  }
+
+  workspace.proposal = refinedProposal
+  workspace.revisions = [revision, ...workspace.revisions]
+  workspace.review = {
+    ...workspace.review,
+    state: 'Viewed',
+    updatedAt: timestamp,
+    reason: 'Mock refinement returned proposal to non-authoritative review state.',
+  }
+
+  state.decisionProposalBrowserItems[repositoryId] =
+    state.decisionProposalBrowserItems[repositoryId]?.map((item) =>
+      item.proposalId === proposalId
+        ? {
+            ...item,
+            state: 'Refined',
+            reviewState: 'Viewed',
+            updatedAt: timestamp,
+            reviewUpdatedAt: timestamp,
+          }
+        : item,
+    ) ?? []
+
+  return refinedProposal
 }
 
 function createDecisionProposalLineage(
@@ -1919,6 +2033,18 @@ export function installDevTauriMock() {
           const repositoryId = getStringArg(args, 'repositoryId')
           const proposalId = getStringArg(args, 'proposalId')
           return clone(createDecisionProposalLineage(state, repositoryId, proposalId))
+        }
+        case 'refine_decision_proposal': {
+          const repositoryId = getStringArg(args, 'repositoryId')
+          const proposalId = getStringArg(args, 'proposalId')
+          return clone(
+            refineDecisionProposalMock(
+              state,
+              repositoryId,
+              proposalId,
+              args?.request as DecisionRefinementRequest,
+            ),
+          )
         }
         case 'get_decision_option_comparison': {
           const repositoryId = getStringArg(args, 'repositoryId')

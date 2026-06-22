@@ -18,6 +18,7 @@ import { DecisionEvidenceSourcePanel } from './DecisionEvidenceSourcePanel'
 import { DecisionOptionComparison } from './DecisionOptionComparison'
 import { DecisionProposalBrowser } from './DecisionProposalBrowser'
 import { DecisionProposalViewer } from './DecisionProposalViewer'
+import { DecisionRefinementPanel } from './DecisionRefinementPanel'
 import { DecisionRevisionHistory } from './DecisionRevisionHistory'
 
 type DecisionLifecycleTabProps = {
@@ -47,22 +48,27 @@ export function DecisionLifecycleTab({
   const {
     data: proposalReviewWorkspace,
     isLoading: isProposalReviewLoading,
+    refresh: refreshProposalReview,
   } = useDecisionProposalReview(repositoryId, selectedProposalId)
   const {
     data: proposalLineage,
     isLoading: isProposalLineageLoading,
+    refresh: refreshProposalLineage,
   } = useDecisionProposalLineage(repositoryId, selectedProposalId)
   const {
     data: optionComparison,
     isLoading: isOptionComparisonLoading,
+    refresh: refreshOptionComparison,
   } = useDecisionOptionComparison(repositoryId, selectedProposalId)
   const {
     data: evidenceInspection,
     isLoading: isEvidenceInspectionLoading,
+    refresh: refreshEvidenceInspection,
   } = useDecisionEvidenceInspection(repositoryId, selectedProposalId)
   const {
     data: sourceAttributions,
     isLoading: isSourceAttributionsLoading,
+    refresh: refreshSourceAttributions,
   } = useDecisionSourceAttributions(repositoryId, selectedProposalId)
   const activeCandidateCount = candidates.filter((candidate) =>
     candidate.state === 'Discovered' || candidate.state === 'Promoted',
@@ -118,6 +124,23 @@ export function DecisionLifecycleTab({
           <DecisionProposalViewer
             workspace={proposalReviewWorkspace}
             isLoading={isProposalReviewLoading}
+          />
+
+          <DecisionRefinementPanel
+            repositoryId={repositoryId}
+            workspace={proposalReviewWorkspace}
+            lineage={proposalLineage}
+            isLoading={isProposalReviewLoading || isProposalLineageLoading}
+            onRefined={async () => {
+              await Promise.all([
+                refreshProposalReview(),
+                refreshProposalLineage(),
+                refreshOptionComparison(),
+                refreshEvidenceInspection(),
+                refreshSourceAttributions(),
+              ])
+              onRefresh()
+            }}
           />
 
           <DecisionRevisionHistory

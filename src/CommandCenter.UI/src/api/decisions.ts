@@ -7,6 +7,7 @@ import type {
   DecisionProposalBrowserItem,
   DecisionProposalLineage,
   DecisionProposalState,
+  DecisionRefinementRequest,
   DecisionReviewWorkspace,
   DecisionSourceAttribution,
 } from '../types'
@@ -53,6 +54,18 @@ export function getDecisionProposalLineage(repositoryId: string, proposalId: str
   return invokeCommand<DecisionProposalLineage>('get_decision_proposal_lineage', {
     repositoryId,
     proposalId,
+  })
+}
+
+export function refineDecisionProposal(
+  repositoryId: string,
+  proposalId: string,
+  request: DecisionRefinementRequest,
+) {
+  return invokeCommand<DecisionProposal>('refine_decision_proposal', {
+    repositoryId,
+    proposalId,
+    request,
   })
 }
 

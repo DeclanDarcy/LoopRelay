@@ -105,6 +105,57 @@ export type DecisionAssumption = {
   evidence: DecisionEvidence[]
 }
 
+export type DecisionConstraint = {
+  id: string
+  summary: string
+  evidence: DecisionEvidence[]
+}
+
+export type DecisionAssumptionRevision = {
+  assumptionId: string
+  revisedStatement: string | null
+  retire: boolean
+  reason: string
+}
+
+export type DecisionOptionRevision = {
+  optionId: string
+  revisedTitle: string | null
+  revisedDescription: string | null
+  retire: boolean
+  reason: string
+}
+
+export type DecisionTradeoffRevision = {
+  optionId: string
+  benefit: string | null
+  cost: string | null
+  reason: string
+}
+
+export type DecisionPriorityAdjustment = {
+  itemId: string
+  priority: DecisionCandidatePriority
+  reason: string
+}
+
+export type DecisionRefinementRequest = {
+  reason: string
+  context?: string | null
+  options?: DecisionOption[] | null
+  tradeoffs?: DecisionTradeoff[] | null
+  recommendation?: DecisionRecommendation | null
+  assumptions?: DecisionAssumption[] | null
+  requestedBy?: string | null
+  baseProposalFingerprint?: string | null
+  constraints?: DecisionConstraint[] | null
+  assumptionRevisions?: DecisionAssumptionRevision[] | null
+  optionRevisions?: DecisionOptionRevision[] | null
+  tradeoffRevisions?: DecisionTradeoffRevision[] | null
+  priorityAdjustments?: DecisionPriorityAdjustment[] | null
+  rejectedChanges?: string[] | null
+}
+
 export type DecisionProposal = {
   id: string
   repositoryId: string
