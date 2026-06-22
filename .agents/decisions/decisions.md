@@ -2,26 +2,19 @@
 
 ## Newly Authorized
 
-- M6 Decision Resolution is started, and the first M6 foundation is accepted:
-  - proposal authority flows into explicit human resolution
-  - human resolution creates an immutable resolution snapshot
-  - the snapshot becomes part of decision authority
-- The resolution snapshot model is accepted as the correct first M6 move because it answers: "What exactly was resolved?"
-- A decision record should not require reconstructing mutable proposal state, revision history, comparison history, or current proposal files to explain what was resolved.
-- Future decision consumers should treat the resolution snapshot as sufficient to explain resolution.
-- Resolution should become its own lifecycle/service boundary:
-  - `IDecisionGenerationService` owns proposal creation
-  - `IDecisionRefinementService` owns proposal evolution
-  - `IDecisionResolutionService` owns decision authority creation
-- The next M6 slice should introduce `IDecisionResolutionService` and `DecisionResolutionService`, then move `ResolveProposalAsync` behind that boundary without changing endpoint behavior.
-- Accept, reject, and defer must receive focused backend lifecycle tests before UI work.
-- Accept, reject, and defer must be tested for:
-  - proposal state
-  - decision state
-  - decision artifact creation
-  - resolution snapshot creation
-- Accept, reject, and defer are not assumed to be symmetrical outcomes.
-- Accept is expected to create straightforward decision authority.
-- Reject likely creates decision authority too, but not the same authority as acceptance; it should prevent rejected proposals from reappearing indefinitely.
-- Defer needs careful review because it may be closer to review state than decision authority.
-- Resolution UI should wait until accept/reject/defer semantics are stable.
+- The M6 resolution service boundary is accepted as correct:
+  - `IDecisionGenerationService` owns advisory recommendation/proposal creation.
+  - `IDecisionResolutionService` owns human authority creation.
+- Outcome semantics are now the active M6 domain decision to settle before any resolution UI.
+- Resolution outcome must drive lifecycle state intentionally; `Outcome` is not the same concept as a state enum value.
+- Accepted, rejected, and deferred outcomes must not all be treated as the same authority state.
+- Directionally authorized lifecycle semantics:
+  - Accepted creates accepted decision authority and should transition the decision to `Resolved`.
+  - Rejected creates rejected decision authority and should align closer to `Archived` than `Resolved`.
+  - Deferred means no conclusion was reached and should align closer to `UnderReview` than `Resolved` or `Archived`.
+- The next implementation slice should reconcile `DecisionResolutionService` with `DecisionLifecycleRules` until accepted, rejected, and deferred have exactly one backend interpretation.
+- Add certification-style backend tests for accepted, rejected, and deferred outcomes before UI work.
+- Tests must verify proposal state, decision state, resolution snapshot, decision artifact creation, and projection/index output for each outcome.
+- Resolution snapshots must be preserved for accepted, rejected, and deferred outcomes because all three are explicit human actions.
+- A future reader must be able to inspect the decision record and reconstruct the resolution outcome, what was reviewed, and why it happened without traversing proposal history.
+- Resolution UI remains blocked until outcome semantics are stable.

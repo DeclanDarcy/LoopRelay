@@ -7,7 +7,7 @@ transform reviewed and refined proposals into authoritative project decisions th
 ## Backend Work
 
 - [ ] Add `DecisionResolution`, `ResolveDecisionCommand`, `DecisionResolutionRationale`, `DecisionResolutionHistory`, and recommendation divergence tracking.
-- [ ] Implement `IDecisionResolutionService`.
+- [x] Implement `IDecisionResolutionService`.
 - [ ] Support accept, reject, and defer.
 - [x] Require resolver and rationale.
 - [ ] Create or update authoritative `Decision` records only through resolution commands.
@@ -48,3 +48,4 @@ transform reviewed and refined proposals into authoritative project decisions th
 ## Progress Notes
 
 - Resolution now captures an immutable source proposal snapshot inside `DecisionResolution`, including the pre-resolution proposal fingerprint, proposal state, proposal content, history, and proposal revisions.
+- Resolution now runs through `IDecisionResolutionService` and `DecisionResolutionService`; generation no longer owns proposal resolution commands and the resolve endpoint uses the resolution service boundary.

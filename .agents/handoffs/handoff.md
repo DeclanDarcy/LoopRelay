@@ -2,27 +2,23 @@
 
 ## New State From This Slice
 
-- Began M6 decision resolution with a backend audit/fix focused on immutable resolution context.
-- Added `DecisionResolvedProposalSnapshot`.
-  - Stored inside `DecisionResolution.SourceProposalSnapshot`.
-  - Captures the exact proposal resolved before it is marked `Resolved`.
-  - Includes proposal ID, candidate ID, proposal fingerprint, proposal state, title, context, options, tradeoffs, recommendation, assumptions, evidence, history, and proposal revisions.
-- Updated `DecisionGenerationService.ResolveProposalAsync` to:
-  - fingerprint the pre-resolution proposal
-  - load proposal revisions at resolution time
-  - persist the snapshot in the authoritative decision record
-- Updated decision markdown projection to show:
-  - source proposal
-  - source candidate
-  - source proposal state
-  - source proposal fingerprint
-  - captured revision count
-- Added backend characterization coverage proving:
-  - ordinary resolution includes source proposal snapshot metadata
-  - refined proposal resolution preserves revision context in the decision record
-  - persisted decisions reload with the same source proposal fingerprint and revision IDs
-- Updated `.agents/milestones/m6-decision-resolution.md` to reflect completed resolution metadata/projection/test coverage from this slice.
-- Rotated the previous handoff to `.agents/handoffs/handoff.0026.md`.
+- Continued M6 decision resolution by extracting proposal resolution into a first-class backend service boundary.
+- Added `IDecisionResolutionService`.
+- Added `DecisionResolutionService`.
+  - Owns resolution command validation.
+  - Owns ready-state validation before resolution.
+  - Owns selected option validation.
+  - Owns immutable source proposal snapshot capture.
+  - Owns authoritative decision creation.
+  - Owns marking the source proposal `Resolved`.
+  - Owns decision/proposal markdown projection refresh and decision index refresh.
+- Removed `ResolveProposalAsync` from `IDecisionGenerationService`.
+- Removed resolution implementation from `DecisionGenerationService`.
+- Registered `IDecisionResolutionService` in decision DI.
+- Updated the resolve endpoint to call `IDecisionResolutionService` while preserving the same route, request body, response shape, and error mapping.
+- Updated existing resolution-focused backend tests to resolve through `DecisionResolutionService`.
+- Updated `.agents/milestones/m6-decision-resolution.md` to mark `IDecisionResolutionService` complete.
+- Rotated the previous handoff to `.agents/handoffs/handoff.0027.md`.
 
 ## Verification
 
@@ -31,7 +27,15 @@
 
 ## Next Slice
 
-- Continue M6 by separating resolution ownership from `DecisionGenerationService`.
-- Add `IDecisionResolutionService` and a concrete backend service that owns proposal resolution commands.
-- Preserve existing endpoint behavior while moving resolution logic behind the new service.
-- During that move, verify reject/defer state semantics against the plan before adding UI resolution controls.
+- Continue M6 with accept/reject/defer semantics.
+- Add focused `DecisionResolutionService` tests for `Accepted`, `Rejected`, and `Deferred` outcomes covering:
+  - decision state
+  - proposal state
+  - decision artifact creation
+  - resolution snapshot creation
+  - index/projection output
+- Reconcile `DecisionResolutionService` behavior with `DecisionLifecycleRules`, which already says:
+  - accepted decisions transition to `Resolved`
+  - rejected decisions transition to `Archived`
+  - deferred decisions transition to `UnderReview`
+- Do this before adding any resolution UI.

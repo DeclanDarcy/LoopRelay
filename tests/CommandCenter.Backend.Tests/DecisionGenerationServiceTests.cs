@@ -323,11 +323,12 @@ public sealed class DecisionGenerationServiceTests
         var decisionRepository = new FileSystemDecisionRepository(store);
         await decisionRepository.SaveCandidateAsync(repository, candidate);
         var service = CreateGenerationService(repository, store, decisionRepository);
+        var resolutionService = CreateResolutionService(repository, store, decisionRepository);
         DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
         await service.MarkProposalReadyForResolutionAsync(repository.Id, proposal.Id, "Ready for human resolution.");
         string operationalContextBefore = await ReadAsync(repository, ".agents/operational_context.md");
 
-        Decision decision = await service.ResolveProposalAsync(
+        Decision decision = await resolutionService.ResolveProposalAsync(
             repository.Id,
             proposal.Id,
             new ResolveDecisionCommand(
@@ -377,6 +378,7 @@ public sealed class DecisionGenerationServiceTests
         var decisionRepository = new FileSystemDecisionRepository(store);
         await decisionRepository.SaveCandidateAsync(repository, candidate);
         var service = CreateGenerationService(repository, store, decisionRepository);
+        var resolutionService = CreateResolutionService(repository, store, decisionRepository);
         DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
         await service.MarkProposalViewedAsync(repository.Id, proposal.Id, "Reviewer opened the proposal.");
         await service.MarkProposalNeedsRefinementAsync(repository.Id, proposal.Id, "Needs clearer context.");
@@ -391,7 +393,7 @@ public sealed class DecisionGenerationServiceTests
             refined.Id,
             "Ready after refinement.");
 
-        Decision decision = await service.ResolveProposalAsync(
+        Decision decision = await resolutionService.ResolveProposalAsync(
             repository.Id,
             ready.Id,
             new ResolveDecisionCommand(
@@ -426,27 +428,28 @@ public sealed class DecisionGenerationServiceTests
         var decisionRepository = new FileSystemDecisionRepository(store);
         await decisionRepository.SaveCandidateAsync(repository, candidate);
         var service = CreateGenerationService(repository, store, decisionRepository);
+        var resolutionService = CreateResolutionService(repository, store, decisionRepository);
         DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
 
         InvalidOperationException stateException = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            service.ResolveProposalAsync(
+            resolutionService.ResolveProposalAsync(
                 repository.Id,
                 proposal.Id,
                 new ResolveDecisionCommand("Resolve too early.", "human-reviewer", "option-1")));
 
         await service.MarkProposalReadyForResolutionAsync(repository.Id, proposal.Id, "Ready now.");
         ArgumentException rationaleException = await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.ResolveProposalAsync(
+            resolutionService.ResolveProposalAsync(
                 repository.Id,
                 proposal.Id,
                 new ResolveDecisionCommand("", "human-reviewer", "option-1")));
         ArgumentException resolverException = await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.ResolveProposalAsync(
+            resolutionService.ResolveProposalAsync(
                 repository.Id,
                 proposal.Id,
                 new ResolveDecisionCommand("Resolve.", "", "option-1")));
         ArgumentException optionException = await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.ResolveProposalAsync(
+            resolutionService.ResolveProposalAsync(
                 repository.Id,
                 proposal.Id,
                 new ResolveDecisionCommand("Resolve.", "human-reviewer", "missing-option")));
@@ -471,10 +474,11 @@ public sealed class DecisionGenerationServiceTests
         var decisionRepository = new FileSystemDecisionRepository(store);
         await decisionRepository.SaveCandidateAsync(repository, candidate);
         var service = CreateGenerationService(repository, store, decisionRepository);
+        var resolutionService = CreateResolutionService(repository, store, decisionRepository);
         DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
         await service.MarkProposalReadyForResolutionAsync(repository.Id, proposal.Id, "Ready for alternate option.");
 
-        Decision decision = await service.ResolveProposalAsync(
+        Decision decision = await resolutionService.ResolveProposalAsync(
             repository.Id,
             proposal.Id,
             new ResolveDecisionCommand(
@@ -536,9 +540,10 @@ public sealed class DecisionGenerationServiceTests
         var decisionRepository = new FileSystemDecisionRepository(store);
         await decisionRepository.SaveCandidateAsync(repository, candidate);
         var service = CreateGenerationService(repository, store, decisionRepository);
+        var resolutionService = CreateResolutionService(repository, store, decisionRepository);
         DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
         await service.MarkProposalReadyForResolutionAsync(repository.Id, proposal.Id, "Ready for human resolution.");
-        Decision decision = await service.ResolveProposalAsync(
+        Decision decision = await resolutionService.ResolveProposalAsync(
             repository.Id,
             proposal.Id,
             new ResolveDecisionCommand("Resolve before discard attempt.", "human-reviewer", "option-1"));
@@ -872,6 +877,16 @@ public sealed class DecisionGenerationServiceTests
         var repositoryService = new StubRepositoryService(repository);
         var projectionService = new DecisionArtifactProjectionService(decisionRepository, store);
         return new DecisionGenerationService(repositoryService, decisionRepository, projectionService);
+    }
+
+    private static DecisionResolutionService CreateResolutionService(
+        Repository repository,
+        FileSystemArtifactStore store,
+        FileSystemDecisionRepository decisionRepository)
+    {
+        var repositoryService = new StubRepositoryService(repository);
+        var projectionService = new DecisionArtifactProjectionService(decisionRepository, store);
+        return new DecisionResolutionService(repositoryService, decisionRepository, projectionService);
     }
 
     private static DecisionCandidate CreateCandidate(

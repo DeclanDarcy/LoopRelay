@@ -13,6 +13,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IDecisionContextService, DecisionContextService>();
         services.AddSingleton<IDecisionDiscoveryService, DecisionDiscoveryService>();
         services.AddSingleton<IDecisionGenerationService, DecisionGenerationService>();
+        services.AddSingleton<IDecisionResolutionService, DecisionResolutionService>();
         services.AddSingleton<IDecisionRefinementService, DecisionRefinementService>();
         services.AddSingleton<IDecisionReviewService, DecisionReviewService>();
         return services;
