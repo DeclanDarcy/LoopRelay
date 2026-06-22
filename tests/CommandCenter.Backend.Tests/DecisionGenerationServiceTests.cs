@@ -341,6 +341,10 @@ public sealed class DecisionGenerationServiceTests
         Assert.Equal("option-1", decision.Resolution?.SelectedOptionId);
         Assert.Equal("human-reviewer", decision.Resolution?.ResolvedBy);
         Assert.False(decision.Resolution?.RecommendationDiverged);
+        Assert.NotNull(decision.Resolution?.SourceProposalSnapshot);
+        Assert.Equal(proposal.Id, decision.Resolution?.SourceProposalSnapshot?.ProposalId);
+        Assert.Equal(DecisionProposalState.ReadyForResolution, decision.Resolution?.SourceProposalSnapshot?.ProposalState);
+        Assert.False(string.IsNullOrWhiteSpace(decision.Resolution?.SourceProposalSnapshot?.ProposalFingerprint));
         Assert.True(File.Exists(Path.Combine(repository.Path, ".agents", "decisions", "records", "DEC-0001", "decision.json")));
         Assert.True(File.Exists(Path.Combine(repository.Path, ".agents", "decisions", "records", "DEC-0001", "decision.md")));
         Assert.True(File.Exists(Path.Combine(repository.Path, ".agents", "decisions", "records", "DEC-0001", "history.json")));
@@ -354,11 +358,63 @@ public sealed class DecisionGenerationServiceTests
         Assert.Contains("- Selected option: option-1", decisionMarkdown);
         Assert.Contains("- Resolved by: human-reviewer", decisionMarkdown);
         Assert.Contains("- Recommendation diverged: False", decisionMarkdown);
+        Assert.Contains("- Source proposal: PROP-0001", decisionMarkdown);
+        Assert.Contains("- Source proposal state: ReadyForResolution", decisionMarkdown);
+        Assert.Contains("- Captured revisions: 0", decisionMarkdown);
         Assert.Contains("- State: Resolved", proposalMarkdown);
         Assert.Contains("- DEC-0001 | Resolved | Architectural | Accepted | Decide persistence schema", index);
         Assert.Contains("- PROP-0001 | Resolved | CAND-0001 | Decide persistence schema", index);
         Assert.Equal(operationalContextBefore, operationalContextAfter);
         Assert.False(Directory.Exists(Path.Combine(repository.Path, ".agents", "decisions", "assimilation")));
+    }
+
+    [Fact]
+    public async Task ResolveProposalCapturesResolvedProposalContentAndRevisionContext()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var service = CreateGenerationService(repository, store, decisionRepository);
+        DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
+        await service.MarkProposalViewedAsync(repository.Id, proposal.Id, "Reviewer opened the proposal.");
+        await service.MarkProposalNeedsRefinementAsync(repository.Id, proposal.Id, "Needs clearer context.");
+        DecisionProposal refined = await service.RefineProposalAsync(
+            repository.Id,
+            proposal.Id,
+            new DecisionRefinementRequest(
+                "Clarify context for resolution.",
+                Context: "Refined context captured by resolution."));
+        DecisionProposal ready = await service.MarkProposalReadyForResolutionAsync(
+            repository.Id,
+            refined.Id,
+            "Ready after refinement.");
+
+        Decision decision = await service.ResolveProposalAsync(
+            repository.Id,
+            ready.Id,
+            new ResolveDecisionCommand(
+                "Resolve using refined proposal context.",
+                "human-reviewer",
+                "option-1"));
+
+        DecisionResolvedProposalSnapshot snapshot = Assert.IsType<DecisionResolvedProposalSnapshot>(
+            decision.Resolution?.SourceProposalSnapshot);
+        DecisionProposalRevision revision = Assert.Single(snapshot.Revisions);
+        Assert.Equal(ready.Id, snapshot.ProposalId);
+        Assert.Equal(candidate.Id, snapshot.CandidateId);
+        Assert.Equal(DecisionProposalState.ReadyForResolution, snapshot.ProposalState);
+        Assert.Equal("Refined context captured by resolution.", snapshot.Context);
+        Assert.Equal("REV-0001", revision.Id);
+        Assert.Contains("Context", revision.ChangedFields);
+        Assert.Contains(snapshot.History, entry => entry.Event == "Refined");
+        Assert.Contains(snapshot.History, entry => entry.Event == "ReadyForResolution");
+        Assert.False(string.IsNullOrWhiteSpace(snapshot.ProposalFingerprint));
+
+        Decision? reloaded = await decisionRepository.GetDecisionAsync(repository, decision.Id);
+        Assert.Equal(snapshot.ProposalFingerprint, reloaded?.Resolution?.SourceProposalSnapshot?.ProposalFingerprint);
+        Assert.Equal("REV-0001", Assert.Single(reloaded!.Resolution!.SourceProposalSnapshot!.Revisions).Id);
     }
 
     [Fact]

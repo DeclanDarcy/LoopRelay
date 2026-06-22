@@ -191,6 +191,8 @@ public sealed class DecisionGenerationService(
         string rationale = command.Rationale.Trim();
         string resolver = command.Resolver.Trim();
         string selectedOptionId = selectedOption.Id;
+        string proposalFingerprint = Fingerprint(proposal);
+        IReadOnlyList<DecisionProposalRevision> revisions = await decisionRepository.ListProposalRevisionsAsync(repository, proposal.Id);
         bool recommendationDiverged = proposal.Recommendation is not null &&
             !string.Equals(proposal.Recommendation.OptionId, selectedOptionId, StringComparison.Ordinal);
         var proposalSource = new DecisionSourceReference(
@@ -216,7 +218,21 @@ public sealed class DecisionGenerationService(
             resolver,
             recommendationDiverged,
             now,
-            [proposalSource, selectedOptionSource]);
+            [proposalSource, selectedOptionSource],
+            new DecisionResolvedProposalSnapshot(
+                proposal.Id,
+                proposal.CandidateId,
+                proposalFingerprint,
+                proposal.State,
+                proposal.Title,
+                proposal.Context,
+                proposal.Options,
+                proposal.Tradeoffs,
+                proposal.Recommendation,
+                proposal.Assumptions,
+                proposal.Evidence,
+                proposal.History,
+                revisions));
         var decision = new Decision(
             decisionId,
             DecisionState.Resolved,

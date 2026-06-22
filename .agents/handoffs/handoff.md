@@ -2,41 +2,36 @@
 
 ## New State From This Slice
 
-- Completed the remaining M5 UI work by adding `DecisionRefinementPanel`.
-- Added typed frontend refinement request support:
-  - `DecisionRefinementRequest` and related request model types in UI decision types.
-  - `refineDecisionProposal` API wrapper.
-  - `useDecisionProposalRefinement` mutation hook.
-- Wired refinement submission into `DecisionLifecycleTab`.
-  - The panel is enabled only when backend proposal state is `NeedsRefinement`.
-  - The request submits structured backend-shaped data instead of mutating proposals locally.
-  - Recommendation rationale changes reuse the existing recommendation object with a revised rationale.
-  - Base proposal fingerprint comes from backend lineage.
-  - On success, the tab reloads proposal review, lineage, option comparison, evidence inspection, source attributions, and parent decision projections.
-- Added the Tauri command `refine_decision_proposal` and mapped it to the backend refinement endpoint.
-- Extended dev Tauri mock refinement behavior:
-  - rejects non-`NeedsRefinement` proposals
-  - returns a `Refined` proposal
-  - appends a revision
-  - updates review/browser state and timestamps
-- Added characterization coverage for:
-  - structured refinement request payload
-  - disabled state when backend state is not refinable
-  - stale-base error rendering without local authority mutation
-- Marked `.agents/milestones/m5-refinement-workflow.md` UI refinement form complete.
-- Rotated the previous handoff to `.agents/handoffs/handoff.0025.md`.
+- Began M6 decision resolution with a backend audit/fix focused on immutable resolution context.
+- Added `DecisionResolvedProposalSnapshot`.
+  - Stored inside `DecisionResolution.SourceProposalSnapshot`.
+  - Captures the exact proposal resolved before it is marked `Resolved`.
+  - Includes proposal ID, candidate ID, proposal fingerprint, proposal state, title, context, options, tradeoffs, recommendation, assumptions, evidence, history, and proposal revisions.
+- Updated `DecisionGenerationService.ResolveProposalAsync` to:
+  - fingerprint the pre-resolution proposal
+  - load proposal revisions at resolution time
+  - persist the snapshot in the authoritative decision record
+- Updated decision markdown projection to show:
+  - source proposal
+  - source candidate
+  - source proposal state
+  - source proposal fingerprint
+  - captured revision count
+- Added backend characterization coverage proving:
+  - ordinary resolution includes source proposal snapshot metadata
+  - refined proposal resolution preserves revision context in the decision record
+  - persisted decisions reload with the same source proposal fingerprint and revision IDs
+- Updated `.agents/milestones/m6-decision-resolution.md` to reflect completed resolution metadata/projection/test coverage from this slice.
+- Rotated the previous handoff to `.agents/handoffs/handoff.0026.md`.
 
 ## Verification
 
-- `npm run lint --prefix src/CommandCenter.UI` passes.
-- `npm run test --prefix src/CommandCenter.UI` passes with 44 files and 156 tests.
-- `npm run build --prefix src/CommandCenter.UI` passes.
-- `cargo build --manifest-path src/CommandCenter.Shell/Cargo.toml` passes.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes with 297 tests.
-- `dotnet build CommandCenter.slnx` passes.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter DecisionGenerationServiceTests` passes with 24 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes with 298 tests.
 
 ## Next Slice
 
-- Begin M6 decision resolution.
-- Start with backend/API/UI review of the existing proposal resolution endpoint and model before adding resolution UI.
-- Preserve the M5 authority boundary: proposals and revisions are inputs to explicit human resolution, not authority by themselves.
+- Continue M6 by separating resolution ownership from `DecisionGenerationService`.
+- Add `IDecisionResolutionService` and a concrete backend service that owns proposal resolution commands.
+- Preserve existing endpoint behavior while moving resolution logic behind the new service.
+- During that move, verify reject/defer state semantics against the plan before adding UI resolution controls.

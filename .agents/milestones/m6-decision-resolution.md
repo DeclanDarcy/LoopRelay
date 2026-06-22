@@ -9,11 +9,11 @@ transform reviewed and refined proposals into authoritative project decisions th
 - [ ] Add `DecisionResolution`, `ResolveDecisionCommand`, `DecisionResolutionRationale`, `DecisionResolutionHistory`, and recommendation divergence tracking.
 - [ ] Implement `IDecisionResolutionService`.
 - [ ] Support accept, reject, and defer.
-- [ ] Require resolver and rationale.
+- [x] Require resolver and rationale.
 - [ ] Create or update authoritative `Decision` records only through resolution commands.
-- [ ] Record selected option and whether it matched the recommendation.
-- [ ] Persist outcome, timestamp, resolver, rationale, state transition, and source proposal.
-- [ ] Update `decision.md` and `decisions.md` projections.
+- [x] Record selected option and whether it matched the recommendation.
+- [x] Persist outcome, timestamp, resolver, rationale, state transition, and source proposal.
+- [x] Update `decision.md` and `decisions.md` projections.
 - [ ] Support supersede and archive actions with lineage validation.
 - [ ] Expose an explicit command to create a decision assimilation recommendation package from a resolved decision and current continuity inputs.
 - [ ] Do not decide that operational context must change; package evidence and rationale for the operational-context workflow to review.
@@ -30,11 +30,11 @@ transform reviewed and refined proposals into authoritative project decisions th
 ## Tests
 
 - [ ] Accept/reject/defer tests.
-- [ ] Rationale requirement tests.
-- [ ] Resolver metadata tests.
-- [ ] Recommendation divergence tests.
-- [ ] State transition tests.
-- [ ] Projection update tests.
+- [x] Rationale requirement tests.
+- [x] Resolver metadata tests.
+- [x] Recommendation divergence tests.
+- [x] State transition tests.
+- [x] Projection update tests.
 - [ ] Supersede/archive tests.
 - [ ] Assimilation recommendation tests proving operational context is not mutated and continuity policy is not owned by decision services.
 
@@ -44,3 +44,7 @@ transform reviewed and refined proposals into authoritative project decisions th
 - [ ] Authoritative decisions are repository-backed.
 - [ ] Historical proposal, review, refinement, and resolution context remain recoverable.
 - [ ] Resolved decisions can be packaged as operational-context assimilation recommendations without becoming operational context automatically.
+
+## Progress Notes
+
+- Resolution now captures an immutable source proposal snapshot inside `DecisionResolution`, including the pre-resolution proposal fingerprint, proposal state, proposal content, history, and proposal revisions.

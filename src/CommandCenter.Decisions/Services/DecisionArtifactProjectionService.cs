@@ -156,6 +156,17 @@ public sealed class DecisionArtifactProjectionService(
                 ("Resolved by", decision.Resolution.ResolvedBy),
                 ("Recommendation diverged", decision.Resolution.RecommendationDiverged.ToString()),
                 ("Resolved", FormatTimestamp(decision.Resolution.ResolvedAt)));
+            if (decision.Resolution.SourceProposalSnapshot is not null)
+            {
+                DecisionResolvedProposalSnapshot snapshot = decision.Resolution.SourceProposalSnapshot;
+                markdown.Fields(
+                    ("Source proposal", snapshot.ProposalId),
+                    ("Source candidate", snapshot.CandidateId),
+                    ("Source proposal state", snapshot.ProposalState.ToString()),
+                    ("Source proposal fingerprint", snapshot.ProposalFingerprint),
+                    ("Captured revisions", snapshot.Revisions.Count.ToString()));
+            }
+
             markdown.Paragraph(decision.Resolution.Rationale);
             markdown.H3("Sources");
             markdown.SourceList(decision.Resolution.Sources);

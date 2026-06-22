@@ -9,4 +9,5 @@ public sealed record DecisionResolution(
     string ResolvedBy,
     bool RecommendationDiverged,
     DateTimeOffset ResolvedAt,
-    IReadOnlyList<DecisionSourceReference> Sources);
+    IReadOnlyList<DecisionSourceReference> Sources,
+    DecisionResolvedProposalSnapshot? SourceProposalSnapshot = null);
