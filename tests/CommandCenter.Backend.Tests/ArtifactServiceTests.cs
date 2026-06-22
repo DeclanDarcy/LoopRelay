@@ -1,5 +1,5 @@
-using CommandCenter.Backend.Artifacts;
-using CommandCenter.Backend.Repositories;
+using CommandCenter.Core.Artifacts;
+using CommandCenter.Core.Repositories;
 
 namespace CommandCenter.Backend.Tests;
 

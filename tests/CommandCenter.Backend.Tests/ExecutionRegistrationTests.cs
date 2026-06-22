@@ -1,10 +1,13 @@
 using CommandCenter.Backend;
-using CommandCenter.Backend.Continuity;
-using CommandCenter.Backend.Execution;
+using CommandCenter.Continuity;
+using CommandCenter.Execution;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
+using CommandCenter.Continuity.Abstractions;
+using CommandCenter.Execution.Abstractions;
+using CommandCenter.Execution.Primitives;
 using Microsoft.AspNetCore.Builder;
 
 namespace CommandCenter.Backend.Tests;

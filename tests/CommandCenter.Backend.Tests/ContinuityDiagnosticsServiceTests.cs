@@ -1,7 +1,9 @@
-using CommandCenter.Backend.Artifacts;
-using CommandCenter.Backend.Configuration;
-using CommandCenter.Backend.Continuity;
-using CommandCenter.Backend.Repositories;
+using CommandCenter.Core.Artifacts;
+using CommandCenter.Core.Configuration;
+using CommandCenter.Continuity;
+using CommandCenter.Continuity.Models;
+using CommandCenter.Continuity.Services;
+using CommandCenter.Core.Repositories;
 
 namespace CommandCenter.Backend.Tests;
 

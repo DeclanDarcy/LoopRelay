@@ -1,0 +1,38 @@
+using CommandCenter.Core.Repositories;
+
+namespace CommandCenter.Core.Artifacts;
+
+public static class ArtifactPath
+{
+    public static string ResolveRepositoryPath(Repository repository, string relativePath)
+    {
+        if (Path.IsPathRooted(relativePath))
+        {
+            throw new ArgumentException("Artifact path must be repository-relative.", nameof(relativePath));
+        }
+
+        string repositoryRoot = Path.GetFullPath(repository.Path);
+        string resolvedPath = Path.GetFullPath(Path.Combine(repositoryRoot, relativePath));
+        string rootWithSeparator = repositoryRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+
+        if (!resolvedPath.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(resolvedPath, repositoryRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("Artifact path must stay within the repository root.", nameof(relativePath));
+        }
+
+        return resolvedPath;
+    }
+
+    public static string ToRepositoryRelativePath(Repository repository, string fullPath)
+    {
+        return Path.GetRelativePath(Path.GetFullPath(repository.Path), Path.GetFullPath(fullPath))
+            .Replace(Path.DirectorySeparatorChar, '/')
+            .Replace(Path.AltDirectorySeparatorChar, '/');
+    }
+
+    public static string CombineRelative(params string[] parts)
+    {
+        return string.Join('/', parts);
+    }
+}
