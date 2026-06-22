@@ -802,6 +802,8 @@ public sealed class DecisionGovernanceService(
         List<DecisionGovernanceFinding> findings,
         List<string> diagnostics)
     {
+        AnalyzeRepeatedUnresolvedQuestionSignals(candidates, findings);
+
         foreach (DecisionCandidate candidate in candidates.Where(candidate => candidate.State == DecisionCandidateState.Promoted))
         {
             bool hasActiveProposal = proposals.Any(proposal =>
@@ -824,7 +826,68 @@ public sealed class DecisionGovernanceService(
             }
         }
 
-        diagnostics.Add("Repeated ambiguity, repeated blocker, repeated fork, and repeated unresolved-question analysis is limited to structured candidate/proposal evidence in this slice.");
+        diagnostics.Add("Repeated ambiguity, repeated blocker, and repeated fork analysis is limited to structured candidate/proposal evidence in this slice.");
+    }
+
+    private static void AnalyzeRepeatedUnresolvedQuestionSignals(
+        IReadOnlyList<DecisionCandidate> candidates,
+        List<DecisionGovernanceFinding> findings)
+    {
+        foreach (IGrouping<string, CandidateSignalReference> repeatedQuestion in candidates
+                     .Where(IsActiveCandidate)
+                     .SelectMany(CandidateSignalReferences)
+                     .Where(reference => IsUnresolvedQuestionSignal(reference.SignalKind))
+                     .GroupBy(reference => $"{reference.SignalKind}|{SourceKey(reference.Source)}", StringComparer.Ordinal)
+                     .Where(group => group.Select(reference => reference.Candidate.Id).Distinct(StringComparer.Ordinal).Count() > 1))
+        {
+            CandidateSignalReference[] references = repeatedQuestion.ToArray();
+            DecisionCandidate[] relatedCandidates = references
+                .Select(reference => reference.Candidate)
+                .DistinctBy(candidate => candidate.Id)
+                .OrderBy(candidate => candidate.Id, StringComparer.Ordinal)
+                .ToArray();
+            AddFinding(
+                findings,
+                DecisionGovernanceCategory.DecisionCoverage,
+                DecisionGovernanceSeverity.Warning,
+                false,
+                "Repeated unresolved question signal",
+                $"Active candidates {string.Join(", ", relatedCandidates.Select(candidate => candidate.Id))} repeat unresolved-question signal {references[0].SignalKind} from the same structured source reference.",
+                references.Select(reference => reference.Source).Concat(relatedCandidates.Select(CandidateSource)).ToArray(),
+                [],
+                relatedCandidates.Select(candidate => candidate.Id).ToArray(),
+                []);
+        }
+    }
+
+    private static IEnumerable<CandidateSignalReference> CandidateSignalReferences(DecisionCandidate candidate)
+    {
+        foreach (DecisionSignal signal in candidate.Signals)
+        {
+            DecisionSourceReference[] sources = signal.Evidence
+                .SelectMany(evidence => evidence.Sources)
+                .Concat(candidate.Sources)
+                .ToArray();
+            foreach (DecisionSourceReference source in sources.Length == 0 ? [CandidateSource(candidate)] : sources)
+            {
+                yield return new CandidateSignalReference(candidate, signal.Kind, source);
+            }
+        }
+    }
+
+    private static bool IsUnresolvedQuestionSignal(string signalKind)
+    {
+        return signalKind is "Ambiguity" or "MissingDirection" or "RepeatedContinuityUncertainty" or "StaleOpenDecision";
+    }
+
+    private static string SourceKey(DecisionSourceReference source)
+    {
+        return string.Join(
+            "|",
+            source.SourceKind,
+            source.RelativePath ?? string.Empty,
+            source.Section ?? string.Empty,
+            source.ItemId ?? string.Empty);
     }
 
     private static bool IsActiveCandidate(DecisionCandidate candidate)
@@ -1098,6 +1161,11 @@ public sealed class DecisionGovernanceService(
         bool IsPositive,
         string Statement,
         Decision Decision);
+
+    private sealed record CandidateSignalReference(
+        DecisionCandidate Candidate,
+        string SignalKind,
+        DecisionSourceReference Source);
 
     private static DecisionSourceReference DecisionSource(Decision decision)
     {

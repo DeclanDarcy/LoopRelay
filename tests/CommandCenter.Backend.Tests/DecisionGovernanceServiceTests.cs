@@ -284,6 +284,39 @@ public sealed class DecisionGovernanceServiceTests
     }
 
     [Fact]
+    public async Task RepeatedUnresolvedQuestionSignalsCreateCoverageFinding()
+    {
+        Repository repository = CreateRepository();
+        var decisionRepository = new InMemoryDecisionRepository();
+        await decisionRepository.SaveCandidateAsync(
+            repository,
+            CreateCandidate(
+                repository.Id,
+                signalKind: "Ambiguity",
+                sourceItemId: "milestone-7-coverage"));
+        await decisionRepository.SaveCandidateAsync(
+            repository,
+            CreateCandidate(
+                repository.Id,
+                candidateId: "CAND-0002",
+                state: DecisionCandidateState.Discovered,
+                sourceFingerprint: "different-source-fingerprint",
+                signalKind: "Ambiguity",
+                sourceItemId: "milestone-7-coverage"));
+        var service = CreateService(repository, decisionRepository);
+
+        DecisionGovernanceReport report = await service.GetCurrentReportAsync(repository.Id);
+
+        Assert.Equal(DecisionHealthAssessment.AdvisoryFindings, report.Health);
+        Assert.Contains(report.Findings, finding =>
+            finding.Category == DecisionGovernanceCategory.DecisionCoverage &&
+            finding.Title == "Repeated unresolved question signal" &&
+            finding.Severity == DecisionGovernanceSeverity.Warning &&
+            !finding.BlocksExecutionProjection &&
+            finding.RelatedCandidateIds.SequenceEqual(["CAND-0001", "CAND-0002"]));
+    }
+
+    [Fact]
     public async Task SupersededDecisionWithoutIncomingSupersedesCreatesLineageFinding()
     {
         Repository repository = CreateRepository();
@@ -622,8 +655,27 @@ public sealed class DecisionGovernanceServiceTests
     private static DecisionCandidate CreateCandidate(
         Guid repositoryId,
         string candidateId = "CAND-0001",
-        DecisionCandidateState state = DecisionCandidateState.Promoted)
+        DecisionCandidateState state = DecisionCandidateState.Promoted,
+        string sourceFingerprint = "source-fingerprint",
+        string? signalKind = null,
+        string sourceItemId = "plan")
     {
+        var source = new DecisionSourceReference(
+            "Plan",
+            ".agents/plan.md",
+            Section: "Milestone 7",
+            ItemId: sourceItemId);
+        DecisionSignal[] signals = string.IsNullOrWhiteSpace(signalKind)
+            ? []
+            :
+            [
+                new DecisionSignal(
+                    signalKind,
+                    $"{signalKind} signal found in structured test context.",
+                    DecisionClassification.Architectural,
+                    DecisionCandidatePriority.Medium,
+                    [new DecisionEvidence("Structured source carries unresolved question signal.", [source])])
+            ];
         return new DecisionCandidate(
             candidateId,
             repositoryId,
@@ -632,10 +684,10 @@ public sealed class DecisionGovernanceServiceTests
             DecisionClassification.Architectural,
             "Decide persistence schema",
             "Need to decide repository-backed persistence schema.",
-            "source-fingerprint",
-            [],
+            sourceFingerprint,
+            signals,
             [new DecisionEvidence("Plan requires a persistence decision.", [new DecisionSourceReference("Plan", ".agents/plan.md")])],
-            [new DecisionSourceReference("Plan", ".agents/plan.md")],
+            [source],
             [],
             [new DecisionHistoryEntry(DateTimeOffset.UtcNow, state.ToString(), null, state.ToString(), "Seeded by governance test.", [])]);
     }

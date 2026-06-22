@@ -20,6 +20,7 @@ detect decision ecosystem health issues before decisions are projected into exec
   - [x] execution projection readiness
 - [ ] Decision coverage analysis detects repeated ambiguity, repeated blockers, repeated governance findings, repeated forks, stale candidates, and repeated unresolved questions.
   - [x] Stale candidates.
+  - [x] Repeated unresolved questions from structured candidate signals.
 - [ ] Detect contradictory resolved decisions, conflicting directives, circular supersession, broken dependencies, missing resolver metadata, unresolved stale proposals, decisions not ready for projection, and projection failures.
   - [x] Contradictory resolved decisions.
   - [x] Circular supersession.

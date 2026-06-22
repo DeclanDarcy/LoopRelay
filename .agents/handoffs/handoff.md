@@ -3,22 +3,19 @@
 ## New State From This Slice
 
 - Continued Milestone 7 decision coverage analysis.
-- Added stale candidate lifecycle-hygiene detection in `DecisionGovernanceService`.
-- Active candidates now create advisory `DecisionCoverage` findings when:
-  - multiple active candidates share the same source fingerprint
-  - an active candidate reuses a source fingerprint already represented by a terminal candidate
-  - an active candidate already has resolved authority through a resolved proposal or decision snapshot
-- Stale candidate findings are warnings and do not block execution projection.
-- Added focused governance tests for duplicate active source fingerprints, terminal source fingerprint reuse, and active candidates with resolved authority.
-- Updated `.agents/milestones/m7-decision-governance.md` to mark stale candidates complete under decision coverage analysis.
-- Rotated prior handoff to `.agents/handoffs/handoff.0038.md`.
+- Added repeated unresolved-question detection in `DecisionGovernanceService`.
+- Governance now emits advisory `DecisionCoverage` findings when multiple active candidates carry unresolved-question signal kinds from the same structured source reference.
+- The unresolved-question analyzer uses structured `DecisionSignal.Kind` plus source identity, not natural-language similarity.
+- Covered signal kinds are `Ambiguity`, `MissingDirection`, `RepeatedContinuityUncertainty`, and `StaleOpenDecision`.
+- Updated `.agents/milestones/m7-decision-governance.md` to mark repeated unresolved questions complete under decision coverage analysis.
+- Rotated prior handoff to `.agents/handoffs/handoff.0039.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter DecisionGovernanceServiceTests` passes: 19 tests.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes: 327 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter DecisionGovernanceServiceTests` passes: 20 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes: 328 tests.
 
 ## Next Slice
 
-- Continue Milestone 7 with repeated unresolved questions using structured repository signals rather than natural-language similarity.
-- After that, add repeated governance finding detection across persisted governance reports.
+- Continue Milestone 7 decision coverage with repeated blockers, repeated forks, and repeated ambiguity using structured candidate signals.
+- After structured repeated-signal coverage, add repeated governance finding detection across persisted governance reports.
