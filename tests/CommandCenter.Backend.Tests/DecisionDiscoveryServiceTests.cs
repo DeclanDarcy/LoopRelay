@@ -85,6 +85,128 @@ public sealed class DecisionDiscoveryServiceTests
     }
 
     [Fact]
+    public async Task ExpiredCandidateDoesNotRediscoverAsActiveWork()
+    {
+        Repository repository = CreateRepository();
+        await WriteAsync(repository, ".agents/plan.md", "# Plan\n\n- Need to decide operational workflow ownership.");
+        await WriteAsync(repository, ".agents/milestones/m2-decision-discovery.md", "# M2\n\n- Detect missing direction.");
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        var service = CreateService(repository, store, decisionRepository);
+        DecisionCandidate candidate = Assert.Single((await service.DiscoverAsync(repository.Id)).Candidates);
+
+        DecisionCandidate expired = await service.ExpireCandidateAsync(repository.Id, candidate.Id, "Source blocker resolved.");
+        DecisionDiscoveryResult rediscovery = await service.DiscoverAsync(repository.Id);
+        IReadOnlyList<DecisionCandidate> persisted = await service.ListCandidatesAsync(repository.Id);
+
+        Assert.Equal(DecisionCandidateState.Expired, expired.State);
+        Assert.Empty(rediscovery.Candidates);
+        Assert.Equal(1, rediscovery.Diagnostics.SuppressedDuplicateCount);
+        DecisionCandidate reloaded = Assert.Single(persisted);
+        Assert.Equal(DecisionCandidateState.Expired, reloaded.State);
+        Assert.Contains(reloaded.History, entry => entry.Event == "Expired" && entry.Reason == "Source blocker resolved.");
+    }
+
+    [Fact]
+    public async Task DismissedExpiredAndDuplicateCandidatesDoNotAccumulateAsActiveWork()
+    {
+        Repository repository = CreateRepository();
+        await WriteAsync(
+            repository,
+            ".agents/plan.md",
+            """
+            # Plan
+
+            - Need to decide repository-backed API schema.
+            - Ambiguous execution workflow.
+            - Blocked until governance policy is decided.
+            - Conflict between backend API approaches.
+            """);
+        await WriteAsync(repository, ".agents/milestones/m2-decision-discovery.md", "# M2\n\n- Detect candidate lifecycle hygiene.");
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        var service = CreateService(repository, store, decisionRepository);
+        DecisionDiscoveryResult firstDiscovery = await service.DiscoverAsync(repository.Id);
+        DecisionCandidate[] candidates = firstDiscovery.Candidates.OrderBy(candidate => candidate.Id, StringComparer.Ordinal).ToArray();
+
+        await service.DismissCandidateAsync(repository.Id, candidates[0].Id, "Dismissed by reviewer.");
+        await service.ExpireCandidateAsync(repository.Id, candidates[1].Id, "Expired after source changed.");
+        await service.MarkCandidateDuplicateAsync(repository.Id, candidates[2].Id, candidates[3].Id, "Covered by another candidate.");
+        DecisionDiscoveryResult rediscovery = await service.DiscoverAsync(repository.Id);
+        IReadOnlyList<DecisionCandidate> persisted = await service.ListCandidatesAsync(repository.Id);
+
+        Assert.Equal(4, candidates.Length);
+        Assert.Empty(rediscovery.Candidates);
+        Assert.Equal(4, rediscovery.Diagnostics.SuppressedDuplicateCount);
+        Assert.Collection(
+            persisted.OrderBy(candidate => candidate.Id, StringComparer.Ordinal),
+            candidate => Assert.Equal(DecisionCandidateState.Dismissed, candidate.State),
+            candidate => Assert.Equal(DecisionCandidateState.Expired, candidate.State),
+            candidate => Assert.Equal(DecisionCandidateState.Duplicate, candidate.State),
+            candidate => Assert.Equal(DecisionCandidateState.Discovered, candidate.State));
+    }
+
+    [Fact]
+    public async Task CandidateEndpointsReturnSuccessForDiscoveryListingAndLifecycleOperations()
+    {
+        Repository repository = CreateRepository();
+        await WriteAsync(
+            repository,
+            ".agents/plan.md",
+            """
+            # Plan
+
+            - Need to decide repository-backed persistence schema.
+            - Ambiguous execution workflow.
+            - Blocked until governance policy is decided.
+            - Conflict between backend API approaches.
+            """);
+        await WriteAsync(repository, ".agents/milestones/m2-decision-discovery.md", "# M2\n\n- Detect lifecycle endpoint success paths.");
+
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services => services.AddSingleton<IRepositoryService>(new StubRepositoryService(repository)));
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+        using var client = new HttpClient();
+        string root = app.Urls.Single();
+        JsonSerializerOptions jsonOptions = CreateJsonOptions();
+
+        HttpResponseMessage discoverResponse = await client.PostAsync($"{root}/api/repositories/{repository.Id}/decisions/discover", null);
+        DecisionDiscoveryResult? discovery = await discoverResponse.Content.ReadFromJsonAsync<DecisionDiscoveryResult>(jsonOptions);
+        Assert.NotNull(discovery);
+        DecisionCandidate[] candidates = discovery.Candidates.OrderBy(candidate => candidate.Id, StringComparer.Ordinal).ToArray();
+
+        HttpResponseMessage listResponse = await client.GetAsync($"{root}/api/repositories/{repository.Id}/decisions/candidates");
+        DecisionCandidate[]? listed = await listResponse.Content.ReadFromJsonAsync<DecisionCandidate[]>(jsonOptions);
+        HttpResponseMessage promoteResponse = await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/candidates/{candidates[0].Id}/promote",
+            new DecisionCandidateTransitionRequest("Ready for proposal generation."));
+        HttpResponseMessage dismissResponse = await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/candidates/{candidates[1].Id}/dismiss",
+            new DecisionCandidateTransitionRequest("Reviewer dismissed."));
+        HttpResponseMessage expireResponse = await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/candidates/{candidates[2].Id}/expire",
+            new DecisionCandidateTransitionRequest("Source no longer applies."));
+        HttpResponseMessage duplicateResponse = await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/candidates/{candidates[3].Id}/duplicate",
+            new DecisionCandidateTransitionRequest("Covered by promoted candidate.", candidates[0].Id));
+
+        Assert.Equal(HttpStatusCode.OK, discoverResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, promoteResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, dismissResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, expireResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, duplicateResponse.StatusCode);
+        Assert.NotNull(listed);
+        Assert.Equal(4, listed.Length);
+        Assert.Equal(DecisionCandidateState.Promoted, (await promoteResponse.Content.ReadFromJsonAsync<DecisionCandidate>(jsonOptions))!.State);
+        Assert.Equal(DecisionCandidateState.Dismissed, (await dismissResponse.Content.ReadFromJsonAsync<DecisionCandidate>(jsonOptions))!.State);
+        Assert.Equal(DecisionCandidateState.Expired, (await expireResponse.Content.ReadFromJsonAsync<DecisionCandidate>(jsonOptions))!.State);
+        Assert.Equal(DecisionCandidateState.Duplicate, (await duplicateResponse.Content.ReadFromJsonAsync<DecisionCandidate>(jsonOptions))!.State);
+    }
+
+    [Fact]
     public async Task InvalidCandidateTransitionReturnsConflictFromEndpoint()
     {
         Repository repository = CreateRepository();
@@ -98,8 +220,7 @@ public sealed class DecisionDiscoveryServiceTests
         await app.StartAsync();
         using var client = new HttpClient();
         string root = app.Urls.Single();
-        JsonSerializerOptions jsonOptions = new(JsonSerializerDefaults.Web);
-        jsonOptions.Converters.Add(new JsonStringEnumConverter());
+        JsonSerializerOptions jsonOptions = CreateJsonOptions();
 
         HttpResponseMessage discoverResponse = await client.PostAsync($"{root}/api/repositories/{repository.Id}/decisions/discover", null);
         DecisionDiscoveryResult? result = await discoverResponse.Content.ReadFromJsonAsync<DecisionDiscoveryResult>(jsonOptions);
@@ -115,6 +236,13 @@ public sealed class DecisionDiscoveryServiceTests
 
         Assert.Equal(HttpStatusCode.OK, dismissResponse.StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, promoteResponse.StatusCode);
+    }
+
+    private static JsonSerializerOptions CreateJsonOptions()
+    {
+        JsonSerializerOptions jsonOptions = new(JsonSerializerDefaults.Web);
+        jsonOptions.Converters.Add(new JsonStringEnumConverter());
+        return jsonOptions;
     }
 
     private static DecisionDiscoveryService CreateService(

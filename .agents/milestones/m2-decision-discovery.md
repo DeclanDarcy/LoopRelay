@@ -8,7 +8,7 @@ identify decision candidates without generating recommendations.
 
 - [x] Add `DecisionCandidate`, `DecisionCandidateState`, `DecisionSignal`, `DecisionEvidence`, priority, and diagnostics models.
 - [x] Implement `IDecisionDiscoveryService`.
-- [ ] Detect signals for:
+- [x] Detect signals for:
   - [x] ambiguity
   - [x] conflict
   - [x] missing direction
@@ -32,7 +32,7 @@ identify decision candidates without generating recommendations.
 - [x] Candidate persistence tests.
 - [x] Duplicate candidate suppression tests.
 - [x] Dismissed candidate tests.
-- [ ] Expired candidate tests.
+- [x] Expired candidate tests.
 
 ## Exit Criteria
 
@@ -40,4 +40,4 @@ identify decision candidates without generating recommendations.
 - [x] Every candidate has evidence and source attribution.
 - [x] Candidate lifecycle state survives restart.
 - [x] Promotion to proposal is explicit and not automatic.
-- [ ] Dismissed, expired, and duplicate candidates do not accumulate as active work.
+- [x] Dismissed, expired, and duplicate candidates do not accumulate as active work.
