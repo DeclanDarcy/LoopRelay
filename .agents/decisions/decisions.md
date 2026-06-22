@@ -2,9 +2,13 @@
 
 ## Newly Authorized
 
-- Treat M0, M1, M2, and M3 as closed.
-- Start M4 with an inventory before implementation.
-- Include current Execution tab surfaces, execution session state, execution events/feed, execution context panel, diagnostics, history, start/cancel/recovery controls, and commit/push adjacency in the M4 inventory.
-- Separate Execution Workspace presentation and composition from backend-owned execution authority, React-owned draft/readiness state, and workflow command dispatch.
-- Do not allow the Execution Workspace migration to make React the execution authority.
-- Define the M4 target as a dedicated, coherent execution operational surface using existing hooks, projections, and backend commands.
+- Treat M4 as closed.
+- Preserve the M4 Execution boundary: `ExecutionTab` owns composition and presentation, while `App.tsx` and backend-owned surfaces retain workflow authority, readiness authority, and mutation authority.
+- Preserve the existing `useExecutionEvents` event stream as the single event source; do not introduce client replay, client persistence, client event caching, or a secondary event store.
+- Source Execution stream provider, status, and session id from the projected session model rather than inferring them from execution events.
+- Keep Abort absent unless and until a backend-owned abort capability exists.
+- Keep Execution cross-links navigation-only; they must not mutate workflow state.
+- Begin M5 with an Operational Context inventory before extraction.
+- Treat Operational Context as the most authority-sensitive remaining surface because proposal generation, review, comparison, acceptance, rejection, promotion, draft ownership, and readiness ownership are tightly coupled.
+- For M5, separate presentation/composition from authority before implementation.
+- Ensure `OperationalContextTab` owns composition and presentation only; proposal decisions and workflow authority must remain with `App.tsx` and backend-owned commands/projections.

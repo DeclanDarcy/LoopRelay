@@ -37,7 +37,7 @@ export function WorkspaceTab({
         {milestones}
         {artifactWorkspace}
       </div>
-      <aside className="workspace-inspector-rail" aria-label="Workspace inspector">
+      <aside id="workspace-inspector" className="workspace-inspector-rail" aria-label="Workspace inspector">
         {inspector}
       </aside>
     </section>

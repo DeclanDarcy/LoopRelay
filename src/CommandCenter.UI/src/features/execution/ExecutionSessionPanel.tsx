@@ -1,19 +1,49 @@
 import { formatDateTime, formatDuration } from '../../lib'
-import { Panel, SectionHeader, StatusBadge } from '../../components/design'
+import { Button, Panel, SectionHeader, StatusBadge } from '../../components/design'
 import { executionSessionStatus, repositoryExecutionStatus } from '../../lib/status'
 import type { ExecutionSessionSummary } from '../../types'
 
 type ExecutionSessionPanelProps = {
   session: ExecutionSessionSummary
+  onOpenMilestone?: () => void
+  onOpenHandoff?: () => void
 }
 
-export function ExecutionSessionPanel({ session }: ExecutionSessionPanelProps) {
+export function ExecutionSessionPanel({
+  session,
+  onOpenMilestone,
+  onOpenHandoff,
+}: ExecutionSessionPanelProps) {
   return (
     <Panel className="execution-session-panel" aria-label="Execution session">
       <SectionHeader
         eyebrow={session.repositoryState === 'Executing' ? 'Active Execution' : 'Execution Session'}
         title={session.milestonePath ?? 'Selected milestone'}
         headingLevel={4}
+        actions={
+          <div className="execution-session-actions">
+            {onOpenMilestone ? (
+              <Button
+                type="button"
+                variant="secondary"
+                className="secondary-action"
+                onClick={onOpenMilestone}
+              >
+                Milestone
+              </Button>
+            ) : null}
+            {onOpenHandoff ? (
+              <Button
+                type="button"
+                variant="secondary"
+                className="secondary-action"
+                onClick={onOpenHandoff}
+              >
+                Handoff
+              </Button>
+            ) : null}
+          </div>
+        }
       />
       <div className="execution-session-grid">
         <span>Session: {session.sessionId}</span>

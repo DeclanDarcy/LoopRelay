@@ -695,6 +695,23 @@ button:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.execution-tab-grid {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  align-items: start;
+  gap: 14px;
+}
+
+.execution-tab-main,
+.execution-tab-rail,
+.execution-context-drawer {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+
 .execution-workflow-rail,
 .workspace-workflow-rail {
   min-width: 0;
@@ -775,7 +792,10 @@ button:focus-visible {
 .execution-history-panel,
 .execution-output-panel,
 .git-status-panel,
-.handoff-review-panel {
+.handoff-review-panel,
+.execution-diagnostics-panel,
+.context-diagnostics-panel,
+.launch-readiness-panel {
   min-width: 0;
   display: grid;
   gap: 12px;
@@ -801,12 +821,21 @@ button:focus-visible {
 .context-preview h5,
 .execution-session-panel h4,
 .execution-output-panel h4,
+.execution-diagnostics-panel h4,
+.context-diagnostics-panel h4,
+.launch-readiness-panel h4,
 .git-status-panel h4,
 .handoff-review-header h4 {
   margin: 4px 0 0;
   color: var(--fg-default);
   letter-spacing: 0;
   overflow-wrap: anywhere;
+}
+
+.execution-session-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .workspace-milestone-list {
@@ -1117,6 +1146,56 @@ button:focus-visible {
   background: var(--status-danger-subtle);
 }
 
+.execution-rail-summary {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.execution-rail-summary span,
+.execution-rail-warning {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  color: var(--fg-muted);
+  background: var(--bg-inset);
+  font-size: 0.82rem;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.execution-rail-warning {
+  display: grid;
+  gap: 4px;
+  border-color: var(--status-danger-muted);
+  color: var(--status-danger-fg);
+  background: var(--status-danger-subtle);
+}
+
+.execution-rail-warning span,
+.execution-rail-list h5 {
+  margin: 0;
+  color: var(--fg-subtle);
+  font-size: 0.76rem;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.execution-rail-warning strong {
+  min-width: 0;
+  color: var(--status-danger-fg);
+  font-size: 0.84rem;
+  overflow-wrap: anywhere;
+}
+
+.execution-context-diagnostics,
+.execution-rail-list {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
 .execution-history-list {
   min-width: 0;
   display: grid;
@@ -1210,7 +1289,7 @@ button:focus-visible {
 
 .execution-event-feed {
   min-width: 0;
-  max-height: 360px;
+  max-height: 560px;
   display: grid;
   align-content: start;
   gap: 8px;
@@ -1224,7 +1303,7 @@ button:focus-visible {
 .execution-event-row {
   min-width: 0;
   display: grid;
-  grid-template-columns: auto minmax(150px, auto) auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(150px, auto) auto minmax(120px, auto) auto minmax(160px, auto);
   align-items: start;
   gap: 8px;
   padding: 8px;
@@ -1235,11 +1314,15 @@ button:focus-visible {
 
 .execution-event-sequence,
 .execution-event-time,
-.execution-event-type {
+.execution-event-type,
+.execution-event-provider,
+.execution-event-status,
+.execution-event-session {
   color: var(--fg-subtle);
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 0.76rem;
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .execution-event-type {
@@ -1248,6 +1331,7 @@ button:focus-visible {
 
 .execution-event-row pre {
   min-width: 0;
+  grid-column: 1 / -1;
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -1464,6 +1548,7 @@ button:focus-visible {
   .workspace-grid,
   .details-title-row,
   .workspace-tab,
+  .execution-tab-grid,
   .artifact-workspace {
     grid-template-columns: 1fr;
     display: grid;
