@@ -2,18 +2,19 @@
 
 ## Slice Summary
 
-Continued Milestone 8 by extracting remaining presentation-only execution review surfaces from `App.tsx`.
+Completed Milestone 8 final validation by auditing the remaining `App.tsx` boundary, recording the authority-boundary decision, and certifying the milestone.
 
 ## New State
 
-- Added `src/CommandCenter.UI/src/features/execution/GitWorkflowPanel.tsx`.
-- Added `src/CommandCenter.UI/src/features/execution/GeneratedHandoffReviewPanel.tsx`.
-- Removed inline Git workflow panel rendering and generated handoff review rendering from `App.tsx`.
-- Kept Git and handoff authority in `App.tsx`: refresh/prepare, commit, push, accept, reject, draft state, selected commit scope state, and backend command dispatch remain callback-owned by `App.tsx`.
-- Rotated prior handoff to `.agents/handoffs/handoff.0073.md`.
+- Added `.agents/audits/m8-final-validation.md`.
+- Updated `docs/frontend-modernization-deviations.md` with `App Authority Boundary`.
+- Marked Milestone 8 complete in `.agents/milestones/m8-capability-gaps-cleanup-and-final-validation.md`.
+- Certified `App.tsx` as the current natural authority boundary rather than a physically thin composition root.
+- Rotated prior handoff to `.agents/handoffs/handoff.0074.md`.
 
 ## Verification
 
+- Passed `dotnet test CommandCenter.slnx` with 192 backend tests.
 - Passed `npm run lint`.
 - Passed `npm run test -- --run` with 36 test files and 135 tests.
 - Passed `npm run build`.
@@ -21,5 +22,5 @@ Continued Milestone 8 by extracting remaining presentation-only execution review
 
 ## Remaining Work
 
-- Continue M8 by deciding whether the remaining `App.tsx` composition gap should be handled through hook extraction, container extraction, or documented as the current authority boundary.
-- Do not mark Workstream 8.8 or certification complete until that boundary decision is made and recorded.
+- No current Milestone 8 work remains.
+- Next slice should start the next authorized milestone or planning pass, not reopen M8 unless a new defect or product decision is introduced.

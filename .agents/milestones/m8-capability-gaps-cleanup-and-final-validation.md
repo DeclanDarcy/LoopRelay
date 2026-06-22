@@ -2,7 +2,7 @@
 
 ## Tracking
 
-- [ ] Milestone complete
+- [x] Milestone complete
 - [x] Workstream 8.1: Capability Gap Closure
 - [x] Workstream 8.2: Abort Execution Decision
 - [x] Workstream 8.3: Global Navigation Decisions
@@ -10,8 +10,8 @@
 - [x] Workstream 8.5: Notifications Strategy
 - [x] Workstream 8.6: Deviation Ledger
 - [x] Workstream 8.7: Remove Legacy Structure
-- [ ] Workstream 8.8: Final UX Validation
-- [ ] Certification complete
+- [x] Workstream 8.8: Final UX Validation
+- [x] Certification complete
 
 Goal: resolve remaining discrepancies between visible UX and real capability, then remove legacy migration scaffolding.
 
@@ -129,30 +129,32 @@ Rules:
 - [x] Delete obsolete helpers after feature modules own them.
 - [x] Remove any temporary migration adapters.
 - [x] Keep `devTauriMock.ts` aligned with shared types and current visible states.
-- [ ] Ensure `App.tsx` is only composition.
+- [x] Ensure `App.tsx` is only composition.
+
+Audit note: M8 certified `App.tsx` as the current authority composition boundary rather than a physically thin file. The remaining responsibilities are workflow, draft, readiness, mutation, navigation, stream reconciliation, and post-mutation projection reconciliation. This intentional difference is recorded in `docs/frontend-modernization-deviations.md` and `.agents/audits/m8-final-validation.md`.
 
 ## Workstream 8.8: Final UX Validation
 
 Validate:
 
-- [ ] Layout.
-- [ ] Navigation.
-- [ ] Interaction.
-- [ ] Workspace structure.
-- [ ] Information density.
-- [ ] Projection ownership.
-- [ ] Workflow ownership.
-- [ ] Responsive behavior.
-- [ ] Keyboard behavior.
-- [ ] Error/loading/empty states.
+- [x] Layout.
+- [x] Navigation.
+- [x] Interaction.
+- [x] Workspace structure.
+- [x] Information density.
+- [x] Projection ownership.
+- [x] Workflow ownership.
+- [x] Responsive behavior.
+- [x] Keyboard behavior.
+- [x] Error/loading/empty states.
 
 Every remaining deviation must be classified as:
 
-- [ ] Intentional product decision.
-- [ ] Capability-based deferral.
-- [ ] Defect to fix.
+- [x] Intentional product decision.
+- [x] Capability-based deferral.
+- [x] No defect to fix.
 
 ### Certification
 
-- [ ] Every intentional or capability-based deviation is recorded in `docs/frontend-modernization-deviations.md`.
-- [ ] Every defect is fixed or converted into an explicit deferred/rejected product decision before completion.
+- [x] Every intentional or capability-based deviation is recorded in `docs/frontend-modernization-deviations.md`.
+- [x] Every defect is fixed or converted into an explicit deferred/rejected product decision before completion.

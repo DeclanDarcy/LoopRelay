@@ -101,3 +101,13 @@ This ledger records intentional differences between the target Command Center fr
 - Outcome: Deferred.
 - Required backend projection or capability: Cross-repository continuity/insight rollup projection.
 - Follow-up owner or issue reference: None recorded.
+
+## App Authority Boundary
+
+- Location or surface: `src/CommandCenter.UI/src/App.tsx`.
+- Description: `App.tsx` is not reduced to a physically thin composition root even though DTOs, transport, projection hooks, shell state, design primitives, and major feature presentation surfaces have been extracted.
+- Reason: The remaining code owns workflow coordination, local drafts, readiness derivation, backend command dispatch, stream reconciliation, and post-mutation projection refreshes. Moving those responsibilities into feature presentation components or generic hooks would make authority harder to locate without adding backend capability.
+- Category: Product decision.
+- Outcome: Implemented differently.
+- Required backend projection or capability: A future workflow-orchestration boundary could be introduced if backend projections or a dedicated frontend workflow controller are explicitly designed to own these responsibilities.
+- Follow-up owner or issue reference: None recorded.
