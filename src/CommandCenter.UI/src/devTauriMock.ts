@@ -9,8 +9,11 @@ import type {
   ContinuityTrend,
   DecisionCandidate,
   DecisionContextSnapshot,
+  DecisionEvidenceInspection,
+  DecisionOptionComparison,
   DecisionProposalBrowserItem,
   DecisionReviewWorkspace,
+  DecisionSourceAttribution,
   ExecutionContextPreview,
   ExecutionSessionState,
   ExecutionSession,
@@ -647,6 +650,129 @@ function filterDecisionProposalBrowserItems(
 
   const selectedStates = new Set(states)
   return proposals.filter((proposal) => selectedStates.has(proposal.state))
+}
+
+function getDecisionReviewWorkspace(
+  state: MockState,
+  repositoryId: string,
+  proposalId: string,
+): DecisionReviewWorkspace {
+  const workspace = state.decisionProposalReviewWorkspaces[repositoryId]?.[proposalId]
+  if (!workspace) {
+    throw new Error('Decision proposal review workspace was not found.')
+  }
+
+  return workspace
+}
+
+function createDecisionOptionComparison(
+  state: MockState,
+  repositoryId: string,
+  proposalId: string,
+): DecisionOptionComparison {
+  const workspace = getDecisionReviewWorkspace(state, repositoryId, proposalId)
+  const recommendedOptionId = workspace.proposal.recommendation?.optionId ?? null
+
+  return {
+    proposalId,
+    recommendedOptionId,
+    options: workspace.proposal.options.map((option) => {
+      const tradeoffs = workspace.proposal.tradeoffs.filter((tradeoff) => tradeoff.optionId === option.id)
+      return {
+        optionId: option.id,
+        title: option.title,
+        description: option.description,
+        isRecommended: option.id === recommendedOptionId,
+        benefits: tradeoffs.map((tradeoff) => tradeoff.benefit),
+        costs: tradeoffs.map((tradeoff) => tradeoff.cost),
+        evidence: [
+          ...option.evidence,
+          ...tradeoffs.flatMap((tradeoff) => tradeoff.evidence),
+          ...(option.id === recommendedOptionId ? workspace.proposal.recommendation?.evidence ?? [] : []),
+        ],
+      }
+    }),
+  }
+}
+
+function createDecisionEvidenceInspection(
+  state: MockState,
+  repositoryId: string,
+  proposalId: string,
+): DecisionEvidenceInspection {
+  const workspace = getDecisionReviewWorkspace(state, repositoryId, proposalId)
+  const proposal = workspace.proposal
+  const items = [
+    ...proposal.evidence.map((evidence) => ({
+      appliesToKind: 'Proposal',
+      itemId: proposal.id,
+      summary: evidence.summary,
+      sources: evidence.sources.map((source) => createDecisionSourceAttribution('Proposal', proposal.id, source)),
+    })),
+    ...proposal.options.flatMap((option) =>
+      option.evidence.map((evidence) => ({
+        appliesToKind: 'Option',
+        itemId: option.id,
+        summary: evidence.summary,
+        sources: evidence.sources.map((source) => createDecisionSourceAttribution('Option', option.id, source)),
+      })),
+    ),
+    ...proposal.tradeoffs.flatMap((tradeoff) =>
+      tradeoff.evidence.map((evidence) => ({
+        appliesToKind: 'Tradeoff',
+        itemId: tradeoff.optionId,
+        summary: evidence.summary,
+        sources: evidence.sources.map((source) => createDecisionSourceAttribution('Tradeoff', tradeoff.optionId, source)),
+      })),
+    ),
+    ...(proposal.recommendation?.evidence.map((evidence) => ({
+      appliesToKind: 'Recommendation',
+      itemId: proposal.recommendation?.optionId ?? null,
+      summary: evidence.summary,
+      sources: evidence.sources.map((source) =>
+        createDecisionSourceAttribution('Recommendation', proposal.recommendation?.optionId ?? null, source),
+      ),
+    })) ?? []),
+    ...proposal.assumptions.flatMap((assumption) =>
+      assumption.evidence.map((evidence) => ({
+        appliesToKind: 'Assumption',
+        itemId: assumption.id,
+        summary: evidence.summary,
+        sources: evidence.sources.map((source) => createDecisionSourceAttribution('Assumption', assumption.id, source)),
+      })),
+    ),
+  ]
+
+  return {
+    proposalId,
+    candidateId: proposal.candidateId,
+    items,
+    diagnostics: workspace.diagnostics,
+  }
+}
+
+function listDecisionSourceAttributionsForProposal(
+  state: MockState,
+  repositoryId: string,
+  proposalId: string,
+): DecisionSourceAttribution[] {
+  return createDecisionEvidenceInspection(state, repositoryId, proposalId).items.flatMap((item) => item.sources)
+}
+
+function createDecisionSourceAttribution(
+  appliesToKind: string,
+  itemId: string | null,
+  source: DecisionSourceAttribution['source'],
+): DecisionSourceAttribution {
+  return {
+    appliesToKind,
+    itemId,
+    sourceKind: source.sourceKind,
+    relativePath: source.relativePath,
+    section: source.section,
+    excerpt: source.excerpt,
+    source,
+  }
 }
 
 function createReadyInventory(): ArtifactInventory {
@@ -1685,12 +1811,22 @@ export function installDevTauriMock() {
         case 'get_decision_proposal_review': {
           const repositoryId = getStringArg(args, 'repositoryId')
           const proposalId = getStringArg(args, 'proposalId')
-          const workspace = state.decisionProposalReviewWorkspaces[repositoryId]?.[proposalId]
-          if (!workspace) {
-            throw new Error('Decision proposal review workspace was not found.')
-          }
-
-          return clone(workspace)
+          return clone(getDecisionReviewWorkspace(state, repositoryId, proposalId))
+        }
+        case 'get_decision_option_comparison': {
+          const repositoryId = getStringArg(args, 'repositoryId')
+          const proposalId = getStringArg(args, 'proposalId')
+          return clone(createDecisionOptionComparison(state, repositoryId, proposalId))
+        }
+        case 'get_decision_evidence_inspection': {
+          const repositoryId = getStringArg(args, 'repositoryId')
+          const proposalId = getStringArg(args, 'proposalId')
+          return clone(createDecisionEvidenceInspection(state, repositoryId, proposalId))
+        }
+        case 'list_decision_source_attributions': {
+          const repositoryId = getStringArg(args, 'repositoryId')
+          const proposalId = getStringArg(args, 'proposalId')
+          return clone(listDecisionSourceAttributionsForProposal(state, repositoryId, proposalId))
         }
         case 'start_execution':
           return clone(

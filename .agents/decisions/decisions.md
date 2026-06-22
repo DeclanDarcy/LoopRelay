@@ -2,38 +2,28 @@
 
 ## Newly Authorized
 
-- The M4 candidate browser slice is accepted as complete.
-- Candidate browser coverage of all candidate states is accepted as aligned with M4 inspection goals.
-- Candidate filtering and selection remain React presentation state only.
-- Proposal selection navigation characterization coverage is accepted.
-- M4 remains read-only.
-- Backend read models remain authoritative.
+- The M4 option comparison slice is accepted as aligned with the roadmap.
+- Option comparison must remain a projection of backend-owned read models.
+- React must not recompute tradeoff summaries or create an alternative lifecycle interpretation.
+- Evidence/source navigation is accepted as completing the explainability chain from recommendation to evidence to source attribution.
+- Source attribution and evidence navigation remain read-only and presentation-only in React.
+- React ownership remains limited to selection, filtering, navigation, and presentation.
+- Backend ownership remains authoritative for lifecycle state, review state, and read models.
 - No lifecycle authority should move into React.
+- No operational-context coupling should be introduced by the M4 review workspace.
+- No execution coupling should be introduced by the M4 review workspace.
 
-## Current UI Ownership Boundary
+## M4 Closure Guidance
 
-React owns:
-
-- selected candidate
-- selected proposal
-- active filters
-- expanded panels
-
-Backend owns:
-
-- candidate state
-- proposal state
-- review state
-- lifecycle transitions
-- read-model authority
+- Perform a final M4 closure review before marking M4 complete.
+- Evaluate information density, evidence discoverability, source attribution discoverability, review note visibility, diagnostics visibility, and navigation friction.
+- A dedicated review diagnostics panel is not required if diagnostics are already discoverable where users need them in the proposal viewer, review workspace, and evidence surfaces.
+- Avoid adding a diagnostics panel merely because it appeared in the earlier concept; the goal is explainability, not panel count.
+- If the closure review finds no substantive gaps, close M4 and begin M5.
 
 ## Newly Authorized Next Slice
 
-- Proceed with remaining M4 inspection surfaces:
-  1. Add evidence/source attribution navigation.
-  2. Keep evidence/source navigation read-only.
-  3. Add tests proving evidence/source links render and select the expected source.
-  4. Add an option comparison surface using the existing backend option-comparison read model.
-  5. Do not recompute tradeoff summaries in React.
-  6. Add characterization tests for option rows, tradeoffs, recommendation, and evidence adjacency.
-- After these surfaces, M4 should be near closure or ready for a final read-only review-workspace polish pass.
+- Run the final M4 closure review.
+- If no substantive gaps are found, mark M4 complete.
+- Begin M5 refinement workflow planning after M4 closure.
+- M5 should focus on revision UX, refinement requests, revision comparison, and revision history navigation rather than foundational lifecycle work.

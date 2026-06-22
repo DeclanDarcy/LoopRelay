@@ -949,7 +949,8 @@ button:focus-visible {
 }
 
 .decision-proposal-browser-grid,
-.decision-candidate-browser-grid {
+.decision-candidate-browser-grid,
+.decision-evidence-source-grid {
   min-width: 0;
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(240px, 0.8fr);
@@ -1004,6 +1005,8 @@ button:focus-visible {
 }
 
 .decision-proposal-viewer,
+.decision-option-comparison,
+.decision-evidence-source-panel,
 .decision-viewer-summary,
 .decision-inspection-list {
   min-width: 0;

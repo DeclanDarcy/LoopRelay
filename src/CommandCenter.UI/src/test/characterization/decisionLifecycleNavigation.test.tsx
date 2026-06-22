@@ -9,14 +9,23 @@ import type {
 } from '../../types'
 
 const useDecisionProposalReviewMock = vi.hoisted(() => vi.fn())
+const useDecisionOptionComparisonMock = vi.hoisted(() => vi.fn())
+const useDecisionEvidenceInspectionMock = vi.hoisted(() => vi.fn())
+const useDecisionSourceAttributionsMock = vi.hoisted(() => vi.fn())
 
 vi.mock('../../hooks', () => ({
+  useDecisionEvidenceInspection: useDecisionEvidenceInspectionMock,
+  useDecisionOptionComparison: useDecisionOptionComparisonMock,
   useDecisionProposalReview: useDecisionProposalReviewMock,
+  useDecisionSourceAttributions: useDecisionSourceAttributionsMock,
 }))
 
 afterEach(() => {
   cleanup()
   useDecisionProposalReviewMock.mockReset()
+  useDecisionOptionComparisonMock.mockReset()
+  useDecisionEvidenceInspectionMock.mockReset()
+  useDecisionSourceAttributionsMock.mockReset()
 })
 
 describe('DecisionLifecycleTab navigation', () => {
@@ -25,6 +34,9 @@ describe('DecisionLifecycleTab navigation', () => {
       data: repositoryId && proposalId ? createWorkspace(repositoryId, proposalId) : null,
       isLoading: false,
     }))
+    useDecisionOptionComparisonMock.mockReturnValue({ data: null, isLoading: false })
+    useDecisionEvidenceInspectionMock.mockReturnValue({ data: null, isLoading: false })
+    useDecisionSourceAttributionsMock.mockReturnValue({ data: [], isLoading: false })
 
     render(
       <DecisionLifecycleTab
@@ -50,6 +62,9 @@ describe('DecisionLifecycleTab navigation', () => {
       expect(screen.getByText('Workspace for PROP-0002')).toBeInTheDocument()
     })
     expect(useDecisionProposalReviewMock).toHaveBeenLastCalledWith('repo-alpha', 'PROP-0002')
+    expect(useDecisionOptionComparisonMock).toHaveBeenLastCalledWith('repo-alpha', 'PROP-0002')
+    expect(useDecisionEvidenceInspectionMock).toHaveBeenLastCalledWith('repo-alpha', 'PROP-0002')
+    expect(useDecisionSourceAttributionsMock).toHaveBeenLastCalledWith('repo-alpha', 'PROP-0002')
   })
 })
 

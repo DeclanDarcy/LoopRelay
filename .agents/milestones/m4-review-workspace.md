@@ -24,8 +24,8 @@ provide full proposal inspection before refinement or resolution.
 - [x] Add candidate browser with active, promoted, dismissed, expired, and duplicate filters.
 - [x] Add proposal browser with generated, viewed, needs refinement, refined, ready for resolution, resolved, expired, and discarded filters.
 - [x] Add full proposal viewer.
-- [ ] Add option comparison.
-- [ ] Add evidence/source attribution navigation.
+- [x] Add option comparison.
+- [x] Add evidence/source attribution navigation.
 - [x] Add review notes panel.
 
 ## Tests

@@ -6,8 +6,15 @@ import type {
   DecisionProposalBrowserItem,
   DecisionProposalState,
 } from '../../types'
-import { useDecisionProposalReview } from '../../hooks'
+import {
+  useDecisionEvidenceInspection,
+  useDecisionOptionComparison,
+  useDecisionProposalReview,
+  useDecisionSourceAttributions,
+} from '../../hooks'
 import { DecisionCandidateBrowser } from './DecisionCandidateBrowser'
+import { DecisionEvidenceSourcePanel } from './DecisionEvidenceSourcePanel'
+import { DecisionOptionComparison } from './DecisionOptionComparison'
 import { DecisionProposalBrowser } from './DecisionProposalBrowser'
 import { DecisionProposalViewer } from './DecisionProposalViewer'
 
@@ -39,6 +46,18 @@ export function DecisionLifecycleTab({
     data: proposalReviewWorkspace,
     isLoading: isProposalReviewLoading,
   } = useDecisionProposalReview(repositoryId, selectedProposalId)
+  const {
+    data: optionComparison,
+    isLoading: isOptionComparisonLoading,
+  } = useDecisionOptionComparison(repositoryId, selectedProposalId)
+  const {
+    data: evidenceInspection,
+    isLoading: isEvidenceInspectionLoading,
+  } = useDecisionEvidenceInspection(repositoryId, selectedProposalId)
+  const {
+    data: sourceAttributions,
+    isLoading: isSourceAttributionsLoading,
+  } = useDecisionSourceAttributions(repositoryId, selectedProposalId)
   const activeCandidateCount = candidates.filter((candidate) =>
     candidate.state === 'Discovered' || candidate.state === 'Promoted',
   ).length
@@ -93,6 +112,17 @@ export function DecisionLifecycleTab({
           <DecisionProposalViewer
             workspace={proposalReviewWorkspace}
             isLoading={isProposalReviewLoading}
+          />
+
+          <DecisionOptionComparison
+            comparison={optionComparison}
+            isLoading={isOptionComparisonLoading}
+          />
+
+          <DecisionEvidenceSourcePanel
+            inspection={evidenceInspection}
+            attributions={sourceAttributions}
+            isLoading={isEvidenceInspectionLoading || isSourceAttributionsLoading}
           />
         </div>
       ) : (
