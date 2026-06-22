@@ -161,6 +161,145 @@ public sealed class DecisionResolutionService(
         return decision;
     }
 
+    public async Task<Decision> SupersedeDecisionAsync(Guid repositoryId, string decisionId, SupersedeDecisionCommand command)
+    {
+        if (command is null)
+        {
+            throw new ArgumentException("Supersede command is required.", nameof(command));
+        }
+
+        if (string.IsNullOrWhiteSpace(command.ReplacementDecisionId))
+        {
+            throw new ArgumentException("Replacement decision id is required.", nameof(command));
+        }
+
+        string rationale = RequireText(command.Rationale, "Supersede rationale is required.", nameof(command));
+        string resolver = RequireText(command.Resolver, "Resolver metadata is required.", nameof(command));
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        Decision source = await GetDecisionAsync(repository, decisionId);
+        Decision replacement = await GetDecisionAsync(repository, command.ReplacementDecisionId);
+        if (source.Id == replacement.Id)
+        {
+            throw new ArgumentException("A decision cannot supersede itself.", nameof(command));
+        }
+
+        DecisionTransitionResult sourceTransition = DecisionLifecycleRules.ValidateDecisionTransition(
+            source.State,
+            DecisionState.Superseded);
+        if (!sourceTransition.IsValid)
+        {
+            throw new InvalidOperationException(sourceTransition.Error);
+        }
+
+        if (replacement.State != DecisionState.Resolved)
+        {
+            throw new InvalidOperationException("Replacement decision must be Resolved before it can supersede another decision.");
+        }
+
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        DecisionSourceReference sourceDecisionReference = DecisionRecordSource(source.Id);
+        DecisionSourceReference replacementDecisionReference = DecisionRecordSource(replacement.Id);
+        string reason = $"{rationale} Resolver: {resolver}.";
+        DecisionRelationship supersedesRelationship = new(
+            replacement.Id,
+            source.Id,
+            DecisionRelationshipType.Supersedes,
+            rationale);
+        IReadOnlyList<DecisionRelationship> replacementRelationships = AddRelationship(
+            replacement.Relationships,
+            supersedesRelationship);
+        DecisionTransitionResult relationshipValidation = DecisionLifecycleRules.ValidateRelationships(
+            replacement.Id,
+            replacementRelationships);
+        if (!relationshipValidation.IsValid)
+        {
+            throw new InvalidOperationException(relationshipValidation.Error);
+        }
+
+        Decision superseded = source with
+        {
+            State = DecisionState.Superseded,
+            Metadata = source.Metadata with { UpdatedAt = now },
+            History = source.History
+                .Concat([
+                    new DecisionHistoryEntry(
+                        now,
+                        "Superseded",
+                        source.State.ToString(),
+                        DecisionState.Superseded.ToString(),
+                        reason,
+                        [replacementDecisionReference])
+                ])
+                .ToArray()
+        };
+        Decision updatedReplacement = replacement with
+        {
+            Metadata = replacement.Metadata with { UpdatedAt = now },
+            Relationships = replacementRelationships,
+            History = replacement.History
+                .Concat([
+                    new DecisionHistoryEntry(
+                        now,
+                        "Supersedes",
+                        replacement.State.ToString(),
+                        replacement.State.ToString(),
+                        reason,
+                        [sourceDecisionReference])
+                ])
+                .ToArray()
+        };
+
+        await decisionRepository.SaveDecisionAsync(repository, superseded);
+        await projectionService.ProjectDecisionAsync(repository, superseded);
+        await decisionRepository.SaveDecisionAsync(repository, updatedReplacement);
+        await projectionService.ProjectDecisionAsync(repository, updatedReplacement);
+        await projectionService.RefreshDecisionIndexAsync(repository);
+        return superseded;
+    }
+
+    public async Task<Decision> ArchiveDecisionAsync(Guid repositoryId, string decisionId, ArchiveDecisionCommand command)
+    {
+        if (command is null)
+        {
+            throw new ArgumentException("Archive command is required.", nameof(command));
+        }
+
+        string rationale = RequireText(command.Rationale, "Archive rationale is required.", nameof(command));
+        string resolver = RequireText(command.Resolver, "Resolver metadata is required.", nameof(command));
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        Decision decision = await GetDecisionAsync(repository, decisionId);
+        DecisionTransitionResult transition = DecisionLifecycleRules.ValidateDecisionTransition(
+            decision.State,
+            DecisionState.Archived);
+        if (!transition.IsValid)
+        {
+            throw new InvalidOperationException(transition.Error);
+        }
+
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        Decision archived = decision with
+        {
+            State = DecisionState.Archived,
+            Metadata = decision.Metadata with { UpdatedAt = now },
+            History = decision.History
+                .Concat([
+                    new DecisionHistoryEntry(
+                        now,
+                        "Archived",
+                        decision.State.ToString(),
+                        DecisionState.Archived.ToString(),
+                        $"{rationale} Resolver: {resolver}.",
+                        [])
+                ])
+                .ToArray()
+        };
+
+        await decisionRepository.SaveDecisionAsync(repository, archived);
+        await projectionService.ProjectDecisionAsync(repository, archived);
+        await projectionService.RefreshDecisionIndexAsync(repository);
+        return archived;
+    }
+
     private async Task<Repository> GetRepositoryAsync(Guid repositoryId)
     {
         Repository? repository = (await repositoryService.GetAllAsync())
@@ -172,6 +311,13 @@ public sealed class DecisionResolutionService(
     {
         DecisionProposal? proposal = await decisionRepository.GetProposalAsync(repository, proposalId);
         return proposal ?? throw new KeyNotFoundException($"Decision proposal was not found: {proposalId}");
+    }
+
+    private async Task<Decision> GetDecisionAsync(Repository repository, string decisionId)
+    {
+        DecisionId id = DecisionId.Parse(decisionId);
+        Decision? decision = await decisionRepository.GetDecisionAsync(repository, id);
+        return decision ?? throw new KeyNotFoundException($"Decision was not found: {id.Value}");
     }
 
     private async Task<DecisionClassification> ResolveClassificationAsync(Repository repository, string candidateId)
@@ -194,6 +340,39 @@ public sealed class DecisionResolutionService(
     private static string ProposalPath(string proposalId)
     {
         return $".agents/decisions/proposals/{proposalId}/proposal.json";
+    }
+
+    private static DecisionSourceReference DecisionRecordSource(DecisionId decisionId)
+    {
+        return new DecisionSourceReference(
+            "DecisionRecord",
+            $".agents/decisions/records/{decisionId.Value}/decision.json",
+            DecisionId: decisionId);
+    }
+
+    private static IReadOnlyList<DecisionRelationship> AddRelationship(
+        IReadOnlyList<DecisionRelationship> relationships,
+        DecisionRelationship relationship)
+    {
+        if (relationships.Any(existing =>
+                existing.SourceDecisionId == relationship.SourceDecisionId &&
+                existing.TargetDecisionId == relationship.TargetDecisionId &&
+                existing.Type == relationship.Type))
+        {
+            return relationships;
+        }
+
+        return relationships.Concat([relationship]).ToArray();
+    }
+
+    private static string RequireText(string? value, string message, string parameterName)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            throw new ArgumentException(message, parameterName);
+        }
+
+        return value.Trim();
     }
 
     private static DecisionState TargetStateFor(DecisionOutcome outcome)

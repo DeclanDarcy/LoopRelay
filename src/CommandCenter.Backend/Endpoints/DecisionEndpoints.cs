@@ -35,6 +35,8 @@ public static class DecisionEndpoints
         app.MapListDecisionProposalRevisions();
         app.MapGetDecisionProposalRevisionComparison();
         app.MapResolveDecisionProposal();
+        app.MapSupersedeDecision();
+        app.MapArchiveDecision();
         app.MapExpireDecisionProposal();
         app.MapDiscardDecisionProposal();
         return app;
@@ -755,6 +757,66 @@ public static class DecisionEndpoints
                 }
 
                 return Results.Ok(await resolutionService.ResolveProposalAsync(repositoryId, proposalId, request));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapSupersedeDecision(this IEndpointRouteBuilder app) =>
+        app.MapPost("/api/repositories/{repositoryId:guid}/decisions/{decisionId}/supersede", async (
+            Guid repositoryId,
+            string decisionId,
+            SupersedeDecisionCommand? request,
+            IDecisionResolutionService resolutionService) =>
+        {
+            try
+            {
+                if (request is null)
+                {
+                    return Results.BadRequest(new { error = "Supersede command is required." });
+                }
+
+                return Results.Ok(await resolutionService.SupersedeDecisionAsync(repositoryId, decisionId, request));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapArchiveDecision(this IEndpointRouteBuilder app) =>
+        app.MapPost("/api/repositories/{repositoryId:guid}/decisions/{decisionId}/archive", async (
+            Guid repositoryId,
+            string decisionId,
+            ArchiveDecisionCommand? request,
+            IDecisionResolutionService resolutionService) =>
+        {
+            try
+            {
+                if (request is null)
+                {
+                    return Results.BadRequest(new { error = "Archive command is required." });
+                }
+
+                return Results.Ok(await resolutionService.ArchiveDecisionAsync(repositoryId, decisionId, request));
             }
             catch (KeyNotFoundException exception)
             {

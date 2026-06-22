@@ -417,6 +417,165 @@ public sealed class DecisionGenerationServiceTests
     }
 
     [Fact]
+    public async Task SupersedeDecisionPersistsReplacementLineageMarkdownAndIndex()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate firstCandidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        DecisionCandidate secondCandidate = CreateCandidate(
+            repository.Id,
+            DecisionCandidateState.Promoted,
+            summary: "Need to decide replacement authority.") with
+        {
+            Id = "CAND-0002",
+            Title = "Decide replacement authority"
+        };
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, firstCandidate);
+        await decisionRepository.SaveCandidateAsync(repository, secondCandidate);
+        var generationService = CreateGenerationService(repository, store, decisionRepository);
+        var resolutionService = CreateResolutionService(repository, store, decisionRepository);
+        Decision firstDecision = await ResolveAcceptedDecisionAsync(repository, generationService, resolutionService, firstCandidate.Id);
+        Decision replacementDecision = await ResolveAcceptedDecisionAsync(repository, generationService, resolutionService, secondCandidate.Id);
+
+        Decision superseded = await resolutionService.SupersedeDecisionAsync(
+            repository.Id,
+            firstDecision.Id.Value,
+            new SupersedeDecisionCommand(
+                replacementDecision.Id.Value,
+                "Replacement captures the current authority.",
+                "human-reviewer"));
+
+        Decision? reloadedSuperseded = await decisionRepository.GetDecisionAsync(repository, firstDecision.Id);
+        Decision? reloadedReplacement = await decisionRepository.GetDecisionAsync(repository, replacementDecision.Id);
+        DecisionRelationship relationship = Assert.Single(reloadedReplacement!.Relationships);
+        string supersededMarkdown = await ReadAsync(repository, ".agents/decisions/records/DEC-0001/decision.md");
+        string replacementMarkdown = await ReadAsync(repository, ".agents/decisions/records/DEC-0002/decision.md");
+        string index = await ReadAsync(repository, ".agents/decisions/decisions.md");
+
+        Assert.Equal(DecisionState.Superseded, superseded.State);
+        Assert.Equal(DecisionState.Superseded, reloadedSuperseded?.State);
+        Assert.Equal(DecisionState.Resolved, reloadedReplacement.State);
+        Assert.Equal(replacementDecision.Id, relationship.SourceDecisionId);
+        Assert.Equal(firstDecision.Id, relationship.TargetDecisionId);
+        Assert.Equal(DecisionRelationshipType.Supersedes, relationship.Type);
+        Assert.Contains(reloadedSuperseded!.History, entry =>
+            entry.Event == "Superseded" &&
+            entry.FromState == DecisionState.Resolved.ToString() &&
+            entry.ToState == DecisionState.Superseded.ToString() &&
+            entry.Sources.Any(source => source.DecisionId == replacementDecision.Id));
+        Assert.Contains(reloadedReplacement.History, entry =>
+            entry.Event == "Supersedes" &&
+            entry.Sources.Any(source => source.DecisionId == firstDecision.Id));
+        Assert.Contains("- State: Superseded", supersededMarkdown);
+        Assert.Contains("Superseded | Resolved -> Superseded", supersededMarkdown);
+        Assert.Contains("DEC-0002 Supersedes DEC-0001", replacementMarkdown);
+        Assert.Contains("- DEC-0001 | Superseded | Architectural | Accepted | Decide persistence schema", index);
+        Assert.Contains("- DEC-0002 | Resolved | Architectural | Accepted | Decide replacement authority", index);
+    }
+
+    [Fact]
+    public async Task ArchiveDecisionPersistsTerminalStateAfterSupersession()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate firstCandidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        DecisionCandidate secondCandidate = CreateCandidate(
+            repository.Id,
+            DecisionCandidateState.Promoted,
+            summary: "Need to decide replacement authority.") with
+        {
+            Id = "CAND-0002",
+            Title = "Decide replacement authority"
+        };
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, firstCandidate);
+        await decisionRepository.SaveCandidateAsync(repository, secondCandidate);
+        var generationService = CreateGenerationService(repository, store, decisionRepository);
+        var resolutionService = CreateResolutionService(repository, store, decisionRepository);
+        Decision firstDecision = await ResolveAcceptedDecisionAsync(repository, generationService, resolutionService, firstCandidate.Id);
+        Decision replacementDecision = await ResolveAcceptedDecisionAsync(repository, generationService, resolutionService, secondCandidate.Id);
+        await resolutionService.SupersedeDecisionAsync(
+            repository.Id,
+            firstDecision.Id.Value,
+            new SupersedeDecisionCommand(replacementDecision.Id.Value, "Replacement is authoritative.", "human-reviewer"));
+
+        Decision archived = await resolutionService.ArchiveDecisionAsync(
+            repository.Id,
+            firstDecision.Id.Value,
+            new ArchiveDecisionCommand("Superseded authority is no longer active.", "human-reviewer"));
+
+        Decision? reloaded = await decisionRepository.GetDecisionAsync(repository, firstDecision.Id);
+        string markdown = await ReadAsync(repository, ".agents/decisions/records/DEC-0001/decision.md");
+        string index = await ReadAsync(repository, ".agents/decisions/decisions.md");
+        Assert.Equal(DecisionState.Archived, archived.State);
+        Assert.Equal(DecisionState.Archived, reloaded?.State);
+        Assert.Contains(reloaded!.History, entry =>
+            entry.Event == "Archived" &&
+            entry.FromState == DecisionState.Superseded.ToString() &&
+            entry.ToState == DecisionState.Archived.ToString());
+        Assert.Contains("- State: Archived", markdown);
+        Assert.Contains("Archived | Superseded -> Archived", markdown);
+        Assert.Contains("- DEC-0001 | Archived | Architectural | Accepted | Decide persistence schema", index);
+    }
+
+    [Fact]
+    public async Task SupersedeAndArchiveRejectInvalidAuthorityTransitions()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate firstCandidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        DecisionCandidate secondCandidate = CreateCandidate(
+            repository.Id,
+            DecisionCandidateState.Promoted,
+            summary: "Need to decide replacement authority.") with
+        {
+            Id = "CAND-0002",
+            Title = "Decide replacement authority"
+        };
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, firstCandidate);
+        await decisionRepository.SaveCandidateAsync(repository, secondCandidate);
+        var generationService = CreateGenerationService(repository, store, decisionRepository);
+        var resolutionService = CreateResolutionService(repository, store, decisionRepository);
+        Decision firstDecision = await ResolveAcceptedDecisionAsync(repository, generationService, resolutionService, firstCandidate.Id);
+        DecisionProposal replacementProposal = await generationService.GenerateProposalAsync(repository.Id, secondCandidate.Id);
+        await generationService.MarkProposalReadyForResolutionAsync(repository.Id, replacementProposal.Id, "Ready for explicit deferral.");
+        Decision underReviewReplacement = await resolutionService.ResolveProposalAsync(
+            repository.Id,
+            replacementProposal.Id,
+            new ResolveDecisionCommand("Defer replacement.", "human-reviewer", "option-1", DecisionOutcome.Deferred));
+
+        InvalidOperationException replacementException = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            resolutionService.SupersedeDecisionAsync(
+                repository.Id,
+                firstDecision.Id.Value,
+                new SupersedeDecisionCommand(
+                    underReviewReplacement.Id.Value,
+                    "Try to replace with non-resolved authority.",
+                    "human-reviewer")));
+        InvalidOperationException archiveException = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            resolutionService.ArchiveDecisionAsync(
+                repository.Id,
+                firstDecision.Id.Value,
+                new ArchiveDecisionCommand("Archive before supersession.", "human-reviewer")));
+        ArgumentException selfException = await Assert.ThrowsAsync<ArgumentException>(() =>
+            resolutionService.SupersedeDecisionAsync(
+                repository.Id,
+                firstDecision.Id.Value,
+                new SupersedeDecisionCommand(
+                    firstDecision.Id.Value,
+                    "Self replacement is invalid.",
+                    "human-reviewer")));
+
+        Assert.Equal("Replacement decision must be Resolved before it can supersede another decision.", replacementException.Message);
+        Assert.Equal("Decision transition from Resolved to Archived is not allowed.", archiveException.Message);
+        Assert.Equal("A decision cannot supersede itself. (Parameter 'command')", selfException.Message);
+        Decision? reloaded = await decisionRepository.GetDecisionAsync(repository, firstDecision.Id);
+        Assert.Equal(DecisionState.Resolved, reloaded?.State);
+    }
+
+    [Fact]
     public async Task ResolveProposalCapturesResolvedProposalContentAndRevisionContext()
     {
         Repository repository = CreateRepository();
@@ -762,6 +921,61 @@ public sealed class DecisionGenerationServiceTests
     }
 
     [Fact]
+    public async Task DecisionSupersedeAndArchiveEndpointsReturnMutatedDecisionAndConflicts()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate firstCandidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        DecisionCandidate secondCandidate = CreateCandidate(
+            repository.Id,
+            DecisionCandidateState.Promoted,
+            summary: "Need to decide replacement authority.") with
+        {
+            Id = "CAND-0002",
+            Title = "Decide replacement authority"
+        };
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, firstCandidate);
+        await decisionRepository.SaveCandidateAsync(repository, secondCandidate);
+
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services => services.AddSingleton<IRepositoryService>(new StubRepositoryService(repository)));
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+        using var client = new HttpClient();
+        string root = app.Urls.Single();
+        JsonSerializerOptions jsonOptions = CreateJsonOptions();
+
+        Decision firstDecision = await ResolveViaEndpointAsync(root, client, jsonOptions, repository.Id, firstCandidate.Id);
+        Decision replacementDecision = await ResolveViaEndpointAsync(root, client, jsonOptions, repository.Id, secondCandidate.Id);
+
+        HttpResponseMessage supersedeResponse = await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/{firstDecision.Id.Value}/supersede",
+            new SupersedeDecisionCommand(
+                replacementDecision.Id.Value,
+                "Replacement captures the current authority.",
+                "human-reviewer"),
+            jsonOptions);
+        HttpResponseMessage archiveResponse = await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/{firstDecision.Id.Value}/archive",
+            new ArchiveDecisionCommand("Superseded authority is no longer active.", "human-reviewer"),
+            jsonOptions);
+        HttpResponseMessage archiveResolvedResponse = await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/{replacementDecision.Id.Value}/archive",
+            new ArchiveDecisionCommand("Archive before supersession.", "human-reviewer"),
+            jsonOptions);
+
+        Decision superseded = (await supersedeResponse.Content.ReadFromJsonAsync<Decision>(jsonOptions))!;
+        Decision archived = (await archiveResponse.Content.ReadFromJsonAsync<Decision>(jsonOptions))!;
+        Assert.Equal(HttpStatusCode.OK, supersedeResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, archiveResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, archiveResolvedResponse.StatusCode);
+        Assert.Equal(DecisionState.Superseded, superseded.State);
+        Assert.Equal(DecisionState.Archived, archived.State);
+    }
+
+    [Fact]
     public async Task ProposalReviewEndpointReturnsConflictForInvalidTransition()
     {
         Repository repository = CreateRepository();
@@ -934,6 +1148,39 @@ public sealed class DecisionGenerationServiceTests
         var repositoryService = new StubRepositoryService(repository);
         var projectionService = new DecisionArtifactProjectionService(decisionRepository, store);
         return new DecisionResolutionService(repositoryService, decisionRepository, projectionService);
+    }
+
+    private static async Task<Decision> ResolveAcceptedDecisionAsync(
+        Repository repository,
+        DecisionGenerationService generationService,
+        DecisionResolutionService resolutionService,
+        string candidateId)
+    {
+        DecisionProposal proposal = await generationService.GenerateProposalAsync(repository.Id, candidateId);
+        await generationService.MarkProposalReadyForResolutionAsync(repository.Id, proposal.Id, "Ready for human resolution.");
+        return await resolutionService.ResolveProposalAsync(
+            repository.Id,
+            proposal.Id,
+            new ResolveDecisionCommand("Accept the proposal.", "human-reviewer", "option-1"));
+    }
+
+    private static async Task<Decision> ResolveViaEndpointAsync(
+        string root,
+        HttpClient client,
+        JsonSerializerOptions jsonOptions,
+        Guid repositoryId,
+        string candidateId)
+    {
+        DecisionProposal proposal = (await (await client.PostAsync(
+            $"{root}/api/repositories/{repositoryId}/decisions/candidates/{candidateId}/proposals",
+            null)).Content.ReadFromJsonAsync<DecisionProposal>(jsonOptions))!;
+        await client.PostAsync(
+            $"{root}/api/repositories/{repositoryId}/decisions/proposals/{proposal.Id}/review/ready-for-resolution",
+            null);
+        return (await (await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repositoryId}/decisions/proposals/{proposal.Id}/resolve",
+            new ResolveDecisionCommand("Resolve via endpoint.", "human-reviewer", "option-1"),
+            jsonOptions)).Content.ReadFromJsonAsync<Decision>(jsonOptions))!;
     }
 
     private static DecisionCandidate CreateCandidate(

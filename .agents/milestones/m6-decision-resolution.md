@@ -14,7 +14,7 @@ transform reviewed and refined proposals into authoritative project decisions th
 - [x] Record selected option and whether it matched the recommendation.
 - [x] Persist outcome, timestamp, resolver, rationale, state transition, and source proposal.
 - [x] Update `decision.md` and `decisions.md` projections.
-- [ ] Support supersede and archive actions with lineage validation.
+- [x] Support supersede and archive actions with lineage validation.
 - [ ] Expose an explicit command to create a decision assimilation recommendation package from a resolved decision and current continuity inputs.
 - [ ] Do not decide that operational context must change; package evidence and rationale for the operational-context workflow to review.
 - [ ] Do not write `.agents/operational_context.md` from decision resolution.
@@ -35,7 +35,7 @@ transform reviewed and refined proposals into authoritative project decisions th
 - [x] Recommendation divergence tests.
 - [x] State transition tests.
 - [x] Projection update tests.
-- [ ] Supersede/archive tests.
+- [x] Supersede/archive tests.
 - [ ] Assimilation recommendation tests proving operational context is not mutated and continuity policy is not owned by decision services.
 
 ## Exit Criteria
