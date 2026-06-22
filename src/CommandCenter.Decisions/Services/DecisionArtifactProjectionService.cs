@@ -140,6 +140,9 @@ public sealed class DecisionArtifactProjectionService(
         {
             markdown.Fields(
                 ("Outcome", decision.Resolution.Outcome.ToString()),
+                ("Selected option", decision.Resolution.SelectedOptionId),
+                ("Resolved by", decision.Resolution.ResolvedBy),
+                ("Recommendation diverged", decision.Resolution.RecommendationDiverged.ToString()),
                 ("Resolved", FormatTimestamp(decision.Resolution.ResolvedAt)));
             markdown.Paragraph(decision.Resolution.Rationale);
             markdown.H3("Sources");

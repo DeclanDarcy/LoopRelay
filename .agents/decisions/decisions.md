@@ -2,23 +2,23 @@
 
 ## Newly Authorized
 
-- The M3 refinement slice is accepted as aligned with the roadmap.
-- Refinement remains proposal evolution, not decision authority.
-- `REV-*` artifacts are repository-backed authority for proposal evolution.
-- Candidate authority, proposal authority, revision authority, and decision authority must remain separate layers.
-- `NeedsRefinement -> Refined` must continue to require an explicit content-bearing refinement operation.
-- `ReadyForResolution` must remain protected from refinement and expiration shortcuts.
-- The next authorized proposal path after `ReadyForResolution` is `Resolve`.
-- The next M3 slice should proceed to resolution, kept narrow.
-- Resolution work should introduce `ResolveDecisionCommand`, `DecisionResolution`, `DecisionResolutionRationale`, and `DecisionResolutionHistory`.
-- Resolution should implement `ReadyForResolution -> Resolved`.
-- Resolution should create authoritative `DEC-*` records and refresh `decision.json`, `decision.md`, and `decisions.md`.
-- Resolution tests should prove non-ready proposals cannot resolve, rationale is required, resolver metadata is required, selected option is recorded, recommendation divergence is recorded, proposal resolution does not mutate operational context, and proposal resolution does not project into execution.
-- No operational-context assimilation should be implemented in the resolution slice.
+- The M3 resolution slice is accepted as aligned with the roadmap.
+- Resolution is the correct lifecycle point for authoritative `DEC-*` decision records to begin existing.
+- Resolution must remain an explicit human action, not an automatic promotion from proposal recommendation.
+- `ReadyForResolution` remains the required gate before `Resolved`.
+- Selected option, resolver metadata, rationale, and recommendation divergence are decision-authority metadata.
+- Decision resolution must continue not to mutate operational context, create assimilation recommendations, or project into execution.
+- The next M3 slice should implement proposal discard as a constrained proposal-state transition only.
+- Discard should explicitly define allowed source states and reject all others.
+- Discard must persist proposal state, history entry, timestamp, and reason without mutating candidates, decisions, or resolution objects.
+- Discard should refresh `proposal.md` and `decisions.md`.
+- Discard tests should prove resolved proposals cannot be discarded.
+- Discard boundary tests should prove no mutation of `DEC-*` records, operational context, assimilation recommendations, or execution projection.
+- After discard, run final lifecycle validation and M3 closure review.
 
 ## Current Milestone Status
 
 - M0 is complete.
 - M1 is complete.
 - M2 is complete.
-- M3 is in progress.
+- M3 is nearly complete.

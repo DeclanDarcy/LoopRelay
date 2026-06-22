@@ -314,6 +314,125 @@ public sealed class DecisionGenerationServiceTests
     }
 
     [Fact]
+    public async Task ResolveProposalCreatesDecisionRecordAndMarksProposalResolved()
+    {
+        Repository repository = CreateRepository();
+        await WriteAsync(repository, ".agents/operational_context.md", "# Operational Context\n\nStable understanding.");
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var service = CreateGenerationService(repository, store, decisionRepository);
+        DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
+        await service.MarkProposalReadyForResolutionAsync(repository.Id, proposal.Id, "Ready for human resolution.");
+        string operationalContextBefore = await ReadAsync(repository, ".agents/operational_context.md");
+
+        Decision decision = await service.ResolveProposalAsync(
+            repository.Id,
+            proposal.Id,
+            new ResolveDecisionCommand(
+                "Accept the proposed persistence direction.",
+                "human-reviewer",
+                "option-1"));
+
+        Assert.Equal("DEC-0001", decision.Id.Value);
+        Assert.Equal(DecisionState.Resolved, decision.State);
+        Assert.Equal(DecisionOutcome.Accepted, decision.Resolution?.Outcome);
+        Assert.Equal("option-1", decision.Resolution?.SelectedOptionId);
+        Assert.Equal("human-reviewer", decision.Resolution?.ResolvedBy);
+        Assert.False(decision.Resolution?.RecommendationDiverged);
+        Assert.True(File.Exists(Path.Combine(repository.Path, ".agents", "decisions", "records", "DEC-0001", "decision.json")));
+        Assert.True(File.Exists(Path.Combine(repository.Path, ".agents", "decisions", "records", "DEC-0001", "decision.md")));
+        Assert.True(File.Exists(Path.Combine(repository.Path, ".agents", "decisions", "records", "DEC-0001", "history.json")));
+
+        DecisionProposal? resolvedProposal = await decisionRepository.GetProposalAsync(repository, proposal.Id);
+        string decisionMarkdown = await ReadAsync(repository, ".agents/decisions/records/DEC-0001/decision.md");
+        string proposalMarkdown = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/proposal.md");
+        string index = await ReadAsync(repository, ".agents/decisions/decisions.md");
+        string operationalContextAfter = await ReadAsync(repository, ".agents/operational_context.md");
+        Assert.Equal(DecisionProposalState.Resolved, resolvedProposal?.State);
+        Assert.Contains("- Selected option: option-1", decisionMarkdown);
+        Assert.Contains("- Resolved by: human-reviewer", decisionMarkdown);
+        Assert.Contains("- Recommendation diverged: False", decisionMarkdown);
+        Assert.Contains("- State: Resolved", proposalMarkdown);
+        Assert.Contains("- DEC-0001 | Resolved | Architectural | Accepted | Decide persistence schema", index);
+        Assert.Contains("- PROP-0001 | Resolved | CAND-0001 | Decide persistence schema", index);
+        Assert.Equal(operationalContextBefore, operationalContextAfter);
+        Assert.False(Directory.Exists(Path.Combine(repository.Path, ".agents", "decisions", "assimilation")));
+    }
+
+    [Fact]
+    public async Task ResolveProposalRequiresReadyStateRationaleResolverAndSelectedOption()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var service = CreateGenerationService(repository, store, decisionRepository);
+        DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
+
+        InvalidOperationException stateException = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.ResolveProposalAsync(
+                repository.Id,
+                proposal.Id,
+                new ResolveDecisionCommand("Resolve too early.", "human-reviewer", "option-1")));
+
+        await service.MarkProposalReadyForResolutionAsync(repository.Id, proposal.Id, "Ready now.");
+        ArgumentException rationaleException = await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.ResolveProposalAsync(
+                repository.Id,
+                proposal.Id,
+                new ResolveDecisionCommand("", "human-reviewer", "option-1")));
+        ArgumentException resolverException = await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.ResolveProposalAsync(
+                repository.Id,
+                proposal.Id,
+                new ResolveDecisionCommand("Resolve.", "", "option-1")));
+        ArgumentException optionException = await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.ResolveProposalAsync(
+                repository.Id,
+                proposal.Id,
+                new ResolveDecisionCommand("Resolve.", "human-reviewer", "missing-option")));
+
+        Assert.Equal("Proposal transition from Generated to Resolved is not allowed.", stateException.Message);
+        Assert.Equal("Resolution rationale is required. (Parameter 'command')", rationaleException.Message);
+        Assert.Equal("Resolver metadata is required. (Parameter 'command')", resolverException.Message);
+        Assert.Equal("Selected option was not found: missing-option (Parameter 'command')", optionException.Message);
+        Assert.Empty(await decisionRepository.ListDecisionsAsync(repository));
+    }
+
+    [Fact]
+    public async Task ResolveProposalRecordsRecommendationDivergence()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(
+            repository.Id,
+            DecisionCandidateState.Promoted,
+            signalKind: "Conflict",
+            summary: "Conflict between backend API approaches.");
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var service = CreateGenerationService(repository, store, decisionRepository);
+        DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
+        await service.MarkProposalReadyForResolutionAsync(repository.Id, proposal.Id, "Ready for alternate option.");
+
+        Decision decision = await service.ResolveProposalAsync(
+            repository.Id,
+            proposal.Id,
+            new ResolveDecisionCommand(
+                "Choose the safer deferral option despite the advisory recommendation.",
+                "human-reviewer",
+                "option-2",
+                DecisionOutcome.Deferred));
+
+        Assert.Equal(DecisionOutcome.Deferred, decision.Resolution?.Outcome);
+        Assert.Equal("option-2", decision.Resolution?.SelectedOptionId);
+        Assert.True(decision.Resolution?.RecommendationDiverged);
+    }
+
+    [Fact]
     public async Task ProposalEndpointsReturnSuccessForGenerationListingGetReviewTransitionsAndExpiration()
     {
         Repository repository = CreateRepository();
@@ -376,6 +495,42 @@ public sealed class DecisionGenerationServiceTests
         Assert.Equal(DecisionProposalState.Viewed, (await viewedResponse.Content.ReadFromJsonAsync<DecisionProposal>(jsonOptions))!.State);
         Assert.Equal(DecisionProposalState.ReadyForResolution, (await readyResponse.Content.ReadFromJsonAsync<DecisionProposal>(jsonOptions))!.State);
         Assert.Equal(DecisionProposalState.Expired, (await expireResponse.Content.ReadFromJsonAsync<DecisionProposal>(jsonOptions))!.State);
+    }
+
+    [Fact]
+    public async Task ProposalResolveEndpointReturnsDecisionRecord()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services => services.AddSingleton<IRepositoryService>(new StubRepositoryService(repository)));
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+        using var client = new HttpClient();
+        string root = app.Urls.Single();
+        JsonSerializerOptions jsonOptions = CreateJsonOptions();
+
+        DecisionProposal proposal = (await (await client.PostAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/candidates/{candidate.Id}/proposals",
+            null)).Content.ReadFromJsonAsync<DecisionProposal>(jsonOptions))!;
+        await client.PostAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/proposals/{proposal.Id}/review/ready-for-resolution",
+            null);
+
+        HttpResponseMessage resolveResponse = await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/proposals/{proposal.Id}/resolve",
+            new ResolveDecisionCommand("Resolve via endpoint.", "human-reviewer", "option-1"));
+
+        Decision decision = (await resolveResponse.Content.ReadFromJsonAsync<Decision>(jsonOptions))!;
+        Assert.Equal(HttpStatusCode.OK, resolveResponse.StatusCode);
+        Assert.Equal("DEC-0001", decision.Id.Value);
+        Assert.Equal(DecisionState.Resolved, decision.State);
+        Assert.Equal("option-1", decision.Resolution?.SelectedOptionId);
     }
 
     [Fact]

@@ -137,6 +137,127 @@ public sealed class DecisionGenerationService(
         return await decisionRepository.ListProposalRevisionsAsync(repository, proposalId);
     }
 
+    public async Task<Decision> ResolveProposalAsync(Guid repositoryId, string proposalId, ResolveDecisionCommand command)
+    {
+        if (command is null)
+        {
+            throw new ArgumentException("Resolution command is required.", nameof(command));
+        }
+
+        if (string.IsNullOrWhiteSpace(command.Rationale))
+        {
+            throw new ArgumentException("Resolution rationale is required.", nameof(command));
+        }
+
+        if (string.IsNullOrWhiteSpace(command.Resolver))
+        {
+            throw new ArgumentException("Resolver metadata is required.", nameof(command));
+        }
+
+        if (string.IsNullOrWhiteSpace(command.SelectedOptionId))
+        {
+            throw new ArgumentException("Selected option id is required.", nameof(command));
+        }
+
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        DecisionProposal proposal = await GetProposalAsync(repositoryId, proposalId);
+        DecisionTransitionResult transition = DecisionLifecycleRules.ValidateProposalTransition(
+            proposal.State,
+            DecisionProposalState.Resolved);
+        if (!transition.IsValid)
+        {
+            throw new InvalidOperationException(transition.Error);
+        }
+
+        DecisionOption? selectedOption = proposal.Options
+            .FirstOrDefault(option => string.Equals(option.Id, command.SelectedOptionId.Trim(), StringComparison.Ordinal));
+        if (selectedOption is null)
+        {
+            throw new ArgumentException($"Selected option was not found: {command.SelectedOptionId}", nameof(command));
+        }
+
+        DecisionId decisionId = await decisionRepository.AllocateDecisionIdAsync(repository);
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        string rationale = command.Rationale.Trim();
+        string resolver = command.Resolver.Trim();
+        string selectedOptionId = selectedOption.Id;
+        bool recommendationDiverged = proposal.Recommendation is not null &&
+            !string.Equals(proposal.Recommendation.OptionId, selectedOptionId, StringComparison.Ordinal);
+        var proposalSource = new DecisionSourceReference(
+            "DecisionProposal",
+            ProposalPath(proposal.Id),
+            DecisionId: decisionId,
+            ProposalId: proposal.Id,
+            CandidateId: proposal.CandidateId);
+        var selectedOptionSource = new DecisionSourceReference(
+            "DecisionOption",
+            ProposalPath(proposal.Id),
+            Section: "Options",
+            ItemId: selectedOptionId,
+            DecisionId: decisionId,
+            ProposalId: proposal.Id,
+            CandidateId: proposal.CandidateId,
+            Excerpt: selectedOption.Title);
+
+        var resolution = new DecisionResolution(
+            command.Outcome,
+            selectedOptionId,
+            rationale,
+            resolver,
+            recommendationDiverged,
+            now,
+            [proposalSource, selectedOptionSource]);
+        var decision = new Decision(
+            decisionId,
+            DecisionState.Resolved,
+            await ResolveClassificationAsync(repository, proposal.CandidateId),
+            proposal.Title,
+            proposal.Context,
+            new DecisionMetadata(repository.Id, now, now),
+            resolution,
+            [],
+            proposal.Evidence,
+            [
+                new DecisionHistoryEntry(
+                    now,
+                    "Resolved",
+                    null,
+                    DecisionState.Resolved.ToString(),
+                    rationale,
+                    [proposalSource, selectedOptionSource])
+            ]);
+        DecisionProposal resolvedProposal = proposal with
+        {
+            State = DecisionProposalState.Resolved,
+            History = proposal.History
+                .Concat([
+                    new DecisionHistoryEntry(
+                        now,
+                        "Resolved",
+                        proposal.State.ToString(),
+                        DecisionProposalState.Resolved.ToString(),
+                        rationale,
+                        [
+                            proposalSource,
+                            new DecisionSourceReference(
+                                "DecisionRecord",
+                                $".agents/decisions/records/{decisionId.Value}/decision.json",
+                                DecisionId: decisionId,
+                                ProposalId: proposal.Id,
+                                CandidateId: proposal.CandidateId)
+                        ])
+                ])
+                .ToArray()
+        };
+
+        await decisionRepository.SaveDecisionAsync(repository, decision);
+        await projectionService.ProjectDecisionAsync(repository, decision);
+        await decisionRepository.SaveProposalAsync(repository, resolvedProposal);
+        await projectionService.ProjectProposalAsync(repository, resolvedProposal);
+        await projectionService.RefreshDecisionIndexAsync(repository);
+        return decision;
+    }
+
     public async Task<DecisionProposal> RefineProposalAsync(
         Guid repositoryId,
         string proposalId,
@@ -277,6 +398,12 @@ public sealed class DecisionGenerationService(
     {
         DecisionCandidate? candidate = await decisionRepository.GetCandidateAsync(repository, candidateId);
         return candidate ?? throw new KeyNotFoundException($"Decision candidate was not found: {candidateId}");
+    }
+
+    private async Task<DecisionClassification> ResolveClassificationAsync(Repository repository, string candidateId)
+    {
+        DecisionCandidate? candidate = await decisionRepository.GetCandidateAsync(repository, candidateId);
+        return candidate?.Classification ?? DecisionClassification.Tactical;
     }
 
     private static DecisionOption[] BuildOptions(DecisionCandidate candidate, IReadOnlyList<DecisionEvidence> evidence)

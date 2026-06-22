@@ -24,6 +24,7 @@ public static class DecisionEndpoints
         app.MapMarkDecisionProposalReadyForResolution();
         app.MapRefineDecisionProposal();
         app.MapListDecisionProposalRevisions();
+        app.MapResolveDecisionProposal();
         app.MapExpireDecisionProposal();
         return app;
     }
@@ -463,6 +464,36 @@ public static class DecisionEndpoints
             try
             {
                 return Results.Ok(await generationService.ListProposalRevisionsAsync(repositoryId, proposalId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapResolveDecisionProposal(this IEndpointRouteBuilder app) =>
+        app.MapPost("/api/repositories/{repositoryId:guid}/decisions/proposals/{proposalId}/resolve", async (
+            Guid repositoryId,
+            string proposalId,
+            ResolveDecisionCommand? request,
+            IDecisionGenerationService generationService) =>
+        {
+            try
+            {
+                if (request is null)
+                {
+                    return Results.BadRequest(new { error = "Resolution command is required." });
+                }
+
+                return Results.Ok(await generationService.ResolveProposalAsync(repositoryId, proposalId, request));
             }
             catch (KeyNotFoundException exception)
             {

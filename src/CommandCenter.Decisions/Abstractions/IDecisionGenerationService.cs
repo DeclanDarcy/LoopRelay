@@ -20,5 +20,7 @@ public interface IDecisionGenerationService
 
     Task<IReadOnlyList<DecisionProposalRevision>> ListProposalRevisionsAsync(Guid repositoryId, string proposalId);
 
+    Task<Decision> ResolveProposalAsync(Guid repositoryId, string proposalId, ResolveDecisionCommand command);
+
     Task<DecisionProposal> ExpireProposalAsync(Guid repositoryId, string proposalId, string? reason);
 }

@@ -17,7 +17,8 @@ transform validated candidates into structured decision proposals with options, 
 - [ ] Move proposal state through draft, generated, viewed, needs refinement, refined, ready for resolution, resolved, expired, and discarded.
   - [x] Backend-owned transitions for generated -> viewed, viewed -> needs refinement, generated/viewed -> ready for resolution, and allowed expiration paths.
   - [x] Refinement transition through explicit revision artifacts.
-  - [ ] Resolution and discard transitions.
+  - [x] Resolution transition from ready proposals into authoritative decision records.
+  - [ ] Discard transitions.
 
 ## Tests
 
@@ -30,6 +31,7 @@ transform validated candidates into structured decision proposals with options, 
 - [ ] Proposal state transition tests.
   - [x] Review transition success, persistence, projection refresh, and conflict-path coverage.
   - [x] Refinement transition, revision artifact, endpoint, and conflict-path coverage.
+  - [x] Resolution transition, decision artifact, endpoint, and conflict-path coverage.
 - [x] Proposal expiration tests.
 
 ## Exit Criteria
