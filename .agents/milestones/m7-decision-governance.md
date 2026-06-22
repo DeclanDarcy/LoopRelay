@@ -30,7 +30,7 @@ detect decision ecosystem health issues before decisions are projected into exec
   - [x] Multiple accepted resolved decisions for one candidate.
   - [x] Conflicting execution directives.
   - [ ] Unresolved stale proposals.
-  - [ ] Projection failures.
+  - [x] Projection failures.
 - [x] Persist governance reports under `.agents/decisions/governance`.
 - [x] Mark blocking governance findings so execution projection can exclude affected decisions.
 

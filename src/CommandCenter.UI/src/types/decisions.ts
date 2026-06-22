@@ -41,6 +41,7 @@ export type DecisionGovernanceCategory =
   | 'ExecutionProjectionReadiness'
   | 'AuthorityBoundary'
   | 'FingerprintIntegrity'
+  | 'ProjectionIntegrity'
 
 export type DecisionGovernanceSeverity = 'Info' | 'Warning' | 'Blocking'
 

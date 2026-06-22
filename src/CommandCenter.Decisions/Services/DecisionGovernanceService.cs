@@ -60,6 +60,7 @@ public sealed class DecisionGovernanceService(
         AnalyzeExecutionReadiness(decisions, findings);
         AnalyzeConflictingExecutionDirectives(decisions, findings);
         AnalyzeAuthorityBoundaries(decisions, proposals, assimilationRecommendations, findings);
+        AnalyzeProjectionIntegrity(repository, decisions, candidates, proposals, findings);
         AnalyzeCoverage(candidates, proposals, findings, diagnostics);
 
         IReadOnlyList<DecisionGovernanceFinding> orderedFindings = findings
@@ -695,6 +696,144 @@ public sealed class DecisionGovernanceService(
         }
 
         diagnostics.Add("Repeated ambiguity, repeated blocker, repeated fork, and repeated unresolved-question analysis is limited to structured candidate/proposal evidence in this slice.");
+    }
+
+    private static void AnalyzeProjectionIntegrity(
+        Repository repository,
+        IReadOnlyList<Decision> decisions,
+        IReadOnlyList<DecisionCandidate> candidates,
+        IReadOnlyList<DecisionProposal> proposals,
+        List<DecisionGovernanceFinding> findings)
+    {
+        if (!Directory.Exists(DecisionArtifactPaths.ResolveRoot(repository, DecisionArtifactKind.Decision)) &&
+            !Directory.Exists(DecisionArtifactPaths.ResolveRoot(repository, DecisionArtifactKind.Candidate)) &&
+            !Directory.Exists(DecisionArtifactPaths.ResolveRoot(repository, DecisionArtifactKind.Proposal)))
+        {
+            return;
+        }
+
+        foreach (Decision decision in decisions)
+        {
+            string relativePath = DecisionArtifactPaths.DecisionMarkdown(decision.Id.Value);
+            CheckProjection(
+                repository,
+                relativePath,
+                "DecisionRecordProjection",
+                $"Decision {decision.Id.Value} markdown projection is missing",
+                $"Decision {decision.Id.Value} has no generated decision.md projection beside its structured record.",
+                $"Decision {decision.Id.Value} markdown projection is stale",
+                $"Decision {decision.Id.Value} decision.md does not match the current structured decision identity or state.",
+                [$"# {decision.Id.Value}:", $"- State: {decision.State}"],
+                findings,
+                [decision.Id.Value],
+                [],
+                []);
+        }
+
+        foreach (DecisionCandidate candidate in candidates)
+        {
+            string relativePath = DecisionArtifactPaths.CandidateMarkdown(candidate.Id);
+            CheckProjection(
+                repository,
+                relativePath,
+                "DecisionCandidateProjection",
+                $"Candidate {candidate.Id} markdown projection is missing",
+                $"Candidate {candidate.Id} has no generated candidate.md projection beside its structured record.",
+                $"Candidate {candidate.Id} markdown projection is stale",
+                $"Candidate {candidate.Id} candidate.md does not match the current structured candidate identity or state.",
+                [$"# {candidate.Id}:", $"- State: {candidate.State}"],
+                findings,
+                [],
+                [candidate.Id],
+                []);
+        }
+
+        foreach (DecisionProposal proposal in proposals)
+        {
+            string relativePath = DecisionArtifactPaths.ProposalMarkdown(proposal.Id);
+            CheckProjection(
+                repository,
+                relativePath,
+                "DecisionProposalProjection",
+                $"Proposal {proposal.Id} markdown projection is missing",
+                $"Proposal {proposal.Id} has no generated proposal.md projection beside its structured record.",
+                $"Proposal {proposal.Id} markdown projection is stale",
+                $"Proposal {proposal.Id} proposal.md does not match the current structured proposal identity or state.",
+                [$"# {proposal.Id}:", $"- State: {proposal.State}", $"- Candidate: {proposal.CandidateId}"],
+                findings,
+                [],
+                [proposal.CandidateId],
+                [proposal.Id]);
+        }
+
+        string indexPath = DecisionArtifactPaths.DecisionsIndex();
+        var expectedIndexFragments = decisions.Select(decision => decision.Id.Value)
+            .Concat(candidates.Select(candidate => candidate.Id))
+            .Concat(proposals.Select(proposal => proposal.Id))
+            .ToArray();
+        CheckProjection(
+            repository,
+            indexPath,
+            "DecisionIndexProjection",
+            "Decision index projection is missing",
+            "The current decisions.md projection is missing from .agents/decisions.",
+            "Decision index projection is stale",
+            "The current decisions.md projection does not list every structured decision lifecycle artifact.",
+            ["# Decisions", .. expectedIndexFragments],
+            findings,
+            decisions.Select(decision => decision.Id.Value).ToArray(),
+            candidates.Select(candidate => candidate.Id).ToArray(),
+            proposals.Select(proposal => proposal.Id).ToArray());
+    }
+
+    private static void CheckProjection(
+        Repository repository,
+        string relativePath,
+        string sourceKind,
+        string missingTitle,
+        string missingDetail,
+        string staleTitle,
+        string staleDetail,
+        IReadOnlyList<string> expectedFragments,
+        List<DecisionGovernanceFinding> findings,
+        IReadOnlyList<string> relatedDecisionIds,
+        IReadOnlyList<string> relatedCandidateIds,
+        IReadOnlyList<string> relatedProposalIds)
+    {
+        string path = DecisionArtifactPaths.Resolve(repository, relativePath);
+        var source = new DecisionSourceReference(sourceKind, relativePath);
+        if (!File.Exists(path))
+        {
+            AddFinding(
+                findings,
+                DecisionGovernanceCategory.ProjectionIntegrity,
+                DecisionGovernanceSeverity.Blocking,
+                true,
+                missingTitle,
+                missingDetail,
+                [source],
+                relatedDecisionIds,
+                relatedCandidateIds,
+                relatedProposalIds);
+            return;
+        }
+
+        string content = File.ReadAllText(path);
+        if (string.IsNullOrWhiteSpace(content) ||
+            expectedFragments.Any(fragment => !content.Contains(fragment, StringComparison.Ordinal)))
+        {
+            AddFinding(
+                findings,
+                DecisionGovernanceCategory.ProjectionIntegrity,
+                DecisionGovernanceSeverity.Blocking,
+                true,
+                staleTitle,
+                staleDetail,
+                [source],
+                relatedDecisionIds,
+                relatedCandidateIds,
+                relatedProposalIds);
+        }
     }
 
     private async Task<IReadOnlyList<DecisionAssimilationRecommendation>> ListAssimilationRecommendationsAsync(

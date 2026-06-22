@@ -10,5 +10,6 @@ public enum DecisionGovernanceCategory
     ProposalQuality,
     ExecutionProjectionReadiness,
     AuthorityBoundary,
-    FingerprintIntegrity
+    FingerprintIntegrity,
+    ProjectionIntegrity
 }

@@ -20,6 +20,7 @@ public sealed class DecisionGovernanceServiceTests
         var decisionRepository = new FileSystemDecisionRepository(store);
         Decision decision = CreateResolvedDecision(repository.Id);
         await decisionRepository.SaveDecisionAsync(repository, decision);
+        await ProjectAllAsync(repository, decisionRepository, store);
         var service = CreateService(repository, decisionRepository);
 
         DecisionGovernanceReport report = await service.GenerateReportAsync(repository.Id);
@@ -70,6 +71,7 @@ public sealed class DecisionGovernanceServiceTests
         var decisionRepository = new FileSystemDecisionRepository(store);
         Decision decision = CreateResolvedDecision(repository.Id);
         await decisionRepository.SaveDecisionAsync(repository, decision);
+        await ProjectAllAsync(repository, decisionRepository, store);
         string before = await File.ReadAllTextAsync(Path.Combine(
             repository.Path,
             ".agents",
@@ -90,6 +92,25 @@ public sealed class DecisionGovernanceServiceTests
             "decision.json"));
         Assert.Equal(before, after);
         Assert.False(Directory.Exists(Path.Combine(repository.Path, ".agents", "decisions", "governance")));
+    }
+
+    [Fact]
+    public async Task MissingDecisionMarkdownProjectionCreatesBlockingProjectionFinding()
+    {
+        Repository repository = CreateRepository();
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveDecisionAsync(repository, CreateResolvedDecision(repository.Id));
+        var service = CreateService(repository, decisionRepository);
+
+        DecisionGovernanceReport report = await service.GetCurrentReportAsync(repository.Id);
+
+        Assert.Equal(DecisionHealthAssessment.Blocked, report.Health);
+        Assert.Contains(report.Findings, finding =>
+            finding.Category == DecisionGovernanceCategory.ProjectionIntegrity &&
+            finding.Title == "Decision DEC-0001 markdown projection is missing" &&
+            finding.BlocksExecutionProjection &&
+            finding.RelatedDecisionIds.SequenceEqual(["DEC-0001"]));
     }
 
     [Fact]
@@ -452,6 +473,15 @@ public sealed class DecisionGovernanceServiceTests
     {
         byte[] bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(proposal, CreateJsonOptions()));
         return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+    }
+
+    private static async Task ProjectAllAsync(
+        Repository repository,
+        FileSystemDecisionRepository decisionRepository,
+        FileSystemArtifactStore store)
+    {
+        var projectionService = new DecisionArtifactProjectionService(decisionRepository, store);
+        await projectionService.RefreshAllAsync(repository);
     }
 
     private static JsonSerializerOptions CreateJsonOptions()
