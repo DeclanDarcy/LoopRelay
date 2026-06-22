@@ -65,6 +65,7 @@ import { executionReadinessStatus } from './lib/status'
 import { useShellState } from './state/shellState'
 import type {
   CommitPreparation,
+  DecisionProposalState,
   ExecutionSessionSummary,
   NavigationTarget,
   OperationalContextProposal,
@@ -103,6 +104,9 @@ function App() {
   const [operationalContextCurrentContent, setOperationalContextCurrentContent] = useState('')
   const [operationalContextProposalDraft, setOperationalContextProposalDraft] = useState('')
   const [operationalContextReviewNote, setOperationalContextReviewNote] = useState('')
+  const [selectedDecisionProposalStates, setSelectedDecisionProposalStates] = useState<
+    DecisionProposalState[]
+  >([])
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
@@ -214,7 +218,7 @@ function App() {
     isLoading: isDecisionProposalsLoading,
     error: decisionProposalsError,
     refresh: refreshDecisionProposals,
-  } = useDecisionProposals(selectedRepository?.repository.id ?? null)
+  } = useDecisionProposals(selectedRepository?.repository.id ?? null, selectedDecisionProposalStates)
 
   const selectedArtifact = useMemo(() => {
     if (!workspace || !selectedArtifactPath) {
@@ -448,6 +452,7 @@ function App() {
       setOperationalContextCurrentContent('')
       setOperationalContextProposalDraft('')
       setOperationalContextReviewNote('')
+      setSelectedDecisionProposalStates([])
     },
     [selectRepositoryNavigation, setContinuityDiagnostics, setContinuityReports],
   )
@@ -1617,12 +1622,14 @@ function App() {
                 context={decisionContext}
                 candidates={decisionCandidates}
                 proposals={decisionProposals}
+                selectedProposalStates={selectedDecisionProposalStates}
                 hasSelectedRepository={Boolean(selectedRepository)}
                 isLoading={
                   isDecisionContextLoading ||
                   isDecisionCandidatesLoading ||
                   isDecisionProposalsLoading
                 }
+                onSelectedProposalStatesChange={setSelectedDecisionProposalStates}
                 onRefresh={() => void refreshDecisions()}
               />
 

@@ -22,7 +22,7 @@ provide full proposal inspection before refinement or resolution.
 
 - [x] Add Decisions tab and decision lifecycle route composition.
 - [ ] Add candidate browser with active, promoted, dismissed, expired, and duplicate filters.
-- [ ] Add proposal browser with generated, viewed, needs refinement, refined, ready for resolution, resolved, expired, and discarded filters.
+- [x] Add proposal browser with generated, viewed, needs refinement, refined, ready for resolution, resolved, expired, and discarded filters.
 - [ ] Add full proposal viewer.
 - [ ] Add option comparison.
 - [ ] Add evidence/source attribution navigation.
@@ -34,7 +34,7 @@ provide full proposal inspection before refinement or resolution.
 - [x] Review note persistence tests.
 - [ ] Proposal viewer characterization tests.
 - [ ] Evidence and attribution display tests.
-- [ ] Candidate/proposal filter tests.
+- [x] Candidate/proposal filter tests.
 - [ ] Navigation tests.
 
 ## Exit Criteria

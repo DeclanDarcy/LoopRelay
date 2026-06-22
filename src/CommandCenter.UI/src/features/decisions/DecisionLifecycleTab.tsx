@@ -3,14 +3,18 @@ import type {
   DecisionCandidate,
   DecisionContextSnapshot,
   DecisionProposalBrowserItem,
+  DecisionProposalState,
 } from '../../types'
+import { DecisionProposalBrowser } from './DecisionProposalBrowser'
 
 type DecisionLifecycleTabProps = {
   context: DecisionContextSnapshot | null
   candidates: DecisionCandidate[]
   proposals: DecisionProposalBrowserItem[]
+  selectedProposalStates: DecisionProposalState[]
   hasSelectedRepository: boolean
   isLoading: boolean
+  onSelectedProposalStatesChange: (states: DecisionProposalState[]) => void
   onRefresh: () => void
 }
 
@@ -18,8 +22,10 @@ export function DecisionLifecycleTab({
   context,
   candidates,
   proposals,
+  selectedProposalStates,
   hasSelectedRepository,
   isLoading,
+  onSelectedProposalStatesChange,
   onRefresh,
 }: DecisionLifecycleTabProps) {
   const activeCandidateCount = candidates.filter((candidate) =>
@@ -82,26 +88,12 @@ export function DecisionLifecycleTab({
             )}
           </section>
 
-          <section className="decision-lifecycle-panel" aria-label="Decision proposals">
-            <h5>Proposals</h5>
-            {proposals.length > 0 ? (
-              <div className="decision-row-list">
-                {proposals.slice(0, 8).map((proposal) => (
-                  <article className="decision-row" key={proposal.proposalId}>
-                    <strong>{proposal.title}</strong>
-                    <span>
-                      {proposal.proposalId} | {proposal.state} | Review {proposal.reviewState}
-                    </span>
-                    <p>{proposal.classification} / {proposal.priority}</p>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <EmptyState className="empty-state">
-                {isLoading ? 'Loading decision proposals...' : 'No decision proposals found.'}
-              </EmptyState>
-            )}
-          </section>
+          <DecisionProposalBrowser
+            proposals={proposals}
+            selectedStates={selectedProposalStates}
+            isLoading={isLoading}
+            onSelectedStatesChange={onSelectedProposalStatesChange}
+          />
         </div>
       ) : (
         <EmptyState className="empty-state">Select or add a repository.</EmptyState>

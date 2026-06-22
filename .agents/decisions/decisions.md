@@ -2,26 +2,15 @@
 
 ## Newly Authorized
 
-- M4 UI Phase 1 is accepted as the correct entry point for the review workspace UI.
-- The Decisions tab implementation is accepted because it consumes backend contracts instead of inventing a React lifecycle model.
-- The governing boundary remains: backend owns lifecycle authority; UI observes lifecycle authority.
-- The current layering is accepted:
-  - Repository authority
-  - Decision services
-  - Review workspace
-  - Read models
-  - Tauri commands
-  - API wrappers
-  - Hooks
-  - UI
-- The Tauri bridge scope for decision context, candidates, proposals, review workspace, options, evidence, and sources is accepted because these are read-model concerns.
-- The dev Tauri mock extension is accepted as useful for UI development and future characterization tests, provided it preserves backend contract shape.
-- Proposal browsing must use `DecisionProposalBrowserItem` only; React must not reconstruct proposal lifecycle status from full proposal payloads.
-- Phase 2 is authorized for the M4 proposal browser.
-- Proposal browser filters must use backend-driven browser endpoint filtering for generated, viewed, needs-refinement, refined, ready-for-resolution, resolved, and discarded proposals.
-- Proposal selection may be local UI state only.
-- Review, refinement, and resolution mutation controls remain deferred until proposal viewer, review workspace, and evidence/source navigation exist.
-- The missing `rustfmt` component is environment setup only and does not affect roadmap status.
+- M4 proposal browser slice is accepted as complete.
+- The proposal browser architecture is accepted:
+  - Backend read model
+  - `DecisionProposalBrowserItem`
+  - React filtering and selection presentation
+- The key invariant remains: selected proposal is UI state, while proposal lifecycle state is backend state.
+- The next M4 slice is authorized for a read-only full proposal viewer.
+- The full proposal viewer should include context, options, tradeoffs, recommendation, assumptions, diagnostics, review state, notes, revisions, evidence, and source attribution.
+- Review, refinement, and resolution mutation controls remain deferred until users can inspect the full proposal, evidence, and review workspace from backend-owned read models.
 
 ## Current Milestone Status
 
@@ -33,8 +22,8 @@
 
 ## Newly Authorized Next Slice
 
-- Implement the M4 proposal browser UI:
-  1. Render browser rows from `DecisionProposalBrowserItem`.
-  2. Add backend-driven state filters.
-  3. Add selected-proposal local UI state.
+- Implement the read-only M4 full proposal viewer:
+  1. Load selected proposal review workspace data from backend-owned read models.
+  2. Render the complete proposal inspection surface.
+  3. Keep evidence and source attribution visible near the content they support.
   4. Do not add lifecycle mutation controls.

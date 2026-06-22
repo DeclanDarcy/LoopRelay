@@ -2,32 +2,26 @@
 
 ## New State From This Slice
 
-- Continued M4: Decision Review Workspace UI Phase 1.
-- Added decision lifecycle TypeScript contracts in `src/CommandCenter.UI/src/types/decisions.ts`, matching the current backend camelCase records for context snapshots, candidates, proposal browser items, review workspace projections, option comparison, evidence inspection, and source attribution.
-- Added decision API wrappers in `src/CommandCenter.UI/src/api/decisions.ts` and exported them through the shared API barrel.
-- Added initial decision hooks:
-  - `useDecisionContext`
-  - `useDecisionDiscovery`
-  - `useDecisionProposals`
-- Added `DecisionLifecycleTab`, a minimal observational Decisions tab showing backend-sourced context, candidate, and proposal browser summaries.
-- Wired `decisions` into primary shell tab state, workspace tabs, command-palette navigation targets, active-tab visibility, and `App.tsx`.
-- Added Tauri bridge commands for decision context, candidates, proposals, proposal review workspace, option comparison, evidence inspection, and source attribution read endpoints.
-- Extended the dev Tauri mock with decision context, candidate, and proposal browser data so mounted UI hooks work in mock mode.
-- Updated `.agents/milestones/m4-review-workspace.md`; the Decisions tab and decision lifecycle route composition UI item is now complete.
-- Rotated the previous handoff to `.agents/handoffs/handoff.0014.md`.
+- Continued M4: Decision Review Workspace UI.
+- Added `DecisionProposalBrowser` in `src/CommandCenter.UI/src/features/decisions/DecisionProposalBrowser.tsx`.
+- The proposal browser renders rows from `DecisionProposalBrowserItem`, supports backend-driven proposal state filters, and keeps selected proposal state local to the browser.
+- Wired proposal filter state through `App.tsx` into `useDecisionProposals`, preserving the existing backend browser endpoint contract.
+- Updated `DecisionLifecycleTab` to delegate proposal rendering to the dedicated proposal browser component.
+- Expanded `devTauriMock` proposal browser data with generated, viewed, and ready-for-resolution examples, and made the mock browser command honor `states` filters.
+- Added proposal browser characterization coverage in `src/CommandCenter.UI/src/test/characterization/decisionProposalBrowser.test.tsx`.
+- Updated `.agents/milestones/m4-review-workspace.md`; the proposal browser UI and candidate/proposal filter test items are now complete.
+- Rotated the previous handoff to `.agents/handoffs/handoff.0015.md`.
 
 ## Verification
 
 - `npm run lint --prefix src/CommandCenter.UI` succeeds.
+- `npm run test --prefix src/CommandCenter.UI` passes with 37 files and 138 tests.
 - `npm run build --prefix src/CommandCenter.UI` succeeds.
-- `npm run test --prefix src/CommandCenter.UI` passes with 36 files and 135 tests.
-- `cargo build --manifest-path src/CommandCenter.Shell/Cargo.toml` succeeds.
-- `dotnet build CommandCenter.slnx` succeeds with 0 warnings and 0 errors.
-- `cargo fmt --manifest-path src/CommandCenter.Shell/Cargo.toml` could not run because `rustfmt` is not installed for the stable Windows toolchain.
 
 ## Next Slice
 
-- Continue M4 UI with the proposal browser itself:
-  1. Add proposal state filters for generated, viewed, needs-refinement, refined, ready-for-resolution, resolved, expired, and discarded.
-  2. Keep the browser backed by `DecisionProposalBrowserItem`; do not infer lifecycle state from proposal details.
-  3. Add selection state for a proposal, but keep mutation controls out until the review workspace is visible.
+- Continue M4 with the full proposal viewer:
+  1. Load the selected proposal review workspace from the backend when a proposal is selected.
+  2. Render proposal context, options, tradeoffs, recommendation, assumptions, diagnostics, review state, notes, and revisions.
+  3. Keep evidence near the recommendation, option, tradeoff, or assumption it supports.
+  4. Do not add review, refinement, or resolution mutation controls until the viewer and evidence/source navigation are visible.

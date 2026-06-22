@@ -365,6 +365,7 @@ function createDecisionCandidates(repository: Repository): DecisionCandidate[] {
 }
 
 function createDecisionProposalBrowserItems(): DecisionProposalBrowserItem[] {
+  const timestamp = new Date().toISOString()
   return [
     {
       proposalId: 'PROP-0001',
@@ -373,13 +374,51 @@ function createDecisionProposalBrowserItems(): DecisionProposalBrowserItem[] {
       title: 'Use backend-owned review read models',
       classification: 'Architectural',
       priority: 'High',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: timestamp,
+      updatedAt: timestamp,
       reviewState: 'NotStarted',
-      reviewUpdatedAt: new Date().toISOString(),
+      reviewUpdatedAt: timestamp,
+      isResolved: false,
+    },
+    {
+      proposalId: 'PROP-0002',
+      candidateId: 'CAND-0001',
+      state: 'Viewed',
+      title: 'Keep proposal selection in React presentation state',
+      classification: 'Tactical',
+      priority: 'Medium',
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      reviewState: 'Viewed',
+      reviewUpdatedAt: timestamp,
+      isResolved: false,
+    },
+    {
+      proposalId: 'PROP-0003',
+      candidateId: 'CAND-0001',
+      state: 'ReadyForResolution',
+      title: 'Defer mutation controls until evidence navigation exists',
+      classification: 'Operational',
+      priority: 'Medium',
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      reviewState: 'ReadyForResolution',
+      reviewUpdatedAt: timestamp,
       isResolved: false,
     },
   ]
+}
+
+function filterDecisionProposalBrowserItems(
+  proposals: DecisionProposalBrowserItem[],
+  states: string[],
+) {
+  if (states.length === 0) {
+    return proposals
+  }
+
+  const selectedStates = new Set(states)
+  return proposals.filter((proposal) => selectedStates.has(proposal.state))
 }
 
 function createReadyInventory(): ArtifactInventory {
@@ -698,6 +737,15 @@ function getStringArg(args: InvokeArgs, name: string): string {
   }
 
   return value
+}
+
+function getStringArrayArg(args: InvokeArgs, name: string): string[] {
+  const value = args?.[name]
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value.filter((item): item is string => typeof item === 'string')
 }
 
 function rotateCurrentArtifact(
@@ -1393,8 +1441,14 @@ export function installDevTauriMock() {
         case 'list_decision_candidates':
           return clone(state.decisionCandidates[getStringArg(args, 'repositoryId')] ?? [])
         case 'list_decision_proposals':
-        case 'list_decision_proposal_browser':
           return clone(state.decisionProposalBrowserItems[getStringArg(args, 'repositoryId')] ?? [])
+        case 'list_decision_proposal_browser':
+          return clone(
+            filterDecisionProposalBrowserItems(
+              state.decisionProposalBrowserItems[getStringArg(args, 'repositoryId')] ?? [],
+              getStringArrayArg(args, 'states'),
+            ),
+          )
         case 'start_execution':
           return clone(
             startExecution(
