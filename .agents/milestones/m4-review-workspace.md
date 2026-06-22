@@ -20,7 +20,7 @@ provide full proposal inspection before refinement or resolution.
 
 ## UI Work
 
-- [ ] Add Decisions tab and decision lifecycle route composition.
+- [x] Add Decisions tab and decision lifecycle route composition.
 - [ ] Add candidate browser with active, promoted, dismissed, expired, and duplicate filters.
 - [ ] Add proposal browser with generated, viewed, needs refinement, refined, ready for resolution, resolved, expired, and discarded filters.
 - [ ] Add full proposal viewer.

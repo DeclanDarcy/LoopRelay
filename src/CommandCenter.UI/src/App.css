@@ -355,6 +355,7 @@ button:focus-visible {
 .details-body[data-active-tab='workspace'] .tab-panel:not(.tab-workspace),
 .details-body[data-active-tab='execution'] .tab-panel:not(.tab-execution),
 .details-body[data-active-tab='operational-context'] .tab-panel:not(.tab-operational-context),
+.details-body[data-active-tab='decisions'] .tab-panel:not(.tab-decisions),
 .details-body[data-active-tab='continuity'] .tab-panel:not(.tab-continuity) {
   display: none;
 }
@@ -843,6 +844,51 @@ button:focus-visible {
 .context-preview {
   display: grid;
   gap: 14px;
+}
+
+.decision-lifecycle-grid,
+.decision-lifecycle-panel,
+.decision-row-list {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.decision-lifecycle-panel h5 {
+  margin: 0;
+  color: var(--fg-default);
+  font-size: 0.9rem;
+  letter-spacing: 0;
+}
+
+.decision-row {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--bg-inset);
+}
+
+.decision-row strong,
+.decision-row span,
+.decision-row p {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.decision-row strong {
+  color: var(--fg-default);
+  font-size: 0.88rem;
+}
+
+.decision-row span,
+.decision-row p {
+  color: var(--fg-subtle);
+  font-size: 0.8rem;
+  font-weight: 650;
 }
 
 .context-summary {

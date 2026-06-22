@@ -1,5 +1,6 @@
 export type * from './artifacts'
 export type * from './continuity'
+export type * from './decisions'
 export type * from './execution'
 export type * from './git'
 export type * from './navigation'

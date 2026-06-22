@@ -1,6 +1,11 @@
 import { useCallback, useMemo, useState } from 'react'
 
-export type PrimaryWorkspaceTab = 'workspace' | 'execution' | 'operational-context' | 'continuity'
+export type PrimaryWorkspaceTab =
+  | 'workspace'
+  | 'execution'
+  | 'operational-context'
+  | 'decisions'
+  | 'continuity'
 
 type RepositoryPathSelections = Record<string, string>
 type RepositoryTabSelections = Record<string, PrimaryWorkspaceTab>

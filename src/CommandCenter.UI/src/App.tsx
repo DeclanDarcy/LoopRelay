@@ -27,6 +27,7 @@ import { ArtifactWorkspace } from './features/artifacts/ArtifactWorkspace'
 import { Button, EmptyState, Panel, SectionHeader } from './components/design'
 import { AppShell, CommandPalette, Header, Sidebar, WorkspaceTabs } from './components/shell'
 import { ContinuityTab } from './features/continuity/ContinuityTab'
+import { DecisionLifecycleTab } from './features/decisions/DecisionLifecycleTab'
 import { ExecutionTab } from './features/execution/ExecutionTab'
 import { GeneratedHandoffReviewPanel } from './features/execution/GeneratedHandoffReviewPanel'
 import { GitWorkflowPanel } from './features/execution/GitWorkflowPanel'
@@ -41,6 +42,9 @@ import {
   useArtifactContent,
   useContinuityDiagnostics,
   useContinuityReports,
+  useDecisionContext,
+  useDecisionDiscovery,
+  useDecisionProposals,
   useExecutionContextPreview,
   useExecutionEvents,
   useExecutionSession,
@@ -193,6 +197,24 @@ function App() {
     isLoading: isContinuityReportsLoading,
     error: continuityReportsError,
   } = useContinuityReports(selectedRepository?.repository.id ?? null)
+  const {
+    data: decisionContext,
+    isLoading: isDecisionContextLoading,
+    error: decisionContextError,
+    refresh: refreshDecisionContext,
+  } = useDecisionContext(selectedRepository?.repository.id ?? null)
+  const {
+    data: decisionCandidates,
+    isLoading: isDecisionCandidatesLoading,
+    error: decisionCandidatesError,
+    refresh: refreshDecisionCandidates,
+  } = useDecisionDiscovery(selectedRepository?.repository.id ?? null)
+  const {
+    data: decisionProposals,
+    isLoading: isDecisionProposalsLoading,
+    error: decisionProposalsError,
+    refresh: refreshDecisionProposals,
+  } = useDecisionProposals(selectedRepository?.repository.id ?? null)
 
   const selectedArtifact = useMemo(() => {
     if (!workspace || !selectedArtifactPath) {
@@ -1205,6 +1227,24 @@ function App() {
   }, [continuityReportsError])
 
   useEffect(() => {
+    if (decisionContextError) {
+      setError(decisionContextError)
+    }
+  }, [decisionContextError])
+
+  useEffect(() => {
+    if (decisionCandidatesError) {
+      setError(decisionCandidatesError)
+    }
+  }, [decisionCandidatesError])
+
+  useEffect(() => {
+    if (decisionProposalsError) {
+      setError(decisionProposalsError)
+    }
+  }, [decisionProposalsError])
+
+  useEffect(() => {
     if (!selectedRepository || !workspace) {
       return
     }
@@ -1334,6 +1374,14 @@ function App() {
   const openContinuitySection = (sectionId: string) => {
     setActivePrimaryTab('continuity')
     setSectionTarget(sectionId)
+  }
+
+  const refreshDecisions = async () => {
+    await Promise.all([
+      refreshDecisionContext(),
+      refreshDecisionCandidates(),
+      refreshDecisionProposals(),
+    ])
   }
 
   const openContinuityWarnings = () => {
@@ -1563,6 +1611,19 @@ function App() {
                 onGenerateReport={() => void generateContinuityReport()}
                 onOpenOperationalContextSection={openOperationalContextSection}
                 onOpenReport={openWorkspaceArtifact}
+              />
+
+              <DecisionLifecycleTab
+                context={decisionContext}
+                candidates={decisionCandidates}
+                proposals={decisionProposals}
+                hasSelectedRepository={Boolean(selectedRepository)}
+                isLoading={
+                  isDecisionContextLoading ||
+                  isDecisionCandidatesLoading ||
+                  isDecisionProposalsLoading
+                }
+                onRefresh={() => void refreshDecisions()}
               />
 
               <ExecutionTab

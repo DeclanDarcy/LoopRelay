@@ -590,6 +590,170 @@ fn promote_operational_context_proposal(
 }
 
 #[tauri::command]
+fn get_decision_context(repository_id: String) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/context"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision context lookup failed")
+}
+
+#[tauri::command]
+fn build_decision_context(repository_id: String) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/decisions/context"
+        ))
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision context build failed")
+}
+
+#[tauri::command]
+fn list_decision_candidates(repository_id: String) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/candidates"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision candidate listing failed")
+}
+
+#[tauri::command]
+fn list_decision_proposals(repository_id: String) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision proposal listing failed")
+}
+
+#[tauri::command]
+fn list_decision_proposal_browser(
+    repository_id: String,
+    states: Vec<String>,
+) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::new();
+    let mut request = client.get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/browser"
+    ));
+
+    if !states.is_empty() {
+        request = request.query(&[("states", states.join(","))]);
+    }
+
+    let response = request.send().map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision proposal browser listing failed")
+}
+
+#[tauri::command]
+fn get_decision_proposal(repository_id: String, proposal_id: String) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/{proposal_id}"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision proposal lookup failed")
+}
+
+#[tauri::command]
+fn get_decision_proposal_review(
+    repository_id: String,
+    proposal_id: String,
+) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/{proposal_id}/review"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision proposal review lookup failed")
+}
+
+#[tauri::command]
+fn get_decision_option_comparison(
+    repository_id: String,
+    proposal_id: String,
+) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/{proposal_id}/options"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision option comparison lookup failed")
+}
+
+#[tauri::command]
+fn get_decision_evidence_inspection(
+    repository_id: String,
+    proposal_id: String,
+) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/{proposal_id}/evidence"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision evidence inspection lookup failed")
+}
+
+#[tauri::command]
+fn list_decision_source_attributions(
+    repository_id: String,
+    proposal_id: String,
+) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/{proposal_id}/sources"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision source attribution listing failed")
+}
+
+#[tauri::command]
 fn get_continuity_diagnostics(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/continuity/diagnostics"
@@ -950,6 +1114,16 @@ fn main() {
             accept_operational_context_proposal,
             reject_operational_context_proposal,
             promote_operational_context_proposal,
+            get_decision_context,
+            build_decision_context,
+            list_decision_candidates,
+            list_decision_proposals,
+            list_decision_proposal_browser,
+            get_decision_proposal,
+            get_decision_proposal_review,
+            get_decision_option_comparison,
+            get_decision_evidence_inspection,
+            list_decision_source_attributions,
             get_continuity_diagnostics,
             generate_continuity_report,
             list_continuity_reports,

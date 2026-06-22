@@ -12,6 +12,7 @@ const workspaceTabs: { id: PrimaryWorkspaceTab; label: string }[] = [
   { id: 'workspace', label: 'Workspace' },
   { id: 'execution', label: 'Execution' },
   { id: 'operational-context', label: 'Operational Context' },
+  { id: 'decisions', label: 'Decisions' },
   { id: 'continuity', label: 'Continuity' },
 ]
 
@@ -162,6 +163,15 @@ const staticSectionTargets: Pick<
     description: 'Open operational-context stable decisions.',
     tab: 'operational-context',
     sectionId: 'operational-stable-decisions',
+  },
+  {
+    id: 'section-decision-lifecycle',
+    kind: 'section',
+    group: 'Inspector Sections',
+    label: 'Decision Lifecycle',
+    description: 'Open the decision review workspace.',
+    tab: 'decisions',
+    sectionId: 'decision-lifecycle',
   },
   {
     id: 'section-continuity-diagnostics',

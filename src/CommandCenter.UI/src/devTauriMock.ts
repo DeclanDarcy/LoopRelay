@@ -7,6 +7,9 @@ import type {
   ContinuityDiagnostics,
   ContinuityReport,
   ContinuityTrend,
+  DecisionCandidate,
+  DecisionContextSnapshot,
+  DecisionProposalBrowserItem,
   ExecutionContextPreview,
   ExecutionSessionState,
   ExecutionSession,
@@ -31,6 +34,9 @@ type MockState = {
   sessions: Record<string, ExecutionSession>
   operationalContextProposals: Record<string, OperationalContextProposal[]>
   continuityReports: Record<string, ContinuityReport[]>
+  decisionContexts: Record<string, DecisionContextSnapshot>
+  decisionCandidates: Record<string, DecisionCandidate[]>
+  decisionProposalBrowserItems: Record<string, DecisionProposalBrowserItem[]>
   commandCalls: Record<string, number>
 }
 
@@ -251,6 +257,131 @@ function operationalContextItem(kind: string, text: string): OperationalContextI
   }
 }
 
+function decisionSource(relativePath: string, excerpt: string) {
+  return {
+    sourceKind: 'CurrentDecisionMarkdown',
+    relativePath,
+    section: null,
+    itemId: null,
+    decisionId: null,
+    proposalId: null,
+    candidateId: null,
+    excerpt,
+  }
+}
+
+function createDecisionContext(repository: Repository): DecisionContextSnapshot {
+  const source = decisionSource('.agents/decisions/decisions.md', 'Decision lifecycle UI requires backend-owned state.')
+  return {
+    snapshotId: `context-${repository.id}`,
+    repositoryId: repository.id,
+    createdAt: new Date().toISOString(),
+    fingerprint: `mock-decision-context-${repository.id}`,
+    context: {
+      repositoryId: repository.id,
+      fingerprint: `mock-decision-context-${repository.id}`,
+      items: [
+        {
+          id: 'current-decisions',
+          kind: 'CurrentDecisionMarkdown',
+          title: 'Current decisions',
+          content: 'Decision lifecycle UI requires backend-owned state.',
+          required: false,
+          fingerprint: 'mock-current-decisions',
+          sources: [source],
+        },
+      ],
+      diagnostics: {
+        sources: [
+          {
+            name: 'CurrentDecisionMarkdown',
+            relativePath: '.agents/decisions/decisions.md',
+            required: false,
+            status: 'Loaded',
+            message: null,
+            byteCount: 64,
+            characterCount: 64,
+            fingerprint: 'mock-current-decisions',
+          },
+        ],
+        warnings: [],
+      },
+      validation: {
+        isValid: true,
+        errors: [],
+        warnings: [],
+      },
+    },
+    diagnostics: {
+      sources: [
+        {
+          name: 'CurrentDecisionMarkdown',
+          relativePath: '.agents/decisions/decisions.md',
+          required: false,
+          status: 'Loaded',
+          message: null,
+          byteCount: 64,
+          characterCount: 64,
+          fingerprint: 'mock-current-decisions',
+        },
+      ],
+      warnings: [],
+    },
+    validation: {
+      isValid: true,
+      errors: [],
+      warnings: [],
+    },
+  }
+}
+
+function createDecisionCandidates(repository: Repository): DecisionCandidate[] {
+  const source = decisionSource('.agents/plan.md', 'The review workspace should expose proposals without resolution.')
+  return [
+    {
+      id: 'CAND-0001',
+      repositoryId: repository.id,
+      state: 'Promoted',
+      priority: 'High',
+      classification: 'Architectural',
+      title: 'Decision review workspace UI boundary',
+      summary: 'The Decisions UI should consume backend read models without reconstructing lifecycle authority.',
+      sourceFingerprint: 'mock-candidate-source',
+      signals: [
+        {
+          kind: 'OpenDecision',
+          summary: 'UI must observe backend-owned lifecycle state.',
+          classification: 'Architectural',
+          priority: 'High',
+          evidence: [{ summary: 'Authorized UI phase is observational.', sources: [source] }],
+        },
+      ],
+      evidence: [{ summary: 'Backend read models are stable enough for UI shell wiring.', sources: [source] }],
+      sources: [source],
+      diagnostics: [],
+      history: [],
+    },
+  ]
+}
+
+function createDecisionProposalBrowserItems(): DecisionProposalBrowserItem[] {
+  return [
+    {
+      proposalId: 'PROP-0001',
+      candidateId: 'CAND-0001',
+      state: 'Generated',
+      title: 'Use backend-owned review read models',
+      classification: 'Architectural',
+      priority: 'High',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      reviewState: 'NotStarted',
+      reviewUpdatedAt: new Date().toISOString(),
+      isResolved: false,
+    },
+  ]
+}
+
 function createReadyInventory(): ArtifactInventory {
   return {
     plan: artifacts.plan,
@@ -307,8 +438,17 @@ function createInitialState(): MockState {
     sessions: {},
     operationalContextProposals: {},
     continuityReports: {},
+    decisionContexts: {},
+    decisionCandidates: {},
+    decisionProposalBrowserItems: {},
     commandCalls: {},
   }
+
+  state.repositories.forEach((repository) => {
+    state.decisionContexts[repository.id] = createDecisionContext(repository)
+    state.decisionCandidates[repository.id] = createDecisionCandidates(repository)
+    state.decisionProposalBrowserItems[repository.id] = createDecisionProposalBrowserItems()
+  })
 
   seedCertificationSession(state, certificationRepositories[0], 'Executing', 'Executing')
   seedCertificationSession(state, certificationRepositories[1], 'AwaitingAcceptance', 'Completed')
@@ -1247,6 +1387,14 @@ export function installDevTauriMock() {
           return clone(generateContinuityReport(state, getStringArg(args, 'repositoryId')))
         case 'list_continuity_reports':
           return clone(state.continuityReports[getStringArg(args, 'repositoryId')] ?? [])
+        case 'get_decision_context':
+        case 'build_decision_context':
+          return clone(state.decisionContexts[getStringArg(args, 'repositoryId')])
+        case 'list_decision_candidates':
+          return clone(state.decisionCandidates[getStringArg(args, 'repositoryId')] ?? [])
+        case 'list_decision_proposals':
+        case 'list_decision_proposal_browser':
+          return clone(state.decisionProposalBrowserItems[getStringArg(args, 'repositoryId')] ?? [])
         case 'start_execution':
           return clone(
             startExecution(

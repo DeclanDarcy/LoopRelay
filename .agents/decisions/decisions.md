@@ -2,20 +2,26 @@
 
 ## Newly Authorized
 
-- M4 backend read models are accepted as aligned with the intended architecture.
-- The UI phase is now authorized to begin because backend contracts are mature enough for UI consumption.
-- The UI must consume backend-owned read models rather than co-designing or reconstructing lifecycle contracts.
-- Proposal browser, option comparison, evidence inspection, and source attribution remain backend-owned interpretations of authority, not authority itself.
-- The active UI layering remains repository authority to decision records to review workspace to read models to UI.
-- The primary UI failure mode to avoid is client-side lifecycle reconstruction.
-- The next UI work should proceed in phases:
-  1. Shell integration only: `DecisionLifecycleTab`, API client, types, and hook wiring.
-  2. Proposal browser and state filters using the browser projection directly.
-  3. Proposal viewer and option comparison using backend models as-is.
-  4. Evidence viewer and source attribution viewer before review notes.
-  5. Review notes and review workspace last.
-- UI state checks should avoid spreading ad hoc `selectedProposal.status` style logic.
-- Lifecycle authority remains backend-owned; the UI remains observational.
+- M4 UI Phase 1 is accepted as the correct entry point for the review workspace UI.
+- The Decisions tab implementation is accepted because it consumes backend contracts instead of inventing a React lifecycle model.
+- The governing boundary remains: backend owns lifecycle authority; UI observes lifecycle authority.
+- The current layering is accepted:
+  - Repository authority
+  - Decision services
+  - Review workspace
+  - Read models
+  - Tauri commands
+  - API wrappers
+  - Hooks
+  - UI
+- The Tauri bridge scope for decision context, candidates, proposals, review workspace, options, evidence, and sources is accepted because these are read-model concerns.
+- The dev Tauri mock extension is accepted as useful for UI development and future characterization tests, provided it preserves backend contract shape.
+- Proposal browsing must use `DecisionProposalBrowserItem` only; React must not reconstruct proposal lifecycle status from full proposal payloads.
+- Phase 2 is authorized for the M4 proposal browser.
+- Proposal browser filters must use backend-driven browser endpoint filtering for generated, viewed, needs-refinement, refined, ready-for-resolution, resolved, and discarded proposals.
+- Proposal selection may be local UI state only.
+- Review, refinement, and resolution mutation controls remain deferred until proposal viewer, review workspace, and evidence/source navigation exist.
+- The missing `rustfmt` component is environment setup only and does not affect roadmap status.
 
 ## Current Milestone Status
 
@@ -27,9 +33,8 @@
 
 ## Newly Authorized Next Slice
 
-- Begin M4 UI with Phase 1 shell integration only:
-  - add decision UI types
-  - add decision API client methods
-  - add hook wiring
-  - add `DecisionLifecycleTab`
-  - wire the Decisions tab into the shell without complex workflow behavior
+- Implement the M4 proposal browser UI:
+  1. Render browser rows from `DecisionProposalBrowserItem`.
+  2. Add backend-driven state filters.
+  3. Add selected-proposal local UI state.
+  4. Do not add lifecycle mutation controls.
