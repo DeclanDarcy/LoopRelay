@@ -8,6 +8,8 @@ public interface IDecisionRefinementService
 
     Task<IReadOnlyList<DecisionProposalRevision>> ListProposalRevisionsAsync(Guid repositoryId, string proposalId);
 
+    Task<DecisionProposalLineage> GetProposalLineageAsync(Guid repositoryId, string proposalId);
+
     Task<DecisionProposalRevisionComparison> GetProposalRevisionComparisonAsync(
         Guid repositoryId,
         string proposalId,

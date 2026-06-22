@@ -278,6 +278,58 @@ public sealed class DecisionRefinementServiceTests
         Assert.Contains("Current milestone cannot proceed until this decision is resolved.", comparisonMarkdown);
     }
 
+    [Fact]
+    public async Task ProposalLineageSeparatesCurrentProposalFromHistoricalRevisionsAndReviewNotes()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        DecisionGenerationService generationService = CreateGenerationService(repository, store, decisionRepository);
+        DecisionRefinementService refinementService = CreateRefinementService(repository, store, decisionRepository);
+        DecisionProposal proposal = await generationService.GenerateProposalAsync(repository.Id, candidate.Id);
+        await generationService.MarkProposalViewedAsync(repository.Id, proposal.Id, null);
+        DecisionProposal needsRefinement = await generationService.MarkProposalNeedsRefinementAsync(
+            repository.Id,
+            proposal.Id,
+            "Lineage should capture review state.");
+        var reviewService = new DecisionReviewService(
+            new StubRepositoryService(repository),
+            decisionRepository,
+            generationService);
+        await reviewService.AddReviewNoteAsync(
+            repository.Id,
+            proposal.Id,
+            new DecisionReviewNoteRequest("Historical revisions must remain explanatory.", "reviewer"));
+
+        DecisionProposal refined = await refinementService.RefineProposalAsync(
+            repository.Id,
+            proposal.Id,
+            new DecisionRefinementRequest(
+                "Clarify lineage context.",
+                Context: "Refined context for lineage.",
+                BaseProposalFingerprint: Fingerprint(needsRefinement)));
+
+        DecisionProposalLineage lineage = await refinementService.GetProposalLineageAsync(repository.Id, proposal.Id);
+
+        Assert.Equal(refined.Id, lineage.CurrentProposal.Id);
+        Assert.Equal(DecisionProposalState.Refined, lineage.CurrentState);
+        Assert.Equal(Fingerprint(refined), lineage.CurrentProposalFingerprint);
+        Assert.Contains(lineage.Diagnostics, diagnostic =>
+            diagnostic.Contains("Current proposal is authoritative", StringComparison.Ordinal));
+        DecisionProposalRevisionSnapshot snapshot = Assert.Single(lineage.Revisions);
+        Assert.False(snapshot.IsCurrentProposal);
+        Assert.Equal("REV-0001", snapshot.Revision.Id);
+        Assert.Equal("Refined context for lineage.", lineage.CurrentProposal.Context);
+        Assert.Equal(needsRefinement.Context, snapshot.Revision.PreviousContext);
+        Assert.Equal("Refined context for lineage.", snapshot.Revision.RevisedContext);
+        Assert.Equal("Historical revision is read-only explanatory history; currentProposal remains authoritative.", snapshot.AuthorityBoundary);
+        Assert.Contains(lineage.ReviewNotes, note => note.Body == "Historical revisions must remain explanatory.");
+        Assert.Contains(lineage.Events, item => item.Kind == "Revision" && item.ItemId == "REV-0001");
+        Assert.Contains(lineage.Events, item => item.Kind == "ReviewNote" && item.ItemId == "NOTE-0001");
+    }
+
     private static DecisionGenerationService CreateGenerationService(
         Repository repository,
         FileSystemArtifactStore store,

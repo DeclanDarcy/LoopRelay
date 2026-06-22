@@ -2,32 +2,26 @@
 
 ## Newly Authorized
 
-- The priority-adjustment implementation direction is accepted as preserving the key M5 authority boundary.
-- Priority adjustments must remain refinement reasoning metadata, not proposal mutations.
-- The authority model remains a certification-level invariant:
+- M5 should now transition from backend lifecycle implementation into presentation work.
+- The proposal lineage projection is accepted as the correct abstraction and should remain a first-class backend concept.
+- React must consume lineage rather than reconstruct proposal history, revision ordering, parent relationships, summaries, priority adjustments, retired assumptions, or retired options.
+- The artifact authority decomposition is:
   - proposal is authority
   - revision is history
   - comparison is explanation
-  - review is review state
-  - decision is resolution authority
-- Refinement evidence should remain separated into distinct classes:
-  - structural changes such as option, assumption, and constraint changes
-  - analytical changes such as tradeoff, evidence, and rationale expansion
-  - preference changes such as priority adjustment
-- Priority adjustment answers what became more important; it must not imply what became true or what changed structurally in the proposal.
-- Revision records should remain self-describing so future consumers do not reconstruct intent from raw diffs.
-- Proposal lineage projection should precede UI work.
-- Proposal lineage should be treated as a foundational read model for M5 UI and likely later M6 resolution integration, M7 governance, and M10 operational adoption.
-- Revision UI must preserve a hard boundary between current proposal and historical revision:
-  - current proposal is authoritative, active, and current recommendation state
-  - historical revision is read-only and explanatory
-- M6 should consider an immutable resolution-time proposal snapshot so decision authority records what proposal was actually resolved without relying on the latest proposal lookup.
+  - lineage is navigation
+- Lineage should become the canonical navigation surface for later M6 resolution integration, M7 governance, and M10 operational adoption questions about proposal evolution.
+- The first M5 UI surface should be a revision history panel focused on understanding proposal evolution, current state, evolution sequence, and revision count.
+- The second M5 UI surface should be a revision comparison viewer that renders backend-provided comparison states rather than introducing client-side diff interpretation.
+- The third M5 UI surface should make current proposal versus historical revision visually explicit:
+  - current proposal is active, authoritative, and carries the current recommendation
+  - historical revision is read-only, historical, and not current
+- Before adding refinement mutation UI, consider adding a lightweight lineage summary model for history navigation containing revision id, timestamp, revision type, change summary, priority adjustment count, and retired item count.
+- The lineage history panel should not need to load every full comparison artifact just to render the revision list.
+- Refinement mutation UI remains deferred until read-only lineage, revision history, and revision comparison surfaces preserve the existing authority boundaries.
 
 ## Next Slice Direction
 
-- Build proposal lineage projection before UI work.
-- Then continue M5 read-only UI work:
-  - revision history read models
-  - revision comparison UI
-  - revision history UI
-- Defer refinement mutation UI until lineage and read-only history surfaces are in place.
+- Start M5 read-only UI with the revision history panel over lineage.
+- Then add the revision comparison viewer using backend comparison projection.
+- Consider adding the lightweight lineage summary projection before or during the history panel work if the current lineage payload is too detailed for navigation.

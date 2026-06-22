@@ -12,6 +12,7 @@ import type {
   DecisionEvidenceInspection,
   DecisionOptionComparison,
   DecisionProposalBrowserItem,
+  DecisionProposalLineage,
   DecisionReviewWorkspace,
   DecisionSourceAttribution,
   ExecutionContextPreview,
@@ -663,6 +664,91 @@ function getDecisionReviewWorkspace(
   }
 
   return workspace
+}
+
+function createDecisionProposalLineage(
+  state: MockState,
+  repositoryId: string,
+  proposalId: string,
+): DecisionProposalLineage {
+  const workspace = getDecisionReviewWorkspace(state, repositoryId, proposalId)
+  const events = [
+    ...workspace.proposal.history.map((entry) => ({
+      occurredAt: 'timestamp' in entry ? String(entry.timestamp) : String(entry.at),
+      kind: 'ProposalHistory',
+      itemId: workspace.proposal.id,
+      summary: 'event' in entry ? String(entry.event) : String(entry.action),
+      fromState: entry.fromState,
+      toState: 'toState' in entry ? entry.toState : null,
+      sources: entry.sources,
+    })),
+    ...workspace.revisions.map((revision) => ({
+      occurredAt: revision.createdAt,
+      kind: 'Revision',
+      itemId: revision.id,
+      summary: revision.reason,
+      fromState: null,
+      toState: 'Refined',
+      sources: revision.sources,
+    })),
+    ...workspace.notes.map((note) => ({
+      occurredAt: note.createdAt,
+      kind: 'ReviewNote',
+      itemId: note.id,
+      summary: note.body,
+      fromState: null,
+      toState: null,
+      sources: note.sources,
+    })),
+  ].sort((left, right) => left.occurredAt.localeCompare(right.occurredAt))
+
+  return {
+    repositoryId,
+    proposalId,
+    currentState: workspace.proposal.state,
+    currentProposalFingerprint: `mock-current-fingerprint-${proposalId}`,
+    currentProposal: workspace.proposal,
+    review: workspace.review,
+    events,
+    revisions: workspace.revisions.map((revision) => ({
+      revision,
+      comparison: {
+        proposalId,
+        revisionId: revision.id,
+        repositoryId,
+        sourceProposalFingerprint: revision.sourceProposalFingerprint,
+        currentProposalFingerprint: `mock-current-fingerprint-${proposalId}`,
+        sourceMatchesCurrentProposal: false,
+        changedFields: revision.changedFields,
+        fieldComparisons: revision.changedFields.map((field) => ({
+          field,
+          changeType: 'Changed',
+          previousValue: null,
+          revisedValue: null,
+        })),
+        acceptedChanges: [],
+        rejectedChanges: [],
+        diagnostics: [],
+        previousOptions: [],
+        revisedOptions: workspace.proposal.options,
+        retiredOptions: [],
+        previousAssumptions: [],
+        revisedAssumptions: workspace.proposal.assumptions,
+        retiredAssumptions: [],
+        previousTradeoffs: [],
+        revisedTradeoffs: workspace.proposal.tradeoffs,
+        sources: revision.sources,
+      },
+      isCurrentProposal: false,
+      authorityBoundary:
+        'Historical revision is read-only explanatory history; currentProposal remains authoritative.',
+    })),
+    reviewNotes: workspace.notes,
+    diagnostics: [
+      'Current proposal is authoritative; revision snapshots are historical and read-only.',
+      'Revision comparisons explain evolution and do not resolve decisions.',
+    ],
+  }
 }
 
 function createDecisionOptionComparison(
@@ -1812,6 +1898,11 @@ export function installDevTauriMock() {
           const repositoryId = getStringArg(args, 'repositoryId')
           const proposalId = getStringArg(args, 'proposalId')
           return clone(getDecisionReviewWorkspace(state, repositoryId, proposalId))
+        }
+        case 'get_decision_proposal_lineage': {
+          const repositoryId = getStringArg(args, 'repositoryId')
+          const proposalId = getStringArg(args, 'proposalId')
+          return clone(createDecisionProposalLineage(state, repositoryId, proposalId))
         }
         case 'get_decision_option_comparison': {
           const repositoryId = getStringArg(args, 'repositoryId')

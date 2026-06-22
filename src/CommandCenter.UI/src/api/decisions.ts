@@ -5,6 +5,7 @@ import type {
   DecisionOptionComparison,
   DecisionProposal,
   DecisionProposalBrowserItem,
+  DecisionProposalLineage,
   DecisionProposalState,
   DecisionReviewWorkspace,
   DecisionSourceAttribution,
@@ -43,6 +44,13 @@ export function getDecisionProposal(repositoryId: string, proposalId: string) {
 
 export function getDecisionProposalReview(repositoryId: string, proposalId: string) {
   return invokeCommand<DecisionReviewWorkspace>('get_decision_proposal_review', {
+    repositoryId,
+    proposalId,
+  })
+}
+
+export function getDecisionProposalLineage(repositoryId: string, proposalId: string) {
+  return invokeCommand<DecisionProposalLineage>('get_decision_proposal_lineage', {
     repositoryId,
     proposalId,
   })

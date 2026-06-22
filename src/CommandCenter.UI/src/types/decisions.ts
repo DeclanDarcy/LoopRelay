@@ -148,6 +148,82 @@ export type DecisionProposalRevision = {
   changedFields: string[]
   sourceProposalFingerprint: string
   sources: DecisionSourceReference[]
+  requestedBy: string | null
+  acceptedChanges: string[] | null
+  rejectedChanges: string[] | null
+  diagnostics: string[] | null
+  previousOptions: DecisionOption[] | null
+  retiredOptions: DecisionOption[] | null
+  previousAssumptions: DecisionAssumption[] | null
+  retiredAssumptions: DecisionAssumption[] | null
+  previousRecommendationRationale: string | null
+  revisedRecommendationRationale: string | null
+  previousContext: string | null
+  revisedContext: string | null
+  revisedOptions: DecisionOption[] | null
+  previousTradeoffs: DecisionTradeoff[] | null
+  revisedTradeoffs: DecisionTradeoff[] | null
+  revisedAssumptions: DecisionAssumption[] | null
+}
+
+export type DecisionRevisionFieldComparison = {
+  field: string
+  changeType: string
+  previousValue: string | null
+  revisedValue: string | null
+}
+
+export type DecisionProposalRevisionComparison = {
+  proposalId: string
+  revisionId: string
+  repositoryId: string
+  sourceProposalFingerprint: string
+  currentProposalFingerprint: string
+  sourceMatchesCurrentProposal: boolean
+  changedFields: string[]
+  fieldComparisons: DecisionRevisionFieldComparison[]
+  acceptedChanges: string[]
+  rejectedChanges: string[]
+  diagnostics: string[]
+  previousOptions: DecisionOption[]
+  revisedOptions: DecisionOption[]
+  retiredOptions: DecisionOption[]
+  previousAssumptions: DecisionAssumption[]
+  revisedAssumptions: DecisionAssumption[]
+  retiredAssumptions: DecisionAssumption[]
+  previousTradeoffs: DecisionTradeoff[]
+  revisedTradeoffs: DecisionTradeoff[]
+  sources: DecisionSourceReference[]
+}
+
+export type DecisionProposalRevisionSnapshot = {
+  revision: DecisionProposalRevision
+  comparison: DecisionProposalRevisionComparison
+  isCurrentProposal: boolean
+  authorityBoundary: string
+}
+
+export type DecisionProposalLineageEvent = {
+  occurredAt: string
+  kind: string
+  itemId: string | null
+  summary: string
+  fromState: string | null
+  toState: string | null
+  sources: DecisionSourceReference[]
+}
+
+export type DecisionProposalLineage = {
+  repositoryId: string
+  proposalId: string
+  currentState: DecisionProposalState
+  currentProposalFingerprint: string
+  currentProposal: DecisionProposal
+  review: DecisionReviewStatus
+  events: DecisionProposalLineageEvent[]
+  revisions: DecisionProposalRevisionSnapshot[]
+  reviewNotes: DecisionReviewNote[]
+  diagnostics: string[]
 }
 
 export type DecisionReviewDiagnostics = {

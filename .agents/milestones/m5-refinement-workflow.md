@@ -19,6 +19,7 @@ support controlled proposal evolution with revision history.
 - [x] Persist revision JSON and markdown comparison artifacts.
 - [x] Track who or what requested refinement, reason, changed fields, accepted changes, rejected changes, and diagnostics.
 - [x] Return refined proposals to a non-authoritative proposal state.
+- [x] Add proposal lineage read model/projection separating current proposal authority from historical revisions.
 
 ## UI Work
 

@@ -147,6 +147,42 @@ public sealed class DecisionRefinementService(
         return await decisionRepository.ListProposalRevisionsAsync(repository, proposalId);
     }
 
+    public async Task<DecisionProposalLineage> GetProposalLineageAsync(Guid repositoryId, string proposalId)
+    {
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        DecisionProposal proposal = await GetProposalAsync(repository, proposalId);
+        IReadOnlyList<DecisionProposalRevision> revisions =
+            await decisionRepository.ListProposalRevisionsAsync(repository, proposal.Id);
+        IReadOnlyList<DecisionReviewNote> notes =
+            await decisionRepository.ListReviewNotesAsync(repository, proposal.Id);
+        DecisionReviewStatus review =
+            await decisionRepository.GetReviewStatusAsync(repository, proposal.Id) ??
+            CreateDefaultReviewStatus(repository, proposal);
+        string currentFingerprint = Fingerprint(proposal);
+
+        DecisionProposalRevisionSnapshot[] snapshots = revisions
+            .OrderBy(revision => revision.CreatedAt)
+            .ThenBy(revision => revision.Id, StringComparer.Ordinal)
+            .Select(revision => new DecisionProposalRevisionSnapshot(
+                revision,
+                BuildComparison(repository, proposal, revision),
+                false,
+                "Historical revision is read-only explanatory history; currentProposal remains authoritative."))
+            .ToArray();
+
+        return new DecisionProposalLineage(
+            repository.Id,
+            proposal.Id,
+            proposal.State,
+            currentFingerprint,
+            proposal,
+            review,
+            BuildLineageEvents(proposal, review, revisions, notes),
+            snapshots,
+            notes,
+            BuildLineageDiagnostics(proposal, review, revisions, notes));
+    }
+
     public async Task<DecisionProposalRevisionComparison> GetProposalRevisionComparisonAsync(
         Guid repositoryId,
         string proposalId,
@@ -175,6 +211,114 @@ public sealed class DecisionRefinementService(
     {
         DecisionProposal? proposal = await decisionRepository.GetProposalAsync(repository, proposalId);
         return proposal ?? throw new KeyNotFoundException($"Decision proposal was not found: {proposalId}");
+    }
+
+    private static DecisionReviewStatus CreateDefaultReviewStatus(Repository repository, DecisionProposal proposal)
+    {
+        DecisionReviewState state = proposal.State switch
+        {
+            DecisionProposalState.Viewed => DecisionReviewState.Viewed,
+            DecisionProposalState.NeedsRefinement => DecisionReviewState.NeedsRefinement,
+            DecisionProposalState.ReadyForResolution => DecisionReviewState.ReadyForResolution,
+            DecisionProposalState.Resolved or DecisionProposalState.Expired or DecisionProposalState.Discarded => DecisionReviewState.Closed,
+            _ => DecisionReviewState.NotStarted
+        };
+
+        return new DecisionReviewStatus(
+            repository.Id,
+            proposal.Id,
+            state,
+            DateTimeOffset.MinValue,
+            null,
+            [ProposalSource(proposal)]);
+    }
+
+    private static IReadOnlyList<DecisionProposalLineageEvent> BuildLineageEvents(
+        DecisionProposal proposal,
+        DecisionReviewStatus review,
+        IReadOnlyList<DecisionProposalRevision> revisions,
+        IReadOnlyList<DecisionReviewNote> notes)
+    {
+        var events = new List<DecisionProposalLineageEvent>();
+        events.AddRange(proposal.History.Select(entry => new DecisionProposalLineageEvent(
+            entry.Timestamp,
+            "ProposalHistory",
+            proposal.Id,
+            entry.Event,
+            entry.FromState,
+            entry.ToState,
+            entry.Sources)));
+
+        events.AddRange(revisions.Select(revision => new DecisionProposalLineageEvent(
+            revision.CreatedAt,
+            "Revision",
+            revision.Id,
+            revision.Reason,
+            null,
+            DecisionProposalState.Refined.ToString(),
+            revision.Sources)));
+
+        events.AddRange(notes.Select(note => new DecisionProposalLineageEvent(
+            note.CreatedAt,
+            "ReviewNote",
+            note.Id,
+            note.Body,
+            null,
+            null,
+            note.Sources)));
+
+        if (review.UpdatedAt != DateTimeOffset.MinValue)
+        {
+            events.Add(new DecisionProposalLineageEvent(
+                review.UpdatedAt,
+                "ReviewState",
+                proposal.Id,
+                review.Reason ?? $"Review state is {review.State}.",
+                null,
+                review.State.ToString(),
+                review.Sources));
+        }
+
+        return events
+            .OrderBy(item => item.OccurredAt)
+            .ThenBy(item => item.Kind, StringComparer.Ordinal)
+            .ThenBy(item => item.ItemId, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<string> BuildLineageDiagnostics(
+        DecisionProposal proposal,
+        DecisionReviewStatus review,
+        IReadOnlyList<DecisionProposalRevision> revisions,
+        IReadOnlyList<DecisionReviewNote> notes)
+    {
+        var diagnostics = new List<string>
+        {
+            "Current proposal is authoritative; revision snapshots are historical and read-only.",
+            "Revision comparisons explain evolution and do not resolve decisions."
+        };
+
+        if (revisions.Count == 0)
+        {
+            diagnostics.Add("No proposal revisions have been recorded.");
+        }
+
+        if (notes.Count == 0)
+        {
+            diagnostics.Add("No review notes have been recorded.");
+        }
+
+        if (review.State == DecisionReviewState.NotStarted)
+        {
+            diagnostics.Add("Review has not started for this proposal.");
+        }
+
+        if (proposal.State == DecisionProposalState.Resolved)
+        {
+            diagnostics.Add("Proposal is resolved; lineage remains explanatory rather than decision authority.");
+        }
+
+        return diagnostics.ToArray();
     }
 
     private static string[] ChangedFields(
@@ -386,5 +530,14 @@ public sealed class DecisionRefinementService(
     private static string ProposalPath(string proposalId)
     {
         return $".agents/decisions/proposals/{proposalId}/proposal.json";
+    }
+
+    private static DecisionSourceReference ProposalSource(DecisionProposal proposal)
+    {
+        return new DecisionSourceReference(
+            "DecisionProposal",
+            ProposalPath(proposal.Id),
+            ProposalId: proposal.Id,
+            CandidateId: proposal.CandidateId);
     }
 }

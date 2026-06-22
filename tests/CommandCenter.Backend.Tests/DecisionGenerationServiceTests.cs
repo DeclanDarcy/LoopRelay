@@ -732,6 +732,56 @@ public sealed class DecisionGenerationServiceTests
     }
 
     [Fact]
+    public async Task ProposalLineageEndpointReturnsReadOnlyRevisionProjection()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services => services.AddSingleton<IRepositoryService>(new StubRepositoryService(repository)));
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+        using var client = new HttpClient();
+        string root = app.Urls.Single();
+        JsonSerializerOptions jsonOptions = CreateJsonOptions();
+
+        var decisionRepository = new FileSystemDecisionRepository(new FileSystemArtifactStore());
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        DecisionProposal proposal = (await (await client.PostAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/candidates/{candidate.Id}/proposals",
+            null)).Content.ReadFromJsonAsync<DecisionProposal>(jsonOptions))!;
+        await client.PostAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/proposals/{proposal.Id}/review/viewed",
+            null);
+        await client.PostAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/proposals/{proposal.Id}/review/needs-refinement",
+            null);
+        await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/proposals/{proposal.Id}/notes",
+            new DecisionReviewNoteRequest("Keep lineage read-only.", "reviewer"),
+            jsonOptions);
+        await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/proposals/{proposal.Id}/refinements",
+            new DecisionRefinementRequest("Refine endpoint lineage.", Context: "Endpoint lineage context."),
+            jsonOptions);
+
+        HttpResponseMessage lineageResponse = await client.GetAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/proposals/{proposal.Id}/lineage");
+
+        DecisionProposalLineage lineage =
+            (await lineageResponse.Content.ReadFromJsonAsync<DecisionProposalLineage>(jsonOptions))!;
+        Assert.Equal(HttpStatusCode.OK, lineageResponse.StatusCode);
+        Assert.Equal(DecisionProposalState.Refined, lineage.CurrentState);
+        Assert.Equal("Endpoint lineage context.", lineage.CurrentProposal.Context);
+        DecisionProposalRevisionSnapshot snapshot = Assert.Single(lineage.Revisions);
+        Assert.False(snapshot.IsCurrentProposal);
+        Assert.Equal("REV-0001", snapshot.Revision.Id);
+        Assert.Contains(lineage.ReviewNotes, note => note.Body == "Keep lineage read-only.");
+        Assert.Contains(lineage.Diagnostics, diagnostic =>
+            diagnostic.Contains("Current proposal is authoritative", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task ProposalEndpointReturnsConflictForUnpromotedCandidate()
     {
         Repository repository = CreateRepository();
