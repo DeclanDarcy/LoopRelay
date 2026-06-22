@@ -8,6 +8,7 @@ import type {
 } from '../../types'
 import {
   useDecisionEvidenceInspection,
+  useDecisionGovernance,
   useDecisionOptionComparison,
   useDecisionProposalLineage,
   useDecisionProposalReview,
@@ -15,6 +16,7 @@ import {
 } from '../../hooks'
 import { DecisionCandidateBrowser } from './DecisionCandidateBrowser'
 import { DecisionEvidenceSourcePanel } from './DecisionEvidenceSourcePanel'
+import { DecisionGovernancePanel } from './DecisionGovernancePanel'
 import { DecisionOptionComparison } from './DecisionOptionComparison'
 import { DecisionProposalBrowser } from './DecisionProposalBrowser'
 import { DecisionProposalViewer } from './DecisionProposalViewer'
@@ -71,6 +73,15 @@ export function DecisionLifecycleTab({
     isLoading: isSourceAttributionsLoading,
     refresh: refreshSourceAttributions,
   } = useDecisionSourceAttributions(repositoryId, selectedProposalId)
+  const {
+    currentReport: governanceReport,
+    reports: governanceReports,
+    isLoading: isGovernanceLoading,
+    isGenerating: isGovernanceGenerating,
+    error: governanceError,
+    refresh: refreshGovernance,
+    generateReport: generateGovernanceReport,
+  } = useDecisionGovernance(repositoryId)
   const activeCandidateCount = candidates.filter((candidate) =>
     candidate.state === 'Discovered' || candidate.state === 'Promoted',
   ).length
@@ -174,6 +185,20 @@ export function DecisionLifecycleTab({
             inspection={evidenceInspection}
             attributions={sourceAttributions}
             isLoading={isEvidenceInspectionLoading || isSourceAttributionsLoading}
+          />
+
+          <DecisionGovernancePanel
+            currentReport={governanceReport}
+            reports={governanceReports}
+            isLoading={isGovernanceLoading}
+            isGenerating={isGovernanceGenerating}
+            error={governanceError}
+            onSelectProposal={setSelectedProposalId}
+            onGenerateReport={async () => {
+              await generateGovernanceReport()
+              await refreshGovernance()
+              onRefresh()
+            }}
           />
         </div>
       ) : (

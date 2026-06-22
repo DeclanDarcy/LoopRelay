@@ -5,6 +5,7 @@ import type {
   DecisionCandidate,
   DecisionContextSnapshot,
   DecisionEvidenceInspection,
+  DecisionGovernanceReport,
   DecisionOptionComparison,
   DecisionProposal,
   DecisionProposalBrowserItem,
@@ -125,5 +126,21 @@ export function listDecisionSourceAttributions(repositoryId: string, proposalId:
   return invokeCommand<DecisionSourceAttribution[]>('list_decision_source_attributions', {
     repositoryId,
     proposalId,
+  })
+}
+
+export function getDecisionGovernance(repositoryId: string) {
+  return invokeCommand<DecisionGovernanceReport>('get_decision_governance', { repositoryId })
+}
+
+export function generateDecisionGovernanceReport(repositoryId: string) {
+  return invokeCommand<DecisionGovernanceReport>('generate_decision_governance_report', {
+    repositoryId,
+  })
+}
+
+export function listDecisionGovernanceReports(repositoryId: string) {
+  return invokeCommand<DecisionGovernanceReport[]>('list_decision_governance_reports', {
+    repositoryId,
   })
 }

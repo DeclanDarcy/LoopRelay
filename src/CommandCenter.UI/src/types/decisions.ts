@@ -31,6 +31,21 @@ export type DecisionReviewState =
 
 export type DecisionOutcome = 'Accepted' | 'Rejected' | 'Deferred'
 
+export type DecisionGovernanceCategory =
+  | 'Consistency'
+  | 'SupersessionLineage'
+  | 'DependencyIntegrity'
+  | 'AuthorityMetadata'
+  | 'DecisionCoverage'
+  | 'ProposalQuality'
+  | 'ExecutionProjectionReadiness'
+  | 'AuthorityBoundary'
+  | 'FingerprintIntegrity'
+
+export type DecisionGovernanceSeverity = 'Info' | 'Warning' | 'Blocking'
+
+export type DecisionHealthAssessment = 'Healthy' | 'AdvisoryFindings' | 'Blocked'
+
 export type DecisionSourceReference = {
   sourceKind: string
   relativePath: string | null
@@ -485,4 +500,38 @@ export type DecisionContextSnapshot = {
   context: DecisionContext
   diagnostics: DecisionContextDiagnostics
   validation: DecisionContextValidationResult
+}
+
+export type DecisionGovernanceSummary = {
+  decisionCount: number
+  resolvedDecisionCount: number
+  activeCandidateCount: number
+  activeProposalCount: number
+  assimilationRecommendationCount: number
+  findingCount: number
+  blockingFindingCount: number
+}
+
+export type DecisionGovernanceFinding = {
+  id: string
+  category: DecisionGovernanceCategory
+  severity: DecisionGovernanceSeverity
+  blocksExecutionProjection: boolean
+  title: string
+  detail: string
+  sources: DecisionSourceReference[]
+  relatedDecisionIds: string[]
+  relatedCandidateIds: string[]
+  relatedProposalIds: string[]
+}
+
+export type DecisionGovernanceReport = {
+  id: string
+  repositoryId: string
+  generatedAt: string
+  inputFingerprint: string
+  health: DecisionHealthAssessment
+  summary: DecisionGovernanceSummary
+  findings: DecisionGovernanceFinding[]
+  diagnostics: string[]
 }

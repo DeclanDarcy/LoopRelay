@@ -12,6 +12,7 @@ import type {
   DecisionCandidate,
   DecisionContextSnapshot,
   DecisionEvidenceInspection,
+  DecisionGovernanceReport,
   DecisionOutcome,
   DecisionProposal,
   DecisionOptionComparison,
@@ -50,6 +51,7 @@ type MockState = {
   decisionProposalReviewWorkspaces: Record<string, Record<string, DecisionReviewWorkspace>>
   decisions: Record<string, Record<string, Decision>>
   decisionAssimilationRecommendations: Record<string, Record<string, DecisionAssimilationRecommendation>>
+  decisionGovernanceReports: Record<string, DecisionGovernanceReport[]>
   commandCalls: Record<string, number>
 }
 
@@ -1016,6 +1018,97 @@ function proposeDecisionOperationalContextAssimilationMock(
   return recommendation
 }
 
+function createDecisionGovernanceReport(
+  state: MockState,
+  repositoryId: string,
+  persist: boolean,
+): DecisionGovernanceReport {
+  const timestamp = new Date().toISOString()
+  const candidates = state.decisionCandidates[repositoryId] ?? []
+  const proposals = state.decisionProposalBrowserItems[repositoryId] ?? []
+  const decisions = Object.values(state.decisions[repositoryId] ?? {})
+  const recommendations = Object.values(state.decisionAssimilationRecommendations[repositoryId] ?? {})
+  const activeCandidates = candidates.filter((candidate) =>
+    candidate.state === 'Discovered' || candidate.state === 'Promoted',
+  )
+  const activeProposals = proposals.filter((proposal) =>
+    proposal.state !== 'Resolved' && proposal.state !== 'Expired' && proposal.state !== 'Discarded',
+  )
+  const findings = [
+    {
+      id: 'GOV-MOCK-001',
+      category: 'DecisionCoverage' as const,
+      severity: 'Warning' as const,
+      blocksExecutionProjection: false,
+      title: 'Promoted candidates still need resolution',
+      detail:
+        'Mock governance reports promoted candidates that have not yet produced governed resolved decisions.',
+      sources: [decisionSource('.agents/decisions/candidates/CAND-0001/candidate.json', 'Candidate remains promoted.')],
+      relatedDecisionIds: [],
+      relatedCandidateIds: activeCandidates.map((candidate) => candidate.id),
+      relatedProposalIds: activeProposals.map((proposal) => proposal.proposalId),
+    },
+    ...(decisions.some((decision) => decision.state === 'Resolved') && recommendations.length === 0
+      ? [
+          {
+            id: 'GOV-MOCK-002',
+            category: 'ExecutionProjectionReadiness' as const,
+            severity: 'Blocking' as const,
+            blocksExecutionProjection: true,
+            title: 'Resolved decision lacks assimilation package',
+            detail:
+              'A resolved decision is visible, but no operational-context assimilation recommendation has been generated.',
+            sources: [
+              decisionSource(
+                '.agents/decisions/records/DEC-mock/decision.json',
+                'Resolved decision requires governance visibility before execution projection.',
+              ),
+            ],
+            relatedDecisionIds: decisions
+              .filter((decision) => decision.state === 'Resolved')
+              .map((decision) => decision.id),
+            relatedCandidateIds: [],
+            relatedProposalIds: [],
+          },
+        ]
+      : []),
+  ]
+
+  const report: DecisionGovernanceReport = {
+    id: persist ? `governance.${Date.now().toString().padStart(21, '0')}` : 'governance.current',
+    repositoryId,
+    generatedAt: timestamp,
+    inputFingerprint: `mock-governance-${repositoryId}-${decisions.length}-${proposals.length}`,
+    health: findings.some((finding) => finding.blocksExecutionProjection)
+      ? 'Blocked'
+      : findings.length > 0
+        ? 'AdvisoryFindings'
+        : 'Healthy',
+    summary: {
+      decisionCount: decisions.length,
+      resolvedDecisionCount: decisions.filter((decision) => decision.state === 'Resolved').length,
+      activeCandidateCount: activeCandidates.length,
+      activeProposalCount: activeProposals.length,
+      assimilationRecommendationCount: recommendations.length,
+      findingCount: findings.length,
+      blockingFindingCount: findings.filter((finding) => finding.blocksExecutionProjection).length,
+    },
+    findings,
+    diagnostics: persist
+      ? ['Mock governance report was persisted to generated report history.']
+      : ['Mock current governance is an inspection and is not persisted.'],
+  }
+
+  if (persist) {
+    state.decisionGovernanceReports[repositoryId] = [
+      report,
+      ...(state.decisionGovernanceReports[repositoryId] ?? []),
+    ]
+  }
+
+  return report
+}
+
 function isDecisionOutcome(value: unknown): value is DecisionOutcome {
   return value === 'Accepted' || value === 'Rejected' || value === 'Deferred'
 }
@@ -1288,6 +1381,7 @@ function createInitialState(): MockState {
     decisionProposalReviewWorkspaces: {},
     decisions: {},
     decisionAssimilationRecommendations: {},
+    decisionGovernanceReports: {},
     commandCalls: {},
   }
 
@@ -1301,6 +1395,7 @@ function createInitialState(): MockState {
     )
     state.decisions[repository.id] = {}
     state.decisionAssimilationRecommendations[repository.id] = {}
+    state.decisionGovernanceReports[repository.id] = []
   })
 
   seedCertificationSession(state, certificationRepositories[0], 'Executing', 'Executing')
@@ -2334,6 +2429,12 @@ export function installDevTauriMock() {
           const proposalId = getStringArg(args, 'proposalId')
           return clone(listDecisionSourceAttributionsForProposal(state, repositoryId, proposalId))
         }
+        case 'get_decision_governance':
+          return clone(createDecisionGovernanceReport(state, getStringArg(args, 'repositoryId'), false))
+        case 'generate_decision_governance_report':
+          return clone(createDecisionGovernanceReport(state, getStringArg(args, 'repositoryId'), true))
+        case 'list_decision_governance_reports':
+          return clone(state.decisionGovernanceReports[getStringArg(args, 'repositoryId')] ?? [])
         case 'start_execution':
           return clone(
             startExecution(

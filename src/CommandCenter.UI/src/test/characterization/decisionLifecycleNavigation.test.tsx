@@ -15,9 +15,11 @@ const useDecisionResolutionMock = vi.hoisted(() => vi.fn())
 const useDecisionOptionComparisonMock = vi.hoisted(() => vi.fn())
 const useDecisionEvidenceInspectionMock = vi.hoisted(() => vi.fn())
 const useDecisionSourceAttributionsMock = vi.hoisted(() => vi.fn())
+const useDecisionGovernanceMock = vi.hoisted(() => vi.fn())
 
 vi.mock('../../hooks', () => ({
   useDecisionEvidenceInspection: useDecisionEvidenceInspectionMock,
+  useDecisionGovernance: useDecisionGovernanceMock,
   useDecisionOptionComparison: useDecisionOptionComparisonMock,
   useDecisionProposalLineage: useDecisionProposalLineageMock,
   useDecisionProposalReview: useDecisionProposalReviewMock,
@@ -35,6 +37,7 @@ afterEach(() => {
   useDecisionOptionComparisonMock.mockReset()
   useDecisionEvidenceInspectionMock.mockReset()
   useDecisionSourceAttributionsMock.mockReset()
+  useDecisionGovernanceMock.mockReset()
 })
 
 describe('DecisionLifecycleTab navigation', () => {
@@ -50,6 +53,15 @@ describe('DecisionLifecycleTab navigation', () => {
     useDecisionOptionComparisonMock.mockReturnValue({ data: null, isLoading: false })
     useDecisionEvidenceInspectionMock.mockReturnValue({ data: null, isLoading: false })
     useDecisionSourceAttributionsMock.mockReturnValue({ data: [], isLoading: false })
+    useDecisionGovernanceMock.mockReturnValue({
+      currentReport: null,
+      reports: [],
+      isLoading: false,
+      isGenerating: false,
+      error: null,
+      refresh: vi.fn(),
+      generateReport: vi.fn(),
+    })
     useDecisionProposalRefinementMock.mockReturnValue({
       refine: vi.fn(),
       isSubmitting: false,

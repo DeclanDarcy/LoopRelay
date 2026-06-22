@@ -854,6 +854,51 @@ fn list_decision_source_attributions(
 }
 
 #[tauri::command]
+fn get_decision_governance(repository_id: String) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/governance"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision governance lookup failed")
+}
+
+#[tauri::command]
+fn generate_decision_governance_report(repository_id: String) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/decisions/governance/reports"
+        ))
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision governance report generation failed")
+}
+
+#[tauri::command]
+fn list_decision_governance_reports(repository_id: String) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/governance/reports"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision governance report listing failed")
+}
+
+#[tauri::command]
 fn get_continuity_diagnostics(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/continuity/diagnostics"
@@ -1229,6 +1274,9 @@ fn main() {
             get_decision_option_comparison,
             get_decision_evidence_inspection,
             list_decision_source_attributions,
+            get_decision_governance,
+            generate_decision_governance_report,
+            list_decision_governance_reports,
             get_continuity_diagnostics,
             generate_continuity_report,
             list_continuity_reports,

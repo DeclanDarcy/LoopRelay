@@ -2,52 +2,48 @@
 
 ## Newly Authorized
 
-- The first M7 backend governance reporting slice is accepted as correct.
-- M7 governance must continue to preserve the `Read -> Analyze -> Report` boundary.
-- Governance must not mutate, repair, or enforce lifecycle state.
-- `GET /decisions/governance` remaining non-persistent is accepted as the correct inspection behavior.
-- Explicit governance report generation remaining persistent is accepted as the correct historical audit behavior.
-- `BlocksExecutionProjection` is accepted as a governance assessment signal, not governance enforcement.
-- Execution consumption remains responsible for deciding how to act on blocking governance findings.
-- The key M8 boundary is accepted:
-  - governance identifies risk
-  - execution decides what to do about it
-- M7 should stay focused on structural governance.
-- Semantic proposal-quality judgments should be delayed until M9 certification unless the finding can be proven from repository artifacts without interpreting decision content.
-- M7B is authorized as the next implementation slice:
-  - Tauri/UI governance surface
-  - report-oriented governance panel
-  - governance summary
-  - findings grouped by severity and category
-  - generated report history
-- M7B UI must avoid action buttons that imply governance authority:
-  - no fix
-  - no repair
-  - no correct
-  - no resolve
-- M7B UI may provide navigation-only actions:
-  - view proposal
-  - view decision
-  - view candidate
-  - view assimilation package
-- The accepted M7 sequence is:
-  - M7A Backend Governance Reporting complete
-  - M7B Tauri/UI Governance Surface
-  - M7C Analyzer Hardening
-  - M7D Governance Report Persistence Validation
-  - M7E Governance Certification
-- M7C analyzer hardening should prioritize:
-  - broken ancestry
+- M7A Governance Reporting is accepted as complete.
+- M7B Governance Visibility is accepted as complete.
+- M7 has achieved the key architectural success criterion:
+  - governance analysis exists
+  - governance visibility exists
+  - governance authority has not been introduced
+- The authority invariant remains mandatory through the rest of M7:
+  - governance identifies
+  - lifecycle decides
+  - execution consumes
+  - continuity adopts
+- Current governance inspection and historical governance reports must remain separate concepts:
+  - `GET /decisions/governance` represents current repository health and must remain non-persistent
+  - `POST /decisions/governance/reports` represents historical audit evidence and remains the persistent report path
+- Governance findings should continue to carry source references because traceable evidence is required for repository-scale governance.
+- Governance UI navigation-only proposal viewing is accepted as the right boundary:
+  - navigation is allowed
+  - repair, resolve, correct, fix, or lifecycle mutation actions are not allowed
+- M7C Analyzer Hardening is authorized as the next implementation slice.
+- M7C hardening should prioritize repository corruption risk.
+- Tier 1 structural integrity findings should be prioritized first:
   - circular ancestry
-  - missing ancestry
-  - multiple parents
   - supersede loops
+  - multiple parents where only one parent is valid
+  - missing ancestry
+- Tier 2 authority integrity findings should follow:
+  - multiple active authorities
   - archived authority referenced
   - superseded authority referenced
-  - multiple active authorities
-  - decision without assimilation package
-  - package without decision
-  - orphaned package
-  - proposal referenced as authority
-  - revision referenced as authority
-  - assimilation treated as adopted
+- Tier 3 artifact integrity findings should follow:
+  - orphaned assimilation package
+  - missing expected package
+  - broken decision-to-package linkage
+- Tier 4 boundary integrity findings should remain architecturally important:
+  - proposal used as authority
+  - revision used as authority
+  - assimilation recommendation treated as adopted operational context
+- Boundary integrity findings may warrant elevated severity because they violate the core authority model.
+- Add Decision Snapshot Integrity to the governance analyzer backlog:
+  - resolved decision snapshot exists
+  - resolved decision snapshot is complete
+  - resolved decision snapshot fingerprint is valid
+- Broken resolution snapshot integrity is more serious than broken proposal lineage because the snapshot is the authoritative historical record of what was reviewed.
+- M7D remains Governance Validation.
+- M7E remains Governance Certification.

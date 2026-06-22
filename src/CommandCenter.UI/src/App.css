@@ -1010,6 +1010,7 @@ button:focus-visible {
 .decision-revision-history,
 .decision-option-comparison,
 .decision-evidence-source-panel,
+.decision-governance-panel,
 .decision-viewer-summary,
 .decision-inspection-list {
   min-width: 0;
@@ -1020,6 +1021,7 @@ button:focus-visible {
 .decision-viewer-summary,
 .decision-authority-callout,
 .decision-inspection-card,
+.decision-governance-finding,
 .decision-tradeoff,
 .decision-evidence-block article {
   min-width: 0;
@@ -1033,7 +1035,8 @@ button:focus-visible {
 
 .decision-viewer-summary div,
 .decision-authority-callout div,
-.decision-inspection-card div {
+.decision-inspection-card div,
+.decision-governance-finding div {
   min-width: 0;
   display: grid;
   gap: 4px;
@@ -1042,6 +1045,7 @@ button:focus-visible {
 .decision-viewer-summary span,
 .decision-authority-callout span,
 .decision-inspection-card span,
+.decision-governance-finding span,
 .decision-evidence-block > span {
   color: var(--fg-muted);
   font-size: 0.76rem;
@@ -1051,7 +1055,8 @@ button:focus-visible {
 
 .decision-viewer-summary strong,
 .decision-authority-callout strong,
-.decision-inspection-card strong {
+.decision-inspection-card strong,
+.decision-governance-finding strong {
   min-width: 0;
   color: var(--fg-default);
   overflow-wrap: anywhere;
@@ -1062,6 +1067,7 @@ button:focus-visible {
 .decision-authority-callout p,
 .decision-authority-callout small,
 .decision-inspection-card p,
+.decision-governance-finding p,
 .decision-tradeoff p,
 .decision-evidence-block p,
 .decision-source-list p,
@@ -1191,7 +1197,16 @@ button:focus-visible {
   gap: 8px;
 }
 
-.decision-lineage-summary span {
+.decision-governance-meta {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.decision-lineage-summary span,
+.decision-governance-meta span,
+.decision-badge-row span {
   min-width: 0;
   padding: 9px 10px;
   border: 1px solid var(--border-subtle);
@@ -1201,6 +1216,35 @@ button:focus-visible {
   font-size: 0.8rem;
   font-weight: 700;
   overflow-wrap: anywhere;
+}
+
+.decision-badge-row span {
+  padding: 5px 8px;
+  font-size: 0.74rem;
+  text-transform: none;
+}
+
+.decision-governance-findings,
+.decision-governance-group,
+.decision-governance-actions {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.decision-governance-actions {
+  grid-template-columns: repeat(auto-fit, minmax(120px, max-content));
+}
+
+.decision-governance-group h6 {
+  margin: 0;
+  color: var(--fg-default);
+  font-size: 0.86rem;
+  letter-spacing: 0;
+}
+
+.decision-governance-finding {
+  background: var(--surface-1);
 }
 
 .decision-authority-callout {
@@ -1914,6 +1958,7 @@ button:focus-visible {
   .decision-candidate-browser-grid,
   .decision-evidence-source-grid,
   .decision-diagnostics-grid,
+  .decision-governance-meta,
   .decision-option-grid,
   .decision-review-grid,
   .decision-revision-grid,

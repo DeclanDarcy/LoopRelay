@@ -23,10 +23,10 @@ detect decision ecosystem health issues before decisions are projected into exec
 
 ## UI Work
 
-- [ ] Add governance panel to the Decisions tab.
-- [ ] Show findings grouped by severity and category.
-- [ ] Link each finding to related decisions, candidates, proposals, relationships, artifacts, and source signals.
-- [ ] Keep findings advisory and non-mutating.
+- [x] Add governance panel to the Decisions tab.
+- [x] Show findings grouped by severity and category.
+- [x] Link each finding to related decisions, candidates, proposals, relationships, artifacts, and source signals.
+- [x] Keep findings advisory and non-mutating.
 
 ## Tests
 
@@ -37,7 +37,7 @@ detect decision ecosystem health issues before decisions are projected into exec
 - [x] Decision coverage tests.
 - [ ] Execution projection readiness tests.
 - [x] Governance report persistence tests.
-- [ ] UI finding display tests.
+- [x] UI finding display tests.
 
 ## Exit Criteria
 

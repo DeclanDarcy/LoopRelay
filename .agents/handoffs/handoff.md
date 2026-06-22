@@ -2,45 +2,48 @@
 
 ## New State From This Slice
 
-- Began M7 decision governance with the first backend-only advisory reporting slice.
-- Added governance domain models:
-  - `DecisionGovernanceReport`
-  - `DecisionGovernanceFinding`
-  - `DecisionGovernanceSummary`
-  - `DecisionGovernanceCategory`
-  - `DecisionGovernanceSeverity`
-  - `DecisionHealthAssessment`
-- Added `IDecisionGovernanceService` and `DecisionGovernanceService`.
-- Added repository persistence for governance reports under `.agents/decisions/governance/governance.<timestamp>.json`.
-- Added governance endpoints:
-  - `GET /api/repositories/{repositoryId}/decisions/governance`
-  - `POST /api/repositories/{repositoryId}/decisions/governance/reports`
-  - `GET /api/repositories/{repositoryId}/decisions/governance/reports`
-- Implemented advisory analyzers for:
-  - consistency
-  - supersession lineage
-  - dependency integrity
-  - authority metadata
-  - proposal quality
-  - execution projection readiness
-  - authority boundary
-  - initial promoted-candidate coverage
-- Governance currently reads lifecycle artifacts and only writes report artifacts when explicitly asked to generate a report.
-- `GET` current governance report does not persist and does not mutate lifecycle artifacts.
-- Updated `.agents/milestones/m7-decision-governance.md` to mark the completed backend/reporting pieces.
-- Rotated the prior handoff to `.agents/handoffs/handoff.0032.md`.
+- Completed M7B Tauri/UI governance surface.
+- Added Tauri bridge commands:
+  - `get_decision_governance`
+  - `generate_decision_governance_report`
+  - `list_decision_governance_reports`
+- Added UI governance types, API bindings, and `useDecisionGovernance`.
+- Added `DecisionGovernancePanel` to the Decisions tab.
+- The panel shows:
+  - current non-persistent governance inspection
+  - explicit generated report history
+  - health and summary counts
+  - diagnostics
+  - findings grouped by severity and category
+  - related decision, candidate, and proposal IDs
+  - source references and excerpts
+- Added navigation-only proposal viewing from governance findings.
+- Kept governance UI advisory and non-mutating; no fix, repair, correct, resolve, or enforcement controls were added.
+- Updated dev Tauri mock governance behavior:
+  - current governance reads do not persist
+  - explicit report generation appends to report history
+- Added characterization coverage for governance finding display and advisory-only controls.
+- Updated `.agents/milestones/m7-decision-governance.md` for completed M7B UI work.
+- Rotated prior handoff to `.agents/handoffs/handoff.0033.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes with 313 tests.
-- `dotnet build CommandCenter.slnx` passes with 0 warnings and 0 errors.
+- `cargo build --manifest-path src/CommandCenter.Shell/Cargo.toml` passes.
+- `npm run lint --prefix src/CommandCenter.UI` passes.
+- `npm run test --prefix src/CommandCenter.UI` passes with 46 files and 159 tests.
+- `npm run build --prefix src/CommandCenter.UI` passes.
 
 ## Next Slice
 
-- Continue M7 by adding the UI/Tauri governance surface:
-  - add Tauri bridge commands for current governance, report generation, and report history
-  - add UI decision governance types and API bindings
-  - implement `useDecisionGovernance`
-  - add `DecisionGovernancePanel` to the Decisions tab
-  - group findings by severity/category and keep them explicitly advisory/non-mutating
-- After UI lands, broaden analyzer tests for lineage and dependency edge cases that are implemented but not yet directly covered.
+- Continue M7C analyzer hardening.
+- Prioritize structural governance cases already authorized:
+  - broken ancestry
+  - circular ancestry
+  - missing ancestry
+  - multiple parents
+  - supersede loops
+  - archived or superseded authority referenced
+  - multiple active authorities
+  - decision/package orphaning
+  - proposal or revision referenced as authority
+  - assimilation treated as adopted
