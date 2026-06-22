@@ -88,11 +88,56 @@ public sealed class DecisionGenerationService(
 
     public async Task<DecisionProposal> ExpireProposalAsync(Guid repositoryId, string proposalId, string? reason)
     {
+        return await TransitionProposalAsync(
+            repositoryId,
+            proposalId,
+            DecisionProposalState.Expired,
+            "Expired",
+            reason ?? "Proposal expired by explicit proposal-management operation.");
+    }
+
+    public async Task<DecisionProposal> MarkProposalViewedAsync(Guid repositoryId, string proposalId, string? reason)
+    {
+        return await TransitionProposalAsync(
+            repositoryId,
+            proposalId,
+            DecisionProposalState.Viewed,
+            "Viewed",
+            reason ?? "Proposal marked viewed by explicit review operation.");
+    }
+
+    public async Task<DecisionProposal> MarkProposalNeedsRefinementAsync(Guid repositoryId, string proposalId, string? reason)
+    {
+        return await TransitionProposalAsync(
+            repositoryId,
+            proposalId,
+            DecisionProposalState.NeedsRefinement,
+            "NeedsRefinement",
+            reason ?? "Proposal marked as needing refinement by explicit review operation.");
+    }
+
+    public async Task<DecisionProposal> MarkProposalReadyForResolutionAsync(Guid repositoryId, string proposalId, string? reason)
+    {
+        return await TransitionProposalAsync(
+            repositoryId,
+            proposalId,
+            DecisionProposalState.ReadyForResolution,
+            "ReadyForResolution",
+            reason ?? "Proposal marked ready for resolution by explicit review operation.");
+    }
+
+    private async Task<DecisionProposal> TransitionProposalAsync(
+        Guid repositoryId,
+        string proposalId,
+        DecisionProposalState targetState,
+        string eventName,
+        string reason)
+    {
         Repository repository = await GetRepositoryAsync(repositoryId);
         DecisionProposal proposal = await GetProposalAsync(repositoryId, proposalId);
         DecisionTransitionResult transition = DecisionLifecycleRules.ValidateProposalTransition(
             proposal.State,
-            DecisionProposalState.Expired);
+            targetState);
         if (!transition.IsValid)
         {
             throw new InvalidOperationException(transition.Error);
@@ -101,15 +146,15 @@ public sealed class DecisionGenerationService(
         DateTimeOffset now = DateTimeOffset.UtcNow;
         DecisionProposal updated = proposal with
         {
-            State = DecisionProposalState.Expired,
+            State = targetState,
             History = proposal.History
                 .Concat([
                     new DecisionHistoryEntry(
                         now,
-                        "Expired",
+                        eventName,
                         proposal.State.ToString(),
-                        DecisionProposalState.Expired.ToString(),
-                        reason ?? "Proposal expired by explicit proposal-management operation.",
+                        targetState.ToString(),
+                        reason,
                         [new DecisionSourceReference("DecisionProposal", ProposalPath(proposal.Id), ProposalId: proposal.Id)])
                 ])
                 .ToArray()

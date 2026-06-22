@@ -10,5 +10,11 @@ public interface IDecisionGenerationService
 
     Task<DecisionProposal> GenerateProposalAsync(Guid repositoryId, string candidateId);
 
+    Task<DecisionProposal> MarkProposalViewedAsync(Guid repositoryId, string proposalId, string? reason);
+
+    Task<DecisionProposal> MarkProposalNeedsRefinementAsync(Guid repositoryId, string proposalId, string? reason);
+
+    Task<DecisionProposal> MarkProposalReadyForResolutionAsync(Guid repositoryId, string proposalId, string? reason);
+
     Task<DecisionProposal> ExpireProposalAsync(Guid repositoryId, string proposalId, string? reason);
 }

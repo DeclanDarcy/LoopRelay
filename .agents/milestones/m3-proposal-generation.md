@@ -15,6 +15,8 @@ transform validated candidates into structured decision proposals with options, 
 - [x] Persist proposals under `.agents/decisions/proposals`.
 - [x] Render `proposal.md`.
 - [ ] Move proposal state through draft, generated, viewed, needs refinement, refined, ready for resolution, resolved, expired, and discarded.
+  - [x] Backend-owned transitions for generated -> viewed, viewed -> needs refinement, generated/viewed -> ready for resolution, and allowed expiration paths.
+  - [ ] Refinement, resolution, and discard transitions.
 
 ## Tests
 
@@ -25,6 +27,7 @@ transform validated candidates into structured decision proposals with options, 
 - [x] Assumption visibility tests.
 - [x] Proposal persistence tests.
 - [ ] Proposal state transition tests.
+  - [x] Review transition success, persistence, projection refresh, and conflict-path coverage.
 - [x] Proposal expiration tests.
 
 ## Exit Criteria
