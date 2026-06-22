@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\CommandCenter.Core\CommandCenter.Core.csproj" />
+    <ProjectReference Include="..\CommandCenter.Decisions\CommandCenter.Decisions.csproj" />
   </ItemGroup>
 
 </Project>

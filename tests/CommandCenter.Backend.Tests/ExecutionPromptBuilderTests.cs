@@ -1,4 +1,6 @@
 using CommandCenter.Execution;
+using CommandCenter.Decisions.Models;
+using CommandCenter.Decisions.Primitives;
 using CommandCenter.Execution.Models;
 using CommandCenter.Execution.Services;
 
@@ -87,6 +89,37 @@ public sealed class ExecutionPromptBuilderTests
     }
 
     [Fact]
+    public void PromptIncludesGovernedDecisionProjectionBeforeRawDecisionArtifact()
+    {
+        ExecutionPrompt prompt = new ExecutionPromptBuilder().Build(CreateContext(
+            optionalArtifacts:
+            [
+                Artifact("CurrentDecisions", ".agents/decisions/decisions.md", "raw decisions content")
+            ],
+            decisionProjection: new ExecutionDecisionProjection(
+                Guid.Parse("00000000-0000-0000-0000-000000000001"),
+                DateTimeOffset.UtcNow,
+                [
+                    new ExecutionConstraint(
+                        "ECON-0001",
+                        "DEC-0001",
+                        "Architecture",
+                        "Use repository artifacts",
+                        DecisionClassification.Architectural,
+                        [])
+                ],
+                [],
+                [],
+                [])));
+
+        Assert.Contains("## Governed Decision Projection", prompt.Text);
+        Assert.Contains("- DEC-0001 (Architectural): Use repository artifacts", prompt.Text);
+        Assert.True(
+            prompt.Text.IndexOf("## Governed Decision Projection", StringComparison.Ordinal) <
+            prompt.Text.IndexOf("CurrentDecisions: .agents/decisions/decisions.md", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void PromptIncludesDirtyRepositoryDiagnostics()
     {
         ExecutionPrompt prompt = new ExecutionPromptBuilder().Build(CreateContext(dirtyState: new RepositoryDirtyState
@@ -131,7 +164,8 @@ public sealed class ExecutionPromptBuilderTests
 
     private static ExecutionContext CreateContext(
         IReadOnlyList<ExecutionContextArtifact>? optionalArtifacts = null,
-        RepositoryDirtyState? dirtyState = null)
+        RepositoryDirtyState? dirtyState = null,
+        ExecutionDecisionProjection? decisionProjection = null)
     {
         var artifacts = new List<ExecutionContextArtifact>
         {
@@ -157,6 +191,7 @@ public sealed class ExecutionPromptBuilderTests
                 DirtyState = dirtyState ?? new RepositoryDirtyState(),
                 CapturedAt = new DateTimeOffset(2026, 6, 19, 12, 0, 0, TimeSpan.Zero)
             },
+            DecisionProjection = decisionProjection,
             Diagnostics = new ExecutionContextDiagnostics
             {
                 TotalBytes = 27,

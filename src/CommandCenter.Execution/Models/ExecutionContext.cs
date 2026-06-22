@@ -1,3 +1,5 @@
+using CommandCenter.Decisions.Models;
+
 namespace CommandCenter.Execution.Models;
 
 public sealed class ExecutionContext
@@ -15,6 +17,8 @@ public sealed class ExecutionContext
     public IReadOnlyList<ExecutionContextArtifact> Artifacts { get; init; } = Array.Empty<ExecutionContextArtifact>();
 
     public ExecutionRepositorySnapshot? RepositorySnapshot { get; init; }
+
+    public ExecutionDecisionProjection? DecisionProjection { get; init; }
 
     public ExecutionContextDiagnostics Diagnostics { get; init; } = new();
 }

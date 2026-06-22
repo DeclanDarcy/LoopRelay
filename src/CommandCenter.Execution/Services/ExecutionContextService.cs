@@ -2,6 +2,8 @@ using System.Text;
 using CommandCenter.Core.Artifacts;
 using CommandCenter.Core.Planning;
 using CommandCenter.Core.Repositories;
+using CommandCenter.Decisions.Abstractions;
+using CommandCenter.Decisions.Models;
 using CommandCenter.Execution.Abstractions;
 using CommandCenter.Execution.Models;
 using CommandCenter.Execution.Primitives;
@@ -12,7 +14,8 @@ public sealed class ExecutionContextService(
     IRepositoryService repositoryService,
     IArtifactService artifactService,
     IPlanningService planningService,
-    IGitService gitService) : IExecutionContextService
+    IGitService gitService,
+    IDecisionProjectionService? decisionProjectionService = null) : IExecutionContextService
 {
     private const string PlanPath = ".agents/plan.md";
     private const string OperationalContextPath = ".agents/operational_context.md";
@@ -28,6 +31,8 @@ public sealed class ExecutionContextService(
         var missingOptionalArtifacts = new List<string>();
         var artifacts = new List<ExecutionContextArtifact>();
         ExecutionRepositorySnapshot? snapshot = null;
+        ExecutionDecisionProjection? decisionProjection = null;
+        string? milestoneContent = null;
 
         if (DetermineAvailability(repository) != RepositoryAvailability.Available)
         {
@@ -49,7 +54,7 @@ public sealed class ExecutionContextService(
         }
         else
         {
-            await AddRequiredArtifactAsync(repository, artifacts, "Milestone", normalizedMilestonePath, validationErrors);
+            milestoneContent = await AddRequiredArtifactAsync(repository, artifacts, "Milestone", normalizedMilestonePath, validationErrors);
         }
 
         await AddOptionalArtifactAsync(repository, artifacts, "OperationalContext", OperationalContextPath, missingOptionalArtifacts);
@@ -65,6 +70,25 @@ public sealed class ExecutionContextService(
             validationErrors.Add($"Git snapshot failed: {exception.Message}");
         }
 
+        if (decisionProjectionService is not null)
+        {
+            try
+            {
+                decisionProjection = await decisionProjectionService.BuildExecutionProjectionAsync(
+                    repository.Id,
+                    milestoneContent: milestoneContent);
+                foreach (ExecutionDecisionConflict conflict in decisionProjection.Conflicts)
+                {
+                    validationErrors.Add(
+                        $"Execution request conflicts with governed decision {conflict.DecisionId}: {conflict.ConflictingExcerpt}");
+                }
+            }
+            catch (Exception exception) when (exception is InvalidOperationException or IOException)
+            {
+                validationErrors.Add($"Decision projection failed: {exception.Message}");
+            }
+        }
+
         ExecutionContextDiagnostics diagnostics = BuildDiagnostics(artifacts, validationErrors, missingOptionalArtifacts);
 
         return new ExecutionContext
@@ -76,6 +100,7 @@ public sealed class ExecutionContextService(
             GeneratedAt = generatedAt,
             Artifacts = artifacts,
             RepositorySnapshot = snapshot,
+            DecisionProjection = decisionProjection,
             Diagnostics = diagnostics
         };
     }
@@ -86,7 +111,7 @@ public sealed class ExecutionContextService(
         return repository ?? throw new KeyNotFoundException($"Repository was not found: {repositoryId}");
     }
 
-    private async Task AddRequiredArtifactAsync(
+    private async Task<string?> AddRequiredArtifactAsync(
         Repository repository,
         List<ExecutionContextArtifact> artifacts,
         string role,
@@ -97,14 +122,17 @@ public sealed class ExecutionContextService(
         {
             string content = await artifactService.LoadAsync(repository, relativePath);
             artifacts.Add(CreateArtifact(role, relativePath, content));
+            return content;
         }
         catch (FileNotFoundException)
         {
             validationErrors.Add($"Required artifact is missing: {relativePath}");
+            return null;
         }
         catch (ArgumentException exception)
         {
             validationErrors.Add(exception.Message);
+            return null;
         }
     }
 

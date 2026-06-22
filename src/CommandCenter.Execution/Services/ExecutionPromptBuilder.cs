@@ -1,4 +1,5 @@
 using System.Text;
+using CommandCenter.Decisions.Models;
 using CommandCenter.Execution.Abstractions;
 using CommandCenter.Execution.Models;
 
@@ -38,6 +39,7 @@ public sealed class ExecutionPromptBuilder : IExecutionPromptBuilder
         builder.AppendLine();
         AppendRepositorySnapshot(builder, context.RepositorySnapshot);
         AppendContextDiagnostics(builder, context.Diagnostics);
+        AppendGovernedDecisions(builder, context.DecisionProjection);
         AppendArtifacts(builder, context.Artifacts);
 
         return new ExecutionPrompt
@@ -56,6 +58,83 @@ public sealed class ExecutionPromptBuilder : IExecutionPromptBuilder
                 DirtyRepository = context.RepositorySnapshot?.DirtyState.IsClean == false
             }
         };
+    }
+
+    private static void AppendGovernedDecisions(StringBuilder builder, ExecutionDecisionProjection? projection)
+    {
+        builder.AppendLine("## Governed Decision Projection");
+        if (projection is null)
+        {
+            builder.AppendLine("Projection: unavailable");
+            builder.AppendLine();
+            return;
+        }
+
+        AppendDecisionDiagnostics(builder, projection.Diagnostics);
+        AppendConflicts(builder, projection.Conflicts);
+        AppendConstraints(builder, projection.Constraints);
+        AppendDirectives(builder, projection.Directives);
+        builder.AppendLine();
+    }
+
+    private static void AppendDecisionDiagnostics(StringBuilder builder, IReadOnlyList<string> diagnostics)
+    {
+        builder.AppendLine("Diagnostics:");
+        if (diagnostics.Count == 0)
+        {
+            builder.AppendLine("- none");
+            return;
+        }
+
+        foreach (string diagnostic in diagnostics.Order(StringComparer.Ordinal))
+        {
+            builder.AppendLine($"- {diagnostic}");
+        }
+    }
+
+    private static void AppendConflicts(StringBuilder builder, IReadOnlyList<ExecutionDecisionConflict> conflicts)
+    {
+        builder.AppendLine("Conflicts:");
+        if (conflicts.Count == 0)
+        {
+            builder.AppendLine("- none");
+            return;
+        }
+
+        foreach (ExecutionDecisionConflict conflict in conflicts.OrderBy(conflict => conflict.Id, StringComparer.Ordinal))
+        {
+            builder.AppendLine($"- {conflict.DecisionId}: {conflict.Statement} conflicts with `{conflict.ConflictingExcerpt}`");
+        }
+    }
+
+    private static void AppendConstraints(StringBuilder builder, IReadOnlyList<ExecutionConstraint> constraints)
+    {
+        builder.AppendLine("Constraints:");
+        if (constraints.Count == 0)
+        {
+            builder.AppendLine("- none");
+            return;
+        }
+
+        foreach (ExecutionConstraint constraint in constraints.OrderBy(constraint => constraint.DecisionId, StringComparer.Ordinal))
+        {
+            builder.AppendLine($"- {constraint.DecisionId} ({constraint.Classification}): {constraint.Statement}");
+        }
+    }
+
+    private static void AppendDirectives(StringBuilder builder, IReadOnlyList<ExecutionDirective> directives)
+    {
+        builder.AppendLine("Directives:");
+        if (directives.Count == 0)
+        {
+            builder.AppendLine("- none");
+            return;
+        }
+
+        foreach (ExecutionDirective directive in directives.OrderBy(directive => directive.DecisionId, StringComparer.Ordinal))
+        {
+            builder.AppendLine($"- {directive.DecisionId} ({directive.Classification}): {directive.Statement}");
+        }
     }
 
     private static void AppendRepositorySnapshot(StringBuilder builder, ExecutionRepositorySnapshot? snapshot)

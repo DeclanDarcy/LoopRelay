@@ -6,6 +6,9 @@ using CommandCenter.Core.Configuration;
 using CommandCenter.Execution;
 using CommandCenter.Core.Planning;
 using CommandCenter.Core.Repositories;
+using CommandCenter.Decisions.Abstractions;
+using CommandCenter.Decisions.Models;
+using CommandCenter.Decisions.Primitives;
 using CommandCenter.Execution.Abstractions;
 using CommandCenter.Execution.Models;
 using CommandCenter.Execution.Services;
@@ -249,6 +252,37 @@ public sealed class ExecutionContextServiceTests
     }
 
     [Fact]
+    public async Task DecisionProjectionIsIncludedWhenProjectionServiceIsAvailable()
+    {
+        var projection = new ExecutionDecisionProjection(
+            Guid.Empty,
+            DateTimeOffset.UtcNow,
+            [],
+            [
+                new ExecutionDirective(
+                    "EDIR-0001",
+                    "DEC-0001",
+                    "Workflow policy",
+                    "Use repository artifacts",
+                    DecisionClassification.Operational,
+                    [])
+            ],
+            [],
+            []);
+        Harness harness = await CreateHarnessAsync(decisionProjection: projection);
+        await WriteAsync(harness.Repository, ".agents/plan.md", "plan");
+        await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
+
+        ExecutionContext context = await harness.ContextService.BuildContextAsync(
+            harness.Repository.Id,
+            ".agents/milestones/m1.md");
+
+        Assert.NotNull(context.DecisionProjection);
+        Assert.Equal("DEC-0001", Assert.Single(context.DecisionProjection.Directives).DecisionId);
+        Assert.Empty(context.Diagnostics.ValidationErrors);
+    }
+
+    [Fact]
     public async Task ContextEndpointReturnsDiagnostics()
     {
         string configurationPath = Path.Combine(CreateTemporaryDirectory(), "configuration.json");
@@ -291,7 +325,8 @@ public sealed class ExecutionContextServiceTests
 
     private static async Task<Harness> CreateHarnessAsync(
         RepositoryDirtyState? dirtyState = null,
-        string? gitFailure = null)
+        string? gitFailure = null,
+        ExecutionDecisionProjection? decisionProjection = null)
     {
         var repositoryService = new RepositoryService(
             new ApplicationConfigurationStore(Path.Combine(CreateTemporaryDirectory(), "configuration.json")));
@@ -301,7 +336,8 @@ public sealed class ExecutionContextServiceTests
             repositoryService,
             new ArtifactService(artifactStore),
             new PlanningService(artifactStore),
-            new FakeGitService(dirtyState, gitFailure));
+            new FakeGitService(dirtyState, gitFailure),
+            decisionProjection is null ? null : new FakeDecisionProjectionService(decisionProjection));
 
         return new Harness(repository, contextService);
     }
@@ -388,6 +424,17 @@ public sealed class ExecutionContextServiceTests
         public Task<PushResult> PushAsync(Repository repository, string? commitSha)
         {
             throw new NotSupportedException();
+        }
+    }
+
+    private sealed class FakeDecisionProjectionService(ExecutionDecisionProjection projection) : IDecisionProjectionService
+    {
+        public Task<ExecutionDecisionProjection> BuildExecutionProjectionAsync(
+            Guid repositoryId,
+            string? executionRequest = null,
+            string? milestoneContent = null)
+        {
+            return Task.FromResult(projection with { RepositoryId = repositoryId });
         }
     }
 }
