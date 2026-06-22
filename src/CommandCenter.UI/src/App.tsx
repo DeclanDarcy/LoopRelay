@@ -58,8 +58,10 @@ import {
   countDirtyPaths,
   formatDateTime,
   formatDuration,
+  getTabForSection,
   getArtifactCategories,
   getAvailableArtifactPaths,
+  buildNavigationTargets,
   getExecutionWorkflowSteps,
 } from './lib'
 import { executionReadinessStatus, repositoryExecutionStatus } from './lib/status'
@@ -67,6 +69,7 @@ import { useShellState } from './state/shellState'
 import type {
   CommitPreparation,
   ExecutionSessionSummary,
+  NavigationTarget,
   OperationalContextProposal,
   Repository,
   RepositoryWorkspaceProjection,
@@ -149,10 +152,13 @@ function App() {
     selectedRepository?.executionSummary ??
     selectedRepository?.activeExecutionSession ??
     null
-  const selectedExecutionHistory =
-    workspace?.executionHistory ??
-    selectedRepository?.executionHistory ??
-    (executionSummary ? [executionSummary] : [])
+  const selectedExecutionHistory = useMemo(
+    () =>
+      workspace?.executionHistory ??
+      selectedRepository?.executionHistory ??
+      (executionSummary ? [executionSummary] : []),
+    [executionSummary, selectedRepository?.executionHistory, workspace?.executionHistory],
+  )
   const activeExecutionSummary =
     executionSummary?.repositoryState === 'Executing'
       ? executionSummary
@@ -349,6 +355,31 @@ function App() {
       : executionContext.diagnostics.warningThresholdExceeded
         ? 'Warning'
         : 'Within limits'
+  const navigationTargets = useMemo(
+    () =>
+      buildNavigationTargets({
+        repositories,
+        selectedRepositoryId: selectedRepository?.repository.id ?? selectedRepositoryId,
+        workspace,
+        executionHistory: selectedExecutionHistory,
+        continuityDiagnostics,
+      }),
+    [
+      continuityDiagnostics,
+      repositories,
+      selectedExecutionHistory,
+      selectedRepository?.repository.id,
+      selectedRepositoryId,
+      workspace,
+    ],
+  )
+  const discoveryTargets = useMemo(
+    () =>
+      navigationTargets.filter(
+        (target) => target.group === 'Discovery' || target.group === 'Continuity Warnings',
+      ),
+    [navigationTargets],
+  )
 
   const startExecutionBlockedReason = useMemo(() => {
     if (!workspace) {
@@ -411,6 +442,40 @@ function App() {
       selectArtifactNavigation(repositoryId, relativePath)
     },
     [selectArtifactNavigation],
+  )
+
+  const selectNavigationTarget = useCallback(
+    (target: NavigationTarget) => {
+      const repositoryId = target.repositoryId
+
+      if (repositoryId) {
+        selectRepository(repositoryId)
+      }
+
+      if (repositoryId && target.artifactPath) {
+        selectArtifactNavigation(repositoryId, target.artifactPath)
+      }
+
+      if (repositoryId && target.milestonePath) {
+        selectMilestone(repositoryId, target.milestonePath)
+      }
+
+      const targetTab = target.tab ?? (target.sectionId ? getTabForSection(target.sectionId) : null)
+      if (targetTab) {
+        setActivePrimaryTab(targetTab)
+      }
+
+      if (target.sectionId) {
+        setSectionTarget(target.sectionId)
+      }
+    },
+    [
+      selectArtifactNavigation,
+      selectMilestone,
+      selectRepository,
+      setActivePrimaryTab,
+      setSectionTarget,
+    ],
   )
 
   const reconcileSelectedArtifact = useCallback(
@@ -1233,9 +1298,14 @@ function App() {
       return
     }
 
-    document.getElementById(sectionTarget)?.scrollIntoView({ block: 'start' })
+    const targetElement = document.getElementById(sectionTarget)
+    if (!targetElement) {
+      return
+    }
+
+    targetElement.scrollIntoView({ block: 'start' })
     setSectionTarget(null)
-  }, [sectionTarget, setSectionTarget])
+  }, [activePrimaryTab, sectionTarget, setSectionTarget, workspace])
 
   const renderExecutionContextPanel = (panelId?: string) =>
     selectedRepository ? (
@@ -1311,7 +1381,7 @@ function App() {
 
   const renderGitWorkflowPanel = () =>
     shouldShowGitWorkflow ? (
-      <Panel className="git-status-panel" aria-label="Git status">
+      <Panel id="git-workflow" className="git-status-panel" aria-label="Git status">
         <SectionHeader
           className="git-status-header"
           eyebrow="Git Workflow"
@@ -1433,7 +1503,11 @@ function App() {
 
   const renderHandoffReviewPanel = () =>
     canReviewGeneratedHandoff && executionDisplay ? (
-      <Panel className="handoff-review-panel" aria-label="Generated handoff review">
+      <Panel
+        id="generated-handoff-review"
+        className="handoff-review-panel"
+        aria-label="Generated handoff review"
+      >
         <div className="handoff-review-header">
           <SectionHeader
             eyebrow="Handoff Review"
@@ -1479,9 +1553,11 @@ function App() {
         <Sidebar
           repositories={repositories}
           selectedRepositoryId={selectedRepository?.repository.id ?? selectedRepositoryId}
+          discoveryTargets={discoveryTargets}
           isLoading={isLoading}
           onOpenPalette={() => setIsCommandPaletteOpen(true)}
           onSelectRepository={selectRepository}
+          onSelectNavigationTarget={selectNavigationTarget}
         />
       }
       header={
@@ -1504,42 +1580,10 @@ function App() {
       palette={
         <CommandPalette
           isOpen={isCommandPaletteOpen}
-          repositories={repositories}
+          targets={navigationTargets}
           onClose={() => setIsCommandPaletteOpen(false)}
           onOpen={() => setIsCommandPaletteOpen(true)}
-          onSelectRepository={selectRepository}
-          onSelectSection={(sectionId) => {
-            if (sectionId === 'execution-context') {
-              setActivePrimaryTab('execution')
-            }
-
-            if (
-              sectionId === 'operational-current' ||
-              sectionId === 'operational-open-questions' ||
-              sectionId === 'operational-active-risks' ||
-              sectionId === 'proposal-review'
-            ) {
-              setActivePrimaryTab('operational-context')
-            }
-
-            if (
-              sectionId === 'continuity-diagnostics' ||
-              sectionId === 'continuity-warnings' ||
-              sectionId === 'continuity-compression' ||
-              sectionId === 'continuity-decision-retention'
-            ) {
-              setActivePrimaryTab('continuity')
-            }
-
-            if (sectionId === 'artifacts') {
-              setActivePrimaryTab('workspace')
-              setSectionTarget('artifact-workspace')
-              return
-            }
-
-            setSectionTarget(sectionId)
-          }}
-          onSelectTab={setActivePrimaryTab}
+          onSelectTarget={selectNavigationTarget}
         />
       }
     >

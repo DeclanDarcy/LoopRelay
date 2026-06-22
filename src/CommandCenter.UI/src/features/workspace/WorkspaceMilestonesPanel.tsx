@@ -19,7 +19,7 @@ export function WorkspaceMilestonesPanel({
   )
 
   return (
-    <Panel className="workspace-milestones-panel" aria-label="Workspace milestones">
+    <Panel id="workspace-milestones" className="workspace-milestones-panel" aria-label="Workspace milestones">
       <SectionHeader
         className="workspace-milestones-header"
         eyebrow="Milestones"

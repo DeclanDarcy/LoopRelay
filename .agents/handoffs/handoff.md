@@ -2,28 +2,28 @@
 
 ## Slice Summary
 
-Completed Milestone 6: Continuity Workspace.
+Started Milestone 7: Navigation, Discovery, and Cohesion.
 
 ## New State
 
-- Added `features/continuity/ContinuityTab.tsx` so the Continuity workspace presentation is feature-owned while `App.tsx` keeps backend command authority.
-- Expanded `ContinuityDiagnosticsPanel` to show understanding evolution, continuity warnings, compression trends, repeated indicators, question/risk lifecycle, and continuity report visibility from projected diagnostics/report data.
-- Added frontend transport and hook support for `list_continuity_reports` via `api/continuity.ts` and `hooks/useContinuityReports.ts`.
-- Generated continuity reports now update the local report projection list and diagnostics projection in `App.tsx`; report generation remains an explicit backend-owned action.
-- Added Operational Context anchors for architecture, constraints, stable decisions, and decision rationale so Continuity evolution rows can navigate to evidence sections.
-- Continuity cross-links remain navigation-only: evolution rows switch to Operational Context anchors and report paths open projected artifacts through the existing workspace artifact navigation.
-- Marked `.agents/milestones/m6-continuity-workspace.md` complete.
-- Rotated prior handoff to `.agents/handoffs/handoff.0066.md`.
+- Added a projection-derived navigation target model in `src/CommandCenter.UI/src/lib/navigation.ts` and `src/CommandCenter.UI/src/types/navigation.ts`.
+- Command palette now consumes navigation targets rather than constructing local hard-coded workflow lists; target selection remains navigation-only.
+- Palette targets now cover repositories, current and repository-scoped workspace tabs, milestones, execution sessions, inspector sections, open questions, active risks, stable decisions, pending proposals, execution workflow states, and continuity warnings.
+- Sidebar now exposes a compact Discovery list from the same projection-derived navigation targets.
+- Shell state now preserves the active primary tab per repository, matching the existing per-repository artifact and milestone selection behavior.
+- Added stable anchors for workspace milestones, git workflow, and generated handoff review, plus retrying scroll behavior while tab/projection content mounts.
+- Added characterization coverage for navigation target construction and per-repository tab preservation.
+- Updated `.agents/milestones/m7-navigation-discovery-and-cohesion.md` to mark the covered M7 checklist items while leaving the milestone open.
+- Rotated prior handoff to `.agents/handoffs/handoff.0067.md`.
 
 ## Verification
 
 - Passed `npm run lint`.
-- Passed focused continuity tests: `npm run test -- --run src/test/characterization/continuityDiagnosticsPanel.test.tsx src/test/characterization/projectionHooks.test.tsx src/test/characterization/transport.test.ts`.
-- Passed `npm run test -- --run` with 35 test files and 131 tests.
+- Passed focused navigation tests: `npm run test -- --run src/test/characterization/navigation.test.ts src/test/characterization/shellState.test.tsx src/test/characterization/app.smoke.test.tsx`.
+- Passed full frontend tests: `npm run test -- --run` with 36 test files and 134 tests.
 - Passed `npm run build`.
 - Passed `npm run test:e2e` with 6 Playwright tests.
-- Passed `dotnet test CommandCenter.slnx` with 192 backend tests.
 
 ## Remaining Work
 
-- Continue with Milestone 7: Navigation, Discovery, and Cohesion.
+- Continue M7 with the remaining cross-workspace link audit and cohesion audit, especially status/empty/loading/error/disabled state consistency and focus/responsive review.

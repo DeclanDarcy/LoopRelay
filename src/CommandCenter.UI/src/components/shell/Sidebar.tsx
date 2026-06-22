@@ -1,13 +1,15 @@
 import { Button, StatusBadge } from '../design'
 import { repositoryExecutionStatus } from '../../lib/status'
-import type { RepositoryDashboardProjection } from '../../types'
+import type { NavigationTarget, RepositoryDashboardProjection } from '../../types'
 
 type SidebarProps = {
   repositories: RepositoryDashboardProjection[]
   selectedRepositoryId: string | null
+  discoveryTargets: NavigationTarget[]
   isLoading: boolean
   onOpenPalette: () => void
   onSelectRepository: (repositoryId: string) => void
+  onSelectNavigationTarget: (target: NavigationTarget) => void
 }
 
 const globalNavigationItems = ['Overview', 'Repositories', 'Executions', 'Insights']
@@ -15,10 +17,14 @@ const globalNavigationItems = ['Overview', 'Repositories', 'Executions', 'Insigh
 export function Sidebar({
   repositories,
   selectedRepositoryId,
+  discoveryTargets,
   isLoading,
   onOpenPalette,
   onSelectRepository,
+  onSelectNavigationTarget,
 }: SidebarProps) {
+  const visibleDiscoveryTargets = discoveryTargets.slice(0, 6)
+
   return (
     <aside className="app-sidebar" aria-label="Command Center navigation">
       <div className="sidebar-brand">
@@ -49,6 +55,28 @@ export function Sidebar({
           </button>
         ))}
       </nav>
+
+      {visibleDiscoveryTargets.length > 0 ? (
+        <section className="sidebar-discovery" aria-label="Repository discovery">
+          <div className="sidebar-section-header">
+            <span>Discovery</span>
+            <small>{discoveryTargets.length}</small>
+          </div>
+          <div className="sidebar-discovery-list">
+            {visibleDiscoveryTargets.map((target) => (
+              <button
+                type="button"
+                key={target.id}
+                className="sidebar-discovery-item"
+                onClick={() => onSelectNavigationTarget(target)}
+              >
+                <span>{target.label}</span>
+                <small>{target.group}</small>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="sidebar-repositories" aria-label="Registered repositories">
         <div className="sidebar-section-header">

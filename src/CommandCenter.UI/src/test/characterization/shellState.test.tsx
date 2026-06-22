@@ -71,4 +71,39 @@ describe('shell navigation state', () => {
     expect(result.current.activePrimaryTab).toBe('execution')
     expect(result.current.isCommandPaletteOpen).toBe(true)
   })
+
+  it('preserves active primary tabs per repository', () => {
+    const { result } = renderHook(() => useShellState())
+
+    act(() => {
+      result.current.reconcileRepositorySelection(['repo-alpha', 'repo-beta'])
+    })
+
+    act(() => {
+      result.current.setActivePrimaryTab('continuity')
+    })
+
+    act(() => {
+      result.current.selectRepository('repo-beta')
+    })
+
+    expect(result.current.selectedRepositoryId).toBe('repo-beta')
+    expect(result.current.activePrimaryTab).toBe('workspace')
+
+    act(() => {
+      result.current.setActivePrimaryTab('execution')
+    })
+
+    act(() => {
+      result.current.selectRepository('repo-alpha')
+    })
+
+    expect(result.current.activePrimaryTab).toBe('continuity')
+
+    act(() => {
+      result.current.selectRepository('repo-beta')
+    })
+
+    expect(result.current.activePrimaryTab).toBe('execution')
+  })
 })

@@ -1,66 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { PrimaryWorkspaceTab } from '../../state/shellState'
-import type { RepositoryDashboardProjection } from '../../types'
-
-type PaletteTabTarget = {
-  kind: 'tab'
-  id: PrimaryWorkspaceTab
-  label: string
-}
-
-type PaletteRepositoryTarget = {
-  kind: 'repository'
-  id: string
-  label: string
-  description: string
-}
-
-type PaletteSectionTarget = {
-  kind: 'section'
-  id: string
-  label: string
-}
-
-type PaletteTarget = PaletteTabTarget | PaletteRepositoryTarget | PaletteSectionTarget
+import type { NavigationTarget } from '../../types'
 
 type CommandPaletteProps = {
   isOpen: boolean
-  repositories: RepositoryDashboardProjection[]
+  targets: NavigationTarget[]
   onClose: () => void
   onOpen: () => void
-  onSelectRepository: (repositoryId: string) => void
-  onSelectSection: (sectionId: string) => void
-  onSelectTab: (tab: PrimaryWorkspaceTab) => void
+  onSelectTarget: (target: NavigationTarget) => void
 }
-
-const tabTargets: PaletteTabTarget[] = [
-  { kind: 'tab', id: 'workspace', label: 'Workspace' },
-  { kind: 'tab', id: 'execution', label: 'Execution' },
-  { kind: 'tab', id: 'operational-context', label: 'Operational Context' },
-  { kind: 'tab', id: 'continuity', label: 'Continuity' },
-]
-
-const sectionTargets: PaletteSectionTarget[] = [
-  { kind: 'section', id: 'artifacts', label: 'Repository Artifacts' },
-  { kind: 'section', id: 'execution-context', label: 'Execution Context' },
-  { kind: 'section', id: 'operational-current', label: 'Current Understanding' },
-  { kind: 'section', id: 'operational-open-questions', label: 'Open Questions' },
-  { kind: 'section', id: 'operational-active-risks', label: 'Active Risks' },
-  { kind: 'section', id: 'proposal-review', label: 'Proposal Review' },
-  { kind: 'section', id: 'continuity-diagnostics', label: 'Continuity Diagnostics' },
-  { kind: 'section', id: 'continuity-warnings', label: 'Continuity Warnings' },
-  { kind: 'section', id: 'continuity-compression', label: 'Compression Trend' },
-  { kind: 'section', id: 'continuity-decision-retention', label: 'Decision Retention' },
-]
 
 export function CommandPalette({
   isOpen,
-  repositories,
+  targets,
   onClose,
   onOpen,
-  onSelectRepository,
-  onSelectSection,
-  onSelectTab,
+  onSelectTarget,
 }: CommandPaletteProps) {
   const [query, setQuery] = useState('')
   const inputRef = useRef<HTMLInputElement | null>(null)
@@ -82,24 +36,10 @@ export function CommandPalette({
   }, [onClose, onOpen])
 
   useEffect(() => {
-    if (!isOpen) {
-      setQuery('')
-      return
+    if (isOpen) {
+      inputRef.current?.focus()
     }
-
-    inputRef.current?.focus()
   }, [isOpen])
-
-  const targets = useMemo<PaletteTarget[]>(() => {
-    const repositoryTargets = repositories.map((entry) => ({
-      kind: 'repository' as const,
-      id: entry.repository.id,
-      label: entry.repository.name,
-      description: entry.repository.path,
-    }))
-
-    return [...tabTargets, ...sectionTargets, ...repositoryTargets]
-  }, [repositories])
 
   const filteredTargets = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
@@ -107,33 +47,15 @@ export function CommandPalette({
       return targets
     }
 
-    return targets.filter((target) => {
-      const searchable =
-        target.kind === 'repository'
-          ? `${target.label} ${target.description}`
-          : target.label
-
-      return searchable.toLowerCase().includes(normalizedQuery)
-    })
+    return targets.filter((target) => target.searchText.includes(normalizedQuery))
   }, [query, targets])
 
   if (!isOpen) {
     return null
   }
 
-  function selectTarget(target: PaletteTarget) {
-    if (target.kind === 'repository') {
-      onSelectRepository(target.id)
-    }
-
-    if (target.kind === 'tab') {
-      onSelectTab(target.id)
-    }
-
-    if (target.kind === 'section') {
-      onSelectSection(target.id)
-    }
-
+  function selectTarget(target: NavigationTarget) {
+    onSelectTarget(target)
     onClose()
   }
 
@@ -155,14 +77,18 @@ export function CommandPalette({
           {filteredTargets.map((target) => (
             <button
               type="button"
-              key={`${target.kind}-${target.id}`}
+              key={target.id}
               className="command-palette-item"
               onClick={() => selectTarget(target)}
             >
               <span>{target.label}</span>
-              <small>{target.kind}</small>
+              <small>{target.group}</small>
+              <em>{target.description}</em>
             </button>
           ))}
+          {filteredTargets.length === 0 ? (
+            <p className="command-palette-empty">No navigation targets found.</p>
+          ) : null}
         </div>
       </section>
     </div>

@@ -25,7 +25,7 @@
 .app-sidebar {
   min-height: 100vh;
   display: grid;
-  grid-template-rows: auto auto auto 1fr;
+  grid-template-rows: auto auto auto auto 1fr;
   gap: 18px;
   padding: 18px;
   border-right: 1px solid var(--border-subtle);
@@ -69,12 +69,14 @@ kbd {
 }
 
 .global-nav,
+.sidebar-discovery-list,
 .sidebar-repository-list {
   display: grid;
   gap: 8px;
 }
 
 .global-nav-item,
+.sidebar-discovery-item,
 .sidebar-repository-item,
 .command-palette-item {
   min-width: 0;
@@ -95,6 +97,34 @@ kbd {
   border-color: var(--accent-muted);
   color: var(--accent-fg);
   background: var(--accent-subtle);
+}
+
+.sidebar-discovery {
+  display: grid;
+  gap: 10px;
+}
+
+.sidebar-discovery-item {
+  display: grid;
+  gap: 4px;
+  padding: 9px 10px;
+}
+
+.sidebar-discovery-item span,
+.sidebar-discovery-item small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-discovery-item span {
+  color: var(--fg-default);
+}
+
+.sidebar-discovery-item small {
+  color: var(--fg-subtle);
+  font-size: 0.72rem;
 }
 
 .sidebar-repositories {
@@ -379,10 +409,28 @@ button:focus-visible {
   white-space: nowrap;
 }
 
-.command-palette-item small {
+.command-palette-item small,
+.command-palette-item em {
   color: var(--fg-subtle);
   font-size: 0.76rem;
+}
+
+.command-palette-item small {
   text-transform: capitalize;
+}
+
+.command-palette-item em {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-palette-empty {
+  margin: 0;
+  padding: 12px;
+  color: var(--fg-subtle);
 }
 
 .section-heading {

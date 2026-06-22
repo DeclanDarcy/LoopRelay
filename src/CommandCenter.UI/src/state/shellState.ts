@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from 'react'
 export type PrimaryWorkspaceTab = 'workspace' | 'execution' | 'operational-context' | 'continuity'
 
 type RepositoryPathSelections = Record<string, string>
+type RepositoryTabSelections = Record<string, PrimaryWorkspaceTab>
 
 function rememberPath(
   currentSelections: RepositoryPathSelections,
@@ -40,7 +41,9 @@ export function useShellState() {
     useState<RepositoryPathSelections>({})
   const [selectedMilestonePathsByRepository, setSelectedMilestonePathsByRepository] =
     useState<RepositoryPathSelections>({})
-  const [activePrimaryTab, setActivePrimaryTab] = useState<PrimaryWorkspaceTab>('workspace')
+  const [activePrimaryTabsByRepository, setActivePrimaryTabsByRepository] =
+    useState<RepositoryTabSelections>({})
+  const [activePrimaryTab, setActivePrimaryTabState] = useState<PrimaryWorkspaceTab>('workspace')
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
   const [sectionTarget, setSectionTarget] = useState<string | null>(null)
 
@@ -51,23 +54,33 @@ export function useShellState() {
     ? selectedMilestonePathsByRepository[selectedRepositoryId] ?? null
     : null
 
-  const selectRepository = useCallback((repositoryId: string) => {
-    setSelectedRepositoryId(repositoryId)
-  }, [])
+  const selectRepository = useCallback(
+    (repositoryId: string) => {
+      setSelectedRepositoryId(repositoryId)
+      setActivePrimaryTabState(activePrimaryTabsByRepository[repositoryId] ?? 'workspace')
+    },
+    [activePrimaryTabsByRepository],
+  )
 
-  const reconcileRepositorySelection = useCallback((repositoryIds: string[]) => {
-    setSelectedRepositoryId((currentId) => {
-      if (repositoryIds.length === 0) {
-        return null
-      }
+  const reconcileRepositorySelection = useCallback(
+    (repositoryIds: string[]) => {
+      setSelectedRepositoryId((currentId) => {
+        if (repositoryIds.length === 0) {
+          setActivePrimaryTabState('workspace')
+          return null
+        }
 
-      if (currentId && repositoryIds.includes(currentId)) {
-        return currentId
-      }
+        if (currentId && repositoryIds.includes(currentId)) {
+          return currentId
+        }
 
-      return repositoryIds[0]
-    })
-  }, [])
+        const nextRepositoryId = repositoryIds[0]
+        setActivePrimaryTabState(activePrimaryTabsByRepository[nextRepositoryId] ?? 'workspace')
+        return nextRepositoryId
+      })
+    },
+    [activePrimaryTabsByRepository],
+  )
 
   const selectArtifact = useCallback((repositoryId: string, relativePath: string | null) => {
     setSelectedArtifactPathsByRepository((currentSelections) =>
@@ -106,6 +119,19 @@ export function useShellState() {
     setSelectedRepositoryId((currentId) => (currentId === repositoryId ? null : currentId))
   }, [])
 
+  const setActivePrimaryTab = useCallback(
+    (tab: PrimaryWorkspaceTab) => {
+      setActivePrimaryTabState(tab)
+      if (selectedRepositoryId) {
+        setActivePrimaryTabsByRepository((currentSelections) => ({
+          ...currentSelections,
+          [selectedRepositoryId]: tab,
+        }))
+      }
+    },
+    [selectedRepositoryId],
+  )
+
   return useMemo(
     () => ({
       selectedRepositoryId,
@@ -138,6 +164,7 @@ export function useShellState() {
       selectedArtifactPath,
       selectedMilestonePath,
       selectedRepositoryId,
+      setActivePrimaryTab,
       sectionTarget,
     ],
   )

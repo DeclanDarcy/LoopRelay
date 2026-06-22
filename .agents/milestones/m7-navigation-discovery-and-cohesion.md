@@ -16,24 +16,24 @@ Goal: make the application feel like one operational environment rather than sep
 
 Expand navigation targets:
 
-- [ ] Repositories.
-- [ ] Repository Workspace.
-- [ ] Repository Execution.
-- [ ] Repository Operational Context.
-- [ ] Repository Continuity.
-- [ ] Open questions.
-- [ ] Active risks.
-- [ ] Stable decisions.
-- [ ] Continuity warnings.
-- [ ] Milestones.
-- [ ] Execution sessions.
-- [ ] Inspector sections.
+- [x] Repositories.
+- [x] Repository Workspace.
+- [x] Repository Execution.
+- [x] Repository Operational Context.
+- [x] Repository Continuity.
+- [x] Open questions.
+- [x] Active risks.
+- [x] Stable decisions.
+- [x] Continuity warnings.
+- [x] Milestones.
+- [x] Execution sessions.
+- [x] Inspector sections.
 
 Rules:
 
-- [ ] Targets must be built from existing projections.
-- [ ] Selecting a target only changes navigation state and optional section anchor.
-- [ ] No workflow mutations.
+- [x] Targets must be built from existing projections.
+- [x] Selecting a target only changes navigation state and optional section anchor.
+- [x] No workflow mutations.
 
 ## Workstream 7.2: Cross-Workspace Link Hardening
 
@@ -44,49 +44,49 @@ Audit and complete the links introduced during Workspace, Execution, Operational
 - [ ] Execution summaries -> Execution tab.
 - [ ] Milestones -> Workspace milestone section or execution context selection.
 - [ ] Pending proposal -> Operational Context proposal section.
-- [ ] Context diagnostics -> Workspace execution context panel.
+- [x] Context diagnostics -> Workspace execution context panel.
 - [ ] Decision/rationale warnings -> relevant Operational Context or Continuity section.
 - [ ] Report paths -> report/artifact surfaces where projected.
 
 Rules:
 
-- [ ] Links navigate only and preserve selected repository context.
-- [ ] Links do not refresh, mutate, or trigger workflows.
-- [ ] Broken or unavailable link targets degrade to the nearest valid workspace section.
+- [x] Links navigate only and preserve selected repository context.
+- [x] Links do not refresh, mutate, or trigger workflows.
+- [x] Broken or unavailable link targets degrade to the nearest valid workspace section.
 
 ## Workstream 7.3: Context Preservation
 
 Preserve:
 
-- [ ] Selected repository.
-- [ ] Active tab per repository where useful.
-- [ ] Selected artifact per repository.
-- [ ] Selected milestone per repository.
+- [x] Selected repository.
+- [x] Active tab per repository where useful.
+- [x] Selected artifact per repository.
+- [x] Selected milestone per repository.
 - [ ] Expanded sections.
-- [ ] Current palette query until close.
+- [x] Current palette query until close.
 
 ### Certification
 
-- [ ] Switching tabs does not wipe drafts unless the draft's owning object changes.
-- [ ] Switching repositories restores that repository's selected artifact and milestone when still valid.
+- [x] Switching tabs does not wipe drafts unless the draft's owning object changes.
+- [x] Switching repositories restores that repository's selected artifact and milestone when still valid.
 
 ## Workstream 7.4: Discovery Layer
 
 Expose projection-derived shortcuts:
 
-- [ ] Pending proposal.
-- [ ] Current execution.
-- [ ] Awaiting handoff review.
-- [ ] Awaiting commit.
-- [ ] Awaiting push.
-- [ ] Continuity warnings.
-- [ ] Open questions.
-- [ ] Active risks.
+- [x] Pending proposal.
+- [x] Current execution.
+- [x] Awaiting handoff review.
+- [x] Awaiting commit.
+- [x] Awaiting push.
+- [x] Continuity warnings.
+- [x] Open questions.
+- [x] Active risks.
 
 Rules:
 
-- [ ] Discovery surfaces point to projected information.
-- [ ] They do not interpret text, score health, or compute product meaning.
+- [x] Discovery surfaces point to projected information.
+- [x] They do not interpret text, score health, or compute product meaning.
 
 ## Workstream 7.5: Cohesion Audit
 

@@ -2,12 +2,12 @@
 
 ## Newly Authorized
 
-- Treat M6 as legitimately certified and closed.
-- Treat completion of the four observational workspaces, Workspace, Execution, Operational Context, and Continuity, as a substantial architecture milestone because they now share the same boundary: feature tabs own composition/presentation/navigation surfaces while `App.tsx` retains workflow authority, backend dispatch, mutation logic, readiness, and lifecycle decisions.
-- Preserve the highest-value Continuity invariant going into M7: Continuity shows evidence, diagnostics, and state; it must not introduce scores, readiness gates, workflow blocking, auto-correction, auto-promotion, auto-rejection, health scoring, confidence scoring, or quality scoring.
-- Start M7 as a navigation, discovery, and cohesion milestone rather than an authority or workflow-expansion milestone.
-- Treat the main M7 risk as navigation fragmentation across sidebar navigation, workspace tabs, cross-links, artifact links, command palette entries, and section anchors.
-- M7 should produce a certified navigation/discovery model that standardizes workspace ids, section ids, anchor ids, cross-link targets, command palette targets, and artifact navigation targets.
-- Preserve the M7 authority constraint that navigation is not workflow mutation.
-- Command palette actions in M7 should continue to resolve only to navigation-oriented behavior such as navigate, focus, select, or scroll unless an explicit backend-owned workflow command is separately authorized.
-- Certify M7 by checking discovery consistency, anchor consistency, cross-link consistency, and the invariant that navigation still works if backend mutation endpoints disappear.
+- Treat first-class navigation targets in `src/CommandCenter.UI/src/lib/navigation.ts` as the correct architectural layer for M7 navigation cohesion.
+- Keep navigation targets projection-derived rather than UI-derived so discovery and navigation remain anchored to backend-owned facts.
+- Continue using the command palette only for navigation-oriented outcomes: navigate, focus, scroll, or select.
+- Treat Sidebar Discovery as another view of the shared navigation target model, not as a separate navigation system.
+- Continue pushing M7 toward one destination registry with many entry points rather than multiple destination registries.
+- Treat per-repository active primary tab preservation as valid shell navigation state and not workflow authority.
+- Treat stable anchors for milestones, git workflow, and generated handoffs as navigation identity, not workflow identity.
+- Make the next M7 slice a cross-workspace link audit followed by cohesion audit work across status language, interaction behavior, focus, keyboard behavior, and responsive behavior.
+- Preserve the current App-level ownership of workflow authority, draft authority, readiness authority, and mutation authority while the extracted surfaces converge through shared navigation.
