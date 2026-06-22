@@ -6,6 +6,7 @@ import type {
   DecisionContextSnapshot,
   DecisionEvidenceInspection,
   DecisionGovernanceReport,
+  ExecutionDecisionProjection,
   DecisionOptionComparison,
   DecisionProposal,
   DecisionProposalBrowserItem,
@@ -141,6 +142,12 @@ export function generateDecisionGovernanceReport(repositoryId: string) {
 
 export function listDecisionGovernanceReports(repositoryId: string) {
   return invokeCommand<DecisionGovernanceReport[]>('list_decision_governance_reports', {
+    repositoryId,
+  })
+}
+
+export function getExecutionDecisionProjection(repositoryId: string) {
+  return invokeCommand<ExecutionDecisionProjection>('get_execution_decision_projection', {
     repositoryId,
   })
 }

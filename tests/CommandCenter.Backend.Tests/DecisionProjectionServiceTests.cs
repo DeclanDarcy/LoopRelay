@@ -27,6 +27,7 @@ public sealed class DecisionProjectionServiceTests
         ExecutionConstraint constraint = Assert.Single(projection.Constraints);
         Assert.Equal("DEC-0001", constraint.DecisionId);
         Assert.Equal("Use repository artifacts", constraint.Statement);
+        Assert.Equal(ExecutionProjectionKind.RepositoryConvention, constraint.ProjectionKind);
         Assert.Empty(projection.Directives);
     }
 
@@ -62,15 +63,92 @@ public sealed class DecisionProjectionServiceTests
         Harness harness = CreateHarness();
         await harness.DecisionRepository.SaveDecisionAsync(
             harness.Repository,
-            CreateDecision(harness.Repository.Id, "DEC-0001", DecisionState.Resolved, DecisionOutcome.Accepted, DecisionClassification.Tactical));
+            CreateDecision(
+                harness.Repository.Id,
+                "DEC-0001",
+                DecisionState.Resolved,
+                DecisionOutcome.Accepted,
+                DecisionClassification.Tactical,
+                "Apply implementation patch",
+                "Apply the implementation patch for the current milestone."));
 
         ExecutionDecisionProjection projection = await harness.Service.BuildExecutionProjectionAsync(harness.Repository.Id);
 
         ExecutionDirective directive = Assert.Single(projection.Directives);
         Assert.Equal("DEC-0001", directive.DecisionId);
         Assert.Equal(DecisionClassification.Tactical, directive.Classification);
-        Assert.Equal("Use repository artifacts", directive.Statement);
+        Assert.Equal("Apply implementation patch: Apply the implementation patch for the current milestone.", directive.Statement);
+        Assert.Equal(ExecutionProjectionKind.ImplementationDirective, directive.ProjectionKind);
         Assert.Empty(projection.Constraints);
+    }
+
+    [Fact]
+    public async Task ProjectionClassifiesTechnologyChoicesAsConstraints()
+    {
+        Harness harness = CreateHarness();
+        await harness.DecisionRepository.SaveDecisionAsync(
+            harness.Repository,
+            CreateDecision(
+                harness.Repository.Id,
+                "DEC-0001",
+                DecisionState.Resolved,
+                DecisionOutcome.Accepted,
+                DecisionClassification.Tactical,
+                "Use React framework",
+                "Use React framework for decision lifecycle UI surfaces."));
+
+        ExecutionDecisionProjection projection = await harness.Service.BuildExecutionProjectionAsync(harness.Repository.Id);
+
+        ExecutionConstraint constraint = Assert.Single(projection.Constraints);
+        Assert.Equal("DEC-0001", constraint.DecisionId);
+        Assert.Equal(ExecutionProjectionKind.TechnologyChoice, constraint.ProjectionKind);
+        Assert.Empty(projection.Directives);
+    }
+
+    [Fact]
+    public async Task ProjectionClassifiesWorkflowPoliciesAsDirectives()
+    {
+        Harness harness = CreateHarness();
+        await harness.DecisionRepository.SaveDecisionAsync(
+            harness.Repository,
+            CreateDecision(
+                harness.Repository.Id,
+                "DEC-0001",
+                DecisionState.Resolved,
+                DecisionOutcome.Accepted,
+                DecisionClassification.Strategic,
+                "Require review workflow",
+                "Require review before mutating lifecycle authority."));
+
+        ExecutionDecisionProjection projection = await harness.Service.BuildExecutionProjectionAsync(harness.Repository.Id);
+
+        ExecutionDirective directive = Assert.Single(projection.Directives);
+        Assert.Equal("DEC-0001", directive.DecisionId);
+        Assert.Equal(ExecutionProjectionKind.WorkflowPolicy, directive.ProjectionKind);
+        Assert.Empty(projection.Constraints);
+    }
+
+    [Fact]
+    public async Task ProjectionClassifiesRepositoryConventionsAsConstraints()
+    {
+        Harness harness = CreateHarness();
+        await harness.DecisionRepository.SaveDecisionAsync(
+            harness.Repository,
+            CreateDecision(
+                harness.Repository.Id,
+                "DEC-0001",
+                DecisionState.Resolved,
+                DecisionOutcome.Accepted,
+                DecisionClassification.Operational,
+                "Preserve .agents layout",
+                "Preserve .agents decision artifact layout."));
+
+        ExecutionDecisionProjection projection = await harness.Service.BuildExecutionProjectionAsync(harness.Repository.Id);
+
+        ExecutionConstraint constraint = Assert.Single(projection.Constraints);
+        Assert.Equal("DEC-0001", constraint.DecisionId);
+        Assert.Equal(ExecutionProjectionKind.RepositoryConvention, constraint.ProjectionKind);
+        Assert.Empty(projection.Directives);
     }
 
     [Fact]
@@ -137,7 +215,9 @@ public sealed class DecisionProjectionServiceTests
         string decisionId,
         DecisionState state,
         DecisionOutcome outcome,
-        DecisionClassification classification)
+        DecisionClassification classification,
+        string selectedOptionTitle = "Use repository artifacts",
+        string selectedOptionDescription = "")
     {
         var id = new DecisionId(decisionId);
         var source = new DecisionSourceReference(
@@ -146,8 +226,8 @@ public sealed class DecisionProjectionServiceTests
             DecisionId: id);
         var selectedOption = new DecisionOption(
             "OPT-0001",
-            "Use repository artifacts",
-            string.Empty,
+            selectedOptionTitle,
+            selectedOptionDescription,
             [new DecisionEvidence("Repository artifacts are authoritative.", [source])]);
         var snapshot = new DecisionResolvedProposalSnapshot(
             "PROP-0001",

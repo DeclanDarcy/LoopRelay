@@ -47,6 +47,13 @@ export type DecisionGovernanceSeverity = 'Info' | 'Warning' | 'Blocking'
 
 export type DecisionHealthAssessment = 'Healthy' | 'AdvisoryFindings' | 'Blocked'
 
+export type ExecutionProjectionKind =
+  | 'ArchitecturalConstraint'
+  | 'ImplementationDirective'
+  | 'TechnologyChoice'
+  | 'WorkflowPolicy'
+  | 'RepositoryConvention'
+
 export type DecisionSourceReference = {
   sourceKind: string
   relativePath: string | null
@@ -534,5 +541,43 @@ export type DecisionGovernanceReport = {
   health: DecisionHealthAssessment
   summary: DecisionGovernanceSummary
   findings: DecisionGovernanceFinding[]
+  diagnostics: string[]
+}
+
+export type ExecutionConstraint = {
+  id: string
+  decisionId: string
+  title: string
+  statement: string
+  classification: DecisionClassification
+  projectionKind: ExecutionProjectionKind
+  sources: DecisionSourceReference[]
+}
+
+export type ExecutionDirective = {
+  id: string
+  decisionId: string
+  title: string
+  statement: string
+  classification: DecisionClassification
+  projectionKind: ExecutionProjectionKind
+  sources: DecisionSourceReference[]
+}
+
+export type ExecutionDecisionConflict = {
+  id: string
+  decisionId: string
+  title: string
+  statement: string
+  conflictingExcerpt: string
+  sources: DecisionSourceReference[]
+}
+
+export type ExecutionDecisionProjection = {
+  repositoryId: string
+  generatedAt: string
+  constraints: ExecutionConstraint[]
+  directives: ExecutionDirective[]
+  conflicts: ExecutionDecisionConflict[]
   diagnostics: string[]
 }

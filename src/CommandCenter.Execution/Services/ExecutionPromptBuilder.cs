@@ -118,7 +118,7 @@ public sealed class ExecutionPromptBuilder : IExecutionPromptBuilder
 
         foreach (ExecutionConstraint constraint in constraints.OrderBy(constraint => constraint.DecisionId, StringComparer.Ordinal))
         {
-            builder.AppendLine($"- {constraint.DecisionId} ({constraint.Classification}): {constraint.Statement}");
+            builder.AppendLine($"- {constraint.DecisionId} ({constraint.ProjectionKind}, {constraint.Classification}): {constraint.Statement}");
         }
     }
 
@@ -133,7 +133,7 @@ public sealed class ExecutionPromptBuilder : IExecutionPromptBuilder
 
         foreach (ExecutionDirective directive in directives.OrderBy(directive => directive.DecisionId, StringComparer.Ordinal))
         {
-            builder.AppendLine($"- {directive.DecisionId} ({directive.Classification}): {directive.Statement}");
+            builder.AppendLine($"- {directive.DecisionId} ({directive.ProjectionKind}, {directive.Classification}): {directive.Statement}");
         }
     }
 

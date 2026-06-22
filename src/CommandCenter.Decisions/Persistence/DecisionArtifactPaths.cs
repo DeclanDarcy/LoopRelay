@@ -14,6 +14,7 @@ internal static partial class DecisionArtifactPaths
     private const string ProposalsRoot = $"{DecisionsRoot}/proposals";
     private const string AssimilationRoot = $"{DecisionsRoot}/assimilation";
     private const string GovernanceRoot = $"{DecisionsRoot}/governance";
+    private const string CertificationRoot = $"{DecisionsRoot}/certification";
 
     public static string DecisionDirectory(string id)
     {
@@ -110,9 +111,19 @@ internal static partial class DecisionArtifactPaths
         return ArtifactPath.CombineRelative(GovernanceRoot, $"{ValidateReportId(reportId)}.json");
     }
 
+    public static string CertificationReportJson(string reportId)
+    {
+        return ArtifactPath.CombineRelative(CertificationRoot, $"{ValidateCertificationReportId(reportId)}.json");
+    }
+
     public static string GovernanceRootPath()
     {
         return GovernanceRoot;
+    }
+
+    public static string CertificationRootPath()
+    {
+        return CertificationRoot;
     }
 
     public static string DecisionsIndex()
@@ -168,11 +179,24 @@ internal static partial class DecisionArtifactPaths
         return id;
     }
 
+    public static string ValidateCertificationReportId(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id) || !CertificationReportIdPattern().IsMatch(id))
+        {
+            throw new ArgumentException("Certification report id must match certification.YYYYMMDDHHMMSSFFFFFFF.", nameof(id));
+        }
+
+        return id;
+    }
+
     [GeneratedRegex("^[A-Z]+-[0-9]{4}$")]
     private static partial Regex IdPattern();
 
     [GeneratedRegex("^governance\\.[0-9]{21}$")]
     private static partial Regex ReportIdPattern();
+
+    [GeneratedRegex("^certification\\.[0-9]{21}$")]
+    private static partial Regex CertificationReportIdPattern();
 }
 
 internal enum DecisionArtifactKind

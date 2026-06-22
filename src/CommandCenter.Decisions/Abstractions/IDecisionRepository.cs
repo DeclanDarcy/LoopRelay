@@ -55,4 +55,8 @@ public interface IDecisionRepository
     Task<IReadOnlyList<DecisionGovernanceReport>> ListGovernanceReportsAsync(Repository repository);
 
     Task<DecisionGovernanceReport> SaveGovernanceReportAsync(Repository repository, DecisionGovernanceReport report);
+
+    Task<IReadOnlyList<DecisionCertificationReport>> ListCertificationReportsAsync(Repository repository);
+
+    Task<DecisionCertificationReport> SaveCertificationReportAsync(Repository repository, DecisionCertificationReport report);
 }

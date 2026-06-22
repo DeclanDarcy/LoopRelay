@@ -32,6 +32,56 @@ public sealed class DecisionProjectionService(
         ("preserve ", true)
     ];
 
+    private static readonly string[] TechnologyTerms =
+    [
+        "technology",
+        "framework",
+        "library",
+        "package",
+        "dependency",
+        "provider",
+        "runtime",
+        "api",
+        "sdk",
+        ".net",
+        "react",
+        "tauri",
+        "rust",
+        "typescript"
+    ];
+
+    private static readonly string[] WorkflowTerms =
+    [
+        "workflow",
+        "process",
+        "review",
+        "approval",
+        "promotion",
+        "governance",
+        "handoff",
+        "commit",
+        "push",
+        "rotation",
+        "certification"
+    ];
+
+    private static readonly string[] RepositoryConventionTerms =
+    [
+        "repository",
+        "repo",
+        "artifact",
+        "path",
+        "file",
+        "directory",
+        "folder",
+        ".agents",
+        "markdown",
+        "json",
+        "projection",
+        "naming",
+        "convention"
+    ];
+
     public async Task<ExecutionDecisionProjection> BuildExecutionProjectionAsync(
         Guid repositoryId,
         string? executionRequest = null,
@@ -62,8 +112,9 @@ public sealed class DecisionProjectionService(
             }
 
             string statement = BuildStatement(decision);
+            ExecutionProjectionKind projectionKind = ClassifyProjectionKind(decision, statement);
             DecisionSourceReference[] sources = BuildSources(decision);
-            if (decision.Classification is DecisionClassification.Architectural or DecisionClassification.Strategic)
+            if (ProjectsAsConstraint(projectionKind))
             {
                 constraints.Add(new ExecutionConstraint(
                     $"ECON-{constraints.Count + 1:0000}",
@@ -71,6 +122,7 @@ public sealed class DecisionProjectionService(
                     decision.Title,
                     statement,
                     decision.Classification,
+                    projectionKind,
                     sources));
             }
             else
@@ -81,6 +133,7 @@ public sealed class DecisionProjectionService(
                     decision.Title,
                     statement,
                     decision.Classification,
+                    projectionKind,
                     sources));
             }
         }
@@ -136,6 +189,71 @@ public sealed class DecisionProjectionService(
         return string.IsNullOrWhiteSpace(resolution.Rationale)
             ? decision.Context
             : resolution.Rationale;
+    }
+
+    private static bool ProjectsAsConstraint(ExecutionProjectionKind projectionKind)
+    {
+        return projectionKind is ExecutionProjectionKind.ArchitecturalConstraint
+            or ExecutionProjectionKind.TechnologyChoice
+            or ExecutionProjectionKind.RepositoryConvention;
+    }
+
+    private static ExecutionProjectionKind ClassifyProjectionKind(Decision decision, string statement)
+    {
+        string primaryText = Normalize(string.Join(
+            " ",
+            decision.Title,
+            decision.Context,
+            statement));
+        ExecutionProjectionKind? primaryKind = TryClassifyByTerms(primaryText, includeRepositoryConvention: true);
+        if (primaryKind is not null)
+        {
+            return primaryKind.Value;
+        }
+
+        string evidenceText = Normalize(string.Join(
+            " ",
+            string.Join(" ", decision.Evidence.Select(evidence => evidence.Summary)),
+            string.Join(" ", decision.Resolution?.SourceProposalSnapshot?.Evidence.Select(evidence => evidence.Summary) ?? [])));
+        ExecutionProjectionKind? evidenceKind = TryClassifyByTerms(evidenceText, includeRepositoryConvention: false);
+        if (evidenceKind is not null)
+        {
+            return evidenceKind.Value;
+        }
+
+        return decision.Classification switch
+        {
+            DecisionClassification.Architectural => ExecutionProjectionKind.ArchitecturalConstraint,
+            DecisionClassification.Strategic => ExecutionProjectionKind.WorkflowPolicy,
+            DecisionClassification.Tactical => ExecutionProjectionKind.ImplementationDirective,
+            DecisionClassification.Operational => ExecutionProjectionKind.WorkflowPolicy,
+            _ => ExecutionProjectionKind.ImplementationDirective
+        };
+    }
+
+    private static ExecutionProjectionKind? TryClassifyByTerms(string searchable, bool includeRepositoryConvention)
+    {
+        if (ContainsAny(searchable, TechnologyTerms))
+        {
+            return ExecutionProjectionKind.TechnologyChoice;
+        }
+
+        if (ContainsAny(searchable, WorkflowTerms))
+        {
+            return ExecutionProjectionKind.WorkflowPolicy;
+        }
+
+        if (includeRepositoryConvention && ContainsAny(searchable, RepositoryConventionTerms))
+        {
+            return ExecutionProjectionKind.RepositoryConvention;
+        }
+
+        return null;
+    }
+
+    private static bool ContainsAny(string value, IReadOnlyList<string> terms)
+    {
+        return terms.Any(term => value.Contains(term, StringComparison.Ordinal));
     }
 
     private static DecisionSourceReference[] BuildSources(Decision decision)

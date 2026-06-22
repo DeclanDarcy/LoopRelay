@@ -899,6 +899,20 @@ fn list_decision_governance_reports(repository_id: String) -> Result<Value, Stri
 }
 
 #[tauri::command]
+fn get_execution_decision_projection(repository_id: String) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/execution-projection"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "execution decision projection lookup failed")
+}
+
+#[tauri::command]
 fn get_continuity_diagnostics(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/continuity/diagnostics"
@@ -1277,6 +1291,7 @@ fn main() {
             get_decision_governance,
             generate_decision_governance_report,
             list_decision_governance_reports,
+            get_execution_decision_projection,
             get_continuity_diagnostics,
             generate_continuity_report,
             list_continuity_reports,

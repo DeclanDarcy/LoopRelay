@@ -9,7 +9,7 @@ expose governed resolved decisions to execution as constraints and directives wi
 - [x] Add `ExecutionDecisionProjection`, `ExecutionConstraint`, `ExecutionDirective`, `ExecutionDecisionConflict`, and consumption diagnostics.
 - [x] Implement `IDecisionProjectionService`.
 - [x] Filter only resolved, execution-relevant decisions without blocking governance findings.
-- [ ] Project architectural constraints, implementation directives, technology choices, workflow policies, and repository conventions.
+- [x] Project architectural constraints, implementation directives, technology choices, workflow policies, and repository conventions.
 - [x] Exclude rejected proposals, deferred decisions, review notes, draft proposals, unresolved candidates, stale proposals, historical analysis, and decisions with blocking governance findings.
 - [x] Extend `ExecutionContext` with governed decision projections and diagnostics.
 - [x] Update `ExecutionContextService` to inject `IDecisionProjectionService`.
@@ -30,7 +30,7 @@ expose governed resolved decisions to execution as constraints and directives wi
 
 ## Exit Criteria
 
-- [ ] Execution consumes governed authoritative decisions.
-- [ ] Execution cannot mutate, govern, or resolve decisions.
-- [ ] Decision influence is traceable from execution context back to `DEC-*`.
-- [ ] Governance problems are discovered before projection into execution.
+- [x] Execution consumes governed authoritative decisions.
+- [x] Execution cannot mutate, govern, or resolve decisions.
+- [x] Decision influence is traceable from execution context back to `DEC-*`.
+- [x] Governance problems are discovered before projection into execution.

@@ -6,26 +6,26 @@ prove the decision lifecycle works end to end, recovers from repository artifact
 
 ## Backend Work
 
-- [ ] Add `DecisionLifecycleCertificationResult`, `DecisionCertificationReport`, `DecisionCertificationEvidence`, and long-horizon fixtures.
-- [ ] Implement `IDecisionCertificationService`.
+- [x] Add `DecisionLifecycleCertificationResult`, `DecisionCertificationReport`, `DecisionCertificationEvidence`, and long-horizon fixtures.
+- [x] Implement `IDecisionCertificationService`.
 - [ ] Validate:
-  - [ ] context resolution
-  - [ ] discovery
-  - [ ] candidate lifecycle
-  - [ ] proposal generation
-  - [ ] proposal lifecycle
-  - [ ] review
-  - [ ] refinement
-  - [ ] resolution
-  - [ ] governance
-  - [ ] execution consumption
-  - [ ] operational-context assimilation boundary
-  - [ ] authority boundaries
-  - [ ] recovery after reload
-  - [ ] artifact reconstruction
-  - [ ] multi-repository isolation
-  - [ ] long-horizon decision histories
-- [ ] Generate certification reports under `.agents/decisions/certification`.
+  - [x] context resolution
+  - [x] discovery
+  - [x] candidate lifecycle
+  - [x] proposal generation
+  - [x] proposal lifecycle
+  - [x] review
+  - [x] refinement
+  - [x] resolution
+  - [x] governance
+  - [x] execution consumption
+  - [x] operational-context assimilation boundary
+  - [x] authority boundaries
+  - [x] recovery after reload
+  - [x] artifact reconstruction
+  - [x] multi-repository isolation
+  - [x] long-horizon decision histories
+- [x] Generate certification reports under `.agents/decisions/certification`.
 
 ## UI Work
 
@@ -35,10 +35,10 @@ prove the decision lifecycle works end to end, recovers from repository artifact
 ## Tests
 
 - [ ] End-to-end lifecycle tests.
-- [ ] Restart recovery tests.
-- [ ] Artifact recovery tests.
-- [ ] Multi-repository isolation tests.
-- [ ] Long-horizon scale tests with 50, 100, and 200 decision histories.
+- [x] Restart recovery tests.
+- [x] Artifact recovery tests.
+- [x] Multi-repository isolation tests.
+- [x] Long-horizon scale tests with 50, 100, and 200 decision histories.
 - [ ] Authority boundary tests proving execution and governance cannot resolve decisions.
 - [ ] Assimilation boundary tests proving decision resolution does not mutate operational context.
 - [ ] Certification report reproducibility tests.

@@ -15,6 +15,7 @@ public sealed class InMemoryDecisionRepository : IDecisionRepository
     private readonly Dictionary<Guid, SortedDictionary<string, SortedDictionary<string, DecisionReviewNote>>> reviewNotesByRepository = [];
     private readonly Dictionary<Guid, SortedDictionary<string, DecisionAssimilationRecommendation>> assimilationByRepository = [];
     private readonly Dictionary<Guid, SortedDictionary<string, DecisionGovernanceReport>> governanceReportsByRepository = [];
+    private readonly Dictionary<Guid, SortedDictionary<string, DecisionCertificationReport>> certificationReportsByRepository = [];
 
     public Task<DecisionId> AllocateDecisionIdAsync(Repository repository)
     {
@@ -195,6 +196,24 @@ public sealed class InMemoryDecisionRepository : IDecisionRepository
         return Task.FromResult(report);
     }
 
+    public Task<IReadOnlyList<DecisionCertificationReport>> ListCertificationReportsAsync(Repository repository)
+    {
+        return Task.FromResult<IReadOnlyList<DecisionCertificationReport>>(GetCertificationReports(repository.Id).Values.ToArray());
+    }
+
+    public Task<DecisionCertificationReport> SaveCertificationReportAsync(
+        Repository repository,
+        DecisionCertificationReport report)
+    {
+        if (report.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException("Decision certification report belongs to a different repository.");
+        }
+
+        GetCertificationReports(repository.Id)[report.Id] = report;
+        return Task.FromResult(report);
+    }
+
     private SortedDictionary<string, Decision> GetDecisions(Guid repositoryId)
     {
         return GetRepositoryMap(decisionsByRepository, repositoryId);
@@ -249,6 +268,11 @@ public sealed class InMemoryDecisionRepository : IDecisionRepository
     private SortedDictionary<string, DecisionGovernanceReport> GetGovernanceReports(Guid repositoryId)
     {
         return GetRepositoryMap(governanceReportsByRepository, repositoryId);
+    }
+
+    private SortedDictionary<string, DecisionCertificationReport> GetCertificationReports(Guid repositoryId)
+    {
+        return GetRepositoryMap(certificationReportsByRepository, repositoryId);
     }
 
     private static SortedDictionary<string, T> GetRepositoryMap<T>(

@@ -2,34 +2,43 @@
 
 ## New State From This Slice
 
-- Started Milestone 8 execution consumption.
-- Added structured execution projection domain models:
-  - `ExecutionDecisionProjection`
-  - `ExecutionConstraint`
-  - `ExecutionDirective`
-  - `ExecutionDecisionConflict`
-- Added and registered `IDecisionProjectionService` / `DecisionProjectionService`.
-- Execution projection currently includes only accepted resolved decisions and excludes any decision related to a blocking governance finding.
-- Architectural and strategic accepted decisions project as execution constraints.
-- Tactical and operational accepted decisions project as execution directives.
-- Projection statements are currently derived from the selected resolved proposal option when available, falling back to resolution rationale or decision context.
-- Projection diagnostics record governed decisions excluded by blocking governance.
-- Added simple contradiction detection between governed projected statements and milestone/request text for opposite directive prefixes such as `use` vs `avoid`.
-- Extended `ExecutionContext` with nullable `DecisionProjection`.
-- Updated `ExecutionContextService` to request governed decision projection when `IDecisionProjectionService` is available and to add projection conflicts to launch-blocking validation errors.
-- Updated `ExecutionPromptBuilder` to render a stable `Governed Decision Projection` section before raw context artifacts.
-- Preserved raw `CurrentDecisions` artifact inclusion as backward-compatible context.
-- Updated `.agents/milestones/m8-execution-consumption.md` to mark completed M8 backend and test items.
-- Rotated prior handoff to `.agents/handoffs/handoff.0041.md`.
+- Started Milestone 9 lifecycle certification backend work.
+- Added first-class certification models:
+  - `DecisionLifecycleCertificationResult`
+  - `DecisionCertificationReport`
+  - `DecisionCertificationEvidence`
+  - `DecisionLifecycleCertificationResultKind`
+- Added `IDecisionCertificationService` and `DecisionCertificationService`.
+- Certification now rebuilds lifecycle state from repository decision artifacts and records evidence for:
+  - context resolution
+  - discovery
+  - candidate lifecycle
+  - proposal generation and lifecycle
+  - review and refinement readability
+  - resolution metadata
+  - governance health
+  - execution projection consumption
+  - operational-context assimilation boundary
+  - authority boundaries
+  - reload/reconstruction consistency
+  - multi-repository ownership
+  - long-horizon decision histories
+- Added certification report persistence under `.agents/decisions/certification/certification.<timestamp>.json`.
+- Added backend endpoints:
+  - `GET /api/repositories/{repositoryId}/decisions/certification`
+  - `POST /api/repositories/{repositoryId}/decisions/certification`
+  - `GET /api/repositories/{repositoryId}/decisions/certification/reports`
+- Added backend tests for report persistence, read-only current certification, system-authority boundary failure, and 50/100/200 decision-history scale thresholds.
+- Rotated prior handoff to `.agents/handoffs/handoff.0043.md`.
 
 ## Verification
 
 - `dotnet build CommandCenter.slnx` passes.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "DecisionProjectionServiceTests|ExecutionContextServiceTests|ExecutionPromptBuilderTests"` passes: 27 tests.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes: 338 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter DecisionCertificationServiceTests` passes.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes: 348 tests.
 
 ## Next Slice
 
-- Continue M8 by strengthening projection taxonomy beyond the initial classification mapping.
-- Add source-rich projection for explicit technology choices, workflow policies, repository conventions, and implementation directives.
-- Consider adding an endpoint or UI-visible diagnostics surface for `/decisions/execution-projection` if not already fully wired through backend routes.
+- Add UI and Tauri certification surfaces for Milestone 9.
+- Add explicit endpoint/API tests for certification HTTP behavior.
+- Add deeper authority-boundary and assimilation-boundary tests proving governance/execution/certification cannot resolve decisions and decision resolution does not mutate operational context.

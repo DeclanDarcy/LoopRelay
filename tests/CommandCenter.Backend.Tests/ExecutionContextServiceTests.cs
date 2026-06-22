@@ -265,6 +265,7 @@ public sealed class ExecutionContextServiceTests
                     "Workflow policy",
                     "Use repository artifacts",
                     DecisionClassification.Operational,
+                    ExecutionProjectionKind.RepositoryConvention,
                     [])
             ],
             [],

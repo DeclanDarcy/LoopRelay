@@ -8,4 +8,5 @@ public sealed record ExecutionConstraint(
     string Title,
     string Statement,
     DecisionClassification Classification,
+    ExecutionProjectionKind ProjectionKind,
     IReadOnlyList<DecisionSourceReference> Sources);

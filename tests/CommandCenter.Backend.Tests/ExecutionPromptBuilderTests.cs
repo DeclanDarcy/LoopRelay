@@ -106,6 +106,7 @@ public sealed class ExecutionPromptBuilderTests
                         "Architecture",
                         "Use repository artifacts",
                         DecisionClassification.Architectural,
+                        ExecutionProjectionKind.RepositoryConvention,
                         [])
                 ],
                 [],
@@ -113,7 +114,7 @@ public sealed class ExecutionPromptBuilderTests
                 [])));
 
         Assert.Contains("## Governed Decision Projection", prompt.Text);
-        Assert.Contains("- DEC-0001 (Architectural): Use repository artifacts", prompt.Text);
+        Assert.Contains("- DEC-0001 (RepositoryConvention, Architectural): Use repository artifacts", prompt.Text);
         Assert.True(
             prompt.Text.IndexOf("## Governed Decision Projection", StringComparison.Ordinal) <
             prompt.Text.IndexOf("CurrentDecisions: .agents/decisions/decisions.md", StringComparison.Ordinal));

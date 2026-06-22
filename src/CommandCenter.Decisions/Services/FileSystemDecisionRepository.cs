@@ -359,6 +359,53 @@ public sealed class FileSystemDecisionRepository(IArtifactStore artifactStore) :
         return report;
     }
 
+    public async Task<IReadOnlyList<DecisionCertificationReport>> ListCertificationReportsAsync(Repository repository)
+    {
+        string root = DecisionArtifactPaths.Resolve(repository, DecisionArtifactPaths.CertificationRootPath());
+        IReadOnlyList<string> files = await artifactStore.ListAsync(root, "certification.*.json");
+        var reports = new List<DecisionCertificationReport>();
+
+        foreach (string file in files.OrderBy(file => file, StringComparer.Ordinal))
+        {
+            string? reportId = Path.GetFileNameWithoutExtension(file);
+            if (string.IsNullOrWhiteSpace(reportId))
+            {
+                continue;
+            }
+
+            DecisionCertificationReport? report = await ReadPayloadAsync<DecisionCertificationReport>(
+                repository,
+                DecisionArtifactPaths.CertificationReportJson(reportId));
+            if (report is not null)
+            {
+                reports.Add(report);
+            }
+        }
+
+        return reports
+            .OrderBy(report => report.Id, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    public async Task<DecisionCertificationReport> SaveCertificationReportAsync(
+        Repository repository,
+        DecisionCertificationReport report)
+    {
+        DecisionArtifactPaths.ValidateCertificationReportId(report.Id);
+        if (report.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException("Decision certification report belongs to a different repository.");
+        }
+
+        await WriteDocumentAsync(
+            repository,
+            DecisionArtifactPaths.CertificationReportJson(report.Id),
+            report,
+            report.GeneratedAt,
+            report.GeneratedAt);
+        return report;
+    }
+
     private async Task<string> AllocateIdAsync(Repository repository, DecisionArtifactKind kind, string prefix)
     {
         IReadOnlyList<string> directories = await ListArtifactDirectoriesAsync(repository, kind);

@@ -42,6 +42,10 @@ public static class DecisionEndpoints
         app.MapGetDecisionGovernance();
         app.MapGenerateDecisionGovernanceReport();
         app.MapListDecisionGovernanceReports();
+        app.MapGetExecutionDecisionProjection();
+        app.MapGetDecisionCertification();
+        app.MapRunDecisionCertification();
+        app.MapListDecisionCertificationReports();
         app.MapExpireDecisionProposal();
         app.MapDiscardDecisionProposal();
         return app;
@@ -947,6 +951,103 @@ public static class DecisionEndpoints
             try
             {
                 return Results.Ok(await governanceService.ListReportsAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGetExecutionDecisionProjection(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/decisions/execution-projection", async (
+            Guid repositoryId,
+            string? executionRequest,
+            string? milestoneContent,
+            IDecisionProjectionService projectionService) =>
+        {
+            try
+            {
+                return Results.Ok(await projectionService.BuildExecutionProjectionAsync(
+                    repositoryId,
+                    executionRequest,
+                    milestoneContent));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGetDecisionCertification(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/decisions/certification", async (
+            Guid repositoryId,
+            IDecisionCertificationService certificationService) =>
+        {
+            try
+            {
+                return Results.Ok(await certificationService.GetCurrentCertificationAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapRunDecisionCertification(this IEndpointRouteBuilder app) =>
+        app.MapPost("/api/repositories/{repositoryId:guid}/decisions/certification", async (
+            Guid repositoryId,
+            IDecisionCertificationService certificationService) =>
+        {
+            try
+            {
+                return Results.Ok(await certificationService.RunCertificationAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapListDecisionCertificationReports(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/decisions/certification/reports", async (
+            Guid repositoryId,
+            IDecisionCertificationService certificationService) =>
+        {
+            try
+            {
+                return Results.Ok(await certificationService.ListReportsAsync(repositoryId));
             }
             catch (KeyNotFoundException exception)
             {

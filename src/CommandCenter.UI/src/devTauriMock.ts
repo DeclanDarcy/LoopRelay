@@ -21,6 +21,7 @@ import type {
   DecisionRefinementRequest,
   DecisionReviewWorkspace,
   DecisionSourceAttribution,
+  ExecutionDecisionProjection,
   ExecutionContextPreview,
   ExecutionSessionState,
   ExecutionSession,
@@ -1107,6 +1108,97 @@ function createDecisionGovernanceReport(
   }
 
   return report
+}
+
+function createExecutionDecisionProjection(
+  state: MockState,
+  repositoryId: string,
+): ExecutionDecisionProjection {
+  const decisions = Object.values(state.decisions[repositoryId] ?? {})
+  const governance = createDecisionGovernanceReport(state, repositoryId, false)
+  const blockedDecisionIds = new Set(
+    governance.findings
+      .filter((finding) => finding.blocksExecutionProjection)
+      .flatMap((finding) => finding.relatedDecisionIds),
+  )
+  const constraints: ExecutionDecisionProjection['constraints'] = []
+  const directives: ExecutionDecisionProjection['directives'] = []
+  const diagnostics: string[] = []
+
+  for (const decision of decisions.sort((left, right) => left.id.localeCompare(right.id))) {
+    if (decision.state !== 'Resolved' || decision.resolution?.outcome !== 'Accepted') {
+      continue
+    }
+
+    if (blockedDecisionIds.has(decision.id)) {
+      diagnostics.push(`${decision.id} excluded by blocking governance finding.`)
+      continue
+    }
+
+    const selectedOption = decision.resolution.sourceProposalSnapshot?.options.find(
+      (option) => option.id === decision.resolution?.selectedOptionId,
+    )
+    const statement = selectedOption
+      ? selectedOption.description.trim()
+        ? `${selectedOption.title}: ${selectedOption.description}`
+        : selectedOption.title
+      : decision.resolution.rationale.trim() || decision.context
+    const projectionKind = classifyMockProjectionKind(decision, statement)
+    const item = {
+      id: '',
+      decisionId: decision.id,
+      title: decision.title,
+      statement,
+      classification: decision.classification,
+      projectionKind,
+      sources: decision.resolution.sources.length > 0
+        ? decision.resolution.sources
+        : [decisionSource(`.agents/decisions/records/${decision.id}/decision.json`, statement)],
+    }
+
+    if (
+      projectionKind === 'ArchitecturalConstraint' ||
+      projectionKind === 'TechnologyChoice' ||
+      projectionKind === 'RepositoryConvention'
+    ) {
+      constraints.push({ ...item, id: `ECON-${String(constraints.length + 1).padStart(4, '0')}` })
+    } else {
+      directives.push({ ...item, id: `EDIR-${String(directives.length + 1).padStart(4, '0')}` })
+    }
+  }
+
+  return {
+    repositoryId,
+    generatedAt: new Date().toISOString(),
+    constraints,
+    directives,
+    conflicts: [],
+    diagnostics,
+  }
+}
+
+function classifyMockProjectionKind(
+  decision: Decision,
+  statement: string,
+): ExecutionDecisionProjection['constraints'][number]['projectionKind'] {
+  const searchable = `${decision.title} ${decision.context} ${statement}`.toLowerCase()
+  if (/(technology|framework|library|package|dependency|provider|runtime|api|sdk|react|tauri|rust|typescript|\.net)/.test(searchable)) {
+    return 'TechnologyChoice'
+  }
+  if (/(workflow|process|review|approval|promotion|governance|handoff|commit|push|rotation|certification)/.test(searchable)) {
+    return 'WorkflowPolicy'
+  }
+  if (/(repository|repo|artifact|path|file|directory|folder|\.agents|markdown|json|projection|naming|convention)/.test(searchable)) {
+    return 'RepositoryConvention'
+  }
+
+  if (decision.classification === 'Architectural') {
+    return 'ArchitecturalConstraint'
+  }
+  if (decision.classification === 'Tactical') {
+    return 'ImplementationDirective'
+  }
+  return 'WorkflowPolicy'
 }
 
 function isDecisionOutcome(value: unknown): value is DecisionOutcome {
@@ -2435,6 +2527,8 @@ export function installDevTauriMock() {
           return clone(createDecisionGovernanceReport(state, getStringArg(args, 'repositoryId'), true))
         case 'list_decision_governance_reports':
           return clone(state.decisionGovernanceReports[getStringArg(args, 'repositoryId')] ?? [])
+        case 'get_execution_decision_projection':
+          return clone(createExecutionDecisionProjection(state, getStringArg(args, 'repositoryId')))
         case 'start_execution':
           return clone(
             startExecution(
