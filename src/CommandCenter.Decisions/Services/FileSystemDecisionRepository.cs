@@ -312,6 +312,53 @@ public sealed class FileSystemDecisionRepository(IArtifactStore artifactStore) :
         return recommendation;
     }
 
+    public async Task<IReadOnlyList<DecisionGovernanceReport>> ListGovernanceReportsAsync(Repository repository)
+    {
+        string root = DecisionArtifactPaths.Resolve(repository, DecisionArtifactPaths.GovernanceRootPath());
+        IReadOnlyList<string> files = await artifactStore.ListAsync(root, "governance.*.json");
+        var reports = new List<DecisionGovernanceReport>();
+
+        foreach (string file in files.OrderBy(file => file, StringComparer.Ordinal))
+        {
+            string? reportId = Path.GetFileNameWithoutExtension(file);
+            if (string.IsNullOrWhiteSpace(reportId))
+            {
+                continue;
+            }
+
+            DecisionGovernanceReport? report = await ReadPayloadAsync<DecisionGovernanceReport>(
+                repository,
+                DecisionArtifactPaths.GovernanceReportJson(reportId));
+            if (report is not null)
+            {
+                reports.Add(report);
+            }
+        }
+
+        return reports
+            .OrderBy(report => report.Id, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    public async Task<DecisionGovernanceReport> SaveGovernanceReportAsync(
+        Repository repository,
+        DecisionGovernanceReport report)
+    {
+        DecisionArtifactPaths.ValidateReportId(report.Id);
+        if (report.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException("Decision governance report belongs to a different repository.");
+        }
+
+        await WriteDocumentAsync(
+            repository,
+            DecisionArtifactPaths.GovernanceReportJson(report.Id),
+            report,
+            report.GeneratedAt,
+            report.GeneratedAt);
+        return report;
+    }
+
     private async Task<string> AllocateIdAsync(Repository repository, DecisionArtifactKind kind, string prefix)
     {
         IReadOnlyList<string> directories = await ListArtifactDirectoriesAsync(repository, kind);

@@ -51,4 +51,8 @@ public interface IDecisionRepository
     Task<DecisionAssimilationRecommendation> SaveAssimilationRecommendationAsync(
         Repository repository,
         DecisionAssimilationRecommendation recommendation);
+
+    Task<IReadOnlyList<DecisionGovernanceReport>> ListGovernanceReportsAsync(Repository repository);
+
+    Task<DecisionGovernanceReport> SaveGovernanceReportAsync(Repository repository, DecisionGovernanceReport report);
 }

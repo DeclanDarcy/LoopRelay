@@ -39,6 +39,9 @@ public static class DecisionEndpoints
         app.MapArchiveDecision();
         app.MapGetDecisionAssimilationRecommendation();
         app.MapProposeDecisionOperationalContextAssimilation();
+        app.MapGetDecisionGovernance();
+        app.MapGenerateDecisionGovernanceReport();
+        app.MapListDecisionGovernanceReports();
         app.MapExpireDecisionProposal();
         app.MapDiscardDecisionProposal();
         return app;
@@ -875,6 +878,75 @@ public static class DecisionEndpoints
                     repositoryId,
                     decisionId,
                     request));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGetDecisionGovernance(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/decisions/governance", async (
+            Guid repositoryId,
+            IDecisionGovernanceService governanceService) =>
+        {
+            try
+            {
+                return Results.Ok(await governanceService.GetCurrentReportAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGenerateDecisionGovernanceReport(this IEndpointRouteBuilder app) =>
+        app.MapPost("/api/repositories/{repositoryId:guid}/decisions/governance/reports", async (
+            Guid repositoryId,
+            IDecisionGovernanceService governanceService) =>
+        {
+            try
+            {
+                return Results.Ok(await governanceService.GenerateReportAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapListDecisionGovernanceReports(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/decisions/governance/reports", async (
+            Guid repositoryId,
+            IDecisionGovernanceService governanceService) =>
+        {
+            try
+            {
+                return Results.Ok(await governanceService.ListReportsAsync(repositoryId));
             }
             catch (KeyNotFoundException exception)
             {

@@ -6,20 +6,20 @@ detect decision ecosystem health issues before decisions are projected into exec
 
 ## Backend Work
 
-- [ ] Add governance findings, categories, severities, reports, diagnostics, and health assessment models.
-- [ ] Implement `IDecisionGovernanceService`.
+- [x] Add governance findings, categories, severities, reports, diagnostics, and health assessment models.
+- [x] Implement `IDecisionGovernanceService`.
 - [ ] Add analyzers for:
-  - [ ] consistency
-  - [ ] supersession lineage
-  - [ ] dependency integrity
-  - [ ] authority metadata
+  - [x] consistency
+  - [x] supersession lineage
+  - [x] dependency integrity
+  - [x] authority metadata
   - [ ] decision coverage
-  - [ ] proposal quality
-  - [ ] execution projection readiness
+  - [x] proposal quality
+  - [x] execution projection readiness
 - [ ] Decision coverage analysis detects repeated ambiguity, repeated blockers, repeated governance findings, repeated forks, stale candidates, and repeated unresolved questions.
 - [ ] Detect contradictory resolved decisions, conflicting directives, circular supersession, broken dependencies, missing resolver metadata, unresolved stale proposals, decisions not ready for projection, and projection failures.
-- [ ] Persist governance reports under `.agents/decisions/governance`.
-- [ ] Mark blocking governance findings so execution projection can exclude affected decisions.
+- [x] Persist governance reports under `.agents/decisions/governance`.
+- [x] Mark blocking governance findings so execution projection can exclude affected decisions.
 
 ## UI Work
 
@@ -30,18 +30,18 @@ detect decision ecosystem health issues before decisions are projected into exec
 
 ## Tests
 
-- [ ] Consistency analyzer tests.
+- [x] Consistency analyzer tests.
 - [ ] Lineage analyzer tests.
 - [ ] Dependency analyzer tests.
-- [ ] Authority analyzer tests.
-- [ ] Decision coverage tests.
+- [x] Authority analyzer tests.
+- [x] Decision coverage tests.
 - [ ] Execution projection readiness tests.
-- [ ] Governance report persistence tests.
+- [x] Governance report persistence tests.
 - [ ] UI finding display tests.
 
 ## Exit Criteria
 
-- [ ] Decision health is observable before execution consumption.
-- [ ] Findings are explainable and traceable.
-- [ ] Coverage gaps are visible.
-- [ ] Governance does not modify decisions, proposals, operational context, or execution state.
+- [x] Decision health is observable before execution consumption.
+- [x] Findings are explainable and traceable.
+- [x] Coverage gaps are visible.
+- [x] Governance does not modify decisions, proposals, operational context, or execution state.

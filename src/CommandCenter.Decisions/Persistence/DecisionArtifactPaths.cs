@@ -13,6 +13,7 @@ internal static partial class DecisionArtifactPaths
     private const string CandidatesRoot = $"{DecisionsRoot}/candidates";
     private const string ProposalsRoot = $"{DecisionsRoot}/proposals";
     private const string AssimilationRoot = $"{DecisionsRoot}/assimilation";
+    private const string GovernanceRoot = $"{DecisionsRoot}/governance";
 
     public static string DecisionDirectory(string id)
     {
@@ -104,6 +105,16 @@ internal static partial class DecisionArtifactPaths
         return ArtifactPath.CombineRelative(AssimilationDirectory(decisionId), "recommendation.md");
     }
 
+    public static string GovernanceReportJson(string reportId)
+    {
+        return ArtifactPath.CombineRelative(GovernanceRoot, $"{ValidateReportId(reportId)}.json");
+    }
+
+    public static string GovernanceRootPath()
+    {
+        return GovernanceRoot;
+    }
+
     public static string DecisionsIndex()
     {
         return ArtifactPath.CombineRelative(DecisionsRoot, "decisions.md");
@@ -147,8 +158,21 @@ internal static partial class DecisionArtifactPaths
         return id;
     }
 
+    public static string ValidateReportId(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id) || !ReportIdPattern().IsMatch(id))
+        {
+            throw new ArgumentException("Governance report id must match governance.YYYYMMDDHHMMSSFFFFFFF.", nameof(id));
+        }
+
+        return id;
+    }
+
     [GeneratedRegex("^[A-Z]+-[0-9]{4}$")]
     private static partial Regex IdPattern();
+
+    [GeneratedRegex("^governance\\.[0-9]{21}$")]
+    private static partial Regex ReportIdPattern();
 }
 
 internal enum DecisionArtifactKind

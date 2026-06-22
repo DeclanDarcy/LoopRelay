@@ -17,6 +17,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IDecisionRefinementService, DecisionRefinementService>();
         services.AddSingleton<IDecisionReviewService, DecisionReviewService>();
         services.AddSingleton<IDecisionOperationalContextAssimilationService, DecisionOperationalContextAssimilationService>();
+        services.AddSingleton<IDecisionGovernanceService, DecisionGovernanceService>();
         return services;
     }
 }

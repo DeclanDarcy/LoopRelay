@@ -2,63 +2,52 @@
 
 ## Newly Authorized
 
-- M6 is accepted as a legitimate closure point.
-- M6 is accepted as complete without violating the established authority boundaries.
-- The completed lifecycle is accepted as:
-  - `Decision Context`
-  - `Discovery`
-  - `Candidate`
-  - `Proposal`
-  - `Review`
-  - `Refinement`
-  - `Resolution`
-  - `Decision Authority`
-  - `Assimilation Recommendation`
-- The architectural boundary remains authoritative:
-  - `Decision Authority` is not equivalent to `Operational Context Authority`
-- The final M6 decomposition is accepted:
-  - `Generation` creates recommendations
-  - `Refinement` evolves recommendations
-  - `Resolution` creates authority
-  - `Assimilation` creates advisory adoption recommendations
-- Assimilation boundary is accepted as intact:
-  - resolved decisions create recommendation packages
-  - resolved decisions do not mutate operational context
-  - continuity remains responsible for context adoption, merge, promotion, and acceptance
-- Resolution UI timing is accepted as correct because backend semantics, snapshots, supersede/archive, and assimilation packages existed before UI exposure.
-- M7 is authorized to begin.
-- The first M7 governance slice must remain entirely advisory:
-  - read
-  - analyze
-  - report
-  - do not mutate
-  - do not correct
-  - do not enforce
-- Governance should first prove lifecycle integrity reporting before gaining influence over lifecycle behavior.
-- Initial governance finding categories are authorized:
-  - lineage integrity
-  - fingerprint integrity
-  - contradictions
-  - resolution completeness
-  - authority boundary findings
-- Authority boundary findings are explicitly authorized for M7 and should detect regressions such as:
-  - assimilation package attempts mutation
-  - operational context references decision-owned state
-  - proposal referenced as authority after resolution
-  - revision treated as current proposal
-- Recommended M7 sequence is authorized:
-  - governance domain
-  - governance repository scan
-  - governance findings model
-  - governance reports
-  - governance UI
-- Governance actions are not authorized until governance reporting is fully established.
-- Program status is accepted:
-  - M0 Domain Foundation complete
-  - M1 Context Resolution complete
-  - M2 Discovery complete
-  - M3 Proposal Lifecycle complete
-  - M4 Review Workspace complete
-  - M5 Refinement Workflow complete
-  - M6 Decision Resolution complete
-- M7 should focus first on answering whether the lifecycle is healthy before deciding what should be done about it.
+- The first M7 backend governance reporting slice is accepted as correct.
+- M7 governance must continue to preserve the `Read -> Analyze -> Report` boundary.
+- Governance must not mutate, repair, or enforce lifecycle state.
+- `GET /decisions/governance` remaining non-persistent is accepted as the correct inspection behavior.
+- Explicit governance report generation remaining persistent is accepted as the correct historical audit behavior.
+- `BlocksExecutionProjection` is accepted as a governance assessment signal, not governance enforcement.
+- Execution consumption remains responsible for deciding how to act on blocking governance findings.
+- The key M8 boundary is accepted:
+  - governance identifies risk
+  - execution decides what to do about it
+- M7 should stay focused on structural governance.
+- Semantic proposal-quality judgments should be delayed until M9 certification unless the finding can be proven from repository artifacts without interpreting decision content.
+- M7B is authorized as the next implementation slice:
+  - Tauri/UI governance surface
+  - report-oriented governance panel
+  - governance summary
+  - findings grouped by severity and category
+  - generated report history
+- M7B UI must avoid action buttons that imply governance authority:
+  - no fix
+  - no repair
+  - no correct
+  - no resolve
+- M7B UI may provide navigation-only actions:
+  - view proposal
+  - view decision
+  - view candidate
+  - view assimilation package
+- The accepted M7 sequence is:
+  - M7A Backend Governance Reporting complete
+  - M7B Tauri/UI Governance Surface
+  - M7C Analyzer Hardening
+  - M7D Governance Report Persistence Validation
+  - M7E Governance Certification
+- M7C analyzer hardening should prioritize:
+  - broken ancestry
+  - circular ancestry
+  - missing ancestry
+  - multiple parents
+  - supersede loops
+  - archived authority referenced
+  - superseded authority referenced
+  - multiple active authorities
+  - decision without assimilation package
+  - package without decision
+  - orphaned package
+  - proposal referenced as authority
+  - revision referenced as authority
+  - assimilation treated as adopted
