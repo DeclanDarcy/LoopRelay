@@ -9,7 +9,7 @@
 - [x] Workstream 8.4: Repository Summary Completion
 - [x] Workstream 8.5: Notifications Strategy
 - [x] Workstream 8.6: Deviation Ledger
-- [ ] Workstream 8.7: Remove Legacy Structure
+- [x] Workstream 8.7: Remove Legacy Structure
 - [ ] Workstream 8.8: Final UX Validation
 - [ ] Certification complete
 
@@ -124,11 +124,11 @@ Rules:
 
 ## Workstream 8.7: Remove Legacy Structure
 
-- [ ] Delete unused CSS from the old layout.
-- [ ] Delete duplicate DTOs.
-- [ ] Delete obsolete helpers after feature modules own them.
-- [ ] Remove any temporary migration adapters.
-- [ ] Keep `devTauriMock.ts` aligned with shared types and current visible states.
+- [x] Delete unused CSS from the old layout.
+- [x] Delete duplicate DTOs.
+- [x] Delete obsolete helpers after feature modules own them.
+- [x] Remove any temporary migration adapters.
+- [x] Keep `devTauriMock.ts` aligned with shared types and current visible states.
 - [ ] Ensure `App.tsx` is only composition.
 
 ## Workstream 8.8: Final UX Validation

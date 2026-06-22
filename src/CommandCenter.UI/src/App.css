@@ -336,7 +336,6 @@ button:focus-visible {
   gap: 18px;
 }
 
-.repository-list,
 .repository-details {
   min-width: 0;
   min-height: 0;
@@ -451,139 +450,6 @@ button:focus-visible {
   gap: 12px;
   color: var(--fg-subtle);
   font-size: 0.9rem;
-}
-
-.repository-items {
-  min-height: 0;
-  display: grid;
-  align-content: start;
-  gap: 10px;
-  overflow: auto;
-  padding-right: 2px;
-}
-
-.repository-item {
-  width: 100%;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 6px 12px;
-  padding: 14px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-6);
-  color: var(--fg-default);
-  background: var(--surface-1);
-  text-align: left;
-}
-
-.repository-item:hover,
-.repository-item.selected {
-  border-color: var(--accent-muted);
-  background: var(--accent-subtle);
-}
-
-.repository-name {
-  min-width: 0;
-  color: var(--fg-default);
-  font-weight: 750;
-  overflow-wrap: anywhere;
-}
-
-.repository-path {
-  min-width: 0;
-  grid-column: 1 / -1;
-  color: var(--fg-subtle);
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 0.82rem;
-  overflow-wrap: anywhere;
-}
-
-.repository-metadata {
-  min-width: 0;
-  color: var(--fg-muted);
-  font-size: 0.78rem;
-  font-weight: 650;
-  overflow-wrap: anywhere;
-}
-
-.failure-metadata {
-  grid-column: 1 / -1;
-  color: var(--status-danger-fg);
-}
-
-.availability {
-  align-self: start;
-  white-space: nowrap;
-  padding: 3px 8px;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 750;
-}
-
-.readiness {
-  align-self: start;
-  white-space: nowrap;
-  padding: 3px 8px;
-  border-radius: 999px;
-  color: var(--fg-muted);
-  background: var(--surface-2);
-  font-size: 0.75rem;
-  font-weight: 750;
-}
-
-.execution-state {
-  align-self: start;
-  white-space: nowrap;
-  padding: 3px 8px;
-  border-radius: 999px;
-  color: var(--status-info-fg);
-  background: var(--status-info-subtle);
-  font-size: 0.75rem;
-  font-weight: 750;
-}
-
-.readiness-ready {
-  color: var(--accent-emphasis);
-  background: var(--status-success-subtle);
-}
-
-.readiness-missingplan,
-.readiness-missingmilestones {
-  color: var(--status-warning-fg);
-  background: var(--status-warning-subtle);
-}
-
-.availability-available {
-  color: var(--accent-emphasis);
-  background: var(--status-success-subtle);
-}
-
-.availability-missing {
-  color: var(--status-warning-fg);
-  background: var(--status-warning-subtle);
-}
-
-.availability-accessdenied {
-  color: var(--status-danger-fg);
-  background: var(--status-danger-subtle);
-}
-
-.execution-state-failed,
-.execution-state-cancelled {
-  color: var(--status-danger-fg);
-  background: var(--status-danger-subtle);
-}
-
-.execution-state-executing,
-.execution-state-awaitingacceptance,
-.execution-state-awaitingcommit,
-.execution-state-awaitingpush {
-  color: var(--status-warning-fg);
-  background: var(--status-warning-subtle);
-}
-
-.execution-state-accepted {
-  color: var(--status-done-fg);
-  background: var(--status-done-subtle);
 }
 
 .details-body {
@@ -1669,7 +1535,6 @@ button:focus-visible {
 }
 
 @media (max-width: 560px) {
-  .repository-item,
   .summary-grid,
   .context-toolbar,
   .context-controls,
