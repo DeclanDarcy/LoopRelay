@@ -18,10 +18,13 @@ public static class DecisionEndpoints
         app.MapMarkDecisionCandidateDuplicate();
         app.MapListDecisionProposals();
         app.MapGetDecisionProposal();
+        app.MapGetDecisionProposalReviewWorkspace();
         app.MapGenerateDecisionProposal();
         app.MapMarkDecisionProposalViewed();
         app.MapMarkDecisionProposalNeedsRefinement();
         app.MapMarkDecisionProposalReadyForResolution();
+        app.MapListDecisionReviewNotes();
+        app.MapAddDecisionReviewNote();
         app.MapRefineDecisionProposal();
         app.MapListDecisionProposalRevisions();
         app.MapResolveDecisionProposal();
@@ -302,6 +305,30 @@ public static class DecisionEndpoints
             }
         });
 
+    private static void MapGetDecisionProposalReviewWorkspace(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/decisions/proposals/{proposalId}/review", async (
+            Guid repositoryId,
+            string proposalId,
+            IDecisionReviewService reviewService) =>
+        {
+            try
+            {
+                return Results.Ok(await reviewService.GetReviewWorkspaceAsync(repositoryId, proposalId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
     private static void MapGenerateDecisionProposal(this IEndpointRouteBuilder app) =>
         app.MapPost("/api/repositories/{repositoryId:guid}/decisions/candidates/{candidateId}/proposals", async (
             Guid repositoryId,
@@ -381,11 +408,11 @@ public static class DecisionEndpoints
             Guid repositoryId,
             string proposalId,
             DecisionProposalTransitionRequest? request,
-            IDecisionGenerationService generationService) =>
+            IDecisionReviewService reviewService) =>
         {
             try
             {
-                return Results.Ok(await generationService.MarkProposalViewedAsync(repositoryId, proposalId, request?.Reason));
+                return Results.Ok(await reviewService.MarkProposalViewedAsync(repositoryId, proposalId, request?.Reason));
             }
             catch (KeyNotFoundException exception)
             {
@@ -406,11 +433,11 @@ public static class DecisionEndpoints
             Guid repositoryId,
             string proposalId,
             DecisionProposalTransitionRequest? request,
-            IDecisionGenerationService generationService) =>
+            IDecisionReviewService reviewService) =>
         {
             try
             {
-                return Results.Ok(await generationService.MarkProposalNeedsRefinementAsync(repositoryId, proposalId, request?.Reason));
+                return Results.Ok(await reviewService.MarkProposalNeedsRefinementAsync(repositoryId, proposalId, request?.Reason));
             }
             catch (KeyNotFoundException exception)
             {
@@ -431,11 +458,65 @@ public static class DecisionEndpoints
             Guid repositoryId,
             string proposalId,
             DecisionProposalTransitionRequest? request,
-            IDecisionGenerationService generationService) =>
+            IDecisionReviewService reviewService) =>
         {
             try
             {
-                return Results.Ok(await generationService.MarkProposalReadyForResolutionAsync(repositoryId, proposalId, request?.Reason));
+                return Results.Ok(await reviewService.MarkProposalReadyForResolutionAsync(repositoryId, proposalId, request?.Reason));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapListDecisionReviewNotes(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/decisions/proposals/{proposalId}/notes", async (
+            Guid repositoryId,
+            string proposalId,
+            IDecisionReviewService reviewService) =>
+        {
+            try
+            {
+                return Results.Ok(await reviewService.ListReviewNotesAsync(repositoryId, proposalId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapAddDecisionReviewNote(this IEndpointRouteBuilder app) =>
+        app.MapPost("/api/repositories/{repositoryId:guid}/decisions/proposals/{proposalId}/notes", async (
+            Guid repositoryId,
+            string proposalId,
+            DecisionReviewNoteRequest? request,
+            IDecisionReviewService reviewService) =>
+        {
+            try
+            {
+                if (request is null)
+                {
+                    return Results.BadRequest(new { error = "Review note request is required." });
+                }
+
+                return Results.Ok(await reviewService.AddReviewNoteAsync(repositoryId, proposalId, request));
             }
             catch (KeyNotFoundException exception)
             {

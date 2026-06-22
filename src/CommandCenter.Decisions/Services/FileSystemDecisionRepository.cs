@@ -40,6 +40,18 @@ public sealed class FileSystemDecisionRepository(IArtifactStore artifactStore) :
         return $"REV-{next:0000}";
     }
 
+    public async Task<string> AllocateReviewNoteIdAsync(Repository repository, string proposalId)
+    {
+        string id = DecisionArtifactPaths.ValidateId(proposalId, "PROP");
+        IReadOnlyList<DecisionReviewNote> notes = await ListReviewNotesAsync(repository, id);
+        int next = notes
+            .Select(note => ParseSequence(note.Id, "NOTE"))
+            .DefaultIfEmpty(0)
+            .Max() + 1;
+
+        return $"NOTE-{next:0000}";
+    }
+
     public async Task<IReadOnlyList<Decision>> ListDecisionsAsync(Repository repository)
     {
         IReadOnlyList<string> directories = await ListArtifactDirectoriesAsync(repository, DecisionArtifactKind.Decision);
@@ -208,6 +220,68 @@ public sealed class FileSystemDecisionRepository(IArtifactStore artifactStore) :
             revision.CreatedAt,
             revision.CreatedAt);
         return revision;
+    }
+
+    public async Task<DecisionReviewStatus?> GetReviewStatusAsync(Repository repository, string proposalId)
+    {
+        string id = DecisionArtifactPaths.ValidateId(proposalId, "PROP");
+        return await ReadPayloadAsync<DecisionReviewStatus>(
+            repository,
+            DecisionArtifactPaths.ProposalReviewJson(id));
+    }
+
+    public async Task<DecisionReviewStatus> SaveReviewStatusAsync(Repository repository, DecisionReviewStatus reviewStatus)
+    {
+        string proposalId = DecisionArtifactPaths.ValidateId(reviewStatus.ProposalId, "PROP");
+        if (reviewStatus.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException("Decision review status belongs to a different repository.");
+        }
+
+        string relativePath = DecisionArtifactPaths.ProposalReviewJson(proposalId);
+        DateTimeOffset createdAt = await GetExistingCreatedAtAsync<DecisionReviewStatus>(repository, relativePath) ?? reviewStatus.UpdatedAt;
+        await WriteDocumentAsync(repository, relativePath, reviewStatus, createdAt, reviewStatus.UpdatedAt);
+        return reviewStatus;
+    }
+
+    public async Task<IReadOnlyList<DecisionReviewNote>> ListReviewNotesAsync(Repository repository, string proposalId)
+    {
+        string id = DecisionArtifactPaths.ValidateId(proposalId, "PROP");
+        IReadOnlyList<DecisionReviewNote>? notes = await ReadPayloadAsync<IReadOnlyList<DecisionReviewNote>>(
+            repository,
+            DecisionArtifactPaths.ProposalReviewNotesJson(id));
+        return (notes ?? [])
+            .OrderBy(note => note.Id, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    public async Task<DecisionReviewNote> SaveReviewNoteAsync(Repository repository, DecisionReviewNote note)
+    {
+        string proposalId = DecisionArtifactPaths.ValidateId(note.ProposalId, "PROP");
+        string noteId = DecisionArtifactPaths.ValidateId(note.Id, "NOTE");
+        if (note.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException("Decision review note belongs to a different repository.");
+        }
+
+        List<DecisionReviewNote> notes = (await ListReviewNotesAsync(repository, proposalId)).ToList();
+        int existingIndex = notes.FindIndex(existing => string.Equals(existing.Id, noteId, StringComparison.Ordinal));
+        if (existingIndex >= 0)
+        {
+            notes[existingIndex] = note;
+        }
+        else
+        {
+            notes.Add(note);
+        }
+
+        notes = notes
+            .OrderBy(existing => existing.Id, StringComparer.Ordinal)
+            .ToList();
+        string relativePath = DecisionArtifactPaths.ProposalReviewNotesJson(proposalId);
+        DateTimeOffset createdAt = await GetExistingCreatedAtAsync<IReadOnlyList<DecisionReviewNote>>(repository, relativePath) ?? note.CreatedAt;
+        await WriteDocumentAsync(repository, relativePath, notes, createdAt, DateTimeOffset.UtcNow);
+        return note;
     }
 
     private async Task<string> AllocateIdAsync(Repository repository, DecisionArtifactKind kind, string prefix)

@@ -560,8 +560,8 @@ public sealed class DecisionGenerationServiceTests
         Assert.Equal(HttpStatusCode.Conflict, refineTooLateResponse.StatusCode);
         Assert.Single(listed);
         Assert.Equal(generated.Id, listed[0].Id);
-        Assert.Equal(DecisionProposalState.Viewed, (await viewedResponse.Content.ReadFromJsonAsync<DecisionProposal>(jsonOptions))!.State);
-        Assert.Equal(DecisionProposalState.ReadyForResolution, (await readyResponse.Content.ReadFromJsonAsync<DecisionProposal>(jsonOptions))!.State);
+        Assert.Equal(DecisionProposalState.Viewed, (await viewedResponse.Content.ReadFromJsonAsync<DecisionReviewWorkspace>(jsonOptions))!.Proposal.State);
+        Assert.Equal(DecisionProposalState.ReadyForResolution, (await readyResponse.Content.ReadFromJsonAsync<DecisionReviewWorkspace>(jsonOptions))!.Proposal.State);
         Assert.Equal(DecisionProposalState.Expired, (await expireResponse.Content.ReadFromJsonAsync<DecisionProposal>(jsonOptions))!.State);
     }
 

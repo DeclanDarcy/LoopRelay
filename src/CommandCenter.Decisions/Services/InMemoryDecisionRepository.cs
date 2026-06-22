@@ -11,6 +11,8 @@ public sealed class InMemoryDecisionRepository : IDecisionRepository
     private readonly Dictionary<Guid, SortedDictionary<string, DecisionCandidate>> candidatesByRepository = [];
     private readonly Dictionary<Guid, SortedDictionary<string, DecisionProposal>> proposalsByRepository = [];
     private readonly Dictionary<Guid, SortedDictionary<string, SortedDictionary<string, DecisionProposalRevision>>> revisionsByRepository = [];
+    private readonly Dictionary<Guid, SortedDictionary<string, DecisionReviewStatus>> reviewStatusByRepository = [];
+    private readonly Dictionary<Guid, SortedDictionary<string, SortedDictionary<string, DecisionReviewNote>>> reviewNotesByRepository = [];
 
     public Task<DecisionId> AllocateDecisionIdAsync(Repository repository)
     {
@@ -30,6 +32,11 @@ public sealed class InMemoryDecisionRepository : IDecisionRepository
     public Task<string> AllocateProposalRevisionIdAsync(Repository repository, string proposalId)
     {
         return Task.FromResult(NextId(GetRevisions(repository.Id, proposalId).Keys, "REV"));
+    }
+
+    public Task<string> AllocateReviewNoteIdAsync(Repository repository, string proposalId)
+    {
+        return Task.FromResult(NextId(GetReviewNotes(repository.Id, proposalId).Keys, "NOTE"));
     }
 
     public Task<IReadOnlyList<Decision>> ListDecisionsAsync(Repository repository)
@@ -114,6 +121,39 @@ public sealed class InMemoryDecisionRepository : IDecisionRepository
         return Task.FromResult(revision);
     }
 
+    public Task<DecisionReviewStatus?> GetReviewStatusAsync(Repository repository, string proposalId)
+    {
+        GetReviewStatuses(repository.Id).TryGetValue(proposalId, out DecisionReviewStatus? reviewStatus);
+        return Task.FromResult(reviewStatus);
+    }
+
+    public Task<DecisionReviewStatus> SaveReviewStatusAsync(Repository repository, DecisionReviewStatus reviewStatus)
+    {
+        if (reviewStatus.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException("Decision review status belongs to a different repository.");
+        }
+
+        GetReviewStatuses(repository.Id)[reviewStatus.ProposalId] = reviewStatus;
+        return Task.FromResult(reviewStatus);
+    }
+
+    public Task<IReadOnlyList<DecisionReviewNote>> ListReviewNotesAsync(Repository repository, string proposalId)
+    {
+        return Task.FromResult<IReadOnlyList<DecisionReviewNote>>(GetReviewNotes(repository.Id, proposalId).Values.ToArray());
+    }
+
+    public Task<DecisionReviewNote> SaveReviewNoteAsync(Repository repository, DecisionReviewNote note)
+    {
+        if (note.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException("Decision review note belongs to a different repository.");
+        }
+
+        GetReviewNotes(repository.Id, note.ProposalId)[note.Id] = note;
+        return Task.FromResult(note);
+    }
+
     private SortedDictionary<string, Decision> GetDecisions(Guid repositoryId)
     {
         return GetRepositoryMap(decisionsByRepository, repositoryId);
@@ -129,6 +169,11 @@ public sealed class InMemoryDecisionRepository : IDecisionRepository
         return GetRepositoryMap(proposalsByRepository, repositoryId);
     }
 
+    private SortedDictionary<string, DecisionReviewStatus> GetReviewStatuses(Guid repositoryId)
+    {
+        return GetRepositoryMap(reviewStatusByRepository, repositoryId);
+    }
+
     private SortedDictionary<string, DecisionProposalRevision> GetRevisions(Guid repositoryId, string proposalId)
     {
         SortedDictionary<string, SortedDictionary<string, DecisionProposalRevision>> repositoryRevisions =
@@ -140,6 +185,19 @@ public sealed class InMemoryDecisionRepository : IDecisionRepository
         }
 
         return revisions;
+    }
+
+    private SortedDictionary<string, DecisionReviewNote> GetReviewNotes(Guid repositoryId, string proposalId)
+    {
+        SortedDictionary<string, SortedDictionary<string, DecisionReviewNote>> repositoryNotes =
+            GetRepositoryMap(reviewNotesByRepository, repositoryId);
+        if (!repositoryNotes.TryGetValue(proposalId, out SortedDictionary<string, DecisionReviewNote>? notes))
+        {
+            notes = new SortedDictionary<string, DecisionReviewNote>(StringComparer.Ordinal);
+            repositoryNotes[proposalId] = notes;
+        }
+
+        return notes;
     }
 
     private static SortedDictionary<string, T> GetRepositoryMap<T>(

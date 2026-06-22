@@ -2,23 +2,33 @@
 
 ## Newly Authorized
 
-- M3 Proposal Generation is complete.
-- The implemented M3 lifecycle chain is accepted as aligned with the roadmap: decision context, discovery, candidate, promotion, proposal, review, refinement, ready for resolution, resolution, and `DEC-*`.
-- Proposal discard is authorized only before decision authority exists.
-- Discard from `Resolved` proposals must remain prohibited because `DEC-*` creation moves authority into the decision layer.
-- Allowed discard source states remain `Generated`, `Viewed`, `NeedsRefinement`, `Refined`, and `ReadyForResolution`.
-- `Resolved`, `Discarded`, and `Expired` remain terminal proposal states for discard purposes.
-- Proposal authority, review artifacts, and decision authority must remain separate as the implementation moves into M4 and later milestones.
-- Review notes should not be stored inside `proposal.json` or decision history as proposal or decision state.
-- M4 should begin with backend review-workspace primitives before UI work.
-- Review notes should be treated as reviewer evidence and persisted as their own review-workspace layer.
-- Initial M4 priority order is `DecisionReviewNote`, `DecisionReviewState`, review-note persistence, review-note endpoints, attribution metadata, proposal-to-review linkage, review workspace read models, and review-note tests.
-- UI review workspace, option comparison UI, and evidence browser UI should be postponed until the review artifact model stabilizes.
+- M4 Review Workspace is in progress.
+- The first M4 backend slice is accepted as aligned with the roadmap.
+- Review information must remain a first-class repository-backed layer rather than being folded into proposals or decisions.
+- The review layer must remain observational rather than authoritative.
+- Review notes must persist as their own review layer in `notes.json`.
+- Review notes must not mutate `proposal.json`, proposal revisions, decisions, candidates, operational context, or execution context.
+- Review transition endpoints returning `DecisionReviewWorkspace` is accepted as the correct contract direction because backend review state should own the authoritative projection for UI consumption.
+- The implementation should continue to preserve the lifecycle ordering: decision context, candidate, proposal, revision history, review workspace, and decision authority.
+- Proposal browser, option comparison, evidence inspection, and source attribution must remain backend-owned projections/read models and must not become alternate sources of authority.
+- The safe read-model flow is repository authority to review workspace models to read models to UI.
+- Backend contracts should lead the UI; the Decisions UI should wait until M4 read models stabilize.
 
 ## Current Milestone Status
 
-- M0 is complete.
-- M1 is complete.
-- M2 is complete.
-- M3 is complete.
-- M4 is ready to start.
+- M0 Domain Foundation is complete.
+- M1 Context Resolution is complete.
+- M2 Discovery is complete.
+- M3 Proposal Lifecycle is complete.
+- M4 Review Workspace is in progress.
+
+## Newly Authorized Next Slice
+
+- Continue M4 by completing backend read models before Decisions UI work.
+- Priority order:
+  1. Proposal browser read model with state, classification, priority, created, updated, review status, and resolution status.
+  2. Backend proposal filtering for generated, viewed, needs-refinement, refined, ready-for-resolution, resolved, and discarded states.
+  3. Dedicated option comparison projection.
+  4. Evidence inspection model with evidence, signals, diagnostics, and attribution.
+  5. Source attribution navigation exposing source kind, relative path, section, and excerpt.
+  6. UI workspace only after backend contracts stabilize.

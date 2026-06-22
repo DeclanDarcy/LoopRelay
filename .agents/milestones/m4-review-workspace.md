@@ -6,15 +6,17 @@ provide full proposal inspection before refinement or resolution.
 
 ## Backend Work
 
-- [ ] Add review state and review note models.
-- [ ] Implement `IDecisionReviewService`.
-- [ ] Support review actions:
-  - [ ] viewed
-  - [ ] needs refinement
-  - [ ] ready for resolution
+- [x] Add review state and review note models.
+- [x] Implement `IDecisionReviewService`.
+- [x] Support review actions:
+  - [x] viewed
+  - [x] needs refinement
+  - [x] ready for resolution
 - [ ] Add read models for proposal browser, proposal viewer, option comparison, evidence inspection, source attribution, and review diagnostics.
-- [ ] Persist notes separately from proposal revisions.
-- [ ] Keep proposal state and review notes synchronized through backend-owned transitions.
+  - [x] Add initial proposal review workspace read model with proposal, review status, notes, revisions, and diagnostics.
+  - [ ] Add dedicated proposal browser, option comparison, evidence inspection, and source attribution read models.
+- [x] Persist notes separately from proposal revisions.
+- [x] Keep proposal state and review notes synchronized through backend-owned transitions.
 
 ## UI Work
 
@@ -28,8 +30,8 @@ provide full proposal inspection before refinement or resolution.
 
 ## Tests
 
-- [ ] Backend review transition tests.
-- [ ] Review note persistence tests.
+- [x] Backend review transition tests.
+- [x] Review note persistence tests.
 - [ ] Proposal viewer characterization tests.
 - [ ] Evidence and attribution display tests.
 - [ ] Candidate/proposal filter tests.
