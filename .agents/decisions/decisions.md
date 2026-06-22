@@ -2,35 +2,32 @@
 
 ## Newly Authorized
 
-- The completed comparison/read-model slice is accepted as preserving the correct Decision Lifecycle sequencing.
-- Proposal evolution should remain inspectable before it becomes mutable.
-- Backend-owned comparison read models remain the approved boundary:
-  - backend builds lifecycle comparisons
-  - React renders comparison projections
-  - React must not calculate lifecycle deltas
-- `REV-NNNN.comparison.md` artifacts are accepted as first-class repository artifacts.
-- The governing model remains:
+- The priority-adjustment implementation direction is accepted as preserving the key M5 authority boundary.
+- Priority adjustments must remain refinement reasoning metadata, not proposal mutations.
+- The authority model remains a certification-level invariant:
   - proposal is authority
   - revision is history
   - comparison is explanation
-- Source-fingerprint chain integrity is directionally correct and should continue to preserve traceability, stale-base rejection, and auditability without converting the proposal lifecycle into event sourcing.
-- Priority-change refinement should be treated as explicit refinement input rather than inferred proposal mutation.
-- Priority changes should use explicit domain language such as `DecisionPriorityAdjustment` or equivalent.
-- Priority adjustment artifacts should record:
-  - previous priority
-  - new priority
-  - reason
-  - source
-  - attribution
-- Revision history and revision comparison UI should precede refinement mutation UI.
-- Add a dedicated proposal lineage read model/projection before UI mutation controls if it can stay non-authoritative.
-- Proposal lineage should summarize proposal evolution at a glance for human review, governance, operational adoption, and later M6/M7 work.
+  - review is review state
+  - decision is resolution authority
+- Refinement evidence should remain separated into distinct classes:
+  - structural changes such as option, assumption, and constraint changes
+  - analytical changes such as tradeoff, evidence, and rationale expansion
+  - preference changes such as priority adjustment
+- Priority adjustment answers what became more important; it must not imply what became true or what changed structurally in the proposal.
+- Revision records should remain self-describing so future consumers do not reconstruct intent from raw diffs.
+- Proposal lineage projection should precede UI work.
+- Proposal lineage should be treated as a foundational read model for M5 UI and likely later M6 resolution integration, M7 governance, and M10 operational adoption.
+- Revision UI must preserve a hard boundary between current proposal and historical revision:
+  - current proposal is authoritative, active, and current recommendation state
+  - historical revision is read-only and explanatory
+- M6 should consider an immutable resolution-time proposal snapshot so decision authority records what proposal was actually resolved without relying on the latest proposal lookup.
 
 ## Next Slice Direction
 
-- Continue M5 with priority-change semantics and proposal lineage/read models.
-- Keep UI work read-only first:
-  - revision history browser
-  - revision comparison viewer
-  - current proposal versus historical revision distinction
-- Defer refinement mutation UI until priority evolution and lineage are inspectable.
+- Build proposal lineage projection before UI work.
+- Then continue M5 read-only UI work:
+  - revision history read models
+  - revision comparison UI
+  - revision history UI
+- Defer refinement mutation UI until lineage and read-only history surfaces are in place.

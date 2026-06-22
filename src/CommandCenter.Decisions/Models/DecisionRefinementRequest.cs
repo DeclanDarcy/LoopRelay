@@ -13,4 +13,5 @@ public sealed record DecisionRefinementRequest(
     IReadOnlyList<DecisionAssumptionRevision>? AssumptionRevisions = null,
     IReadOnlyList<DecisionOptionRevision>? OptionRevisions = null,
     IReadOnlyList<DecisionTradeoffRevision>? TradeoffRevisions = null,
+    IReadOnlyList<DecisionPriorityAdjustment>? PriorityAdjustments = null,
     IReadOnlyList<string>? RejectedChanges = null);

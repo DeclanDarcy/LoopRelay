@@ -94,6 +94,7 @@ public sealed class DecisionRefinementService(
             request.AssumptionRevisions?.ToArray() ?? [],
             request.OptionRevisions?.ToArray() ?? [],
             request.TradeoffRevisions?.ToArray() ?? [],
+            request.PriorityAdjustments?.ToArray() ?? [],
             proposal.Recommendation?.Rationale,
             recommendation?.Rationale,
             proposal.Context,
@@ -195,6 +196,7 @@ public sealed class DecisionRefinementService(
         AddIfPresent("AssumptionRevisions", request.AssumptionRevisions);
         AddIfPresent("OptionRevisions", request.OptionRevisions);
         AddIfPresent("TradeoffRevisions", request.TradeoffRevisions);
+        AddIfPresent("PriorityAdjustments", request.PriorityAdjustments);
         AddIfPresent("RejectedChanges", request.RejectedChanges);
         return changed.Distinct(StringComparer.Ordinal).ToArray();
 
@@ -239,6 +241,11 @@ public sealed class DecisionRefinementService(
         if (request.RejectedChanges is { Count: > 0 })
         {
             diagnostics.Add("Request included rejected changes for review traceability.");
+        }
+
+        if (request.PriorityAdjustments is { Count: > 0 })
+        {
+            diagnostics.Add("Request included explicit priority adjustment metadata without inferring proposal authority.");
         }
 
         return diagnostics.ToArray();
@@ -317,6 +324,7 @@ public sealed class DecisionRefinementService(
             revision.AssumptionRevisions ?? [],
             revision.OptionRevisions ?? [],
             revision.TradeoffRevisions ?? [],
+            revision.PriorityAdjustments ?? [],
             revision.Sources);
     }
 

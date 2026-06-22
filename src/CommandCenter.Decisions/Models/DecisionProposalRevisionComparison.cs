@@ -24,4 +24,5 @@ public sealed record DecisionProposalRevisionComparison(
     IReadOnlyList<DecisionAssumptionRevision> AssumptionRevisions,
     IReadOnlyList<DecisionOptionRevision> OptionRevisions,
     IReadOnlyList<DecisionTradeoffRevision> TradeoffRevisions,
+    IReadOnlyList<DecisionPriorityAdjustment> PriorityAdjustments,
     IReadOnlyList<DecisionSourceReference> Sources);

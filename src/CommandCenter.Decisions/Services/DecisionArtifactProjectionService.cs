@@ -346,6 +346,20 @@ public sealed class DecisionArtifactProjectionService(
         }
 
         markdown.EmptyListIf((revision.TradeoffRevisions ?? []).Count == 0);
+        markdown.H2("Priority Adjustments");
+        foreach (DecisionPriorityAdjustment adjustment in (revision.PriorityAdjustments ?? [])
+            .OrderBy(item => item.PreviousPriority.ToString(), StringComparer.Ordinal)
+            .ThenBy(item => item.NewPriority.ToString(), StringComparer.Ordinal)
+            .ThenBy(item => item.Reason, StringComparer.Ordinal))
+        {
+            string attribution = string.IsNullOrWhiteSpace(adjustment.Attribution)
+                ? "Unspecified"
+                : adjustment.Attribution;
+            markdown.Bullet($"{adjustment.PreviousPriority} -> {adjustment.NewPriority} | {adjustment.Reason} | attribution: {attribution}");
+            markdown.NestedSourceList([adjustment.Source]);
+        }
+
+        markdown.EmptyListIf((revision.PriorityAdjustments ?? []).Count == 0);
         markdown.H2("Recommendation Rationale");
         markdown.Fields(
             ("Previous", revision.PreviousRecommendationRationale ?? "None."),
@@ -401,6 +415,20 @@ public sealed class DecisionArtifactProjectionService(
         }
 
         markdown.EmptyListIf(comparison.RejectedChanges.Count == 0);
+        markdown.H2("Priority Adjustments");
+        foreach (DecisionPriorityAdjustment adjustment in comparison.PriorityAdjustments
+            .OrderBy(item => item.PreviousPriority.ToString(), StringComparer.Ordinal)
+            .ThenBy(item => item.NewPriority.ToString(), StringComparer.Ordinal)
+            .ThenBy(item => item.Reason, StringComparer.Ordinal))
+        {
+            string attribution = string.IsNullOrWhiteSpace(adjustment.Attribution)
+                ? "Unspecified"
+                : adjustment.Attribution;
+            markdown.Bullet($"{adjustment.PreviousPriority} -> {adjustment.NewPriority} | {adjustment.Reason} | attribution: {attribution}");
+            markdown.NestedSourceList([adjustment.Source]);
+        }
+
+        markdown.EmptyListIf(comparison.PriorityAdjustments.Count == 0);
         markdown.H2("Retired Options");
         foreach (DecisionOption option in comparison.RetiredOptions.OrderBy(option => option.Id, StringComparer.Ordinal))
         {
@@ -592,7 +620,7 @@ public sealed class DecisionArtifactProjectionService(
             return builder.ToString();
         }
 
-        private void NestedSourceList(IReadOnlyList<DecisionSourceReference> sources, string indent = "  ")
+        public void NestedSourceList(IReadOnlyList<DecisionSourceReference> sources, string indent = "  ")
         {
             foreach (DecisionSourceReference source in SortSources(sources))
             {

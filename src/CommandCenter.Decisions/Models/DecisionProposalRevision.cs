@@ -21,6 +21,7 @@ public sealed record DecisionProposalRevision(
     IReadOnlyList<DecisionAssumptionRevision>? AssumptionRevisions = null,
     IReadOnlyList<DecisionOptionRevision>? OptionRevisions = null,
     IReadOnlyList<DecisionTradeoffRevision>? TradeoffRevisions = null,
+    IReadOnlyList<DecisionPriorityAdjustment>? PriorityAdjustments = null,
     string? PreviousRecommendationRationale = null,
     string? RevisedRecommendationRationale = null,
     string? PreviousContext = null,

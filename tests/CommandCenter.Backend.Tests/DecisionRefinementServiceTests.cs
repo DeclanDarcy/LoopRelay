@@ -211,6 +211,73 @@ public sealed class DecisionRefinementServiceTests
         Assert.Contains("Keeps refinement review evidence adjacent to the recommendation.", comparisonMarkdown);
     }
 
+    [Fact]
+    public async Task RefinementRecordsExplicitPriorityAdjustmentWithoutProposalContentMutation()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        DecisionGenerationService generationService = CreateGenerationService(repository, store, decisionRepository);
+        DecisionRefinementService refinementService = CreateRefinementService(repository, store, decisionRepository);
+        DecisionProposal proposal = await generationService.GenerateProposalAsync(repository.Id, candidate.Id);
+        await generationService.MarkProposalViewedAsync(repository.Id, proposal.Id, null);
+        DecisionProposal needsRefinement = await generationService.MarkProposalNeedsRefinementAsync(
+            repository.Id,
+            proposal.Id,
+            "Priority needs explicit review metadata.");
+
+        DecisionSourceReference source = new(
+            "DecisionCandidate",
+            ".agents/decisions/candidates/CAND-0001/candidate.json",
+            CandidateId: candidate.Id);
+
+        DecisionProposal refined = await refinementService.RefineProposalAsync(
+            repository.Id,
+            proposal.Id,
+            new DecisionRefinementRequest(
+                "Escalate priority because execution is blocked.",
+                RequestedBy: "reviewer",
+                BaseProposalFingerprint: Fingerprint(needsRefinement),
+                PriorityAdjustments:
+                [
+                    new DecisionPriorityAdjustment(
+                        DecisionCandidatePriority.High,
+                        DecisionCandidatePriority.Blocking,
+                        "Current milestone cannot proceed until this decision is resolved.",
+                        source,
+                        "reviewer")
+                ]));
+
+        DecisionProposalRevision revision = Assert.Single(await refinementService.ListProposalRevisionsAsync(repository.Id, proposal.Id));
+        DecisionProposalRevisionComparison comparison = await refinementService.GetProposalRevisionComparisonAsync(
+            repository.Id,
+            proposal.Id,
+            revision.Id);
+
+        Assert.Equal(DecisionProposalState.Refined, refined.State);
+        Assert.Equal(needsRefinement.Context, refined.Context);
+        Assert.Equal(Fingerprint(needsRefinement), revision.SourceProposalFingerprint);
+        Assert.Contains("PriorityAdjustments", revision.ChangedFields);
+        DecisionPriorityAdjustment adjustment = Assert.Single(revision.PriorityAdjustments ?? []);
+        Assert.Equal(DecisionCandidatePriority.High, adjustment.PreviousPriority);
+        Assert.Equal(DecisionCandidatePriority.Blocking, adjustment.NewPriority);
+        Assert.Equal("reviewer", adjustment.Attribution);
+        Assert.Contains(revision.Diagnostics ?? [], diagnostic =>
+            diagnostic.Contains("explicit priority adjustment", StringComparison.Ordinal));
+        Assert.Contains(comparison.FieldComparisons, field =>
+            field.Field == "PriorityAdjustments" &&
+            field.ChangeType == "Metadata");
+        Assert.Single(comparison.PriorityAdjustments);
+
+        string revisionMarkdown = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/revisions/REV-0001.md");
+        string comparisonMarkdown = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/revisions/REV-0001.comparison.md");
+        Assert.Contains("## Priority Adjustments", revisionMarkdown);
+        Assert.Contains("High -> Blocking", revisionMarkdown);
+        Assert.Contains("Current milestone cannot proceed until this decision is resolved.", comparisonMarkdown);
+    }
+
     private static DecisionGenerationService CreateGenerationService(
         Repository repository,
         FileSystemArtifactStore store,

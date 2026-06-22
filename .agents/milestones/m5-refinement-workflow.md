@@ -10,7 +10,7 @@ support controlled proposal evolution with revision history.
 - [x] Implement `IDecisionRefinementService`.
 - [ ] Support refinement requests for:
   - [x] adding constraints
-  - [ ] changing priorities
+  - [x] changing priorities
   - [x] challenging assumptions
   - [x] adding or removing options
   - [x] expanding tradeoffs

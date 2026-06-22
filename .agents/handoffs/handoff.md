@@ -3,27 +3,33 @@
 ## New State From This Slice
 
 - Continued M5 refinement workflow backend implementation.
-- Added explicit revision comparison read models:
-  - `DecisionProposalRevisionComparison`
-  - `DecisionRevisionFieldComparison`
-- Expanded `DecisionProposalRevision` snapshots with previous/revised context, revised options, previous/revised tradeoffs, and revised assumptions so comparison data is backend-owned and not inferred by React.
-- Added `IDecisionRefinementService.GetProposalRevisionComparisonAsync`.
-- Added backend endpoint:
-  - `GET /api/repositories/{repositoryId}/decisions/proposals/{proposalId}/revisions/{revisionId}/comparison`
-- Added persisted revision comparison markdown artifacts beside revision JSON/markdown:
-  - `.agents/decisions/proposals/{PROP}/revisions/{REV}.comparison.md`
-- Refinement now writes revision JSON, revision markdown, proposal JSON/markdown, comparison markdown, and the decision index in one backend operation.
-- Added comparison coverage for expanded tradeoffs and source-fingerprint chain integrity.
-- Updated `.agents/milestones/m5-refinement-workflow.md` to mark tradeoff expansion, comparison artifacts, comparison tests, and traceable proposal evolution complete.
-- Rotated the previous handoff to `.agents/handoffs/handoff.0021.md`.
+- Added explicit priority-change refinement semantics via `DecisionPriorityAdjustment`.
+- Extended refinement request, revision, and revision comparison models to carry priority adjustments.
+- Priority adjustments record:
+  - previous priority
+  - new priority
+  - reason
+  - source reference
+  - attribution
+- `DecisionRefinementService` now treats `PriorityAdjustments` as a first-class changed field, allowing priority-only refinements to produce traceable revisions without mutating proposal content.
+- Revision diagnostics now call out explicit priority adjustment metadata so the lifecycle does not infer proposal authority.
+- Revision markdown and comparison markdown now render `Priority Adjustments` sections.
+- Added regression coverage proving a priority-only refinement:
+  - transitions the proposal to `Refined`
+  - preserves proposal content
+  - records the priority adjustment in revision JSON/read models
+  - renders priority adjustment markdown artifacts
+- Updated `.agents/milestones/m5-refinement-workflow.md` to mark priority-change refinement support complete.
+- Rotated the previous handoff to `.agents/handoffs/handoff.0022.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes with 294 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes with 295 tests.
 
 ## Next Slice
 
-- Finish the remaining M5 backend gap for priority-change refinement semantics, then start the refinement UI read-only surfaces:
+- Add the dedicated proposal lineage read model/projection authorized in the decision log.
+- Then start read-only M5 UI surfaces:
   - revision history
   - revision comparison view
-  - clear distinction between current proposal content and historical revision records
+  - clear current proposal versus historical revision distinction
