@@ -13,10 +13,10 @@ support controlled proposal evolution with revision history.
   - [ ] changing priorities
   - [x] challenging assumptions
   - [x] adding or removing options
-  - [ ] expanding tradeoffs
+  - [x] expanding tradeoffs
   - [x] changing recommendation rationale
 - [x] Preserve removed options and retired assumptions in revision history.
-- [ ] Persist revision JSON and markdown comparison artifacts.
+- [x] Persist revision JSON and markdown comparison artifacts.
 - [x] Track who or what requested refinement, reason, changed fields, accepted changes, rejected changes, and diagnostics.
 - [x] Return refined proposals to a non-authoritative proposal state.
 
@@ -33,12 +33,12 @@ support controlled proposal evolution with revision history.
 - [x] Revision history tests.
 - [x] Removed option preservation tests.
 - [x] Assumption evolution tests.
-- [ ] Revision comparison tests.
+- [x] Revision comparison tests.
 - [x] Attribution tests.
 
 ## Exit Criteria
 
-- [ ] Proposal evolution is explicit and traceable.
+- [x] Proposal evolution is explicit and traceable.
 - [x] Refinement does not resolve decisions.
 - [x] Every change has a reason and history entry.
 - [x] Removed alternatives remain inspectable.

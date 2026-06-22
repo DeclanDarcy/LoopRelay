@@ -32,6 +32,7 @@ public static class DecisionEndpoints
         app.MapAddDecisionReviewNote();
         app.MapRefineDecisionProposal();
         app.MapListDecisionProposalRevisions();
+        app.MapGetDecisionProposalRevisionComparison();
         app.MapResolveDecisionProposal();
         app.MapExpireDecisionProposal();
         app.MapDiscardDecisionProposal();
@@ -674,6 +675,31 @@ public static class DecisionEndpoints
             try
             {
                 return Results.Ok(await refinementService.ListProposalRevisionsAsync(repositoryId, proposalId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGetDecisionProposalRevisionComparison(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/decisions/proposals/{proposalId}/revisions/{revisionId}/comparison", async (
+            Guid repositoryId,
+            string proposalId,
+            string revisionId,
+            IDecisionRefinementService refinementService) =>
+        {
+            try
+            {
+                return Results.Ok(await refinementService.GetProposalRevisionComparisonAsync(repositoryId, proposalId, revisionId));
             }
             catch (KeyNotFoundException exception)
             {

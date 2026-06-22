@@ -22,4 +22,10 @@ public sealed record DecisionProposalRevision(
     IReadOnlyList<DecisionOptionRevision>? OptionRevisions = null,
     IReadOnlyList<DecisionTradeoffRevision>? TradeoffRevisions = null,
     string? PreviousRecommendationRationale = null,
-    string? RevisedRecommendationRationale = null);
+    string? RevisedRecommendationRationale = null,
+    string? PreviousContext = null,
+    string? RevisedContext = null,
+    IReadOnlyList<DecisionOption>? RevisedOptions = null,
+    IReadOnlyList<DecisionTradeoff>? PreviousTradeoffs = null,
+    IReadOnlyList<DecisionTradeoff>? RevisedTradeoffs = null,
+    IReadOnlyList<DecisionAssumption>? RevisedAssumptions = null);

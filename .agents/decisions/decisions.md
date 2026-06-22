@@ -2,37 +2,35 @@
 
 ## Newly Authorized
 
-- The first M5 slice is accepted as a clean opening slice that preserves M0-M4 architectural direction.
-- M5 authority separation is approved:
-  - `DecisionGenerationService` owns proposal creation.
-  - `DecisionRefinementService` owns proposal evolution.
-- Refinement must remain separate from review and resolution.
-- Stale-base protection is a non-negotiable M5 lifecycle invariant.
-- Refinement requests should continue to validate the proposal fingerprint they were based on and reject mismatches.
-- Expanded revision metadata is directionally correct and should support future explainability:
-  - accepted changes
-  - rejected changes
-  - diagnostics
-  - constraints
-  - retired assumptions
-  - retired options
-  - before/after recommendation rationale
+- The completed comparison/read-model slice is accepted as preserving the correct Decision Lifecycle sequencing.
+- Proposal evolution should remain inspectable before it becomes mutable.
+- Backend-owned comparison read models remain the approved boundary:
+  - backend builds lifecycle comparisons
+  - React renders comparison projections
+  - React must not calculate lifecycle deltas
+- `REV-NNNN.comparison.md` artifacts are accepted as first-class repository artifacts.
+- The governing model remains:
+  - proposal is authority
+  - revision is history
+  - comparison is explanation
+- Source-fingerprint chain integrity is directionally correct and should continue to preserve traceability, stale-base rejection, and auditability without converting the proposal lifecycle into event sourcing.
+- Priority-change refinement should be treated as explicit refinement input rather than inferred proposal mutation.
+- Priority changes should use explicit domain language such as `DecisionPriorityAdjustment` or equivalent.
+- Priority adjustment artifacts should record:
+  - previous priority
+  - new priority
+  - reason
+  - source
   - attribution
-- Proposal authority remains the intended model.
-- Revision records are historical artifacts, not the authoritative current proposal state.
-- Do not accidentally convert the proposal lifecycle into event sourcing before M6.
-- Continue M5 in the sequence:
-  - domain
-  - persistence
-  - read models
-  - UI
-- React must not compute lifecycle diffs.
-- Backend comparison/read models should precede refinement UI mutation controls.
-- Add revision chain integrity coverage before UI work, proving each revision references the exact proposal state it evolved from and stale references cannot advance the chain.
+- Revision history and revision comparison UI should precede refinement mutation UI.
+- Add a dedicated proposal lineage read model/projection before UI mutation controls if it can stay non-authoritative.
+- Proposal lineage should summarize proposal evolution at a glance for human review, governance, operational adoption, and later M6/M7 work.
 
 ## Next Slice Direction
 
-- Build backend revision comparison/read models first.
-- Add or shape backend endpoints for revision retrieval and current-versus-previous proposal comparison.
-- Expose traceability projections for accepted changes, rejected changes, retired assumptions, and retired options.
-- Defer refinement UI controls until reviewers can inspect what changed, why, and compared to what.
+- Continue M5 with priority-change semantics and proposal lineage/read models.
+- Keep UI work read-only first:
+  - revision history browser
+  - revision comparison viewer
+  - current proposal versus historical revision distinction
+- Defer refinement mutation UI until priority evolution and lineage are inspectable.

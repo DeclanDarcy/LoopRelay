@@ -95,7 +95,13 @@ public sealed class DecisionRefinementService(
             request.OptionRevisions?.ToArray() ?? [],
             request.TradeoffRevisions?.ToArray() ?? [],
             proposal.Recommendation?.Rationale,
-            recommendation?.Rationale);
+            recommendation?.Rationale,
+            proposal.Context,
+            context,
+            options,
+            proposal.Tradeoffs.ToArray(),
+            tradeoffs,
+            assumptions);
 
         DecisionProposal updated = proposal with
         {
@@ -128,6 +134,7 @@ public sealed class DecisionRefinementService(
         await projectionService.ProjectProposalRevisionAsync(repository, revision);
         await decisionRepository.SaveProposalAsync(repository, updated);
         await projectionService.ProjectProposalAsync(repository, updated);
+        await projectionService.ProjectProposalRevisionComparisonAsync(repository, BuildComparison(repository, updated, revision));
         await projectionService.RefreshDecisionIndexAsync(repository);
         return updated;
     }
@@ -137,6 +144,23 @@ public sealed class DecisionRefinementService(
         Repository repository = await GetRepositoryAsync(repositoryId);
         _ = await GetProposalAsync(repository, proposalId);
         return await decisionRepository.ListProposalRevisionsAsync(repository, proposalId);
+    }
+
+    public async Task<DecisionProposalRevisionComparison> GetProposalRevisionComparisonAsync(
+        Guid repositoryId,
+        string proposalId,
+        string revisionId)
+    {
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        DecisionProposal proposal = await GetProposalAsync(repository, proposalId);
+        DecisionProposalRevision? revision = (await decisionRepository.ListProposalRevisionsAsync(repository, proposalId))
+            .FirstOrDefault(item => string.Equals(item.Id, revisionId, StringComparison.Ordinal));
+        if (revision is null)
+        {
+            throw new KeyNotFoundException($"Decision proposal revision was not found: {revisionId}");
+        }
+
+        return BuildComparison(repository, proposal, revision);
     }
 
     private async Task<Repository> GetRepositoryAsync(Guid repositoryId)
@@ -218,6 +242,126 @@ public sealed class DecisionRefinementService(
         }
 
         return diagnostics.ToArray();
+    }
+
+    private static IReadOnlyList<DecisionRevisionFieldComparison> BuildFieldComparisons(DecisionProposalRevision revision)
+    {
+        var comparisons = new List<DecisionRevisionFieldComparison>();
+        Add("Context", revision.PreviousContext, revision.RevisedContext);
+        Add("Options", SummarizeOptions(revision.PreviousOptions ?? []), SummarizeOptions(revision.RevisedOptions ?? []));
+        Add("Tradeoffs", SummarizeTradeoffs(revision.PreviousTradeoffs ?? []), SummarizeTradeoffs(revision.RevisedTradeoffs ?? []));
+        Add(
+            "Recommendation",
+            revision.PreviousRecommendationRationale,
+            revision.RevisedRecommendationRationale);
+        Add(
+            "Assumptions",
+            SummarizeAssumptions(revision.PreviousAssumptions ?? []),
+            SummarizeAssumptions(revision.RevisedAssumptions ?? []));
+
+        foreach (string field in revision.ChangedFields.Order(StringComparer.Ordinal))
+        {
+            if (comparisons.All(comparison => !string.Equals(comparison.Field, field, StringComparison.Ordinal)))
+            {
+                comparisons.Add(new DecisionRevisionFieldComparison(field, "Metadata", null, null));
+            }
+        }
+
+        return comparisons
+            .OrderBy(comparison => comparison.Field, StringComparer.Ordinal)
+            .ToArray();
+
+        void Add(string field, string? previous, string? revised)
+        {
+            if (!revision.ChangedFields.Contains(field, StringComparer.Ordinal) &&
+                string.Equals(previous, revised, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            comparisons.Add(new DecisionRevisionFieldComparison(
+                field,
+                ChangeType(previous, revised),
+                previous,
+                revised));
+        }
+    }
+
+    private static DecisionProposalRevisionComparison BuildComparison(
+        Repository repository,
+        DecisionProposal proposal,
+        DecisionProposalRevision revision)
+    {
+        string currentFingerprint = Fingerprint(proposal);
+        return new DecisionProposalRevisionComparison(
+            proposal.Id,
+            revision.Id,
+            repository.Id,
+            revision.SourceProposalFingerprint,
+            currentFingerprint,
+            string.Equals(revision.SourceProposalFingerprint, currentFingerprint, StringComparison.Ordinal),
+            revision.ChangedFields,
+            BuildFieldComparisons(revision),
+            revision.AcceptedChanges ?? [],
+            revision.RejectedChanges ?? [],
+            revision.Diagnostics ?? [],
+            revision.Constraints ?? [],
+            revision.PreviousOptions ?? [],
+            revision.RevisedOptions ?? proposal.Options,
+            revision.RetiredOptions ?? [],
+            revision.PreviousAssumptions ?? [],
+            revision.RevisedAssumptions ?? proposal.Assumptions,
+            revision.RetiredAssumptions ?? [],
+            revision.PreviousTradeoffs ?? [],
+            revision.RevisedTradeoffs ?? proposal.Tradeoffs,
+            revision.AssumptionRevisions ?? [],
+            revision.OptionRevisions ?? [],
+            revision.TradeoffRevisions ?? [],
+            revision.Sources);
+    }
+
+    private static string ChangeType(string? previous, string? revised)
+    {
+        if (string.IsNullOrWhiteSpace(previous) && !string.IsNullOrWhiteSpace(revised))
+        {
+            return "Added";
+        }
+
+        if (!string.IsNullOrWhiteSpace(previous) && string.IsNullOrWhiteSpace(revised))
+        {
+            return "Removed";
+        }
+
+        return string.Equals(previous, revised, StringComparison.Ordinal) ? "Unchanged" : "Changed";
+    }
+
+    private static string SummarizeOptions(IReadOnlyList<DecisionOption> options)
+    {
+        return string.Join(
+            "\n",
+            options
+                .OrderBy(option => option.Id, StringComparer.Ordinal)
+                .Select(option => $"{option.Id}: {option.Title} - {option.Description}"));
+    }
+
+    private static string SummarizeTradeoffs(IReadOnlyList<DecisionTradeoff> tradeoffs)
+    {
+        return string.Join(
+            "\n",
+            tradeoffs
+                .OrderBy(tradeoff => tradeoff.OptionId, StringComparer.Ordinal)
+                .ThenBy(tradeoff => tradeoff.Benefit, StringComparer.Ordinal)
+                .ThenBy(tradeoff => tradeoff.Cost, StringComparer.Ordinal)
+                .Select(tradeoff => $"{tradeoff.OptionId}: benefit {tradeoff.Benefit}; cost {tradeoff.Cost}"));
+    }
+
+    private static string SummarizeAssumptions(IReadOnlyList<DecisionAssumption> assumptions)
+    {
+        return string.Join(
+            "\n",
+            assumptions
+                .OrderBy(assumption => assumption.Id, StringComparer.Ordinal)
+                .Select(assumption => $"{assumption.Id}: {assumption.Statement}"));
     }
 
     private static string Fingerprint(DecisionProposal proposal)

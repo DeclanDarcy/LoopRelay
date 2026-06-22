@@ -130,6 +130,87 @@ public sealed class DecisionRefinementServiceTests
         Assert.Contains("Do not resolve the proposal during refinement.", markdown);
     }
 
+    [Fact]
+    public async Task RevisionComparisonCapturesTradeoffExpansionAndChainIntegrity()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(
+            repository.Id,
+            DecisionCandidateState.Promoted,
+            signalKind: "Conflict",
+            summary: "Conflict between provider bridge approaches.");
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        DecisionGenerationService generationService = CreateGenerationService(repository, store, decisionRepository);
+        DecisionRefinementService refinementService = CreateRefinementService(repository, store, decisionRepository);
+        DecisionProposal proposal = await generationService.GenerateProposalAsync(repository.Id, candidate.Id);
+        await generationService.MarkProposalViewedAsync(repository.Id, proposal.Id, null);
+        DecisionProposal needsRefinement = await generationService.MarkProposalNeedsRefinementAsync(repository.Id, proposal.Id, "Needs expanded tradeoffs.");
+        DecisionTradeoff previousTradeoff = needsRefinement.Tradeoffs.Single(tradeoff => tradeoff.OptionId == "option-1");
+        DecisionTradeoff revisedTradeoff = previousTradeoff with
+        {
+            Benefit = "Creates explicit bridge direction and preserves repository authority.",
+            Cost = "Requires one more certification pass before UI controls are exposed."
+        };
+        DecisionTradeoff addedTradeoff = new(
+            "option-1",
+            "Keeps refinement review evidence adjacent to the recommendation.",
+            "Adds comparison projection maintenance.",
+            needsRefinement.Evidence);
+
+        DecisionProposal refined = await refinementService.RefineProposalAsync(
+            repository.Id,
+            proposal.Id,
+            new DecisionRefinementRequest(
+                "Expand tradeoffs before resolution.",
+                Context: "Refined context with expanded tradeoff review.",
+                Tradeoffs: [revisedTradeoff, addedTradeoff, .. needsRefinement.Tradeoffs.Where(tradeoff => tradeoff.OptionId != "option-1")],
+                BaseProposalFingerprint: Fingerprint(needsRefinement),
+                TradeoffRevisions:
+                [
+                    new DecisionTradeoffRevision(
+                        "option-1",
+                        "Expanded",
+                        "Reviewer requested fuller benefit and cost traceability.",
+                        previousTradeoff,
+                        revisedTradeoff),
+                    new DecisionTradeoffRevision(
+                        "option-1",
+                        "Added",
+                        "Reviewer requested an additional comparison-maintenance cost.",
+                        null,
+                        addedTradeoff)
+                ]));
+
+        DecisionProposalRevision revision = Assert.Single(await refinementService.ListProposalRevisionsAsync(repository.Id, proposal.Id));
+        DecisionProposalRevisionComparison comparison = await refinementService.GetProposalRevisionComparisonAsync(
+            repository.Id,
+            proposal.Id,
+            revision.Id);
+
+        Assert.Equal(DecisionProposalState.Refined, refined.State);
+        Assert.Equal(Fingerprint(needsRefinement), comparison.SourceProposalFingerprint);
+        Assert.False(comparison.SourceMatchesCurrentProposal);
+        Assert.Equal(Fingerprint(refined), comparison.CurrentProposalFingerprint);
+        Assert.Contains("Tradeoffs", comparison.ChangedFields);
+        Assert.Contains("Context", comparison.ChangedFields);
+        Assert.Contains(comparison.FieldComparisons, field =>
+            field.Field == "Tradeoffs" &&
+            field.ChangeType == "Changed" &&
+            field.PreviousValue!.Contains(previousTradeoff.Benefit, StringComparison.Ordinal) &&
+            field.RevisedValue!.Contains(addedTradeoff.Benefit, StringComparison.Ordinal));
+        Assert.Contains(comparison.TradeoffRevisions, tradeoffRevision => tradeoffRevision.ChangeType == "Expanded");
+        Assert.Contains(comparison.TradeoffRevisions, tradeoffRevision => tradeoffRevision.ChangeType == "Added");
+        Assert.Contains(comparison.PreviousTradeoffs, tradeoff => tradeoff.Benefit == previousTradeoff.Benefit);
+        Assert.Contains(comparison.RevisedTradeoffs, tradeoff => tradeoff.Benefit == addedTradeoff.Benefit);
+
+        string comparisonMarkdown = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/revisions/REV-0001.comparison.md");
+        Assert.Contains("## Changed Fields", comparisonMarkdown);
+        Assert.Contains("Tradeoffs: Changed", comparisonMarkdown);
+        Assert.Contains("Keeps refinement review evidence adjacent to the recommendation.", comparisonMarkdown);
+    }
+
     private static DecisionGenerationService CreateGenerationService(
         Repository repository,
         FileSystemArtifactStore store,

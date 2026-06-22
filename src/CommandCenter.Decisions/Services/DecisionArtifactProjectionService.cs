@@ -36,6 +36,18 @@ public sealed class DecisionArtifactProjectionService(
         await WriteAsync(repository, DecisionArtifactPaths.ProposalRevisionMarkdown(proposalId, revisionId), RenderProposalRevision(revision));
     }
 
+    public async Task ProjectProposalRevisionComparisonAsync(
+        Repository repository,
+        DecisionProposalRevisionComparison comparison)
+    {
+        string proposalId = DecisionArtifactPaths.ValidateId(comparison.ProposalId, "PROP");
+        string revisionId = DecisionArtifactPaths.ValidateId(comparison.RevisionId, "REV");
+        await WriteAsync(
+            repository,
+            DecisionArtifactPaths.ProposalRevisionComparisonMarkdown(proposalId, revisionId),
+            RenderProposalRevisionComparison(comparison));
+    }
+
     public async Task RefreshDecisionIndexAsync(Repository repository)
     {
         IReadOnlyList<Decision> decisions = await decisionRepository.ListDecisionsAsync(repository);
@@ -338,6 +350,10 @@ public sealed class DecisionArtifactProjectionService(
         markdown.Fields(
             ("Previous", revision.PreviousRecommendationRationale ?? "None."),
             ("Revised", revision.RevisedRecommendationRationale ?? "None."));
+        markdown.H2("Context");
+        markdown.Fields(
+            ("Previous", revision.PreviousContext ?? "None."),
+            ("Revised", revision.RevisedContext ?? "None."));
         markdown.H2("Diagnostics");
         foreach (string diagnostic in (revision.Diagnostics ?? []).Order(StringComparer.Ordinal))
         {
@@ -347,6 +363,67 @@ public sealed class DecisionArtifactProjectionService(
         markdown.EmptyListIf((revision.Diagnostics ?? []).Count == 0);
         markdown.H2("Sources");
         markdown.SourceList(revision.Sources);
+        return markdown.ToString();
+    }
+
+    private static string RenderProposalRevisionComparison(DecisionProposalRevisionComparison comparison)
+    {
+        var markdown = new MarkdownProjectionBuilder();
+        markdown.H1($"{comparison.RevisionId}: {comparison.ProposalId} Comparison");
+        markdown.Fields(
+            ("Proposal", comparison.ProposalId),
+            ("Repository", comparison.RepositoryId.ToString()),
+            ("Source proposal fingerprint", comparison.SourceProposalFingerprint),
+            ("Current proposal fingerprint", comparison.CurrentProposalFingerprint),
+            ("Source matches current proposal", comparison.SourceMatchesCurrentProposal.ToString()));
+        markdown.H2("Changed Fields");
+        foreach (DecisionRevisionFieldComparison field in comparison.FieldComparisons
+            .OrderBy(field => field.Field, StringComparer.Ordinal))
+        {
+            markdown.H3($"{field.Field}: {field.ChangeType}");
+            markdown.Fields(
+                ("Previous", field.PreviousValue ?? "None."),
+                ("Revised", field.RevisedValue ?? "None."));
+        }
+
+        markdown.EmptyListIf(comparison.FieldComparisons.Count == 0);
+        markdown.H2("Accepted Changes");
+        foreach (string change in comparison.AcceptedChanges.Order(StringComparer.Ordinal))
+        {
+            markdown.Bullet(change);
+        }
+
+        markdown.EmptyListIf(comparison.AcceptedChanges.Count == 0);
+        markdown.H2("Rejected Changes");
+        foreach (string change in comparison.RejectedChanges.Order(StringComparer.Ordinal))
+        {
+            markdown.Bullet(change);
+        }
+
+        markdown.EmptyListIf(comparison.RejectedChanges.Count == 0);
+        markdown.H2("Retired Options");
+        foreach (DecisionOption option in comparison.RetiredOptions.OrderBy(option => option.Id, StringComparer.Ordinal))
+        {
+            markdown.Bullet($"{option.Id}: {option.Title} - {option.Description}");
+        }
+
+        markdown.EmptyListIf(comparison.RetiredOptions.Count == 0);
+        markdown.H2("Retired Assumptions");
+        foreach (DecisionAssumption assumption in comparison.RetiredAssumptions.OrderBy(assumption => assumption.Id, StringComparer.Ordinal))
+        {
+            markdown.Bullet($"{assumption.Id}: {assumption.Statement}");
+        }
+
+        markdown.EmptyListIf(comparison.RetiredAssumptions.Count == 0);
+        markdown.H2("Diagnostics");
+        foreach (string diagnostic in comparison.Diagnostics.Order(StringComparer.Ordinal))
+        {
+            markdown.Bullet(diagnostic);
+        }
+
+        markdown.EmptyListIf(comparison.Diagnostics.Count == 0);
+        markdown.H2("Sources");
+        markdown.SourceList(comparison.Sources);
         return markdown.ToString();
     }
 
