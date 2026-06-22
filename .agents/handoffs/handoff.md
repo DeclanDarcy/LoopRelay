@@ -2,29 +2,23 @@
 
 ## New State From This Slice
 
-- Continued M7C analyzer hardening.
-- Extended `DecisionGovernanceService` with blocking findings for:
-  - superseded decisions with no incoming `Supersedes` ancestry
-  - superseded decisions with multiple replacement parents
-  - `DependsOn`, `Supports`, or `Constrains` relationships pointing at archived or superseded authority
-  - multiple accepted resolved decisions for the same source candidate
-  - incomplete resolved proposal snapshots
-  - invalid resolved proposal snapshot fingerprints
-- Resolved proposal snapshot fingerprint validation reconstructs the source `DecisionProposal` from the stored snapshot and hashes it with the same decision JSON options used by production lifecycle services.
-- Updated governance service tests from 5 to 11 cases.
-- Updated `.agents/milestones/m7-decision-governance.md` to mark lineage, dependency, authority-boundary, and snapshot-integrity hardening as covered.
-- Rotated prior handoff to `.agents/handoffs/handoff.0034.md`.
+- Continued Milestone 7 governance hardening.
+- Added conflicting execution directive detection in `DecisionGovernanceService`.
+- The analyzer only evaluates active accepted resolved decisions with source proposal snapshots, projects the selected option as the execution directive, and emits a blocking `ExecutionProjectionReadiness` finding when the same normalized subject has both positive and negative directives.
+- Added focused governance tests for:
+  - conflicting accepted execution directives blocking execution projection
+  - non-accepted resolved decisions producing advisory readiness findings only
+- Updated `.agents/milestones/m7-decision-governance.md` to mark conflicting execution directives and execution projection readiness tests complete.
+- Rotated prior handoff to `.agents/handoffs/handoff.0035.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter DecisionGovernanceServiceTests` passes: 11 tests.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes: 319 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter DecisionGovernanceServiceTests` passes: 13 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes: 321 tests.
 
 ## Next Slice
 
-- Continue M7C/M7D with governance analyzer gaps that remain open:
-  - conflicting execution directives
+- Continue M7C/M7D with objective remaining analyzer gaps:
   - unresolved stale proposals
   - projection failure detection
-  - explicit execution projection readiness tests
   - repeated ambiguity, blocker, fork, governance-finding, stale-candidate, and unresolved-question coverage analysis

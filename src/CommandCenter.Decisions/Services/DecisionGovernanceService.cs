@@ -58,6 +58,7 @@ public sealed class DecisionGovernanceService(
         AnalyzeActiveAuthority(decisions, findings);
         AnalyzeProposalQuality(candidates, proposals, findings);
         AnalyzeExecutionReadiness(decisions, findings);
+        AnalyzeConflictingExecutionDirectives(decisions, findings);
         AnalyzeAuthorityBoundaries(decisions, proposals, assimilationRecommendations, findings);
         AnalyzeCoverage(candidates, proposals, findings, diagnostics);
 
@@ -476,6 +477,111 @@ public sealed class DecisionGovernanceService(
         }
     }
 
+    private static void AnalyzeConflictingExecutionDirectives(
+        IReadOnlyList<Decision> decisions,
+        List<DecisionGovernanceFinding> findings)
+    {
+        ProjectedDecisionDirective[] directives = decisions
+            .Where(decision => decision.State == DecisionState.Resolved &&
+                decision.Resolution?.Outcome == DecisionOutcome.Accepted &&
+                decision.Resolution.SourceProposalSnapshot is not null)
+            .Select(TryProjectExecutionDirective)
+            .OfType<ProjectedDecisionDirective>()
+            .ToArray();
+
+        foreach (IGrouping<string, ProjectedDecisionDirective> directiveGroup in directives
+                     .GroupBy(directive => directive.Subject, StringComparer.Ordinal)
+                     .Where(group => group.Any(directive => directive.IsPositive) &&
+                         group.Any(directive => !directive.IsPositive)))
+        {
+            ProjectedDecisionDirective[] conflicting = directiveGroup.ToArray();
+            AddFinding(
+                findings,
+                DecisionGovernanceCategory.ExecutionProjectionReadiness,
+                DecisionGovernanceSeverity.Blocking,
+                true,
+                "Conflicting execution directives",
+                $"Accepted resolved decisions project contradictory execution directives for '{directiveGroup.Key}': {string.Join("; ", conflicting.Select(directive => $"{directive.Decision.Id.Value}: {directive.Statement}").Order(StringComparer.Ordinal))}.",
+                conflicting.Select(directive => DecisionSource(directive.Decision)).ToArray(),
+                conflicting.Select(directive => directive.Decision.Id.Value).ToArray(),
+                conflicting.Select(directive => directive.Decision.Resolution?.SourceProposalSnapshot?.CandidateId).OfType<string>().ToArray(),
+                conflicting.Select(directive => directive.Decision.Resolution?.SourceProposalSnapshot?.ProposalId).OfType<string>().ToArray());
+        }
+    }
+
+    private static ProjectedDecisionDirective? TryProjectExecutionDirective(Decision decision)
+    {
+        DecisionResolution resolution = decision.Resolution!;
+        DecisionResolvedProposalSnapshot snapshot = resolution.SourceProposalSnapshot!;
+        DecisionOption? selectedOption = snapshot.Options
+            .FirstOrDefault(option => string.Equals(option.Id, resolution.SelectedOptionId, StringComparison.Ordinal));
+        if (selectedOption is null)
+        {
+            return null;
+        }
+
+        return TryParseDirective(selectedOption.Title, decision) ??
+            TryParseDirective(selectedOption.Description, decision) ??
+            TryParseDirective(decision.Title, decision);
+    }
+
+    private static ProjectedDecisionDirective? TryParseDirective(string statement, Decision decision)
+    {
+        string normalized = NormalizeDirectiveText(statement);
+        if (normalized.Length == 0)
+        {
+            return null;
+        }
+
+        foreach ((string Prefix, bool IsPositive) directive in DirectivePrefixes)
+        {
+            if (!normalized.StartsWith(directive.Prefix, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            string subject = normalized[directive.Prefix.Length..].Trim();
+            if (subject.Length == 0)
+            {
+                return null;
+            }
+
+            return new ProjectedDecisionDirective(
+                subject,
+                directive.IsPositive,
+                statement.Trim(),
+                decision);
+        }
+
+        return null;
+    }
+
+    private static string NormalizeDirectiveText(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder(value.Length);
+        bool previousWasSpace = true;
+        foreach (char character in value.ToLowerInvariant())
+        {
+            if (char.IsLetterOrDigit(character))
+            {
+                builder.Append(character);
+                previousWasSpace = false;
+            }
+            else if (!previousWasSpace)
+            {
+                builder.Append(' ');
+                previousWasSpace = true;
+            }
+        }
+
+        return builder.ToString().Trim();
+    }
+
     private static void AnalyzeAuthorityBoundaries(
         IReadOnlyList<Decision> decisions,
         IReadOnlyList<DecisionProposal> proposals,
@@ -691,6 +797,34 @@ public sealed class DecisionGovernanceService(
         byte[] bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(proposal, DecisionJson.Options));
         return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
     }
+
+    private static readonly (string Prefix, bool IsPositive)[] DirectivePrefixes =
+    [
+        ("do not use ", false),
+        ("do not enable ", false),
+        ("do not allow ", false),
+        ("disable ", false),
+        ("avoid ", false),
+        ("exclude ", false),
+        ("forbid ", false),
+        ("reject ", false),
+        ("remove ", false),
+        ("prevent ", false),
+        ("use ", true),
+        ("enable ", true),
+        ("adopt ", true),
+        ("include ", true),
+        ("allow ", true),
+        ("require ", true),
+        ("keep ", true),
+        ("preserve ", true)
+    ];
+
+    private sealed record ProjectedDecisionDirective(
+        string Subject,
+        bool IsPositive,
+        string Statement,
+        Decision Decision);
 
     private static DecisionSourceReference DecisionSource(Decision decision)
     {

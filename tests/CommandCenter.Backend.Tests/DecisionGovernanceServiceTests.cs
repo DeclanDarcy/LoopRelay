@@ -258,6 +258,68 @@ public sealed class DecisionGovernanceServiceTests
     }
 
     [Fact]
+    public async Task ConflictingExecutionDirectivesCreateBlockingReadinessFinding()
+    {
+        Repository repository = CreateRepository();
+        var decisionRepository = new InMemoryDecisionRepository();
+        await decisionRepository.SaveDecisionAsync(
+            repository,
+            CreateResolvedDecision(
+                repository.Id,
+                "DEC-0001",
+                "Enable automatic assimilation",
+                candidateId: "CAND-0001",
+                proposalId: "PROP-0001",
+                selectedOptionTitle: "Enable automatic assimilation"));
+        await decisionRepository.SaveDecisionAsync(
+            repository,
+            CreateResolvedDecision(
+                repository.Id,
+                "DEC-0002",
+                "Disable automatic assimilation",
+                candidateId: "CAND-0002",
+                proposalId: "PROP-0002",
+                selectedOptionTitle: "Disable automatic assimilation"));
+        var service = CreateService(repository, decisionRepository);
+
+        DecisionGovernanceReport report = await service.GetCurrentReportAsync(repository.Id);
+
+        Assert.Equal(DecisionHealthAssessment.Blocked, report.Health);
+        Assert.Contains(report.Findings, finding =>
+            finding.Category == DecisionGovernanceCategory.ExecutionProjectionReadiness &&
+            finding.Title == "Conflicting execution directives" &&
+            finding.BlocksExecutionProjection &&
+            finding.RelatedDecisionIds.SequenceEqual(["DEC-0001", "DEC-0002"]) &&
+            finding.RelatedCandidateIds.SequenceEqual(["CAND-0001", "CAND-0002"]) &&
+            finding.RelatedProposalIds.SequenceEqual(["PROP-0001", "PROP-0002"]));
+    }
+
+    [Fact]
+    public async Task NonAcceptedResolvedDecisionCreatesAdvisoryReadinessFinding()
+    {
+        Repository repository = CreateRepository();
+        var decisionRepository = new InMemoryDecisionRepository();
+        Decision decision = CreateResolvedDecision(repository.Id) with
+        {
+            Resolution = CreateResolvedDecision(repository.Id).Resolution! with
+            {
+                Outcome = DecisionOutcome.Deferred
+            }
+        };
+        await decisionRepository.SaveDecisionAsync(repository, decision);
+        var service = CreateService(repository, decisionRepository);
+
+        DecisionGovernanceReport report = await service.GetCurrentReportAsync(repository.Id);
+
+        Assert.Equal(DecisionHealthAssessment.AdvisoryFindings, report.Health);
+        DecisionGovernanceFinding finding = Assert.Single(report.Findings);
+        Assert.Equal(DecisionGovernanceCategory.ExecutionProjectionReadiness, finding.Category);
+        Assert.Equal(DecisionGovernanceSeverity.Warning, finding.Severity);
+        Assert.False(finding.BlocksExecutionProjection);
+        Assert.Contains("should not be projected", finding.Detail);
+    }
+
+    [Fact]
     public async Task InvalidResolvedSnapshotFingerprintCreatesBlockingFinding()
     {
         Repository repository = CreateRepository();
@@ -330,18 +392,22 @@ public sealed class DecisionGovernanceServiceTests
     private static Decision CreateResolvedDecision(
         Guid repositoryId,
         string decisionId = "DEC-0001",
-        string title = "Use repository-backed decisions")
+        string title = "Use repository-backed decisions",
+        string candidateId = "CAND-0001",
+        string proposalId = "PROP-0001",
+        string selectedOptionTitle = "Use repository-backed decisions",
+        string selectedOptionDescription = "Persist records under .agents/decisions.")
     {
         DateTimeOffset now = DateTimeOffset.UtcNow;
         var id = new DecisionId(decisionId);
         var proposal = new DecisionProposal(
-            "PROP-0001",
+            proposalId,
             repositoryId,
-            "CAND-0001",
+            candidateId,
             DecisionProposalState.ReadyForResolution,
             title,
             "Decision lifecycle state must be recoverable from repository artifacts.",
-            [new DecisionOption("option-1", title, "Persist records under .agents/decisions.", [])],
+            [new DecisionOption("option-1", selectedOptionTitle, selectedOptionDescription, [])],
             [new DecisionTradeoff("option-1", "Recoverable.", "Requires schema discipline.", [])],
             new DecisionRecommendation("option-1", "Matches repository authority.", []),
             [],
@@ -375,7 +441,7 @@ public sealed class DecisionGovernanceServiceTests
                 "human-reviewer",
                 false,
                 now,
-                [new DecisionSourceReference("DecisionProposal", ".agents/decisions/proposals/PROP-0001/proposal.json", DecisionId: id, ProposalId: "PROP-0001")],
+                [new DecisionSourceReference("DecisionProposal", $".agents/decisions/proposals/{proposalId}/proposal.json", DecisionId: id, ProposalId: proposalId)],
                 snapshot),
             [],
             [new DecisionEvidence("Plan requires repository authority.", [new DecisionSourceReference("Plan", ".agents/plan.md")])],
