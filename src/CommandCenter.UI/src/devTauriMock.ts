@@ -10,6 +10,7 @@ import type {
   DecisionCandidate,
   DecisionContextSnapshot,
   DecisionProposalBrowserItem,
+  DecisionReviewWorkspace,
   ExecutionContextPreview,
   ExecutionSessionState,
   ExecutionSession,
@@ -37,6 +38,7 @@ type MockState = {
   decisionContexts: Record<string, DecisionContextSnapshot>
   decisionCandidates: Record<string, DecisionCandidate[]>
   decisionProposalBrowserItems: Record<string, DecisionProposalBrowserItem[]>
+  decisionProposalReviewWorkspaces: Record<string, Record<string, DecisionReviewWorkspace>>
   commandCalls: Record<string, number>
 }
 
@@ -337,30 +339,78 @@ function createDecisionContext(repository: Repository): DecisionContextSnapshot 
 
 function createDecisionCandidates(repository: Repository): DecisionCandidate[] {
   const source = decisionSource('.agents/plan.md', 'The review workspace should expose proposals without resolution.')
+  const createCandidate = (
+    id: string,
+    state: DecisionCandidate['state'],
+    priority: DecisionCandidate['priority'],
+    classification: DecisionCandidate['classification'],
+    title: string,
+    summary: string,
+  ): DecisionCandidate => ({
+    id,
+    repositoryId: repository.id,
+    state,
+    priority,
+    classification,
+    title,
+    summary,
+    sourceFingerprint: `mock-candidate-source-${id}`,
+    signals: [
+      {
+        kind: 'OpenDecision',
+        summary: 'UI must observe backend-owned lifecycle state.',
+        classification,
+        priority,
+        evidence: [{ summary: 'Authorized UI phase is observational.', sources: [source] }],
+      },
+    ],
+    evidence: [{ summary: 'Backend read models are stable enough for UI shell wiring.', sources: [source] }],
+    sources: [source],
+    diagnostics: [],
+    history: [],
+  })
+
   return [
-    {
-      id: 'CAND-0001',
-      repositoryId: repository.id,
-      state: 'Promoted',
-      priority: 'High',
-      classification: 'Architectural',
-      title: 'Decision review workspace UI boundary',
-      summary: 'The Decisions UI should consume backend read models without reconstructing lifecycle authority.',
-      sourceFingerprint: 'mock-candidate-source',
-      signals: [
-        {
-          kind: 'OpenDecision',
-          summary: 'UI must observe backend-owned lifecycle state.',
-          classification: 'Architectural',
-          priority: 'High',
-          evidence: [{ summary: 'Authorized UI phase is observational.', sources: [source] }],
-        },
-      ],
-      evidence: [{ summary: 'Backend read models are stable enough for UI shell wiring.', sources: [source] }],
-      sources: [source],
-      diagnostics: [],
-      history: [],
-    },
+    createCandidate(
+      'CAND-0001',
+      'Promoted',
+      'High',
+      'Architectural',
+      'Decision review workspace UI boundary',
+      'The Decisions UI should consume backend read models without reconstructing lifecycle authority.',
+    ),
+    createCandidate(
+      'CAND-0002',
+      'Discovered',
+      'Medium',
+      'Tactical',
+      'Candidate browser navigation',
+      'Reviewers need upstream candidate context before selecting a proposal.',
+    ),
+    createCandidate(
+      'CAND-0003',
+      'Dismissed',
+      'Low',
+      'Operational',
+      'Inline mutation controls',
+      'Mutation controls remain out of scope for the current inspection workspace.',
+    ),
+    createCandidate(
+      'CAND-0004',
+      'Expired',
+      'Medium',
+      'Strategic',
+      'Outdated review shortcut',
+      'This candidate no longer matches the active M4 repository state.',
+    ),
+    createCandidate(
+      'CAND-0005',
+      'Duplicate',
+      'Low',
+      'Tactical',
+      'Duplicate proposal browser work',
+      'A promoted candidate already covers the same proposal inspection need.',
+    ),
   ]
 }
 
@@ -407,6 +457,184 @@ function createDecisionProposalBrowserItems(): DecisionProposalBrowserItem[] {
       isResolved: false,
     },
   ]
+}
+
+function createDecisionProposalReviewWorkspaces(
+  repository: Repository,
+  proposals: DecisionProposalBrowserItem[],
+): Record<string, DecisionReviewWorkspace> {
+  const timestamp = new Date().toISOString()
+  return Object.fromEntries(
+    proposals.map((proposal, index) => {
+      const proposalSource = {
+        sourceKind: 'DecisionProposal',
+        relativePath: `.agents/decisions/proposals/${proposal.proposalId}/proposal.json`,
+        section: null,
+        itemId: null,
+        decisionId: null,
+        proposalId: proposal.proposalId,
+        candidateId: proposal.candidateId,
+        excerpt: 'The proposal review workspace is loaded from a backend-owned read model.',
+      }
+      const planSource = {
+        sourceKind: 'Plan',
+        relativePath: '.agents/plan.md',
+        section: 'Milestone 4',
+        itemId: null,
+        decisionId: null,
+        proposalId: proposal.proposalId,
+        candidateId: proposal.candidateId,
+        excerpt: 'Provide full proposal inspection before refinement or resolution.',
+      }
+      const optionIds = [`${proposal.proposalId}-OPT-A`, `${proposal.proposalId}-OPT-B`]
+      const workspace: DecisionReviewWorkspace = {
+        proposal: {
+          id: proposal.proposalId,
+          repositoryId: repository.id,
+          candidateId: proposal.candidateId,
+          state: proposal.state,
+          title: proposal.title,
+          context:
+            'The review workspace must expose proposal context, supported options, tradeoffs, recommendation, assumptions, notes, revisions, diagnostics, and source attribution before mutation controls are introduced.',
+          options: [
+            {
+              id: optionIds[0],
+              title: 'Render a read-only backend workspace',
+              description: 'Load the selected proposal review workspace and display proposal details without allowing lifecycle mutation.',
+              evidence: [
+                {
+                  summary: 'The current slice authorizes inspection-only review UI.',
+                  sources: [planSource],
+                },
+              ],
+            },
+            {
+              id: optionIds[1],
+              title: 'Delay full inspection',
+              description: 'Keep only the proposal browser until mutation controls are ready.',
+              evidence: [
+                {
+                  summary: 'Deferring inspection would leave reviewers without enough context.',
+                  sources: [proposalSource],
+                },
+              ],
+            },
+          ],
+          tradeoffs: [
+            {
+              optionId: optionIds[0],
+              benefit: 'Reviewers can inspect the proposal before refinement or resolution.',
+              cost: 'The UI needs a larger read-only surface.',
+              evidence: [
+                {
+                  summary: 'M4 exit criteria require full proposal inspection.',
+                  sources: [planSource],
+                },
+              ],
+            },
+            {
+              optionId: optionIds[1],
+              benefit: 'Smaller UI change.',
+              cost: 'Evidence and review state remain hidden from the reviewer.',
+              evidence: [
+                {
+                  summary: 'Review, refinement, and resolution controls are deferred until inspection exists.',
+                  sources: [proposalSource],
+                },
+              ],
+            },
+          ],
+          recommendation: {
+            optionId: optionIds[0],
+            rationale:
+              'Use the backend review workspace as the source of truth and keep all controls observational in this slice.',
+            evidence: [
+              {
+                summary: 'Human authority should see evidence before any decision mutation path is added.',
+                sources: [planSource, proposalSource],
+              },
+            ],
+          },
+          assumptions: [
+            {
+              id: `${proposal.proposalId}-ASM-1`,
+              statement: 'The backend review workspace already contains notes, revisions, and diagnostics.',
+              evidence: [
+                {
+                  summary: 'The Tauri command and API wrapper already expose get_decision_proposal_review.',
+                  sources: [proposalSource],
+                },
+              ],
+            },
+          ],
+          evidence: [
+            {
+              summary: 'Proposal-level evidence remains visible near the proposal summary.',
+              sources: [planSource],
+            },
+          ],
+          history: [
+            {
+              at: timestamp,
+              actor: 'system',
+              action: 'Generate',
+              fromState: null,
+              toState: proposal.state,
+              reason: 'Mock proposal seeded for review workspace characterization.',
+              sources: [proposalSource],
+            },
+          ],
+        },
+        review: {
+          repositoryId: repository.id,
+          proposalId: proposal.proposalId,
+          state: proposal.reviewState,
+          updatedAt: proposal.reviewUpdatedAt,
+          reason: proposal.reviewState === 'NotStarted' ? null : 'Mock review state mirrors proposal browser item.',
+          sources: [proposalSource],
+        },
+        notes:
+          index === 0
+            ? [
+                {
+                  id: 'NOTE-0001',
+                  repositoryId: repository.id,
+                  proposalId: proposal.proposalId,
+                  createdAt: timestamp,
+                  reviewer: 'reviewer',
+                  body: 'Keep mutation controls out until evidence and attribution are visible.',
+                  sources: [planSource],
+                },
+              ]
+            : [],
+        revisions:
+          index === 0
+            ? [
+                {
+                  id: 'REV-0001',
+                  repositoryId: repository.id,
+                  proposalId: proposal.proposalId,
+                  createdAt: timestamp,
+                  reason: 'Initial generated review workspace revision.',
+                  changedFields: ['context', 'options', 'recommendation'],
+                  sourceProposalFingerprint: `mock-fingerprint-${proposal.proposalId}`,
+                  sources: [proposalSource],
+                },
+              ]
+            : [],
+        diagnostics: {
+          hasRecommendation: true,
+          hasEvidence: true,
+          optionCount: 2,
+          tradeoffCount: 2,
+          assumptionCount: 1,
+          noteCount: index === 0 ? 1 : 0,
+          warnings: [],
+        },
+      }
+      return [proposal.proposalId, workspace]
+    }),
+  )
 }
 
 function filterDecisionProposalBrowserItems(
@@ -480,6 +708,7 @@ function createInitialState(): MockState {
     decisionContexts: {},
     decisionCandidates: {},
     decisionProposalBrowserItems: {},
+    decisionProposalReviewWorkspaces: {},
     commandCalls: {},
   }
 
@@ -487,6 +716,10 @@ function createInitialState(): MockState {
     state.decisionContexts[repository.id] = createDecisionContext(repository)
     state.decisionCandidates[repository.id] = createDecisionCandidates(repository)
     state.decisionProposalBrowserItems[repository.id] = createDecisionProposalBrowserItems()
+    state.decisionProposalReviewWorkspaces[repository.id] = createDecisionProposalReviewWorkspaces(
+      repository,
+      state.decisionProposalBrowserItems[repository.id],
+    )
   })
 
   seedCertificationSession(state, certificationRepositories[0], 'Executing', 'Executing')
@@ -1449,6 +1682,16 @@ export function installDevTauriMock() {
               getStringArrayArg(args, 'states'),
             ),
           )
+        case 'get_decision_proposal_review': {
+          const repositoryId = getStringArg(args, 'repositoryId')
+          const proposalId = getStringArg(args, 'proposalId')
+          const workspace = state.decisionProposalReviewWorkspaces[repositoryId]?.[proposalId]
+          if (!workspace) {
+            throw new Error('Decision proposal review workspace was not found.')
+          }
+
+          return clone(workspace)
+        }
         case 'start_execution':
           return clone(
             startExecution(

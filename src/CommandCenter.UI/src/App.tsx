@@ -1624,6 +1624,7 @@ function App() {
                 proposals={decisionProposals}
                 selectedProposalStates={selectedDecisionProposalStates}
                 hasSelectedRepository={Boolean(selectedRepository)}
+                repositoryId={selectedRepository?.repository.id ?? null}
                 isLoading={
                   isDecisionContextLoading ||
                   isDecisionCandidatesLoading ||

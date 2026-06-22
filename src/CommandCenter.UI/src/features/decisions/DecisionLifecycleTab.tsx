@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { EmptyState, Panel, SectionHeader } from '../../components/design'
 import type {
   DecisionCandidate,
@@ -5,7 +6,10 @@ import type {
   DecisionProposalBrowserItem,
   DecisionProposalState,
 } from '../../types'
+import { useDecisionProposalReview } from '../../hooks'
+import { DecisionCandidateBrowser } from './DecisionCandidateBrowser'
 import { DecisionProposalBrowser } from './DecisionProposalBrowser'
+import { DecisionProposalViewer } from './DecisionProposalViewer'
 
 type DecisionLifecycleTabProps = {
   context: DecisionContextSnapshot | null
@@ -14,6 +18,7 @@ type DecisionLifecycleTabProps = {
   selectedProposalStates: DecisionProposalState[]
   hasSelectedRepository: boolean
   isLoading: boolean
+  repositoryId: string | null
   onSelectedProposalStatesChange: (states: DecisionProposalState[]) => void
   onRefresh: () => void
 }
@@ -25,9 +30,15 @@ export function DecisionLifecycleTab({
   selectedProposalStates,
   hasSelectedRepository,
   isLoading,
+  repositoryId,
   onSelectedProposalStatesChange,
   onRefresh,
 }: DecisionLifecycleTabProps) {
+  const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null)
+  const {
+    data: proposalReviewWorkspace,
+    isLoading: isProposalReviewLoading,
+  } = useDecisionProposalReview(repositoryId, selectedProposalId)
   const activeCandidateCount = candidates.filter((candidate) =>
     candidate.state === 'Discovered' || candidate.state === 'Promoted',
   ).length
@@ -69,30 +80,19 @@ export function DecisionLifecycleTab({
             <span>{reviewableProposalCount} reviewable proposals</span>
           </div>
 
-          <section className="decision-lifecycle-panel" aria-label="Decision candidates">
-            <h5>Candidates</h5>
-            {candidates.length > 0 ? (
-              <div className="decision-row-list">
-                {candidates.slice(0, 6).map((candidate) => (
-                  <article className="decision-row" key={candidate.id}>
-                    <strong>{candidate.title}</strong>
-                    <span>{candidate.id} | {candidate.state} | {candidate.priority}</span>
-                    <p>{candidate.summary}</p>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <EmptyState className="empty-state">
-                {isLoading ? 'Loading decision candidates...' : 'No decision candidates found.'}
-              </EmptyState>
-            )}
-          </section>
+          <DecisionCandidateBrowser candidates={candidates} isLoading={isLoading} />
 
           <DecisionProposalBrowser
             proposals={proposals}
             selectedStates={selectedProposalStates}
             isLoading={isLoading}
             onSelectedStatesChange={onSelectedProposalStatesChange}
+            onSelectedProposalChange={setSelectedProposalId}
+          />
+
+          <DecisionProposalViewer
+            workspace={proposalReviewWorkspace}
+            isLoading={isProposalReviewLoading}
           />
         </div>
       ) : (

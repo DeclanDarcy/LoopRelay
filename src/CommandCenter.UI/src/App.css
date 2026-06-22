@@ -948,7 +948,8 @@ button:focus-visible {
   background: var(--accent-subtle);
 }
 
-.decision-proposal-browser-grid {
+.decision-proposal-browser-grid,
+.decision-candidate-browser-grid {
   min-width: 0;
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(240px, 0.8fr);
@@ -1000,6 +1001,143 @@ button:focus-visible {
   display: grid;
   gap: 8px;
   margin: 0;
+}
+
+.decision-proposal-viewer,
+.decision-viewer-summary,
+.decision-inspection-list {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.decision-viewer-summary,
+.decision-inspection-card,
+.decision-tradeoff,
+.decision-evidence-block article {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--bg-inset);
+}
+
+.decision-viewer-summary div,
+.decision-inspection-card div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.decision-viewer-summary span,
+.decision-inspection-card span,
+.decision-evidence-block > span {
+  color: var(--fg-muted);
+  font-size: 0.76rem;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.decision-viewer-summary strong,
+.decision-inspection-card strong {
+  min-width: 0;
+  color: var(--fg-default);
+  overflow-wrap: anywhere;
+}
+
+.decision-viewer-summary p,
+.decision-inspection-card p,
+.decision-tradeoff p,
+.decision-evidence-block p,
+.decision-source-list p,
+.decision-inspection-card small {
+  min-width: 0;
+  margin: 0;
+  color: var(--fg-subtle);
+  font-size: 0.84rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.decision-diagnostics-grid {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.decision-diagnostics-grid span,
+.decision-warning-list span {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--surface-1);
+  color: var(--fg-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.decision-warning-list {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.decision-warning-list span {
+  border-color: var(--status-warning-muted);
+  color: var(--fg-default);
+}
+
+.decision-option-grid,
+.decision-review-grid {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.decision-evidence-block {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.decision-source-list {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.decision-source-list li {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+  border-left: 3px solid var(--accent-muted);
+  background: var(--surface-1);
+}
+
+.decision-source-list strong,
+.decision-source-list span {
+  min-width: 0;
+  color: var(--fg-muted);
+  font-size: 0.76rem;
+  overflow-wrap: anywhere;
+}
+
+.decision-review-grid h6,
+.decision-inspection-list h6 {
+  margin: 0;
+  color: var(--fg-default);
+  font-size: 0.86rem;
+  letter-spacing: 0;
 }
 
 .context-summary {
@@ -1660,7 +1798,8 @@ button:focus-visible {
   .context-summary,
   .context-columns,
   .diagnostic-list,
-  .decision-proposal-browser-grid,
+    .decision-proposal-browser-grid,
+    .decision-candidate-browser-grid,
   .execution-workflow-rail,
   .workspace-workflow-rail,
   .execution-session-grid,

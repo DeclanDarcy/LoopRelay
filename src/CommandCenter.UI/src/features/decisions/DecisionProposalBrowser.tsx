@@ -30,6 +30,7 @@ type DecisionProposalBrowserProps = {
   selectedStates: DecisionProposalState[]
   isLoading: boolean
   onSelectedStatesChange: (states: DecisionProposalState[]) => void
+  onSelectedProposalChange?: (proposalId: string | null) => void
 }
 
 export function DecisionProposalBrowser({
@@ -37,6 +38,7 @@ export function DecisionProposalBrowser({
   selectedStates,
   isLoading,
   onSelectedStatesChange,
+  onSelectedProposalChange,
 }: DecisionProposalBrowserProps) {
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null)
   const selectedStateSet = useMemo(() => new Set(selectedStates), [selectedStates])
@@ -50,6 +52,10 @@ export function DecisionProposalBrowser({
 
     setSelectedProposalId(proposals[0]?.proposalId ?? null)
   }, [proposals, selectedProposalId])
+
+  useEffect(() => {
+    onSelectedProposalChange?.(selectedProposal?.proposalId ?? null)
+  }, [onSelectedProposalChange, selectedProposal?.proposalId])
 
   const toggleState = (state: DecisionProposalState) => {
     if (selectedStateSet.has(state)) {

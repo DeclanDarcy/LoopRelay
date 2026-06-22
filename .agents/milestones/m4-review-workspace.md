@@ -21,25 +21,25 @@ provide full proposal inspection before refinement or resolution.
 ## UI Work
 
 - [x] Add Decisions tab and decision lifecycle route composition.
-- [ ] Add candidate browser with active, promoted, dismissed, expired, and duplicate filters.
+- [x] Add candidate browser with active, promoted, dismissed, expired, and duplicate filters.
 - [x] Add proposal browser with generated, viewed, needs refinement, refined, ready for resolution, resolved, expired, and discarded filters.
-- [ ] Add full proposal viewer.
+- [x] Add full proposal viewer.
 - [ ] Add option comparison.
 - [ ] Add evidence/source attribution navigation.
-- [ ] Add review notes panel.
+- [x] Add review notes panel.
 
 ## Tests
 
 - [x] Backend review transition tests.
 - [x] Review note persistence tests.
-- [ ] Proposal viewer characterization tests.
-- [ ] Evidence and attribution display tests.
+- [x] Proposal viewer characterization tests.
+- [x] Evidence and attribution display tests.
 - [x] Candidate/proposal filter tests.
-- [ ] Navigation tests.
+- [x] Navigation tests.
 
 ## Exit Criteria
 
-- [ ] Users can inspect the full proposal without resolving it.
-- [ ] Proposal state and review notes are visible and persisted.
-- [ ] Evidence remains visible where it matters.
-- [ ] UI does not mutate proposal content during review.
+- [x] Users can inspect the full proposal without resolving it.
+- [x] Proposal state and review notes are visible and persisted.
+- [x] Evidence remains visible where it matters.
+- [x] UI does not mutate proposal content during review.

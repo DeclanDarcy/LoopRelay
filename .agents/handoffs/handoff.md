@@ -2,26 +2,29 @@
 
 ## New State From This Slice
 
-- Continued M4: Decision Review Workspace UI.
-- Added `DecisionProposalBrowser` in `src/CommandCenter.UI/src/features/decisions/DecisionProposalBrowser.tsx`.
-- The proposal browser renders rows from `DecisionProposalBrowserItem`, supports backend-driven proposal state filters, and keeps selected proposal state local to the browser.
-- Wired proposal filter state through `App.tsx` into `useDecisionProposals`, preserving the existing backend browser endpoint contract.
-- Updated `DecisionLifecycleTab` to delegate proposal rendering to the dedicated proposal browser component.
-- Expanded `devTauriMock` proposal browser data with generated, viewed, and ready-for-resolution examples, and made the mock browser command honor `states` filters.
-- Added proposal browser characterization coverage in `src/CommandCenter.UI/src/test/characterization/decisionProposalBrowser.test.tsx`.
-- Updated `.agents/milestones/m4-review-workspace.md`; the proposal browser UI and candidate/proposal filter test items are now complete.
-- Rotated the previous handoff to `.agents/handoffs/handoff.0015.md`.
+- Continued M4 inspection/navigation work.
+- Added `DecisionCandidateBrowser` in `src/CommandCenter.UI/src/features/decisions/DecisionCandidateBrowser.tsx`.
+- `DecisionLifecycleTab` now renders the dedicated candidate browser instead of the prior inline six-row candidate preview.
+- Candidate browser keeps selected candidate and selected state filters as React presentation state only.
+- Candidate filters cover `Discovered`, `Promoted`, `Dismissed`, `Expired`, and `Duplicate`; the default view shows active `Discovered` and `Promoted` candidates.
+- Candidate browser exposes selected candidate metadata, signal count, and evidence count without mutation controls.
+- `devTauriMock` now seeds representative candidates for all candidate lifecycle states.
+- Added `decisionCandidateBrowser.test.tsx` for candidate filtering, local selection, and no mutation controls.
+- Added `decisionLifecycleNavigation.test.tsx` proving proposal selection loads the matching backend-owned review workspace into the viewer.
+- Updated `.agents/milestones/m4-review-workspace.md`; candidate browser and navigation tests are now complete.
+- Rotated the previous handoff to `.agents/handoffs/handoff.0017.md`.
 
 ## Verification
 
 - `npm run lint --prefix src/CommandCenter.UI` succeeds.
-- `npm run test --prefix src/CommandCenter.UI` passes with 37 files and 138 tests.
+- `npm run test --prefix src/CommandCenter.UI -- decisionCandidateBrowser decisionLifecycleNavigation decisionProposalBrowser` passes.
+- `npm run test --prefix src/CommandCenter.UI` passes with 40 files and 145 tests.
 - `npm run build --prefix src/CommandCenter.UI` succeeds.
 
 ## Next Slice
 
-- Continue M4 with the full proposal viewer:
-  1. Load the selected proposal review workspace from the backend when a proposal is selected.
-  2. Render proposal context, options, tradeoffs, recommendation, assumptions, diagnostics, review state, notes, and revisions.
-  3. Keep evidence near the recommendation, option, tradeoff, or assumption it supports.
-  4. Do not add review, refinement, or resolution mutation controls until the viewer and evidence/source navigation are visible.
+- Continue M4 with the remaining inspection/navigation UI:
+  1. Add a dedicated option comparison surface backed by the existing option comparison read model.
+  2. Add evidence/source attribution navigation backed by the existing evidence inspection and source attribution read models.
+  3. Add characterization coverage for option comparison and evidence/source navigation.
+  4. Keep review, refinement, resolution, discard, and other mutation controls deferred until the inspection surfaces are complete.
