@@ -2,34 +2,41 @@
 
 ## Newly Authorized
 
-- The M6 supersession boundary is accepted:
-  - supersession means replacement lineage
-  - archive means retirement state
-- Supersession must remain distinct from archive:
-  - `Decision A was replaced by Decision B`
-  - is not equivalent to
-  - `Decision A is no longer active`
-- Recording `Supersedes` on the replacement decision is accepted as the right lineage direction because it preserves the forward authority chain from old resolved decision to new resolved decision.
-- Replacement authority must already be `Resolved`.
-- `UnderReview`, `Deferred`, and `Archived` decisions must not become replacement authority through supersession.
-- Archive should remain a terminal cleanup/retirement action after `Superseded -> Archived`.
-- Resolution UI remains deferred until assimilation recommendation boundaries are stable.
-- Assimilation recommendation packages must be explicitly advisory:
-  - `Resolved Decision`
-  - to `Assimilation Recommendation Package`
-  - to human or later continuity workflow
-- Decision resolution must never directly mutate `.agents/operational_context.md`.
-- The next M6 implementation slice should cover assimilation recommendation packages.
-- Core next-slice tests should prove:
-  - packages are generated only from `Resolved` decisions
-  - packages include source decision and snapshot lineage
-  - packages do not mutate `.agents/operational_context.md`
-  - packages do not promote or merge continuity state
-  - package projection is reproducible from repository artifacts
+- M6 now has the backend boundary needed before UI work.
+- The accepted resolution-to-assimilation flow is:
+  - `Decision Resolution`
+  - to `Advisory Assimilation Package`
+  - to continuity-owned adoption later
+- Decision resolution must not mutate `.agents/operational_context.md`.
+- The core authority separation is accepted:
+  - `Decision Authority` is not equivalent to `Operational Context Authority`
+- Assimilation recommendation package constraints are accepted:
+  - generated from `Resolved` decisions only
+  - includes decision lineage
+  - includes context snapshot lineage
+  - does not mutate `.agents/operational_context.md`
+  - does not own continuity merge or promotion
+- M6 should remain focused on resolution while preparing M10 without pulling adoption authority forward.
+- Resolution UI is authorized as the next slice.
+- Resolution UI should remain review-oriented and include:
+  - current proposal snapshot
+  - selected outcome
+  - rationale and resolver metadata
+  - resulting decision state
+  - assimilation recommendation package
+- React authority remains limited to:
+  - submitting resolution commands
+  - fetching assimilation packages
+  - rendering backend projections
+- React must not infer:
+  - decision state
+  - assimilation eligibility
+  - operational-context changes
 - Current M6 status is accepted as:
-  - Resolution snapshot complete
-  - Resolution service boundary complete
-  - Outcome semantics complete
-  - Supersede/archive complete
-  - Assimilation recommendations next
-  - Resolution UI deferred
+  - Resolution Snapshot complete
+  - Resolution Service Boundary complete
+  - Outcome Semantics complete
+  - Supersede / Archive complete
+  - Assimilation Recommendations complete
+  - Resolution UI next
+- The milestone is ready for user-facing resolution surfaces without violating the operational-context boundary.

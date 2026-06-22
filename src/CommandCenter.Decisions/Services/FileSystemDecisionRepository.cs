@@ -284,6 +284,34 @@ public sealed class FileSystemDecisionRepository(IArtifactStore artifactStore) :
         return note;
     }
 
+    public async Task<DecisionAssimilationRecommendation?> GetAssimilationRecommendationAsync(
+        Repository repository,
+        DecisionId decisionId)
+    {
+        string id = DecisionArtifactPaths.ValidateId(decisionId.Value, "DEC");
+        return await ReadPayloadAsync<DecisionAssimilationRecommendation>(
+            repository,
+            DecisionArtifactPaths.AssimilationRecommendationJson(id));
+    }
+
+    public async Task<DecisionAssimilationRecommendation> SaveAssimilationRecommendationAsync(
+        Repository repository,
+        DecisionAssimilationRecommendation recommendation)
+    {
+        string id = DecisionArtifactPaths.ValidateId(recommendation.DecisionId, "DEC");
+        if (recommendation.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException("Decision assimilation recommendation belongs to a different repository.");
+        }
+
+        string relativePath = DecisionArtifactPaths.AssimilationRecommendationJson(id);
+        DateTimeOffset createdAt =
+            await GetExistingCreatedAtAsync<DecisionAssimilationRecommendation>(repository, relativePath) ??
+            recommendation.CreatedAt;
+        await WriteDocumentAsync(repository, relativePath, recommendation, createdAt, recommendation.CreatedAt);
+        return recommendation;
+    }
+
     private async Task<string> AllocateIdAsync(Repository repository, DecisionArtifactKind kind, string prefix)
     {
         IReadOnlyList<string> directories = await ListArtifactDirectoriesAsync(repository, kind);

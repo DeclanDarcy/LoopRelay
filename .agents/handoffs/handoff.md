@@ -2,42 +2,41 @@
 
 ## New State From This Slice
 
-- Continued M6 decision resolution by implementing explicit decision authority mutation after proposal resolution.
-- Added `SupersedeDecisionCommand` and `ArchiveDecisionCommand`.
-- Extended `IDecisionResolutionService` and `DecisionResolutionService` with:
-  - `SupersedeDecisionAsync`
-  - `ArchiveDecisionAsync`
-- Supersede behavior now:
-  - requires replacement decision id, rationale, and resolver
-  - requires the source decision to transition through `DecisionLifecycleRules` from `Resolved` to `Superseded`
-  - requires the replacement decision to already be `Resolved`
-  - rejects self-supersession
-  - records replacement lineage as a `Supersedes` relationship on the replacement decision
-  - records history on both the superseded and replacement decisions
-  - refreshes both decision markdown projections and `decisions.md`
-- Archive behavior now:
-  - requires rationale and resolver
-  - only allows the planned `Superseded` to `Archived` transition through `DecisionLifecycleRules`
-  - records history and refreshes `decision.md` plus `decisions.md`
+- Continued M6 decision resolution by implementing advisory operational-context assimilation recommendation packages for resolved decisions.
+- Added `IDecisionOperationalContextAssimilationService` and `DecisionOperationalContextAssimilationService`.
+- Added:
+  - `DecisionAssimilationRecommendation`
+  - `CreateDecisionAssimilationRecommendationCommand`
+- Added repository persistence for `.agents/decisions/assimilation/{DEC-id}/recommendation.json`.
+- Added markdown projection for `.agents/decisions/assimilation/{DEC-id}/recommendation.md`.
+- Assimilation recommendation generation now:
+  - requires the source decision to be `Resolved`
+  - captures the full source decision
+  - creates and captures a current decision context snapshot
+  - records decision and context fingerprints
+  - emits projected stable-decision text, rationale, evidence, sources, diagnostics, requester, and notes
+  - explicitly remains advisory and does not mutate `.agents/operational_context.md`
+  - leaves continuity merge/review/acceptance/promotion policy outside decision services
 - Added backend endpoints:
-  - `POST /api/repositories/{repositoryId}/decisions/{decisionId}/supersede`
-  - `POST /api/repositories/{repositoryId}/decisions/{decisionId}/archive`
-- Added repository-backed tests for:
-  - supersede lineage persistence
-  - archive after supersession
-  - invalid supersede/archive conflicts
-  - endpoint supersede/archive behavior
-- Updated `.agents/milestones/m6-decision-resolution.md` to mark supersede/archive work and tests complete.
-- Rotated the previous handoff to `.agents/handoffs/handoff.0029.md`.
+  - `GET /api/repositories/{repositoryId}/decisions/{decisionId}/assimilation`
+  - `POST /api/repositories/{repositoryId}/decisions/{decisionId}/assimilation/propose-operational-context`
+- Added repository-backed and endpoint tests proving:
+  - recommendations are generated only from `Resolved` decisions
+  - source decision and context snapshot lineage are persisted and reloadable
+  - markdown projection is created
+  - `.agents/operational_context.md` remains unchanged
+- Updated `.agents/milestones/m6-decision-resolution.md` to mark assimilation backend work and tests complete.
+- Rotated the previous handoff to `.agents/handoffs/handoff.0030.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter DecisionGenerationServiceTests` passes with 31 tests.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes with 305 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter DecisionGenerationServiceTests` passes with 34 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes with 308 tests.
 
 ## Next Slice
 
-- Continue M6 with assimilation recommendation packages for resolved decisions.
-- Add the explicit backend command/service for creating a decision assimilation recommendation from a resolved decision and current continuity inputs.
-- Prove with tests that the recommendation package does not mutate `.agents/operational_context.md` and does not own continuity merge or promotion policy.
-- Keep resolution UI deferred until assimilation boundaries and projection consistency are stable.
+- Continue M6 by adding the resolution UI surface now that the backend resolution, supersede/archive, and assimilation boundaries are stable.
+- Suggested first UI slice:
+  - add API bindings and Tauri commands for assimilation recommendation get/create
+  - add resolution/assimilation panels that show recommendation packages as reviewable advisory artifacts
+  - keep mutation controls backend-driven and avoid any client-side lifecycle authority

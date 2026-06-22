@@ -13,6 +13,7 @@ public sealed class InMemoryDecisionRepository : IDecisionRepository
     private readonly Dictionary<Guid, SortedDictionary<string, SortedDictionary<string, DecisionProposalRevision>>> revisionsByRepository = [];
     private readonly Dictionary<Guid, SortedDictionary<string, DecisionReviewStatus>> reviewStatusByRepository = [];
     private readonly Dictionary<Guid, SortedDictionary<string, SortedDictionary<string, DecisionReviewNote>>> reviewNotesByRepository = [];
+    private readonly Dictionary<Guid, SortedDictionary<string, DecisionAssimilationRecommendation>> assimilationByRepository = [];
 
     public Task<DecisionId> AllocateDecisionIdAsync(Repository repository)
     {
@@ -154,6 +155,27 @@ public sealed class InMemoryDecisionRepository : IDecisionRepository
         return Task.FromResult(note);
     }
 
+    public Task<DecisionAssimilationRecommendation?> GetAssimilationRecommendationAsync(
+        Repository repository,
+        DecisionId decisionId)
+    {
+        GetAssimilationRecommendations(repository.Id).TryGetValue(decisionId.Value, out DecisionAssimilationRecommendation? recommendation);
+        return Task.FromResult(recommendation);
+    }
+
+    public Task<DecisionAssimilationRecommendation> SaveAssimilationRecommendationAsync(
+        Repository repository,
+        DecisionAssimilationRecommendation recommendation)
+    {
+        if (recommendation.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException("Decision assimilation recommendation belongs to a different repository.");
+        }
+
+        GetAssimilationRecommendations(repository.Id)[recommendation.DecisionId] = recommendation;
+        return Task.FromResult(recommendation);
+    }
+
     private SortedDictionary<string, Decision> GetDecisions(Guid repositoryId)
     {
         return GetRepositoryMap(decisionsByRepository, repositoryId);
@@ -198,6 +220,11 @@ public sealed class InMemoryDecisionRepository : IDecisionRepository
         }
 
         return notes;
+    }
+
+    private SortedDictionary<string, DecisionAssimilationRecommendation> GetAssimilationRecommendations(Guid repositoryId)
+    {
+        return GetRepositoryMap(assimilationByRepository, repositoryId);
     }
 
     private static SortedDictionary<string, T> GetRepositoryMap<T>(

@@ -45,4 +45,10 @@ public interface IDecisionRepository
     Task<IReadOnlyList<DecisionReviewNote>> ListReviewNotesAsync(Repository repository, string proposalId);
 
     Task<DecisionReviewNote> SaveReviewNoteAsync(Repository repository, DecisionReviewNote note);
+
+    Task<DecisionAssimilationRecommendation?> GetAssimilationRecommendationAsync(Repository repository, DecisionId decisionId);
+
+    Task<DecisionAssimilationRecommendation> SaveAssimilationRecommendationAsync(
+        Repository repository,
+        DecisionAssimilationRecommendation recommendation);
 }

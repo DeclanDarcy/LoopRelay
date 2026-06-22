@@ -48,6 +48,17 @@ public sealed class DecisionArtifactProjectionService(
             RenderProposalRevisionComparison(comparison));
     }
 
+    public async Task ProjectDecisionAssimilationRecommendationAsync(
+        Repository repository,
+        DecisionAssimilationRecommendation recommendation)
+    {
+        string id = DecisionArtifactPaths.ValidateId(recommendation.DecisionId, "DEC");
+        await WriteAsync(
+            repository,
+            DecisionArtifactPaths.AssimilationRecommendationMarkdown(id),
+            RenderAssimilationRecommendation(recommendation));
+    }
+
     public async Task RefreshDecisionIndexAsync(Repository repository)
     {
         IReadOnlyList<Decision> decisions = await decisionRepository.ListDecisionsAsync(repository);
@@ -463,6 +474,37 @@ public sealed class DecisionArtifactProjectionService(
         markdown.EmptyListIf(comparison.Diagnostics.Count == 0);
         markdown.H2("Sources");
         markdown.SourceList(comparison.Sources);
+        return markdown.ToString();
+    }
+
+    private static string RenderAssimilationRecommendation(DecisionAssimilationRecommendation recommendation)
+    {
+        var markdown = new MarkdownProjectionBuilder();
+        markdown.H1($"{recommendation.DecisionId}: Operational Context Assimilation Recommendation");
+        markdown.Fields(
+            ("Repository", recommendation.RepositoryId.ToString()),
+            ("Created", FormatTimestamp(recommendation.CreatedAt)),
+            ("Decision fingerprint", recommendation.DecisionFingerprint),
+            ("Context snapshot", recommendation.ContextSnapshotId),
+            ("Context fingerprint", recommendation.ContextFingerprint),
+            ("Requested by", recommendation.RequestedBy ?? "Unspecified"));
+        markdown.H2("Projected Stable Decision");
+        markdown.Paragraph(recommendation.ProjectedStableDecision);
+        markdown.H2("Rationale");
+        markdown.Paragraph(recommendation.Rationale);
+        markdown.H2("Notes");
+        markdown.Paragraph(recommendation.Notes);
+        markdown.H2("Evidence");
+        markdown.EvidenceList(recommendation.Evidence);
+        markdown.H2("Sources");
+        markdown.SourceList(recommendation.Sources);
+        markdown.H2("Diagnostics");
+        foreach (string diagnostic in recommendation.Diagnostics.Order(StringComparer.Ordinal))
+        {
+            markdown.Bullet(diagnostic);
+        }
+
+        markdown.EmptyListIf(recommendation.Diagnostics.Count == 0);
         return markdown.ToString();
     }
 

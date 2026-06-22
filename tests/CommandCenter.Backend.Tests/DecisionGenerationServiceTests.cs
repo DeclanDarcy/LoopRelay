@@ -369,6 +369,125 @@ public sealed class DecisionGenerationServiceTests
         Assert.False(Directory.Exists(Path.Combine(repository.Path, ".agents", "decisions", "assimilation")));
     }
 
+    [Fact]
+    public async Task AssimilationRecommendationPersistsAdvisoryPackageWithoutMutatingOperationalContext()
+    {
+        Repository repository = CreateRepository();
+        await WriteAsync(repository, ".agents/plan.md", "# Plan\n\n- Need to decide repository-backed persistence schema.");
+        await WriteAsync(repository, ".agents/operational_context.md", "# Operational Context\n\nStable understanding.");
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var generationService = CreateGenerationService(repository, store, decisionRepository);
+        var resolutionService = CreateResolutionService(repository, store, decisionRepository);
+        var assimilationService = CreateAssimilationService(repository, store, decisionRepository);
+        Decision decision = await ResolveAcceptedDecisionAsync(repository, generationService, resolutionService, candidate.Id);
+        string operationalContextBefore = await ReadAsync(repository, ".agents/operational_context.md");
+
+        DecisionAssimilationRecommendation recommendation =
+            await assimilationService.ProposeOperationalContextAssimilationAsync(
+                repository.Id,
+                decision.Id.Value,
+                new CreateDecisionAssimilationRecommendationCommand("human-reviewer", "Prepare for continuity review."));
+
+        string operationalContextAfter = await ReadAsync(repository, ".agents/operational_context.md");
+        var restartedRepository = new FileSystemDecisionRepository(store);
+        DecisionAssimilationRecommendation? reloaded =
+            await restartedRepository.GetAssimilationRecommendationAsync(repository, decision.Id);
+        string markdown = await ReadAsync(repository, ".agents/decisions/assimilation/DEC-0001/recommendation.md");
+
+        Assert.Equal(decision.Id.Value, recommendation.DecisionId);
+        Assert.Equal(decision.Id, recommendation.SourceDecision.Id);
+        Assert.Equal(repository.Id, recommendation.ContextSnapshot.RepositoryId);
+        Assert.Equal(recommendation.ContextSnapshotId, recommendation.ContextSnapshot.SnapshotId);
+        Assert.Equal(recommendation.ContextFingerprint, recommendation.ContextSnapshot.Fingerprint);
+        Assert.False(string.IsNullOrWhiteSpace(recommendation.DecisionFingerprint));
+        Assert.Contains(recommendation.Diagnostics, diagnostic =>
+            diagnostic.Contains("advisory", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(recommendation.Sources, source => source.SourceKind == "DecisionRecord" && source.DecisionId == decision.Id);
+        Assert.Contains(recommendation.Sources, source => source.SourceKind == "DecisionContextSnapshot");
+        Assert.Equal(operationalContextBefore, operationalContextAfter);
+        Assert.NotNull(reloaded);
+        Assert.Equal(recommendation.DecisionFingerprint, reloaded.DecisionFingerprint);
+        Assert.Equal(recommendation.ContextFingerprint, reloaded.ContextFingerprint);
+        Assert.True(File.Exists(Path.Combine(repository.Path, ".agents", "decisions", "assimilation", "DEC-0001", "recommendation.json")));
+        Assert.True(File.Exists(Path.Combine(repository.Path, ".agents", "decisions", "assimilation", "DEC-0001", "recommendation.md")));
+        Assert.Contains("# DEC-0001: Operational Context Assimilation Recommendation", markdown);
+        Assert.Contains("Continuity remains responsible", markdown);
+    }
+
+    [Fact]
+    public async Task AssimilationRecommendationRequiresResolvedDecision()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var generationService = CreateGenerationService(repository, store, decisionRepository);
+        var resolutionService = CreateResolutionService(repository, store, decisionRepository);
+        var assimilationService = CreateAssimilationService(repository, store, decisionRepository);
+        DecisionProposal proposal = await generationService.GenerateProposalAsync(repository.Id, candidate.Id);
+        await generationService.MarkProposalReadyForResolutionAsync(repository.Id, proposal.Id, "Ready to defer.");
+        Decision underReviewDecision = await resolutionService.ResolveProposalAsync(
+            repository.Id,
+            proposal.Id,
+            new ResolveDecisionCommand("Defer until more evidence exists.", "human-reviewer", "option-1", DecisionOutcome.Deferred));
+
+        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            assimilationService.ProposeOperationalContextAssimilationAsync(
+                repository.Id,
+                underReviewDecision.Id.Value,
+                null));
+
+        Assert.Equal("Only resolved decisions can produce operational-context assimilation recommendations.", exception.Message);
+        Assert.False(Directory.Exists(Path.Combine(repository.Path, ".agents", "decisions", "assimilation")));
+    }
+
+    [Fact]
+    public async Task AssimilationRecommendationEndpointCreatesAndReturnsPackage()
+    {
+        Repository repository = CreateRepository();
+        await WriteAsync(repository, ".agents/plan.md", "# Plan\n\n- Need to decide repository-backed persistence schema.");
+        await WriteAsync(repository, ".agents/operational_context.md", "# Operational Context\n\nStable understanding.");
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services => services.AddSingleton<IRepositoryService>(new StubRepositoryService(repository)));
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+        using var client = new HttpClient();
+        string root = app.Urls.Single();
+        JsonSerializerOptions jsonOptions = CreateJsonOptions();
+        Decision decision = await ResolveViaEndpointAsync(root, client, jsonOptions, repository.Id, candidate.Id);
+        string operationalContextBefore = await ReadAsync(repository, ".agents/operational_context.md");
+
+        HttpResponseMessage proposeResponse = await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/{decision.Id.Value}/assimilation/propose-operational-context",
+            new CreateDecisionAssimilationRecommendationCommand("human-reviewer", "Endpoint package."),
+            jsonOptions);
+        HttpResponseMessage getResponse = await client.GetAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/{decision.Id.Value}/assimilation");
+
+        DecisionAssimilationRecommendation proposed =
+            (await proposeResponse.Content.ReadFromJsonAsync<DecisionAssimilationRecommendation>(jsonOptions))!;
+        DecisionAssimilationRecommendation fetched =
+            (await getResponse.Content.ReadFromJsonAsync<DecisionAssimilationRecommendation>(jsonOptions))!;
+        string operationalContextAfter = await ReadAsync(repository, ".agents/operational_context.md");
+
+        Assert.Equal(HttpStatusCode.OK, proposeResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+        Assert.Equal(decision.Id.Value, proposed.DecisionId);
+        Assert.Equal(proposed.DecisionFingerprint, fetched.DecisionFingerprint);
+        Assert.Equal(proposed.ContextSnapshotId, fetched.ContextSnapshotId);
+        Assert.Equal(operationalContextBefore, operationalContextAfter);
+    }
+
     [Theory]
     [InlineData(DecisionOutcome.Accepted, DecisionState.Resolved)]
     [InlineData(DecisionOutcome.Rejected, DecisionState.Archived)]
@@ -1148,6 +1267,21 @@ public sealed class DecisionGenerationServiceTests
         var repositoryService = new StubRepositoryService(repository);
         var projectionService = new DecisionArtifactProjectionService(decisionRepository, store);
         return new DecisionResolutionService(repositoryService, decisionRepository, projectionService);
+    }
+
+    private static DecisionOperationalContextAssimilationService CreateAssimilationService(
+        Repository repository,
+        FileSystemArtifactStore store,
+        FileSystemDecisionRepository decisionRepository)
+    {
+        var repositoryService = new StubRepositoryService(repository);
+        var projectionService = new DecisionArtifactProjectionService(decisionRepository, store);
+        var contextService = new DecisionContextService(repositoryService, store, decisionRepository);
+        return new DecisionOperationalContextAssimilationService(
+            repositoryService,
+            decisionRepository,
+            contextService,
+            projectionService);
     }
 
     private static async Task<Decision> ResolveAcceptedDecisionAsync(

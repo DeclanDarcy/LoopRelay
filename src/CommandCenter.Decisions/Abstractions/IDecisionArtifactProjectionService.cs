@@ -17,6 +17,10 @@ public interface IDecisionArtifactProjectionService
         Repository repository,
         DecisionProposalRevisionComparison comparison);
 
+    Task ProjectDecisionAssimilationRecommendationAsync(
+        Repository repository,
+        DecisionAssimilationRecommendation recommendation);
+
     Task RefreshDecisionIndexAsync(Repository repository);
 
     Task RefreshAllAsync(Repository repository);

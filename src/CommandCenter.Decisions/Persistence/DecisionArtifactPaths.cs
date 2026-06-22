@@ -12,6 +12,7 @@ internal static partial class DecisionArtifactPaths
     private const string RecordsRoot = $"{DecisionsRoot}/records";
     private const string CandidatesRoot = $"{DecisionsRoot}/candidates";
     private const string ProposalsRoot = $"{DecisionsRoot}/proposals";
+    private const string AssimilationRoot = $"{DecisionsRoot}/assimilation";
 
     public static string DecisionDirectory(string id)
     {
@@ -26,6 +27,11 @@ internal static partial class DecisionArtifactPaths
     public static string ProposalDirectory(string id)
     {
         return ArtifactPath.CombineRelative(ProposalsRoot, ValidateId(id, "PROP"));
+    }
+
+    public static string AssimilationDirectory(string decisionId)
+    {
+        return ArtifactPath.CombineRelative(AssimilationRoot, ValidateId(decisionId, "DEC"));
     }
 
     public static string DecisionJson(string id)
@@ -86,6 +92,16 @@ internal static partial class DecisionArtifactPaths
     public static string ProposalReviewNotesJson(string proposalId)
     {
         return ArtifactPath.CombineRelative(ProposalDirectory(proposalId), "notes.json");
+    }
+
+    public static string AssimilationRecommendationJson(string decisionId)
+    {
+        return ArtifactPath.CombineRelative(AssimilationDirectory(decisionId), "recommendation.json");
+    }
+
+    public static string AssimilationRecommendationMarkdown(string decisionId)
+    {
+        return ArtifactPath.CombineRelative(AssimilationDirectory(decisionId), "recommendation.md");
     }
 
     public static string DecisionsIndex()

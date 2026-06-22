@@ -37,6 +37,8 @@ public static class DecisionEndpoints
         app.MapResolveDecisionProposal();
         app.MapSupersedeDecision();
         app.MapArchiveDecision();
+        app.MapGetDecisionAssimilationRecommendation();
+        app.MapProposeDecisionOperationalContextAssimilation();
         app.MapExpireDecisionProposal();
         app.MapDiscardDecisionProposal();
         return app;
@@ -817,6 +819,62 @@ public static class DecisionEndpoints
                 }
 
                 return Results.Ok(await resolutionService.ArchiveDecisionAsync(repositoryId, decisionId, request));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGetDecisionAssimilationRecommendation(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/decisions/{decisionId}/assimilation", async (
+            Guid repositoryId,
+            string decisionId,
+            IDecisionOperationalContextAssimilationService assimilationService) =>
+        {
+            try
+            {
+                DecisionAssimilationRecommendation? recommendation =
+                    await assimilationService.GetRecommendationAsync(repositoryId, decisionId);
+                return recommendation is null
+                    ? Results.NotFound(new { error = $"Decision assimilation recommendation was not found: {decisionId}" })
+                    : Results.Ok(recommendation);
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapProposeDecisionOperationalContextAssimilation(this IEndpointRouteBuilder app) =>
+        app.MapPost("/api/repositories/{repositoryId:guid}/decisions/{decisionId}/assimilation/propose-operational-context", async (
+            Guid repositoryId,
+            string decisionId,
+            CreateDecisionAssimilationRecommendationCommand? request,
+            IDecisionOperationalContextAssimilationService assimilationService) =>
+        {
+            try
+            {
+                return Results.Ok(await assimilationService.ProposeOperationalContextAssimilationAsync(
+                    repositoryId,
+                    decisionId,
+                    request));
             }
             catch (KeyNotFoundException exception)
             {
