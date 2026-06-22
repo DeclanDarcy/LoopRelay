@@ -2,26 +2,22 @@
 
 ## Slice Summary
 
-Completed Milestone 7 by finishing the cohesion audit, explicitly deferring expanded-section preservation, hardening command-palette keyboard behavior, and certifying the milestone.
+Started Milestone 8 by creating the deviation ledger, classifying the known capability gaps, and removing the fake notification count from the header.
 
 ## New State
 
-- Added `.agents/audits/m7-cohesion-audit.md` with the M7 audit across status labels, empty/loading/error/disabled states, layout density, keyboard behavior, focus behavior, and responsive behavior.
-- Marked M7 Workstreams 7.3 and 7.5 complete, plus milestone and certification complete, in `.agents/milestones/m7-navigation-discovery-and-cohesion.md`.
-- Explicitly deferred expanded-section preservation for M7 because current shell workflows do not require durable expanded/collapsed state.
-- `CommandPalette` now supports ArrowUp, ArrowDown, Home, End, and Enter for highlighted target selection while preserving existing native button semantics and navigation-only callbacks.
-- Added `src/CommandCenter.UI/src/test/characterization/commandPalette.test.tsx` for keyboard selection, highlight wrapping, and filter reset behavior.
-- Rotated prior handoff to `.agents/handoffs/handoff.0069.md`.
+- Added `docs/frontend-modernization-deviations.md` with M8 capability deferrals for abort execution, global Overview, global Executions, Insights, Notifications, all-repository git summaries, ahead/behind counts outside selected repository git status, milestone criteria progress, cross-repository execution views, and cross-repository continuity/insight rollups.
+- Marked M8 Workstreams 8.1 through 8.6 complete in `.agents/milestones/m8-capability-gaps-cleanup-and-final-validation.md`; Workstreams 8.7, 8.8, milestone completion, and certification remain open.
+- Changed the header notification placement from a synthetic `0` count to a disabled `Notifications` placement with a backend-projection title.
+- Rotated prior handoff to `.agents/handoffs/handoff.0070.md`.
 
 ## Verification
 
-- Passed `dotnet test CommandCenter.slnx`.
 - Passed `npm run lint`.
 - Passed `npm run test -- --run` with 37 test files and 138 tests.
 - Passed `npm run build`.
-- Passed `npm run test:e2e` with 6 Playwright tests.
 
 ## Remaining Work
 
-- Start Milestone 8: capability gaps, cleanup, deviations documentation, and final validation.
-- Prioritize creating/updating `docs/frontend-modernization-deviations.md`, removing unused migration scaffolding, and checking whether any remaining target UX affordances need backend-owned projections or explicit deferrals.
+- Continue Milestone 8 with Workstream 8.7: remove legacy structure and temporary migration scaffolding.
+- Then run Workstream 8.8 final UX validation and update the deviation ledger for any remaining mismatch found during validation.

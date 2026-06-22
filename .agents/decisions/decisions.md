@@ -2,12 +2,13 @@
 
 ## Newly Authorized
 
-- Accept M7 as complete and certified on the basis of the navigation/discovery cohesion audit and passing verification gates.
-- Treat `m7-cohesion-audit.md` as the certification artifact proving navigation identity, navigation consistency, discovery consistency, and workspace cohesion were evaluated rather than assumed.
-- Keep expanded-section persistence deferred after M7 because it is a UX enhancement, not a navigation cohesion, workflow capability, authority preservation, or backend parity requirement.
-- Preserve the command-palette invariant that keyboard selection and mouse selection use the same navigation callback and destination resolution path.
-- Start M8 with `docs/frontend-modernization-deviations.md` before additional cleanup.
-- Classify M8 deviations as `Intentional`, `Backend-Owned Gap`, `Deferred`, `Migration Artifact`, or `Defect`.
-- After the deviations artifact, audit remaining migration scaffolding such as temporary adapters, wrappers, legacy navigation paths, duplicate composition helpers, and deprecated shell glue.
-- During the M8 capability audit, classify missing affordances without backend support as backend-owned gaps rather than frontend missing features.
-- Treat M8 as proof, documentation, cleanup, and final certification of the architecture already built, not a new architecture-changing milestone.
+- Treat `docs/frontend-modernization-deviations.md` as the primary M8 certification ledger because M8 is a reconciliation milestone.
+- Validate the M8 classification model: capability gaps must be explicitly classified rather than implicitly treated as defects.
+- Preserve the notification correction: a disabled notification placement is preferable to a synthetic `0` count because the backend notification capability does not exist.
+- Confirm abort execution, global navigation surfaces, notifications, cross-repository rollups, milestone progress, and all-repository git summary as backend-owned capability gaps.
+- Continue M8 with Workstream 8.7 focused on residue cleanup: temporary migration scaffolding, duplicate abstractions, abandoned DTOs, legacy composition helpers, obsolete CSS, unused adapters, duplicate state, and dead navigation paths.
+- Audit `App.tsx` by separating intentional authority from unintentional presentation ownership.
+- Keep workflow authority, draft authority, readiness authority, and mutation authority in `App.tsx` when they represent the current architecture boundary.
+- Treat presentation helpers, workspace composition, navigation glue, display formatting, and cross-link construction remaining in `App.tsx` as candidates for extraction or explicit deferral.
+- Structure the M8 endgame as cleanup, authority-boundary audit, final UX validation, and final certification.
+- Treat the remaining modernization work as certification work unless the audit reveals accidental authority leaks, migration artifacts, or synthetic capabilities.

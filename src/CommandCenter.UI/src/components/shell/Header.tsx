@@ -36,8 +36,12 @@ export function Header({
         {selectedRepository ? (
           <StatusBadge status={repositoryExecutionStatus[currentExecutionState]} />
         ) : null}
-        <span className="notification-slot" aria-label="Notifications">
-          0
+        <span
+          className="notification-slot notification-slot-disabled"
+          aria-label="Notifications unavailable"
+          title="Notifications require a backend projection."
+        >
+          Notifications
         </span>
       </div>
       <div className="header-actions">

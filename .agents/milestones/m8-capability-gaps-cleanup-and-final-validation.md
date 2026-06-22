@@ -3,12 +3,12 @@
 ## Tracking
 
 - [ ] Milestone complete
-- [ ] Workstream 8.1: Capability Gap Closure
-- [ ] Workstream 8.2: Abort Execution Decision
-- [ ] Workstream 8.3: Global Navigation Decisions
-- [ ] Workstream 8.4: Repository Summary Completion
-- [ ] Workstream 8.5: Notifications Strategy
-- [ ] Workstream 8.6: Deviation Ledger
+- [x] Workstream 8.1: Capability Gap Closure
+- [x] Workstream 8.2: Abort Execution Decision
+- [x] Workstream 8.3: Global Navigation Decisions
+- [x] Workstream 8.4: Repository Summary Completion
+- [x] Workstream 8.5: Notifications Strategy
+- [x] Workstream 8.6: Deviation Ledger
 - [ ] Workstream 8.7: Remove Legacy Structure
 - [ ] Workstream 8.8: Final UX Validation
 - [ ] Certification complete
@@ -20,26 +20,26 @@ Goal: resolve remaining discrepancies between visible UX and real capability, th
 Classify every unresolved target affordance as:
 
 - [ ] Implemented.
-- [ ] Deferred.
+- [x] Deferred.
 - [ ] Rejected.
 
 Known gaps to resolve:
 
-- [ ] User-invokable abort execution.
-- [ ] Global Overview.
-- [ ] Global Executions.
-- [ ] Insights.
-- [ ] Notifications.
-- [ ] Dashboard/sidebar branch and dirty state for all repositories.
-- [ ] Ahead/behind counts outside selected repository git status.
-- [ ] Milestone criteria progress.
-- [ ] Cross-repository execution views.
-- [ ] Cross-repository continuity/insight rollups.
+- [x] User-invokable abort execution.
+- [x] Global Overview.
+- [x] Global Executions.
+- [x] Insights.
+- [x] Notifications.
+- [x] Dashboard/sidebar branch and dirty state for all repositories.
+- [x] Ahead/behind counts outside selected repository git status.
+- [x] Milestone criteria progress.
+- [x] Cross-repository execution views.
+- [x] Cross-repository continuity/insight rollups.
 
 Rules:
 
-- [ ] Implement only with backend projection or backend capability.
-- [ ] Deferred and rejected items must be explicit in product UI or docs.
+- [x] Implement only with backend projection or backend capability.
+- [x] Deferred and rejected items must be explicit in product UI or docs.
 
 ## Workstream 8.2: Abort Execution Decision
 
@@ -60,9 +60,9 @@ Option B: omit or disable abort.
 
 Required UI work:
 
-- [ ] Remove active abort affordance.
-- [ ] Show a restrained disabled state only if useful.
-- [ ] Ensure no palette abort command exists.
+- [x] Remove active abort affordance.
+- [x] Show a restrained disabled state only if useful.
+- [x] Ensure no palette abort command exists.
 
 ## Workstream 8.3: Global Navigation Decisions
 
@@ -73,7 +73,7 @@ Possible outcomes:
 - [ ] Overview becomes a repository landing page using dashboard projections only.
 - [ ] Executions becomes a cross-repository execution projection after backend support.
 - [ ] Insights becomes a continuity/operational insight projection after backend support.
-- [ ] Any of these can remain disabled/deferred until backend authority exists.
+- [x] Any of these can remain disabled/deferred until backend authority exists.
 
 ## Workstream 8.4: Repository Summary Completion
 
@@ -82,7 +82,7 @@ If the final sidebar/header requires branch, dirty count, ahead, behind, criteri
 Potential backend additions:
 
 - [ ] Extend `RepositoryDashboardProjection` with branch, dirty count, ahead count, behind count, and captured timestamp.
-- [ ] Add milestone criteria projection only if criteria parsing is a real backend capability.
+- [x] Add milestone criteria projection only if criteria parsing is a real backend capability.
 - [ ] Add tests in `RepositoryProjectionServiceTests` and `GitServiceTests`.
 - [ ] Update Tauri DTOs and frontend shared types.
 
@@ -91,7 +91,7 @@ Potential backend additions:
 Choose one:
 
 - [ ] Implement a backend-backed notification projection.
-- [ ] Keep notification icon as disabled placement.
+- [x] Keep notification icon as disabled placement.
 - [ ] Remove notification UI.
 
 Do not show fake notification counts.
@@ -102,25 +102,25 @@ Create `docs/frontend-modernization-deviations.md` before final validation.
 
 Record every intentional difference between the target UX and the real product:
 
-- [ ] Description.
-- [ ] Location or surface.
-- [ ] Reason.
-- [ ] Category:
-  - [ ] Capability.
+- [x] Description.
+- [x] Location or surface.
+- [x] Reason.
+- [x] Category:
+  - [x] Capability.
   - [ ] Product decision.
   - [ ] Technical constraint.
-- [ ] Outcome:
+- [x] Outcome:
   - [ ] Implemented differently.
-  - [ ] Deferred.
+  - [x] Deferred.
   - [ ] Rejected.
-- [ ] Required backend projection or capability, if any.
-- [ ] Follow-up owner or issue reference, if known.
+- [x] Required backend projection or capability, if any.
+- [x] Follow-up owner or issue reference, if known.
 
 Rules:
 
-- [ ] A missing capability is not a defect if it is recorded and represented honestly in the UI.
-- [ ] An unrecorded mismatch found during final validation is a defect.
-- [ ] The ledger must be self-contained and explain each difference directly.
+- [x] A missing capability is not a defect if it is recorded and represented honestly in the UI.
+- [x] An unrecorded mismatch found during final validation is a defect.
+- [x] The ledger must be self-contained and explain each difference directly.
 
 ## Workstream 8.7: Remove Legacy Structure
 
