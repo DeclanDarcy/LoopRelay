@@ -2,15 +2,15 @@
 
 ## Slice Summary
 
-Continued Milestone 8 by reducing remaining `App.tsx` presentation responsibility during the Workstream 8.8 responsibility inventory.
+Continued Milestone 8 by extracting remaining presentation-only execution review surfaces from `App.tsx`.
 
 ## New State
 
-- Added `src/CommandCenter.UI/src/features/artifacts/ArtifactWorkspace.tsx`.
-- Moved the Workspace artifact explorer/editor JSX out of `App.tsx` and into the artifacts feature.
-- Kept artifact save and rotate workflow authority in `App.tsx` as explicit callbacks passed into `ArtifactWorkspace`.
-- Left M8 open because `App.tsx` still contains extractable presentation candidates, especially Git workflow and generated handoff review panel rendering.
-- Rotated prior handoff to `.agents/handoffs/handoff.0072.md`.
+- Added `src/CommandCenter.UI/src/features/execution/GitWorkflowPanel.tsx`.
+- Added `src/CommandCenter.UI/src/features/execution/GeneratedHandoffReviewPanel.tsx`.
+- Removed inline Git workflow panel rendering and generated handoff review rendering from `App.tsx`.
+- Kept Git and handoff authority in `App.tsx`: refresh/prepare, commit, push, accept, reject, draft state, selected commit scope state, and backend command dispatch remain callback-owned by `App.tsx`.
+- Rotated prior handoff to `.agents/handoffs/handoff.0073.md`.
 
 ## Verification
 
@@ -21,5 +21,5 @@ Continued Milestone 8 by reducing remaining `App.tsx` presentation responsibilit
 
 ## Remaining Work
 
-- Continue M8 by extracting or explicitly classifying the remaining `App.tsx` presentation panels.
-- Do not mark Workstream 8.8 or certification complete until the remaining `App.tsx` composition gap is resolved or recorded as an intentional deviation.
+- Continue M8 by deciding whether the remaining `App.tsx` composition gap should be handled through hook extraction, container extraction, or documented as the current authority boundary.
+- Do not mark Workstream 8.8 or certification complete until that boundary decision is made and recorded.

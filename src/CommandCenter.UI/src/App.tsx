@@ -28,12 +28,8 @@ import { Button, EmptyState, Panel, SectionHeader } from './components/design'
 import { AppShell, CommandPalette, Header, Sidebar, WorkspaceTabs } from './components/shell'
 import { ContinuityTab } from './features/continuity/ContinuityTab'
 import { ExecutionTab } from './features/execution/ExecutionTab'
-import { GeneratedHandoffContent } from './features/execution/GeneratedHandoffContent'
-import {
-  CommitPreparationSummary,
-  GitStatusDetails,
-  PushReviewSummary,
-} from './features/execution/GitWorkflowEvidence'
+import { GeneratedHandoffReviewPanel } from './features/execution/GeneratedHandoffReviewPanel'
+import { GitWorkflowPanel } from './features/execution/GitWorkflowPanel'
 import { OperationalContextTab } from './features/operational-context/OperationalContextTab'
 import { SelectedRepositorySummary } from './features/repositories/SelectedRepositorySummary'
 import { ExecutionContextPanel } from './features/workspace/ExecutionContextPanel'
@@ -55,15 +51,13 @@ import {
 } from './hooks'
 import {
   countDirtyPaths,
-  formatDateTime,
-  formatDuration,
   getTabForSection,
   getArtifactCategories,
   getAvailableArtifactPaths,
   buildNavigationTargets,
   getExecutionWorkflowSteps,
 } from './lib'
-import { executionReadinessStatus, repositoryExecutionStatus } from './lib/status'
+import { executionReadinessStatus } from './lib/status'
 import { useShellState } from './state/shellState'
 import type {
   CommitPreparation,
@@ -1378,174 +1372,6 @@ function App() {
     setSectionTarget('artifact-workspace')
   }
 
-  const renderGitWorkflowPanel = () =>
-    shouldShowGitWorkflow ? (
-      <Panel id="git-workflow" className="git-status-panel" aria-label="Git status">
-        <SectionHeader
-          className="git-status-header"
-          eyebrow="Git Workflow"
-          title={repositoryExecutionStatus[currentExecutionState].label}
-          headingLevel={4}
-          actions={
-            <button
-              type="button"
-              className="secondary-action"
-              onClick={() =>
-                currentExecutionState === 'AwaitingCommit' && executionSessionId
-                  ? void loadCommitPreparation(executionSessionId)
-                  : selectedRepository
-                    ? void refreshGitStatus()
-                    : undefined
-              }
-              disabled={
-                (!selectedRepository && !executionSessionId) ||
-                isGitStatusLoading ||
-                isCommitPreparationLoading
-              }
-            >
-              {isGitStatusLoading || isCommitPreparationLoading ? 'Refreshing...' : 'Refresh'}
-            </button>
-          }
-        />
-        {currentExecutionState === 'AwaitingCommit' ? (
-          isCommitPreparationCurrent && commitPreparation ? (
-            <div className="commit-review-panel">
-              <CommitPreparationSummary
-                preparation={commitPreparation}
-                selectedPathCount={selectedCommitScopeItems.length}
-              />
-              <label className="commit-message-editor">
-                <span>Commit message</span>
-                <textarea
-                  value={commitMessage}
-                  onChange={(event) => setCommitMessage(event.target.value)}
-                  spellCheck={false}
-                />
-              </label>
-              <div className="commit-scope-toolbar">
-                <button
-                  type="button"
-                  className="secondary-action"
-                  onClick={selectAllCommitPaths}
-                  disabled={commitPreparation.scopeItems.length === 0}
-                >
-                  Select All
-                </button>
-                <button
-                  type="button"
-                  className="secondary-action"
-                  onClick={selectNoCommitPaths}
-                  disabled={commitPreparation.scopeItems.length === 0}
-                >
-                  Select None
-                </button>
-                <button
-                  type="button"
-                  className="primary-action"
-                  onClick={() => void commitPreparedScope()}
-                  disabled={!canCommitPreparedScope}
-                >
-                  {isCommitting ? 'Committing...' : 'Commit Selected'}
-                </button>
-              </div>
-              {commitPreparation.scopeItems.length === 0 ? (
-                <EmptyState className="empty-state">No changed paths are available for commit.</EmptyState>
-              ) : (
-                <div className="commit-scope-list" aria-label="Commit scope">
-                  {commitPreparation.scopeItems.map((item) => (
-                    <label className="commit-scope-item" key={item.path}>
-                      <input
-                        type="checkbox"
-                        checked={selectedCommitPaths.has(item.path)}
-                        onChange={(event) =>
-                          setCommitPathSelection(item.path, event.currentTarget.checked)
-                        }
-                      />
-                      <span>{item.path}</span>
-                      <small>{item.changeType}</small>
-                      <small>{item.origin === 'PreExisting' ? 'Pre-existing' : 'Execution generated'}</small>
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : (
-            <EmptyState className="empty-state">
-              {isCommitPreparationLoading
-                ? 'Preparing commit review...'
-                : 'Commit preparation is not loaded.'}
-            </EmptyState>
-          )
-        ) : currentExecutionState === 'AwaitingPush' && executionDisplay?.commitSha ? (
-          <div className="commit-review-panel">
-            <PushReviewSummary execution={executionDisplay} gitStatus={gitStatus} />
-            <div className="commit-scope-toolbar">
-              <button
-                type="button"
-                className="primary-action"
-                onClick={() => void pushExecution()}
-                disabled={!canPushExecution}
-              >
-                {isPushing ? 'Pushing...' : 'Push Commit'}
-              </button>
-            </div>
-          </div>
-        ) : gitStatus ? (
-          <GitStatusDetails gitStatus={gitStatus} changedPathCount={gitStatusPathCount} />
-        ) : (
-          <EmptyState className="empty-state">
-            {isGitStatusLoading ? 'Loading Git status...' : 'Git status is not loaded.'}
-          </EmptyState>
-        )}
-      </Panel>
-    ) : null
-
-  const renderHandoffReviewPanel = () =>
-    canReviewGeneratedHandoff && executionDisplay ? (
-      <Panel
-        id="generated-handoff-review"
-        className="handoff-review-panel"
-        aria-label="Generated handoff review"
-      >
-        <div className="handoff-review-header">
-          <SectionHeader
-            eyebrow="Handoff Review"
-            title={executionDisplay.handoffPath ?? 'Generated handoff'}
-            headingLevel={4}
-          />
-          <div className="handoff-review-metadata">
-            <span>State: {repositoryExecutionStatus[executionDisplay.repositoryState].label}</span>
-            <span>Completed: {formatDateTime(executionDisplay.completedAt)}</span>
-            <span>Duration: {formatDuration(executionDisplay.duration)}</span>
-            <span>Decision: Awaiting review</span>
-            <span>{generatedHandoffContent.length} characters</span>
-          </div>
-        </div>
-        <div className="handoff-review-actions">
-          <button
-            type="button"
-            className="primary-action"
-            onClick={() => void acceptGeneratedHandoff()}
-            disabled={!isHandoffDecisionPending}
-          >
-            {isAcceptingHandoff ? 'Accepting...' : 'Accept Handoff'}
-          </button>
-          <button
-            type="button"
-            className="danger-action"
-            onClick={() => void rejectGeneratedHandoff()}
-            disabled={!isHandoffDecisionPending}
-          >
-            {isRejectingHandoff ? 'Rejecting...' : 'Reject Handoff'}
-          </button>
-        </div>
-        <GeneratedHandoffContent
-          content={generatedHandoffContent}
-          isLoading={isGeneratedHandoffLoading}
-        />
-      </Panel>
-    ) : null
-
   return (
     <AppShell
       sidebar={
@@ -1748,8 +1574,53 @@ function App() {
                 currentExecutionState={currentExecutionState}
                 selectedMilestonePath={selectedMilestonePath}
                 contextPanel={activePrimaryTab === 'execution' ? renderExecutionContextPanel() : null}
-                gitWorkflow={renderGitWorkflowPanel()}
-                handoffReview={renderHandoffReviewPanel()}
+                gitWorkflow={
+                  <GitWorkflowPanel
+                    shouldShow={shouldShowGitWorkflow}
+                    currentExecutionState={currentExecutionState}
+                    execution={executionDisplay}
+                    gitStatus={gitStatus}
+                    gitStatusPathCount={gitStatusPathCount}
+                    commitPreparation={commitPreparation}
+                    isCommitPreparationCurrent={isCommitPreparationCurrent}
+                    selectedCommitScopeItems={selectedCommitScopeItems}
+                    selectedCommitPaths={selectedCommitPaths}
+                    commitMessage={commitMessage}
+                    canCommitPreparedScope={canCommitPreparedScope}
+                    canPushExecution={canPushExecution}
+                    hasRefreshTarget={Boolean(selectedRepository || executionSessionId)}
+                    isGitStatusLoading={isGitStatusLoading}
+                    isCommitPreparationLoading={isCommitPreparationLoading}
+                    isCommitting={isCommitting}
+                    isPushing={isPushing}
+                    onRefresh={() =>
+                      currentExecutionState === 'AwaitingCommit' && executionSessionId
+                        ? void loadCommitPreparation(executionSessionId)
+                        : selectedRepository
+                          ? void refreshGitStatus()
+                          : undefined
+                    }
+                    onCommitMessageChange={setCommitMessage}
+                    onSelectAllCommitPaths={selectAllCommitPaths}
+                    onSelectNoCommitPaths={selectNoCommitPaths}
+                    onSetCommitPathSelection={setCommitPathSelection}
+                    onCommitPreparedScope={() => void commitPreparedScope()}
+                    onPushExecution={() => void pushExecution()}
+                  />
+                }
+                handoffReview={
+                  <GeneratedHandoffReviewPanel
+                    canReview={canReviewGeneratedHandoff}
+                    execution={executionDisplay}
+                    content={generatedHandoffContent}
+                    isContentLoading={isGeneratedHandoffLoading}
+                    isDecisionPending={isHandoffDecisionPending}
+                    isAccepting={isAcceptingHandoff}
+                    isRejecting={isRejectingHandoff}
+                    onAccept={() => void acceptGeneratedHandoff()}
+                    onReject={() => void rejectGeneratedHandoff()}
+                  />
+                }
                 launchReadiness={startExecutionBlockedReason}
                 onOpenWorkspaceMilestone={openWorkspaceExecutionContext}
                 onOpenWorkspaceExecutionContext={() => {
