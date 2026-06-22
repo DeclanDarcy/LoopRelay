@@ -1,5 +1,5 @@
-import { cleanup, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SelectedRepositorySummary } from '../../features/repositories/SelectedRepositorySummary'
 import type {
   ExecutionSessionSummary,
@@ -155,11 +155,19 @@ function renderSummary({
   workspace = null,
   executionDisplay = null,
   currentExecutionState = 'Ready',
+  onOpenExecution,
+  onOpenMilestones,
+  onOpenOperationalContext,
+  onOpenHandoffArtifact,
 }: {
   repository?: RepositoryDashboardProjection
   workspace?: RepositoryWorkspaceProjection | null
   executionDisplay?: ExecutionSessionSummary | null
   currentExecutionState?: RepositoryExecutionState
+  onOpenExecution?: () => void
+  onOpenMilestones?: () => void
+  onOpenOperationalContext?: () => void
+  onOpenHandoffArtifact?: (handoffPath: string) => void
 } = {}) {
   render(
     <SelectedRepositorySummary
@@ -167,6 +175,10 @@ function renderSummary({
       workspace={workspace}
       executionDisplay={executionDisplay}
       currentExecutionState={currentExecutionState}
+      onOpenExecution={onOpenExecution}
+      onOpenMilestones={onOpenMilestones}
+      onOpenOperationalContext={onOpenOperationalContext}
+      onOpenHandoffArtifact={onOpenHandoffArtifact}
     />,
   )
 }
@@ -249,5 +261,33 @@ describe('selected repository summary rendering characterization', () => {
     expect(scopedDetails.getByText('Handoff').nextElementSibling).toHaveTextContent(
       'Not recorded',
     )
+  })
+
+  it('uses optional navigation callbacks for projected summary destinations', () => {
+    const onOpenExecution = vi.fn()
+    const onOpenMilestones = vi.fn()
+    const onOpenOperationalContext = vi.fn()
+    const onOpenHandoffArtifact = vi.fn()
+
+    renderSummary({
+      workspace: workspaceProjection(),
+      executionDisplay: executionSummary(),
+      currentExecutionState: 'AwaitingCommit',
+      onOpenExecution,
+      onOpenMilestones,
+      onOpenOperationalContext,
+      onOpenHandoffArtifact,
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Awaiting commit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'session-alpha' }))
+    fireEvent.click(screen.getByRole('button', { name: '5' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Present' }))
+    fireEvent.click(screen.getByRole('button', { name: '.agents/handoffs/handoff.md' }))
+
+    expect(onOpenExecution).toHaveBeenCalledTimes(2)
+    expect(onOpenMilestones).toHaveBeenCalledTimes(1)
+    expect(onOpenOperationalContext).toHaveBeenCalledTimes(1)
+    expect(onOpenHandoffArtifact).toHaveBeenCalledWith('.agents/handoffs/handoff.md')
   })
 })

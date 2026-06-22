@@ -8,6 +8,8 @@ type OperationalContextCurrentPanelProps = {
   executionStatus: string
   reviewStatus: string
   onOpenSection?: (sectionId: string) => void
+  onOpenExecutionContext?: () => void
+  onOpenProposalReview?: () => void
   onOpenContinuityWarnings?: () => void
 }
 
@@ -60,6 +62,8 @@ export function OperationalContextCurrentPanel({
   executionStatus,
   reviewStatus,
   onOpenSection,
+  onOpenExecutionContext,
+  onOpenProposalReview,
   onOpenContinuityWarnings,
 }: OperationalContextCurrentPanelProps) {
   const proposalStatus = proposalSummary.latestProposalId
@@ -70,9 +74,35 @@ export function OperationalContextCurrentPanel({
     return (
       <div className="context-artifact-previews">
         <div className="context-summary">
-          <span>Execution context: {executionStatus}</span>
+          <span>
+            Execution context:{' '}
+            {onOpenExecutionContext ? (
+              <button
+                type="button"
+                className="workspace-cross-link inline-cross-link"
+                onClick={onOpenExecutionContext}
+              >
+                {executionStatus}
+              </button>
+            ) : (
+              executionStatus
+            )}
+          </span>
           <span>Review: {reviewStatus}</span>
-          <span>Proposal: {proposalStatus}</span>
+          <span>
+            Proposal:{' '}
+            {proposalSummary.latestProposalId && onOpenProposalReview ? (
+              <button
+                type="button"
+                className="workspace-cross-link inline-cross-link"
+                onClick={onOpenProposalReview}
+              >
+                {proposalStatus}
+              </button>
+            ) : (
+              proposalStatus
+            )}
+          </span>
         </div>
         <EmptyState className="empty-state">No current operational context exists.</EmptyState>
       </div>
@@ -83,7 +113,20 @@ export function OperationalContextCurrentPanel({
     <div className="context-artifact-previews">
       <div className="context-summary">
         <span>Path: {operationalContext.currentRelativePath}</span>
-        <span>Execution context: {executionStatus}</span>
+        <span>
+          Execution context:{' '}
+          {onOpenExecutionContext ? (
+            <button
+              type="button"
+              className="workspace-cross-link inline-cross-link"
+              onClick={onOpenExecutionContext}
+            >
+              {executionStatus}
+            </button>
+          ) : (
+            executionStatus
+          )}
+        </span>
         <span>Revisions: {operationalContext.revisionCount}</span>
         <span>Current revision: {operationalContext.currentRevisionNumber}</span>
         <span>Updated: {formatDateTime(operationalContext.lastUpdatedAt)}</span>
@@ -91,7 +134,20 @@ export function OperationalContextCurrentPanel({
         <span>Questions: {operationalContext.openQuestions.length}</span>
         <span>Risks: {operationalContext.activeRisks.length}</span>
         <span>Review: {reviewStatus}</span>
-        <span>Proposal: {proposalStatus}</span>
+        <span>
+          Proposal:{' '}
+          {proposalSummary.latestProposalId && onOpenProposalReview ? (
+            <button
+              type="button"
+              className="workspace-cross-link inline-cross-link"
+              onClick={onOpenProposalReview}
+            >
+              {proposalStatus}
+            </button>
+          ) : (
+            proposalStatus
+          )}
+        </span>
       </div>
 
       <div className="context-columns">

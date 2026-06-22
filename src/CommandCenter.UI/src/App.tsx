@@ -1623,6 +1623,13 @@ function App() {
                     workspace={workspace}
                     executionDisplay={executionDisplay}
                     currentExecutionState={currentExecutionState}
+                    onOpenExecution={() => openExecutionSection('execution-context')}
+                    onOpenMilestones={() => {
+                      setActivePrimaryTab('workspace')
+                      setSectionTarget('workspace-milestones')
+                    }}
+                    onOpenOperationalContext={() => openOperationalContextSection('operational-current')}
+                    onOpenHandoffArtifact={openHandoffArtifact}
                   />
                 }
                 executionContext={renderExecutionContextPanel('workspace-execution-context')}
@@ -1793,6 +1800,10 @@ function App() {
                 onProposalDraftChange={setOperationalContextProposalDraft}
                 onReviewNoteChange={setOperationalContextReviewNote}
                 onOpenOperationalContextSection={openOperationalContextSection}
+                onOpenWorkspaceExecutionContext={() => {
+                  setActivePrimaryTab('workspace')
+                  setSectionTarget('workspace-execution-context')
+                }}
                 onOpenContinuityWarnings={openContinuityWarnings}
                 onOpenContinuityCompression={() => openContinuitySection('continuity-compression')}
                 onOpenContinuityDecisionRetention={() =>

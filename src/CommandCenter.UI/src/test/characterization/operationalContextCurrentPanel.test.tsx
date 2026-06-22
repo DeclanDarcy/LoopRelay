@@ -1,5 +1,5 @@
-import { cleanup, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OperationalContextCurrentPanel } from '../../features/operational-context/OperationalContextCurrentPanel'
 import type { OperationalContextProjection, OperationalContextProposalSummary } from '../../types'
 
@@ -63,6 +63,12 @@ function createOperationalContext(
 function renderPanel(
   operationalContext = createOperationalContext(),
   proposalSummary = createProposalSummary(),
+  callbacks: {
+    onOpenExecutionContext?: () => void
+    onOpenProposalReview?: () => void
+    onOpenSection?: (sectionId: string) => void
+    onOpenContinuityWarnings?: () => void
+  } = {},
 ) {
   render(
     <OperationalContextCurrentPanel
@@ -70,6 +76,7 @@ function renderPanel(
       proposalSummary={proposalSummary}
       executionStatus="Included (120 bytes)"
       reviewStatus="Edited"
+      {...callbacks}
     />,
   )
 }
@@ -167,5 +174,29 @@ describe('operational context current panel rendering characterization', () => {
     renderPanel(createOperationalContext(), createProposalSummary({ status: null }))
 
     expect(screen.getByText('Proposal: Unknown')).toBeInTheDocument()
+  })
+
+  it('uses navigation callbacks for execution context, proposal, sections, and continuity warnings', () => {
+    const onOpenExecutionContext = vi.fn()
+    const onOpenProposalReview = vi.fn()
+    const onOpenSection = vi.fn()
+    const onOpenContinuityWarnings = vi.fn()
+
+    renderPanel(createOperationalContext(), createProposalSummary(), {
+      onOpenExecutionContext,
+      onOpenProposalReview,
+      onOpenSection,
+      onOpenContinuityWarnings,
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Included (120 bytes)' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edited' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Decision rationale' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Continuity warning' }))
+
+    expect(onOpenExecutionContext).toHaveBeenCalledTimes(1)
+    expect(onOpenProposalReview).toHaveBeenCalledTimes(1)
+    expect(onOpenSection).toHaveBeenCalledWith('operational-decision-rationale')
+    expect(onOpenContinuityWarnings).toHaveBeenCalledTimes(1)
   })
 })

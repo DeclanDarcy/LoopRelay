@@ -17,6 +17,10 @@ type SelectedRepositorySummaryProps = {
   workspace: RepositoryWorkspaceProjection | null
   executionDisplay: ExecutionSessionSummary | null
   currentExecutionState: RepositoryExecutionState
+  onOpenExecution?: () => void
+  onOpenMilestones?: () => void
+  onOpenOperationalContext?: () => void
+  onOpenHandoffArtifact?: (handoffPath: string) => void
 }
 
 export function SelectedRepositorySummary({
@@ -24,8 +28,14 @@ export function SelectedRepositorySummary({
   workspace,
   executionDisplay,
   currentExecutionState,
+  onOpenExecution,
+  onOpenMilestones,
+  onOpenOperationalContext,
+  onOpenHandoffArtifact,
 }: SelectedRepositorySummaryProps) {
   const readiness = workspace?.readiness ?? repository.readiness
+  const milestoneCount = workspace?.milestoneCount ?? repository.milestoneCount
+  const hasOperationalContext = Boolean(workspace?.hasOperationalContext)
 
   return (
     <>
@@ -51,14 +61,36 @@ export function SelectedRepositorySummary({
         <div>
           <dt>Execution</dt>
           <dd>
-            <StatusBadge status={repositoryExecutionStatus[currentExecutionState]} />
+            {onOpenExecution ? (
+              <button
+                type="button"
+                className="workspace-cross-link inline-cross-link"
+                onClick={onOpenExecution}
+              >
+                <StatusBadge status={repositoryExecutionStatus[currentExecutionState]} />
+              </button>
+            ) : (
+              <StatusBadge status={repositoryExecutionStatus[currentExecutionState]} />
+            )}
           </dd>
         </div>
         {executionDisplay ? (
           <>
             <div>
               <dt>Session</dt>
-              <dd>{executionDisplay.sessionId}</dd>
+              <dd>
+                {onOpenExecution ? (
+                  <button
+                    type="button"
+                    className="workspace-cross-link inline-cross-link"
+                    onClick={onOpenExecution}
+                  >
+                    {executionDisplay.sessionId}
+                  </button>
+                ) : (
+                  executionDisplay.sessionId
+                )}
+              </dd>
             </div>
             <div>
               <dt>Provider</dt>
@@ -102,20 +134,57 @@ export function SelectedRepositorySummary({
             </div>
             <div>
               <dt>Handoff</dt>
-              <dd>{executionDisplay.handoffPath || 'Not recorded'}</dd>
+              <dd>
+                {executionDisplay.handoffPath && onOpenHandoffArtifact ? (
+                  <button
+                    type="button"
+                    className="workspace-cross-link inline-cross-link"
+                    onClick={() => onOpenHandoffArtifact(executionDisplay.handoffPath as string)}
+                  >
+                    {executionDisplay.handoffPath}
+                  </button>
+                ) : (
+                  executionDisplay.handoffPath || 'Not recorded'
+                )}
+              </dd>
             </div>
           </>
         ) : null}
         <div>
           <dt>Milestones</dt>
-          <dd>{workspace?.milestoneCount ?? repository.milestoneCount}</dd>
+          <dd>
+            {milestoneCount > 0 && onOpenMilestones ? (
+              <button
+                type="button"
+                className="workspace-cross-link inline-cross-link"
+                onClick={onOpenMilestones}
+              >
+                {milestoneCount}
+              </button>
+            ) : (
+              milestoneCount
+            )}
+          </dd>
         </div>
       </dl>
 
       <div className="summary-grid">
         <span>Plan: {workspace?.hasPlan ? 'Present' : 'Missing'}</span>
         <span>
-          Operational context: {workspace?.hasOperationalContext ? 'Present' : 'Missing'}
+          Operational context:{' '}
+          {hasOperationalContext && onOpenOperationalContext ? (
+            <button
+              type="button"
+              className="workspace-cross-link inline-cross-link"
+              onClick={onOpenOperationalContext}
+            >
+              Present
+            </button>
+          ) : hasOperationalContext ? (
+            'Present'
+          ) : (
+            'Missing'
+          )}
         </span>
         <span>Handoff: {workspace?.hasCurrentHandoff ? 'Present' : 'Missing'}</span>
         <span>Decisions: {workspace?.hasCurrentDecisions ? 'Present' : 'Missing'}</span>

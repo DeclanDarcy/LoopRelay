@@ -2,28 +2,27 @@
 
 ## Slice Summary
 
-Started Milestone 7: Navigation, Discovery, and Cohesion.
+Continued Milestone 7 with cross-workspace link hardening and left the milestone open for the remaining cohesion audit.
 
 ## New State
 
-- Added a projection-derived navigation target model in `src/CommandCenter.UI/src/lib/navigation.ts` and `src/CommandCenter.UI/src/types/navigation.ts`.
-- Command palette now consumes navigation targets rather than constructing local hard-coded workflow lists; target selection remains navigation-only.
-- Palette targets now cover repositories, current and repository-scoped workspace tabs, milestones, execution sessions, inspector sections, open questions, active risks, stable decisions, pending proposals, execution workflow states, and continuity warnings.
-- Sidebar now exposes a compact Discovery list from the same projection-derived navigation targets.
-- Shell state now preserves the active primary tab per repository, matching the existing per-repository artifact and milestone selection behavior.
-- Added stable anchors for workspace milestones, git workflow, and generated handoff review, plus retrying scroll behavior while tab/projection content mounts.
-- Added characterization coverage for navigation target construction and per-repository tab preservation.
-- Updated `.agents/milestones/m7-navigation-discovery-and-cohesion.md` to mark the covered M7 checklist items while leaving the milestone open.
-- Rotated prior handoff to `.agents/handoffs/handoff.0067.md`.
+- Added operational-context static navigation targets for architecture, constraints, and decision rationale in `src/CommandCenter.UI/src/lib/navigation.ts`.
+- `SelectedRepositorySummary` now exposes navigation-only links for execution status/session, milestone count, operational-context presence, and generated handoff path when callbacks are provided.
+- `OperationalContextCurrentPanel` now links execution-context status back to the Workspace execution-context panel and proposal status to the proposal review section.
+- `WorkspaceInspectorRail` now links stable-decision, open-question, active-risk, and pending-proposal summary values to their operational-context sections.
+- `OperationalContextTab` now accepts and passes a Workspace execution-context navigation callback.
+- Updated M7 tracking to mark Workstreams 7.1, 7.2, and 7.4 complete; cohesion audit and expanded-section preservation remain open.
+- Rotated prior handoff to `.agents/handoffs/handoff.0068.md`.
 
 ## Verification
 
 - Passed `npm run lint`.
-- Passed focused navigation tests: `npm run test -- --run src/test/characterization/navigation.test.ts src/test/characterization/shellState.test.tsx src/test/characterization/app.smoke.test.tsx`.
-- Passed full frontend tests: `npm run test -- --run` with 36 test files and 134 tests.
+- Passed focused characterization tests for navigation and hardened summary links.
+- Passed full frontend tests: `npm run test -- --run` with 36 test files and 136 tests.
 - Passed `npm run build`.
 - Passed `npm run test:e2e` with 6 Playwright tests.
 
 ## Remaining Work
 
-- Continue M7 with the remaining cross-workspace link audit and cohesion audit, especially status/empty/loading/error/disabled state consistency and focus/responsive review.
+- Continue M7 with Workstream 7.5 cohesion audit: status labels, empty/loading/error/disabled states, layout density, keyboard behavior, focus behavior, and responsive behavior.
+- Decide whether expanded-section preservation is still required for M7 or should be explicitly deferred before milestone certification.

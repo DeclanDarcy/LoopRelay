@@ -3,10 +3,10 @@
 ## Tracking
 
 - [ ] Milestone complete
-- [ ] Workstream 7.1: Command Palette v2
-- [ ] Workstream 7.2: Cross-Workspace Link Hardening
+- [x] Workstream 7.1: Command Palette v2
+- [x] Workstream 7.2: Cross-Workspace Link Hardening
 - [ ] Workstream 7.3: Context Preservation
-- [ ] Workstream 7.4: Discovery Layer
+- [x] Workstream 7.4: Discovery Layer
 - [ ] Workstream 7.5: Cohesion Audit
 - [ ] Certification complete
 
@@ -39,14 +39,14 @@ Rules:
 
 Audit and complete the links introduced during Workspace, Execution, Operational Context, and Continuity implementation:
 
-- [ ] Operational-context summary -> Operational Context tab.
-- [ ] Continuity warnings -> Continuity tab and warning section.
-- [ ] Execution summaries -> Execution tab.
-- [ ] Milestones -> Workspace milestone section or execution context selection.
-- [ ] Pending proposal -> Operational Context proposal section.
+- [x] Operational-context summary -> Operational Context tab.
+- [x] Continuity warnings -> Continuity tab and warning section.
+- [x] Execution summaries -> Execution tab.
+- [x] Milestones -> Workspace milestone section or execution context selection.
+- [x] Pending proposal -> Operational Context proposal section.
 - [x] Context diagnostics -> Workspace execution context panel.
-- [ ] Decision/rationale warnings -> relevant Operational Context or Continuity section.
-- [ ] Report paths -> report/artifact surfaces where projected.
+- [x] Decision/rationale warnings -> relevant Operational Context or Continuity section.
+- [x] Report paths -> report/artifact surfaces where projected.
 
 Rules:
 

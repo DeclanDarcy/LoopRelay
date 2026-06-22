@@ -192,10 +192,10 @@ describe('WorkspaceInspectorRail', () => {
     expect(screen.getByText('Behind: 1')).toBeInTheDocument()
     expect(screen.getByText('Changed paths: 3')).toBeInTheDocument()
     expect(screen.getByText('Revisions: 4')).toBeInTheDocument()
-    expect(screen.getByText('Stable decisions: 2')).toBeInTheDocument()
-    expect(screen.getByText('Open questions: 1')).toBeInTheDocument()
-    expect(screen.getByText('Active risks: 1')).toBeInTheDocument()
-    expect(screen.getByText('Pending proposal: Present')).toBeInTheDocument()
+    expect(screen.getByText((_, element) => element?.textContent === 'Stable decisions: 2')).toBeInTheDocument()
+    expect(screen.getByText((_, element) => element?.textContent === 'Open questions: 1')).toBeInTheDocument()
+    expect(screen.getByText((_, element) => element?.textContent === 'Active risks: 1')).toBeInTheDocument()
+    expect(screen.getByText((_, element) => element?.textContent === 'Pending proposal: Present')).toBeInTheDocument()
     expect(screen.getByText('.agents/milestones/m3.md')).toBeInTheDocument()
   })
 
@@ -232,10 +232,16 @@ describe('WorkspaceInspectorRail', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Current' }))
     fireEvent.click(screen.getByRole('button', { name: 'Proposal' }))
+    fireEvent.click(screen.getByRole('button', { name: '2' }))
+    fireEvent.click(screen.getAllByRole('button', { name: '1' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Present' }))
 
-    expect(onOpenOperationalContext).toHaveBeenCalledTimes(2)
+    expect(onOpenOperationalContext).toHaveBeenCalledTimes(5)
     expect(onOpenOperationalContext).toHaveBeenNthCalledWith(1, 'operational-current')
     expect(onOpenOperationalContext).toHaveBeenNthCalledWith(2, 'proposal-review')
+    expect(onOpenOperationalContext).toHaveBeenNthCalledWith(3, 'operational-stable-decisions')
+    expect(onOpenOperationalContext).toHaveBeenNthCalledWith(4, 'operational-open-questions')
+    expect(onOpenOperationalContext).toHaveBeenNthCalledWith(5, 'proposal-review')
   })
 
   it('uses navigation callbacks for continuity warning snippets and execution history', () => {

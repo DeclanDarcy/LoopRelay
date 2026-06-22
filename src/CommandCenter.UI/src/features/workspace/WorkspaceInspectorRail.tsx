@@ -11,6 +11,13 @@ import type {
 } from '../../types'
 import { ExecutionHistoryPanel } from '../execution/ExecutionHistoryPanel'
 
+type OperationalContextSectionId =
+  | 'operational-current'
+  | 'proposal-review'
+  | 'operational-stable-decisions'
+  | 'operational-open-questions'
+  | 'operational-active-risks'
+
 type WorkspaceInspectorRailProps = {
   currentExecutionState: RepositoryExecutionState
   gitStatus: RepositoryGitStatus | null
@@ -24,7 +31,7 @@ type WorkspaceInspectorRailProps = {
   operationalContext: OperationalContextProjection | null
   proposalSummary: OperationalContextProposalSummary | null
   executionHistory: ExecutionSessionSummary[]
-  onOpenOperationalContext: (sectionId: 'operational-current' | 'proposal-review') => void
+  onOpenOperationalContext: (sectionId: OperationalContextSectionId) => void
   onOpenContinuityWarnings?: () => void
   onOpenExecutionSession?: (session: ExecutionSessionSummary) => void
 }
@@ -87,6 +94,7 @@ export function WorkspaceInspectorRail({
         <OperationalContextInspectorSummary
           operationalContext={operationalContext}
           proposalSummary={proposalSummary}
+          onOpenOperationalContext={onOpenOperationalContext}
         />
         {operationalContext?.continuityWarnings.length ? (
           <div className="workspace-cross-link-list" aria-label="Continuity warnings">
@@ -207,11 +215,13 @@ function CommitPushInspectorSummary({
 type OperationalContextInspectorSummaryProps = {
   operationalContext: OperationalContextProjection | null
   proposalSummary: OperationalContextProposalSummary | null
+  onOpenOperationalContext?: (sectionId: OperationalContextSectionId) => void
 }
 
 function OperationalContextInspectorSummary({
   operationalContext,
   proposalSummary,
+  onOpenOperationalContext,
 }: OperationalContextInspectorSummaryProps) {
   if (!operationalContext || !proposalSummary) {
     return <EmptyState className="empty-state">Operational context is not loaded.</EmptyState>
@@ -220,14 +230,73 @@ function OperationalContextInspectorSummary({
   return (
     <div className="workspace-inspector-summary">
       <span>Revisions: {operationalContext.revisionCount}</span>
-      <span>Stable decisions: {operationalContext.stableDecisions.length}</span>
-      <span>Open questions: {operationalContext.openQuestions.length}</span>
-      <span>Active risks: {operationalContext.activeRisks.length}</span>
+      <InspectorCrossLink
+        label="Stable decisions"
+        value={operationalContext.stableDecisions.length}
+        sectionId="operational-stable-decisions"
+        onOpenOperationalContext={onOpenOperationalContext}
+      />
+      <InspectorCrossLink
+        label="Open questions"
+        value={operationalContext.openQuestions.length}
+        sectionId="operational-open-questions"
+        onOpenOperationalContext={onOpenOperationalContext}
+      />
+      <InspectorCrossLink
+        label="Active risks"
+        value={operationalContext.activeRisks.length}
+        sectionId="operational-active-risks"
+        onOpenOperationalContext={onOpenOperationalContext}
+      />
       <span>
-        Pending proposal: {proposalSummary.pendingProposalExists ? 'Present' : 'None'}
+        Pending proposal:{' '}
+        {proposalSummary.pendingProposalExists && onOpenOperationalContext ? (
+          <button
+            type="button"
+            className="workspace-cross-link inline-cross-link"
+            onClick={() => onOpenOperationalContext('proposal-review')}
+          >
+            Present
+          </button>
+        ) : proposalSummary.pendingProposalExists ? (
+          'Present'
+        ) : (
+          'None'
+        )}
       </span>
       <span>Status: {proposalSummary.status ?? 'None'}</span>
       <span>Last promoted: {formatDateTime(proposalSummary.lastPromotedAt)}</span>
     </div>
+  )
+}
+
+type InspectorCrossLinkProps = {
+  label: string
+  value: number
+  sectionId: OperationalContextSectionId
+  onOpenOperationalContext?: (sectionId: OperationalContextSectionId) => void
+}
+
+function InspectorCrossLink({
+  label,
+  value,
+  sectionId,
+  onOpenOperationalContext,
+}: InspectorCrossLinkProps) {
+  return (
+    <span>
+      {label}:{' '}
+      {value > 0 && onOpenOperationalContext ? (
+        <button
+          type="button"
+          className="workspace-cross-link inline-cross-link"
+          onClick={() => onOpenOperationalContext(sectionId)}
+        >
+          {value}
+        </button>
+      ) : (
+        value
+      )}
+    </span>
   )
 }

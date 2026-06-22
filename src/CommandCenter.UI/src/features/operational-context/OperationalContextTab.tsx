@@ -35,6 +35,7 @@ type OperationalContextTabProps = {
   onProposalDraftChange: (draft: string) => void
   onReviewNoteChange: (note: string) => void
   onOpenOperationalContextSection: (sectionId: string) => void
+  onOpenWorkspaceExecutionContext: () => void
   onOpenContinuityWarnings: () => void
   onOpenContinuityCompression: () => void
   onOpenContinuityDecisionRetention: () => void
@@ -83,6 +84,7 @@ export function OperationalContextTab({
   onProposalDraftChange,
   onReviewNoteChange,
   onOpenOperationalContextSection,
+  onOpenWorkspaceExecutionContext,
   onOpenContinuityWarnings,
   onOpenContinuityCompression,
   onOpenContinuityDecisionRetention,
@@ -145,6 +147,8 @@ export function OperationalContextTab({
             executionStatus={executionStatus}
             reviewStatus={reviewStatus}
             onOpenSection={onOpenOperationalContextSection}
+            onOpenExecutionContext={onOpenWorkspaceExecutionContext}
+            onOpenProposalReview={() => onOpenOperationalContextSection('proposal-review')}
             onOpenContinuityWarnings={onOpenContinuityWarnings}
           />
         ) : (
