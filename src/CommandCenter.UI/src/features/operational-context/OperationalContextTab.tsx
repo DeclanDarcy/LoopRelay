@@ -34,6 +34,11 @@ type OperationalContextTabProps = {
   onPromoteProposal: () => void
   onProposalDraftChange: (draft: string) => void
   onReviewNoteChange: (note: string) => void
+  onOpenOperationalContextSection: (sectionId: string) => void
+  onOpenContinuityWarnings: () => void
+  onOpenContinuityCompression: () => void
+  onOpenContinuityDecisionRetention: () => void
+  onOpenArtifact: (relativePath: string) => void
 }
 
 const decisionSemanticChangeTypes = new Set([
@@ -77,6 +82,11 @@ export function OperationalContextTab({
   onPromoteProposal,
   onProposalDraftChange,
   onReviewNoteChange,
+  onOpenOperationalContextSection,
+  onOpenContinuityWarnings,
+  onOpenContinuityCompression,
+  onOpenContinuityDecisionRetention,
+  onOpenArtifact,
 }: OperationalContextTabProps) {
   const proposedStableDecisions = getOperationalContextSectionItems(
     proposalDraft,
@@ -95,6 +105,24 @@ export function OperationalContextTab({
   const decisionContinuityWarnings = proposal
     ? getDecisionContinuityWarnings(proposal.compressionSummary)
     : []
+  const artifactPaths = new Set(
+    workspace
+      ? [
+          workspace.artifactInventory.plan,
+          workspace.artifactInventory.operationalContext,
+          workspace.artifactInventory.currentHandoff,
+          workspace.artifactInventory.currentDecisions,
+          ...workspace.artifactInventory.historicalOperationalContexts,
+          ...workspace.artifactInventory.milestones,
+          ...workspace.artifactInventory.historicalHandoffs,
+          ...workspace.artifactInventory.historicalDecisions,
+        ]
+          .filter((artifact) => artifact !== null)
+          .map((artifact) => artifact.relativePath)
+      : [],
+  )
+  const isArtifactPathAvailable = (relativePath: string | null) =>
+    relativePath !== null && artifactPaths.has(relativePath)
 
   return (
     <>
@@ -116,6 +144,8 @@ export function OperationalContextTab({
             proposalSummary={workspace.operationalContextProposalSummary}
             executionStatus={executionStatus}
             reviewStatus={reviewStatus}
+            onOpenSection={onOpenOperationalContextSection}
+            onOpenContinuityWarnings={onOpenContinuityWarnings}
           />
         ) : (
           <EmptyState className="empty-state">No repository workspace selected.</EmptyState>
@@ -165,7 +195,11 @@ export function OperationalContextTab({
 
         {proposal ? (
           <div className="context-artifact-previews">
-            <OperationalContextProposalStatusPanel proposal={proposal} />
+            <OperationalContextProposalStatusPanel
+              proposal={proposal}
+              isArtifactPathAvailable={isArtifactPathAvailable}
+              onOpenArtifact={onOpenArtifact}
+            />
             <div className="proposal-review-toolbar">
               <button
                 type="button"
@@ -223,10 +257,13 @@ export function OperationalContextTab({
               decisionRationale={proposedDecisionRationale}
               semanticChanges={decisionSemanticChanges}
               warnings={decisionContinuityWarnings}
+              onOpenContinuityDecisionRetention={onOpenContinuityDecisionRetention}
             />
             <OperationalContextSemanticChangeList semanticChanges={proposal.semanticChanges} />
             <OperationalContextCompressionSummaryPanel
               compressionSummary={proposal.compressionSummary}
+              onOpenContinuityCompression={onOpenContinuityCompression}
+              onOpenContinuityDecisionRetention={onOpenContinuityDecisionRetention}
             />
             <OperationalContextProposalComparison
               currentContent={currentContent}
@@ -245,6 +282,7 @@ type DecisionContinuityReviewProps = {
   decisionRationale: string[]
   semanticChanges: OperationalContextProposal['semanticChanges']
   warnings: string[]
+  onOpenContinuityDecisionRetention: () => void
 }
 
 function DecisionContinuityReview({
@@ -253,6 +291,7 @@ function DecisionContinuityReview({
   decisionRationale,
   semanticChanges,
   warnings,
+  onOpenContinuityDecisionRetention,
 }: DecisionContinuityReviewProps) {
   return (
     <div className="proposal-warning-list proposal-decision-review">
@@ -296,7 +335,15 @@ function DecisionContinuityReview({
           <h6>Decision Warnings</h6>
           <ul>
             {warnings.map((warning) => (
-              <li key={warning}>{warning}</li>
+              <li key={warning}>
+                <button
+                  type="button"
+                  className="workspace-cross-link inline-cross-link warning-link"
+                  onClick={onOpenContinuityDecisionRetention}
+                >
+                  {warning}
+                </button>
+              </li>
             ))}
           </ul>
         </>

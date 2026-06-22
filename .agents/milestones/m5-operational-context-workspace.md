@@ -2,15 +2,15 @@
 
 ## Tracking
 
-- [ ] Milestone complete
+- [x] Milestone complete
 - [x] Workstream 5.1: Current Understanding
 - [x] Workstream 5.2: Proposed Revision
 - [x] Workstream 5.3: Semantic Changes
 - [x] Workstream 5.4: Compression Effects
 - [x] Workstream 5.5: Decision Continuity
 - [x] Workstream 5.6: Review Actions
-- [ ] Workstream 5.7: Operational Context Cross-Links
-- [ ] Certification complete
+- [x] Workstream 5.7: Operational Context Cross-Links
+- [x] Certification complete
 
 Goal: make operational context review a first-class workspace without changing backend lifecycle behavior.
 
@@ -119,21 +119,21 @@ Rules:
 
 Add links introduced by the Operational Context workspace:
 
-- [ ] Open questions and active risks navigate to the same section anchors from palette/discovery targets.
-- [ ] Continuity warnings navigate to the Continuity tab and warning section.
-- [ ] Compression warnings navigate to the Continuity tab and compression section.
-- [ ] Decision continuity warnings navigate to the continuity decision-retention section when available.
-- [ ] Proposal source paths navigate to artifact content surfaces when the artifact exists.
-- [ ] Promotion archive paths navigate to artifact surfaces when the artifact exists.
+- [x] Open questions and active risks navigate to the same section anchors from palette/discovery targets.
+- [x] Continuity warnings navigate to the Continuity tab and warning section.
+- [x] Compression warnings navigate to the Continuity tab and compression section.
+- [x] Decision continuity warnings navigate to the continuity decision-retention section when available.
+- [x] Proposal source paths navigate to artifact content surfaces when the artifact exists.
+- [x] Promotion archive paths navigate to artifact surfaces when the artifact exists.
 
 Rules:
 
-- [ ] Links navigate only.
-- [ ] Links do not generate, edit, accept, reject, or promote proposals.
-- [ ] Operational context remains current understanding, not a decision archive or execution history browser.
+- [x] Links navigate only.
+- [x] Links do not generate, edit, accept, reject, or promote proposals.
+- [x] Operational context remains current understanding, not a decision archive or execution history browser.
 
 ### Certification
 
-- [ ] Proposal lifecycle behavior matches existing behavior.
-- [ ] Current understanding remains distinct from proposal, decisions history, execution history, and raw session memory.
-- [ ] Operational Context links do not mutate lifecycle state.
+- [x] Proposal lifecycle behavior matches existing behavior.
+- [x] Current understanding remains distinct from proposal, decisions history, execution history, and raw session memory.
+- [x] Operational Context links do not mutate lifecycle state.

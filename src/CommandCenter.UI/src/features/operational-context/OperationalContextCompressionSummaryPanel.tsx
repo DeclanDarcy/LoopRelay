@@ -2,10 +2,14 @@ import type { OperationalContextCompressionSummary } from '../../types'
 
 type OperationalContextCompressionSummaryPanelProps = {
   compressionSummary: OperationalContextCompressionSummary
+  onOpenContinuityCompression?: () => void
+  onOpenContinuityDecisionRetention?: () => void
 }
 
 export function OperationalContextCompressionSummaryPanel({
   compressionSummary,
+  onOpenContinuityCompression,
+  onOpenContinuityDecisionRetention,
 }: OperationalContextCompressionSummaryPanelProps) {
   return (
     <>
@@ -29,7 +33,19 @@ export function OperationalContextCompressionSummaryPanel({
           <h5>Compression Warnings</h5>
           <ul>
             {compressionSummary.warnings.map((warning) => (
-              <li key={warning}>{warning}</li>
+              <li key={warning}>
+                {onOpenContinuityCompression ? (
+                  <button
+                    type="button"
+                    className="workspace-cross-link inline-cross-link warning-link"
+                    onClick={onOpenContinuityCompression}
+                  >
+                    {warning}
+                  </button>
+                ) : (
+                  warning
+                )}
+              </li>
             ))}
           </ul>
         </div>
@@ -49,7 +65,19 @@ export function OperationalContextCompressionSummaryPanel({
           <h5>Retention Warnings</h5>
           <ul>
             {compressionSummary.stableUnderstandingRetentionWarnings.map((warning) => (
-              <li key={warning}>{warning}</li>
+              <li key={warning}>
+                {onOpenContinuityDecisionRetention ? (
+                  <button
+                    type="button"
+                    className="workspace-cross-link inline-cross-link warning-link"
+                    onClick={onOpenContinuityDecisionRetention}
+                  >
+                    {warning}
+                  </button>
+                ) : (
+                  warning
+                )}
+              </li>
             ))}
           </ul>
         </div>

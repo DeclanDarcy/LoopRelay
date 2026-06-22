@@ -944,6 +944,115 @@ describe('workspace certification mock', () => {
     expect(commandCounts()).toEqual(beforeNavigation)
   })
 
+  it('keeps Operational Context cross-links navigation-only without workflow mutations', async () => {
+    installWorkspaceCertificationMock()
+
+    const invoke = window.__TAURI_INTERNALS__?.invoke
+    expect(invoke).toBeDefined()
+    if (!invoke) {
+      return
+    }
+
+    await invoke('generate_operational_context_proposal', { repositoryId: 'repo-alpha' })
+    const state = window.__COMMAND_CENTER_MOCK_STATE__
+    expect(state).toBeDefined()
+    if (!state) {
+      return
+    }
+
+    const proposal = state.operationalContextProposals['repo-alpha'][0]
+    proposal.compressionSummary.warnings = ['Compression warning preserves reviewer context.']
+    proposal.compressionSummary.stableUnderstandingRetentionWarnings = [
+      'Decision retention warning preserves backend authority.',
+    ]
+    proposal.compressionSummary.warningCount = 2
+    proposal.promotion.archivedRelativePath = '.agents/operational_context.0001.md'
+    state.workspaces['repo-alpha'].artifactInventory.historicalOperationalContexts.push({
+      relativePath: proposal.promotion.archivedRelativePath,
+      name: 'operational_context.0001.md',
+      type: 'OperationalContext',
+      family: 'OperationalContext',
+      versionKind: 'Historical',
+    })
+    state.content[proposal.promotion.archivedRelativePath] = '# Archived Operational Context'
+    state.workspaces['repo-alpha'].operationalContext.continuityWarnings = [
+      'Continuity warning preserves questions.',
+    ]
+
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+    const invokeSpy = vi.fn(invoke)
+    window.__TAURI_INTERNALS__!.invoke = invokeSpy
+
+    render(<App />)
+
+    await screen.findAllByRole('heading', { name: 'AlphaRepo' })
+    fireEvent.click(screen.getByRole('button', { name: 'Operational Context' }))
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Current Understanding' })).toBeInTheDocument(),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Load Latest' }))
+    await waitFor(() =>
+      expect(
+        screen.getByText((_, element) => element?.textContent === 'Proposal: mock-proposal-1'),
+      ).toBeInTheDocument(),
+    )
+
+    const workflowCommands = [
+      'save_artifact_content',
+      'rotate_current_handoff',
+      'rotate_current_decisions',
+      'generate_operational_context_proposal',
+      'edit_operational_context_proposal',
+      'accept_operational_context_proposal',
+      'reject_operational_context_proposal',
+      'promote_operational_context_proposal',
+      'generate_continuity_report',
+      'start_execution',
+      'accept_execution_handoff',
+      'reject_execution_handoff',
+      'prepare_commit',
+      'commit_execution',
+      'push_execution',
+    ]
+    const workflowCallCounts = () =>
+      Object.fromEntries(
+        workflowCommands.map((command) => [
+          command,
+          invokeSpy.mock.calls.filter(([calledCommand]) => calledCommand === command).length,
+        ]),
+      )
+    const beforeNavigation = workflowCallCounts()
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Which warning categories should be shown first?' }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Projection drift could confuse review state.' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Continuity warning preserves questions.' }))
+
+    await waitFor(() => expect(screen.getByLabelText('Continuity diagnostics')).toBeInTheDocument())
+    expect(workflowCallCounts()).toEqual(beforeNavigation)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Operational Context' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Compression warning preserves reviewer context.' }))
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled())
+    expect(workflowCallCounts()).toEqual(beforeNavigation)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Operational Context' }))
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Decision retention warning preserves backend authority.' })[0],
+    )
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled())
+    expect(workflowCallCounts()).toEqual(beforeNavigation)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Operational Context' }))
+    fireEvent.click(screen.getByRole('button', { name: '.agents/operational_context.0001.md' }))
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'operational_context.0001.md' })).toBeInTheDocument(),
+    )
+    expect(workflowCallCounts()).toEqual(beforeNavigation)
+  })
+
   it('keeps continuity diagnostics read-only and report generation behind the explicit action', async () => {
     installWorkspaceCertificationMock()
 

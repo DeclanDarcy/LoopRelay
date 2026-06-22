@@ -654,6 +654,23 @@ button:focus-visible {
   text-align: left;
 }
 
+.inline-cross-link {
+  min-height: 0;
+  width: auto;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  color: var(--accent-fg);
+  background: transparent;
+  font-size: inherit;
+  overflow-wrap: anywhere;
+}
+
+.inline-cross-link:hover {
+  color: var(--accent-emphasis);
+  text-decoration: underline;
+}
+
 .warning-link {
   min-height: 0;
   padding: 9px 10px;

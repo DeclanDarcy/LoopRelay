@@ -7,26 +7,44 @@ type OperationalContextCurrentPanelProps = {
   proposalSummary: OperationalContextProposalSummary
   executionStatus: string
   reviewStatus: string
+  onOpenSection?: (sectionId: string) => void
+  onOpenContinuityWarnings?: () => void
 }
 
 type OperationalContextItemListProps = {
   title: string
   emptyLabel: string
   items: { id: string; text: string }[]
+  sectionId?: string
+  onOpenSection?: (sectionId: string) => void
 }
 
 function OperationalContextItemList({
   title,
   emptyLabel,
   items,
+  sectionId,
+  onOpenSection,
 }: OperationalContextItemListProps) {
   return (
-    <div>
+    <div id={sectionId}>
       <h5>{title}</h5>
       {items.length > 0 ? (
         <ul>
           {items.map((item) => (
-            <li key={item.id}>{item.text}</li>
+            <li key={item.id}>
+              {sectionId && onOpenSection ? (
+                <button
+                  type="button"
+                  className="workspace-cross-link inline-cross-link"
+                  onClick={() => onOpenSection(sectionId)}
+                >
+                  {item.text}
+                </button>
+              ) : (
+                item.text
+              )}
+            </li>
           ))}
         </ul>
       ) : (
@@ -41,6 +59,8 @@ export function OperationalContextCurrentPanel({
   proposalSummary,
   executionStatus,
   reviewStatus,
+  onOpenSection,
+  onOpenContinuityWarnings,
 }: OperationalContextCurrentPanelProps) {
   const proposalStatus = proposalSummary.latestProposalId
     ? proposalSummary.status ?? 'Unknown'
@@ -116,11 +136,15 @@ export function OperationalContextCurrentPanel({
           title="Open Questions"
           emptyLabel="No open questions recorded."
           items={operationalContext.openQuestions}
+          sectionId="operational-open-questions"
+          onOpenSection={onOpenSection}
         />
         <OperationalContextItemList
           title="Active Risks"
           emptyLabel="No active risks recorded."
           items={operationalContext.activeRisks}
+          sectionId="operational-active-risks"
+          onOpenSection={onOpenSection}
         />
         <OperationalContextItemList
           title="Recent Changes"
@@ -132,7 +156,19 @@ export function OperationalContextCurrentPanel({
           {operationalContext.continuityWarnings.length > 0 ? (
             <ul>
               {operationalContext.continuityWarnings.map((warning) => (
-                <li key={warning}>{warning}</li>
+                <li key={warning}>
+                  {onOpenContinuityWarnings ? (
+                    <button
+                      type="button"
+                      className="workspace-cross-link inline-cross-link warning-link"
+                      onClick={onOpenContinuityWarnings}
+                    >
+                      {warning}
+                    </button>
+                  ) : (
+                    warning
+                  )}
+                </li>
               ))}
             </ul>
           ) : (

@@ -1245,16 +1245,18 @@ function App() {
     setSectionTarget(sectionId)
   }
 
-  const openOperationalContextSection = (
-    sectionId: 'operational-current' | 'proposal-review',
-  ) => {
+  const openOperationalContextSection = (sectionId: string) => {
     setActivePrimaryTab('operational-context')
     setSectionTarget(sectionId)
   }
 
-  const openContinuityWarnings = () => {
+  const openContinuitySection = (sectionId: string) => {
     setActivePrimaryTab('continuity')
-    setSectionTarget('continuity-diagnostics')
+    setSectionTarget(sectionId)
+  }
+
+  const openContinuityWarnings = () => {
+    openContinuitySection('continuity-warnings')
   }
 
   const openWorkspaceExecutionContext = (milestonePath: string) => {
@@ -1274,6 +1276,15 @@ function App() {
   const openHandoffArtifact = (handoffPath: string) => {
     if (selectedRepository) {
       selectArtifact(selectedRepository.repository.id, handoffPath)
+    }
+
+    setActivePrimaryTab('workspace')
+    setSectionTarget('artifact-workspace')
+  }
+
+  const openWorkspaceArtifact = (relativePath: string) => {
+    if (selectedRepository) {
+      selectArtifact(selectedRepository.repository.id, relativePath)
     }
 
     setActivePrimaryTab('workspace')
@@ -1484,11 +1495,21 @@ function App() {
               setActivePrimaryTab('execution')
             }
 
-            if (sectionId === 'proposal-review') {
+            if (
+              sectionId === 'operational-current' ||
+              sectionId === 'operational-open-questions' ||
+              sectionId === 'operational-active-risks' ||
+              sectionId === 'proposal-review'
+            ) {
               setActivePrimaryTab('operational-context')
             }
 
-            if (sectionId === 'continuity-diagnostics') {
+            if (
+              sectionId === 'continuity-diagnostics' ||
+              sectionId === 'continuity-warnings' ||
+              sectionId === 'continuity-compression' ||
+              sectionId === 'continuity-decision-retention'
+            ) {
               setActivePrimaryTab('continuity')
             }
 
@@ -1709,6 +1730,13 @@ function App() {
                 onPromoteProposal={() => void promoteOperationalContextProposal()}
                 onProposalDraftChange={setOperationalContextProposalDraft}
                 onReviewNoteChange={setOperationalContextReviewNote}
+                onOpenOperationalContextSection={openOperationalContextSection}
+                onOpenContinuityWarnings={openContinuityWarnings}
+                onOpenContinuityCompression={() => openContinuitySection('continuity-compression')}
+                onOpenContinuityDecisionRetention={() =>
+                  openContinuitySection('continuity-decision-retention')
+                }
+                onOpenArtifact={openWorkspaceArtifact}
               />
 
               <Panel

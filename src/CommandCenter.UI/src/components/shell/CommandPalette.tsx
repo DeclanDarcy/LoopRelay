@@ -43,8 +43,14 @@ const tabTargets: PaletteTabTarget[] = [
 const sectionTargets: PaletteSectionTarget[] = [
   { kind: 'section', id: 'artifacts', label: 'Repository Artifacts' },
   { kind: 'section', id: 'execution-context', label: 'Execution Context' },
+  { kind: 'section', id: 'operational-current', label: 'Current Understanding' },
+  { kind: 'section', id: 'operational-open-questions', label: 'Open Questions' },
+  { kind: 'section', id: 'operational-active-risks', label: 'Active Risks' },
   { kind: 'section', id: 'proposal-review', label: 'Proposal Review' },
   { kind: 'section', id: 'continuity-diagnostics', label: 'Continuity Diagnostics' },
+  { kind: 'section', id: 'continuity-warnings', label: 'Continuity Warnings' },
+  { kind: 'section', id: 'continuity-compression', label: 'Compression Trend' },
+  { kind: 'section', id: 'continuity-decision-retention', label: 'Decision Retention' },
 ]
 
 export function CommandPalette({

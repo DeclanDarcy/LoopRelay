@@ -33,7 +33,7 @@ export function ContinuityDiagnosticsPanel({
       </div>
 
       <div className="context-columns">
-        <div>
+        <div id="continuity-decision-retention">
           <h5>Preservation</h5>
           <ul>
             <li>Architecture lost: {diagnostics.architectureTrend.lostCount}</li>
@@ -42,7 +42,7 @@ export function ContinuityDiagnosticsPanel({
             <li>Decisions removed: {diagnostics.decisionTrend.removedCount}</li>
           </ul>
         </div>
-        <div>
+        <div id="continuity-compression">
           <h5>Compression</h5>
           <ul>
             <li>Proposals observed: {diagnostics.compressionTrend.proposalCount}</li>
@@ -69,7 +69,7 @@ export function ContinuityDiagnosticsPanel({
             <p>No repeated indicators recorded.</p>
           )}
         </div>
-        <div>
+        <div id="continuity-warnings">
           <h5>Warnings</h5>
           {diagnostics.continuityWarnings.length > 0 ? (
             <ul>

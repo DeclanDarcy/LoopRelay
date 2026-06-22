@@ -2,29 +2,27 @@
 
 ## Slice Summary
 
-Continued Milestone 5: Operational Context Workspace.
+Completed Milestone 5: Operational Context Workspace, specifically Workstream 5.7 cross-links and M5 certification.
 
 ## New State
 
-- Added `src/CommandCenter.UI/src/features/operational-context/OperationalContextTab.tsx` as the dedicated Operational Context workspace composition.
-- Moved current-understanding and proposal-review rendering out of `App.tsx`; `App.tsx` still owns proposal draft state, selected repository state, backend command invocation, refresh behavior, and lifecycle authority.
-- Kept proposal actions backend-gated through existing callbacks: generate, load latest, save edits, accept, reject, and promote.
-- Grouped projected semantic changes by UI category in `OperationalContextSemanticChangeList` without computing a new diff in React.
-- Extended `OperationalContextCompressionSummaryPanel` to show modified count, historical noise count, and compression warnings.
-- Extended `OperationalContextProposalStatusPanel` to show generated path, edited path, promotion source, revision number, and generated timestamp.
-- Updated `operationalContextCompressionSummaryPanel` characterization tests for the newly visible projected compression metadata.
-- Marked M5 workstreams 5.1 through 5.6 complete. Workstream 5.7 cross-links, certification, and milestone completion remain open.
-- Rotated the prior handoff to `.agents/handoffs/handoff.0064.md`.
+- Added navigation-only Operational Context cross-links for open questions, active risks, continuity warnings, compression warnings, decision-retention warnings, and artifact-backed proposal/archive paths.
+- Added command palette discovery targets for current understanding, open questions, active risks, continuity warnings, compression trend, and decision retention.
+- Added Continuity diagnostics anchors: `continuity-warnings`, `continuity-compression`, and `continuity-decision-retention`.
+- Proposal generated/edited/source/archive paths only render as artifact navigation when the path exists in the workspace artifact inventory; otherwise they remain plain projected text.
+- `OperationalContextTab` authority audit remains clean: no backend imports, no workflow invocation, no readiness ownership, no draft authority change, and no repository selection ownership.
+- Added characterization coverage proving Operational Context cross-links do not call workflow mutation commands.
+- Marked `.agents/milestones/m5-operational-context-workspace.md` complete.
+- Rotated prior handoff to `.agents/handoffs/handoff.0065.md`.
 
 ## Verification
 
 - Passed `npm run lint`.
-- Passed `npm run test -- --run` with 35 test files and 124 tests.
+- Passed `npm run test -- --run` with 35 test files and 125 tests.
 - Passed `npm run build`.
 - Passed `npm run test:e2e` with 6 Playwright tests.
 - Passed `dotnet test CommandCenter.slnx` with 192 backend tests.
 
 ## Remaining Work
 
-- Continue Milestone 5 with Workstream 5.7: Operational Context cross-links.
-- Run final M5 certification after cross-links are implemented.
+- Continue with Milestone 6: Continuity Workspace.
