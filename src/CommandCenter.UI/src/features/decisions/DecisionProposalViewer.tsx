@@ -41,8 +41,10 @@ export function DecisionProposalViewer({ workspace, isLoading }: DecisionProposa
           <Badge tone="info">{proposal.state}</Badge>
           <Badge>{review.state}</Badge>
           <Badge>{proposal.candidateId}</Badge>
+          <Badge tone="done">Current authority</Badge>
         </div>
         <p>{proposal.context}</p>
+        <small>Historical revisions explain proposal evolution; this current proposal remains authoritative.</small>
       </article>
 
       <div className="decision-diagnostics-grid" aria-label="Review diagnostics">

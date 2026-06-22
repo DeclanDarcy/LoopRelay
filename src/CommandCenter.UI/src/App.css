@@ -1005,6 +1005,7 @@ button:focus-visible {
 }
 
 .decision-proposal-viewer,
+.decision-revision-history,
 .decision-option-comparison,
 .decision-evidence-source-panel,
 .decision-viewer-summary,
@@ -1015,6 +1016,7 @@ button:focus-visible {
 }
 
 .decision-viewer-summary,
+.decision-authority-callout,
 .decision-inspection-card,
 .decision-tradeoff,
 .decision-evidence-block article {
@@ -1028,6 +1030,7 @@ button:focus-visible {
 }
 
 .decision-viewer-summary div,
+.decision-authority-callout div,
 .decision-inspection-card div {
   min-width: 0;
   display: grid;
@@ -1035,6 +1038,7 @@ button:focus-visible {
 }
 
 .decision-viewer-summary span,
+.decision-authority-callout span,
 .decision-inspection-card span,
 .decision-evidence-block > span {
   color: var(--fg-muted);
@@ -1044,6 +1048,7 @@ button:focus-visible {
 }
 
 .decision-viewer-summary strong,
+.decision-authority-callout strong,
 .decision-inspection-card strong {
   min-width: 0;
   color: var(--fg-default);
@@ -1051,6 +1056,9 @@ button:focus-visible {
 }
 
 .decision-viewer-summary p,
+.decision-viewer-summary small,
+.decision-authority-callout p,
+.decision-authority-callout small,
 .decision-inspection-card p,
 .decision-tradeoff p,
 .decision-evidence-block p,
@@ -1096,11 +1104,40 @@ button:focus-visible {
 }
 
 .decision-option-grid,
-.decision-review-grid {
+.decision-review-grid,
+.decision-revision-grid {
   min-width: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+
+.decision-lineage-summary {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.decision-lineage-summary span {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--surface-1);
+  color: var(--fg-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.decision-authority-callout {
+  border-color: var(--accent-muted);
+  background: var(--accent-subtle);
+}
+
+.decision-historical-revision {
+  border-style: dashed;
 }
 
 .decision-evidence-block {
@@ -1807,6 +1844,8 @@ button:focus-visible {
   .decision-diagnostics-grid,
   .decision-option-grid,
   .decision-review-grid,
+  .decision-revision-grid,
+  .decision-lineage-summary,
   .execution-workflow-rail,
   .workspace-workflow-rail,
   .execution-session-grid,

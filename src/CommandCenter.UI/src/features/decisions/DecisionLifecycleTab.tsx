@@ -9,6 +9,7 @@ import type {
 import {
   useDecisionEvidenceInspection,
   useDecisionOptionComparison,
+  useDecisionProposalLineage,
   useDecisionProposalReview,
   useDecisionSourceAttributions,
 } from '../../hooks'
@@ -17,6 +18,7 @@ import { DecisionEvidenceSourcePanel } from './DecisionEvidenceSourcePanel'
 import { DecisionOptionComparison } from './DecisionOptionComparison'
 import { DecisionProposalBrowser } from './DecisionProposalBrowser'
 import { DecisionProposalViewer } from './DecisionProposalViewer'
+import { DecisionRevisionHistory } from './DecisionRevisionHistory'
 
 type DecisionLifecycleTabProps = {
   context: DecisionContextSnapshot | null
@@ -46,6 +48,10 @@ export function DecisionLifecycleTab({
     data: proposalReviewWorkspace,
     isLoading: isProposalReviewLoading,
   } = useDecisionProposalReview(repositoryId, selectedProposalId)
+  const {
+    data: proposalLineage,
+    isLoading: isProposalLineageLoading,
+  } = useDecisionProposalLineage(repositoryId, selectedProposalId)
   const {
     data: optionComparison,
     isLoading: isOptionComparisonLoading,
@@ -112,6 +118,11 @@ export function DecisionLifecycleTab({
           <DecisionProposalViewer
             workspace={proposalReviewWorkspace}
             isLoading={isProposalReviewLoading}
+          />
+
+          <DecisionRevisionHistory
+            lineage={proposalLineage}
+            isLoading={isProposalLineageLoading}
           />
 
           <DecisionOptionComparison

@@ -24,9 +24,9 @@ support controlled proposal evolution with revision history.
 ## UI Work
 
 - [ ] Add refinement request form.
-- [ ] Add revision history.
-- [ ] Add revision comparison view.
-- [ ] Distinguish current proposal content from historical revisions.
+- [x] Add revision history.
+- [x] Add revision comparison view.
+- [x] Distinguish current proposal content from historical revisions.
 
 ## Tests
 

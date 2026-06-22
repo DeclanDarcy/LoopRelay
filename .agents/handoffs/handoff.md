@@ -2,35 +2,30 @@
 
 ## New State From This Slice
 
-- Continued M5 refinement workflow by adding the authorized proposal lineage read model/projection.
-- Added `DecisionProposalLineage`, `DecisionProposalLineageEvent`, and `DecisionProposalRevisionSnapshot`.
-- Extended `IDecisionRefinementService` with `GetProposalLineageAsync`.
-- `DecisionRefinementService` now builds a read-only lineage projection containing:
-  - current authoritative proposal and fingerprint
-  - review status
-  - ordered proposal history, revision, review-note, and review-state events
-  - historical revision snapshots with revision comparisons
-  - review notes
-  - diagnostics that explicitly preserve the current-proposal versus historical-revision authority boundary
-- Added backend endpoint:
-  - `GET /api/repositories/{repositoryId}/decisions/proposals/{proposalId}/lineage`
-- Added Tauri bridge command:
-  - `get_decision_proposal_lineage`
-- Added TypeScript API/type surface and dev mock support for proposal lineage.
-- Updated `.agents/milestones/m5-refinement-workflow.md` to mark proposal lineage projection complete.
-- Rotated the previous handoff to `.agents/handoffs/handoff.0023.md`.
+- Continued M5 read-only UI work for proposal evolution.
+- Added `useDecisionProposalLineage` to load backend-owned lineage through `get_decision_proposal_lineage`.
+- Added `DecisionRevisionHistory` with:
+  - lineage summary
+  - current proposal authority callout
+  - revision list navigation
+  - backend-provided revision comparison rendering
+  - evolution event sequence
+  - diagnostics preserving current proposal versus historical revision authority
+- Wired lineage loading into `DecisionLifecycleTab` for the selected proposal.
+- Updated `DecisionProposalViewer` to label current proposal content as authoritative and historical revisions as explanatory.
+- Updated dev mock revision fixtures to satisfy the fuller revision model used by lineage/comparison.
+- Added characterization coverage for revision history/comparison and updated navigation coverage for lineage loading.
+- Marked M5 UI revision history, revision comparison, and current-versus-historical distinction complete.
+- Rotated the previous handoff to `.agents/handoffs/handoff.0024.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes with 297 tests.
 - `npm run lint --prefix src/CommandCenter.UI` passes.
-- `npm run test --prefix src/CommandCenter.UI` passes with 42 files and 151 tests.
-- `cargo build --manifest-path src/CommandCenter.Shell/Cargo.toml` passes.
+- `npm run test --prefix src/CommandCenter.UI` passes with 43 files and 153 tests.
+- `npm run build --prefix src/CommandCenter.UI` passes.
 
 ## Next Slice
 
-- Start M5 read-only UI work using the new lineage projection:
-  - add a revision history panel
-  - add a revision comparison view
-  - make the current proposal visibly distinct from historical revisions
-- Keep refinement mutation UI deferred until the read-only lineage/revision surfaces are working and characterized.
+- Finish M5 by adding the refinement request form.
+- Keep mutation authority backend-owned: the form should submit structured refinement requests and render returned proposal/revision state rather than editing proposal history client-side.
+- Add focused characterization tests for refinement request input state, disabled/error states, and returned lineage refresh after refinement.

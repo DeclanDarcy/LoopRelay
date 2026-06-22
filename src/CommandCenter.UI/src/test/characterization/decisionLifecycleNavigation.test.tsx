@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DecisionLifecycleTab } from '../../features/decisions/DecisionLifecycleTab'
 import type {
@@ -9,6 +9,7 @@ import type {
 } from '../../types'
 
 const useDecisionProposalReviewMock = vi.hoisted(() => vi.fn())
+const useDecisionProposalLineageMock = vi.hoisted(() => vi.fn())
 const useDecisionOptionComparisonMock = vi.hoisted(() => vi.fn())
 const useDecisionEvidenceInspectionMock = vi.hoisted(() => vi.fn())
 const useDecisionSourceAttributionsMock = vi.hoisted(() => vi.fn())
@@ -16,6 +17,7 @@ const useDecisionSourceAttributionsMock = vi.hoisted(() => vi.fn())
 vi.mock('../../hooks', () => ({
   useDecisionEvidenceInspection: useDecisionEvidenceInspectionMock,
   useDecisionOptionComparison: useDecisionOptionComparisonMock,
+  useDecisionProposalLineage: useDecisionProposalLineageMock,
   useDecisionProposalReview: useDecisionProposalReviewMock,
   useDecisionSourceAttributions: useDecisionSourceAttributionsMock,
 }))
@@ -23,6 +25,7 @@ vi.mock('../../hooks', () => ({
 afterEach(() => {
   cleanup()
   useDecisionProposalReviewMock.mockReset()
+  useDecisionProposalLineageMock.mockReset()
   useDecisionOptionComparisonMock.mockReset()
   useDecisionEvidenceInspectionMock.mockReset()
   useDecisionSourceAttributionsMock.mockReset()
@@ -32,6 +35,10 @@ describe('DecisionLifecycleTab navigation', () => {
   it('loads the selected proposal review workspace from proposal selection', async () => {
     useDecisionProposalReviewMock.mockImplementation((repositoryId: string | null, proposalId: string | null) => ({
       data: repositoryId && proposalId ? createWorkspace(repositoryId, proposalId) : null,
+      isLoading: false,
+    }))
+    useDecisionProposalLineageMock.mockImplementation((repositoryId: string | null, proposalId: string | null) => ({
+      data: repositoryId && proposalId ? createLineage(repositoryId, proposalId) : null,
       isLoading: false,
     }))
     useDecisionOptionComparisonMock.mockReturnValue({ data: null, isLoading: false })
@@ -53,15 +60,16 @@ describe('DecisionLifecycleTab navigation', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText('Workspace for PROP-0001')).toBeInTheDocument()
+      expect(within(screen.getByLabelText('Proposal viewer')).getByText('Workspace for PROP-0001')).toBeInTheDocument()
     })
 
     fireEvent.click(screen.getByRole('button', { name: /Second proposal/ }))
 
     await waitFor(() => {
-      expect(screen.getByText('Workspace for PROP-0002')).toBeInTheDocument()
+      expect(within(screen.getByLabelText('Proposal viewer')).getByText('Workspace for PROP-0002')).toBeInTheDocument()
     })
     expect(useDecisionProposalReviewMock).toHaveBeenLastCalledWith('repo-alpha', 'PROP-0002')
+    expect(useDecisionProposalLineageMock).toHaveBeenLastCalledWith('repo-alpha', 'PROP-0002')
     expect(useDecisionOptionComparisonMock).toHaveBeenLastCalledWith('repo-alpha', 'PROP-0002')
     expect(useDecisionEvidenceInspectionMock).toHaveBeenLastCalledWith('repo-alpha', 'PROP-0002')
     expect(useDecisionSourceAttributionsMock).toHaveBeenLastCalledWith('repo-alpha', 'PROP-0002')
@@ -83,6 +91,23 @@ function createContext(): DecisionContextSnapshot {
     },
     diagnostics: { sources: [], warnings: [] },
     validation: { isValid: true, errors: [], warnings: [] },
+  }
+}
+
+function createLineage(repositoryId: string, proposalId: string) {
+  const workspace = createWorkspace(repositoryId, proposalId)
+
+  return {
+    repositoryId,
+    proposalId,
+    currentState: workspace.proposal.state,
+    currentProposalFingerprint: `fingerprint-${proposalId}`,
+    currentProposal: workspace.proposal,
+    review: workspace.review,
+    events: [],
+    revisions: [],
+    reviewNotes: [],
+    diagnostics: [],
   }
 }
 
