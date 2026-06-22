@@ -34,4 +34,4 @@ build deterministic decision context from repository state without creating deci
 
 - [x] Same repository state produces deterministic decision context.
 - [x] Context diagnostics explain loaded, missing, and warning sources.
-- [ ] Later decision services consume `DecisionContext` without reading repository files directly.
+- [x] Later decision services consume `DecisionContext` without reading repository files directly.

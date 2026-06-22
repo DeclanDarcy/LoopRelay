@@ -2,9 +2,12 @@
 
 ## Newly Authorized
 
-- M1 is functionally complete based on the implemented deterministic `DecisionContext`, stable context fingerprinting, snapshot persistence, source diagnostics, endpoint coverage, and backend verification.
-- M1 is not fully closed until a downstream lifecycle service consumes `IDecisionContextService` as its repository-information boundary.
-- M2 may begin with a first discovery vertical slice, but that slice must also serve as the dependency-inversion proof required to close M1.
-- `IDecisionDiscoveryService` should inject `IDecisionContextService` and must not directly read `.agents/plan.md`, `.agents/operational_context.md`, `.agents/decisions`, `.agents/handoffs`, or milestone files.
-- The first discovery slice should build at least one discovery signal from `DecisionContext` and include tests proving context-driven discovery behavior.
-- `DecisionContext` must remain an explicit decision-lifecycle context model with source attribution, diagnostics, evidence, and signal-ready structure; it should not degrade into a generic `Dictionary<string,string>` or raw artifact bag.
+- M1 is complete and its exit criteria are satisfied.
+- M1 closure is based on deterministic context, snapshots, diagnostics, validation, fingerprints, snapshot persistence, and proven downstream consumption through `DecisionDiscoveryService -> DecisionContext -> Repository Artifacts`.
+- M2 remains in progress and should be closed before beginning M3.
+- The implemented M2 discovery slice is aligned with the roadmap: candidates, signals, evidence, diagnostics, classification, persistence, lifecycle endpoints, promotion boundary, duplicate suppression, and self-artifact suppression all belong in M2.
+- Promotion must remain only a candidate boundary transition during M2; it must not generate proposals.
+- Candidate source fingerprints should remain source-item/excerpt scoped rather than whole-context scoped.
+- Discovery should continue suppressing lifecycle self-artifacts as discovery inputs to prevent candidate feedback loops.
+- Remaining M2 work is lifecycle hygiene: expiration hardening, duplicate lifecycle verification, dismissal validation, endpoint success-path coverage, terminal-state validation, and M2 certification review.
+- The next slice should focus exclusively on closing M2 in this priority order: expiration tests, duplicate-marking tests, dismissal tests, endpoint success-path coverage, terminal candidate accumulation validation, then M2 certification review.

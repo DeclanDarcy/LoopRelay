@@ -162,10 +162,19 @@ public sealed class DecisionRepositoryTests
             repositoryId,
             DecisionCandidateState.Discovered,
             DecisionCandidatePriority.High,
+            DecisionClassification.Architectural,
             "Persist decisions",
             "The plan calls for authoritative structured decision artifacts.",
             "source-fingerprint",
+            [new DecisionSignal(
+                "MissingDirection",
+                "A persistence decision is required.",
+                DecisionClassification.Architectural,
+                DecisionCandidatePriority.High,
+                [new DecisionEvidence("Plan requires persistence.", [new DecisionSourceReference("Plan", ".agents/plan.md")])])],
+            [new DecisionEvidence("Plan requires persistence.", [new DecisionSourceReference("Plan", ".agents/plan.md")])],
             [new DecisionSourceReference("Plan", ".agents/plan.md", Excerpt: "repository-backed persistence")],
+            ["Created by repository test."],
             [new DecisionHistoryEntry(DateTimeOffset.UtcNow, "Discovered", null, DecisionCandidateState.Discovered.ToString(), null, [])]);
     }
 

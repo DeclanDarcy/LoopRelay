@@ -61,7 +61,7 @@ public sealed class DecisionArtifactProjectionServiceTests
         Assert.Equal(first, second);
         Assert.Contains("Generated from structured decision lifecycle artifacts. Structured JSON remains authoritative.", first);
         Assert.Contains("- DEC-0001 | Open | Architectural | Unresolved | Persist structured decision records", first);
-        Assert.Contains("- CAND-0001 | Discovered | High | Persist decisions", first);
+        Assert.Contains("- CAND-0001 | Discovered | High | Architectural | Persist decisions", first);
         Assert.Contains("- PROP-0001 | Generated | CAND-0001 | Persist decisions as structured JSON", first);
     }
 
@@ -162,10 +162,19 @@ public sealed class DecisionArtifactProjectionServiceTests
             repositoryId,
             DecisionCandidateState.Discovered,
             DecisionCandidatePriority.High,
+            DecisionClassification.Architectural,
             "Persist decisions",
             "The plan calls for authoritative structured decision artifacts.",
             "source-fingerprint",
+            [new DecisionSignal(
+                "MissingDirection",
+                "A persistence decision is required.",
+                DecisionClassification.Architectural,
+                DecisionCandidatePriority.High,
+                [new DecisionEvidence("Plan requires persistence.", [new DecisionSourceReference("Plan", ".agents/plan.md")])])],
+            [new DecisionEvidence("Plan requires persistence.", [new DecisionSourceReference("Plan", ".agents/plan.md")])],
             [new DecisionSourceReference("Plan", ".agents/plan.md", Excerpt: "repository-backed persistence")],
+            ["Created by projection test."],
             [new DecisionHistoryEntry(now, "Discovered", null, DecisionCandidateState.Discovered.ToString(), null, [])]);
     }
 

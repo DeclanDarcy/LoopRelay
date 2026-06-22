@@ -155,12 +155,32 @@ public sealed class DecisionArtifactProjectionService(
         markdown.Fields(
             ("State", candidate.State.ToString()),
             ("Priority", candidate.Priority.ToString()),
+            ("Classification", candidate.Classification.ToString()),
             ("Repository", candidate.RepositoryId.ToString()),
             ("Source fingerprint", candidate.SourceFingerprint));
         markdown.H2("Summary");
         markdown.Paragraph(candidate.Summary);
+        markdown.H2("Signals");
+        foreach (DecisionSignal signal in candidate.Signals
+            .OrderBy(signal => signal.Kind, StringComparer.Ordinal)
+            .ThenBy(signal => signal.Summary, StringComparer.Ordinal))
+        {
+            markdown.Bullet($"{signal.Kind} | {signal.Classification} | {signal.Priority} | {signal.Summary}");
+            markdown.NestedEvidenceList(signal.Evidence);
+        }
+
+        markdown.EmptyListIf(candidate.Signals.Count == 0);
+        markdown.H2("Evidence");
+        markdown.EvidenceList(candidate.Evidence);
         markdown.H2("Sources");
         markdown.SourceList(candidate.Sources);
+        markdown.H2("Diagnostics");
+        foreach (string diagnostic in candidate.Diagnostics.Order(StringComparer.Ordinal))
+        {
+            markdown.Bullet(diagnostic);
+        }
+
+        markdown.EmptyListIf(candidate.Diagnostics.Count == 0);
         markdown.H2("History");
         markdown.HistoryList(candidate.History);
         return markdown.ToString();
@@ -241,7 +261,7 @@ public sealed class DecisionArtifactProjectionService(
         markdown.H2("Candidates");
         foreach (DecisionCandidate candidate in candidates.OrderBy(candidate => candidate.Id, StringComparer.Ordinal))
         {
-            markdown.Bullet($"{candidate.Id} | {candidate.State} | {candidate.Priority} | {candidate.Title}");
+            markdown.Bullet($"{candidate.Id} | {candidate.State} | {candidate.Priority} | {candidate.Classification} | {candidate.Title}");
         }
 
         markdown.EmptyListIf(candidates.Count == 0);
