@@ -12,9 +12,10 @@ provide full proposal inspection before refinement or resolution.
   - [x] viewed
   - [x] needs refinement
   - [x] ready for resolution
-- [ ] Add read models for proposal browser, proposal viewer, option comparison, evidence inspection, source attribution, and review diagnostics.
+- [x] Add read models for proposal browser, proposal viewer, option comparison, evidence inspection, source attribution, and review diagnostics.
   - [x] Add initial proposal review workspace read model with proposal, review status, notes, revisions, and diagnostics.
   - [x] Add dedicated proposal browser, option comparison, evidence inspection, and source attribution read models.
+  - [x] Keep review diagnostics discoverable in the proposal viewer instead of adding a redundant diagnostics panel.
 - [x] Persist notes separately from proposal revisions.
 - [x] Keep proposal state and review notes synchronized through backend-owned transitions.
 

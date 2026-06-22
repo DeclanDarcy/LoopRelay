@@ -2,28 +2,43 @@
 
 ## Newly Authorized
 
-- The M4 option comparison slice is accepted as aligned with the roadmap.
-- Option comparison must remain a projection of backend-owned read models.
-- React must not recompute tradeoff summaries or create an alternative lifecycle interpretation.
-- Evidence/source navigation is accepted as completing the explainability chain from recommendation to evidence to source attribution.
-- Source attribution and evidence navigation remain read-only and presentation-only in React.
-- React ownership remains limited to selection, filtering, navigation, and presentation.
-- Backend ownership remains authoritative for lifecycle state, review state, and read models.
-- No lifecycle authority should move into React.
-- No operational-context coupling should be introduced by the M4 review workspace.
-- No execution coupling should be introduced by the M4 review workspace.
+- M4 is complete.
+- Diagnostics should remain in the proposal viewer instead of moving to a dedicated diagnostics panel.
+- The diagnostics requirement is visibility, traceability, and contextual placement, not a specific panel count.
+- Keeping diagnostics adjacent to proposal inspection is the preferred review-workspace UX.
+- Responsive layout hardening for evidence grids, source attribution, diagnostics, option comparison, and review surfaces is accepted as appropriate M4 closure work.
+- M4 maintains the intended architecture: backend-owned lifecycle authority, review state, and read models with React limited to presentation.
+- No operational-context coupling should be introduced by M4.
+- No execution coupling should be introduced by M4.
 
-## M4 Closure Guidance
+## M5 Start Authorization
 
-- Perform a final M4 closure review before marking M4 complete.
-- Evaluate information density, evidence discoverability, source attribution discoverability, review note visibility, diagnostics visibility, and navigation friction.
-- A dedicated review diagnostics panel is not required if diagnostics are already discoverable where users need them in the proposal viewer, review workspace, and evidence surfaces.
-- Avoid adding a diagnostics panel merely because it appeared in the earlier concept; the goal is explainability, not panel count.
-- If the closure review finds no substantive gaps, close M4 and begin M5.
+- M5 refinement workflow is ready to start.
+- M5 should proceed backend-first.
+- Implement refinement domain models as first-class models:
+  - `DecisionRefinementRequest`
+  - `DecisionProposalRevision`
+  - `DecisionConstraint`
+  - `DecisionAssumptionRevision`
+  - `DecisionOptionRevision`
+  - `DecisionTradeoffRevision`
+- Create a dedicated `IDecisionRefinementService`.
+- Do not grow `DecisionGenerationService` into the refinement lifecycle engine.
+- Persist `REV-*.json` and `REV-*.md` as authoritative refinement artifacts.
+- Preserve all historical revisions and never overwrite prior revisions.
+- Stale-base protection is the highest-leverage M5 concern.
+- Refinement requests must reference a base proposal fingerprint or equivalent revision identity.
+- Reject refinement against stale proposal state.
+- Create revision read models before UI mutation controls:
+  - revision history
+  - revision comparison
+  - current versus previous proposal state
 
-## Newly Authorized Next Slice
+## Program Status
 
-- Run the final M4 closure review.
-- If no substantive gaps are found, mark M4 complete.
-- Begin M5 refinement workflow planning after M4 closure.
-- M5 should focus on revision UX, refinement requests, revision comparison, and revision history navigation rather than foundational lifecycle work.
+- M0 Domain Foundation is complete.
+- M1 Context Resolution is complete.
+- M2 Discovery is complete.
+- M3 Proposal Lifecycle is complete.
+- M4 Review Workspace is complete.
+- M5 Refinement Workflow is ready to start.
