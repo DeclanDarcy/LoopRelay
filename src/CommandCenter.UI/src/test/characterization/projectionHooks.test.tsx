@@ -4,6 +4,7 @@ import {
   mergeExecutionEvents,
   useArtifactContent,
   useContinuityDiagnostics,
+  useContinuityReports,
   useExecutionContextPreview,
   useExecutionEvents,
   useExecutionSession,
@@ -15,6 +16,7 @@ import type {
   ExecutionContextPreview,
   ExecutionStatus,
   ContinuityDiagnostics,
+  ContinuityReport,
   RepositoryDashboardProjection,
   RepositoryGitStatus,
   RepositoryWorkspaceProjection,
@@ -713,6 +715,62 @@ describe('projection hook characterization', () => {
     rerender({ repositoryId: null })
 
     await waitFor(() => expect(result.current.data).toBeNull())
+    expect(result.current.isLoading).toBe(false)
+  })
+
+  it('loads and refreshes continuity reports as supporting artifacts', async () => {
+    const initialDiagnostics = createContinuityDiagnostics('repo-alpha')
+    const initialReport = {
+      reportId: 'continuity.1',
+      repositoryId: 'repo-alpha',
+      generatedAt: '2026-01-02T00:00:00Z',
+      relativePath: '.agents/continuity/continuity.1.json',
+      diagnostics: initialDiagnostics,
+    } satisfies ContinuityReport
+    const refreshedReport = {
+      ...initialReport,
+      reportId: 'continuity.2',
+      relativePath: '.agents/continuity/continuity.2.json',
+    } satisfies ContinuityReport
+    const invoke = vi.fn().mockResolvedValueOnce([initialReport]).mockResolvedValueOnce([refreshedReport])
+    installInvokeMock(invoke)
+
+    const { result } = renderHook(() => useContinuityReports('repo-alpha'))
+
+    await waitFor(() => expect(result.current.data).toEqual([initialReport]))
+    expect(invoke).toHaveBeenCalledWith('list_continuity_reports', {
+      repositoryId: 'repo-alpha',
+    }, undefined)
+
+    await act(async () => {
+      await result.current.refresh()
+    })
+
+    expect(result.current.data).toEqual([refreshedReport])
+    expect(invoke).toHaveBeenCalledTimes(2)
+  })
+
+  it('clears continuity reports when the repository selection is removed', async () => {
+    const report = {
+      reportId: 'continuity.1',
+      repositoryId: 'repo-alpha',
+      generatedAt: '2026-01-02T00:00:00Z',
+      relativePath: '.agents/continuity/continuity.1.json',
+      diagnostics: createContinuityDiagnostics('repo-alpha'),
+    } satisfies ContinuityReport
+    const invoke = vi.fn().mockResolvedValue([report])
+    installInvokeMock(invoke)
+
+    const { result, rerender } = renderHook(
+      ({ repositoryId }: { repositoryId: string | null }) => useContinuityReports(repositoryId),
+      { initialProps: { repositoryId: 'repo-alpha' as string | null } },
+    )
+
+    await waitFor(() => expect(result.current.data).toEqual([report]))
+
+    rerender({ repositoryId: null })
+
+    await waitFor(() => expect(result.current.data).toEqual([]))
     expect(result.current.isLoading).toBe(false)
   })
 })

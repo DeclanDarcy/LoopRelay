@@ -111,16 +111,22 @@ export function OperationalContextCurrentPanel({
           title="Stable Decisions"
           emptyLabel="No stable decisions recorded."
           items={operationalContext.stableDecisions}
+          sectionId="operational-stable-decisions"
+          onOpenSection={onOpenSection}
         />
         <OperationalContextItemList
           title="Decision Rationale"
           emptyLabel="No decision rationale recorded."
           items={operationalContext.decisionRationale}
+          sectionId="operational-decision-rationale"
+          onOpenSection={onOpenSection}
         />
         <OperationalContextItemList
           title="Architecture"
           emptyLabel="No architecture items recorded."
           items={operationalContext.architecture}
+          sectionId="operational-architecture"
+          onOpenSection={onOpenSection}
         />
         <OperationalContextItemList
           title="Authority Boundaries"
@@ -131,6 +137,8 @@ export function OperationalContextCurrentPanel({
           title="Constraints"
           emptyLabel="No constraints recorded."
           items={operationalContext.constraints}
+          sectionId="operational-constraints"
+          onOpenSection={onOpenSection}
         />
         <OperationalContextItemList
           title="Open Questions"

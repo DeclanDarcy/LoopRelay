@@ -2,13 +2,12 @@
 
 ## Newly Authorized
 
-- Treat M5 as successfully certified and closed.
-- Preserve the post-M5 authority model: `WorkspaceTab`, `ExecutionTab`, and `OperationalContextTab` own presentation/composition only, while `App.tsx` continues to own workflow authority, draft authority, readiness authority, mutation authority, backend dispatch, selected repository state, and lifecycle refresh behavior.
-- Start M6 by reviewing the milestone definition and separating pure continuity presentation responsibilities from backend-owned continuity projection authority before extraction begins.
-- Target M6 extraction toward `features/continuity/ContinuityTab.tsx` owning continuity presentation, diagnostic presentation, warning presentation, evolution history presentation, and cross-links.
-- Keep M6 continuity state projection-driven: consume projected continuity state, diagnostics, warnings, trends, reports, and artifact paths from existing backend projections/hooks.
-- Treat M6's main risk as interpretation leakage rather than mutation leakage.
-- M6 may display warnings, group warnings, sort warnings, cross-link to evidence, show evolution history, and show continuity diagnostics.
-- M6 must not block workflows, calculate readiness, calculate health scores, calculate continuity scores, dispatch backend actions, perform governance decisions, add promotion/execution/readiness/confidence gates, auto-correct, auto-promote, or auto-reject.
-- Preserve the navigation-only cross-link rule for M6: continuity links may switch tabs, scroll to sections, focus evidence, or select valid projected artifacts, but must not invoke backend mutation endpoints.
-- Certify M6 against this standard: if every backend mutation endpoint disappeared, all continuity cross-links should still function.
+- Treat M6 as legitimately certified and closed.
+- Treat completion of the four observational workspaces, Workspace, Execution, Operational Context, and Continuity, as a substantial architecture milestone because they now share the same boundary: feature tabs own composition/presentation/navigation surfaces while `App.tsx` retains workflow authority, backend dispatch, mutation logic, readiness, and lifecycle decisions.
+- Preserve the highest-value Continuity invariant going into M7: Continuity shows evidence, diagnostics, and state; it must not introduce scores, readiness gates, workflow blocking, auto-correction, auto-promotion, auto-rejection, health scoring, confidence scoring, or quality scoring.
+- Start M7 as a navigation, discovery, and cohesion milestone rather than an authority or workflow-expansion milestone.
+- Treat the main M7 risk as navigation fragmentation across sidebar navigation, workspace tabs, cross-links, artifact links, command palette entries, and section anchors.
+- M7 should produce a certified navigation/discovery model that standardizes workspace ids, section ids, anchor ids, cross-link targets, command palette targets, and artifact navigation targets.
+- Preserve the M7 authority constraint that navigation is not workflow mutation.
+- Command palette actions in M7 should continue to resolve only to navigation-oriented behavior such as navigate, focus, select, or scroll unless an explicit backend-owned workflow command is separately authorized.
+- Certify M7 by checking discovery consistency, anchor consistency, cross-link consistency, and the invariant that navigation still works if backend mutation endpoints disappear.

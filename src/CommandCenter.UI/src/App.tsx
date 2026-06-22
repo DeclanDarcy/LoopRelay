@@ -27,7 +27,7 @@ import { ArtifactMarkdownPreview } from './features/artifacts/ArtifactMarkdownPr
 import { ArtifactMetadata } from './features/artifacts/ArtifactMetadata'
 import { Button, EmptyState, Panel, SectionHeader } from './components/design'
 import { AppShell, CommandPalette, Header, Sidebar, WorkspaceTabs } from './components/shell'
-import { ContinuityDiagnosticsPanel } from './features/continuity/ContinuityDiagnosticsPanel'
+import { ContinuityTab } from './features/continuity/ContinuityTab'
 import { ExecutionTab } from './features/execution/ExecutionTab'
 import { GeneratedHandoffContent } from './features/execution/GeneratedHandoffContent'
 import {
@@ -45,6 +45,7 @@ import { WorkspaceTab } from './features/workspace/WorkspaceTab'
 import {
   useArtifactContent,
   useContinuityDiagnostics,
+  useContinuityReports,
   useExecutionContextPreview,
   useExecutionEvents,
   useExecutionSession,
@@ -187,6 +188,12 @@ function App() {
     error: continuityDiagnosticsError,
     refresh: refreshContinuityDiagnostics,
   } = useContinuityDiagnostics(selectedRepository?.repository.id ?? null)
+  const {
+    data: continuityReports,
+    setData: setContinuityReports,
+    isLoading: isContinuityReportsLoading,
+    error: continuityReportsError,
+  } = useContinuityReports(selectedRepository?.repository.id ?? null)
 
   const selectedArtifact = useMemo(() => {
     if (!workspace || !selectedArtifactPath) {
@@ -391,11 +398,12 @@ function App() {
       selectRepositoryNavigation(repositoryId)
       setOperationalContextProposal(null)
       setContinuityDiagnostics(null)
+      setContinuityReports([])
       setOperationalContextCurrentContent('')
       setOperationalContextProposalDraft('')
       setOperationalContextReviewNote('')
     },
-    [selectRepositoryNavigation, setContinuityDiagnostics],
+    [selectRepositoryNavigation, setContinuityDiagnostics, setContinuityReports],
   )
 
   const selectArtifact = useCallback(
@@ -786,6 +794,10 @@ function App() {
     try {
       const report = await generateContinuityReportCommand(selectedRepository.repository.id)
       setContinuityDiagnostics(report.diagnostics)
+      setContinuityReports((reports) => [
+        report,
+        ...reports.filter((item) => item.reportId !== report.reportId),
+      ])
       setMessage(`Continuity report generated: ${report.relativePath}`)
     } catch (reportError) {
       setError(formatError(reportError))
@@ -1127,6 +1139,12 @@ function App() {
       setError(continuityDiagnosticsError)
     }
   }, [continuityDiagnosticsError])
+
+  useEffect(() => {
+    if (continuityReportsError) {
+      setError(continuityReportsError)
+    }
+  }, [continuityReportsError])
 
   useEffect(() => {
     if (!selectedRepository || !workspace) {
@@ -1739,47 +1757,17 @@ function App() {
                 onOpenArtifact={openWorkspaceArtifact}
               />
 
-              <Panel
-                className="execution-context-panel tab-panel tab-continuity"
-                id="continuity-diagnostics"
-                aria-label="Continuity diagnostics"
-              >
-                <SectionHeader
-                  className="context-toolbar"
-                  eyebrow="Continuity"
-                  title="Diagnostics"
-                  headingLevel={4}
-                  actions={
-                    <div className="context-controls">
-                    <button
-                      type="button"
-                      className="secondary-action"
-                      onClick={() => void refreshContinuityDiagnostics()}
-                      disabled={!selectedRepository || isContinuityDiagnosticsLoading}
-                    >
-                      {isContinuityDiagnosticsLoading ? 'Loading...' : 'Refresh Diagnostics'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void generateContinuityReport()}
-                      disabled={!selectedRepository || isContinuityReportGenerating}
-                    >
-                      {isContinuityReportGenerating ? 'Generating...' : 'Generate Report'}
-                    </button>
-                    </div>
-                  }
-                />
-
-                {continuityDiagnostics ? (
-                  <ContinuityDiagnosticsPanel diagnostics={continuityDiagnostics} />
-                ) : (
-                  <EmptyState className="empty-state">
-                    {isContinuityDiagnosticsLoading
-                      ? 'Loading continuity diagnostics...'
-                      : 'No continuity diagnostics loaded.'}
-                  </EmptyState>
-                )}
-              </Panel>
+              <ContinuityTab
+                diagnostics={continuityDiagnostics}
+                reports={continuityReports}
+                hasSelectedRepository={Boolean(selectedRepository)}
+                isDiagnosticsLoading={isContinuityDiagnosticsLoading || isContinuityReportsLoading}
+                isReportGenerating={isContinuityReportGenerating}
+                onRefreshDiagnostics={() => void refreshContinuityDiagnostics()}
+                onGenerateReport={() => void generateContinuityReport()}
+                onOpenOperationalContextSection={openOperationalContextSection}
+                onOpenReport={openWorkspaceArtifact}
+              />
 
               <ExecutionTab
                 execution={executionDisplay}

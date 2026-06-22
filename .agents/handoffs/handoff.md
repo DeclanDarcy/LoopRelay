@@ -2,27 +2,28 @@
 
 ## Slice Summary
 
-Completed Milestone 5: Operational Context Workspace, specifically Workstream 5.7 cross-links and M5 certification.
+Completed Milestone 6: Continuity Workspace.
 
 ## New State
 
-- Added navigation-only Operational Context cross-links for open questions, active risks, continuity warnings, compression warnings, decision-retention warnings, and artifact-backed proposal/archive paths.
-- Added command palette discovery targets for current understanding, open questions, active risks, continuity warnings, compression trend, and decision retention.
-- Added Continuity diagnostics anchors: `continuity-warnings`, `continuity-compression`, and `continuity-decision-retention`.
-- Proposal generated/edited/source/archive paths only render as artifact navigation when the path exists in the workspace artifact inventory; otherwise they remain plain projected text.
-- `OperationalContextTab` authority audit remains clean: no backend imports, no workflow invocation, no readiness ownership, no draft authority change, and no repository selection ownership.
-- Added characterization coverage proving Operational Context cross-links do not call workflow mutation commands.
-- Marked `.agents/milestones/m5-operational-context-workspace.md` complete.
-- Rotated prior handoff to `.agents/handoffs/handoff.0065.md`.
+- Added `features/continuity/ContinuityTab.tsx` so the Continuity workspace presentation is feature-owned while `App.tsx` keeps backend command authority.
+- Expanded `ContinuityDiagnosticsPanel` to show understanding evolution, continuity warnings, compression trends, repeated indicators, question/risk lifecycle, and continuity report visibility from projected diagnostics/report data.
+- Added frontend transport and hook support for `list_continuity_reports` via `api/continuity.ts` and `hooks/useContinuityReports.ts`.
+- Generated continuity reports now update the local report projection list and diagnostics projection in `App.tsx`; report generation remains an explicit backend-owned action.
+- Added Operational Context anchors for architecture, constraints, stable decisions, and decision rationale so Continuity evolution rows can navigate to evidence sections.
+- Continuity cross-links remain navigation-only: evolution rows switch to Operational Context anchors and report paths open projected artifacts through the existing workspace artifact navigation.
+- Marked `.agents/milestones/m6-continuity-workspace.md` complete.
+- Rotated prior handoff to `.agents/handoffs/handoff.0066.md`.
 
 ## Verification
 
 - Passed `npm run lint`.
-- Passed `npm run test -- --run` with 35 test files and 125 tests.
+- Passed focused continuity tests: `npm run test -- --run src/test/characterization/continuityDiagnosticsPanel.test.tsx src/test/characterization/projectionHooks.test.tsx src/test/characterization/transport.test.ts`.
+- Passed `npm run test -- --run` with 35 test files and 131 tests.
 - Passed `npm run build`.
 - Passed `npm run test:e2e` with 6 Playwright tests.
 - Passed `dotnet test CommandCenter.slnx` with 192 backend tests.
 
 ## Remaining Work
 
-- Continue with Milestone 6: Continuity Workspace.
+- Continue with Milestone 7: Navigation, Discovery, and Cohesion.

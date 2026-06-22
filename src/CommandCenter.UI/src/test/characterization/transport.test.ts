@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { refreshRepositoryWorkspace, subscribeToExecutionEvents } from '../../api'
+import { listContinuityReports, refreshRepositoryWorkspace, subscribeToExecutionEvents } from '../../api'
 import type { ExecutionEvent, RepositoryWorkspaceProjection } from '../../types'
 
 afterEach(() => {
@@ -136,5 +136,57 @@ describe('transport boundary characterization', () => {
 
     expect(onExecutionEvent).toHaveBeenCalledWith(executionEvent)
     expect(close).toHaveBeenCalledTimes(1)
+  })
+
+  it('preserves continuity report list command request and response handling', async () => {
+    const report = {
+      reportId: 'continuity.1',
+      repositoryId: 'repo-alpha',
+      generatedAt: '2026-01-02T00:00:00Z',
+      relativePath: '.agents/continuity/continuity.1.json',
+      diagnostics: {
+        repositoryId: 'repo-alpha',
+        generatedAt: '2026-01-02T00:00:00Z',
+        revisionCount: 1,
+        currentContextByteCount: 100,
+        currentContextCharacterCount: 90,
+        contextByteGrowth: 0,
+        averageBytesPerRevision: 100,
+        architectureTrend: { addedCount: 0, removedCount: 0, resolvedCount: 0, lostCount: 0 },
+        constraintTrend: { addedCount: 0, removedCount: 0, resolvedCount: 0, lostCount: 0 },
+        decisionTrend: { addedCount: 0, removedCount: 0, resolvedCount: 0, lostCount: 0 },
+        rationaleTrend: { addedCount: 0, removedCount: 0, resolvedCount: 0, lostCount: 0 },
+        openQuestionTrend: { addedCount: 0, removedCount: 0, resolvedCount: 0, lostCount: 0 },
+        activeRiskTrend: { addedCount: 0, removedCount: 0, resolvedCount: 0, lostCount: 0 },
+        compressionTrend: {
+          proposalCount: 0,
+          compressedItemCount: 0,
+          removedItemCount: 0,
+          resolvedQuestionCount: 0,
+          retiredRiskCount: 0,
+          warningCount: 0,
+          warnings: [],
+          noiseRemovedIndicators: [],
+        },
+        repeatedInvestigationIndicators: [],
+        repeatedQuestionIndicators: [],
+        decisionReworkIndicators: [],
+        continuityWarnings: [],
+      },
+    }
+    const invoke = vi.fn().mockResolvedValue([report])
+
+    window.__TAURI_INTERNALS__ = {
+      invoke,
+      transformCallback: vi.fn(),
+      unregisterCallback: vi.fn(),
+      callbacks: {},
+      convertFileSrc: vi.fn(),
+    }
+
+    await expect(listContinuityReports('repo-alpha')).resolves.toEqual([report])
+    expect(invoke).toHaveBeenCalledWith('list_continuity_reports', {
+      repositoryId: 'repo-alpha',
+    }, undefined)
   })
 })
