@@ -2,10 +2,9 @@
 
 ## Newly Authorized
 
-- M0 is accepted as complete and certified ready based on the completed M0A-M0D foundation work.
-- M1 may begin; no remaining M0 foundation work should block decision context resolution.
-- The M0 authority model remains binding: structured JSON is canonical, markdown is generated projection, UI is presentation state only, execution has no decision authority, operational context assimilation remains separate, and human approval controls resolution.
-- Decision projection recovery is accepted because it regenerates missing markdown from structured JSON without reconstructing authority from markdown.
-- Existing generated markdown should not be overwritten during recovery reads; missing-projection regeneration should remain restorative and low-churn.
-- M1 implementation order is: `DecisionContext`, `DecisionContextSnapshot`, validation model, diagnostics model, source attribution model, fingerprinting, context persistence, context endpoints, and deterministic snapshot tests.
-- Fingerprints are first-class M1 work, not a later enhancement; establish `DecisionContextFingerprint` from the start because later discovery, proposal generation, refinement, resolution, governance, execution projection, and certification depend on it.
+- M1 is functionally complete based on the implemented deterministic `DecisionContext`, stable context fingerprinting, snapshot persistence, source diagnostics, endpoint coverage, and backend verification.
+- M1 is not fully closed until a downstream lifecycle service consumes `IDecisionContextService` as its repository-information boundary.
+- M2 may begin with a first discovery vertical slice, but that slice must also serve as the dependency-inversion proof required to close M1.
+- `IDecisionDiscoveryService` should inject `IDecisionContextService` and must not directly read `.agents/plan.md`, `.agents/operational_context.md`, `.agents/decisions`, `.agents/handoffs`, or milestone files.
+- The first discovery slice should build at least one discovery signal from `DecisionContext` and include tests proving context-driven discovery behavior.
+- `DecisionContext` must remain an explicit decision-lifecycle context model with source attribution, diagnostics, evidence, and signal-ready structure; it should not degrade into a generic `Dictionary<string,string>` or raw artifact bag.

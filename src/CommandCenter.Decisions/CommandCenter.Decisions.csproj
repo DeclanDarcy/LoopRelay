@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\CommandCenter.Core\CommandCenter.Core.csproj" />
+    <ProjectReference Include="..\CommandCenter.Continuity\CommandCenter.Continuity.csproj" />
   </ItemGroup>
 
 </Project>

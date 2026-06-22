@@ -2,20 +2,26 @@
 
 ## New State From This Slice
 
-- Completed M0D and marked M0 domain foundation exit criteria complete.
-- Added `IDecisionArtifactProjectionService.RecoverMissingProjectionsAsync`.
-- `DecisionArtifactProjectionService` now regenerates missing `decision.md`, `candidate.md`, `proposal.md`, and `.agents/decisions/decisions.md` projections from structured JSON artifacts.
-- Recovery writes only missing generated markdown projections; existing markdown is not overwritten during repository projection reads.
-- `RepositoryProjectionService` now invokes decision projection recovery before artifact discovery when the decision projection service is available.
-- `CommandCenter.Middle` now references `CommandCenter.Decisions` for backend-owned workspace/dashboard recovery.
-- Added tests proving deleted generated markdown is regenerated equivalently from structured artifacts after service restart.
-- Added workspace refresh coverage proving missing `decisions.md` is restored from structured records before `HasCurrentDecisions` is projected.
+- Began M1 decision context resolution.
+- Added first-class decision context models: `DecisionContext`, `DecisionContextItem`, `DecisionContextSnapshot`, `DecisionContextDiagnostics`, and `DecisionContextValidationResult`.
+- Added `IDecisionContextService` and `DecisionContextService`.
+- Context assembly now loads and attributes required `.agents/plan.md` and `.agents/milestones/*.md` inputs.
+- Context assembly now loads optional `.agents/operational_context.md`, structured decisions/candidates/proposals, current decision markdown fallback, recent handoffs, and stable continuity diagnostics when available.
+- Structured decision lifecycle artifacts are preferred over current decision markdown; `decisions.md` is loaded as a fallback context item only when structured records are absent.
+- Context fingerprints use normalized content and deterministic item ordering.
+- Continuity diagnostics are projected as a stable summary that excludes volatile generated timestamps and revision write-time ledger data.
+- Immutable context snapshots are persisted under `.agents/decisions/contexts/context.<timestamp>.json`.
+- Added backend context endpoints:
+  - `GET /api/repositories/{repositoryId}/decisions/context`
+  - `POST /api/repositories/{repositoryId}/decisions/context`
+  - `GET /api/repositories/{repositoryId}/decisions/context/snapshots`
+- Added M1 tests covering deterministic assembly, missing required inputs, optional omissions, source attribution, markdown fallback, snapshot restart recovery, and endpoint behavior.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes with 242 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes with 248 tests.
 - `dotnet build CommandCenter.slnx` succeeds with 0 warnings and 0 errors.
 
 ## Next Slice
 
-- Start M1: decision context resolution. Implement deterministic context snapshots from repository artifacts, diagnostics, validation, and repository-owned context snapshot persistence under `.agents/decisions/contexts/`.
+- Continue M1 hardening by adding richer context inspection/query behavior if needed by upcoming discovery services, then mark M1 exit criteria once downstream services can consume `DecisionContext` without direct repository reads.

@@ -65,6 +65,7 @@ public static class Program
         app.MapExecutionEndpoints();
         app.MapGitEndpoints();
         app.MapExecutionSessionsEndpoints();
+        app.MapDecisionEndpoints();
 
         return app;
     }
