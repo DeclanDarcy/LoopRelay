@@ -10,11 +10,108 @@ public sealed class DecisionReviewService(
     IDecisionRepository decisionRepository,
     IDecisionGenerationService generationService) : IDecisionReviewService
 {
+    public async Task<IReadOnlyList<DecisionProposalBrowserItem>> ListProposalBrowserItemsAsync(
+        Guid repositoryId,
+        IReadOnlySet<DecisionProposalState>? states = null)
+    {
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        IReadOnlyList<DecisionCandidate> candidates = await decisionRepository.ListCandidatesAsync(repository);
+        Dictionary<string, DecisionCandidate> candidatesById = candidates.ToDictionary(
+            candidate => candidate.Id,
+            StringComparer.Ordinal);
+        IReadOnlyList<DecisionProposal> proposals = await decisionRepository.ListProposalsAsync(repository);
+        var items = new List<DecisionProposalBrowserItem>();
+        foreach (DecisionProposal proposal in proposals
+            .Where(proposal => states is null || states.Contains(proposal.State))
+            .OrderBy(proposal => proposal.Id, StringComparer.Ordinal))
+        {
+            DecisionReviewStatus reviewStatus =
+                await decisionRepository.GetReviewStatusAsync(repository, proposal.Id) ??
+                CreateDefaultReviewStatus(repository, proposal);
+            candidatesById.TryGetValue(proposal.CandidateId, out DecisionCandidate? candidate);
+            DateTimeOffset createdAt = proposal.History
+                .Select(entry => entry.Timestamp)
+                .DefaultIfEmpty(DateTimeOffset.MinValue)
+                .Min();
+            DateTimeOffset updatedAt = proposal.History
+                .Select(entry => entry.Timestamp)
+                .DefaultIfEmpty(DateTimeOffset.MinValue)
+                .Max();
+            items.Add(new DecisionProposalBrowserItem(
+                proposal.Id,
+                proposal.CandidateId,
+                proposal.State,
+                proposal.Title,
+                candidate?.Classification ?? DecisionClassification.Tactical,
+                candidate?.Priority ?? DecisionCandidatePriority.Medium,
+                createdAt,
+                updatedAt,
+                reviewStatus.State,
+                reviewStatus.UpdatedAt,
+                proposal.State == DecisionProposalState.Resolved));
+        }
+
+        return items;
+    }
+
     public async Task<DecisionReviewWorkspace> GetReviewWorkspaceAsync(Guid repositoryId, string proposalId)
     {
         Repository repository = await GetRepositoryAsync(repositoryId);
         DecisionProposal proposal = await GetProposalAsync(repository, proposalId);
         return await BuildWorkspaceAsync(repository, proposal);
+    }
+
+    public async Task<DecisionOptionComparison> GetOptionComparisonAsync(Guid repositoryId, string proposalId)
+    {
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        DecisionProposal proposal = await GetProposalAsync(repository, proposalId);
+        DecisionOptionComparisonItem[] options = proposal.Options
+            .Select(option =>
+            {
+                DecisionTradeoff[] tradeoffs = proposal.Tradeoffs
+                    .Where(tradeoff => string.Equals(tradeoff.OptionId, option.Id, StringComparison.Ordinal))
+                    .ToArray();
+                DecisionEvidence[] evidence = option.Evidence
+                    .Concat(tradeoffs.SelectMany(tradeoff => tradeoff.Evidence))
+                    .DistinctBy(evidence => evidence.Summary, StringComparer.Ordinal)
+                    .ToArray();
+                return new DecisionOptionComparisonItem(
+                    option.Id,
+                    option.Title,
+                    option.Description,
+                    string.Equals(proposal.Recommendation?.OptionId, option.Id, StringComparison.Ordinal),
+                    tradeoffs.Select(tradeoff => tradeoff.Benefit).ToArray(),
+                    tradeoffs.Select(tradeoff => tradeoff.Cost).ToArray(),
+                    evidence);
+            })
+            .ToArray();
+        return new DecisionOptionComparison(proposal.Id, proposal.Recommendation?.OptionId, options);
+    }
+
+    public async Task<DecisionEvidenceInspection> GetEvidenceInspectionAsync(Guid repositoryId, string proposalId)
+    {
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        DecisionProposal proposal = await GetProposalAsync(repository, proposalId);
+        IReadOnlyList<DecisionReviewNote> notes = await decisionRepository.ListReviewNotesAsync(repository, proposal.Id);
+        return new DecisionEvidenceInspection(
+            proposal.Id,
+            proposal.CandidateId,
+            BuildEvidenceItems(proposal),
+            BuildDiagnostics(proposal, notes));
+    }
+
+    public async Task<IReadOnlyList<DecisionSourceAttribution>> ListSourceAttributionsAsync(Guid repositoryId, string proposalId)
+    {
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        DecisionProposal proposal = await GetProposalAsync(repository, proposalId);
+        return BuildEvidenceItems(proposal)
+            .SelectMany(item => item.Sources)
+            .Concat(ProposalSource(proposal).YieldSourceAttribution("Proposal", proposal.Id))
+            .OrderBy(source => source.RelativePath, StringComparer.Ordinal)
+            .ThenBy(source => source.Section, StringComparer.Ordinal)
+            .ThenBy(source => source.AppliesToKind, StringComparer.Ordinal)
+            .ThenBy(source => source.ItemId, StringComparer.Ordinal)
+            .ToArray();
     }
 
     public async Task<IReadOnlyList<DecisionReviewNote>> ListReviewNotesAsync(Guid repositoryId, string proposalId)
@@ -192,6 +289,64 @@ public sealed class DecisionReviewService(
             warnings);
     }
 
+    private static DecisionEvidenceInspectionItem[] BuildEvidenceItems(DecisionProposal proposal)
+    {
+        var items = new List<DecisionEvidenceInspectionItem>();
+        AddEvidence("Proposal", proposal.Id, proposal.Evidence);
+        foreach (DecisionOption option in proposal.Options)
+        {
+            AddEvidence("Option", option.Id, option.Evidence);
+        }
+
+        foreach (DecisionTradeoff tradeoff in proposal.Tradeoffs)
+        {
+            AddEvidence("Tradeoff", tradeoff.OptionId, tradeoff.Evidence);
+        }
+
+        if (proposal.Recommendation is not null)
+        {
+            AddEvidence("Recommendation", proposal.Recommendation.OptionId, proposal.Recommendation.Evidence);
+        }
+
+        foreach (DecisionAssumption assumption in proposal.Assumptions)
+        {
+            AddEvidence("Assumption", assumption.Id, assumption.Evidence);
+        }
+
+        return items
+            .OrderBy(item => item.AppliesToKind, StringComparer.Ordinal)
+            .ThenBy(item => item.ItemId, StringComparer.Ordinal)
+            .ThenBy(item => item.Summary, StringComparer.Ordinal)
+            .ToArray();
+
+        void AddEvidence(string appliesToKind, string? itemId, IReadOnlyList<DecisionEvidence> evidence)
+        {
+            foreach (DecisionEvidence evidenceItem in evidence)
+            {
+                items.Add(new DecisionEvidenceInspectionItem(
+                    appliesToKind,
+                    itemId,
+                    evidenceItem.Summary,
+                    evidenceItem.Sources.Select(source => ToAttribution(appliesToKind, itemId, source)).ToArray()));
+            }
+        }
+    }
+
+    private static DecisionSourceAttribution ToAttribution(
+        string appliesToKind,
+        string? itemId,
+        DecisionSourceReference source)
+    {
+        return new DecisionSourceAttribution(
+            appliesToKind,
+            itemId,
+            source.SourceKind,
+            source.RelativePath,
+            source.Section,
+            source.Excerpt,
+            source);
+    }
+
     private static IReadOnlyList<DecisionSourceReference> NormalizeSources(
         IReadOnlyList<DecisionSourceReference>? sources,
         DecisionSourceReference fallbackSource)
@@ -209,5 +364,26 @@ public sealed class DecisionReviewService(
             $".agents/decisions/proposals/{proposal.Id}/proposal.json",
             ProposalId: proposal.Id,
             CandidateId: proposal.CandidateId);
+    }
+}
+
+file static class DecisionSourceReferenceExtensions
+{
+    public static IReadOnlyList<DecisionSourceAttribution> YieldSourceAttribution(
+        this DecisionSourceReference source,
+        string appliesToKind,
+        string? itemId)
+    {
+        return
+        [
+            new DecisionSourceAttribution(
+                appliesToKind,
+                itemId,
+                source.SourceKind,
+                source.RelativePath,
+                source.Section,
+                source.Excerpt,
+                source)
+        ];
     }
 }

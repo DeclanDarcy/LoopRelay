@@ -2,17 +2,20 @@
 
 ## Newly Authorized
 
-- M4 Review Workspace is in progress.
-- The first M4 backend slice is accepted as aligned with the roadmap.
-- Review information must remain a first-class repository-backed layer rather than being folded into proposals or decisions.
-- The review layer must remain observational rather than authoritative.
-- Review notes must persist as their own review layer in `notes.json`.
-- Review notes must not mutate `proposal.json`, proposal revisions, decisions, candidates, operational context, or execution context.
-- Review transition endpoints returning `DecisionReviewWorkspace` is accepted as the correct contract direction because backend review state should own the authoritative projection for UI consumption.
-- The implementation should continue to preserve the lifecycle ordering: decision context, candidate, proposal, revision history, review workspace, and decision authority.
-- Proposal browser, option comparison, evidence inspection, and source attribution must remain backend-owned projections/read models and must not become alternate sources of authority.
-- The safe read-model flow is repository authority to review workspace models to read models to UI.
-- Backend contracts should lead the UI; the Decisions UI should wait until M4 read models stabilize.
+- M4 backend read models are accepted as aligned with the intended architecture.
+- The UI phase is now authorized to begin because backend contracts are mature enough for UI consumption.
+- The UI must consume backend-owned read models rather than co-designing or reconstructing lifecycle contracts.
+- Proposal browser, option comparison, evidence inspection, and source attribution remain backend-owned interpretations of authority, not authority itself.
+- The active UI layering remains repository authority to decision records to review workspace to read models to UI.
+- The primary UI failure mode to avoid is client-side lifecycle reconstruction.
+- The next UI work should proceed in phases:
+  1. Shell integration only: `DecisionLifecycleTab`, API client, types, and hook wiring.
+  2. Proposal browser and state filters using the browser projection directly.
+  3. Proposal viewer and option comparison using backend models as-is.
+  4. Evidence viewer and source attribution viewer before review notes.
+  5. Review notes and review workspace last.
+- UI state checks should avoid spreading ad hoc `selectedProposal.status` style logic.
+- Lifecycle authority remains backend-owned; the UI remains observational.
 
 ## Current Milestone Status
 
@@ -24,11 +27,9 @@
 
 ## Newly Authorized Next Slice
 
-- Continue M4 by completing backend read models before Decisions UI work.
-- Priority order:
-  1. Proposal browser read model with state, classification, priority, created, updated, review status, and resolution status.
-  2. Backend proposal filtering for generated, viewed, needs-refinement, refined, ready-for-resolution, resolved, and discarded states.
-  3. Dedicated option comparison projection.
-  4. Evidence inspection model with evidence, signals, diagnostics, and attribution.
-  5. Source attribution navigation exposing source kind, relative path, section, and excerpt.
-  6. UI workspace only after backend contracts stabilize.
+- Begin M4 UI with Phase 1 shell integration only:
+  - add decision UI types
+  - add decision API client methods
+  - add hook wiring
+  - add `DecisionLifecycleTab`
+  - wire the Decisions tab into the shell without complex workflow behavior

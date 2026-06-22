@@ -110,6 +110,53 @@ public sealed class DecisionReviewServiceTests
     }
 
     [Fact]
+    public async Task ReviewReadModelsExposeBrowserComparisonEvidenceAndSources()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        DecisionGenerationService generationService = CreateGenerationService(repository, store, decisionRepository);
+        DecisionReviewService reviewService = CreateReviewService(repository, decisionRepository, generationService);
+        DecisionProposal proposal = await generationService.GenerateProposalAsync(repository.Id, candidate.Id);
+        await reviewService.MarkProposalViewedAsync(repository.Id, proposal.Id, "Read model review.");
+
+        IReadOnlyList<DecisionProposalBrowserItem> browserItems = await reviewService.ListProposalBrowserItemsAsync(
+            repository.Id,
+            new HashSet<DecisionProposalState> { DecisionProposalState.Viewed });
+        DecisionOptionComparison comparison = await reviewService.GetOptionComparisonAsync(repository.Id, proposal.Id);
+        DecisionEvidenceInspection evidence = await reviewService.GetEvidenceInspectionAsync(repository.Id, proposal.Id);
+        IReadOnlyList<DecisionSourceAttribution> sources = await reviewService.ListSourceAttributionsAsync(repository.Id, proposal.Id);
+
+        DecisionProposalBrowserItem browserItem = Assert.Single(browserItems);
+        Assert.Equal(proposal.Id, browserItem.ProposalId);
+        Assert.Equal(DecisionProposalState.Viewed, browserItem.State);
+        Assert.Equal(DecisionReviewState.Viewed, browserItem.ReviewState);
+        Assert.Equal(DecisionClassification.Architectural, browserItem.Classification);
+        Assert.Equal(DecisionCandidatePriority.High, browserItem.Priority);
+        Assert.False(browserItem.IsResolved);
+
+        DecisionOptionComparisonItem option = Assert.Single(comparison.Options);
+        Assert.True(option.IsRecommended);
+        Assert.NotEmpty(option.Benefits);
+        Assert.NotEmpty(option.Costs);
+        Assert.NotEmpty(option.Evidence);
+
+        Assert.Equal(proposal.Id, evidence.ProposalId);
+        Assert.True(evidence.Diagnostics.HasRecommendation);
+        Assert.Contains(evidence.Items, item => item.AppliesToKind == "Recommendation" && item.ItemId == "option-1");
+        Assert.Contains(evidence.Items.SelectMany(item => item.Sources), source =>
+            source.RelativePath == ".agents/plan.md" &&
+            source.Section == "Plan" &&
+            source.Excerpt == "Need to decide repository-backed persistence schema.");
+        Assert.Contains(sources, source =>
+            source.AppliesToKind == "Proposal" &&
+            source.SourceKind == "DecisionProposal" &&
+            source.RelativePath == ".agents/decisions/proposals/PROP-0001/proposal.json");
+    }
+
+    [Fact]
     public async Task ReviewEndpointsExposeWorkspaceAndNotes()
     {
         Repository repository = CreateRepository();
@@ -154,6 +201,59 @@ public sealed class DecisionReviewServiceTests
         Assert.Single(notes);
         Assert.Single(workspace.Notes);
         Assert.Equal(DecisionProposalState.Viewed, workspace.Proposal.State);
+    }
+
+    [Fact]
+    public async Task ReviewReadModelEndpointsExposeFilteredBrowserComparisonEvidenceAndSources()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services => services.AddSingleton<IRepositoryService>(new StubRepositoryService(repository)));
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+        using var client = new HttpClient();
+        string root = app.Urls.Single();
+        JsonSerializerOptions jsonOptions = CreateJsonOptions();
+
+        DecisionProposal proposal = (await (await client.PostAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/candidates/{candidate.Id}/proposals",
+            null)).Content.ReadFromJsonAsync<DecisionProposal>(jsonOptions))!;
+        await client.PostAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/proposals/{proposal.Id}/review/viewed",
+            null);
+
+        HttpResponseMessage browserResponse = await client.GetAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/proposals/browser?states=Viewed");
+        HttpResponseMessage optionsResponse = await client.GetAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/proposals/{proposal.Id}/options");
+        HttpResponseMessage evidenceResponse = await client.GetAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/proposals/{proposal.Id}/evidence");
+        HttpResponseMessage sourcesResponse = await client.GetAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/proposals/{proposal.Id}/sources");
+        HttpResponseMessage badFilterResponse = await client.GetAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/proposals/browser?states=Unknown");
+
+        DecisionProposalBrowserItem[] browser = (await browserResponse.Content.ReadFromJsonAsync<DecisionProposalBrowserItem[]>(jsonOptions))!;
+        DecisionOptionComparison comparison = (await optionsResponse.Content.ReadFromJsonAsync<DecisionOptionComparison>(jsonOptions))!;
+        DecisionEvidenceInspection evidence = (await evidenceResponse.Content.ReadFromJsonAsync<DecisionEvidenceInspection>(jsonOptions))!;
+        DecisionSourceAttribution[] sources = (await sourcesResponse.Content.ReadFromJsonAsync<DecisionSourceAttribution[]>(jsonOptions))!;
+
+        Assert.Equal(HttpStatusCode.OK, browserResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, optionsResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, evidenceResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, sourcesResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, badFilterResponse.StatusCode);
+        Assert.Single(browser);
+        Assert.Equal(DecisionReviewState.Viewed, browser[0].ReviewState);
+        Assert.Equal("option-1", comparison.RecommendedOptionId);
+        Assert.Contains(evidence.Items, item => item.AppliesToKind == "Option");
+        Assert.Contains(sources, source => source.SourceKind == "Plan" && source.RelativePath == ".agents/plan.md");
     }
 
     private static DecisionGenerationService CreateGenerationService(

@@ -1,5 +1,6 @@
 using CommandCenter.Decisions.Abstractions;
 using CommandCenter.Decisions.Models;
+using CommandCenter.Decisions.Primitives;
 
 namespace CommandCenter.Backend.Endpoints;
 
@@ -16,9 +17,13 @@ public static class DecisionEndpoints
         app.MapDismissDecisionCandidate();
         app.MapExpireDecisionCandidate();
         app.MapMarkDecisionCandidateDuplicate();
+        app.MapListDecisionProposalBrowser();
         app.MapListDecisionProposals();
         app.MapGetDecisionProposal();
         app.MapGetDecisionProposalReviewWorkspace();
+        app.MapGetDecisionProposalOptionComparison();
+        app.MapGetDecisionProposalEvidenceInspection();
+        app.MapListDecisionProposalSourceAttributions();
         app.MapGenerateDecisionProposal();
         app.MapMarkDecisionProposalViewed();
         app.MapMarkDecisionProposalNeedsRefinement();
@@ -281,6 +286,32 @@ public static class DecisionEndpoints
             }
         });
 
+    private static void MapListDecisionProposalBrowser(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/decisions/proposals/browser", async (
+            Guid repositoryId,
+            string? states,
+            IDecisionReviewService reviewService) =>
+        {
+            try
+            {
+                return Results.Ok(await reviewService.ListProposalBrowserItemsAsync(
+                    repositoryId,
+                    ParseProposalStates(states)));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
     private static void MapGetDecisionProposal(this IEndpointRouteBuilder app) =>
         app.MapGet("/api/repositories/{repositoryId:guid}/decisions/proposals/{proposalId}", async (
             Guid repositoryId,
@@ -314,6 +345,78 @@ public static class DecisionEndpoints
             try
             {
                 return Results.Ok(await reviewService.GetReviewWorkspaceAsync(repositoryId, proposalId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGetDecisionProposalOptionComparison(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/decisions/proposals/{proposalId}/options", async (
+            Guid repositoryId,
+            string proposalId,
+            IDecisionReviewService reviewService) =>
+        {
+            try
+            {
+                return Results.Ok(await reviewService.GetOptionComparisonAsync(repositoryId, proposalId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGetDecisionProposalEvidenceInspection(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/decisions/proposals/{proposalId}/evidence", async (
+            Guid repositoryId,
+            string proposalId,
+            IDecisionReviewService reviewService) =>
+        {
+            try
+            {
+                return Results.Ok(await reviewService.GetEvidenceInspectionAsync(repositoryId, proposalId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapListDecisionProposalSourceAttributions(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/decisions/proposals/{proposalId}/sources", async (
+            Guid repositoryId,
+            string proposalId,
+            IDecisionReviewService reviewService) =>
+        {
+            try
+            {
+                return Results.Ok(await reviewService.ListSourceAttributionsAsync(repositoryId, proposalId));
             }
             catch (KeyNotFoundException exception)
             {
@@ -615,4 +718,25 @@ public static class DecisionEndpoints
                 return Results.Conflict(new { error = exception.Message });
             }
         });
+
+    private static IReadOnlySet<DecisionProposalState>? ParseProposalStates(string? states)
+    {
+        if (string.IsNullOrWhiteSpace(states))
+        {
+            return null;
+        }
+
+        var parsed = new HashSet<DecisionProposalState>();
+        foreach (string state in states.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (!Enum.TryParse(state, ignoreCase: true, out DecisionProposalState parsedState))
+            {
+                throw new ArgumentException($"Unknown proposal state filter: {state}");
+            }
+
+            parsed.Add(parsedState);
+        }
+
+        return parsed;
+    }
 }
