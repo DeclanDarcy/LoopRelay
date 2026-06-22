@@ -2,40 +2,36 @@
 
 ## New State From This Slice
 
-- Continued M6 decision resolution by extracting proposal resolution into a first-class backend service boundary.
-- Added `IDecisionResolutionService`.
-- Added `DecisionResolutionService`.
-  - Owns resolution command validation.
-  - Owns ready-state validation before resolution.
-  - Owns selected option validation.
-  - Owns immutable source proposal snapshot capture.
-  - Owns authoritative decision creation.
-  - Owns marking the source proposal `Resolved`.
-  - Owns decision/proposal markdown projection refresh and decision index refresh.
-- Removed `ResolveProposalAsync` from `IDecisionGenerationService`.
-- Removed resolution implementation from `DecisionGenerationService`.
-- Registered `IDecisionResolutionService` in decision DI.
-- Updated the resolve endpoint to call `IDecisionResolutionService` while preserving the same route, request body, response shape, and error mapping.
-- Updated existing resolution-focused backend tests to resolve through `DecisionResolutionService`.
-- Updated `.agents/milestones/m6-decision-resolution.md` to mark `IDecisionResolutionService` complete.
-- Rotated the previous handoff to `.agents/handoffs/handoff.0027.md`.
+- Continued M6 decision resolution by reconciling `DecisionResolutionService` with `DecisionLifecycleRules`.
+- Resolution outcome now determines authoritative decision state through a single backend mapping:
+  - `Accepted` -> `Resolved`
+  - `Rejected` -> `Archived`
+  - `Deferred` -> `UnderReview`
+- `DecisionResolutionService` now validates the outcome-driven transition from `Open` through `DecisionLifecycleRules` before creating the decision record.
+- Decision history now records the state transition from `Open` to the outcome-derived target state.
+- Source proposals still transition to `Resolved` for all explicit human resolution outcomes because the proposal has been acted on, even when the resulting decision is rejected or deferred.
+- Added file-backed outcome coverage for accepted, rejected, and deferred resolution outcomes.
+  - Verifies returned decision state.
+  - Verifies reloaded persisted decision state and outcome.
+  - Verifies proposal state is `Resolved`.
+  - Verifies source proposal snapshot is preserved.
+  - Verifies `decision.md` state/outcome projection.
+  - Verifies `decisions.md` index output.
+- Updated `.agents/milestones/m6-decision-resolution.md` to mark accept/reject/defer support and tests complete.
+- Rotated the previous handoff to `.agents/handoffs/handoff.0028.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter DecisionGenerationServiceTests` passes with 24 tests.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes with 298 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter DecisionGenerationServiceTests` passes with 27 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes with 301 tests.
 
 ## Next Slice
 
-- Continue M6 with accept/reject/defer semantics.
-- Add focused `DecisionResolutionService` tests for `Accepted`, `Rejected`, and `Deferred` outcomes covering:
-  - decision state
-  - proposal state
-  - decision artifact creation
-  - resolution snapshot creation
-  - index/projection output
-- Reconcile `DecisionResolutionService` behavior with `DecisionLifecycleRules`, which already says:
-  - accepted decisions transition to `Resolved`
-  - rejected decisions transition to `Archived`
-  - deferred decisions transition to `UnderReview`
-- Do this before adding any resolution UI.
+- Continue M6 with supersede/archive actions and lineage validation.
+- Add backend service methods and endpoint coverage for:
+  - `Resolved` -> `Superseded`
+  - `Superseded` -> `Archived`
+  - invalid transition conflicts
+  - relationship/source lineage validation
+  - projection/index refresh after supersede/archive
+- Keep resolution UI blocked until supersede/archive and assimilation recommendation boundaries are stable.

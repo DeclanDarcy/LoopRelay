@@ -369,6 +369,53 @@ public sealed class DecisionGenerationServiceTests
         Assert.False(Directory.Exists(Path.Combine(repository.Path, ".agents", "decisions", "assimilation")));
     }
 
+    [Theory]
+    [InlineData(DecisionOutcome.Accepted, DecisionState.Resolved)]
+    [InlineData(DecisionOutcome.Rejected, DecisionState.Archived)]
+    [InlineData(DecisionOutcome.Deferred, DecisionState.UnderReview)]
+    public async Task ResolveProposalOutcomeDrivesDecisionStateAndProjection(
+        DecisionOutcome outcome,
+        DecisionState expectedState)
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var service = CreateGenerationService(repository, store, decisionRepository);
+        var resolutionService = CreateResolutionService(repository, store, decisionRepository);
+        DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
+        await service.MarkProposalReadyForResolutionAsync(repository.Id, proposal.Id, "Ready for explicit outcome.");
+
+        Decision decision = await resolutionService.ResolveProposalAsync(
+            repository.Id,
+            proposal.Id,
+            new ResolveDecisionCommand(
+                $"Apply {outcome} outcome.",
+                "human-reviewer",
+                "option-1",
+                outcome));
+
+        Decision? reloadedDecision = await decisionRepository.GetDecisionAsync(repository, decision.Id);
+        DecisionProposal? reloadedProposal = await decisionRepository.GetProposalAsync(repository, proposal.Id);
+        string decisionMarkdown = await ReadAsync(repository, ".agents/decisions/records/DEC-0001/decision.md");
+        string index = await ReadAsync(repository, ".agents/decisions/decisions.md");
+
+        Assert.Equal(expectedState, decision.State);
+        Assert.Equal(expectedState, reloadedDecision?.State);
+        Assert.Equal(outcome, decision.Resolution?.Outcome);
+        Assert.Equal(outcome, reloadedDecision?.Resolution?.Outcome);
+        Assert.Equal(DecisionProposalState.Resolved, reloadedProposal?.State);
+        Assert.Equal(proposal.Id, decision.Resolution?.SourceProposalSnapshot?.ProposalId);
+        Assert.Equal(DecisionProposalState.ReadyForResolution, decision.Resolution?.SourceProposalSnapshot?.ProposalState);
+        Assert.True(File.Exists(Path.Combine(repository.Path, ".agents", "decisions", "records", "DEC-0001", "decision.json")));
+        Assert.Contains($"- State: {expectedState}", decisionMarkdown);
+        Assert.Contains($"- Outcome: {outcome}", decisionMarkdown);
+        Assert.Contains("- Source proposal state: ReadyForResolution", decisionMarkdown);
+        Assert.Contains($"- DEC-0001 | {expectedState} | Architectural | {outcome} | Decide persistence schema", index);
+        Assert.Contains("- PROP-0001 | Resolved | CAND-0001 | Decide persistence schema", index);
+    }
+
     [Fact]
     public async Task ResolveProposalCapturesResolvedProposalContentAndRevisionContext()
     {

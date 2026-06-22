@@ -60,6 +60,16 @@ public sealed class DecisionResolutionService(
         string selectedOptionId = selectedOption.Id;
         string proposalFingerprint = Fingerprint(proposal);
         IReadOnlyList<DecisionProposalRevision> revisions = await decisionRepository.ListProposalRevisionsAsync(repository, proposal.Id);
+        DecisionState targetDecisionState = TargetStateFor(command.Outcome);
+        DecisionTransitionResult decisionTransition = DecisionLifecycleRules.ValidateDecisionTransition(
+            DecisionState.Open,
+            targetDecisionState,
+            command.Outcome);
+        if (!decisionTransition.IsValid)
+        {
+            throw new InvalidOperationException(decisionTransition.Error);
+        }
+
         bool recommendationDiverged = proposal.Recommendation is not null &&
             !string.Equals(proposal.Recommendation.OptionId, selectedOptionId, StringComparison.Ordinal);
         var proposalSource = new DecisionSourceReference(
@@ -102,7 +112,7 @@ public sealed class DecisionResolutionService(
                 revisions));
         var decision = new Decision(
             decisionId,
-            DecisionState.Resolved,
+            targetDecisionState,
             await ResolveClassificationAsync(repository, proposal.CandidateId),
             proposal.Title,
             proposal.Context,
@@ -114,8 +124,8 @@ public sealed class DecisionResolutionService(
                 new DecisionHistoryEntry(
                     now,
                     "Resolved",
-                    null,
-                    DecisionState.Resolved.ToString(),
+                    DecisionState.Open.ToString(),
+                    targetDecisionState.ToString(),
                     rationale,
                     [proposalSource, selectedOptionSource])
             ]);
@@ -184,5 +194,16 @@ public sealed class DecisionResolutionService(
     private static string ProposalPath(string proposalId)
     {
         return $".agents/decisions/proposals/{proposalId}/proposal.json";
+    }
+
+    private static DecisionState TargetStateFor(DecisionOutcome outcome)
+    {
+        return outcome switch
+        {
+            DecisionOutcome.Accepted => DecisionState.Resolved,
+            DecisionOutcome.Rejected => DecisionState.Archived,
+            DecisionOutcome.Deferred => DecisionState.UnderReview,
+            _ => throw new ArgumentOutOfRangeException(nameof(outcome), outcome, "Unsupported decision outcome.")
+        };
     }
 }
