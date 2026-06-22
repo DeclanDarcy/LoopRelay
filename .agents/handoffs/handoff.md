@@ -2,21 +2,21 @@
 
 ## New State From This Slice
 
-- Completed M0B for the decision lifecycle foundation.
-- Added `IDecisionRepository` with allocation, list, get, and save operations for decisions, candidates, and proposals.
-- Added `FileSystemDecisionRepository` backed by `.agents/decisions/records`, `.agents/decisions/candidates`, and `.agents/decisions/proposals`.
-- Added `InMemoryDecisionRepository` as the focused test double.
-- Structured JSON artifacts now use schema-versioned repository-owned envelopes while keeping filesystem and schema concerns in persistence adapters.
-- Decision JSON uses string enums and rejects unmapped fields so unsupported schemas fail visibly instead of being silently accepted.
-- File-system persistence validates `DEC-NNNN`, `CAND-NNNN`, and `PROP-NNNN` IDs before constructing repository paths.
-- File-system ID allocation scans existing artifact directories and chooses the next sequence number.
-- Save operations write authoritative JSON plus `history.json`; markdown projections remain deferred to M0C.
-- Updated the M0 checklist to mark M0B and its completed persistence/test items.
+- Completed M0C for the decision lifecycle foundation.
+- Added `IDecisionArtifactProjectionService` and registered `DecisionArtifactProjectionService` in `AddDecisions()`.
+- Added deterministic markdown projection paths for `decision.md`, `candidate.md`, `proposal.md`, and the current `.agents/decisions/decisions.md` index.
+- `DecisionArtifactProjectionService` now renders human-readable lifecycle markdown from structured decision, candidate, and proposal records.
+- The generated `decisions.md` index summarizes decisions, candidates, and proposals while explicitly preserving `structured JSON -> markdown` authority direction.
+- Projection ordering is deterministic for decisions, candidates, proposals, relationships, evidence, sources, options, tradeoffs, assumptions, and history.
+- Existing artifact discovery remains compatible with `.agents/decisions/decisions.md` and `.agents/decisions/decisions.NNNN.md`; structured JSON lifecycle files remain outside generic artifact discovery.
+- Existing `ArtifactRotationService.RotateCurrentDecisionsAsync` can rotate generated decision index snapshots.
+- Updated the M0 checklist to mark M0C and its completed projection/discovery/rotation test items.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes with 236 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes with 240 tests.
+- `dotnet build CommandCenter.slnx` succeeds with 0 warnings and 0 errors.
 
 ## Next Slice
 
-- Start M0C: implement deterministic markdown projection generation for `decision.md`, `candidate.md`, `proposal.md`, and the current `.agents/decisions/decisions.md` index, while preserving existing decision artifact discovery and rotation compatibility.
+- Start M0D: implement safe recovery from structured artifacts when generated markdown projections are missing, projection regeneration on recovery/restart paths, and full M0 regression coverage.

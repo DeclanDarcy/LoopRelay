@@ -33,14 +33,34 @@ internal static partial class DecisionArtifactPaths
         return ArtifactPath.CombineRelative(DecisionDirectory(id), "decision.json");
     }
 
+    public static string DecisionMarkdown(string id)
+    {
+        return ArtifactPath.CombineRelative(DecisionDirectory(id), "decision.md");
+    }
+
     public static string CandidateJson(string id)
     {
         return ArtifactPath.CombineRelative(CandidateDirectory(id), "candidate.json");
     }
 
+    public static string CandidateMarkdown(string id)
+    {
+        return ArtifactPath.CombineRelative(CandidateDirectory(id), "candidate.md");
+    }
+
     public static string ProposalJson(string id)
     {
         return ArtifactPath.CombineRelative(ProposalDirectory(id), "proposal.json");
+    }
+
+    public static string ProposalMarkdown(string id)
+    {
+        return ArtifactPath.CombineRelative(ProposalDirectory(id), "proposal.md");
+    }
+
+    public static string DecisionsIndex()
+    {
+        return ArtifactPath.CombineRelative(DecisionsRoot, "decisions.md");
     }
 
     public static string HistoryJsonForDirectory(string relativeDirectory)

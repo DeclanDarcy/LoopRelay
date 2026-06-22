@@ -9,6 +9,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddDecisions(this IServiceCollection services)
     {
         services.AddSingleton<IDecisionRepository, FileSystemDecisionRepository>();
+        services.AddSingleton<IDecisionArtifactProjectionService, DecisionArtifactProjectionService>();
         return services;
     }
 }

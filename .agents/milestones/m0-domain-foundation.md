@@ -8,7 +8,7 @@ This is one architectural milestone with multiple implementation slices. Complet
 
 - [x] M0A: domain primitives, state models, transition matrices, relationship rules, and in-memory tests.
 - [x] M0B: repository-backed persistence, ID allocation, repository ownership, JSON schema versioning, and filesystem safety.
-- [ ] M0C: markdown projection generation, `decisions.md` index compatibility, artifact discovery compatibility, and rotation compatibility.
+- [x] M0C: markdown projection generation, `decisions.md` index compatibility, artifact discovery compatibility, and rotation compatibility.
 - [ ] M0D: recovery from structured artifacts, projection regeneration, repository restart recovery, and full M0 regression tests.
 
 ## Backend Work
@@ -21,12 +21,12 @@ This is one architectural milestone with multiple implementation slices. Complet
 - [x] Implement ID allocation by scanning existing lifecycle artifacts.
 - [x] Implement repository ownership on every lifecycle record.
 - [x] Finalize `.agents/decisions` structured layout.
-- [ ] Implement `DecisionArtifactProjectionService`.
-- [ ] Render `decision.md`, `candidate.md`, `proposal.md`, and the current `decisions.md` index from structured records.
-- [ ] Preserve existing `ArtifactService` discovery for `decisions.md` and `decisions.NNNN.md`.
-- [ ] Extend artifact discovery only where markdown lifecycle projections should appear in the artifact browser.
-- [ ] Keep JSON lifecycle files out of the generic artifact editor unless a typed editor exists.
-- [ ] Reuse `ArtifactRotationService.RotateCurrentDecisionsAsync` for current decisions index snapshots.
+- [x] Implement `DecisionArtifactProjectionService`.
+- [x] Render `decision.md`, `candidate.md`, `proposal.md`, and the current `decisions.md` index from structured records.
+- [x] Preserve existing `ArtifactService` discovery for `decisions.md` and `decisions.NNNN.md`.
+- [x] Extend artifact discovery only where markdown lifecycle projections should appear in the artifact browser.
+- [x] Keep JSON lifecycle files out of the generic artifact editor unless a typed editor exists.
+- [x] Reuse `ArtifactRotationService.RotateCurrentDecisionsAsync` for current decisions index snapshots.
 - [ ] Add safe recovery when markdown projections are missing but structured records exist.
 - [x] Add DI extension `AddDecisions()` and register it from backend startup.
 
@@ -40,9 +40,9 @@ This is one architectural milestone with multiple implementation slices. Complet
 - [x] Relationship validation tests.
 - [x] File-system round trip tests.
 - [x] Repository isolation tests.
-- [ ] Projection generation tests.
-- [ ] Decision index rendering tests.
-- [ ] Existing decision artifact discovery compatibility tests.
+- [x] Projection generation tests.
+- [x] Decision index rendering tests.
+- [x] Existing decision artifact discovery compatibility tests.
 - [ ] Recovery tests from structured artifacts after deleting generated markdown projections.
 
 ## Exit Criteria
@@ -51,6 +51,6 @@ This is one architectural milestone with multiple implementation slices. Complet
 - [ ] Candidate and proposal lifecycles are explicit.
 - [ ] Stable IDs survive reload.
 - [x] Structured lifecycle artifacts are repository-owned and reloadable.
-- [ ] Human-readable projections exist.
-- [ ] Existing decision markdown discovery remains compatible.
+- [x] Human-readable projections exist.
+- [x] Existing decision markdown discovery remains compatible.
 - [ ] Invalid transitions and relationships are rejected.

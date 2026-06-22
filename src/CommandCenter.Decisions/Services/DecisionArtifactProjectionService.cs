@@ -1,0 +1,388 @@
+using System.Text;
+using CommandCenter.Core.Artifacts;
+using CommandCenter.Core.Repositories;
+using CommandCenter.Decisions.Abstractions;
+using CommandCenter.Decisions.Models;
+using CommandCenter.Decisions.Persistence;
+
+namespace CommandCenter.Decisions.Services;
+
+public sealed class DecisionArtifactProjectionService(
+    IDecisionRepository decisionRepository,
+    IArtifactStore artifactStore) : IDecisionArtifactProjectionService
+{
+    public async Task ProjectDecisionAsync(Repository repository, Decision decision)
+    {
+        string id = DecisionArtifactPaths.ValidateId(decision.Id.Value, "DEC");
+        await WriteAsync(repository, DecisionArtifactPaths.DecisionMarkdown(id), RenderDecision(decision));
+    }
+
+    public async Task ProjectCandidateAsync(Repository repository, DecisionCandidate candidate)
+    {
+        string id = DecisionArtifactPaths.ValidateId(candidate.Id, "CAND");
+        await WriteAsync(repository, DecisionArtifactPaths.CandidateMarkdown(id), RenderCandidate(candidate));
+    }
+
+    public async Task ProjectProposalAsync(Repository repository, DecisionProposal proposal)
+    {
+        string id = DecisionArtifactPaths.ValidateId(proposal.Id, "PROP");
+        await WriteAsync(repository, DecisionArtifactPaths.ProposalMarkdown(id), RenderProposal(proposal));
+    }
+
+    public async Task RefreshDecisionIndexAsync(Repository repository)
+    {
+        IReadOnlyList<Decision> decisions = await decisionRepository.ListDecisionsAsync(repository);
+        IReadOnlyList<DecisionCandidate> candidates = await decisionRepository.ListCandidatesAsync(repository);
+        IReadOnlyList<DecisionProposal> proposals = await decisionRepository.ListProposalsAsync(repository);
+        await WriteAsync(repository, DecisionArtifactPaths.DecisionsIndex(), RenderIndex(decisions, candidates, proposals));
+    }
+
+    public async Task RefreshAllAsync(Repository repository)
+    {
+        foreach (Decision decision in await decisionRepository.ListDecisionsAsync(repository))
+        {
+            await ProjectDecisionAsync(repository, decision);
+        }
+
+        foreach (DecisionCandidate candidate in await decisionRepository.ListCandidatesAsync(repository))
+        {
+            await ProjectCandidateAsync(repository, candidate);
+        }
+
+        foreach (DecisionProposal proposal in await decisionRepository.ListProposalsAsync(repository))
+        {
+            await ProjectProposalAsync(repository, proposal);
+        }
+
+        await RefreshDecisionIndexAsync(repository);
+    }
+
+    private Task WriteAsync(Repository repository, string relativePath, string content)
+    {
+        return artifactStore.WriteAsync(DecisionArtifactPaths.Resolve(repository, relativePath), content);
+    }
+
+    private static string RenderDecision(Decision decision)
+    {
+        var markdown = new MarkdownProjectionBuilder();
+        markdown.H1($"{decision.Id.Value}: {decision.Title}");
+        markdown.Fields(
+            ("State", decision.State.ToString()),
+            ("Classification", decision.Classification.ToString()),
+            ("Repository", decision.Metadata.RepositoryId.ToString()),
+            ("Created", FormatTimestamp(decision.Metadata.CreatedAt)),
+            ("Updated", FormatTimestamp(decision.Metadata.UpdatedAt)));
+        markdown.H2("Context");
+        markdown.Paragraph(decision.Context);
+        markdown.H2("Resolution");
+        if (decision.Resolution is null)
+        {
+            markdown.Paragraph("Unresolved.");
+        }
+        else
+        {
+            markdown.Fields(
+                ("Outcome", decision.Resolution.Outcome.ToString()),
+                ("Resolved", FormatTimestamp(decision.Resolution.ResolvedAt)));
+            markdown.Paragraph(decision.Resolution.Rationale);
+            markdown.H3("Sources");
+            markdown.SourceList(decision.Resolution.Sources);
+        }
+
+        markdown.H2("Relationships");
+        markdown.RelationshipList(decision.Relationships);
+        markdown.H2("Evidence");
+        markdown.EvidenceList(decision.Evidence);
+        markdown.H2("History");
+        markdown.HistoryList(decision.History);
+        return markdown.ToString();
+    }
+
+    private static string RenderCandidate(DecisionCandidate candidate)
+    {
+        var markdown = new MarkdownProjectionBuilder();
+        markdown.H1($"{candidate.Id}: {candidate.Title}");
+        markdown.Fields(
+            ("State", candidate.State.ToString()),
+            ("Priority", candidate.Priority.ToString()),
+            ("Repository", candidate.RepositoryId.ToString()),
+            ("Source fingerprint", candidate.SourceFingerprint));
+        markdown.H2("Summary");
+        markdown.Paragraph(candidate.Summary);
+        markdown.H2("Sources");
+        markdown.SourceList(candidate.Sources);
+        markdown.H2("History");
+        markdown.HistoryList(candidate.History);
+        return markdown.ToString();
+    }
+
+    private static string RenderProposal(DecisionProposal proposal)
+    {
+        var markdown = new MarkdownProjectionBuilder();
+        markdown.H1($"{proposal.Id}: {proposal.Title}");
+        markdown.Fields(
+            ("State", proposal.State.ToString()),
+            ("Candidate", proposal.CandidateId),
+            ("Repository", proposal.RepositoryId.ToString()));
+        markdown.H2("Context");
+        markdown.Paragraph(proposal.Context);
+        markdown.H2("Options");
+        foreach (DecisionOption option in proposal.Options.OrderBy(option => option.Id, StringComparer.Ordinal))
+        {
+            markdown.H3($"{option.Id}: {option.Title}");
+            markdown.Paragraph(option.Description);
+            markdown.H4("Evidence");
+            markdown.EvidenceList(option.Evidence);
+        }
+
+        markdown.H2("Tradeoffs");
+        foreach (DecisionTradeoff tradeoff in proposal.Tradeoffs
+            .OrderBy(tradeoff => tradeoff.OptionId, StringComparer.Ordinal)
+            .ThenBy(tradeoff => tradeoff.Benefit, StringComparer.Ordinal)
+            .ThenBy(tradeoff => tradeoff.Cost, StringComparer.Ordinal))
+        {
+            markdown.Bullet($"Option {tradeoff.OptionId}: benefit {tradeoff.Benefit}; cost {tradeoff.Cost}");
+            markdown.NestedEvidenceList(tradeoff.Evidence);
+        }
+
+        markdown.H2("Recommendation");
+        if (proposal.Recommendation is null)
+        {
+            markdown.Paragraph("No recommendation.");
+        }
+        else
+        {
+            markdown.Fields(("Option", proposal.Recommendation.OptionId));
+            markdown.Paragraph(proposal.Recommendation.Rationale);
+            markdown.H3("Evidence");
+            markdown.EvidenceList(proposal.Recommendation.Evidence);
+        }
+
+        markdown.H2("Assumptions");
+        foreach (DecisionAssumption assumption in proposal.Assumptions.OrderBy(assumption => assumption.Id, StringComparer.Ordinal))
+        {
+            markdown.Bullet($"{assumption.Id}: {assumption.Statement}");
+            markdown.NestedEvidenceList(assumption.Evidence);
+        }
+
+        markdown.H2("Evidence");
+        markdown.EvidenceList(proposal.Evidence);
+        markdown.H2("History");
+        markdown.HistoryList(proposal.History);
+        return markdown.ToString();
+    }
+
+    private static string RenderIndex(
+        IReadOnlyList<Decision> decisions,
+        IReadOnlyList<DecisionCandidate> candidates,
+        IReadOnlyList<DecisionProposal> proposals)
+    {
+        var markdown = new MarkdownProjectionBuilder();
+        markdown.H1("Decisions");
+        markdown.Paragraph("Generated from structured decision lifecycle artifacts. Structured JSON remains authoritative.");
+        markdown.H2("Decision Records");
+        foreach (Decision decision in decisions.OrderBy(decision => decision.Id.Value, StringComparer.Ordinal))
+        {
+            string outcome = decision.Resolution is null ? "Unresolved" : decision.Resolution.Outcome.ToString();
+            markdown.Bullet($"{decision.Id.Value} | {decision.State} | {decision.Classification} | {outcome} | {decision.Title}");
+        }
+
+        markdown.EmptyListIf(decisions.Count == 0);
+        markdown.H2("Candidates");
+        foreach (DecisionCandidate candidate in candidates.OrderBy(candidate => candidate.Id, StringComparer.Ordinal))
+        {
+            markdown.Bullet($"{candidate.Id} | {candidate.State} | {candidate.Priority} | {candidate.Title}");
+        }
+
+        markdown.EmptyListIf(candidates.Count == 0);
+        markdown.H2("Proposals");
+        foreach (DecisionProposal proposal in proposals.OrderBy(proposal => proposal.Id, StringComparer.Ordinal))
+        {
+            markdown.Bullet($"{proposal.Id} | {proposal.State} | {proposal.CandidateId} | {proposal.Title}");
+        }
+
+        markdown.EmptyListIf(proposals.Count == 0);
+        return markdown.ToString();
+    }
+
+    private static string FormatTimestamp(DateTimeOffset timestamp)
+    {
+        return timestamp.ToUniversalTime().ToString("O");
+    }
+
+    private sealed class MarkdownProjectionBuilder
+    {
+        private readonly StringBuilder builder = new();
+
+        public void H1(string text)
+        {
+            AppendLine($"# {text}");
+            AppendLine();
+        }
+
+        public void H2(string text)
+        {
+            AppendLine($"## {text}");
+            AppendLine();
+        }
+
+        public void H3(string text)
+        {
+            AppendLine($"### {text}");
+            AppendLine();
+        }
+
+        public void H4(string text)
+        {
+            AppendLine($"#### {text}");
+            AppendLine();
+        }
+
+        public void Paragraph(string? text)
+        {
+            AppendLine(string.IsNullOrWhiteSpace(text) ? "None." : text.Trim());
+            AppendLine();
+        }
+
+        public void Fields(params (string Label, string Value)[] fields)
+        {
+            foreach ((string label, string value) in fields)
+            {
+                AppendLine($"- {label}: {value}");
+            }
+
+            AppendLine();
+        }
+
+        public void Bullet(string text)
+        {
+            AppendLine($"- {text}");
+        }
+
+        public void EmptyListIf(bool condition)
+        {
+            if (condition)
+            {
+                Bullet("None.");
+            }
+
+            AppendLine();
+        }
+
+        public void RelationshipList(IReadOnlyList<DecisionRelationship> relationships)
+        {
+            foreach (DecisionRelationship relationship in relationships
+                .OrderBy(relationship => relationship.SourceDecisionId.Value, StringComparer.Ordinal)
+                .ThenBy(relationship => relationship.TargetDecisionId.Value, StringComparer.Ordinal)
+                .ThenBy(relationship => relationship.Type.ToString(), StringComparer.Ordinal)
+                .ThenBy(relationship => relationship.Rationale ?? string.Empty, StringComparer.Ordinal))
+            {
+                string rationale = string.IsNullOrWhiteSpace(relationship.Rationale)
+                    ? string.Empty
+                    : $" - {relationship.Rationale}";
+                Bullet($"{relationship.SourceDecisionId.Value} {relationship.Type} {relationship.TargetDecisionId.Value}{rationale}");
+            }
+
+            EmptyListIf(relationships.Count == 0);
+        }
+
+        public void EvidenceList(IReadOnlyList<DecisionEvidence> evidence)
+        {
+            foreach (DecisionEvidence item in evidence.OrderBy(item => item.Summary, StringComparer.Ordinal))
+            {
+                Bullet(item.Summary);
+                NestedSourceList(item.Sources);
+            }
+
+            EmptyListIf(evidence.Count == 0);
+        }
+
+        public void NestedEvidenceList(IReadOnlyList<DecisionEvidence> evidence)
+        {
+            foreach (DecisionEvidence item in evidence.OrderBy(item => item.Summary, StringComparer.Ordinal))
+            {
+                AppendLine($"  - Evidence: {item.Summary}");
+                NestedSourceList(item.Sources, "    ");
+            }
+        }
+
+        public void SourceList(IReadOnlyList<DecisionSourceReference> sources)
+        {
+            foreach (DecisionSourceReference source in SortSources(sources))
+            {
+                Bullet(FormatSource(source));
+            }
+
+            EmptyListIf(sources.Count == 0);
+        }
+
+        public void HistoryList(IReadOnlyList<DecisionHistoryEntry> history)
+        {
+            foreach (DecisionHistoryEntry entry in history
+                .OrderBy(entry => entry.Timestamp)
+                .ThenBy(entry => entry.Event, StringComparer.Ordinal)
+                .ThenBy(entry => entry.ToState, StringComparer.Ordinal))
+            {
+                string fromState = string.IsNullOrWhiteSpace(entry.FromState) ? "None" : entry.FromState;
+                string reason = string.IsNullOrWhiteSpace(entry.Reason) ? string.Empty : $" - {entry.Reason}";
+                Bullet($"{FormatTimestamp(entry.Timestamp)} | {entry.Event} | {fromState} -> {entry.ToState}{reason}");
+                NestedSourceList(entry.Sources);
+            }
+
+            EmptyListIf(history.Count == 0);
+        }
+
+        public override string ToString()
+        {
+            return builder.ToString();
+        }
+
+        private void NestedSourceList(IReadOnlyList<DecisionSourceReference> sources, string indent = "  ")
+        {
+            foreach (DecisionSourceReference source in SortSources(sources))
+            {
+                AppendLine($"{indent}- Source: {FormatSource(source)}");
+            }
+        }
+
+        private static IEnumerable<DecisionSourceReference> SortSources(IReadOnlyList<DecisionSourceReference> sources)
+        {
+            return sources
+                .OrderBy(source => source.SourceKind, StringComparer.Ordinal)
+                .ThenBy(source => source.RelativePath ?? string.Empty, StringComparer.Ordinal)
+                .ThenBy(source => source.Section ?? string.Empty, StringComparer.Ordinal)
+                .ThenBy(source => source.ItemId ?? string.Empty, StringComparer.Ordinal)
+                .ThenBy(source => source.DecisionId?.Value ?? string.Empty, StringComparer.Ordinal)
+                .ThenBy(source => source.ProposalId ?? string.Empty, StringComparer.Ordinal)
+                .ThenBy(source => source.CandidateId ?? string.Empty, StringComparer.Ordinal)
+                .ThenBy(source => source.Excerpt ?? string.Empty, StringComparer.Ordinal);
+        }
+
+        private static string FormatSource(DecisionSourceReference source)
+        {
+            var parts = new List<string> { source.SourceKind };
+            Add("path", source.RelativePath);
+            Add("section", source.Section);
+            Add("item", source.ItemId);
+            Add("decision", source.DecisionId?.Value);
+            Add("proposal", source.ProposalId);
+            Add("candidate", source.CandidateId);
+            Add("excerpt", source.Excerpt);
+            return string.Join("; ", parts);
+
+            void Add(string label, string? value)
+            {
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    parts.Add($"{label}: {value}");
+                }
+            }
+        }
+
+        private void AppendLine(string text = "")
+        {
+            builder.Append(text);
+            builder.Append('\n');
+        }
+    }
+}
