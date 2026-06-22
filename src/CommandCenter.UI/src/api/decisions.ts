@@ -3,6 +3,7 @@ import type {
   Decision,
   DecisionAssimilationRecommendation,
   DecisionCandidate,
+  DecisionCertificationReport,
   DecisionContextSnapshot,
   DecisionEvidenceInspection,
   DecisionGovernanceReport,
@@ -142,6 +143,20 @@ export function generateDecisionGovernanceReport(repositoryId: string) {
 
 export function listDecisionGovernanceReports(repositoryId: string) {
   return invokeCommand<DecisionGovernanceReport[]>('list_decision_governance_reports', {
+    repositoryId,
+  })
+}
+
+export function getDecisionCertification(repositoryId: string) {
+  return invokeCommand<DecisionCertificationReport>('get_decision_certification', { repositoryId })
+}
+
+export function runDecisionCertification(repositoryId: string) {
+  return invokeCommand<DecisionCertificationReport>('run_decision_certification', { repositoryId })
+}
+
+export function listDecisionCertificationReports(repositoryId: string) {
+  return invokeCommand<DecisionCertificationReport[]>('list_decision_certification_reports', {
     repositoryId,
   })
 }

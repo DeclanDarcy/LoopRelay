@@ -1011,6 +1011,7 @@ button:focus-visible {
 .decision-option-comparison,
 .decision-evidence-source-panel,
 .decision-governance-panel,
+.decision-certification-panel,
 .decision-viewer-summary,
 .decision-inspection-list {
   min-width: 0;
@@ -1022,6 +1023,7 @@ button:focus-visible {
 .decision-authority-callout,
 .decision-inspection-card,
 .decision-governance-finding,
+.decision-certification-evidence,
 .decision-tradeoff,
 .decision-evidence-block article {
   min-width: 0;
@@ -1036,7 +1038,8 @@ button:focus-visible {
 .decision-viewer-summary div,
 .decision-authority-callout div,
 .decision-inspection-card div,
-.decision-governance-finding div {
+.decision-governance-finding div,
+.decision-certification-evidence div {
   min-width: 0;
   display: grid;
   gap: 4px;
@@ -1046,6 +1049,7 @@ button:focus-visible {
 .decision-authority-callout span,
 .decision-inspection-card span,
 .decision-governance-finding span,
+.decision-certification-evidence span,
 .decision-evidence-block > span {
   color: var(--fg-muted);
   font-size: 0.76rem;
@@ -1056,7 +1060,8 @@ button:focus-visible {
 .decision-viewer-summary strong,
 .decision-authority-callout strong,
 .decision-inspection-card strong,
-.decision-governance-finding strong {
+.decision-governance-finding strong,
+.decision-certification-evidence strong {
   min-width: 0;
   color: var(--fg-default);
   overflow-wrap: anywhere;
@@ -1068,6 +1073,7 @@ button:focus-visible {
 .decision-authority-callout small,
 .decision-inspection-card p,
 .decision-governance-finding p,
+.decision-certification-evidence p,
 .decision-tradeoff p,
 .decision-evidence-block p,
 .decision-source-list p,
@@ -1226,6 +1232,7 @@ button:focus-visible {
 
 .decision-governance-findings,
 .decision-governance-group,
+.decision-certification-group,
 .decision-governance-actions {
   min-width: 0;
   display: grid;
@@ -1236,7 +1243,9 @@ button:focus-visible {
   grid-template-columns: repeat(auto-fit, minmax(120px, max-content));
 }
 
-.decision-governance-group h6 {
+.decision-governance-group h6,
+.decision-certification-group h6,
+.decision-inspection-list h6 {
   margin: 0;
   color: var(--fg-default);
   font-size: 0.86rem;
@@ -1244,6 +1253,10 @@ button:focus-visible {
 }
 
 .decision-governance-finding {
+  background: var(--surface-1);
+}
+
+.decision-certification-evidence {
   background: var(--surface-1);
 }
 

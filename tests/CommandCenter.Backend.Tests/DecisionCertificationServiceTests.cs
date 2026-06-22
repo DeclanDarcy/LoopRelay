@@ -1,4 +1,6 @@
 using System.Security.Cryptography;
+using System.Net;
+using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -8,6 +10,8 @@ using CommandCenter.Decisions.Abstractions;
 using CommandCenter.Decisions.Models;
 using CommandCenter.Decisions.Primitives;
 using CommandCenter.Decisions.Services;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CommandCenter.Backend.Tests;
 
@@ -45,6 +49,27 @@ public sealed class DecisionCertificationServiceTests
         Assert.Equal(DecisionLifecycleCertificationResultKind.Passed, report.Result.Kind);
         Assert.Empty(await decisionRepository.ListCertificationReportsAsync(repository));
         Assert.False(Directory.Exists(Path.Combine(repository.Path, ".agents", "decisions", "certification")));
+    }
+
+    [Fact]
+    public async Task CertificationReportIsReproducibleAcrossCurrentAndPersistedRunsWhenRepositoryIsUnchanged()
+    {
+        Repository repository = CreateRepository();
+        var decisionRepository = new FileSystemDecisionRepository(new FileSystemArtifactStore());
+        await decisionRepository.SaveDecisionAsync(repository, CreateResolvedDecision(repository.Id));
+        DecisionCertificationService service = CreateService(repository, decisionRepository);
+
+        DecisionCertificationReport persisted = await service.RunCertificationAsync(repository.Id);
+        DecisionCertificationReport current = await service.GetCurrentCertificationAsync(repository.Id);
+
+        Assert.NotEqual(persisted.Id, current.Id);
+        Assert.Equal(persisted.RepositoryId, current.RepositoryId);
+        Assert.Equal(persisted.InputFingerprint, current.InputFingerprint);
+        Assert.Equal(persisted.Result, current.Result);
+        Assert.Equal(persisted.Health, current.Health);
+        AssertCertificationEvidenceEquivalent(persisted.Evidence, current.Evidence);
+        Assert.Equal(persisted.Diagnostics, current.Diagnostics);
+        Assert.Single(await decisionRepository.ListCertificationReportsAsync(repository));
     }
 
     [Fact]
@@ -102,6 +127,112 @@ public sealed class DecisionCertificationServiceTests
             evidence.Id == "long-horizon-histories" &&
             evidence.Passed &&
             evidence.RelatedDecisionIds.Count == decisionCount);
+    }
+
+    [Fact]
+    public async Task CertificationEndpointsReturnCurrentReportPersistedRunAndHistory()
+    {
+        Repository repository = CreateRepository();
+        await WriteAsync(repository, ".agents/plan.md", "# Plan\n\nDecision lifecycle certification.");
+
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services => services.AddSingleton<IRepositoryService>(new StubRepositoryService(repository)));
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+        using var client = new HttpClient();
+        string root = app.Urls.Single();
+        JsonSerializerOptions jsonOptions = CreateJsonOptions();
+
+        HttpResponseMessage currentResponse =
+            await client.GetAsync($"{root}/api/repositories/{repository.Id}/decisions/certification");
+        HttpResponseMessage runResponse =
+            await client.PostAsync($"{root}/api/repositories/{repository.Id}/decisions/certification", null);
+        HttpResponseMessage historyResponse =
+            await client.GetAsync($"{root}/api/repositories/{repository.Id}/decisions/certification/reports");
+
+        Assert.Equal(HttpStatusCode.OK, currentResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, runResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, historyResponse.StatusCode);
+        DecisionCertificationReport? current =
+            await currentResponse.Content.ReadFromJsonAsync<DecisionCertificationReport>(jsonOptions);
+        DecisionCertificationReport? persisted =
+            await runResponse.Content.ReadFromJsonAsync<DecisionCertificationReport>(jsonOptions);
+        DecisionCertificationReport[]? history =
+            await historyResponse.Content.ReadFromJsonAsync<DecisionCertificationReport[]>(jsonOptions);
+        Assert.NotNull(current);
+        Assert.NotNull(persisted);
+        Assert.NotNull(history);
+        Assert.Equal(DecisionLifecycleCertificationResultKind.Passed, current.Result.Kind);
+        Assert.Equal(DecisionLifecycleCertificationResultKind.Passed, persisted.Result.Kind);
+        Assert.StartsWith("certification.", persisted.Id, StringComparison.Ordinal);
+        Assert.Single(history);
+        Assert.Equal(persisted.Id, history[0].Id);
+    }
+
+    [Fact]
+    public async Task CertificationEndpointPassesAfterEndToEndDecisionLifecycle()
+    {
+        Repository repository = CreateRepository();
+        await WriteAsync(repository, ".agents/plan.md", "# Plan\n\n- Need to decide repository-backed persistence schema.");
+        await WriteAsync(repository, ".agents/milestones/m9-lifecycle-certification.md", "# M9\n\n- Certify lifecycle.");
+        await WriteAsync(repository, ".agents/operational_context.md", "# Operational Context\n\nStable understanding.");
+
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services => services.AddSingleton<IRepositoryService>(new StubRepositoryService(repository)));
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+        using var client = new HttpClient();
+        string root = app.Urls.Single();
+        JsonSerializerOptions jsonOptions = CreateJsonOptions();
+
+        DecisionDiscoveryResult discovery = (await (await client.PostAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/discover",
+            null)).Content.ReadFromJsonAsync<DecisionDiscoveryResult>(jsonOptions))!;
+        DecisionCandidate candidate = Assert.Single(discovery.Candidates);
+        await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/candidates/{candidate.Id}/promote",
+            new DecisionCandidateTransitionRequest("Ready for proposal."),
+            jsonOptions);
+        DecisionProposal proposal = (await (await client.PostAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/candidates/{candidate.Id}/proposals",
+            null)).Content.ReadFromJsonAsync<DecisionProposal>(jsonOptions))!;
+        await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/proposals/{proposal.Id}/review/ready-for-resolution",
+            new DecisionProposalTransitionRequest("Ready for human resolution."),
+            jsonOptions);
+        Decision decision = (await (await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/proposals/{proposal.Id}/resolve",
+            new ResolveDecisionCommand("Accept repository-backed decision lifecycle.", "human-reviewer", "option-1"),
+            jsonOptions)).Content.ReadFromJsonAsync<Decision>(jsonOptions))!;
+
+        HttpResponseMessage governanceResponse = await client.PostAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/governance/reports",
+            null);
+        HttpResponseMessage projectionResponse = await client.GetAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/execution-projection");
+        HttpResponseMessage certificationResponse = await client.PostAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/certification",
+            null);
+
+        DecisionGovernanceReport governance =
+            (await governanceResponse.Content.ReadFromJsonAsync<DecisionGovernanceReport>(jsonOptions))!;
+        ExecutionDecisionProjection projection =
+            (await projectionResponse.Content.ReadFromJsonAsync<ExecutionDecisionProjection>(jsonOptions))!;
+        DecisionCertificationReport certification =
+            (await certificationResponse.Content.ReadFromJsonAsync<DecisionCertificationReport>(jsonOptions))!;
+        Assert.Equal(HttpStatusCode.OK, governanceResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, projectionResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, certificationResponse.StatusCode);
+        Assert.Equal(DecisionState.Resolved, decision.State);
+        Assert.DoesNotContain(governance.Findings, finding => finding.BlocksExecutionProjection);
+        Assert.True(projection.Directives.Count + projection.Constraints.Count > 0);
+        Assert.Equal(DecisionLifecycleCertificationResultKind.Passed, certification.Result.Kind);
+        Assert.All(certification.Evidence, evidence => Assert.True(evidence.Passed, evidence.Id));
+        Assert.Contains(certification.Evidence, evidence =>
+            evidence.Id == "execution-consumption" &&
+            evidence.RelatedDecisionIds.Contains(decision.Id.Value, StringComparer.Ordinal));
     }
 
     private static DecisionCertificationService CreateService(
@@ -200,6 +331,49 @@ public sealed class DecisionCertificationServiceTests
             Name = Path.GetFileName(path),
             Path = path
         };
+    }
+
+    private static async Task WriteAsync(Repository repository, string relativePath, string content)
+    {
+        string path = Path.Combine(repository.Path, relativePath.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        await File.WriteAllTextAsync(path, content);
+    }
+
+    private static void AssertCertificationEvidenceEquivalent(
+        IReadOnlyList<DecisionCertificationEvidence> expected,
+        IReadOnlyList<DecisionCertificationEvidence> actual)
+    {
+        Assert.Equal(expected.Count, actual.Count);
+        foreach (DecisionCertificationEvidence expectedEvidence in expected)
+        {
+            DecisionCertificationEvidence actualEvidence = Assert.Single(
+                actual,
+                evidence => evidence.Id == expectedEvidence.Id);
+            Assert.Equal(expectedEvidence.Area, actualEvidence.Area);
+            Assert.Equal(expectedEvidence.Passed, actualEvidence.Passed);
+            Assert.Equal(expectedEvidence.Detail, actualEvidence.Detail);
+            Assert.Equal(expectedEvidence.RelatedDecisionIds, actualEvidence.RelatedDecisionIds);
+            Assert.Equal(expectedEvidence.RelatedCandidateIds, actualEvidence.RelatedCandidateIds);
+            Assert.Equal(expectedEvidence.RelatedProposalIds, actualEvidence.RelatedProposalIds);
+            Assert.Equal(
+                expectedEvidence.Sources.Select(SourceKey).Order(StringComparer.Ordinal),
+                actualEvidence.Sources.Select(SourceKey).Order(StringComparer.Ordinal));
+        }
+    }
+
+    private static string SourceKey(DecisionSourceReference source)
+    {
+        return string.Join(
+            "|",
+            source.SourceKind,
+            source.RelativePath,
+            source.Section,
+            source.ItemId,
+            source.DecisionId?.Value,
+            source.ProposalId,
+            source.CandidateId,
+            source.Excerpt);
     }
 
     private sealed class StubRepositoryService(params Repository[] repositories) : IRepositoryService

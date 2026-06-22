@@ -10,6 +10,7 @@ import type {
   Decision,
   DecisionAssimilationRecommendation,
   DecisionCandidate,
+  DecisionCertificationReport,
   DecisionContextSnapshot,
   DecisionEvidenceInspection,
   DecisionGovernanceReport,
@@ -53,6 +54,7 @@ type MockState = {
   decisions: Record<string, Record<string, Decision>>
   decisionAssimilationRecommendations: Record<string, Record<string, DecisionAssimilationRecommendation>>
   decisionGovernanceReports: Record<string, DecisionGovernanceReport[]>
+  decisionCertificationReports: Record<string, DecisionCertificationReport[]>
   commandCalls: Record<string, number>
 }
 
@@ -1110,6 +1112,95 @@ function createDecisionGovernanceReport(
   return report
 }
 
+function createDecisionCertificationReport(
+  state: MockState,
+  repositoryId: string,
+  persist: boolean,
+): DecisionCertificationReport {
+  const governance = createDecisionGovernanceReport(state, repositoryId, false)
+  const decisions = Object.values(state.decisions[repositoryId] ?? {})
+  const candidates = state.decisionCandidates[repositoryId] ?? []
+  const proposals = state.decisionProposalBrowserItems[repositoryId] ?? []
+  const timestamp = new Date().toISOString()
+  const evidence = [
+    {
+      id: 'context-resolution',
+      area: 'Context',
+      passed: true,
+      detail: 'Decision context can be rebuilt from repository artifacts.',
+      sources: [decisionSource('.agents/plan.md', 'Repository files remain authoritative.')],
+      relatedDecisionIds: [],
+      relatedCandidateIds: [],
+      relatedProposalIds: [],
+    },
+    {
+      id: 'discovery',
+      area: 'Discovery',
+      passed: candidates.length > 0,
+      detail: candidates.length > 0
+        ? 'Candidate discovery produced source-linked candidates.'
+        : 'No candidates were available to certify discovery coverage.',
+      sources: [decisionSource('.agents/decisions/candidates/CAND-0001/candidate.json', 'Candidate evidence remains source-linked.')],
+      relatedDecisionIds: [],
+      relatedCandidateIds: candidates.map((candidate) => candidate.id),
+      relatedProposalIds: [],
+    },
+    {
+      id: 'proposal-lifecycle',
+      area: 'Proposal',
+      passed: proposals.length > 0,
+      detail: proposals.length > 0
+        ? 'Proposal lifecycle state is readable for review and refinement.'
+        : 'No proposals were available to certify proposal lifecycle coverage.',
+      sources: [decisionSource('.agents/decisions/proposals/PROP-0001/proposal.json', 'Proposal state remains structured.')],
+      relatedDecisionIds: [],
+      relatedCandidateIds: [],
+      relatedProposalIds: proposals.map((proposal) => proposal.proposalId),
+    },
+    {
+      id: 'authority-boundaries',
+      area: 'Authority',
+      passed: decisions.every((decision) =>
+        !decision.resolution || !/governance|certification|execution/i.test(decision.resolution.resolvedBy),
+      ),
+      detail: 'Certification, governance, and execution remain inspection surfaces rather than resolution authority.',
+      sources: [decisionSource('.agents/decisions/records/DEC-mock/decision.json', 'Resolution authority remains human.')],
+      relatedDecisionIds: decisions.map((decision) => decision.id),
+      relatedCandidateIds: [],
+      relatedProposalIds: [],
+    },
+  ]
+  const failedEvidenceCount = evidence.filter((item) => !item.passed).length
+  const passedEvidenceCount = evidence.length - failedEvidenceCount
+  const findings = failedEvidenceCount > 0 ? governance.findings : []
+  const report: DecisionCertificationReport = {
+    id: persist ? `certification.${Date.now().toString().padStart(21, '0')}` : 'certification.current',
+    repositoryId,
+    generatedAt: timestamp,
+    inputFingerprint: `mock-certification-${repositoryId}-${decisions.length}-${candidates.length}-${proposals.length}`,
+    result: {
+      kind: failedEvidenceCount > 0 ? 'Failed' : 'Passed',
+      passedEvidenceCount,
+      failedEvidenceCount,
+    },
+    health: governance.health,
+    evidence,
+    findings,
+    diagnostics: persist
+      ? ['Mock certification report was persisted to generated report history.']
+      : ['Mock current certification is an inspection and is not persisted.'],
+  }
+
+  if (persist) {
+    state.decisionCertificationReports[repositoryId] = [
+      report,
+      ...(state.decisionCertificationReports[repositoryId] ?? []),
+    ]
+  }
+
+  return report
+}
+
 function createExecutionDecisionProjection(
   state: MockState,
   repositoryId: string,
@@ -1474,6 +1565,7 @@ function createInitialState(): MockState {
     decisions: {},
     decisionAssimilationRecommendations: {},
     decisionGovernanceReports: {},
+    decisionCertificationReports: {},
     commandCalls: {},
   }
 
@@ -1488,6 +1580,7 @@ function createInitialState(): MockState {
     state.decisions[repository.id] = {}
     state.decisionAssimilationRecommendations[repository.id] = {}
     state.decisionGovernanceReports[repository.id] = []
+    state.decisionCertificationReports[repository.id] = []
   })
 
   seedCertificationSession(state, certificationRepositories[0], 'Executing', 'Executing')
@@ -2527,6 +2620,12 @@ export function installDevTauriMock() {
           return clone(createDecisionGovernanceReport(state, getStringArg(args, 'repositoryId'), true))
         case 'list_decision_governance_reports':
           return clone(state.decisionGovernanceReports[getStringArg(args, 'repositoryId')] ?? [])
+        case 'get_decision_certification':
+          return clone(createDecisionCertificationReport(state, getStringArg(args, 'repositoryId'), false))
+        case 'run_decision_certification':
+          return clone(createDecisionCertificationReport(state, getStringArg(args, 'repositoryId'), true))
+        case 'list_decision_certification_reports':
+          return clone(state.decisionCertificationReports[getStringArg(args, 'repositoryId')] ?? [])
         case 'get_execution_decision_projection':
           return clone(createExecutionDecisionProjection(state, getStringArg(args, 'repositoryId')))
         case 'start_execution':

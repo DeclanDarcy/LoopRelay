@@ -7,6 +7,7 @@ import type {
   DecisionProposalState,
 } from '../../types'
 import {
+  useDecisionCertification,
   useDecisionEvidenceInspection,
   useDecisionGovernance,
   useDecisionOptionComparison,
@@ -15,6 +16,7 @@ import {
   useDecisionSourceAttributions,
 } from '../../hooks'
 import { DecisionCandidateBrowser } from './DecisionCandidateBrowser'
+import { DecisionCertificationPanel } from './DecisionCertificationPanel'
 import { DecisionEvidenceSourcePanel } from './DecisionEvidenceSourcePanel'
 import { DecisionGovernancePanel } from './DecisionGovernancePanel'
 import { DecisionOptionComparison } from './DecisionOptionComparison'
@@ -82,6 +84,15 @@ export function DecisionLifecycleTab({
     refresh: refreshGovernance,
     generateReport: generateGovernanceReport,
   } = useDecisionGovernance(repositoryId)
+  const {
+    currentReport: certificationReport,
+    reports: certificationReports,
+    isLoading: isCertificationLoading,
+    isRunning: isCertificationRunning,
+    error: certificationError,
+    refresh: refreshCertification,
+    runCertification,
+  } = useDecisionCertification(repositoryId)
   const activeCandidateCount = candidates.filter((candidate) =>
     candidate.state === 'Discovered' || candidate.state === 'Promoted',
   ).length
@@ -197,6 +208,19 @@ export function DecisionLifecycleTab({
             onGenerateReport={async () => {
               await generateGovernanceReport()
               await refreshGovernance()
+              onRefresh()
+            }}
+          />
+
+          <DecisionCertificationPanel
+            currentReport={certificationReport}
+            reports={certificationReports}
+            isLoading={isCertificationLoading}
+            isRunning={isCertificationRunning}
+            error={certificationError}
+            onRunCertification={async () => {
+              await runCertification()
+              await refreshCertification()
               onRefresh()
             }}
           />

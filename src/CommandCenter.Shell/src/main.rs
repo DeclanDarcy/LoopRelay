@@ -899,6 +899,51 @@ fn list_decision_governance_reports(repository_id: String) -> Result<Value, Stri
 }
 
 #[tauri::command]
+fn get_decision_certification(repository_id: String) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/certification"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision certification lookup failed")
+}
+
+#[tauri::command]
+fn run_decision_certification(repository_id: String) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/decisions/certification"
+        ))
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision certification run failed")
+}
+
+#[tauri::command]
+fn list_decision_certification_reports(repository_id: String) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/certification/reports"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision certification report listing failed")
+}
+
+#[tauri::command]
 fn get_execution_decision_projection(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/execution-projection"
@@ -1291,6 +1336,9 @@ fn main() {
             get_decision_governance,
             generate_decision_governance_report,
             list_decision_governance_reports,
+            get_decision_certification,
+            run_decision_certification,
+            list_decision_certification_reports,
             get_execution_decision_projection,
             get_continuity_diagnostics,
             generate_continuity_report,

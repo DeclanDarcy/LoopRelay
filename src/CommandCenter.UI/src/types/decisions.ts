@@ -47,6 +47,8 @@ export type DecisionGovernanceSeverity = 'Info' | 'Warning' | 'Blocking'
 
 export type DecisionHealthAssessment = 'Healthy' | 'AdvisoryFindings' | 'Blocked'
 
+export type DecisionLifecycleCertificationResultKind = 'Passed' | 'Failed'
+
 export type ExecutionProjectionKind =
   | 'ArchitecturalConstraint'
   | 'ImplementationDirective'
@@ -540,6 +542,35 @@ export type DecisionGovernanceReport = {
   inputFingerprint: string
   health: DecisionHealthAssessment
   summary: DecisionGovernanceSummary
+  findings: DecisionGovernanceFinding[]
+  diagnostics: string[]
+}
+
+export type DecisionLifecycleCertificationResult = {
+  kind: DecisionLifecycleCertificationResultKind
+  passedEvidenceCount: number
+  failedEvidenceCount: number
+}
+
+export type DecisionCertificationEvidence = {
+  id: string
+  area: string
+  passed: boolean
+  detail: string
+  sources: DecisionSourceReference[]
+  relatedDecisionIds: string[]
+  relatedCandidateIds: string[]
+  relatedProposalIds: string[]
+}
+
+export type DecisionCertificationReport = {
+  id: string
+  repositoryId: string
+  generatedAt: string
+  inputFingerprint: string
+  result: DecisionLifecycleCertificationResult
+  health: DecisionHealthAssessment
+  evidence: DecisionCertificationEvidence[]
   findings: DecisionGovernanceFinding[]
   diagnostics: string[]
 }
