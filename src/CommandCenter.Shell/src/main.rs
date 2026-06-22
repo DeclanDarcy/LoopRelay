@@ -742,6 +742,67 @@ fn refine_decision_proposal(
 }
 
 #[tauri::command]
+fn resolve_decision_proposal(
+    repository_id: String,
+    proposal_id: String,
+    request: Value,
+) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/{proposal_id}/resolve"
+        ))
+        .json(&request)
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision proposal resolution failed")
+}
+
+#[tauri::command]
+fn get_decision_assimilation_recommendation(
+    repository_id: String,
+    decision_id: String,
+) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/{decision_id}/assimilation"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision assimilation recommendation lookup failed")
+}
+
+#[tauri::command]
+fn propose_decision_operational_context_assimilation(
+    repository_id: String,
+    decision_id: String,
+    request: Value,
+) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/decisions/{decision_id}/assimilation/propose-operational-context"
+        ))
+        .json(&request)
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision assimilation recommendation creation failed")
+}
+
+#[tauri::command]
 fn get_decision_option_comparison(
     repository_id: String,
     proposal_id: String,
@@ -1162,6 +1223,9 @@ fn main() {
             get_decision_proposal_review,
             get_decision_proposal_lineage,
             refine_decision_proposal,
+            resolve_decision_proposal,
+            get_decision_assimilation_recommendation,
+            propose_decision_operational_context_assimilation,
             get_decision_option_comparison,
             get_decision_evidence_inspection,
             list_decision_source_attributions,

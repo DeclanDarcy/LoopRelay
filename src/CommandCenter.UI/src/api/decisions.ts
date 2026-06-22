@@ -1,4 +1,7 @@
 import type {
+  CreateDecisionAssimilationRecommendationCommand,
+  Decision,
+  DecisionAssimilationRecommendation,
   DecisionCandidate,
   DecisionContextSnapshot,
   DecisionEvidenceInspection,
@@ -9,6 +12,7 @@ import type {
   DecisionProposalState,
   DecisionRefinementRequest,
   DecisionReviewWorkspace,
+  ResolveDecisionCommand,
   DecisionSourceAttribution,
 } from '../types'
 import { invokeCommand } from './tauri'
@@ -67,6 +71,40 @@ export function refineDecisionProposal(
     proposalId,
     request,
   })
+}
+
+export function resolveDecisionProposal(
+  repositoryId: string,
+  proposalId: string,
+  request: ResolveDecisionCommand,
+) {
+  return invokeCommand<Decision>('resolve_decision_proposal', {
+    repositoryId,
+    proposalId,
+    request,
+  })
+}
+
+export function getDecisionAssimilationRecommendation(repositoryId: string, decisionId: string) {
+  return invokeCommand<DecisionAssimilationRecommendation>('get_decision_assimilation_recommendation', {
+    repositoryId,
+    decisionId,
+  })
+}
+
+export function proposeDecisionOperationalContextAssimilation(
+  repositoryId: string,
+  decisionId: string,
+  request: CreateDecisionAssimilationRecommendationCommand,
+) {
+  return invokeCommand<DecisionAssimilationRecommendation>(
+    'propose_decision_operational_context_assimilation',
+    {
+      repositoryId,
+      decisionId,
+      request,
+    },
+  )
 }
 
 export function getDecisionOptionComparison(repositoryId: string, proposalId: string) {

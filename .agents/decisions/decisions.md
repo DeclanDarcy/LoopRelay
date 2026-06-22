@@ -2,41 +2,63 @@
 
 ## Newly Authorized
 
-- M6 now has the backend boundary needed before UI work.
-- The accepted resolution-to-assimilation flow is:
-  - `Decision Resolution`
-  - to `Advisory Assimilation Package`
-  - to continuity-owned adoption later
-- Decision resolution must not mutate `.agents/operational_context.md`.
-- The core authority separation is accepted:
+- M6 is accepted as a legitimate closure point.
+- M6 is accepted as complete without violating the established authority boundaries.
+- The completed lifecycle is accepted as:
+  - `Decision Context`
+  - `Discovery`
+  - `Candidate`
+  - `Proposal`
+  - `Review`
+  - `Refinement`
+  - `Resolution`
+  - `Decision Authority`
+  - `Assimilation Recommendation`
+- The architectural boundary remains authoritative:
   - `Decision Authority` is not equivalent to `Operational Context Authority`
-- Assimilation recommendation package constraints are accepted:
-  - generated from `Resolved` decisions only
-  - includes decision lineage
-  - includes context snapshot lineage
-  - does not mutate `.agents/operational_context.md`
-  - does not own continuity merge or promotion
-- M6 should remain focused on resolution while preparing M10 without pulling adoption authority forward.
-- Resolution UI is authorized as the next slice.
-- Resolution UI should remain review-oriented and include:
-  - current proposal snapshot
-  - selected outcome
-  - rationale and resolver metadata
-  - resulting decision state
-  - assimilation recommendation package
-- React authority remains limited to:
-  - submitting resolution commands
-  - fetching assimilation packages
-  - rendering backend projections
-- React must not infer:
-  - decision state
-  - assimilation eligibility
-  - operational-context changes
-- Current M6 status is accepted as:
-  - Resolution Snapshot complete
-  - Resolution Service Boundary complete
-  - Outcome Semantics complete
-  - Supersede / Archive complete
-  - Assimilation Recommendations complete
-  - Resolution UI next
-- The milestone is ready for user-facing resolution surfaces without violating the operational-context boundary.
+- The final M6 decomposition is accepted:
+  - `Generation` creates recommendations
+  - `Refinement` evolves recommendations
+  - `Resolution` creates authority
+  - `Assimilation` creates advisory adoption recommendations
+- Assimilation boundary is accepted as intact:
+  - resolved decisions create recommendation packages
+  - resolved decisions do not mutate operational context
+  - continuity remains responsible for context adoption, merge, promotion, and acceptance
+- Resolution UI timing is accepted as correct because backend semantics, snapshots, supersede/archive, and assimilation packages existed before UI exposure.
+- M7 is authorized to begin.
+- The first M7 governance slice must remain entirely advisory:
+  - read
+  - analyze
+  - report
+  - do not mutate
+  - do not correct
+  - do not enforce
+- Governance should first prove lifecycle integrity reporting before gaining influence over lifecycle behavior.
+- Initial governance finding categories are authorized:
+  - lineage integrity
+  - fingerprint integrity
+  - contradictions
+  - resolution completeness
+  - authority boundary findings
+- Authority boundary findings are explicitly authorized for M7 and should detect regressions such as:
+  - assimilation package attempts mutation
+  - operational context references decision-owned state
+  - proposal referenced as authority after resolution
+  - revision treated as current proposal
+- Recommended M7 sequence is authorized:
+  - governance domain
+  - governance repository scan
+  - governance findings model
+  - governance reports
+  - governance UI
+- Governance actions are not authorized until governance reporting is fully established.
+- Program status is accepted:
+  - M0 Domain Foundation complete
+  - M1 Context Resolution complete
+  - M2 Discovery complete
+  - M3 Proposal Lifecycle complete
+  - M4 Review Workspace complete
+  - M5 Refinement Workflow complete
+  - M6 Decision Resolution complete
+- M7 should focus first on answering whether the lifecycle is healthy before deciding what should be done about it.

@@ -19,6 +19,7 @@ import { DecisionOptionComparison } from './DecisionOptionComparison'
 import { DecisionProposalBrowser } from './DecisionProposalBrowser'
 import { DecisionProposalViewer } from './DecisionProposalViewer'
 import { DecisionRefinementPanel } from './DecisionRefinementPanel'
+import { DecisionResolutionPanel } from './DecisionResolutionPanel'
 import { DecisionRevisionHistory } from './DecisionRevisionHistory'
 
 type DecisionLifecycleTabProps = {
@@ -132,6 +133,22 @@ export function DecisionLifecycleTab({
             lineage={proposalLineage}
             isLoading={isProposalReviewLoading || isProposalLineageLoading}
             onRefined={async () => {
+              await Promise.all([
+                refreshProposalReview(),
+                refreshProposalLineage(),
+                refreshOptionComparison(),
+                refreshEvidenceInspection(),
+                refreshSourceAttributions(),
+              ])
+              onRefresh()
+            }}
+          />
+
+          <DecisionResolutionPanel
+            repositoryId={repositoryId}
+            workspace={proposalReviewWorkspace}
+            isLoading={isProposalReviewLoading}
+            onResolved={async () => {
               await Promise.all([
                 refreshProposalReview(),
                 refreshProposalLineage(),

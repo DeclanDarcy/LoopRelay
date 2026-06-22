@@ -29,6 +29,8 @@ export type DecisionReviewState =
   | 'ReadyForResolution'
   | 'Closed'
 
+export type DecisionOutcome = 'Accepted' | 'Rejected' | 'Deferred'
+
 export type DecisionSourceReference = {
   sourceKind: string
   relativePath: string | null
@@ -169,6 +171,90 @@ export type DecisionProposal = {
   assumptions: DecisionAssumption[]
   evidence: DecisionEvidence[]
   history: DecisionHistoryEntry[]
+}
+
+export type DecisionMetadata = {
+  repositoryId: string
+  createdAt: string
+  updatedAt: string
+  schemaVersion: string
+}
+
+export type DecisionResolvedProposalSnapshot = {
+  proposalId: string
+  candidateId: string
+  proposalFingerprint: string
+  proposalState: DecisionProposalState
+  title: string
+  context: string
+  options: DecisionOption[]
+  tradeoffs: DecisionTradeoff[]
+  recommendation: DecisionRecommendation | null
+  assumptions: DecisionAssumption[]
+  evidence: DecisionEvidence[]
+  history: DecisionHistoryEntry[]
+  revisions: DecisionProposalRevision[]
+}
+
+export type DecisionResolution = {
+  outcome: DecisionOutcome
+  selectedOptionId: string
+  rationale: string
+  resolvedBy: string
+  recommendationDiverged: boolean
+  resolvedAt: string
+  sources: DecisionSourceReference[]
+  sourceProposalSnapshot: DecisionResolvedProposalSnapshot | null
+}
+
+export type DecisionRelationship = {
+  type: string
+  targetDecisionId: string
+  description: string | null
+  sources: DecisionSourceReference[]
+}
+
+export type Decision = {
+  id: string
+  state: DecisionState
+  classification: DecisionClassification
+  title: string
+  context: string
+  metadata: DecisionMetadata
+  resolution: DecisionResolution | null
+  relationships: DecisionRelationship[]
+  evidence: DecisionEvidence[]
+  history: DecisionHistoryEntry[]
+}
+
+export type ResolveDecisionCommand = {
+  rationale: string
+  resolver: string
+  selectedOptionId: string | null
+  outcome: DecisionOutcome
+}
+
+export type CreateDecisionAssimilationRecommendationCommand = {
+  requestedBy?: string | null
+  notes?: string | null
+}
+
+export type DecisionAssimilationRecommendation = {
+  decisionId: string
+  repositoryId: string
+  createdAt: string
+  decisionFingerprint: string
+  contextSnapshotId: string
+  contextFingerprint: string
+  sourceDecision: Decision
+  contextSnapshot: DecisionContextSnapshot
+  projectedStableDecision: string
+  rationale: string
+  requestedBy: string | null
+  notes: string | null
+  evidence: DecisionEvidence[]
+  sources: DecisionSourceReference[]
+  diagnostics: string[]
 }
 
 export type DecisionReviewStatus = {

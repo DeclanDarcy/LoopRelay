@@ -7,9 +7,12 @@ import type {
   ContinuityDiagnostics,
   ContinuityReport,
   ContinuityTrend,
+  Decision,
+  DecisionAssimilationRecommendation,
   DecisionCandidate,
   DecisionContextSnapshot,
   DecisionEvidenceInspection,
+  DecisionOutcome,
   DecisionProposal,
   DecisionOptionComparison,
   DecisionProposalBrowserItem,
@@ -45,6 +48,8 @@ type MockState = {
   decisionCandidates: Record<string, DecisionCandidate[]>
   decisionProposalBrowserItems: Record<string, DecisionProposalBrowserItem[]>
   decisionProposalReviewWorkspaces: Record<string, Record<string, DecisionReviewWorkspace>>
+  decisions: Record<string, Record<string, Decision>>
+  decisionAssimilationRecommendations: Record<string, Record<string, DecisionAssimilationRecommendation>>
   commandCalls: Record<string, number>
 }
 
@@ -796,6 +801,236 @@ function refineDecisionProposalMock(
   return refinedProposal
 }
 
+function resolveDecisionProposalMock(
+  state: MockState,
+  repositoryId: string,
+  proposalId: string,
+  request: {
+    rationale?: unknown
+    resolver?: unknown
+    selectedOptionId?: unknown
+    outcome?: unknown
+  },
+): Decision {
+  const workspace = getDecisionReviewWorkspace(state, repositoryId, proposalId)
+  if (workspace.proposal.state !== 'ReadyForResolution') {
+    throw new Error(`Proposal transition from ${workspace.proposal.state} to Resolved is not allowed.`)
+  }
+
+  const rationale = typeof request.rationale === 'string' ? request.rationale.trim() : ''
+  const resolver = typeof request.resolver === 'string' ? request.resolver.trim() : ''
+  const selectedOptionId =
+    typeof request.selectedOptionId === 'string' ? request.selectedOptionId.trim() : ''
+  const outcome = isDecisionOutcome(request.outcome) ? request.outcome : 'Accepted'
+  if (!rationale) {
+    throw new Error('Resolution rationale is required.')
+  }
+  if (!resolver) {
+    throw new Error('Resolver metadata is required.')
+  }
+  if (!selectedOptionId) {
+    throw new Error('Selected option id is required.')
+  }
+
+  const selectedOption = workspace.proposal.options.find((option) => option.id === selectedOptionId)
+  if (!selectedOption) {
+    throw new Error(`Selected option was not found: ${selectedOptionId}`)
+  }
+
+  const timestamp = new Date().toISOString()
+  const decisionId = `DEC-${String(Object.keys(state.decisions[repositoryId] ?? {}).length + 1).padStart(4, '0')}`
+  const proposalSource = {
+    sourceKind: 'DecisionProposal',
+    relativePath: `.agents/decisions/proposals/${proposalId}/proposal.json`,
+    section: null,
+    itemId: null,
+    decisionId,
+    proposalId,
+    candidateId: workspace.proposal.candidateId,
+    excerpt: 'Mock proposal resolved through explicit resolution command.',
+  }
+  const optionSource = {
+    sourceKind: 'DecisionOption',
+    relativePath: `.agents/decisions/proposals/${proposalId}/proposal.json`,
+    section: 'Options',
+    itemId: selectedOptionId,
+    decisionId,
+    proposalId,
+    candidateId: workspace.proposal.candidateId,
+    excerpt: selectedOption.title,
+  }
+  const decisionState = targetDecisionStateForOutcome(outcome)
+  const decision: Decision = {
+    id: decisionId,
+    state: decisionState,
+    classification: 'Architectural',
+    title: workspace.proposal.title,
+    context: workspace.proposal.context,
+    metadata: {
+      repositoryId,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      schemaVersion: '1',
+    },
+    resolution: {
+      outcome,
+      selectedOptionId,
+      rationale,
+      resolvedBy: resolver,
+      recommendationDiverged:
+        Boolean(workspace.proposal.recommendation) &&
+        workspace.proposal.recommendation?.optionId !== selectedOptionId,
+      resolvedAt: timestamp,
+      sources: [proposalSource, optionSource],
+      sourceProposalSnapshot: {
+        proposalId,
+        candidateId: workspace.proposal.candidateId,
+        proposalFingerprint: `mock-current-fingerprint-${proposalId}`,
+        proposalState: workspace.proposal.state,
+        title: workspace.proposal.title,
+        context: workspace.proposal.context,
+        options: workspace.proposal.options,
+        tradeoffs: workspace.proposal.tradeoffs,
+        recommendation: workspace.proposal.recommendation,
+        assumptions: workspace.proposal.assumptions,
+        evidence: workspace.proposal.evidence,
+        history: workspace.proposal.history,
+        revisions: workspace.revisions,
+      },
+    },
+    relationships: [],
+    evidence: workspace.proposal.evidence,
+    history: [
+      {
+        at: timestamp,
+        actor: resolver,
+        action: 'Resolved',
+        fromState: 'Open',
+        toState: decisionState,
+        reason: rationale,
+        sources: [proposalSource, optionSource],
+      },
+    ],
+  }
+
+  state.decisions[repositoryId] = {
+    ...(state.decisions[repositoryId] ?? {}),
+    [decisionId]: decision,
+  }
+
+  workspace.proposal = {
+    ...workspace.proposal,
+    state: 'Resolved',
+    history: [
+      ...workspace.proposal.history,
+      {
+        at: timestamp,
+        actor: resolver,
+        action: 'Resolved',
+        fromState: workspace.proposal.state,
+        toState: 'Resolved',
+        reason: rationale,
+        sources: [proposalSource],
+      },
+    ],
+  }
+  workspace.review = {
+    ...workspace.review,
+    state: 'Closed',
+    updatedAt: timestamp,
+    reason: 'Mock proposal was resolved through explicit human action.',
+  }
+  state.decisionProposalBrowserItems[repositoryId] =
+    state.decisionProposalBrowserItems[repositoryId]?.map((item) =>
+      item.proposalId === proposalId
+        ? {
+            ...item,
+            state: 'Resolved',
+            reviewState: 'Closed',
+            isResolved: true,
+            updatedAt: timestamp,
+            reviewUpdatedAt: timestamp,
+          }
+        : item,
+    ) ?? []
+
+  return decision
+}
+
+function getDecisionAssimilationRecommendationMock(
+  state: MockState,
+  repositoryId: string,
+  decisionId: string,
+): DecisionAssimilationRecommendation {
+  const recommendation = state.decisionAssimilationRecommendations[repositoryId]?.[decisionId]
+  if (!recommendation) {
+    throw new Error(`Decision assimilation recommendation was not found: ${decisionId}`)
+  }
+
+  return recommendation
+}
+
+function proposeDecisionOperationalContextAssimilationMock(
+  state: MockState,
+  repositoryId: string,
+  decisionId: string,
+  request: { requestedBy?: unknown; notes?: unknown },
+): DecisionAssimilationRecommendation {
+  const decision = state.decisions[repositoryId]?.[decisionId]
+  if (!decision) {
+    throw new Error(`Decision was not found: ${decisionId}`)
+  }
+  if (decision.state !== 'Resolved') {
+    throw new Error('Only resolved decisions can produce operational-context assimilation recommendations.')
+  }
+
+  const timestamp = new Date().toISOString()
+  const contextSnapshot = state.decisionContexts[repositoryId]
+  const recommendation: DecisionAssimilationRecommendation = {
+    decisionId,
+    repositoryId,
+    createdAt: timestamp,
+    decisionFingerprint: `mock-decision-fingerprint-${decisionId}`,
+    contextSnapshotId: contextSnapshot.snapshotId,
+    contextFingerprint: contextSnapshot.fingerprint,
+    sourceDecision: decision,
+    contextSnapshot,
+    projectedStableDecision: `${decision.title}: ${decision.resolution?.rationale ?? decision.context}`,
+    rationale: decision.resolution?.rationale ?? decision.context,
+    requestedBy: typeof request.requestedBy === 'string' && request.requestedBy.trim()
+      ? request.requestedBy.trim()
+      : null,
+    notes: typeof request.notes === 'string' && request.notes.trim() ? request.notes.trim() : null,
+    evidence: decision.evidence,
+    sources: decision.resolution?.sources ?? [],
+    diagnostics: [
+      'Mock package is advisory and does not mutate .agents/operational_context.md.',
+    ],
+  }
+
+  state.decisionAssimilationRecommendations[repositoryId] = {
+    ...(state.decisionAssimilationRecommendations[repositoryId] ?? {}),
+    [decisionId]: recommendation,
+  }
+
+  return recommendation
+}
+
+function isDecisionOutcome(value: unknown): value is DecisionOutcome {
+  return value === 'Accepted' || value === 'Rejected' || value === 'Deferred'
+}
+
+function targetDecisionStateForOutcome(outcome: DecisionOutcome) {
+  if (outcome === 'Rejected') {
+    return 'Archived'
+  }
+  if (outcome === 'Deferred') {
+    return 'UnderReview'
+  }
+
+  return 'Resolved'
+}
+
 function createDecisionProposalLineage(
   state: MockState,
   repositoryId: string,
@@ -1051,6 +1286,8 @@ function createInitialState(): MockState {
     decisionCandidates: {},
     decisionProposalBrowserItems: {},
     decisionProposalReviewWorkspaces: {},
+    decisions: {},
+    decisionAssimilationRecommendations: {},
     commandCalls: {},
   }
 
@@ -1062,6 +1299,8 @@ function createInitialState(): MockState {
       repository,
       state.decisionProposalBrowserItems[repository.id],
     )
+    state.decisions[repository.id] = {}
+    state.decisionAssimilationRecommendations[repository.id] = {}
   })
 
   seedCertificationSession(state, certificationRepositories[0], 'Executing', 'Executing')
@@ -2043,6 +2282,40 @@ export function installDevTauriMock() {
               repositoryId,
               proposalId,
               args?.request as DecisionRefinementRequest,
+            ),
+          )
+        }
+        case 'resolve_decision_proposal': {
+          const repositoryId = getStringArg(args, 'repositoryId')
+          const proposalId = getStringArg(args, 'proposalId')
+          return clone(
+            resolveDecisionProposalMock(
+              state,
+              repositoryId,
+              proposalId,
+              (args?.request ?? {}) as {
+                rationale?: unknown
+                resolver?: unknown
+                selectedOptionId?: unknown
+                outcome?: unknown
+              },
+            ),
+          )
+        }
+        case 'get_decision_assimilation_recommendation': {
+          const repositoryId = getStringArg(args, 'repositoryId')
+          const decisionId = getStringArg(args, 'decisionId')
+          return clone(getDecisionAssimilationRecommendationMock(state, repositoryId, decisionId))
+        }
+        case 'propose_decision_operational_context_assimilation': {
+          const repositoryId = getStringArg(args, 'repositoryId')
+          const decisionId = getStringArg(args, 'decisionId')
+          return clone(
+            proposeDecisionOperationalContextAssimilationMock(
+              state,
+              repositoryId,
+              decisionId,
+              (args?.request ?? {}) as { requestedBy?: unknown; notes?: unknown },
             ),
           )
         }

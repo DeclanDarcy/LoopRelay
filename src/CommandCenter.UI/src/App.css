@@ -1006,6 +1006,7 @@ button:focus-visible {
 
 .decision-proposal-viewer,
 .decision-refinement-panel,
+.decision-resolution-panel,
 .decision-revision-history,
 .decision-option-comparison,
 .decision-evidence-source-panel,
@@ -1151,6 +1152,7 @@ button:focus-visible {
 }
 
 .decision-refinement-form input,
+.decision-refinement-form select,
 .decision-refinement-form textarea {
   min-width: 0;
   width: 100%;
@@ -1174,6 +1176,7 @@ button:focus-visible {
 
 .decision-option-grid,
 .decision-review-grid,
+.decision-resolution-summary,
 .decision-revision-grid {
   min-width: 0;
   display: grid;

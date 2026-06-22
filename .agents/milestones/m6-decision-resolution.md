@@ -6,11 +6,11 @@ transform reviewed and refined proposals into authoritative project decisions th
 
 ## Backend Work
 
-- [ ] Add `DecisionResolution`, `ResolveDecisionCommand`, `DecisionResolutionRationale`, `DecisionResolutionHistory`, and recommendation divergence tracking.
+- [x] Add `DecisionResolution`, `ResolveDecisionCommand`, `DecisionResolutionRationale`, `DecisionResolutionHistory`, and recommendation divergence tracking.
 - [x] Implement `IDecisionResolutionService`.
 - [x] Support accept, reject, and defer.
 - [x] Require resolver and rationale.
-- [ ] Create or update authoritative `Decision` records only through resolution commands.
+- [x] Create or update authoritative `Decision` records only through resolution commands.
 - [x] Record selected option and whether it matched the recommendation.
 - [x] Persist outcome, timestamp, resolver, rationale, state transition, and source proposal.
 - [x] Update `decision.md` and `decisions.md` projections.
@@ -21,11 +21,11 @@ transform reviewed and refined proposals into authoritative project decisions th
 
 ## UI Work
 
-- [ ] Add resolution panel.
-- [ ] Show proposal, refinement history, recommendation, selected outcome, selected option, and rationale before resolution.
-- [ ] Require rationale input for resolution actions.
-- [ ] Show recommendation override explicitly without treating it as an error.
-- [ ] Show any generated operational-context assimilation recommendation as a separate reviewable item.
+- [x] Add resolution panel.
+- [x] Show proposal, refinement history, recommendation, selected outcome, selected option, and rationale before resolution.
+- [x] Require rationale input for resolution actions.
+- [x] Show recommendation override explicitly without treating it as an error.
+- [x] Show any generated operational-context assimilation recommendation as a separate reviewable item.
 
 ## Tests
 
@@ -40,10 +40,10 @@ transform reviewed and refined proposals into authoritative project decisions th
 
 ## Exit Criteria
 
-- [ ] Resolution is human-controlled and explicit.
-- [ ] Authoritative decisions are repository-backed.
-- [ ] Historical proposal, review, refinement, and resolution context remain recoverable.
-- [ ] Resolved decisions can be packaged as operational-context assimilation recommendations without becoming operational context automatically.
+- [x] Resolution is human-controlled and explicit.
+- [x] Authoritative decisions are repository-backed.
+- [x] Historical proposal, review, refinement, and resolution context remain recoverable.
+- [x] Resolved decisions can be packaged as operational-context assimilation recommendations without becoming operational context automatically.
 
 ## Progress Notes
 
@@ -52,3 +52,4 @@ transform reviewed and refined proposals into authoritative project decisions th
 - Resolution outcomes now have one backend interpretation through `DecisionLifecycleRules`: accepted decisions become `Resolved`, rejected decisions become `Archived`, and deferred decisions become `UnderReview`, while the source proposal becomes `Resolved` for all explicit resolution outcomes.
 - Assimilation recommendation packages are now generated through `IDecisionOperationalContextAssimilationService` and persisted under `.agents/decisions/assimilation/{DEC-id}` with source decision and decision context snapshot lineage.
 - Assimilation recommendation generation is advisory only: it creates `recommendation.json`, `recommendation.md`, and a context snapshot, but does not mutate `.agents/operational_context.md` or own continuity merge, review, acceptance, or promotion policy.
+- Resolution UI now submits explicit resolver, rationale, outcome, and selected option metadata through the backend resolution command, renders recommendation overrides as recorded human choices, and renders generated assimilation packages as separate advisory artifacts.
