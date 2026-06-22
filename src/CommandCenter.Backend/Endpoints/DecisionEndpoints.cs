@@ -26,6 +26,7 @@ public static class DecisionEndpoints
         app.MapListDecisionProposalRevisions();
         app.MapResolveDecisionProposal();
         app.MapExpireDecisionProposal();
+        app.MapDiscardDecisionProposal();
         return app;
     }
 
@@ -335,6 +336,31 @@ public static class DecisionEndpoints
             try
             {
                 return Results.Ok(await generationService.ExpireProposalAsync(repositoryId, proposalId, request?.Reason));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapDiscardDecisionProposal(this IEndpointRouteBuilder app) =>
+        app.MapPost("/api/repositories/{repositoryId:guid}/decisions/proposals/{proposalId}/discard", async (
+            Guid repositoryId,
+            string proposalId,
+            DecisionProposalTransitionRequest? request,
+            IDecisionGenerationService generationService) =>
+        {
+            try
+            {
+                return Results.Ok(await generationService.DiscardProposalAsync(repositoryId, proposalId, request?.Reason));
             }
             catch (KeyNotFoundException exception)
             {

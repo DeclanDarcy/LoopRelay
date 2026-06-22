@@ -77,14 +77,19 @@ public sealed class DecisionLifecycleRulesTests
     [InlineData(DecisionProposalState.Generated, DecisionProposalState.Viewed)]
     [InlineData(DecisionProposalState.Generated, DecisionProposalState.ReadyForResolution)]
     [InlineData(DecisionProposalState.Generated, DecisionProposalState.Expired)]
+    [InlineData(DecisionProposalState.Generated, DecisionProposalState.Discarded)]
     [InlineData(DecisionProposalState.Viewed, DecisionProposalState.NeedsRefinement)]
     [InlineData(DecisionProposalState.Viewed, DecisionProposalState.ReadyForResolution)]
     [InlineData(DecisionProposalState.Viewed, DecisionProposalState.Expired)]
+    [InlineData(DecisionProposalState.Viewed, DecisionProposalState.Discarded)]
     [InlineData(DecisionProposalState.NeedsRefinement, DecisionProposalState.Refined)]
     [InlineData(DecisionProposalState.NeedsRefinement, DecisionProposalState.Expired)]
+    [InlineData(DecisionProposalState.NeedsRefinement, DecisionProposalState.Discarded)]
     [InlineData(DecisionProposalState.Refined, DecisionProposalState.ReadyForResolution)]
     [InlineData(DecisionProposalState.Refined, DecisionProposalState.Expired)]
+    [InlineData(DecisionProposalState.Refined, DecisionProposalState.Discarded)]
     [InlineData(DecisionProposalState.ReadyForResolution, DecisionProposalState.Resolved)]
+    [InlineData(DecisionProposalState.ReadyForResolution, DecisionProposalState.Discarded)]
     public void ProposalTransitionMatrixAllowsPlannedTransitions(DecisionProposalState from, DecisionProposalState to)
     {
         DecisionTransitionResult result = DecisionLifecycleRules.ValidateProposalTransition(from, to);
@@ -98,6 +103,19 @@ public sealed class DecisionLifecycleRulesTests
         DecisionTransitionResult result = DecisionLifecycleRules.ValidateProposalTransition(
             DecisionProposalState.Generated,
             DecisionProposalState.Resolved);
+
+        Assert.False(result.IsValid);
+    }
+
+    [Theory]
+    [InlineData(DecisionProposalState.Resolved)]
+    [InlineData(DecisionProposalState.Expired)]
+    [InlineData(DecisionProposalState.Discarded)]
+    public void ProposalTransitionMatrixRejectsDiscardFromTerminalStates(DecisionProposalState from)
+    {
+        DecisionTransitionResult result = DecisionLifecycleRules.ValidateProposalTransition(
+            from,
+            DecisionProposalState.Discarded);
 
         Assert.False(result.IsValid);
     }

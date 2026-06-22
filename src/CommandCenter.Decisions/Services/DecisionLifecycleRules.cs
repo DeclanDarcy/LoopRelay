@@ -32,25 +32,33 @@ public static class DecisionLifecycleRules
         [
             DecisionProposalState.Viewed,
             DecisionProposalState.ReadyForResolution,
-            DecisionProposalState.Expired
+            DecisionProposalState.Expired,
+            DecisionProposalState.Discarded
         ],
         [DecisionProposalState.Viewed] =
         [
             DecisionProposalState.NeedsRefinement,
             DecisionProposalState.ReadyForResolution,
-            DecisionProposalState.Expired
+            DecisionProposalState.Expired,
+            DecisionProposalState.Discarded
         ],
         [DecisionProposalState.NeedsRefinement] =
         [
             DecisionProposalState.Refined,
-            DecisionProposalState.Expired
+            DecisionProposalState.Expired,
+            DecisionProposalState.Discarded
         ],
         [DecisionProposalState.Refined] =
         [
             DecisionProposalState.ReadyForResolution,
-            DecisionProposalState.Expired
+            DecisionProposalState.Expired,
+            DecisionProposalState.Discarded
         ],
-        [DecisionProposalState.ReadyForResolution] = [DecisionProposalState.Resolved]
+        [DecisionProposalState.ReadyForResolution] =
+        [
+            DecisionProposalState.Resolved,
+            DecisionProposalState.Discarded
+        ]
     };
 
     public static DecisionTransitionResult ValidateDecisionTransition(DecisionState from, DecisionState to, DecisionOutcome? outcome = null)

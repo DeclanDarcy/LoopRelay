@@ -433,6 +433,74 @@ public sealed class DecisionGenerationServiceTests
     }
 
     [Fact]
+    public async Task DiscardProposalPersistsTerminalStateHistoryMarkdownAndIndexWithoutDecisionMutation()
+    {
+        Repository repository = CreateRepository();
+        await WriteAsync(repository, ".agents/operational_context.md", "# Operational Context\n\nStable understanding.");
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        string candidateBefore = await ReadAsync(repository, ".agents/decisions/candidates/CAND-0001/candidate.json");
+        string operationalContextBefore = await ReadAsync(repository, ".agents/operational_context.md");
+        var service = CreateGenerationService(repository, store, decisionRepository);
+        DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
+        await service.MarkProposalViewedAsync(repository.Id, proposal.Id, "Reviewer inspected the proposal.");
+
+        DecisionProposal discarded = await service.DiscardProposalAsync(repository.Id, proposal.Id, "Proposal no longer matches direction.");
+
+        Assert.Equal(DecisionProposalState.Discarded, discarded.State);
+        Assert.Contains(discarded.History, entry =>
+            entry.Event == "Discarded" &&
+            entry.FromState == DecisionProposalState.Viewed.ToString() &&
+            entry.ToState == DecisionProposalState.Discarded.ToString() &&
+            entry.Reason == "Proposal no longer matches direction.");
+
+        DecisionProposal? reloaded = await decisionRepository.GetProposalAsync(repository, proposal.Id);
+        string proposalMarkdown = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/proposal.md");
+        string index = await ReadAsync(repository, ".agents/decisions/decisions.md");
+        string candidateAfter = await ReadAsync(repository, ".agents/decisions/candidates/CAND-0001/candidate.json");
+        string operationalContextAfter = await ReadAsync(repository, ".agents/operational_context.md");
+        Assert.Equal(DecisionProposalState.Discarded, reloaded?.State);
+        Assert.Contains("- State: Discarded", proposalMarkdown);
+        Assert.Contains("- PROP-0001 | Discarded | CAND-0001 | Decide persistence schema", index);
+        Assert.Equal(candidateBefore, candidateAfter);
+        Assert.Equal(operationalContextBefore, operationalContextAfter);
+        Assert.Empty(await decisionRepository.ListDecisionsAsync(repository));
+        Assert.False(Directory.Exists(Path.Combine(repository.Path, ".agents", "decisions", "records")));
+        Assert.False(Directory.Exists(Path.Combine(repository.Path, ".agents", "decisions", "assimilation")));
+    }
+
+    [Fact]
+    public async Task DiscardProposalRejectsResolvedProposalsAndLeavesDecisionRecordsUntouched()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var service = CreateGenerationService(repository, store, decisionRepository);
+        DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
+        await service.MarkProposalReadyForResolutionAsync(repository.Id, proposal.Id, "Ready for human resolution.");
+        Decision decision = await service.ResolveProposalAsync(
+            repository.Id,
+            proposal.Id,
+            new ResolveDecisionCommand("Resolve before discard attempt.", "human-reviewer", "option-1"));
+        string decisionBefore = await ReadAsync(repository, ".agents/decisions/records/DEC-0001/decision.json");
+
+        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.DiscardProposalAsync(repository.Id, proposal.Id, "Try to discard after resolution."));
+
+        string decisionAfter = await ReadAsync(repository, ".agents/decisions/records/DEC-0001/decision.json");
+        DecisionProposal? reloaded = await decisionRepository.GetProposalAsync(repository, proposal.Id);
+        Assert.Equal("Proposal transition from Resolved to Discarded is not allowed.", exception.Message);
+        Assert.Equal(decision.Id, Assert.Single(await decisionRepository.ListDecisionsAsync(repository)).Id);
+        Assert.Equal(decisionBefore, decisionAfter);
+        Assert.Equal(DecisionProposalState.Resolved, reloaded?.State);
+        Assert.False(Directory.Exists(Path.Combine(repository.Path, ".agents", "decisions", "assimilation")));
+    }
+
+    [Fact]
     public async Task ProposalEndpointsReturnSuccessForGenerationListingGetReviewTransitionsAndExpiration()
     {
         Repository repository = CreateRepository();
@@ -495,6 +563,58 @@ public sealed class DecisionGenerationServiceTests
         Assert.Equal(DecisionProposalState.Viewed, (await viewedResponse.Content.ReadFromJsonAsync<DecisionProposal>(jsonOptions))!.State);
         Assert.Equal(DecisionProposalState.ReadyForResolution, (await readyResponse.Content.ReadFromJsonAsync<DecisionProposal>(jsonOptions))!.State);
         Assert.Equal(DecisionProposalState.Expired, (await expireResponse.Content.ReadFromJsonAsync<DecisionProposal>(jsonOptions))!.State);
+    }
+
+    [Fact]
+    public async Task ProposalDiscardEndpointReturnsDiscardedProposalAndConflictForResolvedProposal()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate firstCandidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        DecisionCandidate secondCandidate = CreateCandidate(
+            repository.Id,
+            DecisionCandidateState.Promoted,
+            summary: "Need to decide review state projection.") with
+        {
+            Id = "CAND-0002",
+            Title = "Decide review projection"
+        };
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, firstCandidate);
+        await decisionRepository.SaveCandidateAsync(repository, secondCandidate);
+
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services => services.AddSingleton<IRepositoryService>(new StubRepositoryService(repository)));
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+        using var client = new HttpClient();
+        string root = app.Urls.Single();
+        JsonSerializerOptions jsonOptions = CreateJsonOptions();
+
+        DecisionProposal firstProposal = (await (await client.PostAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/candidates/{firstCandidate.Id}/proposals",
+            null)).Content.ReadFromJsonAsync<DecisionProposal>(jsonOptions))!;
+        HttpResponseMessage discardResponse = await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/proposals/{firstProposal.Id}/discard",
+            new DecisionProposalTransitionRequest("Discard via endpoint."));
+
+        DecisionProposal secondProposal = (await (await client.PostAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/candidates/{secondCandidate.Id}/proposals",
+            null)).Content.ReadFromJsonAsync<DecisionProposal>(jsonOptions))!;
+        await client.PostAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/proposals/{secondProposal.Id}/review/ready-for-resolution",
+            null);
+        await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/proposals/{secondProposal.Id}/resolve",
+            new ResolveDecisionCommand("Resolve via endpoint.", "human-reviewer", "option-1"));
+        HttpResponseMessage discardResolvedResponse = await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/proposals/{secondProposal.Id}/discard",
+            new DecisionProposalTransitionRequest("Try to discard resolved proposal."));
+
+        Assert.Equal(HttpStatusCode.OK, discardResponse.StatusCode);
+        Assert.Equal(DecisionProposalState.Discarded, (await discardResponse.Content.ReadFromJsonAsync<DecisionProposal>(jsonOptions))!.State);
+        Assert.Equal(HttpStatusCode.Conflict, discardResolvedResponse.StatusCode);
     }
 
     [Fact]

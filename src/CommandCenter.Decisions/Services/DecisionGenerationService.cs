@@ -100,6 +100,16 @@ public sealed class DecisionGenerationService(
             reason ?? "Proposal expired by explicit proposal-management operation.");
     }
 
+    public async Task<DecisionProposal> DiscardProposalAsync(Guid repositoryId, string proposalId, string? reason)
+    {
+        return await TransitionProposalAsync(
+            repositoryId,
+            proposalId,
+            DecisionProposalState.Discarded,
+            "Discarded",
+            reason ?? "Proposal discarded by explicit proposal-management operation.");
+    }
+
     public async Task<DecisionProposal> MarkProposalViewedAsync(Guid repositoryId, string proposalId, string? reason)
     {
         return await TransitionProposalAsync(

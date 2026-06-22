@@ -23,4 +23,6 @@ public interface IDecisionGenerationService
     Task<Decision> ResolveProposalAsync(Guid repositoryId, string proposalId, ResolveDecisionCommand command);
 
     Task<DecisionProposal> ExpireProposalAsync(Guid repositoryId, string proposalId, string? reason);
+
+    Task<DecisionProposal> DiscardProposalAsync(Guid repositoryId, string proposalId, string? reason);
 }

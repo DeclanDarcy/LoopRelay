@@ -2,23 +2,23 @@
 
 ## Newly Authorized
 
-- The M3 resolution slice is accepted as aligned with the roadmap.
-- Resolution is the correct lifecycle point for authoritative `DEC-*` decision records to begin existing.
-- Resolution must remain an explicit human action, not an automatic promotion from proposal recommendation.
-- `ReadyForResolution` remains the required gate before `Resolved`.
-- Selected option, resolver metadata, rationale, and recommendation divergence are decision-authority metadata.
-- Decision resolution must continue not to mutate operational context, create assimilation recommendations, or project into execution.
-- The next M3 slice should implement proposal discard as a constrained proposal-state transition only.
-- Discard should explicitly define allowed source states and reject all others.
-- Discard must persist proposal state, history entry, timestamp, and reason without mutating candidates, decisions, or resolution objects.
-- Discard should refresh `proposal.md` and `decisions.md`.
-- Discard tests should prove resolved proposals cannot be discarded.
-- Discard boundary tests should prove no mutation of `DEC-*` records, operational context, assimilation recommendations, or execution projection.
-- After discard, run final lifecycle validation and M3 closure review.
+- M3 Proposal Generation is complete.
+- The implemented M3 lifecycle chain is accepted as aligned with the roadmap: decision context, discovery, candidate, promotion, proposal, review, refinement, ready for resolution, resolution, and `DEC-*`.
+- Proposal discard is authorized only before decision authority exists.
+- Discard from `Resolved` proposals must remain prohibited because `DEC-*` creation moves authority into the decision layer.
+- Allowed discard source states remain `Generated`, `Viewed`, `NeedsRefinement`, `Refined`, and `ReadyForResolution`.
+- `Resolved`, `Discarded`, and `Expired` remain terminal proposal states for discard purposes.
+- Proposal authority, review artifacts, and decision authority must remain separate as the implementation moves into M4 and later milestones.
+- Review notes should not be stored inside `proposal.json` or decision history as proposal or decision state.
+- M4 should begin with backend review-workspace primitives before UI work.
+- Review notes should be treated as reviewer evidence and persisted as their own review-workspace layer.
+- Initial M4 priority order is `DecisionReviewNote`, `DecisionReviewState`, review-note persistence, review-note endpoints, attribution metadata, proposal-to-review linkage, review workspace read models, and review-note tests.
+- UI review workspace, option comparison UI, and evidence browser UI should be postponed until the review artifact model stabilizes.
 
 ## Current Milestone Status
 
 - M0 is complete.
 - M1 is complete.
 - M2 is complete.
-- M3 is nearly complete.
+- M3 is complete.
+- M4 is ready to start.
