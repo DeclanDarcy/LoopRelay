@@ -402,6 +402,11 @@ button:focus-visible {
   padding: 10px 12px;
 }
 
+.command-palette-item-active {
+  border-color: var(--accent-muted);
+  background: var(--accent-subtle);
+}
+
 .command-palette-item span {
   overflow: hidden;
   color: var(--fg-default);

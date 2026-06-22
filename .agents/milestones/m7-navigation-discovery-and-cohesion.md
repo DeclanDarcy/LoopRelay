@@ -2,13 +2,13 @@
 
 ## Tracking
 
-- [ ] Milestone complete
+- [x] Milestone complete
 - [x] Workstream 7.1: Command Palette v2
 - [x] Workstream 7.2: Cross-Workspace Link Hardening
-- [ ] Workstream 7.3: Context Preservation
+- [x] Workstream 7.3: Context Preservation
 - [x] Workstream 7.4: Discovery Layer
-- [ ] Workstream 7.5: Cohesion Audit
-- [ ] Certification complete
+- [x] Workstream 7.5: Cohesion Audit
+- [x] Certification complete
 
 Goal: make the application feel like one operational environment rather than separate screens.
 
@@ -62,7 +62,7 @@ Preserve:
 - [x] Active tab per repository where useful.
 - [x] Selected artifact per repository.
 - [x] Selected milestone per repository.
-- [ ] Expanded sections.
+- [x] Expanded sections deferred for M7 because no current shell workflow requires persisted section expansion state.
 - [x] Current palette query until close.
 
 ### Certification
@@ -92,16 +92,23 @@ Rules:
 
 Audit:
 
-- [ ] Status labels.
-- [ ] Empty states.
-- [ ] Loading states.
-- [ ] Error states.
-- [ ] Disabled capability states.
-- [ ] Layout density.
-- [ ] Keyboard behavior.
-- [ ] Focus behavior.
-- [ ] Responsive behavior.
+- [x] Status labels.
+- [x] Empty states.
+- [x] Loading states.
+- [x] Error states.
+- [x] Disabled capability states.
+- [x] Layout density.
+- [x] Keyboard behavior.
+- [x] Focus behavior.
+- [x] Responsive behavior.
 
 ### Certification
 
-- [ ] Similar concepts behave similarly across Workspace, Execution, Operational Context, and Continuity.
+- [x] Similar concepts behave similarly across Workspace, Execution, Operational Context, and Continuity.
+
+## Workstream Notes
+
+- 2026-06-21: Completed the M7 cohesion audit in `.agents/audits/m7-cohesion-audit.md`.
+- 2026-06-21: Explicitly deferred expanded-section preservation for M7. Current shell state persists repository, tab, artifact, milestone, command-palette query until close, and section targets; expanded disclosure state has no backend or workflow authority dependency yet.
+- 2026-06-21: Hardened command-palette keyboard behavior so ArrowUp/ArrowDown/Home/End move the highlighted navigation target, Enter selects the highlighted target, Escape closes through the existing global handler, and filtering resets highlight to the first available navigation target.
+- 2026-06-21: Certified M7 with `dotnet test CommandCenter.slnx`, `npm run lint`, `npm run test -- --run`, `npm run build`, and `npm run test:e2e`.

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import type { NavigationTarget } from '../../types'
 
 type CommandPaletteProps = {
@@ -17,6 +18,7 @@ export function CommandPalette({
   onSelectTarget,
 }: CommandPaletteProps) {
   const [query, setQuery] = useState('')
+  const [highlightedIndex, setHighlightedIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
@@ -50,6 +52,10 @@ export function CommandPalette({
     return targets.filter((target) => target.searchText.includes(normalizedQuery))
   }, [query, targets])
 
+  useEffect(() => {
+    setHighlightedIndex(0)
+  }, [filteredTargets])
+
   if (!isOpen) {
     return null
   }
@@ -57,6 +63,43 @@ export function CommandPalette({
   function selectTarget(target: NavigationTarget) {
     onSelectTarget(target)
     onClose()
+  }
+
+  function handleInputKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
+    if (filteredTargets.length === 0) {
+      return
+    }
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      setHighlightedIndex((currentIndex) => (currentIndex + 1) % filteredTargets.length)
+      return
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      setHighlightedIndex(
+        (currentIndex) => (currentIndex - 1 + filteredTargets.length) % filteredTargets.length,
+      )
+      return
+    }
+
+    if (event.key === 'Home') {
+      event.preventDefault()
+      setHighlightedIndex(0)
+      return
+    }
+
+    if (event.key === 'End') {
+      event.preventDefault()
+      setHighlightedIndex(filteredTargets.length - 1)
+      return
+    }
+
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      selectTarget(filteredTargets[highlightedIndex] ?? filteredTargets[0])
+    }
   }
 
   return (
@@ -70,15 +113,26 @@ export function CommandPalette({
           ref={inputRef}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={handleInputKeyDown}
           placeholder="Search navigation..."
           aria-label="Search navigation"
+          aria-activedescendant={
+            filteredTargets[highlightedIndex] ? `command-palette-target-${highlightedIndex}` : undefined
+          }
         />
-        <div className="command-palette-results">
-          {filteredTargets.map((target) => (
+        <div className="command-palette-results" aria-label="Navigation targets">
+          {filteredTargets.map((target, index) => (
             <button
               type="button"
               key={target.id}
-              className="command-palette-item"
+              id={`command-palette-target-${index}`}
+              data-highlighted={target.id === filteredTargets[highlightedIndex]?.id}
+              className={[
+                'command-palette-item',
+                target.id === filteredTargets[highlightedIndex]?.id
+                  ? 'command-palette-item-active'
+                  : '',
+              ].filter(Boolean).join(' ')}
               onClick={() => selectTarget(target)}
             >
               <span>{target.label}</span>
