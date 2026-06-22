@@ -56,7 +56,8 @@ public sealed class DecisionGovernanceService(
         AnalyzeRelationships(decisions, findings);
         AnalyzeResolvedDecisionAuthority(decisions, findings);
         AnalyzeActiveAuthority(decisions, findings);
-        AnalyzeProposalQuality(candidates, proposals, findings);
+        AnalyzeCandidateHygiene(decisions, candidates, proposals, findings);
+        AnalyzeProposalQuality(decisions, candidates, proposals, findings);
         AnalyzeExecutionReadiness(decisions, findings);
         AnalyzeConflictingExecutionDirectives(decisions, findings);
         AnalyzeAuthorityBoundaries(decisions, proposals, assimilationRecommendations, findings);
@@ -414,12 +415,107 @@ public sealed class DecisionGovernanceService(
         }
     }
 
+    private static void AnalyzeCandidateHygiene(
+        IReadOnlyList<Decision> decisions,
+        IReadOnlyList<DecisionCandidate> candidates,
+        IReadOnlyList<DecisionProposal> proposals,
+        List<DecisionGovernanceFinding> findings)
+    {
+        DecisionCandidate[] activeCandidates = candidates
+            .Where(IsActiveCandidate)
+            .Where(candidate => !string.IsNullOrWhiteSpace(candidate.SourceFingerprint))
+            .ToArray();
+        Dictionary<string, DecisionCandidate[]> terminalCandidatesByFingerprint = candidates
+            .Where(candidate => !IsActiveCandidate(candidate))
+            .Where(candidate => !string.IsNullOrWhiteSpace(candidate.SourceFingerprint))
+            .GroupBy(candidate => candidate.SourceFingerprint, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        Dictionary<string, string[]> resolvedProposalIdsByCandidate = proposals
+            .Where(proposal => proposal.State == DecisionProposalState.Resolved)
+            .GroupBy(proposal => proposal.CandidateId, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(proposal => proposal.Id).Order(StringComparer.Ordinal).ToArray(),
+                StringComparer.Ordinal);
+        Dictionary<string, string[]> resolvedDecisionIdsByCandidate = decisions
+            .Where(decision => decision.State == DecisionState.Resolved)
+            .Where(decision => !string.IsNullOrWhiteSpace(decision.Resolution?.SourceProposalSnapshot?.CandidateId))
+            .GroupBy(decision => decision.Resolution!.SourceProposalSnapshot!.CandidateId, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(decision => decision.Id.Value).Order(StringComparer.Ordinal).ToArray(),
+                StringComparer.Ordinal);
+
+        foreach (IGrouping<string, DecisionCandidate> duplicateSource in activeCandidates
+                     .GroupBy(candidate => candidate.SourceFingerprint, StringComparer.Ordinal)
+                     .Where(group => group.Count() > 1))
+        {
+            DecisionCandidate[] duplicates = duplicateSource.ToArray();
+            AddFinding(
+                findings,
+                DecisionGovernanceCategory.DecisionCoverage,
+                DecisionGovernanceSeverity.Warning,
+                false,
+                "Multiple active candidates share a source fingerprint",
+                $"Active candidates {string.Join(", ", duplicates.Select(candidate => candidate.Id).Order(StringComparer.Ordinal))} share source fingerprint {duplicateSource.Key}. One candidate should remain active and the duplicate should be marked explicitly.",
+                duplicates.Select(CandidateSource).ToArray(),
+                [],
+                duplicates.Select(candidate => candidate.Id).ToArray(),
+                []);
+        }
+
+        foreach (DecisionCandidate candidate in activeCandidates)
+        {
+            if (terminalCandidatesByFingerprint.TryGetValue(candidate.SourceFingerprint, out DecisionCandidate[]? terminalMatches))
+            {
+                AddFinding(
+                    findings,
+                    DecisionGovernanceCategory.DecisionCoverage,
+                    DecisionGovernanceSeverity.Warning,
+                    false,
+                    "Active candidate reuses terminal source fingerprint",
+                    $"Candidate {candidate.Id} is {candidate.State}, but terminal candidate(s) {string.Join(", ", terminalMatches.Select(match => $"{match.Id}:{match.State}").Order(StringComparer.Ordinal))} already record the same source fingerprint.",
+                    terminalMatches.Select(CandidateSource).Prepend(CandidateSource(candidate)).ToArray(),
+                    [],
+                    terminalMatches.Select(match => match.Id).Append(candidate.Id).ToArray(),
+                    []);
+            }
+
+            bool hasResolvedProposal = resolvedProposalIdsByCandidate.TryGetValue(candidate.Id, out string[]? resolvedProposalIds);
+            bool hasResolvedDecision = resolvedDecisionIdsByCandidate.TryGetValue(candidate.Id, out string[]? resolvedDecisionIds);
+            if (hasResolvedProposal || hasResolvedDecision)
+            {
+                AddFinding(
+                    findings,
+                    DecisionGovernanceCategory.DecisionCoverage,
+                    DecisionGovernanceSeverity.Warning,
+                    false,
+                    "Active candidate already has resolved authority",
+                    $"Candidate {candidate.Id} is still {candidate.State}, but resolved authority already exists through proposal(s) {string.Join(", ", resolvedProposalIds ?? [])} and decision(s) {string.Join(", ", resolvedDecisionIds ?? [])}. The candidate should be reviewed for lifecycle cleanup.",
+                    [CandidateSource(candidate)],
+                    resolvedDecisionIds ?? [],
+                    [candidate.Id],
+                    resolvedProposalIds ?? []);
+            }
+        }
+    }
+
     private static void AnalyzeProposalQuality(
+        IReadOnlyList<Decision> decisions,
         IReadOnlyList<DecisionCandidate> candidates,
         IReadOnlyList<DecisionProposal> proposals,
         List<DecisionGovernanceFinding> findings)
     {
         HashSet<string> candidateIds = candidates.Select(candidate => candidate.Id).ToHashSet(StringComparer.Ordinal);
+        Dictionary<string, DecisionCandidate> candidatesById = candidates.ToDictionary(candidate => candidate.Id, StringComparer.Ordinal);
+        HashSet<string> resolvedCandidateIds = proposals
+            .Where(proposal => proposal.State == DecisionProposalState.Resolved)
+            .Select(proposal => proposal.CandidateId)
+            .Concat(decisions
+                .Where(decision => decision.State == DecisionState.Resolved)
+                .Select(decision => decision.Resolution?.SourceProposalSnapshot?.CandidateId)
+                .OfType<string>())
+            .ToHashSet(StringComparer.Ordinal);
         foreach (DecisionProposal proposal in proposals)
         {
             if (!candidateIds.Contains(proposal.CandidateId))
@@ -431,6 +527,39 @@ public sealed class DecisionGovernanceService(
                     true,
                     "Proposal source candidate is missing",
                     $"Proposal {proposal.Id} references missing candidate {proposal.CandidateId}.",
+                    [ProposalSource(proposal)],
+                    [],
+                    [proposal.CandidateId],
+                    [proposal.Id]);
+            }
+
+            if (ActiveProposalStates.Contains(proposal.State) &&
+                candidatesById.TryGetValue(proposal.CandidateId, out DecisionCandidate? candidate) &&
+                candidate.State is not DecisionCandidateState.Discovered and not DecisionCandidateState.Promoted)
+            {
+                AddFinding(
+                    findings,
+                    DecisionGovernanceCategory.ProposalQuality,
+                    DecisionGovernanceSeverity.Warning,
+                    false,
+                    "Unresolved proposal source candidate is no longer active",
+                    $"Proposal {proposal.Id} is {proposal.State}, but candidate {candidate.Id} is {candidate.State}. The proposal should be reviewed, expired, or discarded.",
+                    [ProposalSource(proposal), CandidateSource(candidate)],
+                    [],
+                    [proposal.CandidateId],
+                    [proposal.Id]);
+            }
+
+            if (ActiveProposalStates.Contains(proposal.State) &&
+                resolvedCandidateIds.Contains(proposal.CandidateId))
+            {
+                AddFinding(
+                    findings,
+                    DecisionGovernanceCategory.ProposalQuality,
+                    DecisionGovernanceSeverity.Warning,
+                    false,
+                    "Unresolved proposal is stale after candidate resolution",
+                    $"Proposal {proposal.Id} is still {proposal.State}, but candidate {proposal.CandidateId} already has resolved authority. The proposal should be reviewed, expired, or discarded.",
                     [ProposalSource(proposal)],
                     [],
                     [proposal.CandidateId],
@@ -696,6 +825,11 @@ public sealed class DecisionGovernanceService(
         }
 
         diagnostics.Add("Repeated ambiguity, repeated blocker, repeated fork, and repeated unresolved-question analysis is limited to structured candidate/proposal evidence in this slice.");
+    }
+
+    private static bool IsActiveCandidate(DecisionCandidate candidate)
+    {
+        return candidate.State is DecisionCandidateState.Discovered or DecisionCandidateState.Promoted;
     }
 
     private static void AnalyzeProjectionIntegrity(

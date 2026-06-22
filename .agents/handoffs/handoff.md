@@ -2,25 +2,23 @@
 
 ## New State From This Slice
 
-- Continued Milestone 7 governance hardening.
-- Added `ProjectionIntegrity` governance category across backend and UI types.
-- Added projection failure detection in `DecisionGovernanceService` for file-backed lifecycle artifacts:
-  - missing or stale `decision.md` beside structured decision records
-  - missing or stale `candidate.md` beside structured candidates
-  - missing or stale `proposal.md` beside structured proposals
-  - missing or stale `.agents/decisions/decisions.md` index
-- Projection findings are blocking and set `BlocksExecutionProjection = true` because they indicate repository lifecycle projections are not coherent with structured authority.
-- In-memory governance fixtures remain unaffected unless structured decision artifact directories exist on disk.
-- Added focused governance test coverage for missing decision markdown projection.
-- Updated `.agents/milestones/m7-decision-governance.md` to mark projection failures complete.
-- Rotated prior handoff to `.agents/handoffs/handoff.0036.md`.
+- Continued Milestone 7 decision coverage analysis.
+- Added stale candidate lifecycle-hygiene detection in `DecisionGovernanceService`.
+- Active candidates now create advisory `DecisionCoverage` findings when:
+  - multiple active candidates share the same source fingerprint
+  - an active candidate reuses a source fingerprint already represented by a terminal candidate
+  - an active candidate already has resolved authority through a resolved proposal or decision snapshot
+- Stale candidate findings are warnings and do not block execution projection.
+- Added focused governance tests for duplicate active source fingerprints, terminal source fingerprint reuse, and active candidates with resolved authority.
+- Updated `.agents/milestones/m7-decision-governance.md` to mark stale candidates complete under decision coverage analysis.
+- Rotated prior handoff to `.agents/handoffs/handoff.0038.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter DecisionGovernanceServiceTests` passes: 14 tests.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes: 322 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter DecisionGovernanceServiceTests` passes: 19 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes: 327 tests.
 
 ## Next Slice
 
-- Continue M7C/M7D with unresolved stale proposal detection.
-- After that, move into repeated-signal coverage analysis: repeated ambiguity, blockers, forks, unresolved questions, stale candidates, and repeated governance findings.
+- Continue Milestone 7 with repeated unresolved questions using structured repository signals rather than natural-language similarity.
+- After that, add repeated governance finding detection across persisted governance reports.

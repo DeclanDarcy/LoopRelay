@@ -160,6 +160,130 @@ public sealed class DecisionGovernanceServiceTests
     }
 
     [Fact]
+    public async Task ActiveProposalForTerminalCandidateCreatesStaleProposalFinding()
+    {
+        Repository repository = CreateRepository();
+        var decisionRepository = new InMemoryDecisionRepository();
+        await decisionRepository.SaveCandidateAsync(
+            repository,
+            CreateCandidate(repository.Id, state: DecisionCandidateState.Expired));
+        await decisionRepository.SaveProposalAsync(repository, CreateProposal(repository.Id));
+        var service = CreateService(repository, decisionRepository);
+
+        DecisionGovernanceReport report = await service.GetCurrentReportAsync(repository.Id);
+
+        Assert.Equal(DecisionHealthAssessment.AdvisoryFindings, report.Health);
+        Assert.Contains(report.Findings, finding =>
+            finding.Category == DecisionGovernanceCategory.ProposalQuality &&
+            finding.Title == "Unresolved proposal source candidate is no longer active" &&
+            finding.Severity == DecisionGovernanceSeverity.Warning &&
+            !finding.BlocksExecutionProjection &&
+            finding.RelatedCandidateIds.SequenceEqual(["CAND-0001"]) &&
+            finding.RelatedProposalIds.SequenceEqual(["PROP-0001"]));
+    }
+
+    [Fact]
+    public async Task ActiveProposalForResolvedCandidateCreatesStaleProposalFinding()
+    {
+        Repository repository = CreateRepository();
+        var decisionRepository = new InMemoryDecisionRepository();
+        await decisionRepository.SaveCandidateAsync(repository, CreateCandidate(repository.Id));
+        await decisionRepository.SaveProposalAsync(repository, CreateProposal(repository.Id));
+        await decisionRepository.SaveDecisionAsync(
+            repository,
+            CreateResolvedDecision(
+                repository.Id,
+                proposalId: "PROP-0002"));
+        var service = CreateService(repository, decisionRepository);
+
+        DecisionGovernanceReport report = await service.GetCurrentReportAsync(repository.Id);
+
+        Assert.Equal(DecisionHealthAssessment.AdvisoryFindings, report.Health);
+        Assert.Contains(report.Findings, finding =>
+            finding.Category == DecisionGovernanceCategory.ProposalQuality &&
+            finding.Title == "Unresolved proposal is stale after candidate resolution" &&
+            finding.Severity == DecisionGovernanceSeverity.Warning &&
+            !finding.BlocksExecutionProjection &&
+            finding.RelatedCandidateIds.SequenceEqual(["CAND-0001"]) &&
+            finding.RelatedProposalIds.SequenceEqual(["PROP-0001"]));
+    }
+
+    [Fact]
+    public async Task MultipleActiveCandidatesWithSameSourceFingerprintCreateStaleCandidateFinding()
+    {
+        Repository repository = CreateRepository();
+        var decisionRepository = new InMemoryDecisionRepository();
+        await decisionRepository.SaveCandidateAsync(repository, CreateCandidate(repository.Id));
+        await decisionRepository.SaveCandidateAsync(
+            repository,
+            CreateCandidate(
+                repository.Id,
+                candidateId: "CAND-0002",
+                state: DecisionCandidateState.Discovered));
+        var service = CreateService(repository, decisionRepository);
+
+        DecisionGovernanceReport report = await service.GetCurrentReportAsync(repository.Id);
+
+        Assert.Equal(DecisionHealthAssessment.AdvisoryFindings, report.Health);
+        Assert.Contains(report.Findings, finding =>
+            finding.Category == DecisionGovernanceCategory.DecisionCoverage &&
+            finding.Title == "Multiple active candidates share a source fingerprint" &&
+            finding.Severity == DecisionGovernanceSeverity.Warning &&
+            !finding.BlocksExecutionProjection &&
+            finding.RelatedCandidateIds.SequenceEqual(["CAND-0001", "CAND-0002"]));
+    }
+
+    [Fact]
+    public async Task ActiveCandidateWithTerminalSourceFingerprintCreatesStaleCandidateFinding()
+    {
+        Repository repository = CreateRepository();
+        var decisionRepository = new InMemoryDecisionRepository();
+        await decisionRepository.SaveCandidateAsync(repository, CreateCandidate(repository.Id));
+        await decisionRepository.SaveCandidateAsync(
+            repository,
+            CreateCandidate(
+                repository.Id,
+                candidateId: "CAND-0002",
+                state: DecisionCandidateState.Duplicate));
+        var service = CreateService(repository, decisionRepository);
+
+        DecisionGovernanceReport report = await service.GetCurrentReportAsync(repository.Id);
+
+        Assert.Equal(DecisionHealthAssessment.AdvisoryFindings, report.Health);
+        Assert.Contains(report.Findings, finding =>
+            finding.Category == DecisionGovernanceCategory.DecisionCoverage &&
+            finding.Title == "Active candidate reuses terminal source fingerprint" &&
+            finding.Severity == DecisionGovernanceSeverity.Warning &&
+            !finding.BlocksExecutionProjection &&
+            finding.RelatedCandidateIds.SequenceEqual(["CAND-0001", "CAND-0002"]));
+    }
+
+    [Fact]
+    public async Task ActiveCandidateWithResolvedAuthorityCreatesStaleCandidateFinding()
+    {
+        Repository repository = CreateRepository();
+        var decisionRepository = new InMemoryDecisionRepository();
+        await decisionRepository.SaveCandidateAsync(repository, CreateCandidate(repository.Id));
+        await decisionRepository.SaveProposalAsync(
+            repository,
+            CreateProposal(repository.Id, state: DecisionProposalState.Resolved));
+        await decisionRepository.SaveDecisionAsync(repository, CreateResolvedDecision(repository.Id));
+        var service = CreateService(repository, decisionRepository);
+
+        DecisionGovernanceReport report = await service.GetCurrentReportAsync(repository.Id);
+
+        Assert.Equal(DecisionHealthAssessment.AdvisoryFindings, report.Health);
+        Assert.Contains(report.Findings, finding =>
+            finding.Category == DecisionGovernanceCategory.DecisionCoverage &&
+            finding.Title == "Active candidate already has resolved authority" &&
+            finding.Severity == DecisionGovernanceSeverity.Warning &&
+            !finding.BlocksExecutionProjection &&
+            finding.RelatedDecisionIds.SequenceEqual(["DEC-0001"]) &&
+            finding.RelatedCandidateIds.SequenceEqual(["CAND-0001"]) &&
+            finding.RelatedProposalIds.SequenceEqual(["PROP-0001"]));
+    }
+
+    [Fact]
     public async Task SupersededDecisionWithoutIncomingSupersedesCreatesLineageFinding()
     {
         Repository repository = CreateRepository();
@@ -495,12 +619,15 @@ public sealed class DecisionGovernanceServiceTests
         return options;
     }
 
-    private static DecisionCandidate CreateCandidate(Guid repositoryId)
+    private static DecisionCandidate CreateCandidate(
+        Guid repositoryId,
+        string candidateId = "CAND-0001",
+        DecisionCandidateState state = DecisionCandidateState.Promoted)
     {
         return new DecisionCandidate(
-            "CAND-0001",
+            candidateId,
             repositoryId,
-            DecisionCandidateState.Promoted,
+            state,
             DecisionCandidatePriority.High,
             DecisionClassification.Architectural,
             "Decide persistence schema",
@@ -510,7 +637,28 @@ public sealed class DecisionGovernanceServiceTests
             [new DecisionEvidence("Plan requires a persistence decision.", [new DecisionSourceReference("Plan", ".agents/plan.md")])],
             [new DecisionSourceReference("Plan", ".agents/plan.md")],
             [],
-            [new DecisionHistoryEntry(DateTimeOffset.UtcNow, "Promoted", null, DecisionCandidateState.Promoted.ToString(), "Seeded by governance test.", [])]);
+            [new DecisionHistoryEntry(DateTimeOffset.UtcNow, state.ToString(), null, state.ToString(), "Seeded by governance test.", [])]);
+    }
+
+    private static DecisionProposal CreateProposal(
+        Guid repositoryId,
+        string proposalId = "PROP-0001",
+        string candidateId = "CAND-0001",
+        DecisionProposalState state = DecisionProposalState.Generated)
+    {
+        return new DecisionProposal(
+            proposalId,
+            repositoryId,
+            candidateId,
+            state,
+            "Persist decisions as structured JSON",
+            "Decision lifecycle state must be reviewable before resolution.",
+            [new DecisionOption("option-1", "Use structured files", "Persist lifecycle records under .agents/decisions.", [])],
+            [new DecisionTradeoff("option-1", "Recoverable from repository artifacts.", "Requires schema validation.", [])],
+            new DecisionRecommendation("option-1", "Matches repository authority.", []),
+            [],
+            [new DecisionEvidence("Plan requires repository authority.", [new DecisionSourceReference("Plan", ".agents/plan.md")])],
+            [new DecisionHistoryEntry(DateTimeOffset.UtcNow, state.ToString(), null, state.ToString(), "Seeded by governance test.", [])]);
     }
 
     private static Repository CreateRepository()

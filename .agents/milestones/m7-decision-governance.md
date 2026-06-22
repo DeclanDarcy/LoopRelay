@@ -19,6 +19,7 @@ detect decision ecosystem health issues before decisions are projected into exec
   - [x] proposal quality
   - [x] execution projection readiness
 - [ ] Decision coverage analysis detects repeated ambiguity, repeated blockers, repeated governance findings, repeated forks, stale candidates, and repeated unresolved questions.
+  - [x] Stale candidates.
 - [ ] Detect contradictory resolved decisions, conflicting directives, circular supersession, broken dependencies, missing resolver metadata, unresolved stale proposals, decisions not ready for projection, and projection failures.
   - [x] Contradictory resolved decisions.
   - [x] Circular supersession.
@@ -29,7 +30,7 @@ detect decision ecosystem health issues before decisions are projected into exec
   - [x] DependsOn/Supports/Constrains relationships pointing at archived or superseded authority.
   - [x] Multiple accepted resolved decisions for one candidate.
   - [x] Conflicting execution directives.
-  - [ ] Unresolved stale proposals.
+  - [x] Unresolved stale proposals.
   - [x] Projection failures.
 - [x] Persist governance reports under `.agents/decisions/governance`.
 - [x] Mark blocking governance findings so execution projection can exclude affected decisions.
