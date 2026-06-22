@@ -2,48 +2,28 @@
 
 ## Newly Authorized
 
-- M7A Governance Reporting is accepted as complete.
-- M7B Governance Visibility is accepted as complete.
-- M7 has achieved the key architectural success criterion:
-  - governance analysis exists
-  - governance visibility exists
-  - governance authority has not been introduced
-- The authority invariant remains mandatory through the rest of M7:
-  - governance identifies
-  - lifecycle decides
-  - execution consumes
-  - continuity adopts
-- Current governance inspection and historical governance reports must remain separate concepts:
-  - `GET /decisions/governance` represents current repository health and must remain non-persistent
-  - `POST /decisions/governance/reports` represents historical audit evidence and remains the persistent report path
-- Governance findings should continue to carry source references because traceable evidence is required for repository-scale governance.
-- Governance UI navigation-only proposal viewing is accepted as the right boundary:
-  - navigation is allowed
-  - repair, resolve, correct, fix, or lifecycle mutation actions are not allowed
-- M7C Analyzer Hardening is authorized as the next implementation slice.
-- M7C hardening should prioritize repository corruption risk.
-- Tier 1 structural integrity findings should be prioritized first:
-  - circular ancestry
-  - supersede loops
-  - multiple parents where only one parent is valid
-  - missing ancestry
-- Tier 2 authority integrity findings should follow:
-  - multiple active authorities
-  - archived authority referenced
-  - superseded authority referenced
-- Tier 3 artifact integrity findings should follow:
-  - orphaned assimilation package
-  - missing expected package
-  - broken decision-to-package linkage
-- Tier 4 boundary integrity findings should remain architecturally important:
-  - proposal used as authority
-  - revision used as authority
-  - assimilation recommendation treated as adopted operational context
-- Boundary integrity findings may warrant elevated severity because they violate the core authority model.
-- Add Decision Snapshot Integrity to the governance analyzer backlog:
-  - resolved decision snapshot exists
-  - resolved decision snapshot is complete
-  - resolved decision snapshot fingerprint is valid
-- Broken resolution snapshot integrity is more serious than broken proposal lineage because the snapshot is the authoritative historical record of what was reviewed.
-- M7D remains Governance Validation.
-- M7E remains Governance Certification.
+- M7C should continue prioritizing authority integrity verification over broader semantic evaluation.
+- Resolution snapshot integrity is a high-value governance analyzer and should continue to be treated as authority corruption when broken.
+- Missing resolved snapshots and invalid resolved snapshot fingerprints are blocking governance findings, not documentation warnings.
+- Supersession graphs should remain non-branching unless the lifecycle model is explicitly changed later.
+- Multiple replacement parents for one superseded decision are corruption findings.
+- Multiple accepted authorities for one candidate are blocking findings because downstream consumers cannot infer current truth.
+- Governance is converging into three relevant layers:
+  - structural health: lineage, ancestry, references, fingerprints, snapshots
+  - authority health: competing authorities, inactive references, boundary violations
+  - execution readiness: whether execution can safely consume the repository
+- The next implementation priority is conflicting execution directives.
+- Execution projection readiness tests should be added before adding more broad analyzers so `BlocksExecutionProjection` semantics stay deterministic before M8 consumes them.
+- Projection failure detection should follow because missing, invalid, or authority-broken projections are objective repository defects.
+- Unresolved stale proposal findings are useful but should be framed as review backlog findings with low severity unless stronger structural evidence exists.
+- Repeated-signal coverage should come after authority and execution-readiness work because it is closer to discovery effectiveness than repository integrity.
+- Current M7 status is accepted as:
+  - M7A Governance Reporting complete
+  - M7B Governance Surface complete
+  - M7C Structural Hardening roughly 70-80% complete
+  - M7D Readiness Validation partially started
+  - M7E Certification not started
+- Governance must remain advisory:
+  - governance reports problems
+  - execution decides what to consume or do
+  - continuity decides what to adopt

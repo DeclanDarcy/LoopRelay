@@ -13,11 +13,24 @@ detect decision ecosystem health issues before decisions are projected into exec
   - [x] supersession lineage
   - [x] dependency integrity
   - [x] authority metadata
+  - [x] authority boundary integrity
+  - [x] resolved decision snapshot integrity
   - [ ] decision coverage
   - [x] proposal quality
   - [x] execution projection readiness
 - [ ] Decision coverage analysis detects repeated ambiguity, repeated blockers, repeated governance findings, repeated forks, stale candidates, and repeated unresolved questions.
 - [ ] Detect contradictory resolved decisions, conflicting directives, circular supersession, broken dependencies, missing resolver metadata, unresolved stale proposals, decisions not ready for projection, and projection failures.
+  - [x] Contradictory resolved decisions.
+  - [x] Circular supersession.
+  - [x] Missing relationship targets.
+  - [x] Missing or incomplete resolver metadata.
+  - [x] Missing, incomplete, or invalid resolved proposal snapshots.
+  - [x] Superseded decisions with missing or multiple replacement parents.
+  - [x] DependsOn/Supports/Constrains relationships pointing at archived or superseded authority.
+  - [x] Multiple accepted resolved decisions for one candidate.
+  - [ ] Conflicting execution directives.
+  - [ ] Unresolved stale proposals.
+  - [ ] Projection failures.
 - [x] Persist governance reports under `.agents/decisions/governance`.
 - [x] Mark blocking governance findings so execution projection can exclude affected decisions.
 
@@ -31,11 +44,12 @@ detect decision ecosystem health issues before decisions are projected into exec
 ## Tests
 
 - [x] Consistency analyzer tests.
-- [ ] Lineage analyzer tests.
-- [ ] Dependency analyzer tests.
+- [x] Lineage analyzer tests.
+- [x] Dependency analyzer tests.
 - [x] Authority analyzer tests.
 - [x] Decision coverage tests.
 - [ ] Execution projection readiness tests.
+- [x] Snapshot integrity tests.
 - [x] Governance report persistence tests.
 - [x] UI finding display tests.
 

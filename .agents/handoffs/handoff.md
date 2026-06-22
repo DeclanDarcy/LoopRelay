@@ -2,48 +2,29 @@
 
 ## New State From This Slice
 
-- Completed M7B Tauri/UI governance surface.
-- Added Tauri bridge commands:
-  - `get_decision_governance`
-  - `generate_decision_governance_report`
-  - `list_decision_governance_reports`
-- Added UI governance types, API bindings, and `useDecisionGovernance`.
-- Added `DecisionGovernancePanel` to the Decisions tab.
-- The panel shows:
-  - current non-persistent governance inspection
-  - explicit generated report history
-  - health and summary counts
-  - diagnostics
-  - findings grouped by severity and category
-  - related decision, candidate, and proposal IDs
-  - source references and excerpts
-- Added navigation-only proposal viewing from governance findings.
-- Kept governance UI advisory and non-mutating; no fix, repair, correct, resolve, or enforcement controls were added.
-- Updated dev Tauri mock governance behavior:
-  - current governance reads do not persist
-  - explicit report generation appends to report history
-- Added characterization coverage for governance finding display and advisory-only controls.
-- Updated `.agents/milestones/m7-decision-governance.md` for completed M7B UI work.
-- Rotated prior handoff to `.agents/handoffs/handoff.0033.md`.
+- Continued M7C analyzer hardening.
+- Extended `DecisionGovernanceService` with blocking findings for:
+  - superseded decisions with no incoming `Supersedes` ancestry
+  - superseded decisions with multiple replacement parents
+  - `DependsOn`, `Supports`, or `Constrains` relationships pointing at archived or superseded authority
+  - multiple accepted resolved decisions for the same source candidate
+  - incomplete resolved proposal snapshots
+  - invalid resolved proposal snapshot fingerprints
+- Resolved proposal snapshot fingerprint validation reconstructs the source `DecisionProposal` from the stored snapshot and hashes it with the same decision JSON options used by production lifecycle services.
+- Updated governance service tests from 5 to 11 cases.
+- Updated `.agents/milestones/m7-decision-governance.md` to mark lineage, dependency, authority-boundary, and snapshot-integrity hardening as covered.
+- Rotated prior handoff to `.agents/handoffs/handoff.0034.md`.
 
 ## Verification
 
-- `cargo build --manifest-path src/CommandCenter.Shell/Cargo.toml` passes.
-- `npm run lint --prefix src/CommandCenter.UI` passes.
-- `npm run test --prefix src/CommandCenter.UI` passes with 46 files and 159 tests.
-- `npm run build --prefix src/CommandCenter.UI` passes.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter DecisionGovernanceServiceTests` passes: 11 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes: 319 tests.
 
 ## Next Slice
 
-- Continue M7C analyzer hardening.
-- Prioritize structural governance cases already authorized:
-  - broken ancestry
-  - circular ancestry
-  - missing ancestry
-  - multiple parents
-  - supersede loops
-  - archived or superseded authority referenced
-  - multiple active authorities
-  - decision/package orphaning
-  - proposal or revision referenced as authority
-  - assimilation treated as adopted
+- Continue M7C/M7D with governance analyzer gaps that remain open:
+  - conflicting execution directives
+  - unresolved stale proposals
+  - projection failure detection
+  - explicit execution projection readiness tests
+  - repeated ambiguity, blocker, fork, governance-finding, stale-candidate, and unresolved-question coverage analysis

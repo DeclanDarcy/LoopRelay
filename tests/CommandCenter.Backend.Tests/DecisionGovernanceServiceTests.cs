@@ -1,3 +1,7 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using CommandCenter.Core.Artifacts;
 using CommandCenter.Core.Repositories;
 using CommandCenter.Decisions.Models;
@@ -134,6 +138,181 @@ public sealed class DecisionGovernanceServiceTests
             finding.RelatedCandidateIds.SequenceEqual(["CAND-0001"]));
     }
 
+    [Fact]
+    public async Task SupersededDecisionWithoutIncomingSupersedesCreatesLineageFinding()
+    {
+        Repository repository = CreateRepository();
+        var decisionRepository = new InMemoryDecisionRepository();
+        await decisionRepository.SaveDecisionAsync(
+            repository,
+            CreateResolvedDecision(repository.Id) with
+            {
+                State = DecisionState.Superseded
+            });
+        var service = CreateService(repository, decisionRepository);
+
+        DecisionGovernanceReport report = await service.GetCurrentReportAsync(repository.Id);
+
+        Assert.Contains(report.Findings, finding =>
+            finding.Category == DecisionGovernanceCategory.SupersessionLineage &&
+            finding.Title == "Superseded decision has no replacement ancestry" &&
+            finding.BlocksExecutionProjection &&
+            finding.RelatedDecisionIds.SequenceEqual(["DEC-0001"]));
+    }
+
+    [Fact]
+    public async Task SupersededDecisionWithMultipleParentsCreatesLineageFinding()
+    {
+        Repository repository = CreateRepository();
+        var decisionRepository = new InMemoryDecisionRepository();
+        Decision superseded = CreateResolvedDecision(repository.Id) with
+        {
+            State = DecisionState.Superseded
+        };
+        Decision firstReplacement = CreateResolvedDecision(repository.Id, "DEC-0002", "Use file-backed authority") with
+        {
+            Relationships =
+            [
+                new DecisionRelationship(
+                    new DecisionId("DEC-0002"),
+                    new DecisionId("DEC-0001"),
+                    DecisionRelationshipType.Supersedes,
+                    "First replacement.")
+            ]
+        };
+        Decision secondReplacement = CreateResolvedDecision(repository.Id, "DEC-0003", "Use service-backed authority") with
+        {
+            Relationships =
+            [
+                new DecisionRelationship(
+                    new DecisionId("DEC-0003"),
+                    new DecisionId("DEC-0001"),
+                    DecisionRelationshipType.Supersedes,
+                    "Second replacement.")
+            ]
+        };
+        await decisionRepository.SaveDecisionAsync(repository, superseded);
+        await decisionRepository.SaveDecisionAsync(repository, firstReplacement);
+        await decisionRepository.SaveDecisionAsync(repository, secondReplacement);
+        var service = CreateService(repository, decisionRepository);
+
+        DecisionGovernanceReport report = await service.GetCurrentReportAsync(repository.Id);
+
+        Assert.Contains(report.Findings, finding =>
+            finding.Category == DecisionGovernanceCategory.SupersessionLineage &&
+            finding.Title == "Superseded decision has multiple replacement parents" &&
+            finding.BlocksExecutionProjection &&
+            finding.RelatedDecisionIds.SequenceEqual(["DEC-0001", "DEC-0002", "DEC-0003"]));
+    }
+
+    [Fact]
+    public async Task RelationshipToInactiveAuthorityCreatesBoundaryFinding()
+    {
+        Repository repository = CreateRepository();
+        var decisionRepository = new InMemoryDecisionRepository();
+        Decision archivedAuthority = CreateResolvedDecision(repository.Id, "DEC-0001", "Use archived authority") with
+        {
+            State = DecisionState.Archived
+        };
+        Decision dependent = CreateResolvedDecision(repository.Id, "DEC-0002", "Use dependent authority") with
+        {
+            Relationships =
+            [
+                new DecisionRelationship(
+                    new DecisionId("DEC-0002"),
+                    new DecisionId("DEC-0001"),
+                    DecisionRelationshipType.DependsOn,
+                    "Dependency should be active.")
+            ]
+        };
+        await decisionRepository.SaveDecisionAsync(repository, archivedAuthority);
+        await decisionRepository.SaveDecisionAsync(repository, dependent);
+        var service = CreateService(repository, decisionRepository);
+
+        DecisionGovernanceReport report = await service.GetCurrentReportAsync(repository.Id);
+
+        Assert.Contains(report.Findings, finding =>
+            finding.Category == DecisionGovernanceCategory.AuthorityBoundary &&
+            finding.Title == "Relationship references inactive authority" &&
+            finding.BlocksExecutionProjection &&
+            finding.RelatedDecisionIds.SequenceEqual(["DEC-0001", "DEC-0002"]));
+    }
+
+    [Fact]
+    public async Task MultipleAcceptedDecisionsForOneCandidateCreateBoundaryFinding()
+    {
+        Repository repository = CreateRepository();
+        var decisionRepository = new InMemoryDecisionRepository();
+        await decisionRepository.SaveDecisionAsync(repository, CreateResolvedDecision(repository.Id, "DEC-0001", "Use first authority"));
+        await decisionRepository.SaveDecisionAsync(repository, CreateResolvedDecision(repository.Id, "DEC-0002", "Use second authority"));
+        var service = CreateService(repository, decisionRepository);
+
+        DecisionGovernanceReport report = await service.GetCurrentReportAsync(repository.Id);
+
+        Assert.Contains(report.Findings, finding =>
+            finding.Category == DecisionGovernanceCategory.AuthorityBoundary &&
+            finding.Title == "Multiple active authorities for one candidate" &&
+            finding.BlocksExecutionProjection &&
+            finding.RelatedCandidateIds.SequenceEqual(["CAND-0001"]) &&
+            finding.RelatedDecisionIds.SequenceEqual(["DEC-0001", "DEC-0002"]));
+    }
+
+    [Fact]
+    public async Task InvalidResolvedSnapshotFingerprintCreatesBlockingFinding()
+    {
+        Repository repository = CreateRepository();
+        var decisionRepository = new InMemoryDecisionRepository();
+        Decision decision = CreateResolvedDecision(repository.Id) with
+        {
+            Resolution = CreateResolvedDecision(repository.Id).Resolution! with
+            {
+                SourceProposalSnapshot = CreateResolvedDecision(repository.Id).Resolution!.SourceProposalSnapshot! with
+                {
+                    ProposalFingerprint = "stale-fingerprint"
+                }
+            }
+        };
+        await decisionRepository.SaveDecisionAsync(repository, decision);
+        var service = CreateService(repository, decisionRepository);
+
+        DecisionGovernanceReport report = await service.GetCurrentReportAsync(repository.Id);
+
+        Assert.Contains(report.Findings, finding =>
+            finding.Category == DecisionGovernanceCategory.FingerprintIntegrity &&
+            finding.Title == "Resolved decision source proposal fingerprint is invalid" &&
+            finding.BlocksExecutionProjection &&
+            finding.RelatedDecisionIds.SequenceEqual(["DEC-0001"]));
+    }
+
+    [Fact]
+    public async Task IncompleteResolvedSnapshotCreatesBlockingFinding()
+    {
+        Repository repository = CreateRepository();
+        var decisionRepository = new InMemoryDecisionRepository();
+        Decision decision = CreateResolvedDecision(repository.Id);
+        await decisionRepository.SaveDecisionAsync(
+            repository,
+            decision with
+            {
+                Resolution = decision.Resolution! with
+                {
+                    SourceProposalSnapshot = decision.Resolution.SourceProposalSnapshot! with
+                    {
+                        Options = []
+                    }
+                }
+            });
+        var service = CreateService(repository, decisionRepository);
+
+        DecisionGovernanceReport report = await service.GetCurrentReportAsync(repository.Id);
+
+        Assert.Contains(report.Findings, finding =>
+            finding.Category == DecisionGovernanceCategory.FingerprintIntegrity &&
+            finding.Title == "Resolved decision source proposal snapshot is incomplete" &&
+            finding.BlocksExecutionProjection &&
+            finding.RelatedDecisionIds.SequenceEqual(["DEC-0001"]));
+    }
+
     private static DecisionGovernanceService CreateService(
         Repository repository,
         InMemoryDecisionRepository decisionRepository)
@@ -155,10 +334,10 @@ public sealed class DecisionGovernanceServiceTests
     {
         DateTimeOffset now = DateTimeOffset.UtcNow;
         var id = new DecisionId(decisionId);
-        var proposal = new DecisionResolvedProposalSnapshot(
+        var proposal = new DecisionProposal(
             "PROP-0001",
+            repositoryId,
             "CAND-0001",
-            "proposal-fingerprint",
             DecisionProposalState.ReadyForResolution,
             title,
             "Decision lifecycle state must be recoverable from repository artifacts.",
@@ -167,7 +346,20 @@ public sealed class DecisionGovernanceServiceTests
             new DecisionRecommendation("option-1", "Matches repository authority.", []),
             [],
             [new DecisionEvidence("Plan requires repository authority.", [new DecisionSourceReference("Plan", ".agents/plan.md")])],
-            [],
+            []);
+        var snapshot = new DecisionResolvedProposalSnapshot(
+            proposal.Id,
+            proposal.CandidateId,
+            Fingerprint(proposal),
+            proposal.State,
+            proposal.Title,
+            proposal.Context,
+            proposal.Options,
+            proposal.Tradeoffs,
+            proposal.Recommendation,
+            proposal.Assumptions,
+            proposal.Evidence,
+            proposal.History,
             []);
         return new Decision(
             id,
@@ -184,10 +376,27 @@ public sealed class DecisionGovernanceServiceTests
                 false,
                 now,
                 [new DecisionSourceReference("DecisionProposal", ".agents/decisions/proposals/PROP-0001/proposal.json", DecisionId: id, ProposalId: "PROP-0001")],
-                proposal),
+                snapshot),
             [],
             [new DecisionEvidence("Plan requires repository authority.", [new DecisionSourceReference("Plan", ".agents/plan.md")])],
             [new DecisionHistoryEntry(now, "Resolved", DecisionState.Open.ToString(), DecisionState.Resolved.ToString(), "Resolved by test.", [])]);
+    }
+
+    private static string Fingerprint(DecisionProposal proposal)
+    {
+        byte[] bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(proposal, CreateJsonOptions()));
+        return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+    }
+
+    private static JsonSerializerOptions CreateJsonOptions()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+        {
+            WriteIndented = true,
+            UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow
+        };
+        options.Converters.Add(new JsonStringEnumConverter());
+        return options;
     }
 
     private static DecisionCandidate CreateCandidate(Guid repositoryId)
