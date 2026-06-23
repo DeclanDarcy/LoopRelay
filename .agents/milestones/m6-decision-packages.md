@@ -46,12 +46,12 @@ Tier 0 may use the existing proposal record as the first reviewable package shap
   - [x] open concerns
   - [x] assumptions
   - [x] diagnostics
-- [ ] Add package comparison:
-  - [ ] recommendation changes
-  - [ ] option changes
-  - [ ] evidence changes
-  - [ ] risk changes
-  - [ ] context fingerprint changes
+- [x] Add package comparison:
+  - [x] recommendation changes
+  - [x] option changes
+  - [x] evidence changes
+  - [x] risk changes
+  - [x] context fingerprint changes
 
 ## Tests
 
@@ -59,7 +59,7 @@ Tier 0 may use the existing proposal record as the first reviewable package shap
 - [x] Missing required sections fail validation.
 - [x] Package identity is stable and repository-scoped.
 - [x] Package versions are immutable after creation.
-- [ ] Package comparison detects recommendation and option changes.
+- [x] Package comparison detects recommendation and option changes.
 - [ ] Resolution snapshots reference the package/proposal fingerprint used for authority.
 
 ## Exit Criteria

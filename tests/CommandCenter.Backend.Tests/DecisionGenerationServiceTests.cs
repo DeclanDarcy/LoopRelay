@@ -180,6 +180,122 @@ public sealed class DecisionGenerationServiceTests
     }
 
     [Fact]
+    public async Task PackageComparisonDetectsRecommendationAndOptionChanges()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var service = CreateGenerationService(repository, store, decisionRepository);
+        DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
+        DecisionPackageVersion left = Assert.Single(await decisionRepository.ListPackageVersionsAsync(repository, proposal.Id));
+        DecisionOption modifiedOption = left.Package.Options[0] with
+        {
+            Title = $"{left.Package.Options[0].Title} revised"
+        };
+        DecisionOption addedOption = new(
+            "option-new",
+            "Add governance package comparison endpoint",
+            "Expose package deltas for review workflows.",
+            left.Package.Evidence);
+        DecisionPackageVersion right = left with
+        {
+            Id = "PKG-0002",
+            PackageFingerprint = "right-fingerprint",
+            Package = left.Package with
+            {
+                Id = "PKG-0002",
+                Options = [modifiedOption, .. left.Package.Options.Skip(1), addedOption],
+                Recommendation = left.Package.Recommendation! with
+                {
+                    OptionId = "option-new",
+                    Summary = "Prefer exposing comparison deltas."
+                }
+            }
+        };
+        var packageService = new DecisionPackageService(decisionRepository, new DecisionArtifactProjectionService(decisionRepository, store));
+
+        DecisionPackageComparison comparison = packageService.ComparePackages(left, right);
+
+        Assert.True(comparison.RecommendationChanged);
+        Assert.True(comparison.OptionsChanged);
+        Assert.False(comparison.EvidenceChanged);
+        Assert.False(comparison.RisksChanged);
+        Assert.False(comparison.ContextFingerprintChanged);
+        Assert.Single(comparison.AddedOptions);
+        Assert.Equal("option-new", comparison.AddedOptions[0].Id);
+        Assert.Single(comparison.ModifiedOptions);
+        Assert.Equal(left.Package.Options[0].Id, comparison.ModifiedOptions[0].Id);
+        Assert.Contains(comparison.FieldComparisons, field =>
+            field.Field == "Recommendation" &&
+            field.ChangeType == "Changed" &&
+            field.RevisedValue!.Contains("option-new", StringComparison.Ordinal));
+        Assert.Contains(comparison.FieldComparisons, field =>
+            field.Field == "Options" &&
+            field.ChangeType == "Changed");
+    }
+
+    [Fact]
+    public async Task PackageComparisonDetectsEvidenceRiskAndContextFingerprintChanges()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var service = CreateGenerationService(repository, store, decisionRepository);
+        DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
+        DecisionPackageVersion left = Assert.Single(await decisionRepository.ListPackageVersionsAsync(repository, proposal.Id));
+        DecisionEvidence addedEvidence = new(
+            "Package comparison needs persisted reviewer-visible deltas.",
+            [new DecisionSourceReference(
+                "Milestone",
+                ".agents/milestones/m6-decision-packages.md",
+                Section: "Package comparison",
+                Excerpt: "Add package comparison.")]);
+        AnalyzedDecisionOption firstAnalysis = left.Package.AnalyzedOptions[0];
+        DecisionRisk addedRisk = new(
+            "Comparison output may omit newly introduced governance risk.",
+            TradeoffSeverity.Medium,
+            false,
+            [addedEvidence]);
+        DecisionPackageVersion right = left with
+        {
+            Id = "PKG-0002",
+            PackageFingerprint = "right-fingerprint",
+            Package = left.Package with
+            {
+                Id = "PKG-0002",
+                Evidence = [.. left.Package.Evidence, addedEvidence],
+                AnalyzedOptions = [
+                    firstAnalysis with { Risks = [.. firstAnalysis.Risks, addedRisk] },
+                    .. left.Package.AnalyzedOptions.Skip(1)
+                ],
+                Metadata = left.Package.Metadata with { ContextFingerprint = "changed-context-fingerprint" }
+            }
+        };
+        var packageService = new DecisionPackageService(decisionRepository, new DecisionArtifactProjectionService(decisionRepository, store));
+
+        DecisionPackageComparison comparison = packageService.ComparePackages(left, right);
+
+        Assert.False(comparison.RecommendationChanged);
+        Assert.False(comparison.OptionsChanged);
+        Assert.True(comparison.EvidenceChanged);
+        Assert.True(comparison.RisksChanged);
+        Assert.True(comparison.ContextFingerprintChanged);
+        Assert.Contains(comparison.AddedEvidence, evidence =>
+            evidence.Contains("Package comparison needs persisted reviewer-visible deltas.", StringComparison.Ordinal));
+        Assert.Contains(comparison.AddedRisks, risk =>
+            risk.Contains("Comparison output may omit newly introduced governance risk.", StringComparison.Ordinal));
+        Assert.Contains(comparison.FieldComparisons, field =>
+            field.Field == "ContextFingerprint" &&
+            field.ChangeType == "Changed" &&
+            field.PreviousValue == left.Package.Metadata.ContextFingerprint &&
+            field.RevisedValue == "changed-context-fingerprint");
+    }
+
+    [Fact]
     public async Task GenerateProposalBindsRecommendationToCandidateEvidence()
     {
         Repository repository = CreateRepository();

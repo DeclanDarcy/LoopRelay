@@ -13,4 +13,6 @@ public interface IDecisionPackageService
         DateTimeOffset generatedAt);
 
     DecisionPackageValidationResult ValidatePackage(DecisionPackage package);
+
+    DecisionPackageComparison ComparePackages(DecisionPackageVersion left, DecisionPackageVersion right);
 }

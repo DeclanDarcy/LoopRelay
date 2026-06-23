@@ -132,6 +132,111 @@ public sealed class DecisionPackageService(
         return new DecisionPackageValidationResult(errors.Count == 0, errors, warnings);
     }
 
+    public DecisionPackageComparison ComparePackages(DecisionPackageVersion left, DecisionPackageVersion right)
+    {
+        if (left.RepositoryId != right.RepositoryId)
+        {
+            throw new InvalidOperationException("Decision packages must belong to the same repository.");
+        }
+
+        if (!string.Equals(left.ProposalId, right.ProposalId, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Decision packages must belong to the same proposal.");
+        }
+
+        DecisionPackage leftPackage = left.Package;
+        DecisionPackage rightPackage = right.Package;
+        bool recommendationChanged = Fingerprint(leftPackage.Recommendation) != Fingerprint(rightPackage.Recommendation);
+        bool contextFingerprintChanged = !string.Equals(
+            leftPackage.Metadata.ContextFingerprint,
+            rightPackage.Metadata.ContextFingerprint,
+            StringComparison.Ordinal);
+
+        IReadOnlyList<DecisionOption> addedOptions = rightPackage.Options
+            .Where(rightOption => leftPackage.Options.All(leftOption => !SameId(leftOption.Id, rightOption.Id)))
+            .OrderBy(option => option.Id, StringComparer.Ordinal)
+            .ToArray();
+        IReadOnlyList<DecisionOption> removedOptions = leftPackage.Options
+            .Where(leftOption => rightPackage.Options.All(rightOption => !SameId(rightOption.Id, leftOption.Id)))
+            .OrderBy(option => option.Id, StringComparer.Ordinal)
+            .ToArray();
+        IReadOnlyList<DecisionOption> modifiedOptions = rightPackage.Options
+            .Where(rightOption => leftPackage.Options.Any(leftOption =>
+                SameId(leftOption.Id, rightOption.Id) &&
+                Fingerprint(leftOption) != Fingerprint(rightOption)))
+            .OrderBy(option => option.Id, StringComparer.Ordinal)
+            .ToArray();
+        bool optionsChanged = addedOptions.Count > 0 || removedOptions.Count > 0 || modifiedOptions.Count > 0;
+
+        string[] leftEvidence = EvidenceKeys(leftPackage).ToArray();
+        string[] rightEvidence = EvidenceKeys(rightPackage).ToArray();
+        IReadOnlyList<string> addedEvidence = rightEvidence.Except(leftEvidence, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        IReadOnlyList<string> removedEvidence = leftEvidence.Except(rightEvidence, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        bool evidenceChanged = addedEvidence.Count > 0 || removedEvidence.Count > 0;
+
+        string[] leftRisks = RiskKeys(leftPackage).ToArray();
+        string[] rightRisks = RiskKeys(rightPackage).ToArray();
+        IReadOnlyList<string> addedRisks = rightRisks.Except(leftRisks, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        IReadOnlyList<string> removedRisks = leftRisks.Except(rightRisks, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        bool risksChanged = addedRisks.Count > 0 || removedRisks.Count > 0;
+
+        DecisionRevisionFieldComparison[] fieldComparisons = [
+            new(
+                "Recommendation",
+                recommendationChanged ? "Changed" : "Unchanged",
+                RecommendationSummary(leftPackage.Recommendation),
+                RecommendationSummary(rightPackage.Recommendation)),
+            new(
+                "Options",
+                optionsChanged ? "Changed" : "Unchanged",
+                OptionSummary(leftPackage.Options),
+                OptionSummary(rightPackage.Options)),
+            new(
+                "Evidence",
+                evidenceChanged ? "Changed" : "Unchanged",
+                leftEvidence.Length.ToString(),
+                rightEvidence.Length.ToString()),
+            new(
+                "Risks",
+                risksChanged ? "Changed" : "Unchanged",
+                leftRisks.Length.ToString(),
+                rightRisks.Length.ToString()),
+            new(
+                "ContextFingerprint",
+                contextFingerprintChanged ? "Changed" : "Unchanged",
+                leftPackage.Metadata.ContextFingerprint,
+                rightPackage.Metadata.ContextFingerprint)
+        ];
+
+        var diagnostics = new List<string>();
+        if (!recommendationChanged && !optionsChanged && !evidenceChanged && !risksChanged && !contextFingerprintChanged)
+        {
+            diagnostics.Add("No package comparison changes detected.");
+        }
+
+        return new DecisionPackageComparison(
+            left.ProposalId,
+            left.Id,
+            right.Id,
+            left.RepositoryId,
+            left.PackageFingerprint,
+            right.PackageFingerprint,
+            recommendationChanged,
+            optionsChanged,
+            evidenceChanged,
+            risksChanged,
+            contextFingerprintChanged,
+            fieldComparisons,
+            addedOptions,
+            removedOptions,
+            modifiedOptions,
+            addedEvidence,
+            removedEvidence,
+            addedRisks,
+            removedRisks,
+            diagnostics);
+    }
+
     private static void ValidateRecommendation(
         DecisionPackage package,
         List<string> errors,
@@ -201,6 +306,118 @@ public sealed class DecisionPackageService(
             justification.Contains("only one", StringComparison.OrdinalIgnoreCase) ||
             justification.Contains("single technically valid", StringComparison.OrdinalIgnoreCase) ||
             justification.Contains("one technically valid", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool SameId(string left, string right)
+    {
+        return string.Equals(left, right, StringComparison.Ordinal);
+    }
+
+    private static IEnumerable<string> EvidenceKeys(DecisionPackage package)
+    {
+        foreach (DecisionEvidence evidence in package.Evidence)
+        {
+            yield return EvidenceKey(evidence);
+        }
+
+        foreach (DecisionOption option in package.Options)
+        {
+            foreach (DecisionEvidence evidence in option.Evidence)
+            {
+                yield return EvidenceKey(evidence);
+            }
+        }
+
+        if (package.Recommendation is not null)
+        {
+            foreach (DecisionEvidence evidence in package.Recommendation.Evidence)
+            {
+                yield return EvidenceKey(evidence);
+            }
+
+            foreach (RecommendationEvidence evidence in package.Recommendation.RecommendationEvidence)
+            {
+                yield return $"{evidence.Type}|{Normalize(evidence.OptionId)}|{Normalize(evidence.Summary)}";
+                foreach (DecisionEvidence nestedEvidence in evidence.Evidence)
+                {
+                    yield return EvidenceKey(nestedEvidence);
+                }
+            }
+        }
+
+        foreach (AnalyzedDecisionOption analyzedOption in package.AnalyzedOptions)
+        {
+            foreach (DecisionEvidence evidence in analyzedOption.Evidence)
+            {
+                yield return EvidenceKey(evidence);
+            }
+
+            foreach (DecisionBenefit benefit in analyzedOption.Benefits)
+            {
+                foreach (DecisionEvidence evidence in benefit.Evidence)
+                {
+                    yield return EvidenceKey(evidence);
+                }
+            }
+
+            foreach (DecisionCost cost in analyzedOption.Costs)
+            {
+                foreach (DecisionEvidence evidence in cost.Evidence)
+                {
+                    yield return EvidenceKey(evidence);
+                }
+            }
+
+            foreach (DecisionRisk risk in analyzedOption.Risks)
+            {
+                foreach (DecisionEvidence evidence in risk.Evidence)
+                {
+                    yield return EvidenceKey(evidence);
+                }
+            }
+        }
+    }
+
+    private static IEnumerable<string> RiskKeys(DecisionPackage package)
+    {
+        foreach (AnalyzedDecisionOption analyzedOption in package.AnalyzedOptions)
+        {
+            foreach (DecisionRisk risk in analyzedOption.Risks)
+            {
+                yield return $"{analyzedOption.OptionId}|{Normalize(risk.Statement)}|{risk.Severity}|{risk.IsUnknown}";
+            }
+        }
+    }
+
+    private static string EvidenceKey(DecisionEvidence evidence)
+    {
+        string sources = string.Join(
+            ",",
+            evidence.Sources
+                .Select(source => $"{Normalize(source.SourceKind)}:{Normalize(source.RelativePath)}:{Normalize(source.Section)}:{Normalize(source.ItemId)}:{Normalize(source.Excerpt)}")
+                .Order(StringComparer.Ordinal));
+        return $"{Normalize(evidence.Summary)}|{sources}";
+    }
+
+    private static string RecommendationSummary(DecisionRecommendation? recommendation)
+    {
+        return recommendation is null
+            ? "None"
+            : $"{recommendation.Mode}:{recommendation.OptionId}:{recommendation.Summary}:{recommendation.Rationale}";
+    }
+
+    private static string OptionSummary(IReadOnlyList<DecisionOption> options)
+    {
+        return string.Join(
+            ", ",
+            options
+                .OrderBy(option => option.Id, StringComparer.Ordinal)
+                .Select(option => $"{option.Id}:{option.Title}"));
+    }
+
+    private static string Normalize(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
     }
 
     private static string Fingerprint<T>(T value)
