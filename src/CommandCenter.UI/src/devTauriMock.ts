@@ -31,6 +31,9 @@ import type {
   OperationalContextProjection,
   OperationalContextProposal,
   OperationalContextProposalSummary,
+  ReasoningEvent,
+  ReasoningRelationship,
+  ReasoningThread,
   Repository,
   RepositoryDashboardProjection as DashboardEntry,
   RepositoryExecutionState,
@@ -55,6 +58,9 @@ type MockState = {
   decisionAssimilationRecommendations: Record<string, Record<string, DecisionAssimilationRecommendation>>
   decisionGovernanceReports: Record<string, DecisionGovernanceReport[]>
   decisionCertificationReports: Record<string, DecisionCertificationReport[]>
+  reasoningEvents: Record<string, ReasoningEvent[]>
+  reasoningThreads: Record<string, ReasoningThread[]>
+  reasoningRelationships: Record<string, ReasoningRelationship[]>
   commandCalls: Record<string, number>
 }
 
@@ -1566,6 +1572,9 @@ function createInitialState(): MockState {
     decisionAssimilationRecommendations: {},
     decisionGovernanceReports: {},
     decisionCertificationReports: {},
+    reasoningEvents: {},
+    reasoningThreads: {},
+    reasoningRelationships: {},
     commandCalls: {},
   }
 
@@ -1581,6 +1590,15 @@ function createInitialState(): MockState {
     state.decisionAssimilationRecommendations[repository.id] = {}
     state.decisionGovernanceReports[repository.id] = []
     state.decisionCertificationReports[repository.id] = []
+    state.reasoningEvents[repository.id] = repository.id === alphaRepository.id
+      ? createReasoningEvents(repository.id)
+      : []
+    state.reasoningThreads[repository.id] = repository.id === alphaRepository.id
+      ? createReasoningThreads(repository.id)
+      : []
+    state.reasoningRelationships[repository.id] = repository.id === alphaRepository.id
+      ? createReasoningRelationships(repository.id)
+      : []
   })
 
   seedCertificationSession(state, certificationRepositories[0], 'Executing', 'Executing')
@@ -1683,6 +1701,118 @@ function dashboardEntry(workspace: Workspace): DashboardEntry {
       pendingProposalExists: workspace.operationalContextProposalSummary.pendingProposalExists,
     },
   }
+}
+
+function createReasoningEvents(repositoryId: string): ReasoningEvent[] {
+  return [
+    {
+      id: 'EVT-0001',
+      repositoryId,
+      createdAt: '2026-06-22T16:00:00.0000000Z',
+      family: 'Hypothesis',
+      type: 'HypothesisRaised',
+      title: 'Event substrate can stay narrow',
+      narrative: {
+        summary: 'Reasoning should begin as immutable events with provenance.',
+        details: 'Specialized concepts remain reconstructed from event families and traces.',
+      },
+      references: [
+        {
+          kind: 'Artifact',
+          id: '.agents/plan.md',
+          relativePath: '.agents/plan.md',
+          section: 'Milestone 1',
+          excerpt: 'Preserve events first.',
+        },
+      ],
+      provenance: {
+        sourceKind: 'ManualCapture',
+        capturedBy: 'codex',
+        relativePath: '.agents/plan.md',
+        section: 'Milestone 1',
+        excerpt: 'Event substrate is operational.',
+        fingerprint: 'mock-fingerprint-1',
+      },
+      threadIds: ['THR-0001'],
+      tags: ['milestone-1'],
+    },
+    {
+      id: 'EVT-0002',
+      repositoryId,
+      createdAt: '2026-06-22T16:05:00.0000000Z',
+      family: 'Alternative',
+      type: 'AlternativeRejected',
+      title: 'Specialized entity storage deferred',
+      narrative: {
+        summary: 'Hypotheses, alternatives, contradictions, and direction stay derived.',
+        details: 'The materialization gate must approve any future first-class entity.',
+      },
+      references: [],
+      provenance: {
+        sourceKind: 'ManualCapture',
+        capturedBy: 'codex',
+        relativePath: '.agents/decisions/decisions.md',
+        section: 'Newly Authorized',
+        excerpt: 'Do not add specialized endpoints before the materialization gate.',
+        fingerprint: 'mock-fingerprint-2',
+      },
+      threadIds: ['THR-0001'],
+      tags: ['derived-only'],
+    },
+  ]
+}
+
+function createReasoningThreads(repositoryId: string): ReasoningThread[] {
+  return [
+    {
+      id: 'THR-0001',
+      repositoryId,
+      title: 'Milestone 1 ontology boundary',
+      theme: 'DecisionEvolution',
+      createdAt: '2026-06-22T16:00:00.0000000Z',
+      updatedAt: '2026-06-22T16:05:00.0000000Z',
+      summary: 'Tracks why the event substrate remains explanatory rather than authoritative.',
+      eventIds: ['EVT-0001', 'EVT-0002'],
+      tags: ['milestone-1'],
+    },
+  ]
+}
+
+function createReasoningRelationships(repositoryId: string): ReasoningRelationship[] {
+  return [
+    {
+      id: 'REL-0001',
+      repositoryId,
+      createdAt: '2026-06-22T16:06:00.0000000Z',
+      type: 'Supports',
+      source: {
+        kind: 'ReasoningEvent',
+        id: 'EVT-0001',
+        relativePath: null,
+        section: null,
+        excerpt: null,
+      },
+      target: {
+        kind: 'ReasoningEvent',
+        id: 'EVT-0002',
+        relativePath: null,
+        section: null,
+        excerpt: null,
+      },
+      narrative: {
+        summary: 'A narrow event substrate supports deferring specialized storage.',
+        details: '',
+      },
+      provenance: {
+        sourceKind: 'ManualCapture',
+        capturedBy: 'codex',
+        relativePath: '.agents/handoffs/handoff.md',
+        section: 'Current Gaps',
+        excerpt: 'Derived display status remains unimplemented.',
+        fingerprint: 'mock-fingerprint-3',
+      },
+    },
+  ]
 }
 
 function createContextPreview(state: MockState, repositoryId: string, milestonePath: string): ExecutionContextPreview {
@@ -2628,6 +2758,134 @@ export function installDevTauriMock() {
           return clone(state.decisionCertificationReports[getStringArg(args, 'repositoryId')] ?? [])
         case 'get_execution_decision_projection':
           return clone(createExecutionDecisionProjection(state, getStringArg(args, 'repositoryId')))
+        case 'list_reasoning_events':
+          return clone(state.reasoningEvents[getStringArg(args, 'repositoryId')] ?? [])
+        case 'get_reasoning_event': {
+          const repositoryId = getStringArg(args, 'repositoryId')
+          const eventId = getStringArg(args, 'eventId')
+          const event = (state.reasoningEvents[repositoryId] ?? []).find((item) => item.id === eventId)
+          if (!event) {
+            throw new Error(`Reasoning event was not found: ${eventId}`)
+          }
+
+          return clone(event)
+        }
+        case 'create_reasoning_event': {
+          const repositoryId = getStringArg(args, 'repositoryId')
+          const command = args?.command as Partial<ReasoningEvent>
+          const events = state.reasoningEvents[repositoryId] ?? []
+          const event: ReasoningEvent = {
+            id: `EVT-${String(events.length + 1).padStart(4, '0')}`,
+            repositoryId,
+            createdAt: new Date().toISOString(),
+            family: command.family ?? 'Evidence',
+            type: command.type ?? 'EvidenceAdded',
+            title: command.title ?? 'Reasoning event',
+            narrative: command.narrative ?? { summary: 'Reasoning event.', details: '' },
+            references: command.references ?? [],
+            provenance: command.provenance ?? {
+              sourceKind: 'ManualCapture',
+              capturedBy: 'mock',
+              relativePath: null,
+              section: null,
+              excerpt: null,
+              fingerprint: null,
+            },
+            threadIds: command.threadIds ?? [],
+            tags: command.tags ?? [],
+          }
+          state.reasoningEvents[repositoryId] = [...events, event]
+          return clone(event)
+        }
+        case 'list_reasoning_threads':
+          return clone(state.reasoningThreads[getStringArg(args, 'repositoryId')] ?? [])
+        case 'get_reasoning_thread': {
+          const repositoryId = getStringArg(args, 'repositoryId')
+          const threadId = getStringArg(args, 'threadId')
+          const thread = (state.reasoningThreads[repositoryId] ?? []).find((item) => item.id === threadId)
+          if (!thread) {
+            throw new Error(`Reasoning thread was not found: ${threadId}`)
+          }
+
+          return clone(thread)
+        }
+        case 'create_reasoning_thread': {
+          const repositoryId = getStringArg(args, 'repositoryId')
+          const command = args?.command as Partial<ReasoningThread>
+          const threads = state.reasoningThreads[repositoryId] ?? []
+          const timestamp = new Date().toISOString()
+          const thread: ReasoningThread = {
+            id: `THR-${String(threads.length + 1).padStart(4, '0')}`,
+            repositoryId,
+            title: command.title ?? 'Reasoning thread',
+            theme: command.theme ?? 'General',
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            summary: command.summary ?? 'Reasoning thread.',
+            eventIds: command.eventIds ?? [],
+            tags: command.tags ?? [],
+          }
+          state.reasoningThreads[repositoryId] = [...threads, thread]
+          return clone(thread)
+        }
+        case 'append_reasoning_thread_event': {
+          const repositoryId = getStringArg(args, 'repositoryId')
+          const threadId = getStringArg(args, 'threadId')
+          const eventId = getStringArg(args, 'eventId')
+          const threads = state.reasoningThreads[repositoryId] ?? []
+          const thread = threads.find((item) => item.id === threadId)
+          if (!thread) {
+            throw new Error(`Reasoning thread was not found: ${threadId}`)
+          }
+
+          const updatedThread = {
+            ...thread,
+            updatedAt: new Date().toISOString(),
+            eventIds: thread.eventIds.includes(eventId) ? thread.eventIds : [...thread.eventIds, eventId],
+          }
+          state.reasoningThreads[repositoryId] = threads.map((item) =>
+            item.id === threadId ? updatedThread : item,
+          )
+          return clone(updatedThread)
+        }
+        case 'list_reasoning_relationships':
+          return clone(state.reasoningRelationships[getStringArg(args, 'repositoryId')] ?? [])
+        case 'create_reasoning_relationship': {
+          const repositoryId = getStringArg(args, 'repositoryId')
+          const command = args?.command as Partial<ReasoningRelationship>
+          const relationships = state.reasoningRelationships[repositoryId] ?? []
+          const relationship: ReasoningRelationship = {
+            id: `REL-${String(relationships.length + 1).padStart(4, '0')}`,
+            repositoryId,
+            createdAt: new Date().toISOString(),
+            type: command.type ?? 'Supports',
+            source: command.source ?? {
+              kind: 'ReasoningEvent',
+              id: 'EVT-0001',
+              relativePath: null,
+              section: null,
+              excerpt: null,
+            },
+            target: command.target ?? {
+              kind: 'ReasoningEvent',
+              id: 'EVT-0001',
+              relativePath: null,
+              section: null,
+              excerpt: null,
+            },
+            narrative: command.narrative ?? { summary: 'Reasoning relationship.', details: '' },
+            provenance: command.provenance ?? {
+              sourceKind: 'ManualCapture',
+              capturedBy: 'mock',
+              relativePath: null,
+              section: null,
+              excerpt: null,
+              fingerprint: null,
+            },
+          }
+          state.reasoningRelationships[repositoryId] = [...relationships, relationship]
+          return clone(relationship)
+        }
         case 'start_execution':
           return clone(
             startExecution(

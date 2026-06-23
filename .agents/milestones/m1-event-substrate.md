@@ -22,10 +22,10 @@ Goal: implement durable events, threads, relationships, references, provenance, 
 
 ## UI Work
 
-- [ ] Add Reasoning tab shell entry.
-- [ ] Add reasoning DTOs, API wrappers, and hooks for events, threads, and relationships.
-- [ ] Add `ReasoningEventFeed`, `ReasoningThreadPanel`, and `ReasoningTracePanel` components.
-- [ ] Add command palette navigation targets for the Reasoning tab, event feed, and thread view.
+- [x] Add Reasoning tab shell entry.
+- [x] Add reasoning DTOs, API wrappers, and hooks for events, threads, and relationships.
+- [x] Add `ReasoningEventFeed`, `ReasoningThreadPanel`, and `ReasoningTracePanel` components.
+- [x] Add command palette navigation targets for the Reasoning tab, event feed, and thread view.
 
 ## Tests
 
@@ -41,8 +41,8 @@ Goal: implement durable events, threads, relationships, references, provenance, 
 - [x] Markdown projections are deterministic.
 - [x] Endpoints return expected status codes.
 - [x] Creating hypothesis, alternative, contradiction, or direction family events does not create corresponding entity directories.
-- [ ] Event-family sequences produce derived display status only; they do not authorize lifecycle mutations.
-- [ ] UI characterization covers event feed, empty states, provenance display, and thread selection.
+- [x] Event-family sequences produce derived display status only; they do not authorize lifecycle mutations.
+- [x] UI characterization covers event feed, empty states, provenance display, and thread selection.
 
 ## Exit Criteria
 

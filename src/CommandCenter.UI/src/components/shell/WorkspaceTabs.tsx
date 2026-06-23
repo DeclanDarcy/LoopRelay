@@ -11,6 +11,7 @@ const workspaceTabs: { id: PrimaryWorkspaceTab; label: string }[] = [
   { id: 'execution', label: 'Execution' },
   { id: 'operational-context', label: 'Operational Context' },
   { id: 'decisions', label: 'Decisions' },
+  { id: 'reasoning', label: 'Reasoning' },
   { id: 'continuity', label: 'Continuity' },
 ]
 

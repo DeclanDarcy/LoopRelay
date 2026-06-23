@@ -5,6 +5,7 @@ export type PrimaryWorkspaceTab =
   | 'execution'
   | 'operational-context'
   | 'decisions'
+  | 'reasoning'
   | 'continuity'
 
 type RepositoryPathSelections = Record<string, string>

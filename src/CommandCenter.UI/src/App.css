@@ -356,6 +356,7 @@ button:focus-visible {
 .details-body[data-active-tab='execution'] .tab-panel:not(.tab-execution),
 .details-body[data-active-tab='operational-context'] .tab-panel:not(.tab-operational-context),
 .details-body[data-active-tab='decisions'] .tab-panel:not(.tab-decisions),
+.details-body[data-active-tab='reasoning'] .tab-panel:not(.tab-reasoning),
 .details-body[data-active-tab='continuity'] .tab-panel:not(.tab-continuity) {
   display: none;
 }
@@ -847,18 +848,143 @@ button:focus-visible {
 }
 
 .decision-lifecycle-grid,
+.reasoning-grid,
 .decision-lifecycle-panel,
+.reasoning-panel,
 .decision-row-list {
   min-width: 0;
   display: grid;
   gap: 12px;
 }
 
-.decision-lifecycle-panel h5 {
+.decision-lifecycle-panel h5,
+.reasoning-panel h5 {
   margin: 0;
   color: var(--fg-default);
   font-size: 0.9rem;
   letter-spacing: 0;
+}
+
+.reasoning-grid {
+  grid-template-columns: minmax(260px, 0.34fr) minmax(0, 0.66fr);
+  align-items: start;
+}
+
+.reasoning-grid > .context-summary,
+.reasoning-grid > .notice,
+.reasoning-trace-panel {
+  grid-column: 1 / -1;
+}
+
+.reasoning-event-feed {
+  min-width: 0;
+  max-height: 560px;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  overflow: auto;
+  padding: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--bg-inset);
+}
+
+.reasoning-event-row {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--surface-2);
+  border-radius: var(--radius-6);
+  background: var(--surface-1);
+}
+
+.reasoning-event-heading,
+.reasoning-badge-row,
+.reasoning-provenance,
+.reasoning-derived-status {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.reasoning-event-heading {
+  justify-content: space-between;
+}
+
+.reasoning-event-row strong,
+.reasoning-event-row p,
+.reasoning-event-row small,
+.reasoning-event-row span,
+.reasoning-relationship-row small,
+.reasoning-derived-status strong,
+.reasoning-derived-status span {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.reasoning-event-row strong {
+  color: var(--fg-default);
+  font-size: 0.9rem;
+}
+
+.reasoning-event-row p,
+.reasoning-event-row small,
+.reasoning-relationship-row small {
+  color: var(--fg-subtle);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.reasoning-badge-row span,
+.reasoning-derived-status span {
+  padding: 5px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  color: var(--fg-muted);
+  background: var(--bg-inset);
+  font-size: 0.74rem;
+  font-weight: 750;
+}
+
+.reasoning-provenance {
+  margin: 0;
+}
+
+.reasoning-provenance div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.reasoning-provenance dt {
+  color: var(--fg-muted);
+  font-size: 0.72rem;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.reasoning-provenance dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--fg-default);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.reasoning-derived-status {
+  padding: 10px 12px;
+  border: 1px solid var(--accent-muted);
+  border-radius: var(--radius-6);
+  background: var(--accent-subtle);
+}
+
+.reasoning-derived-status strong {
+  color: var(--fg-default);
+  font-size: 0.84rem;
 }
 
 .decision-row {
@@ -1967,6 +2093,7 @@ button:focus-visible {
   .context-summary,
   .context-columns,
   .diagnostic-list,
+  .reasoning-grid,
   .decision-proposal-browser-grid,
   .decision-candidate-browser-grid,
   .decision-evidence-source-grid,

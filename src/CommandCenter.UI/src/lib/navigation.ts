@@ -13,6 +13,7 @@ const workspaceTabs: { id: PrimaryWorkspaceTab; label: string }[] = [
   { id: 'execution', label: 'Execution' },
   { id: 'operational-context', label: 'Operational Context' },
   { id: 'decisions', label: 'Decisions' },
+  { id: 'reasoning', label: 'Reasoning' },
   { id: 'continuity', label: 'Continuity' },
 ]
 
@@ -172,6 +173,33 @@ const staticSectionTargets: Pick<
     description: 'Open the decision review workspace.',
     tab: 'decisions',
     sectionId: 'decision-lifecycle',
+  },
+  {
+    id: 'section-reasoning-trajectory',
+    kind: 'section',
+    group: 'Inspector Sections',
+    label: 'Reasoning Trajectory',
+    description: 'Open reasoning trajectory history.',
+    tab: 'reasoning',
+    sectionId: 'reasoning-trajectory',
+  },
+  {
+    id: 'section-reasoning-event-feed',
+    kind: 'section',
+    group: 'Inspector Sections',
+    label: 'Reasoning Event Feed',
+    description: 'Open immutable reasoning events.',
+    tab: 'reasoning',
+    sectionId: 'reasoning-event-feed',
+  },
+  {
+    id: 'section-reasoning-thread-view',
+    kind: 'section',
+    group: 'Inspector Sections',
+    label: 'Reasoning Threads',
+    description: 'Open reasoning thread navigation.',
+    tab: 'reasoning',
+    sectionId: 'reasoning-thread-view',
   },
   {
     id: 'section-continuity-diagnostics',

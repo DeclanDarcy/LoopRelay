@@ -958,6 +958,152 @@ fn get_execution_decision_projection(repository_id: String) -> Result<Value, Str
 }
 
 #[tauri::command]
+fn list_reasoning_events(repository_id: String) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/events"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "reasoning event listing failed")
+}
+
+#[tauri::command]
+fn get_reasoning_event(repository_id: String, event_id: String) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/events/{event_id}"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "reasoning event lookup failed")
+}
+
+#[tauri::command]
+fn create_reasoning_event(repository_id: String, command: Value) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/events"
+        ))
+        .json(&command)
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "reasoning event creation failed")
+}
+
+#[tauri::command]
+fn list_reasoning_threads(repository_id: String) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/threads"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "reasoning thread listing failed")
+}
+
+#[tauri::command]
+fn get_reasoning_thread(repository_id: String, thread_id: String) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/threads/{thread_id}"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "reasoning thread lookup failed")
+}
+
+#[tauri::command]
+fn create_reasoning_thread(repository_id: String, command: Value) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/threads"
+        ))
+        .json(&command)
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "reasoning thread creation failed")
+}
+
+#[tauri::command]
+fn append_reasoning_thread_event(
+    repository_id: String,
+    thread_id: String,
+    event_id: String,
+) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/threads/{thread_id}/events"
+        ))
+        .json(&serde_json::json!({ "eventId": event_id }))
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "reasoning thread event append failed")
+}
+
+#[tauri::command]
+fn list_reasoning_relationships(repository_id: String) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/relationships"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "reasoning relationship listing failed")
+}
+
+#[tauri::command]
+fn create_reasoning_relationship(repository_id: String, command: Value) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/relationships"
+        ))
+        .json(&command)
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "reasoning relationship creation failed")
+}
+
+#[tauri::command]
 fn get_continuity_diagnostics(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/continuity/diagnostics"
@@ -1340,6 +1486,15 @@ fn main() {
             run_decision_certification,
             list_decision_certification_reports,
             get_execution_decision_projection,
+            list_reasoning_events,
+            get_reasoning_event,
+            create_reasoning_event,
+            list_reasoning_threads,
+            get_reasoning_thread,
+            create_reasoning_thread,
+            append_reasoning_thread_event,
+            list_reasoning_relationships,
+            create_reasoning_relationship,
             get_continuity_diagnostics,
             generate_continuity_report,
             list_continuity_reports,

@@ -2,9 +2,9 @@
 
 ## Newly Authorized
 
-- Preserve the current Milestone 1 implementation order: documentation, models, persistence, validation, services, endpoints, then UI. UI requirements must not drive reasoning ontology decisions.
-- Keep Milestone 1 API exposure limited to reasoning events, threads, and relationships. Do not add hypothesis, alternative, contradiction, or direction endpoints before the materialization gate.
-- Keep conflict translation at the service/API boundary while preserving repository validation as persistence-safety logic.
-- During UI work, keep events, threads, and decisions visually and behaviorally distinct: events are immutable historical records, threads are grouping/navigation/summarization aids, and decisions remain the authoritative decision workflow.
-- Avoid hidden reasoning-owned mutation workflows in Milestone 1 UI/API work, including thread resolution, hypothesis acceptance, direction selection, contradiction archival, or similar lifecycle authority.
-- Avoid persisted service-layer derived statuses such as thread, hypothesis, alternative, or direction status before materialization review. Derived display status is acceptable only as non-authoritative presentation.
+- Treat Milestone 1 as complete: event substrate, thread grouping, relationship persistence, services, endpoints, shell bridge commands, basic UI, and characterization coverage now satisfy the milestone intent.
+- Start Milestone 2 with assisted/inferred capture from authoritative decision lifecycle transitions, but prefer decision supersession before broader proposal-resolution capture.
+- For the first Milestone 2 slice, reasoning capture must observe an already-authoritative decision transition; it must not independently decide that the transition happened.
+- The first Milestone 2 capture implementation must preserve idempotency so re-running capture does not create duplicate reasoning events.
+- Keep the Reasoning UI read-only for explanation, navigation, and history; do not add decision authoring, status mutation, or workflow ownership through the Reasoning workspace.
+- Keep Tauri as a bridge only. Reasoning behavior and capture logic remain backend-owned.

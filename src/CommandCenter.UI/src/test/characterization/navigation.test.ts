@@ -164,6 +164,17 @@ describe('navigation targets', () => {
           tab: 'execution',
         }),
         expect.objectContaining({
+          id: 'repository-repo-alpha-reasoning',
+          label: 'AlphaRepo Reasoning',
+          tab: 'reasoning',
+        }),
+        expect.objectContaining({
+          id: 'section-reasoning-event-feed',
+          label: 'Reasoning Event Feed',
+          sectionId: 'reasoning-event-feed',
+          tab: 'reasoning',
+        }),
+        expect.objectContaining({
           id: 'milestone-.agents/milestones/m7.md',
           kind: 'milestone',
           milestonePath: '.agents/milestones/m7.md',
@@ -205,6 +216,7 @@ describe('navigation targets', () => {
   it('maps section anchors to their owning workspace tab', () => {
     expect(getTabForSection('proposal-review')).toBe('operational-context')
     expect(getTabForSection('continuity-warnings')).toBe('continuity')
+    expect(getTabForSection('reasoning-thread-view')).toBe('reasoning')
     expect(getTabForSection('workspace-milestones')).toBe('workspace')
   })
 })

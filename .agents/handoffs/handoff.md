@@ -2,30 +2,31 @@
 
 ## New State From This Slice
 
-- Continued Milestone 1 backend API work.
-- Added `IReasoningEventService`, `IReasoningThreadService`, and `IReasoningRelationshipService`.
-- Added service implementations that resolve repository IDs through `IRepositoryService` and delegate durable operations to `IReasoningRepository`.
-- Registered reasoning services through `AddReasoning()` and wired `AddReasoning()` into backend startup.
-- Added backend project reference to `CommandCenter.Reasoning`.
-- Added repository-scoped reasoning endpoints for event list/get/create, thread list/get/create/append-event, and relationship list/create.
-- Added `AppendReasoningThreadEventRequest`.
-- Added `ReasoningConflictException` and mapped unresolved required reasoning references / duplicate relationships to HTTP `409` at the service/API boundary while preserving repository validation behavior.
-- Added `ReasoningEndpointTests` covering success paths plus `404`, `400`, and `409` endpoint status codes.
-- Updated `.agents/milestones/m1-event-substrate.md` to mark service contracts, endpoint mapping, and endpoint status-code coverage complete.
-- Rotated previous handoff to `.agents/handoffs/handoff.0002.md`.
+- Completed Milestone 1 UI surface for Reasoning Trajectory.
+- Added Reasoning as a primary workspace tab and command-palette navigation target.
+- Added reasoning DTOs, API wrappers, and hooks for events, threads, and relationships.
+- Added `ReasoningTrajectoryTab`, `ReasoningEventFeed`, `ReasoningThreadPanel`, and `ReasoningTracePanel`.
+- Added read-only UI presentation for event feed, thread selection, provenance, relationship trace, and display-only derived family status.
+- Added Tauri bridge commands for event list/get/create, thread list/get/create/append-event, and relationship list/create.
+- Extended the development Tauri mock with seeded reasoning events, threads, relationships, and command handlers.
+- Added UI characterization tests for event feed, empty states, provenance display, thread selection, and navigation targets.
+- Updated `.agents/milestones/m1-event-substrate.md` to mark Milestone 1 UI and UI characterization items complete.
+- Rotated previous handoff to `.agents/handoffs/handoff.0003.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes: 367 tests.
-- `dotnet build CommandCenter.slnx` passes with 0 warnings and 0 errors.
+- `npm run test --prefix src/CommandCenter.UI -- reasoningTrajectory navigation` passes: 3 files, 6 tests.
+- `npm run build --prefix src/CommandCenter.UI` passes.
+- `cargo build --manifest-path src/CommandCenter.Shell/Cargo.toml` passes.
+- `npm run lint --prefix src/CommandCenter.UI` passes.
+- `npm run test --prefix src/CommandCenter.UI` passes: 48 files, 163 tests.
 
 ## Current Gaps
 
-- Milestone 1 UI work has not started.
-- Tauri bridge commands for reasoning are still future plan work.
-- Derived display status for event-family sequences remains unimplemented.
-- UI characterization tests for event feed, empty states, provenance display, and thread selection remain pending.
+- Milestone 1 is now complete by checklist.
+- Milestone 2 cross-decision and cross-artifact capture has not started.
+- Reasoning UI remains read-only except API wrappers exist for backend-supported create/append operations.
 
 ## Next Slice
 
-- Start the Milestone 1 UI surface: add reasoning DTO/API/hook plumbing, add the Reasoning tab shell entry and navigation target, then implement a minimal event feed/thread panel against the new backend endpoints with characterization tests.
+- Start Milestone 2 by adding assisted/inferred capture integration at the backend composition boundary for objective decision lifecycle transitions, beginning with decision supersession or proposal resolution events.

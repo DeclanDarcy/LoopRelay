@@ -32,6 +32,7 @@ import { ExecutionTab } from './features/execution/ExecutionTab'
 import { GeneratedHandoffReviewPanel } from './features/execution/GeneratedHandoffReviewPanel'
 import { GitWorkflowPanel } from './features/execution/GitWorkflowPanel'
 import { OperationalContextTab } from './features/operational-context/OperationalContextTab'
+import { ReasoningTrajectoryTab } from './features/reasoning/ReasoningTrajectoryTab'
 import { SelectedRepositorySummary } from './features/repositories/SelectedRepositorySummary'
 import { ExecutionContextPanel } from './features/workspace/ExecutionContextPanel'
 import { WorkspaceLiveActivityPanel } from './features/workspace/WorkspaceLiveActivityPanel'
@@ -50,6 +51,9 @@ import {
   useExecutionSession,
   useGitStatus,
   mergeExecutionEvents,
+  useReasoningEvents,
+  useReasoningRelationships,
+  useReasoningThreads,
   useRepositories,
   useRepositoryWorkspace,
 } from './hooks'
@@ -219,6 +223,24 @@ function App() {
     error: decisionProposalsError,
     refresh: refreshDecisionProposals,
   } = useDecisionProposals(selectedRepository?.repository.id ?? null, selectedDecisionProposalStates)
+  const {
+    data: reasoningEvents,
+    isLoading: isReasoningEventsLoading,
+    error: reasoningEventsError,
+    refresh: refreshReasoningEvents,
+  } = useReasoningEvents(selectedRepository?.repository.id ?? null)
+  const {
+    data: reasoningThreads,
+    isLoading: isReasoningThreadsLoading,
+    error: reasoningThreadsError,
+    refresh: refreshReasoningThreads,
+  } = useReasoningThreads(selectedRepository?.repository.id ?? null)
+  const {
+    data: reasoningRelationships,
+    isLoading: isReasoningRelationshipsLoading,
+    error: reasoningRelationshipsError,
+    refresh: refreshReasoningRelationships,
+  } = useReasoningRelationships(selectedRepository?.repository.id ?? null)
 
   const selectedArtifact = useMemo(() => {
     if (!workspace || !selectedArtifactPath) {
@@ -1389,6 +1411,14 @@ function App() {
     ])
   }
 
+  const refreshReasoning = async () => {
+    await Promise.all([
+      refreshReasoningEvents(),
+      refreshReasoningThreads(),
+      refreshReasoningRelationships(),
+    ])
+  }
+
   const openContinuityWarnings = () => {
     openContinuitySection('continuity-warnings')
   }
@@ -1632,6 +1662,20 @@ function App() {
                 }
                 onSelectedProposalStatesChange={setSelectedDecisionProposalStates}
                 onRefresh={() => void refreshDecisions()}
+              />
+
+              <ReasoningTrajectoryTab
+                events={reasoningEvents}
+                threads={reasoningThreads}
+                relationships={reasoningRelationships}
+                hasSelectedRepository={Boolean(selectedRepository)}
+                isLoading={
+                  isReasoningEventsLoading ||
+                  isReasoningThreadsLoading ||
+                  isReasoningRelationshipsLoading
+                }
+                error={reasoningEventsError ?? reasoningThreadsError ?? reasoningRelationshipsError}
+                onRefresh={() => void refreshReasoning()}
               />
 
               <ExecutionTab
