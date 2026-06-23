@@ -54,6 +54,168 @@ public sealed class DecisionGenerationCertificationServiceTests
     }
 
     [Fact]
+    public async Task ArchitecturalForkScenarioCertifiesArchitectureDecisionThroughExecutionInfluence()
+    {
+        CertificationHarness harness = await CreateGeneratedDecisionHarnessAsync(
+            planContent:
+            """
+            # Plan
+
+            - Architecture fork approach for generated execution projection boundaries has competing options.
+            """);
+
+        DecisionGenerationCertificationReport report =
+            await harness.CertificationService.GetCurrentCertificationAsync(harness.Repository.Id);
+
+        Assert.True(report.Result.Certified);
+        Assert.Equal(DecisionClassification.Architectural, harness.Candidate.Classification);
+        Assert.Contains(harness.Candidate.Signals, signal => signal.Kind == "ArchitecturalFork");
+        Assert.Contains(harness.Proposal.Options, option => option.Type == DecisionOptionType.Preserve);
+        Assert.Contains(harness.Proposal.Options, option => option.Type == DecisionOptionType.Refactor);
+        Assert.Contains(harness.Proposal.Options, option => option.Type == DecisionOptionType.Replace);
+        DecisionGenerationCertificationFinding consumptionFinding = Assert.Single(
+            report.Result.Findings,
+            finding => finding.Id == "CON-001");
+        Assert.True(consumptionFinding.Passed);
+        Assert.Contains(consumptionFinding.RelatedDecisionIds, id => id == harness.Decision.Id.Value);
+    }
+
+    [Fact]
+    public async Task WorkflowPriorityScenarioCertifiesRecommendationUsesPriorityContext()
+    {
+        CertificationHarness harness = await CreateGeneratedDecisionHarnessAsync(
+            planContent:
+            """
+            # Plan
+
+            - Goal: IncreasePriority for workflow sequencing decisions during certification.
+            - Need to decide workflow priority direction for generated execution consumption.
+            """);
+
+        DecisionGenerationCertificationReport report =
+            await harness.CertificationService.GetCurrentCertificationAsync(harness.Repository.Id);
+
+        Assert.True(report.Result.Certified);
+        Assert.Equal(DecisionClassification.Operational, harness.Candidate.Classification);
+        Assert.NotNull(harness.Proposal.Recommendation);
+        OptionEvaluation selected = Assert.Single(
+            harness.Proposal.Recommendation.OptionEvaluations,
+            evaluation => evaluation.OptionId == harness.Proposal.Recommendation.OptionId);
+        Assert.Contains("priority adjustment 2", selected.ScoreExplanation, StringComparison.OrdinalIgnoreCase);
+        DecisionOption selectedOption = Assert.Single(
+            harness.Proposal.Options,
+            option => option.Id == selected.OptionId);
+        Assert.NotEqual(DecisionOptionType.Delay, selectedOption.Type);
+    }
+
+    [Fact]
+    public async Task ContradictionScenarioCertifiesWithheldRecommendationAsDerived()
+    {
+        CertificationHarness harness = await CreateGeneratedDecisionHarnessAsync(
+            mutateCandidate: candidate => candidate with
+            {
+                Signals = candidate.Signals
+                    .Select(signal => signal with
+                    {
+                        Kind = "Contradiction",
+                        Summary = "Contradiction between generated package direction and execution consumption requirements."
+                    })
+                    .ToArray()
+            });
+
+        DecisionGenerationCertificationReport report =
+            await harness.CertificationService.GetCurrentCertificationAsync(harness.Repository.Id);
+
+        Assert.True(report.Result.Certified);
+        Assert.NotNull(harness.Proposal.Recommendation);
+        Assert.Equal(RecommendationMode.NoRecommendation, harness.Proposal.Recommendation.Mode);
+        Assert.Equal(string.Empty, harness.Proposal.Recommendation.OptionId);
+        Assert.Contains(harness.Proposal.Recommendation.Concerns, concern =>
+            concern.Contains("unresolved contradiction", StringComparison.OrdinalIgnoreCase));
+        DecisionGenerationCertificationFinding recommendationFinding = Assert.Single(
+            report.Result.Findings,
+            finding => finding.Id == "GEN-006");
+        Assert.True(recommendationFinding.Passed);
+    }
+
+    [Fact]
+    public async Task RefinementAfterChangedAssumptionsScenarioCertifiesRevisionLineageAndMinorBurden()
+    {
+        CertificationHarness harness = await CreateGeneratedDecisionHarnessAsync(
+            revisionBurden: HumanAuthoringBurden.MinorEdit);
+
+        DecisionGenerationCertificationReport report =
+            await harness.CertificationService.GetCurrentCertificationAsync(harness.Repository.Id);
+
+        Assert.True(report.Result.Certified);
+        Assert.Equal(1, report.HumanAuthoringBurden.MinorEditCount);
+        DecisionGenerationCertificationFinding historyFinding = Assert.Single(
+            report.Result.Findings,
+            finding => finding.Id == "GOV-002");
+        Assert.True(historyFinding.Passed);
+        Assert.Contains(
+            historyFinding.Sources,
+            source => source.SourceKind == "DecisionProposalRevision" &&
+                source.RelativePath?.EndsWith("/REV-9999.json", StringComparison.Ordinal) == true);
+    }
+
+    [Fact]
+    public async Task EndToEndRepositoryLifecycleScenarioPersistsCertificationProofArtifacts()
+    {
+        CertificationHarness harness = await CreateGeneratedDecisionHarnessAsync();
+
+        DecisionGenerationCertificationReport report =
+            await harness.CertificationService.RunCertificationAsync(harness.Repository.Id);
+
+        Assert.True(report.Result.Certified);
+        Assert.True(File.Exists(Path.Combine(
+            harness.Repository.Path,
+            ".agents",
+            "decisions",
+            "candidates",
+            harness.Candidate.Id,
+            "candidate.json")));
+        Assert.True(File.Exists(Path.Combine(
+            harness.Repository.Path,
+            ".agents",
+            "decisions",
+            "proposals",
+            harness.Proposal.Id,
+            "proposal.json")));
+        Assert.True(Directory.Exists(Path.Combine(
+            harness.Repository.Path,
+            ".agents",
+            "decisions",
+            "proposals",
+            harness.Proposal.Id,
+            "versions")));
+        Assert.True(File.Exists(Path.Combine(
+            harness.Repository.Path,
+            ".agents",
+            "decisions",
+            "records",
+            harness.Decision.Id.Value,
+            "decision.json")));
+        Assert.True(Directory.Exists(Path.Combine(
+            harness.Repository.Path,
+            ".agents",
+            "decisions",
+            "quality",
+            "assessments")));
+        Assert.True(Directory.Exists(Path.Combine(
+            harness.Repository.Path,
+            ".agents",
+            "decisions",
+            "influence")));
+        Assert.True(File.Exists(Path.Combine(
+            harness.Repository.Path,
+            ".agents",
+            "decisions",
+            "certification",
+            $"{report.Id}.json")));
+    }
+
+    [Fact]
     public async Task CertificationPreservesRefinementRevisionHistoryThroughResolutionAuthority()
     {
         CertificationHarness harness = await CreateGeneratedDecisionHarnessAsync(
@@ -445,25 +607,29 @@ public sealed class DecisionGenerationCertificationServiceTests
 
     private static async Task<CertificationHarness> CreateGeneratedDecisionHarnessAsync(
         Func<DecisionProposal, DecisionProposal>? mutateProposal = null,
+        Func<DecisionCandidate, DecisionCandidate>? mutateCandidate = null,
         bool saveQualityAssessment = true,
         bool recordInfluence = true,
         HumanAuthoringBurden? revisionBurden = null,
         string resolver = "human-reviewer",
-        bool selectAlternativeOption = false)
+        bool selectAlternativeOption = false,
+        string? planContent = null,
+        string? milestoneContent = null)
     {
         Repository repository = CreateRepository();
         await WriteAsync(
             repository,
             ".agents/plan.md",
-            """
-            # Plan
+            planContent ??
+                """
+                # Plan
 
-            - Need to decide architectural execution projection strategy for generated decisions.
-            """);
+                - Need to decide architectural execution projection strategy for generated decisions.
+                """);
         await WriteAsync(
             repository,
             ".agents/milestones/m10-generation-certification.md",
-            "# M10\n\n- Certify generated decisions reach execution influence.");
+            milestoneContent ?? "# M10\n\n- Certify generated decisions reach execution influence.");
         var store = new FileSystemArtifactStore();
         var decisionRepository = new FileSystemDecisionRepository(store);
         var repositoryService = new StubRepositoryService(repository);
@@ -479,6 +645,13 @@ public sealed class DecisionGenerationCertificationServiceTests
             repository.Id,
             discovered.Id,
             "Ready for proposal generation.");
+        if (mutateCandidate is not null)
+        {
+            candidate = mutateCandidate(candidate);
+            await decisionRepository.SaveCandidateAsync(repository, candidate);
+            await projectionService.ProjectCandidateAsync(repository, candidate);
+        }
+
         var generationService = new DecisionGenerationService(
             repositoryService,
             decisionRepository,
@@ -563,7 +736,10 @@ public sealed class DecisionGenerationCertificationServiceTests
             decisionRepository,
             certificationService,
             burdenService,
-            influenceService);
+            influenceService,
+            candidate,
+            proposal,
+            decision);
     }
 
     private static async Task AddRepeatedRecommendationDivergenceAsync(CertificationHarness harness)
@@ -693,7 +869,10 @@ public sealed class DecisionGenerationCertificationServiceTests
         IDecisionRepository DecisionRepository,
         DecisionGenerationCertificationService CertificationService,
         IHumanAuthoringBurdenService BurdenService,
-        IDecisionInfluenceService InfluenceService);
+        IDecisionInfluenceService InfluenceService,
+        DecisionCandidate Candidate,
+        DecisionProposal Proposal,
+        Decision Decision);
 
     private sealed class EmptyProjectionService(Guid repositoryId) : IDecisionProjectionService
     {

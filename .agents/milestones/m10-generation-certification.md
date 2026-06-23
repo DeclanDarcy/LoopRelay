@@ -63,11 +63,11 @@ certify that automated decision generation replaces human decision production wi
   - [x] execution projection absent
   - [x] influence not traceable
 - [ ] Add certification scenarios:
-  - [ ] architectural fork
-  - [ ] workflow priority decision
-  - [ ] contradiction with withheld recommendation
-  - [ ] refinement after human changes assumptions
-  - [ ] end-to-end repository lifecycle
+  - [x] architectural fork
+  - [x] workflow priority decision
+  - [x] contradiction with withheld recommendation
+  - [x] refinement after human changes assumptions
+  - [x] end-to-end repository lifecycle
 - [ ] Add certification reports:
   - [ ] repository report
   - [ ] workflow report
