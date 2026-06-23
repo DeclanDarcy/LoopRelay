@@ -1,9 +1,15 @@
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using CommandCenter.Core.Artifacts;
 using CommandCenter.Core.Repositories;
 using CommandCenter.Decisions.Abstractions;
 using CommandCenter.Decisions.Models;
 using CommandCenter.Decisions.Primitives;
 using CommandCenter.Decisions.Services;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CommandCenter.Backend.Tests;
 
@@ -136,6 +142,47 @@ public sealed class DecisionGenerationCertificationServiceTests
         Assert.Contains(report.Result.Failures, failure => failure.StartsWith("CON-002:", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task GenerationCertificationEndpointsReturnCurrentReportPersistedRunAndHistory()
+    {
+        Repository repository = CreateRepository();
+
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services => services.AddSingleton<IRepositoryService>(new StubRepositoryService(repository)));
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+        using var client = new HttpClient();
+        string root = app.Urls.Single();
+        JsonSerializerOptions jsonOptions = CreateJsonOptions();
+
+        HttpResponseMessage currentResponse =
+            await client.GetAsync($"{root}/api/repositories/{repository.Id}/decisions/generation-certification/current");
+        HttpResponseMessage runResponse =
+            await client.PostAsync($"{root}/api/repositories/{repository.Id}/decisions/generation-certification", null);
+        HttpResponseMessage historyResponse =
+            await client.GetAsync($"{root}/api/repositories/{repository.Id}/decisions/generation-certification/reports");
+
+        Assert.Equal(HttpStatusCode.OK, currentResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, runResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, historyResponse.StatusCode);
+        DecisionGenerationCertificationReport? current =
+            await currentResponse.Content.ReadFromJsonAsync<DecisionGenerationCertificationReport>(jsonOptions);
+        DecisionGenerationCertificationReport? persisted =
+            await runResponse.Content.ReadFromJsonAsync<DecisionGenerationCertificationReport>(jsonOptions);
+        DecisionGenerationCertificationReport[]? history =
+            await historyResponse.Content.ReadFromJsonAsync<DecisionGenerationCertificationReport[]>(jsonOptions);
+        Assert.NotNull(current);
+        Assert.NotNull(persisted);
+        Assert.NotNull(history);
+        Assert.StartsWith("generation-certification.", current.Id, StringComparison.Ordinal);
+        Assert.StartsWith("generation-certification.", persisted.Id, StringComparison.Ordinal);
+        Assert.False(current.Result.Certified);
+        Assert.False(persisted.Result.Certified);
+        Assert.Single(history);
+        Assert.Equal(persisted.Id, history[0].Id);
+    }
+
     private static DecisionCandidate CreateCandidate(
         Guid repositoryId,
         DecisionCandidateState state)
@@ -191,6 +238,13 @@ public sealed class DecisionGenerationCertificationServiceTests
             Name = Path.GetFileName(path),
             Path = path
         };
+    }
+
+    private static JsonSerializerOptions CreateJsonOptions()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        options.Converters.Add(new JsonStringEnumConverter());
+        return options;
     }
 
     private sealed class StubRepositoryService(params Repository[] repositories) : IRepositoryService

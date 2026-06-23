@@ -57,6 +57,9 @@ public static class DecisionEndpoints
         app.MapGetExecutionDecisionProjection();
         app.MapGetExecutionDecisionInfluence();
         app.MapListDecisionInfluence();
+        app.MapGetDecisionGenerationCertification();
+        app.MapRunDecisionGenerationCertification();
+        app.MapListDecisionGenerationCertificationReports();
         app.MapGetDecisionCertification();
         app.MapRunDecisionCertification();
         app.MapListDecisionCertificationReports();
@@ -1344,6 +1347,75 @@ public static class DecisionEndpoints
             try
             {
                 return Results.Ok(await influenceService.ListDecisionInfluenceAsync(repositoryId, decisionId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGetDecisionGenerationCertification(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/decisions/generation-certification/current", async (
+            Guid repositoryId,
+            IDecisionGenerationCertificationService certificationService) =>
+        {
+            try
+            {
+                return Results.Ok(await certificationService.GetCurrentCertificationAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapRunDecisionGenerationCertification(this IEndpointRouteBuilder app) =>
+        app.MapPost("/api/repositories/{repositoryId:guid}/decisions/generation-certification", async (
+            Guid repositoryId,
+            IDecisionGenerationCertificationService certificationService) =>
+        {
+            try
+            {
+                return Results.Ok(await certificationService.RunCertificationAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapListDecisionGenerationCertificationReports(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/decisions/generation-certification/reports", async (
+            Guid repositoryId,
+            IDecisionGenerationCertificationService certificationService) =>
+        {
+            try
+            {
+                return Results.Ok(await certificationService.ListReportsAsync(repositoryId));
             }
             catch (KeyNotFoundException exception)
             {

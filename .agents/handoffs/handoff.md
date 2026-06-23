@@ -2,29 +2,27 @@
 
 ## New State This Slice
 
-- Started Milestone 10 automated decision generation certification.
-- Added backend generation-certification models:
-  - `DecisionGenerationCertificationResult`
-  - `DecisionGenerationCertificationFinding`
-  - `DecisionGenerationCertificationReport`
-- Added `IDecisionGenerationCertificationService` and `DecisionGenerationCertificationService`.
-- Generation certification is observational only. It reads existing decision lifecycle artifacts, generated packages, human resolutions, persisted quality assessments, burden signals, execution projection, and influence traces.
-- Added repository persistence for `generation-certification.YYYYMMDDHHMMSSFFFFFFF` reports under `.agents/decisions/certification/`.
-- Registered generation certification in decision DI.
-- Added in-memory repository support for generation-certification reports.
-- Added `DecisionGenerationCertificationServiceTests` covering:
-  - pass when a generated package is human-resolved, quality-assessed, projected into execution, influence-traced, and persisted/reloaded
-  - fail when a generated resolved decision lacks an influence trace
-- Updated `.agents/milestones/m10-generation-certification.md` to mark the completed backend foundation items.
-- Rotated prior handoff to `.agents/handoffs/handoff.0032.md`.
+- Continued Milestone 10 automated decision generation certification.
+- Added backend API endpoints for M10 generation certification:
+  - `GET /api/repositories/{repositoryId}/decisions/generation-certification/current`
+  - `POST /api/repositories/{repositoryId}/decisions/generation-certification`
+  - `GET /api/repositories/{repositoryId}/decisions/generation-certification/reports`
+- Endpoint behavior follows the existing decision endpoint pattern:
+  - `200 OK` for successful current, run, and history reads
+  - `404 NotFound` for missing repositories
+  - `400 BadRequest` for invalid arguments
+  - `409 Conflict` for invalid repository/artifact state
+- Added backend endpoint coverage proving current report, persisted run, and persisted report history are reachable through HTTP.
+- Updated `.agents/milestones/m10-generation-certification.md` to mark backend generation-certification endpoints complete.
+- Rotated prior handoff to `.agents/handoffs/handoff.0033.md`.
 
 ## Verification
 
-- `dotnet build CommandCenter.slnx` passed.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter DecisionGenerationCertificationServiceTests` passed: 2 tests.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "DecisionGenerationCertificationServiceTests|DecisionGenerationServiceTests|DecisionProjectionServiceTests|DecisionQualityServiceTests|DecisionCertificationServiceTests"` passed: 104 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter DecisionGenerationCertificationServiceTests` passed: 3 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "DecisionGenerationCertificationServiceTests|DecisionCertificationServiceTests"` passed: 12 tests.
 
 ## Next Recommended Slice
 
-- Add backend API endpoints, Tauri bridge commands, UI types/hooks, and a focused certification panel for generation certification.
-- Then add the remaining negative certification fixtures: missing options, missing quality evidence, generation bypass dominance, full rewrite dominance, and recommendation/order-based failure detection.
+- Add Tauri bridge commands for the three generation-certification endpoints.
+- Add UI decision API/types/hooks and a focused generation certification panel that clearly presents advisory certification state without implying lifecycle authority.
+- Then add the remaining M10 negative certification fixtures: missing options, missing quality evidence, full rewrite dominance, generation bypass dominance, and order-based recommendation failure detection.

@@ -2,16 +2,21 @@
 
 ## Newly Authorized
 
-- Treat the M10 opening slice as correctly scoped.
-- Preserve the M10 invariant that generation certification is observational evidence evaluation, not workflow authority.
-- Keep the governing distinction: evaluate does not equal govern.
-- Certify generated-decision workflow replacement only when a generated decision reaches human accepted resolution, execution projection, and traceable execution influence.
-- Require quality and human-authoring burden evidence before certification can claim workflow replacement.
-- Keep persisted certification reports as historical evidence rather than transient runtime output.
-- Split the next M10 slice into backend endpoints first, then Tauri/UI after endpoint tests pass, then additional negative fixtures.
-- Prioritize negative certification fixtures for missing options, missing quality evidence, full rewrite dominance, generation bypass dominance, order-based recommendation failure, and missing execution influence.
+- Treat the second M10 backend endpoint slice as correct and complete for the backend certification surface.
+- Proceed next with Tauri bridge commands, UI decision API/types/hooks, and a focused generation certification panel.
+- Keep the generation certification UI focused initially on generation capability, governance compatibility, workflow replacement, quality evidence, burden evidence, and execution influence.
+- Prioritize remaining M10 negative fixtures after Tauri/UI exposure:
+  - missing options
+  - missing quality evidence
+  - full rewrite dominance
+  - generation bypass dominance
+  - order-based recommendation failure
+- Give special attention to order-based recommendation failure because certification must prove recommendation behavior has not regressed to `options[0]`.
+- Treat M10 completion as proving workflow replacement, not merely generated artifact production.
 
 ## Not Authorized
 
-- Do not let M10 certification accept, reject, resolve, supersede, archive, or otherwise govern decisions.
-- Do not implement Tauri/UI generation certification surfaces before backend endpoint tests pass.
+- Do not let generation certification mutate lifecycle authority.
+- Do not treat certification as governance.
+- Do not broaden the initial UI into general reporting before the focused certification panel exists.
+- Do not consider Milestone 10 complete until negative certification fixtures reduce false-positive certification risk.

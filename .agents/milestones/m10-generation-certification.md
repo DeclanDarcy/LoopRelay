@@ -17,6 +17,10 @@ certify that automated decision generation replaces human decision production wi
   - [x] failures
 - [x] Add `DecisionGenerationCertificationReport`.
 - [x] Add `IDecisionGenerationCertificationService`.
+- [x] Add backend generation-certification endpoints:
+  - [x] current advisory report
+  - [x] persisted certification run
+  - [x] persisted report history
 - [x] Evaluate certification categories:
   - [x] generation capability
   - [x] governance compatibility
