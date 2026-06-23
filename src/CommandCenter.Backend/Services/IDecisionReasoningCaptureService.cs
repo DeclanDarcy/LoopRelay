@@ -1,3 +1,4 @@
+using CommandCenter.Continuity.Models;
 using CommandCenter.Decisions.Models;
 
 namespace CommandCenter.Backend.Services;
@@ -22,4 +23,8 @@ public interface IDecisionReasoningCaptureService
     Task CaptureGovernanceContradictionsAsync(
         Guid repositoryId,
         DecisionGovernanceReport report);
+
+    Task CaptureOperationalContextPromotionAsync(
+        Guid repositoryId,
+        OperationalContextProposal proposal);
 }

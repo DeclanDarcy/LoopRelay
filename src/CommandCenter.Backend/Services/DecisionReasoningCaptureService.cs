@@ -2,6 +2,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using CommandCenter.Continuity.Models;
+using CommandCenter.Continuity.Primitives;
 using CommandCenter.Core.Repositories;
 using CommandCenter.Decisions.Abstractions;
 using CommandCenter.Decisions.Models;
@@ -172,6 +174,51 @@ public sealed class DecisionReasoningCaptureService(
                 repository,
                 report,
                 finding,
+                transitionFingerprint);
+        }
+    }
+
+    public async Task CaptureOperationalContextPromotionAsync(
+        Guid repositoryId,
+        OperationalContextProposal proposal)
+    {
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        if (proposal.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException("Operational-context proposal belongs to a different repository.");
+        }
+
+        if (proposal.Promotion.PromotedAt is null ||
+            string.IsNullOrWhiteSpace(proposal.Promotion.PromotedContentHash))
+        {
+            throw new InvalidOperationException("Operational-context proposal does not contain successful promotion metadata.");
+        }
+
+        foreach (OperationalContextSemanticChange change in proposal.SemanticChanges)
+        {
+            if (!TryClassifyOperationalContextPromotionChange(change, out ReasoningEventFamily family, out ReasoningEventType type, out string tag))
+            {
+                continue;
+            }
+
+            string transitionFingerprint = Fingerprint(new
+            {
+                Transition = "OperationalContextPromotionReasoningObserved",
+                RepositoryId = repository.Id,
+                ProposalId = proposal.ProposalId,
+                proposal.Promotion.PromotedAt,
+                proposal.Promotion.PromotedContentHash,
+                proposal.Promotion.PromotedContentSourceRelativePath,
+                SemanticChange = change
+            });
+
+            await GetOrCreateOperationalContextPromotionEventAsync(
+                repository,
+                proposal,
+                change,
+                family,
+                type,
+                tag,
                 transitionFingerprint);
         }
     }
@@ -408,6 +455,40 @@ public sealed class DecisionReasoningCaptureService(
                 ["contradiction", "governance", "inferred-capture"]));
     }
 
+    private async Task<ReasoningEvent> GetOrCreateOperationalContextPromotionEventAsync(
+        Repository repository,
+        OperationalContextProposal proposal,
+        OperationalContextSemanticChange change,
+        ReasoningEventFamily family,
+        ReasoningEventType type,
+        string tag,
+        string transitionFingerprint)
+    {
+        IReadOnlyList<ReasoningEvent> existingEvents = await reasoningRepository.ListEventsAsync(repository);
+        ReasoningEvent? existing = existingEvents.FirstOrDefault(reasoningEvent =>
+            reasoningEvent.Family == family &&
+            reasoningEvent.Type == type &&
+            string.Equals(reasoningEvent.Provenance.Fingerprint, transitionFingerprint, StringComparison.Ordinal));
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        return await reasoningRepository.CreateEventAsync(
+            repository,
+            new CreateReasoningEventCommand(
+                family,
+                type,
+                OperationalContextPromotionEventTitle(proposal, change),
+                new ReasoningNarrative(
+                    OperationalContextPromotionSummary(proposal, change),
+                    $"Operational context remains authoritative current understanding; reasoning records the promoted semantic change as explanatory evidence. {change.Description}"),
+                OperationalContextPromotionReferences(proposal, change),
+                OperationalContextPromotionProvenance(proposal, change, transitionFingerprint),
+                [],
+                ["operational-context", "promotion", "inferred-capture", tag]));
+    }
+
     private async Task<Repository> GetRepositoryAsync(Guid repositoryId)
     {
         Repository? repository = (await repositoryService.GetAllAsync())
@@ -492,6 +573,53 @@ public sealed class DecisionReasoningCaptureService(
         return references;
     }
 
+    private static IReadOnlyList<ReasoningReference> OperationalContextPromotionReferences(
+        OperationalContextProposal proposal,
+        OperationalContextSemanticChange change)
+    {
+        List<ReasoningReference> references =
+        [
+            new ReasoningReference(
+                ReasoningReferenceKind.OperationalContextRevision,
+                proposal.ProposalId,
+                OperationalContextProposalPath(proposal.ProposalId),
+                Section: $"Semantic change: {change.Type}",
+                Excerpt: change.Description,
+                Fingerprint: Fingerprint(new
+                {
+                    proposal.ProposalId,
+                    proposal.Promotion.PromotedContentHash,
+                    SemanticChange = change
+                })),
+            new ReasoningReference(
+                ReasoningReferenceKind.Artifact,
+                ".agents/operational_context.md",
+                ".agents/operational_context.md",
+                Section: "Current Operational Context",
+                Fingerprint: proposal.Promotion.PromotedContentHash)
+        ];
+
+        if (!string.IsNullOrWhiteSpace(proposal.Promotion.PromotedContentSourceRelativePath))
+        {
+            references.Add(new ReasoningReference(
+                ReasoningReferenceKind.Artifact,
+                proposal.Promotion.PromotedContentSourceRelativePath,
+                proposal.Promotion.PromotedContentSourceRelativePath,
+                Section: "Promoted Proposal Content"));
+        }
+
+        if (!string.IsNullOrWhiteSpace(proposal.Promotion.ArchivedRelativePath))
+        {
+            references.Add(new ReasoningReference(
+                ReasoningReferenceKind.OperationalContextRevision,
+                proposal.Promotion.ArchivedRelativePath,
+                proposal.Promotion.ArchivedRelativePath,
+                Section: "Archived Previous Operational Context"));
+        }
+
+        return references;
+    }
+
     private static ReasoningProvenance Provenance(
         DecisionResolvedProposalSnapshot proposal,
         string rationale,
@@ -538,6 +666,22 @@ public sealed class DecisionReasoningCaptureService(
             transitionFingerprint);
     }
 
+    private static ReasoningProvenance OperationalContextPromotionProvenance(
+        OperationalContextProposal proposal,
+        OperationalContextSemanticChange change,
+        string transitionFingerprint)
+    {
+        return new ReasoningProvenance(
+            "InferredOperationalContextPromotion",
+            "operational-context-lifecycle-service",
+            OperationalContextProposalPath(proposal.ProposalId),
+            $"Promotion semantic change: {change.Type}",
+            string.IsNullOrWhiteSpace(proposal.Review.ReviewNote)
+                ? change.Description
+                : $"{change.Description} Review note: {proposal.Review.ReviewNote}",
+            transitionFingerprint);
+    }
+
     private static string DecisionPath(DecisionId decisionId)
     {
         return $".agents/decisions/records/{decisionId.Value}/decision.json";
@@ -553,6 +697,11 @@ public sealed class DecisionReasoningCaptureService(
         return $".agents/decisions/governance/{reportId}.json";
     }
 
+    private static string OperationalContextProposalPath(string proposalId)
+    {
+        return $".agents/operational_context/proposals/{proposalId}/metadata.json";
+    }
+
     private static bool IsContradictionFinding(DecisionGovernanceFinding finding)
     {
         return finding.Category is
@@ -561,6 +710,63 @@ public sealed class DecisionReasoningCaptureService(
             DecisionGovernanceCategory.AuthorityBoundary or
             DecisionGovernanceCategory.ExecutionProjectionReadiness or
             DecisionGovernanceCategory.FingerprintIntegrity;
+    }
+
+    private static bool TryClassifyOperationalContextPromotionChange(
+        OperationalContextSemanticChange change,
+        out ReasoningEventFamily family,
+        out ReasoningEventType type,
+        out string tag)
+    {
+        switch (change.Type)
+        {
+            case OperationalContextSemanticChangeType.ConstraintAdded:
+                family = ReasoningEventFamily.ConstraintEvolution;
+                type = ReasoningEventType.ConstraintIntroduced;
+                tag = "constraint-evolution";
+                return true;
+            case OperationalContextSemanticChangeType.ConstraintRemoved:
+                family = ReasoningEventFamily.ConstraintEvolution;
+                type = ReasoningEventType.ConstraintRetired;
+                tag = "constraint-evolution";
+                return true;
+            case OperationalContextSemanticChangeType.ItemChanged
+                when change.Section.Contains("constraint", StringComparison.OrdinalIgnoreCase):
+            case OperationalContextSemanticChangeType.SectionChanged
+                when change.Section.Contains("constraint", StringComparison.OrdinalIgnoreCase):
+                family = ReasoningEventFamily.ConstraintEvolution;
+                type = ReasoningEventType.ConstraintModified;
+                tag = "constraint-evolution";
+                return true;
+            case OperationalContextSemanticChangeType.ImportantDecisionIntroduced:
+            case OperationalContextSemanticChangeType.DecisionRetired:
+            case OperationalContextSemanticChangeType.RationaleChanged:
+            case OperationalContextSemanticChangeType.RationaleLostWarning:
+            case OperationalContextSemanticChangeType.OpenDecisionResolved:
+                family = ReasoningEventFamily.DecisionEvolution;
+                type = ReasoningEventType.EvidenceAdded;
+                tag = "decision-evolution";
+                return true;
+            default:
+                family = default;
+                type = default;
+                tag = string.Empty;
+                return false;
+        }
+    }
+
+    private static string OperationalContextPromotionEventTitle(
+        OperationalContextProposal proposal,
+        OperationalContextSemanticChange change)
+    {
+        return $"Operational context promotion {proposal.ProposalId} changed {change.Section}";
+    }
+
+    private static string OperationalContextPromotionSummary(
+        OperationalContextProposal proposal,
+        OperationalContextSemanticChange change)
+    {
+        return $"Promotion {proposal.ProposalId} changed project understanding: {change.Description}";
     }
 
     private static string Fingerprint<T>(T value)

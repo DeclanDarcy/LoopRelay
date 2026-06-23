@@ -3,6 +3,7 @@ using CommandCenter.Continuity.Abstractions;
 using CommandCenter.Continuity.Models;
 using CommandCenter.Core.Projections;
 using CommandCenter.Core.Repositories;
+using CommandCenter.Backend.Services;
 using CommandCenter.Middle.Projections;
 
 namespace CommandCenter.Backend.Endpoints;
@@ -182,11 +183,13 @@ public static class OperationalContextEndpoints
             Guid repositoryId,
             string proposalId,
             IOperationalContextLifecycleService lifecycleService,
+            IDecisionReasoningCaptureService reasoningCaptureService,
             IRepositoryProjectionService projectionService) =>
         {
             try
             {
                 OperationalContextProposal proposal = await lifecycleService.PromoteAsync(repositoryId, proposalId);
+                await reasoningCaptureService.CaptureOperationalContextPromotionAsync(repositoryId, proposal);
                 await projectionService.RefreshWorkspaceAsync(repositoryId);
                 return Results.Ok(proposal);
             }

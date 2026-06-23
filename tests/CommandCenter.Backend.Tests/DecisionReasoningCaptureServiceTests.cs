@@ -6,6 +6,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using CommandCenter.Backend;
 using CommandCenter.Backend.Services;
+using CommandCenter.Continuity.Models;
+using CommandCenter.Continuity.Primitives;
 using CommandCenter.Core.Artifacts;
 using CommandCenter.Core.Repositories;
 using CommandCenter.Decisions.Abstractions;
@@ -22,6 +24,118 @@ namespace CommandCenter.Backend.Tests;
 
 public sealed class DecisionReasoningCaptureServiceTests
 {
+    [Fact]
+    public async Task OperationalContextPromotionCaptureIsIdempotentAndSelective()
+    {
+        Repository repository = CreateRepository();
+        var decisionRepository = new InMemoryDecisionRepository();
+        var reasoningRepository = new FileSystemReasoningRepository(
+            new FileSystemArtifactStore(),
+            new ReasoningArtifactProjectionService());
+        var captureService = new DecisionReasoningCaptureService(
+            new StubRepositoryService(repository),
+            decisionRepository,
+            reasoningRepository);
+        OperationalContextProposal proposal = CreatePromotedOperationalContextProposal(repository.Id);
+
+        await captureService.CaptureOperationalContextPromotionAsync(repository.Id, proposal);
+        await captureService.CaptureOperationalContextPromotionAsync(repository.Id, proposal);
+
+        IReadOnlyList<ReasoningEvent> reasoningEvents = await reasoningRepository.ListEventsAsync(repository);
+        Assert.Equal(2, reasoningEvents.Count);
+        Assert.Contains(reasoningEvents, reasoningEvent =>
+            reasoningEvent.Family == ReasoningEventFamily.ConstraintEvolution &&
+            reasoningEvent.Type == ReasoningEventType.ConstraintIntroduced &&
+            reasoningEvent.Provenance.SourceKind == "InferredOperationalContextPromotion" &&
+            reasoningEvent.References.Any(reference =>
+                reference.Kind == ReasoningReferenceKind.OperationalContextRevision &&
+                reference.Id == "oc-proposal-1" &&
+                reference.RelativePath == ".agents/operational_context/proposals/oc-proposal-1/metadata.json"));
+        Assert.Contains(reasoningEvents, reasoningEvent =>
+            reasoningEvent.Family == ReasoningEventFamily.DecisionEvolution &&
+            reasoningEvent.Type == ReasoningEventType.EvidenceAdded &&
+            reasoningEvent.Narrative.Details.Contains("Operational context remains authoritative current understanding", StringComparison.Ordinal));
+        Assert.DoesNotContain(reasoningEvents, reasoningEvent =>
+            reasoningEvent.Title.Contains("Should cache derived graph", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task OperationalContextPromotionEndpointCapturesReasoningAfterPromotionPersists()
+    {
+        Repository repository = CreateRepository();
+        await WriteAsync(repository, ".agents/plan.md", "plan");
+        await WriteAsync(repository, ".agents/handoffs/handoff.md", "# Handoff\n\n- Keep backend workflow authority.");
+        await WriteAsync(repository, ".agents/decisions/decisions.md", """
+            # Decisions
+
+            - Reasoning capture must observe promoted operational context because current understanding remains authoritative.
+            """);
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services => services.AddSingleton<IRepositoryService>(new StubRepositoryService(repository)));
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+        using var client = new HttpClient();
+        string root = app.Urls.Single();
+        JsonSerializerOptions jsonOptions = CreateJsonOptions();
+
+        OperationalContextProposal generated = (await (await client.PostAsync(
+            $"{root}/api/repositories/{repository.Id}/operational-context/generate",
+            null)).Content.ReadFromJsonAsync<OperationalContextProposal>(jsonOptions))!;
+        await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/operational-context/proposals/{generated.ProposalId}/accept",
+            new OperationalContextProposalReviewRequest { ReviewNote = "Promote durable understanding." },
+            jsonOptions);
+
+        HttpResponseMessage promoteResponse = await client.PostAsync(
+            $"{root}/api/repositories/{repository.Id}/operational-context/proposals/{generated.ProposalId}/promote",
+            null);
+        ReasoningEvent[] reasoningEvents = (await (await client.GetAsync(
+            $"{root}/api/repositories/{repository.Id}/reasoning/events"))
+            .Content.ReadFromJsonAsync<ReasoningEvent[]>(jsonOptions))!;
+
+        Assert.Equal(HttpStatusCode.OK, promoteResponse.StatusCode);
+        Assert.Contains(reasoningEvents, reasoningEvent =>
+            reasoningEvent.Provenance.SourceKind == "InferredOperationalContextPromotion" &&
+            reasoningEvent.Family == ReasoningEventFamily.DecisionEvolution);
+        ReasoningEvent reasoningEvent = reasoningEvents.First(reasoningEvent =>
+            reasoningEvent.Provenance.SourceKind == "InferredOperationalContextPromotion" &&
+            reasoningEvent.Family == ReasoningEventFamily.DecisionEvolution);
+        Assert.Contains("changed project understanding", reasoningEvent.Narrative.Summary);
+        Assert.Contains(reasoningEvent.References, reference =>
+            reference.Kind == ReasoningReferenceKind.Artifact &&
+            reference.Id == ".agents/operational_context.md");
+    }
+
+    [Fact]
+    public async Task OperationalContextPromotionEndpointDoesNotCaptureReasoningWhenPromotionFails()
+    {
+        Repository repository = CreateRepository();
+        await WriteAsync(repository, ".agents/plan.md", "plan");
+        await WriteAsync(repository, ".agents/handoffs/handoff.md", "# Handoff\n\n- Pending proposal only.");
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services => services.AddSingleton<IRepositoryService>(new StubRepositoryService(repository)));
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+        using var client = new HttpClient();
+        string root = app.Urls.Single();
+        JsonSerializerOptions jsonOptions = CreateJsonOptions();
+
+        OperationalContextProposal generated = (await (await client.PostAsync(
+            $"{root}/api/repositories/{repository.Id}/operational-context/generate",
+            null)).Content.ReadFromJsonAsync<OperationalContextProposal>(jsonOptions))!;
+        HttpResponseMessage promoteResponse = await client.PostAsync(
+            $"{root}/api/repositories/{repository.Id}/operational-context/proposals/{generated.ProposalId}/promote",
+            null);
+        ReasoningEvent[] reasoningEvents = (await (await client.GetAsync(
+            $"{root}/api/repositories/{repository.Id}/reasoning/events"))
+            .Content.ReadFromJsonAsync<ReasoningEvent[]>(jsonOptions))!;
+
+        Assert.Equal(HttpStatusCode.Conflict, promoteResponse.StatusCode);
+        Assert.Empty(reasoningEvents);
+    }
+
     [Fact]
     public async Task GovernanceContradictionCaptureIsIdempotentAndSelective()
     {
@@ -167,6 +281,59 @@ public sealed class DecisionReasoningCaptureServiceTests
             []);
     }
 
+    private static OperationalContextProposal CreatePromotedOperationalContextProposal(Guid repositoryId)
+    {
+        return new OperationalContextProposal
+        {
+            ProposalId = "oc-proposal-1",
+            RepositoryId = repositoryId,
+            GeneratedAt = DateTimeOffset.Parse("2026-06-23T00:00:00Z"),
+            Status = OperationalContextProposalStatus.Promoted,
+            BaselineCurrentContextHash = "baseline",
+            GeneratedContentHash = "generated",
+            GeneratedContentRelativePath = ".agents/operational_context/proposals/oc-proposal-1/proposed.md",
+            SemanticChanges =
+            [
+                new OperationalContextSemanticChange
+                {
+                    Type = OperationalContextSemanticChangeType.ConstraintAdded,
+                    Section = "Constraints",
+                    Description = "Human review remains required before materializing reasoning entities."
+                },
+                new OperationalContextSemanticChange
+                {
+                    Type = OperationalContextSemanticChangeType.ImportantDecisionIntroduced,
+                    Section = "Stable Decisions",
+                    Description = "Decision: Reasoning events explain current direction without owning authority."
+                },
+                new OperationalContextSemanticChange
+                {
+                    Type = OperationalContextSemanticChangeType.QuestionAdded,
+                    Section = "Open Questions",
+                    Description = "Should cache derived graph projections?"
+                }
+            ],
+            Review = new OperationalContextReview
+            {
+                ProposalId = "oc-proposal-1",
+                ReviewState = OperationalContextReviewState.Accepted,
+                BaselineCurrentContextHash = "baseline",
+                ReviewedContentHash = "promoted",
+                ReviewedAt = DateTimeOffset.Parse("2026-06-23T00:01:00Z"),
+                ReviewNote = "Promote semantic changes."
+            },
+            Promotion = new OperationalContextPromotion
+            {
+                ProposalId = "oc-proposal-1",
+                PromotedAt = DateTimeOffset.Parse("2026-06-23T00:02:00Z"),
+                PromotedContentHash = "promoted",
+                PromotedContentSourceRelativePath = ".agents/operational_context/proposals/oc-proposal-1/proposed.md",
+                RevisionNumber = 1,
+                ArchivedRelativePath = ".agents/operational_context.0001.md"
+            }
+        };
+    }
+
     private static Decision CreateResolvedDecision(
         Guid repositoryId,
         string decisionId = "DEC-0001",
@@ -255,6 +422,18 @@ public sealed class DecisionReasoningCaptureServiceTests
             Name = Path.GetFileName(path),
             Path = path
         };
+    }
+
+    private static async Task WriteAsync(Repository repository, string relativePath, string content)
+    {
+        string path = Path.Combine(repository.Path, relativePath.Replace('/', Path.DirectorySeparatorChar));
+        string? directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        await File.WriteAllTextAsync(path, content);
     }
 
     private sealed class StubRepositoryService(params Repository[] repositories) : IRepositoryService
