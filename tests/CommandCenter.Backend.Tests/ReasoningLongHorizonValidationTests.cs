@@ -46,6 +46,90 @@ public sealed class ReasoningLongHorizonValidationTests
         await AssertNoDerivedAuthorityArtifactsAsync(store, repository);
     }
 
+    [Fact]
+    public async Task LongHorizonAnswerLevelQueriesSurviveRepositoryRecovery()
+    {
+        var store = new MemoryArtifactStore();
+        Repository repository = CreateRepository();
+        ReasoningServices initial = CreateServices(repository, store);
+        LongHorizonFixture fixture = await CreateLongHorizonFixtureAsync(repository, store, initial.Repository);
+        Repository recoveredRepository = new()
+        {
+            Id = repository.Id,
+            Name = "Recovered Repo",
+            Path = repository.Path
+        };
+        ReasoningServices recovered = CreateServices(recoveredRepository, store);
+
+        await AssertRecoveredAnswerAsync(
+            recovered,
+            recoveredRepository,
+            new ReasoningQuery(
+                ReasoningQueryCategory.Decision,
+                "Why was the repository event substrate chosen over provider-session continuity?",
+                new ReasoningReference(ReasoningReferenceKind.Decision, "DEC-STRATEGY-CURRENT")),
+            [
+                fixture.SelectedAlternativeId,
+                fixture.RejectedAlternativeId,
+                fixture.DirectionShiftId
+            ],
+            [
+                "event-led repository substrate was selected",
+                "Provider-session reuse was rejected",
+                "current strategy superseded session continuity"
+            ]);
+
+        await AssertRecoveredAnswerAsync(
+            recovered,
+            recoveredRepository,
+            new ReasoningQuery(
+                ReasoningQueryCategory.Alternative,
+                "Which alternative was rejected, and why?",
+                new ReasoningReference(ReasoningReferenceKind.ReasoningEvent, fixture.SelectedAlternativeId)),
+            [
+                fixture.RejectedAlternativeId,
+                fixture.SelectedAlternativeId
+            ],
+            [
+                "Provider-session reuse was rejected",
+                "repository artifacts must remain the continuity source"
+            ]);
+
+        await AssertRecoveredAnswerAsync(
+            recovered,
+            recoveredRepository,
+            new ReasoningQuery(
+                ReasoningQueryCategory.Assumption,
+                "What assumption failed, and what challenged it?",
+                new ReasoningReference(ReasoningReferenceKind.ReasoningEvent, fixture.InvalidatedAssumptionId)),
+            [
+                fixture.InvalidatedAssumptionId,
+                fixture.RecurringContradictionId
+            ],
+            [
+                "Manual-only capture was invalidated",
+                "Repeated materialization pressure conflicted"
+            ]);
+
+        await AssertRecoveredAnswerAsync(
+            recovered,
+            recoveredRepository,
+            new ReasoningQuery(
+                ReasoningQueryCategory.Contradiction,
+                "What contradiction changed the direction of work?",
+                new ReasoningReference(ReasoningReferenceKind.ReasoningEvent, fixture.DirectionShiftId)),
+            [
+                fixture.RecurringContradictionId,
+                fixture.DirectionShiftId
+            ],
+            [
+                "Repeated materialization pressure conflicted",
+                "strategy shifted toward proving equivalent answers after restart"
+            ]);
+
+        await AssertNoDerivedAuthorityArtifactsAsync(store, repository);
+    }
+
     private static async Task<LongHorizonFixture> CreateLongHorizonFixtureAsync(
         Repository repository,
         IArtifactStore store,
@@ -132,7 +216,7 @@ public sealed class ReasoningLongHorizonValidationTests
                 .ToArray(),
             ["long-horizon", "strategy"]));
 
-        await RelateAsync(reasoningRepository, repository, ReasoningRelationshipType.InfluencedBy, rejectedAlternative, selectedAlternative);
+        await RelateAsync(reasoningRepository, repository, ReasoningRelationshipType.ComparesWith, rejectedAlternative, selectedAlternative);
         await RelateAsync(reasoningRepository, repository, ReasoningRelationshipType.Supports, hypothesis, selectedAlternative);
         await RelateAsync(reasoningRepository, repository, ReasoningRelationshipType.Invalidates, invalidatedAssumption, hypothesis);
         await RelateAsync(reasoningRepository, repository, ReasoningRelationshipType.Challenges, contradiction, invalidatedAssumption);
@@ -153,10 +237,33 @@ public sealed class ReasoningLongHorizonValidationTests
             Provenance()));
 
         return new LongHorizonFixture(
+            rejectedAlternative.Id,
             selectedAlternative.Id,
             invalidatedAssumption.Id,
             contradiction.Id,
             directionShift.Id);
+    }
+
+    private static async Task AssertRecoveredAnswerAsync(
+        ReasoningServices recovered,
+        Repository repository,
+        ReasoningQuery query,
+        IReadOnlyList<string> expectedEvidenceIds,
+        IReadOnlyList<string> expectedNarrativeFragments)
+    {
+        ReasoningQueryResult result = await recovered.Query.RunQueryAsync(repository.Id, query);
+
+        foreach (string evidenceId in expectedEvidenceIds)
+        {
+            Assert.Contains(result.Reconstruction.Evidence, evidence => evidence.Id == evidenceId);
+        }
+
+        foreach (string narrativeFragment in expectedNarrativeFragments)
+        {
+            Assert.Contains(narrativeFragment, result.Reconstruction.Narrative.Details, StringComparison.Ordinal);
+        }
+
+        Assert.Equal("High", result.Reconstruction.Confidence);
     }
 
     private static async Task RelateAsync(
@@ -278,6 +385,7 @@ public sealed class ReasoningLongHorizonValidationTests
         IReasoningQueryService Query);
 
     private sealed record LongHorizonFixture(
+        string RejectedAlternativeId,
         string SelectedAlternativeId,
         string InvalidatedAssumptionId,
         string RecurringContradictionId,

@@ -21,10 +21,10 @@ Goal: prove event-led reasoning survives large project histories.
 ## Tests
 
 - [x] A large fixture can answer why current strategy exists.
-- [ ] A large fixture can answer why an architecture was chosen.
-- [ ] A large fixture can list rejected alternatives and their rationale.
-- [ ] A large fixture can list failed assumptions and their outcomes.
-- [ ] A large fixture can identify contradictions that changed direction.
+- [x] A large fixture can answer why an architecture was chosen.
+- [x] A large fixture can list rejected alternatives and their rationale.
+- [x] A large fixture can list failed assumptions and their outcomes.
+- [x] A large fixture can identify contradictions that changed direction.
 - [x] Reconstruction remains traceable to events and source evidence.
 - [ ] Reconstruction remains usable enough for UI consumption.
 
@@ -34,6 +34,8 @@ Goal: prove event-led reasoning survives large project histories.
 - The fixture includes historical evidence, rejected and selected alternatives, a supported hypothesis, an invalidated assumption, a recurring contradiction, a direction shift, and a decision supersession.
 - The test recreates repository and reasoning service instances against the same repository-backed artifacts, then compares graph and query signatures excluding generated timestamps.
 - The test also verifies no derived authority directories are created for hypotheses, alternatives, contradictions, directions, graphs, or queries.
+- Added recovered answer-level query coverage for architecture choice, rejected alternatives, failed assumptions, and contradictions that changed direction.
+- The answer-level tests continue to use the generic `Graph -> Trace -> Reconstruction` pipeline; no specialized read model or first-class hypothesis, alternative, contradiction, or direction entity was introduced.
 
 ## Exit Criteria
 
