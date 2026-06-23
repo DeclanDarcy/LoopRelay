@@ -5,12 +5,12 @@ Goal: prove event-led reasoning survives large project histories.
 ## Backend Work
 
 - [x] Add long-horizon fixture builders for many decisions, many reasoning events, repeated alternatives, recurring contradictions, failed assumptions, and strategic shifts.
-- [ ] Implement decision evolution reconstruction for chains, branches, convergence, supersession, and replacement.
-- [ ] Implement direction reconstruction as an emergent narrative from events and traces.
-- [ ] Implement hypothesis reconstruction for raised, supported, challenged, invalidated, and retired hypothesis events.
-- [ ] Implement contradiction reconstruction for identified, investigated, resolved, accepted, and recurring contradiction events.
-- [ ] Implement project narrative reconstruction across hypotheses, alternatives, contradictions, direction events, and decisions.
-- [ ] Add performance diagnostics for large histories without relying on wall-clock elapsed time as a correctness criterion.
+- [x] Implement decision evolution reconstruction for chains, branches, convergence, supersession, and replacement.
+- [x] Implement direction reconstruction as an emergent narrative from events and traces.
+- [x] Implement hypothesis reconstruction for raised, supported, challenged, invalidated, and retired hypothesis events.
+- [x] Implement contradiction reconstruction for identified, investigated, resolved, accepted, and recurring contradiction events.
+- [x] Implement project narrative reconstruction across hypotheses, alternatives, contradictions, direction events, and decisions.
+- [x] Add performance diagnostics for large histories without relying on wall-clock elapsed time as a correctness criterion.
 
 ## UI Work
 
@@ -40,12 +40,15 @@ Goal: prove event-led reasoning survives large project histories.
 - Added recovered long-horizon UI usability coverage that checks section ordering, scan-friendly line length, key evidence visibility, confidence, and absence of derived authority artifacts.
 - Added UI consumption for grouped generic reconstruction details: the reasoning reconstruction panel now renders metadata separately, exposes a project narrative view with decision/milestone/epic/project/multi-year horizon framing, and collapses grouped evidence sections for large reconstructions.
 - Added characterization coverage for project-level UI reconstruction consumption without adding category-specific narrative engines or first-class derived entities.
+- Added answerability certification that runs the recovered long-horizon evidence through materialization review scenarios for direction, alternative, hypothesis, contradiction, thread grouping, and decision replacement questions.
+- Certified that the generic `Graph -> Trace -> Reconstruction -> Materialization Review` path answers the target M7 questions with high-confidence evidence, so specialized category engines and first-class derived entities remain unjustified for M7.
+- Added deterministic scale diagnostics to reconstruction details, reporting evidence, event, relationship, external-reference, and thread counts without treating wall-clock elapsed time as correctness evidence.
 
 ## Exit Criteria
 
-- [ ] Decision evolution reconstruction is operational.
-- [ ] Direction reconstruction works without first-class direction persistence.
-- [ ] Hypothesis reconstruction works without first-class hypothesis persistence unless materialization was approved.
-- [ ] Alternative reconstruction works without first-class alternative persistence unless materialization was approved.
-- [ ] Contradiction reconstruction works without first-class contradiction persistence unless materialization was approved.
-- [ ] Project narrative reconstruction is operational.
+- [x] Decision evolution reconstruction is operational.
+- [x] Direction reconstruction works without first-class direction persistence.
+- [x] Hypothesis reconstruction works without first-class hypothesis persistence unless materialization was approved.
+- [x] Alternative reconstruction works without first-class alternative persistence unless materialization was approved.
+- [x] Contradiction reconstruction works without first-class contradiction persistence unless materialization was approved.
+- [x] Project narrative reconstruction is operational.

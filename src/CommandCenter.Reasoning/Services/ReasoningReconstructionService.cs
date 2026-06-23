@@ -133,6 +133,7 @@ public sealed class ReasoningReconstructionService(
             $"Question: {query.Question}",
             $"Target: {query.Target.Kind} {query.Target.Id}",
             $"Trace direction: {query.Direction}",
+            $"Scale diagnostics: {context.Evidence.Count} evidence item(s), {context.EventEvidence.Count} event(s), {context.RelationshipEvidence.Count} relationship edge(s), {context.ReferenceEvidence.Count} external reference(s), {context.ThreadEvidence.Count} thread(s).",
             $"Evidence summary: {context.EventEvidence.Count} event(s), {context.RelationshipEvidence.Count} relationship edge(s), {context.ReferenceEvidence.Count} external reference(s), {context.ThreadEvidence.Count} thread(s)."
         };
 

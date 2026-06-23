@@ -210,7 +210,7 @@ const reconstruction: ReasoningReconstruction = {
   narrative: {
     summary: 'The decision question is reconstructed from one event and one relationship.',
     details:
-      'Question: Why did this decision change?\nTarget: ReasoningEvent EVT-0001\nTrace direction: Backward\nEvidence summary: 1 event(s), 1 relationship edge(s), 0 external reference(s), 1 thread(s).\nEvents:\n- Event EVT-0001: HypothesisRaised: Event substrate can stay narrow - Reasoning should begin as immutable events with provenance.\nRelationships:\n- GraphRelationship ThreadMembership:EVT-0001:THR-0001: BelongsTo - Event belongs to thread\nExternal References:\n- None\nThreads:\n- Thread THR-0001: Milestone 1 ontology boundary - Tracks why the event substrate remains explanatory.',
+      'Question: Why did this decision change?\nTarget: ReasoningEvent EVT-0001\nTrace direction: Backward\nScale diagnostics: 2 evidence item(s), 1 event(s), 1 relationship edge(s), 0 external reference(s), 1 thread(s).\nEvidence summary: 1 event(s), 1 relationship edge(s), 0 external reference(s), 1 thread(s).\nEvents:\n- Event EVT-0001: HypothesisRaised: Event substrate can stay narrow - Reasoning should begin as immutable events with provenance.\nRelationships:\n- GraphRelationship ThreadMembership:EVT-0001:THR-0001: BelongsTo - Event belongs to thread\nExternal References:\n- None\nThreads:\n- Thread THR-0001: Milestone 1 ontology boundary - Tracks why the event substrate remains explanatory.',
   },
   confidence: 'High',
   trace: backwardTrace,
@@ -473,6 +473,7 @@ describe('reasoning trajectory tab', () => {
     expect(within(reconstructionRegion).getByLabelText('Project narrative reconstruction')).toHaveTextContent(
       'Multi-year reconstruction uses 1 event evidence item(s)',
     )
+    expect(reconstructionRegion).toHaveTextContent('Scale diagnostics')
     const groupedDetails = within(reconstructionRegion).getByLabelText('Grouped reconstruction details')
     expect(within(groupedDetails).getByText('Events')).toBeInTheDocument()
     expect(within(groupedDetails).getByText('Relationships')).toBeInTheDocument()

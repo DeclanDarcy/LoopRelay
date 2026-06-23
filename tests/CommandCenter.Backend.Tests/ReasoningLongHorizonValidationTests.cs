@@ -152,7 +152,8 @@ public sealed class ReasoningLongHorizonValidationTests
                 new ReasoningReference(ReasoningReferenceKind.Decision, "DEC-STRATEGY-CURRENT")));
 
         string details = result.Reconstruction.Narrative.Details;
-        AssertSectionOrder(details, "Evidence summary:", "Events:", "Relationships:", "External References:", "Threads:");
+        AssertSectionOrder(details, "Scale diagnostics:", "Evidence summary:", "Events:", "Relationships:", "External References:", "Threads:");
+        Assert.Contains("Scale diagnostics:", details, StringComparison.Ordinal);
         Assert.Contains("Evidence summary:", details, StringComparison.Ordinal);
         Assert.Contains("- None", details, StringComparison.Ordinal);
         Assert.Contains(fixture.SelectedAlternativeId, details, StringComparison.Ordinal);
@@ -165,6 +166,85 @@ public sealed class ReasoningLongHorizonValidationTests
         Assert.Contains("Reference DEC-STRATEGY-CURRENT", details, StringComparison.Ordinal);
         Assert.True(details.Split(Environment.NewLine).All(line => line.Length <= 220));
         Assert.Equal("High", result.Reconstruction.Confidence);
+        await AssertNoDerivedAuthorityArtifactsAsync(store, repository);
+    }
+
+    [Fact]
+    public async Task LongHorizonAnswerabilityCertificationKeepsSpecializedConceptsDerived()
+    {
+        var store = new MemoryArtifactStore();
+        Repository repository = CreateRepository();
+        ReasoningServices initial = CreateServices(repository, store);
+        await CreateLongHorizonFixtureAsync(repository, store, initial.Repository);
+        Repository recoveredRepository = new()
+        {
+            Id = repository.Id,
+            Name = "Recovered Repo",
+            Path = repository.Path
+        };
+        ReasoningServices recovered = CreateServices(recoveredRepository, store);
+        IReasoningMaterializationReviewService reviewService = new ReasoningMaterializationReviewService(
+            new StubRepositoryService(recoveredRepository),
+            recovered.Repository);
+
+        ReasoningMaterializationReviewReport report = await reviewService.RunReviewAsync(
+            recoveredRepository.Id,
+            new ReasoningMaterializationReviewRequest(
+            [
+                await AnswerabilityScenarioAsync(
+                    recovered,
+                    recoveredRepository,
+                    ReasoningMaterializationConcept.Direction,
+                    ReasoningQueryCategory.Direction,
+                    "How did the current strategy emerge?",
+                    new ReasoningReference(ReasoningReferenceKind.Decision, "DEC-STRATEGY-CURRENT")),
+                await AnswerabilityScenarioAsync(
+                    recovered,
+                    recoveredRepository,
+                    ReasoningMaterializationConcept.Alternative,
+                    ReasoningQueryCategory.Alternative,
+                    "What alternative was rejected?",
+                    new ReasoningReference(ReasoningReferenceKind.Decision, "DEC-STRATEGY-CURRENT")),
+                await AnswerabilityScenarioAsync(
+                    recovered,
+                    recoveredRepository,
+                    ReasoningMaterializationConcept.Hypothesis,
+                    ReasoningQueryCategory.Hypothesis,
+                    "What hypothesis supported the selected architecture?",
+                    new ReasoningReference(ReasoningReferenceKind.Decision, "DEC-STRATEGY-CURRENT")),
+                await AnswerabilityScenarioAsync(
+                    recovered,
+                    recoveredRepository,
+                    ReasoningMaterializationConcept.Contradiction,
+                    ReasoningQueryCategory.Contradiction,
+                    "What contradiction changed direction?",
+                    new ReasoningReference(ReasoningReferenceKind.Decision, "DEC-STRATEGY-CURRENT")),
+                await AnswerabilityScenarioAsync(
+                    recovered,
+                    recoveredRepository,
+                    ReasoningMaterializationConcept.Thread,
+                    ReasoningQueryCategory.Decision,
+                    "Why did the current decision replace the previous direction?",
+                    new ReasoningReference(ReasoningReferenceKind.Decision, "DEC-STRATEGY-CURRENT"))
+            ]));
+
+        Assert.Equal(
+            ReasoningMaterializationOutcome.RemainDerived,
+            ReviewFor(report, ReasoningMaterializationConcept.Direction).Recommendation);
+        Assert.Equal(
+            ReasoningMaterializationOutcome.RemainDerived,
+            ReviewFor(report, ReasoningMaterializationConcept.Alternative).Recommendation);
+        Assert.Equal(
+            ReasoningMaterializationOutcome.RemainDerived,
+            ReviewFor(report, ReasoningMaterializationConcept.Hypothesis).Recommendation);
+        Assert.Equal(
+            ReasoningMaterializationOutcome.RemainDerived,
+            ReviewFor(report, ReasoningMaterializationConcept.Contradiction).Recommendation);
+        Assert.Equal(
+            ReasoningMaterializationOutcome.RemainDerived,
+            ReviewFor(report, ReasoningMaterializationConcept.Thread).Recommendation);
+        Assert.All(report.Concepts, concept =>
+            Assert.DoesNotContain(concept.Risks, risk => risk.Contains("Failed reconstruction", StringComparison.Ordinal)));
         await AssertNoDerivedAuthorityArtifactsAsync(store, repository);
     }
 
@@ -302,6 +382,39 @@ public sealed class ReasoningLongHorizonValidationTests
         }
 
         Assert.Equal("High", result.Reconstruction.Confidence);
+    }
+
+    private static async Task<ReasoningMaterializationScenario> AnswerabilityScenarioAsync(
+        ReasoningServices recovered,
+        Repository repository,
+        ReasoningMaterializationConcept concept,
+        ReasoningQueryCategory category,
+        string question,
+        ReasoningReference target)
+    {
+        ReasoningQueryResult result = await recovered.Query.RunQueryAsync(
+            repository.Id,
+            new ReasoningQuery(category, question, target));
+        bool reconstructionFailed =
+            result.Reconstruction.Confidence != "High" ||
+            result.Reconstruction.Evidence.Count == 0 ||
+            result.Reconstruction.Diagnostics.Count > 0 ||
+            result.Diagnostics.Count > 0;
+
+        return new ReasoningMaterializationScenario(
+            concept,
+            question,
+            reconstructionFailed,
+            reconstructionFailed
+                ? string.Join(" ", result.Diagnostics.Concat(result.Reconstruction.Diagnostics))
+                : $"Generic trace reconstruction answered with {result.Reconstruction.Evidence.Count} evidence item(s).");
+    }
+
+    private static ReasoningConceptMaterializationReview ReviewFor(
+        ReasoningMaterializationReviewReport report,
+        ReasoningMaterializationConcept concept)
+    {
+        return Assert.Single(report.Concepts, review => review.Concept == concept);
     }
 
     private static async Task RelateAsync(
