@@ -2,6 +2,8 @@ import type {
   CreateReasoningEventCommand,
   CreateReasoningRelationshipCommand,
   CreateReasoningThreadCommand,
+  ManualReasoningCaptureCommand,
+  ManualReasoningCaptureTemplate,
   ReasoningEvent,
   ReasoningRelationship,
   ReasoningThread,
@@ -18,6 +20,19 @@ export function getReasoningEvent(repositoryId: string, eventId: string) {
 
 export function createReasoningEvent(repositoryId: string, command: CreateReasoningEventCommand) {
   return invokeCommand<ReasoningEvent>('create_reasoning_event', { repositoryId, command })
+}
+
+export function listReasoningManualCaptureTemplates(repositoryId: string) {
+  return invokeCommand<ManualReasoningCaptureTemplate[]>('list_reasoning_manual_capture_templates', {
+    repositoryId,
+  })
+}
+
+export function captureManualReasoning(
+  repositoryId: string,
+  command: ManualReasoningCaptureCommand,
+) {
+  return invokeCommand<ReasoningEvent>('capture_manual_reasoning', { repositoryId, command })
 }
 
 export function listReasoningThreads(repositoryId: string) {

@@ -1,7 +1,12 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ReasoningTrajectoryTab } from '../../features/reasoning/ReasoningTrajectoryTab'
-import type { ReasoningEvent, ReasoningRelationship, ReasoningThread } from '../../types'
+import type {
+  ManualReasoningCaptureTemplate,
+  ReasoningEvent,
+  ReasoningRelationship,
+  ReasoningThread,
+} from '../../types'
 
 const events: ReasoningEvent[] = [
   {
@@ -101,15 +106,36 @@ const relationships: ReasoningRelationship[] = [
   },
 ]
 
+const templates: ManualReasoningCaptureTemplate[] = [
+  {
+    kind: 'ContradictionResolved',
+    family: 'Contradiction',
+    type: 'ContradictionResolved',
+    suggestedThreadTheme: 'Conflict',
+    provenanceSourceKind: 'UserSupplied',
+    suggestedReferenceKinds: ['Artifact'],
+  },
+  {
+    kind: 'AlternativeRejected',
+    family: 'Alternative',
+    type: 'AlternativeRejected',
+    suggestedThreadTheme: 'PathConsidered',
+    provenanceSourceKind: 'UserSupplied',
+    suggestedReferenceKinds: ['Artifact'],
+  },
+]
+
 function renderTab(overrides: Partial<Parameters<typeof ReasoningTrajectoryTab>[0]> = {}) {
   const props = {
     events,
     threads,
     relationships,
+    templates,
     hasSelectedRepository: true,
     isLoading: false,
     error: null,
     onRefresh: vi.fn(),
+    onCaptureManualReasoning: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   }
 
@@ -154,5 +180,68 @@ describe('reasoning trajectory tab', () => {
     const feed = screen.getByRole('region', { name: 'Reasoning event feed' })
     expect(within(feed).getByText('Event substrate can stay narrow')).toBeInTheDocument()
     expect(within(feed).queryByText('Specialized entity storage deferred')).toBeNull()
+  })
+
+  it('filters event families without implying materialized derived entities', () => {
+    renderTab()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Alternative Events' }))
+
+    const feed = screen.getByRole('region', { name: 'Reasoning event feed' })
+    expect(within(feed).getByText('Specialized entity storage deferred')).toBeInTheDocument()
+    expect(within(feed).queryByText('Event substrate can stay narrow')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Alternatives' })).toBeNull()
+  })
+
+  it('submits manual capture from backend-approved templates', async () => {
+    const onCaptureManualReasoning = vi.fn().mockResolvedValue(undefined)
+    renderTab({ onCaptureManualReasoning })
+
+    fireEvent.change(screen.getByLabelText('Capture template'), {
+      target: { value: 'AlternativeRejected' },
+    })
+    fireEvent.change(screen.getByLabelText('Title'), {
+      target: { value: 'Alternative rejected after comparison' },
+    })
+    fireEvent.change(screen.getByLabelText('Summary'), {
+      target: { value: 'The simpler event substrate covered the needed explanation.' },
+    })
+    fireEvent.change(screen.getByLabelText('Details'), {
+      target: { value: 'No first-class alternative entity is required yet.' },
+    })
+    fireEvent.change(screen.getByLabelText('Source path'), {
+      target: { value: '.agents/decisions/decisions.md' },
+    })
+    fireEvent.change(screen.getByLabelText('Source section'), {
+      target: { value: 'Newly Authorized' },
+    })
+    fireEvent.change(screen.getByLabelText('Excerpt'), {
+      target: { value: 'Keep derived concepts as event classifications.' },
+    })
+    fireEvent.change(screen.getByLabelText('Tags'), {
+      target: { value: 'milestone-2, manual' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Record Event' }))
+
+    await waitFor(() => expect(onCaptureManualReasoning).toHaveBeenCalledTimes(1))
+    expect(onCaptureManualReasoning).toHaveBeenCalledWith({
+      kind: 'AlternativeRejected',
+      title: 'Alternative rejected after comparison',
+      narrative: {
+        summary: 'The simpler event substrate covered the needed explanation.',
+        details: 'No first-class alternative entity is required yet.',
+      },
+      references: [],
+      provenance: {
+        sourceKind: 'UserSupplied',
+        capturedBy: 'user',
+        relativePath: '.agents/decisions/decisions.md',
+        section: 'Newly Authorized',
+        excerpt: 'Keep derived concepts as event classifications.',
+        fingerprint: null,
+      },
+      threadIds: [],
+      tags: ['milestone-2', 'manual'],
+    })
   })
 })

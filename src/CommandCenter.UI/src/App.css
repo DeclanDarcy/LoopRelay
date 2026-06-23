@@ -872,8 +872,25 @@ button:focus-visible {
 
 .reasoning-grid > .context-summary,
 .reasoning-grid > .notice,
+.reasoning-capture-panel,
+.reasoning-family-filter-bar,
 .reasoning-trace-panel {
   grid-column: 1 / -1;
+}
+
+.reasoning-capture-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.reasoning-capture-form label:nth-of-type(3),
+.reasoning-capture-form label:nth-of-type(4),
+.reasoning-capture-form label:nth-of-type(7),
+.reasoning-capture-form .decision-form-actions {
+  grid-column: 1 / -1;
+}
+
+.reasoning-family-filter-bar {
+  align-self: start;
 }
 
 .reasoning-event-feed {

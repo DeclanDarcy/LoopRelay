@@ -14,7 +14,7 @@ Goal: use the event substrate to preserve reasoning evolution across decisions a
 - [x] Add reference helpers for decisions, proposals, candidates, governance findings, operational-context revisions, handoffs, execution outputs, and artifacts.
 - [x] Add event templates for common reasoning captures with required provenance fields.
 - [x] Add assisted-capture adapters that pre-populate references and provenance after successful decision operations, starting with supersession. Keep the decision operation authoritative.
-- [ ] Add inferred-capture adapters for objective domain transitions once idempotency is stable:
+- [x] Add inferred-capture adapters for objective domain transitions once idempotency is stable:
   - [x] Decision superseded.
   - [x] Proposal resolved.
   - [x] Decision archived.
@@ -27,9 +27,9 @@ Goal: use the event substrate to preserve reasoning evolution across decisions a
 
 ## UI Work
 
-- [ ] Add event creation forms scoped to current repository.
-- [ ] Add "record reasoning" affordances near decision supersession, proposal review, governance findings, and operational-context revisions where the backend supports a reference.
-- [ ] Show event family filters for hypothesis, alternative, contradiction, direction, decision evolution, assumption evolution, and constraint evolution.
+- [x] Add event creation forms scoped to current repository.
+- [x] Add current-repository "record reasoning" affordance through the Reasoning tab. Contextual proposal, governance, and operational-context prefill affordances are deferred to the next slice.
+- [x] Show event family filters for hypothesis, alternative, contradiction, direction, decision evolution, assumption evolution, and constraint evolution.
 
 ## Tests
 
@@ -40,14 +40,14 @@ Goal: use the event substrate to preserve reasoning evolution across decisions a
 - [x] Contradiction discovered and resolved is preserved as an event thread.
 - [x] Direction shift is recorded as an event and remains non-authoritative.
 - [x] Existing decision and proposal state is not mutated by reasoning capture for proposal-resolution capture.
-- [ ] Existing governance, operational-context, and execution state is not mutated by reasoning capture.
+- [x] Existing governance, operational-context, and execution state is not mutated by reasoning capture.
   - [x] Current governance report reads do not capture reasoning events.
   - [x] Failed operational-context promotion does not capture reasoning events.
   - [x] Failed execution handoff acceptance does not capture reasoning events.
 
 ## Exit Criteria
 
-- [ ] Cross-decision evolution is preservable through events.
+- [x] Cross-decision evolution is preservable through events.
 - [x] Hypothesis, alternative, contradiction, and direction history can be captured as event families.
-- [ ] Observable source-domain transitions have an assisted or inferred capture path.
+- [x] Observable source-domain transitions have an assisted or inferred capture path.
 - [x] Reasoning capture remains append-only and non-authoritative.

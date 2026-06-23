@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   acceptExecutionHandoff,
   acceptOperationalContextProposal as acceptOperationalContextProposalCommand,
+  captureManualReasoning,
   commitExecution,
   editOperationalContextProposal,
   formatError,
@@ -52,6 +53,7 @@ import {
   useGitStatus,
   mergeExecutionEvents,
   useReasoningEvents,
+  useReasoningManualCaptureTemplates,
   useReasoningRelationships,
   useReasoningThreads,
   useRepositories,
@@ -71,6 +73,7 @@ import type {
   CommitPreparation,
   DecisionProposalState,
   ExecutionSessionSummary,
+  ManualReasoningCaptureCommand,
   NavigationTarget,
   OperationalContextProposal,
   Repository,
@@ -229,6 +232,12 @@ function App() {
     error: reasoningEventsError,
     refresh: refreshReasoningEvents,
   } = useReasoningEvents(selectedRepository?.repository.id ?? null)
+  const {
+    data: reasoningManualCaptureTemplates,
+    isLoading: isReasoningManualCaptureTemplatesLoading,
+    error: reasoningManualCaptureTemplatesError,
+    refresh: refreshReasoningManualCaptureTemplates,
+  } = useReasoningManualCaptureTemplates(selectedRepository?.repository.id ?? null)
   const {
     data: reasoningThreads,
     isLoading: isReasoningThreadsLoading,
@@ -1414,9 +1423,27 @@ function App() {
   const refreshReasoning = async () => {
     await Promise.all([
       refreshReasoningEvents(),
+      refreshReasoningManualCaptureTemplates(),
       refreshReasoningThreads(),
       refreshReasoningRelationships(),
     ])
+  }
+
+  const createManualReasoningCapture = async (command: ManualReasoningCaptureCommand) => {
+    if (!selectedRepository) {
+      return
+    }
+
+    setError(null)
+    setMessage(null)
+    try {
+      const event = await captureManualReasoning(selectedRepository.repository.id, command)
+      await refreshReasoning()
+      setMessage(`Recorded reasoning event ${event.id}.`)
+    } catch (captureError) {
+      setError(formatError(captureError))
+      throw captureError
+    }
   }
 
   const openContinuityWarnings = () => {
@@ -1668,14 +1695,22 @@ function App() {
                 events={reasoningEvents}
                 threads={reasoningThreads}
                 relationships={reasoningRelationships}
+                templates={reasoningManualCaptureTemplates}
                 hasSelectedRepository={Boolean(selectedRepository)}
                 isLoading={
                   isReasoningEventsLoading ||
+                  isReasoningManualCaptureTemplatesLoading ||
                   isReasoningThreadsLoading ||
                   isReasoningRelationshipsLoading
                 }
-                error={reasoningEventsError ?? reasoningThreadsError ?? reasoningRelationshipsError}
+                error={
+                  reasoningEventsError ??
+                  reasoningManualCaptureTemplatesError ??
+                  reasoningThreadsError ??
+                  reasoningRelationshipsError
+                }
                 onRefresh={() => void refreshReasoning()}
+                onCaptureManualReasoning={createManualReasoningCapture}
               />
 
               <ExecutionTab

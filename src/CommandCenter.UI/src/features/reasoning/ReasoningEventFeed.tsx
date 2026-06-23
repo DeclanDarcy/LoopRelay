@@ -1,31 +1,37 @@
 import { EmptyState } from '../../components/design'
-import type { ReasoningEvent } from '../../types'
+import type { ReasoningEvent, ReasoningEventFamily } from '../../types'
 
 type ReasoningEventFeedProps = {
   events: ReasoningEvent[]
   selectedThreadId: string | null
+  selectedFamilies: ReasoningEventFamily[]
   isLoading: boolean
 }
 
 export function ReasoningEventFeed({
   events,
   selectedThreadId,
+  selectedFamilies,
   isLoading,
 }: ReasoningEventFeedProps) {
+  const selectedFamilySet = new Set(selectedFamilies)
   const visibleEvents = selectedThreadId
     ? events.filter((event) => event.threadIds.includes(selectedThreadId))
     : events
+  const filteredEvents = selectedFamilySet.size > 0
+    ? visibleEvents.filter((event) => selectedFamilySet.has(event.family))
+    : visibleEvents
 
   return (
     <section className="reasoning-panel reasoning-event-feed-panel" id="reasoning-event-feed" aria-label="Reasoning event feed">
       <div className="decision-panel-heading">
         <h5>Event Feed</h5>
-        <span>{visibleEvents.length} events</span>
+        <span>{filteredEvents.length} events</span>
       </div>
 
-      {visibleEvents.length > 0 ? (
+      {filteredEvents.length > 0 ? (
         <div className="reasoning-event-feed">
-          {visibleEvents.map((event) => (
+          {filteredEvents.map((event) => (
             <article className="reasoning-event-row" key={event.id}>
               <div className="reasoning-event-heading">
                 <strong>{event.title}</strong>

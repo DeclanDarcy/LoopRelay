@@ -27,6 +27,8 @@ import type {
   ExecutionSessionState,
   ExecutionSession,
   ExecutionSessionSummary,
+  ManualReasoningCaptureCommand,
+  ManualReasoningCaptureTemplate,
   OperationalContextItem,
   OperationalContextProjection,
   OperationalContextProposal,
@@ -1830,6 +1832,31 @@ function createReasoningEvents(repositoryId: string): ReasoningEvent[] {
   ]
 }
 
+function createManualReasoningCaptureTemplates(): ManualReasoningCaptureTemplate[] {
+  return [
+    ['AlternativeIntroduced', 'Alternative', 'AlternativeIntroduced', 'PathConsidered'],
+    ['AlternativeRejected', 'Alternative', 'AlternativeRejected', 'PathConsidered'],
+    ['AlternativeRevisited', 'Alternative', 'AlternativeRevisited', 'PathConsidered'],
+    ['ContradictionIdentified', 'Contradiction', 'ContradictionIdentified', 'Conflict'],
+    ['ContradictionResolved', 'Contradiction', 'ContradictionResolved', 'Conflict'],
+    ['DirectionObserved', 'Direction', 'DirectionObserved', 'StrategicMovement'],
+    ['DirectionShifted', 'Direction', 'DirectionShifted', 'StrategicMovement'],
+    ['HypothesisRaised', 'Hypothesis', 'HypothesisRaised', 'BeliefUnderInvestigation'],
+    ['HypothesisInvalidated', 'Hypothesis', 'HypothesisInvalidated', 'BeliefUnderInvestigation'],
+    ['DecisionReconsidered', 'DecisionEvolution', 'DecisionReconsidered', 'DecisionEvolution'],
+    ['AssumptionInvalidated', 'AssumptionEvolution', 'AssumptionInvalidated', 'AssumptionEvolution'],
+    ['ConstraintModified', 'ConstraintEvolution', 'ConstraintModified', 'ConstraintEvolution'],
+    ['EvidenceAdded', 'Evidence', 'EvidenceAdded', 'EvidenceTrail'],
+  ].map(([kind, family, type, suggestedThreadTheme]) => ({
+    kind,
+    family,
+    type,
+    suggestedThreadTheme,
+    provenanceSourceKind: 'UserSupplied',
+    suggestedReferenceKinds: ['Artifact'],
+  })) as ManualReasoningCaptureTemplate[]
+}
+
 function createReasoningThreads(repositoryId: string): ReasoningThread[] {
   return [
     {
@@ -2863,6 +2890,44 @@ export function installDevTauriMock() {
             tags: command.tags ?? [],
           }
           state.reasoningEvents[repositoryId] = [...events, event]
+          refreshReasoningSummary(state, repositoryId)
+          return clone(event)
+        }
+        case 'list_reasoning_manual_capture_templates':
+          return clone(createManualReasoningCaptureTemplates())
+        case 'capture_manual_reasoning': {
+          const repositoryId = getStringArg(args, 'repositoryId')
+          const command = args?.command as ManualReasoningCaptureCommand
+          const template = createManualReasoningCaptureTemplates().find(
+            (item) => item.kind === command.kind,
+          )
+          if (!template) {
+            throw new Error(`Unsupported manual reasoning capture kind: ${command.kind}`)
+          }
+
+          const events = state.reasoningEvents[repositoryId] ?? []
+          const event: ReasoningEvent = {
+            id: `EVT-${String(events.length + 1).padStart(4, '0')}`,
+            repositoryId,
+            createdAt: new Date().toISOString(),
+            family: template.family,
+            type: template.type,
+            title: command.title,
+            narrative: command.narrative,
+            references: command.references ?? [],
+            provenance: command.provenance,
+            threadIds: command.threadIds ?? [],
+            tags: command.tags ?? [],
+          }
+          state.reasoningEvents[repositoryId] = [...events, event]
+          for (const threadId of command.threadIds ?? []) {
+            state.reasoningThreads[repositoryId] = (state.reasoningThreads[repositoryId] ?? []).map(
+              (thread) =>
+                thread.id === threadId
+                  ? { ...thread, eventIds: [...thread.eventIds, event.id], updatedAt: event.createdAt }
+                  : thread,
+            )
+          }
           refreshReasoningSummary(state, repositoryId)
           return clone(event)
         }

@@ -88,6 +88,38 @@ export type ReasoningRelationshipType =
   | 'ComparesWith'
   | 'SelectedOver'
 
+export type ReasoningManualCaptureKind =
+  | 'DecisionSuperseded'
+  | 'DecisionReframed'
+  | 'DecisionReconsidered'
+  | 'HypothesisRaised'
+  | 'HypothesisSupported'
+  | 'HypothesisChallenged'
+  | 'HypothesisInvalidated'
+  | 'HypothesisRetired'
+  | 'AlternativeIntroduced'
+  | 'AlternativeCompared'
+  | 'AlternativeRejected'
+  | 'AlternativeRevisited'
+  | 'AlternativeSelected'
+  | 'ContradictionIdentified'
+  | 'ContradictionInvestigated'
+  | 'ContradictionResolved'
+  | 'ContradictionAccepted'
+  | 'ContradictionRecurred'
+  | 'DirectionObserved'
+  | 'DirectionReinforced'
+  | 'DirectionShifted'
+  | 'DirectionAbandoned'
+  | 'AssumptionIntroduced'
+  | 'AssumptionChallenged'
+  | 'AssumptionInvalidated'
+  | 'AssumptionReplaced'
+  | 'ConstraintIntroduced'
+  | 'ConstraintModified'
+  | 'ConstraintRetired'
+  | 'EvidenceAdded'
+
 export type ReasoningNarrative = {
   summary: string
   details: string
@@ -145,6 +177,25 @@ export type ReasoningRelationship = {
   target: ReasoningReference
   narrative: ReasoningNarrative
   provenance: ReasoningProvenance
+}
+
+export type ManualReasoningCaptureTemplate = {
+  kind: ReasoningManualCaptureKind
+  family: ReasoningEventFamily
+  type: ReasoningEventType
+  suggestedThreadTheme: ReasoningThreadTheme
+  provenanceSourceKind: string
+  suggestedReferenceKinds: ReasoningReferenceKind[]
+}
+
+export type ManualReasoningCaptureCommand = {
+  kind: ReasoningManualCaptureKind
+  title: string
+  narrative: ReasoningNarrative
+  references?: ReasoningReference[]
+  provenance: ReasoningProvenance
+  threadIds?: string[]
+  tags?: string[]
 }
 
 export type CreateReasoningEventCommand = {

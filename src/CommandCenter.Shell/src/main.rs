@@ -1029,6 +1029,38 @@ fn create_reasoning_event(repository_id: String, command: Value) -> Result<Value
 }
 
 #[tauri::command]
+fn list_reasoning_manual_capture_templates(repository_id: String) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/manual-captures/templates"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "reasoning manual-capture template listing failed")
+}
+
+#[tauri::command]
+fn capture_manual_reasoning(repository_id: String, command: Value) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/manual-captures"
+        ))
+        .json(&command)
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "reasoning manual capture failed")
+}
+
+#[tauri::command]
 fn list_reasoning_threads(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/threads"
@@ -1514,6 +1546,8 @@ fn main() {
             list_reasoning_events,
             get_reasoning_event,
             create_reasoning_event,
+            list_reasoning_manual_capture_templates,
+            capture_manual_reasoning,
             list_reasoning_threads,
             get_reasoning_thread,
             create_reasoning_thread,
