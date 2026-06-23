@@ -131,6 +131,7 @@ export type ReasoningReference = {
   relativePath: string | null
   section: string | null
   excerpt: string | null
+  fingerprint?: string | null
 }
 
 export type ReasoningProvenance = {
@@ -308,6 +309,31 @@ export type ReasoningMaterializationReviewReport = {
   generatedAt: string
   concepts: ReasoningConceptMaterializationReview[]
   taxonomyFindings: ReasoningTaxonomyMaterializationFinding[]
+  diagnostics: string[]
+}
+
+export type ReasoningCertificationResultKind = 'Passed' | 'Failed'
+
+export type ReasoningCertificationResult = {
+  kind: ReasoningCertificationResultKind
+  summary: string
+}
+
+export type ReasoningCertificationEvidence = {
+  id: string
+  scenario: string
+  passed: boolean
+  summary: string
+  details: string[]
+  references: ReasoningReference[]
+}
+
+export type ReasoningCertificationReport = {
+  id: string
+  repositoryId: string
+  generatedAt: string
+  result: ReasoningCertificationResult
+  evidence: ReasoningCertificationEvidence[]
   diagnostics: string[]
 }
 

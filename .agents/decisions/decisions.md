@@ -2,19 +2,13 @@
 
 ## Newly Authorized
 
-- Treat M8 backend as complete and proceed to the M8 UI slice.
-- Preserve the certification authority boundary: certification reports are evidence artifacts only.
-- Certification reports must not become repository authority, reasoning authority, narrative authority, graph authority, or reconstruction source data.
-- The UI may display certification outcome, evidence, failures, diagnostics, and report history.
-- The UI must remain a presentation layer over certification artifacts and must not introduce a second reasoning authority.
-- The source of truth for reasoning reconstruction remains:
-
-```text
-Repository
-  -> Graph
-  -> Trace
-  -> Reconstruction
-```
-
-- Certification continues to validate answerability using the same reconstruction path, not a specialized certification model or specialized reasoning engine.
-- The M8 UI slice should continue with `ReasoningCertificationPanel`, bridge/API integration, and characterization tests without additional backend architecture unless implementation reveals a concrete gap.
+- Treat the M8 result as clean completion of the Reasoning Trajectory Preservation roadmap unless full verification reveals a concrete hidden failure mode.
+- Run a full repository verification pass as the next work slice before declaring closure.
+- Include backend tests, UI tests, shell build, reasoning tests, decision lifecycle integration, governance integration, and operational context integration in that verification pass.
+- After full verification, perform a milestone-set review centered on the question: what unanswered architectural risk remains?
+- Do not manufacture a Milestone 9 unless the milestone-set review identifies a concrete unresolved architectural risk.
+- Enter the milestone-set review expecting closure rather than roadmap expansion.
+- Continue treating derived reasoning infrastructure as sufficient unless new verification evidence contradicts it.
+- Continue rejecting specialized hypothesis, alternative, contradiction, or direction entities absent materialization evidence.
+- Continue rejecting graph persistence, narrative persistence, specialized reconstruction engines, and specialized read models absent demonstrated need.
+- Preserve the M8 authority boundary: certification remains evidence, audit, and verification, not authority, a persistence source, a read model, or an alternative reconstruction path.

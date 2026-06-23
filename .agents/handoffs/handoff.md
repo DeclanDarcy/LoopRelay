@@ -2,52 +2,45 @@
 
 ## New State From This Slice
 
-- Continued Milestone 8 outcome-oriented reasoning certification.
-- Added reasoning certification domain records:
-  - `ReasoningCertificationReport`,
-  - `ReasoningCertificationEvidence`,
-  - `ReasoningCertificationResult`,
-  - `ReasoningCertificationResultKind`.
-- Added `IReasoningCertificationService` and `ReasoningCertificationService`.
-- Certification now supports:
-  - current read without persistence,
-  - explicit persisted certification run,
-  - persisted report listing,
-  - empty-repository valid baseline,
-  - structured JSON recovery without markdown projections,
-  - fresh service graph/restart recovery,
-  - event immutability evidence,
-  - provenance completeness,
-  - relationship integrity,
-  - thread navigability,
-  - query reproducibility,
-  - outcome answerability for decision supersession, alternative rejection, contradiction importance, assumption failure, direction emergence, and thread reconstruction.
-- Added repository persistence for certification reports under `.agents/reasoning/reports/certification.<timestamp>.json` plus deterministic markdown projection.
-- Added reasoning certification endpoints:
-  - `GET /api/repositories/{repositoryId}/reasoning/certification`,
-  - `POST /api/repositories/{repositoryId}/reasoning/certification`,
-  - `GET /api/repositories/{repositoryId}/reasoning/certification/reports`.
-- Updated `.agents/milestones/m8-outcome-certification.md` to close backend certification work and covered backend tests/exit criteria.
-- Rotated the previous handoff to `.agents/handoffs/handoff.0027.md`.
+- Completed the Milestone 8 UI-facing reasoning certification path.
+- Added UI certification models and API calls for:
+  - current reasoning certification,
+  - persisted certification run,
+  - persisted certification report history.
+- Added `useReasoningCertification`.
+- Added `ReasoningCertificationPanel` to the Reasoning Trajectory tab.
+- The panel displays:
+  - current certification result,
+  - non-authoritative certification boundary,
+  - pass/fail evidence grouped by outcome,
+  - diagnostics,
+  - references to reasoning events and threads,
+  - generated report history.
+- Added Tauri bridge commands:
+  - `get_reasoning_certification`,
+  - `run_reasoning_certification`,
+  - `list_reasoning_certification_reports`.
+- Updated the dev Tauri mock with deterministic reasoning certification data and persisted report history.
+- Updated reasoning characterization tests to cover passed and failed certification evidence.
+- Updated `.agents/milestones/m8-outcome-certification.md` to mark UI work and UI characterization coverage complete.
+- Rotated the previous handoff to `.agents/handoffs/handoff.0028.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter ReasoningCertificationServiceTests` passes: 8 tests.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter Reasoning` passes: 73 tests.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes: 424 tests.
+- `npm run test --prefix src/CommandCenter.UI -- reasoningTrajectory.test.tsx` passes: 10 tests.
+- `npm run lint --prefix src/CommandCenter.UI` passes.
+- `npm run test --prefix src/CommandCenter.UI` passes: 48 files, 170 tests.
+- `npm run build --prefix src/CommandCenter.UI` passes.
+- `cargo build --manifest-path src/CommandCenter.Shell/Cargo.toml` passes.
 
 ## Notes
 
-- Unresolved external references are reported as certification diagnostics and do not fail certification unless they become required reasoning-integrity failures.
-- Broken persisted reasoning event/thread references fail certification through relationship/thread integrity evidence.
-- No specialized hypothesis, alternative, contradiction, direction, graph, query, cache, or read-model persistence was added.
-- UI certification panel, UI hooks/API, Tauri shell bridge commands, and UI characterization coverage remain open.
+- Reasoning certification remains an evidence/reporting surface only.
+- The UI does not add lifecycle authority, graph authority, reconstruction authority, or new reasoning source data.
+- Certification report history is loaded beside current certification; only explicit certification runs persist reports.
+- M8 appears complete from the current milestone checklist.
 
 ## Next Slice
 
-- Implement the UI-facing certification path:
-  - add Tauri bridge commands if the shell API surface is being kept complete,
-  - add reasoning certification API/hook/types in the UI,
-  - add `ReasoningCertificationPanel`,
-  - integrate it into `ReasoningTrajectoryTab`,
-  - add characterization coverage for passed and failed certification evidence.
+- Start Milestone 9 only if a new milestone exists or the plan is extended.
+- Otherwise run a full repository verification pass and consider closing the Reasoning Trajectory Preservation milestone set.

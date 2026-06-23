@@ -53,6 +53,7 @@ import {
   useGitStatus,
   mergeExecutionEvents,
   useReasoningEvents,
+  useReasoningCertification,
   useReasoningGraph,
   useReasoningManualCaptureTemplates,
   useReasoningMaterializationReview,
@@ -285,6 +286,15 @@ function App() {
     refresh: refreshReasoningMaterializationReview,
     run: runReasoningMaterializationReview,
   } = useReasoningMaterializationReview(selectedRepository?.repository.id ?? null)
+  const {
+    currentReport: reasoningCertificationReport,
+    reports: reasoningCertificationReports,
+    isLoading: isReasoningCertificationLoading,
+    isRunning: isReasoningCertificationRunning,
+    error: reasoningCertificationError,
+    refresh: refreshReasoningCertification,
+    runCertification: runReasoningCertification,
+  } = useReasoningCertification(selectedRepository?.repository.id ?? null)
 
   const selectedArtifact = useMemo(() => {
     if (!workspace || !selectedArtifactPath) {
@@ -1463,6 +1473,7 @@ function App() {
       refreshReasoningRelationships(),
       refreshReasoningGraph(),
       refreshReasoningMaterializationReview(),
+      refreshReasoningCertification(),
     ])
   }
 
@@ -1743,6 +1754,8 @@ function App() {
                 queryResult={reasoningQueryResult}
                 reconstruction={reasoningReconstruction}
                 materializationReview={reasoningMaterializationReview}
+                certificationReport={reasoningCertificationReport}
+                certificationReports={reasoningCertificationReports}
                 templates={reasoningManualCaptureTemplates}
                 hasSelectedRepository={Boolean(selectedRepository)}
                 isLoading={
@@ -1751,13 +1764,16 @@ function App() {
                   isReasoningThreadsLoading ||
                   isReasoningRelationshipsLoading ||
                   isReasoningGraphLoading ||
-                  isReasoningMaterializationReviewLoading
+                  isReasoningMaterializationReviewLoading ||
+                  isReasoningCertificationLoading
                 }
                 isTracingGraph={isReasoningGraphTracing}
                 isQuerying={isReasoningQueryRunning}
                 isReconstructing={isReasoningReconstructionRunning}
                 isLoadingMaterializationReview={isReasoningMaterializationReviewLoading}
                 isRunningMaterializationReview={isReasoningMaterializationReviewRunning}
+                isLoadingCertification={isReasoningCertificationLoading}
+                isRunningCertification={isReasoningCertificationRunning}
                 error={
                   reasoningEventsError ??
                   reasoningManualCaptureTemplatesError ??
@@ -1766,15 +1782,18 @@ function App() {
                   reasoningGraphError ??
                   reasoningQueryError ??
                   reasoningReconstructionError ??
-                  reasoningMaterializationReviewError
+                  reasoningMaterializationReviewError ??
+                  reasoningCertificationError
                 }
                 queryError={reasoningQueryError}
                 reconstructionError={reasoningReconstructionError}
                 materializationReviewError={reasoningMaterializationReviewError}
+                certificationError={reasoningCertificationError}
                 onRefresh={() => void refreshReasoning()}
                 onTraceGraphNode={(node) => void traceReasoningGraph(node.kind, node.referenceId)}
                 onRunQuery={queryReasoningTrajectory}
                 onRunMaterializationReview={() => void runReasoningMaterializationReview({})}
+                onRunCertification={() => void runReasoningCertification()}
                 onCaptureManualReasoning={createManualReasoningCapture}
               />
 

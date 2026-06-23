@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ReasoningTrajectoryTab } from '../../features/reasoning/ReasoningTrajectoryTab'
 import type {
   ManualReasoningCaptureTemplate,
+  ReasoningCertificationReport,
   ReasoningEvent,
   ReasoningGraph,
   ReasoningMaterializationReviewReport,
@@ -287,6 +288,80 @@ const materializationReview: ReasoningMaterializationReviewReport = {
   diagnostics: [],
 }
 
+const certificationReport: ReasoningCertificationReport = {
+  id: 'certification.current',
+  repositoryId: 'repo-alpha',
+  generatedAt: '2026-06-22T16:10:00.0000000Z',
+  result: {
+    kind: 'Passed',
+    summary: 'Reasoning remains reconstructable from repository artifacts.',
+  },
+  evidence: [
+    {
+      id: 'CERT-000',
+      scenario: 'Reasoning baseline',
+      passed: true,
+      summary: 'Reasoning records can answer at least one outcome-oriented scenario.',
+      details: ['Alternative rejection and thread reconstruction are answerable.'],
+      references: [
+        {
+          kind: 'ReasoningEvent',
+          id: 'EVT-0002',
+          relativePath: null,
+          section: 'AlternativeRejected',
+          excerpt: 'Specialized storage stays behind the materialization gate.',
+        },
+      ],
+    },
+    {
+      id: 'CERT-040',
+      scenario: 'Thread reconstruction',
+      passed: true,
+      summary: 'At least one reasoning thread can be reconstructed from event membership.',
+      details: ['1 thread is available for navigation.'],
+      references: [
+        {
+          kind: 'ReasoningThread',
+          id: 'THR-0001',
+          relativePath: null,
+          section: 'DecisionEvolution',
+          excerpt: 'Tracks why the event substrate remains explanatory.',
+        },
+      ],
+    },
+  ],
+  diagnostics: [],
+}
+
+const failedCertificationReport: ReasoningCertificationReport = {
+  ...certificationReport,
+  id: 'certification.failed',
+  result: {
+    kind: 'Failed',
+    summary: '1 certification evidence item(s) failed.',
+  },
+  evidence: [
+    ...certificationReport.evidence,
+    {
+      id: 'CERT-010',
+      scenario: 'Provenance completeness',
+      passed: false,
+      summary: 'One or more reasoning events lack provenance.',
+      details: ['EVT-9999 is missing provenance.'],
+      references: [
+        {
+          kind: 'ReasoningEvent',
+          id: 'EVT-9999',
+          relativePath: null,
+          section: 'EvidenceAdded',
+          excerpt: 'Broken event',
+        },
+      ],
+    },
+  ],
+  diagnostics: ['Unresolved external reference: .agents/missing.md'],
+}
+
 function renderTab(overrides: Partial<Parameters<typeof ReasoningTrajectoryTab>[0]> = {}) {
   const props = {
     events,
@@ -298,6 +373,8 @@ function renderTab(overrides: Partial<Parameters<typeof ReasoningTrajectoryTab>[
     queryResult: null,
     reconstruction: null,
     materializationReview,
+    certificationReport,
+    certificationReports: [certificationReport],
     templates,
     hasSelectedRepository: true,
     isLoading: false,
@@ -306,14 +383,18 @@ function renderTab(overrides: Partial<Parameters<typeof ReasoningTrajectoryTab>[
     isReconstructing: false,
     isLoadingMaterializationReview: false,
     isRunningMaterializationReview: false,
+    isLoadingCertification: false,
+    isRunningCertification: false,
     error: null,
     queryError: null,
     reconstructionError: null,
     materializationReviewError: null,
+    certificationError: null,
     onRefresh: vi.fn(),
     onTraceGraphNode: vi.fn(),
     onRunQuery: vi.fn().mockResolvedValue(undefined),
     onRunMaterializationReview: vi.fn(),
+    onRunCertification: vi.fn(),
     onCaptureManualReasoning: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   }
@@ -520,5 +601,50 @@ describe('reasoning trajectory tab', () => {
 
     fireEvent.click(within(reviewRegion).getByRole('button', { name: 'Run Review' }))
     expect(onRunMaterializationReview).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows reasoning certification as non-authoritative answerability evidence', () => {
+    const onRunCertification = vi.fn()
+    renderTab({ onRunCertification })
+
+    const certificationRegion = screen.getByRole('region', { name: 'Reasoning certification' })
+    expect(within(certificationRegion).getByLabelText('Reasoning certification authority')).toHaveTextContent(
+      'Non-authoritative',
+    )
+    expect(within(certificationRegion).getByLabelText('Reasoning certification summary')).toHaveTextContent(
+      'Result: Passed',
+    )
+    expect(within(certificationRegion).getByLabelText('Reasoning certification evidence')).toHaveTextContent(
+      'Alternative rejection and thread reconstruction are answerable.',
+    )
+    expect(within(certificationRegion).getByLabelText('Reasoning certification report history')).toHaveTextContent(
+      'certification.current',
+    )
+
+    fireEvent.click(within(certificationRegion).getByRole('button', { name: 'Run Certification' }))
+    expect(onRunCertification).toHaveBeenCalledTimes(1)
+  })
+
+  it('surfaces failed reasoning certification evidence with references and diagnostics', () => {
+    renderTab({
+      certificationReport: failedCertificationReport,
+      certificationReports: [failedCertificationReport],
+    })
+
+    const certificationRegion = screen.getByRole('region', { name: 'Reasoning certification' })
+    expect(within(certificationRegion).getByLabelText('Reasoning certification summary')).toHaveTextContent(
+      'Result: Failed',
+    )
+    expect(within(certificationRegion).getByLabelText('Reasoning certification diagnostics')).toHaveTextContent(
+      'Unresolved external reference: .agents/missing.md',
+    )
+    expect(within(certificationRegion).getByText('Provenance completeness')).toBeInTheDocument()
+    expect(within(certificationRegion).getByText('EVT-9999 is missing provenance.')).toBeInTheDocument()
+    expect(within(certificationRegion).getByLabelText('CERT-010 references')).toHaveTextContent(
+      'ReasoningEvent',
+    )
+    expect(within(certificationRegion).getByLabelText('CERT-010 references')).toHaveTextContent(
+      'EVT-9999',
+    )
   })
 })

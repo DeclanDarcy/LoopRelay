@@ -34,6 +34,7 @@ import type {
   OperationalContextProposal,
   OperationalContextProposalSummary,
   ReasoningEvent,
+  ReasoningCertificationReport,
   ReasoningGraph,
   ReasoningGraphNode,
   ReasoningGraphRelationship,
@@ -72,6 +73,7 @@ type MockState = {
   reasoningEvents: Record<string, ReasoningEvent[]>
   reasoningThreads: Record<string, ReasoningThread[]>
   reasoningRelationships: Record<string, ReasoningRelationship[]>
+  reasoningCertificationReports: Record<string, ReasoningCertificationReport[]>
   commandCalls: Record<string, number>
 }
 
@@ -1652,6 +1654,7 @@ function createInitialState(): MockState {
     reasoningEvents: {},
     reasoningThreads: {},
     reasoningRelationships: {},
+    reasoningCertificationReports: {},
     commandCalls: {},
   }
 
@@ -1676,6 +1679,7 @@ function createInitialState(): MockState {
     state.reasoningRelationships[repository.id] = repository.id === alphaRepository.id
       ? createReasoningRelationships(repository.id)
       : []
+    state.reasoningCertificationReports[repository.id] = []
     refreshReasoningSummary(state, repository.id)
   })
 
@@ -2188,6 +2192,127 @@ function createReasoningMaterializationReview(
     })),
     diagnostics: [],
   }
+}
+
+function createReasoningCertificationReport(
+  state: MockState,
+  repositoryId: string,
+  persist: boolean,
+): ReasoningCertificationReport {
+  const events = state.reasoningEvents[repositoryId] ?? []
+  const threads = state.reasoningThreads[repositoryId] ?? []
+  const relationships = state.reasoningRelationships[repositoryId] ?? []
+  const missingProvenance = events.filter((event) => !event.provenance?.sourceKind || !event.provenance.capturedBy)
+  const hasOutcomeCoverage =
+    events.some((event) => event.type === 'AlternativeRejected') &&
+    threads.some((thread) => thread.eventIds.length > 0)
+
+  const evidence = [
+    {
+      id: 'CERT-000',
+      scenario: 'Reasoning baseline',
+      passed: events.length === 0 || hasOutcomeCoverage,
+      summary:
+        events.length === 0
+          ? 'No reasoning has been captured yet; the empty baseline is valid.'
+          : 'Reasoning records can answer at least one outcome-oriented scenario.',
+      details:
+        events.length === 0
+          ? ['Certification found no reasoning artifacts to reconstruct.']
+          : [
+              `${events.length} event(s), ${threads.length} thread(s), and ${relationships.length} relationship(s) are available.`,
+              hasOutcomeCoverage
+                ? 'Alternative rejection and thread reconstruction are answerable.'
+                : 'Outcome coverage is incomplete.',
+            ],
+      references: events.slice(0, 2).map((event) => ({
+        kind: 'ReasoningEvent' as const,
+        id: event.id,
+        relativePath: null,
+        section: event.type,
+        excerpt: event.narrative.summary,
+      })),
+    },
+    {
+      id: 'CERT-010',
+      scenario: 'Provenance completeness',
+      passed: missingProvenance.length === 0,
+      summary:
+        missingProvenance.length === 0
+          ? 'Every reasoning event has provenance.'
+          : 'One or more reasoning events lack provenance.',
+      details:
+        missingProvenance.length === 0
+          ? ['Events remain auditable to source context.']
+          : missingProvenance.map((event) => `${event.id} is missing provenance.`),
+      references: missingProvenance.map((event) => ({
+        kind: 'ReasoningEvent' as const,
+        id: event.id,
+        relativePath: null,
+        section: event.type,
+        excerpt: event.title,
+      })),
+    },
+    {
+      id: 'CERT-040',
+      scenario: 'Thread reconstruction',
+      passed: events.length === 0 || threads.some((thread) => thread.eventIds.length > 0),
+      summary:
+        events.length === 0
+          ? 'Thread reconstruction is not required for the empty baseline.'
+          : 'At least one reasoning thread can be reconstructed from event membership.',
+      details: [
+        threads.length > 0
+          ? `${threads.length} thread(s) are available for navigation.`
+          : 'No reasoning threads are available.',
+      ],
+      references: threads.slice(0, 2).map((thread) => ({
+        kind: 'ReasoningThread' as const,
+        id: thread.id,
+        relativePath: null,
+        section: thread.theme,
+        excerpt: thread.summary,
+      })),
+    },
+  ]
+
+  const failedEvidenceCount = evidence.filter((item) => !item.passed).length
+  const report: ReasoningCertificationReport = {
+    id: persist
+      ? `certification.${new Date().toISOString().replace(/\D/g, '').slice(0, 21).padEnd(21, '0')}`
+      : 'certification.current',
+    repositoryId,
+    generatedAt: new Date().toISOString(),
+    result: {
+      kind: failedEvidenceCount === 0 ? 'Passed' : 'Failed',
+      summary:
+        failedEvidenceCount === 0
+          ? 'Reasoning remains reconstructable from repository artifacts.'
+          : `${failedEvidenceCount} certification evidence item(s) failed.`,
+    },
+    evidence,
+    diagnostics:
+      events.length === 0
+        ? ['No reasoning captured yet; certification is reporting the valid empty baseline.']
+        : [],
+  }
+
+  if (persist) {
+    state.reasoningCertificationReports[repositoryId] = [
+      report,
+      ...(state.reasoningCertificationReports[repositoryId] ?? []),
+    ]
+    const workspace = state.workspaces[repositoryId]
+    if (workspace) {
+      workspace.reasoningSummary = {
+        ...workspace.reasoningSummary,
+        lastCertificationAt: report.generatedAt,
+        certificationResult: report.result.kind,
+      }
+    }
+  }
+
+  return report
 }
 
 function createReasoningQueryResult(
@@ -3355,6 +3480,12 @@ export function installDevTauriMock() {
         case 'get_reasoning_materialization_review':
         case 'run_reasoning_materialization_review':
           return clone(createReasoningMaterializationReview(state, getStringArg(args, 'repositoryId')))
+        case 'get_reasoning_certification':
+          return clone(createReasoningCertificationReport(state, getStringArg(args, 'repositoryId'), false))
+        case 'run_reasoning_certification':
+          return clone(createReasoningCertificationReport(state, getStringArg(args, 'repositoryId'), true))
+        case 'list_reasoning_certification_reports':
+          return clone(state.reasoningCertificationReports[getStringArg(args, 'repositoryId')] ?? [])
         case 'start_execution':
           return clone(
             startExecution(

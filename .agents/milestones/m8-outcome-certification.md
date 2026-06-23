@@ -30,8 +30,8 @@ Goal: certify that reasoning can be reconstructed, not merely that low-level rec
 
 ## UI Work
 
-- [ ] Add `ReasoningCertificationPanel` showing current certification, persisted reports, pass/fail evidence, outcome scenarios, and recovery diagnostics.
-- [ ] Link failed outcome evidence to the affected events, threads, relationships, or referenced domain artifacts where possible.
+- [x] Add `ReasoningCertificationPanel` showing current certification, persisted reports, pass/fail evidence, outcome scenarios, and recovery diagnostics.
+- [x] Link failed outcome evidence to the affected events, threads, relationships, or referenced domain artifacts where possible.
 
 ## Tests
 
@@ -43,7 +43,7 @@ Goal: certify that reasoning can be reconstructed, not merely that low-level rec
 - [x] Certification can rebuild from structured artifacts after deleting generated markdown projections.
 - [x] Certification survives service restart.
 - [x] Certification endpoint returns current report, persisted run, and history.
-- [ ] UI characterization covers passed and failed outcome evidence.
+- [x] UI characterization covers passed and failed outcome evidence.
 
 ## Exit Criteria
 

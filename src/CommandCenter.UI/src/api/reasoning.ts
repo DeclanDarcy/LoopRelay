@@ -5,6 +5,7 @@ import type {
   ManualReasoningCaptureCommand,
   ManualReasoningCaptureTemplate,
   ReasoningEvent,
+  ReasoningCertificationReport,
   ReasoningGraph,
   ReasoningQuery,
   ReasoningQueryResult,
@@ -124,4 +125,22 @@ export function runReasoningMaterializationReview(
     'run_reasoning_materialization_review',
     { repositoryId, request },
   )
+}
+
+export function getReasoningCertification(repositoryId: string) {
+  return invokeCommand<ReasoningCertificationReport>('get_reasoning_certification', {
+    repositoryId,
+  })
+}
+
+export function runReasoningCertification(repositoryId: string) {
+  return invokeCommand<ReasoningCertificationReport>('run_reasoning_certification', {
+    repositoryId,
+  })
+}
+
+export function listReasoningCertificationReports(repositoryId: string) {
+  return invokeCommand<ReasoningCertificationReport[]>('list_reasoning_certification_reports', {
+    repositoryId,
+  })
 }

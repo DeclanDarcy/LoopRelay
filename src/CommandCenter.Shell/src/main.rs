@@ -1264,6 +1264,51 @@ fn run_reasoning_materialization_review(
 }
 
 #[tauri::command]
+fn get_reasoning_certification(repository_id: String) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/certification"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "reasoning certification lookup failed")
+}
+
+#[tauri::command]
+fn run_reasoning_certification(repository_id: String) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/certification"
+        ))
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "reasoning certification run failed")
+}
+
+#[tauri::command]
+fn list_reasoning_certification_reports(repository_id: String) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/certification/reports"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "reasoning certification report listing failed")
+}
+
+#[tauri::command]
 fn get_continuity_diagnostics(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/continuity/diagnostics"
@@ -1687,6 +1732,9 @@ fn main() {
             reconstruct_reasoning,
             get_reasoning_materialization_review,
             run_reasoning_materialization_review,
+            get_reasoning_certification,
+            run_reasoning_certification,
+            list_reasoning_certification_reports,
             get_continuity_diagnostics,
             generate_continuity_report,
             list_continuity_reports,

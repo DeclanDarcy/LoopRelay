@@ -4,6 +4,7 @@ import type {
   ManualReasoningCaptureCommand,
   ManualReasoningCaptureTemplate,
   ReasoningEvent,
+  ReasoningCertificationReport,
   ReasoningEventFamily,
   ReasoningGraph,
   ReasoningGraphNode,
@@ -16,6 +17,7 @@ import type {
   ReasoningTrace,
 } from '../../types'
 import { ReasoningEventFeed } from './ReasoningEventFeed'
+import { ReasoningCertificationPanel } from './ReasoningCertificationPanel'
 import { ReasoningGraphPanel } from './ReasoningGraphPanel'
 import { ReasoningQueryPanel } from './ReasoningQueryPanel'
 import { ReasoningReconstructionPanel } from './ReasoningReconstructionPanel'
@@ -33,6 +35,8 @@ type ReasoningTrajectoryTabProps = {
   queryResult: ReasoningQueryResult | null
   reconstruction: ReasoningReconstruction | null
   materializationReview: ReasoningMaterializationReviewReport | null
+  certificationReport: ReasoningCertificationReport | null
+  certificationReports: ReasoningCertificationReport[]
   templates?: ManualReasoningCaptureTemplate[]
   hasSelectedRepository: boolean
   isLoading: boolean
@@ -41,14 +45,18 @@ type ReasoningTrajectoryTabProps = {
   isReconstructing: boolean
   isLoadingMaterializationReview: boolean
   isRunningMaterializationReview: boolean
+  isLoadingCertification: boolean
+  isRunningCertification: boolean
   error: string | null
   queryError: string | null
   reconstructionError: string | null
   materializationReviewError: string | null
+  certificationError: string | null
   onRefresh: () => void
   onTraceGraphNode: (node: ReasoningGraphNode) => void
   onRunQuery: (query: ReasoningQuery) => Promise<unknown>
   onRunMaterializationReview: () => void
+  onRunCertification: () => void
   onCaptureManualReasoning?: (command: ManualReasoningCaptureCommand) => Promise<void>
 }
 
@@ -62,6 +70,8 @@ export function ReasoningTrajectoryTab({
   queryResult,
   reconstruction,
   materializationReview,
+  certificationReport,
+  certificationReports,
   templates = [],
   hasSelectedRepository,
   isLoading,
@@ -70,14 +80,18 @@ export function ReasoningTrajectoryTab({
   isReconstructing,
   isLoadingMaterializationReview,
   isRunningMaterializationReview,
+  isLoadingCertification,
+  isRunningCertification,
   error,
   queryError,
   reconstructionError,
   materializationReviewError,
+  certificationError,
   onRefresh,
   onTraceGraphNode,
   onRunQuery,
   onRunMaterializationReview,
+  onRunCertification,
   onCaptureManualReasoning,
 }: ReasoningTrajectoryTabProps) {
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null)
@@ -362,6 +376,14 @@ export function ReasoningTrajectoryTab({
             isRunning={isRunningMaterializationReview}
             error={materializationReviewError}
             onRunReview={onRunMaterializationReview}
+          />
+          <ReasoningCertificationPanel
+            currentReport={certificationReport}
+            reports={certificationReports}
+            isLoading={isLoadingCertification}
+            isRunning={isRunningCertification}
+            error={certificationError}
+            onRunCertification={onRunCertification}
           />
         </div>
       ) : (

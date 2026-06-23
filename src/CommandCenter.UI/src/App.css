@@ -878,7 +878,8 @@ button:focus-visible {
 .reasoning-graph-panel,
 .reasoning-query-panel,
 .reasoning-reconstruction-panel,
-.reasoning-materialization-review-panel {
+.reasoning-materialization-review-panel,
+.reasoning-certification-panel {
   grid-column: 1 / -1;
 }
 
@@ -1127,10 +1128,77 @@ button:focus-visible {
 .reasoning-trace-grid,
 .reasoning-query-result,
 .reasoning-reconstruction-body,
-.reasoning-materialization-grid {
+.reasoning-materialization-grid,
+.reasoning-certification-evidence,
+.reasoning-certification-history,
+.reasoning-certification-group {
   min-width: 0;
   display: grid;
   gap: 10px;
+}
+
+.reasoning-certification-summary {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.reasoning-certification-summary span {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--surface-1);
+  color: var(--fg-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.reasoning-certification-card {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--surface-2);
+  border-radius: var(--radius-6);
+  background: var(--surface-1);
+}
+
+.reasoning-certification-card p,
+.reasoning-certification-card li,
+.reasoning-certification-card span,
+.reasoning-certification-card strong,
+.reasoning-certification-history h6,
+.reasoning-certification-group h6 {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.reasoning-certification-card p,
+.reasoning-certification-card li {
+  color: var(--fg-subtle);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.reasoning-certification-card ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.reasoning-certification-card .reasoning-event-heading span {
+  padding: 5px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  color: var(--fg-muted);
+  background: var(--bg-inset);
+  font-size: 0.74rem;
+  font-weight: 750;
 }
 
 .reasoning-materialization-grid {
