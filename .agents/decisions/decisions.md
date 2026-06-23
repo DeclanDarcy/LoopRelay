@@ -2,19 +2,25 @@
 
 ## Newly Authorized
 
-- Confirm the Milestone 7 human-authoring burden slice as correct and strategically important.
-- Preserve `HumanAuthoringBurden` as the metric foundation for M8 quality assessment, M10 certification, workflow-replacement validation, and recommendation effectiveness measurement.
-- Keep human-authoring burden observational only; record `FullRewrite` and other burden outcomes without blocking or controlling workflow transitions.
-- Preserve the distinction between human guidance followed by system regeneration and human-authored package rewriting.
-- Preserve scoped package regeneration as `MajorRefinement`, because authorship remains primarily with the system after human guidance.
-- Preserve generated context, options, tradeoffs, recommendation, or assumptions replacement as `FullRewrite`, because that indicates human-authored final decision content.
-- Proceed next to durable refinement artifacts for the analyzed refinement request, directive set, and refinement plan.
-- Use durable refinement artifacts to trace why a regenerated package was created from the prior package version.
-- After durable refinement artifacts, expose directive-driven regeneration and old/new recommendation diff in the UI.
-- Treat recommendation diff visibility as the highest-value review surface for regenerated packages.
+- Confirm the Milestone 7 durable refinement artifact slice as correct.
+- Preserve refinement trace as a first-class artifact rather than folding package regeneration provenance into proposal revisions.
+- Maintain the workflow boundary:
+  - direct proposal edits create proposal revisions
+  - package regeneration creates refinement artifacts and new immutable package versions
+- Keep proposal revisions scoped to mutation of the proposal workflow object.
+- Keep refinement artifacts scoped to generation provenance for immutable package evidence.
+- Preserve durable refinement artifacts as the answer to why a regenerated package exists, what human guidance caused it, which directives were extracted, what plan was executed, and what burden classification resulted.
+- Treat the explicit trace chain as required Milestone 7 provenance: refinement request, directives, plan, old package, new package, comparison, and burden.
+- Use durable refinement artifacts later for quality assessment, burden reporting, and generation certification.
+- Complete backend directive-effect coverage before moving to UI regeneration surfaces.
+- Prioritize the remaining backend behavior tests:
+  - constraint directive affects recommendation
+  - priority directive changes option evaluation
+  - risk directive updates tradeoff analysis
+  - goal clarification triggers or verifies full regeneration
+- After backend directive-effect coverage, expose directive-driven package regeneration and old/new recommendation diff in the UI.
 
 ## Not Authorized
 
-- Do not make burden classification govern, block, punish, or distort human decision workflows.
-- Do not collapse scoped regeneration into `FullRewrite`.
-- Do not proceed to dashboards or certification before preserving the refinement trace needed to explain regenerated packages.
+- Do not blur revision history with regeneration provenance.
+- Do not move to UI regeneration and diff surfaces before finishing backend directive-effect coverage.

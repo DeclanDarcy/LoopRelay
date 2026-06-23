@@ -76,6 +76,21 @@ internal static partial class DecisionArtifactPaths
         return ArtifactPath.CombineRelative(ProposalDirectory(proposalId), "versions");
     }
 
+    public static string ProposalRefinementsDirectory(string proposalId)
+    {
+        return ArtifactPath.CombineRelative(ProposalDirectory(proposalId), "refinements");
+    }
+
+    public static string ProposalRefinementJson(string proposalId, string refinementId)
+    {
+        return ArtifactPath.CombineRelative(ProposalRefinementsDirectory(proposalId), $"{ValidateId(refinementId, "REF")}.json");
+    }
+
+    public static string ProposalRefinementMarkdown(string proposalId, string refinementId)
+    {
+        return ArtifactPath.CombineRelative(ProposalRefinementsDirectory(proposalId), $"{ValidateId(refinementId, "REF")}.md");
+    }
+
     public static string ProposalPackageJson(string proposalId, string packageId)
     {
         return ArtifactPath.CombineRelative(ProposalVersionsDirectory(proposalId), $"{ValidateId(packageId, "PKG")}.json");

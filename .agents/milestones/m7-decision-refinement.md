@@ -28,10 +28,10 @@ let humans guide regeneration without becoming package authors.
 - [ ] Add endpoints to analyze refinement before mutation and regenerate scoped package versions.
   - [x] Analyze refinement before mutation.
   - [x] Regenerate scoped package versions.
-- [ ] Preserve every refinement as:
-  - [ ] request
-  - [ ] directives
-  - [ ] plan
+- [x] Preserve every refinement as:
+  - [x] request
+  - [x] directives
+  - [x] plan
   - [x] old package version
   - [x] new package version
   - [x] comparison
@@ -51,7 +51,7 @@ let humans guide regeneration without becoming package authors.
 - [x] Alternative exploration adds or changes options.
 - [ ] Goal clarification can trigger full regeneration.
 - [x] Stale package fingerprint rejects refinement.
-- [ ] Version history and comparison persist after restart.
+- [x] Version history and comparison persist after restart.
 
 ## Exit Criteria
 

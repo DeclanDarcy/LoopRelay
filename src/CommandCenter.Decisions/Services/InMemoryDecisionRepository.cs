@@ -12,6 +12,7 @@ public sealed class InMemoryDecisionRepository : IDecisionRepository
     private readonly Dictionary<Guid, SortedDictionary<string, DecisionProposal>> proposalsByRepository = [];
     private readonly Dictionary<Guid, SortedDictionary<string, SortedDictionary<string, DecisionProposalRevision>>> revisionsByRepository = [];
     private readonly Dictionary<Guid, SortedDictionary<string, SortedDictionary<string, DecisionPackageVersion>>> packageVersionsByRepository = [];
+    private readonly Dictionary<Guid, SortedDictionary<string, SortedDictionary<string, DecisionRefinementArtifact>>> refinementArtifactsByRepository = [];
     private readonly Dictionary<Guid, SortedDictionary<string, DecisionReviewStatus>> reviewStatusByRepository = [];
     private readonly Dictionary<Guid, SortedDictionary<string, SortedDictionary<string, DecisionReviewNote>>> reviewNotesByRepository = [];
     private readonly Dictionary<Guid, SortedDictionary<string, DecisionAssimilationRecommendation>> assimilationByRepository = [];
@@ -41,6 +42,11 @@ public sealed class InMemoryDecisionRepository : IDecisionRepository
     public Task<string> AllocatePackageVersionIdAsync(Repository repository, string proposalId)
     {
         return Task.FromResult(NextId(GetPackageVersions(repository.Id, proposalId).Keys, "PKG"));
+    }
+
+    public Task<string> AllocateRefinementArtifactIdAsync(Repository repository, string proposalId)
+    {
+        return Task.FromResult(NextId(GetRefinementArtifacts(repository.Id, proposalId).Keys, "REF"));
     }
 
     public Task<string> AllocateReviewNoteIdAsync(Repository repository, string proposalId)
@@ -156,6 +162,31 @@ public sealed class InMemoryDecisionRepository : IDecisionRepository
 
         versions[packageVersion.Id] = packageVersion;
         return Task.FromResult(packageVersion);
+    }
+
+    public Task<IReadOnlyList<DecisionRefinementArtifact>> ListRefinementArtifactsAsync(Repository repository, string proposalId)
+    {
+        return Task.FromResult<IReadOnlyList<DecisionRefinementArtifact>>(GetRefinementArtifacts(repository.Id, proposalId).Values.ToArray());
+    }
+
+    public Task<DecisionRefinementArtifact> SaveRefinementArtifactAsync(
+        Repository repository,
+        DecisionRefinementArtifact refinementArtifact)
+    {
+        if (refinementArtifact.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException("Decision refinement artifact belongs to a different repository.");
+        }
+
+        SortedDictionary<string, DecisionRefinementArtifact> refinements =
+            GetRefinementArtifacts(repository.Id, refinementArtifact.ProposalId);
+        if (refinements.ContainsKey(refinementArtifact.Id))
+        {
+            throw new InvalidOperationException($"Decision refinement artifact already exists: {refinementArtifact.Id}.");
+        }
+
+        refinements[refinementArtifact.Id] = refinementArtifact;
+        return Task.FromResult(refinementArtifact);
     }
 
     public Task<DecisionReviewStatus?> GetReviewStatusAsync(Repository repository, string proposalId)
@@ -292,6 +323,19 @@ public sealed class InMemoryDecisionRepository : IDecisionRepository
         }
 
         return versions;
+    }
+
+    private SortedDictionary<string, DecisionRefinementArtifact> GetRefinementArtifacts(Guid repositoryId, string proposalId)
+    {
+        SortedDictionary<string, SortedDictionary<string, DecisionRefinementArtifact>> repositoryRefinements =
+            GetRepositoryMap(refinementArtifactsByRepository, repositoryId);
+        if (!repositoryRefinements.TryGetValue(proposalId, out SortedDictionary<string, DecisionRefinementArtifact>? refinements))
+        {
+            refinements = new SortedDictionary<string, DecisionRefinementArtifact>(StringComparer.Ordinal);
+            repositoryRefinements[proposalId] = refinements;
+        }
+
+        return refinements;
     }
 
     private SortedDictionary<string, DecisionReviewNote> GetReviewNotes(Guid repositoryId, string proposalId)

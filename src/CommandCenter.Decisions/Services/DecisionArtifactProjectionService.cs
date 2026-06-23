@@ -71,6 +71,18 @@ public sealed class DecisionArtifactProjectionService(
             RenderPackageComparison(comparison));
     }
 
+    public async Task ProjectRefinementArtifactAsync(
+        Repository repository,
+        DecisionRefinementArtifact refinementArtifact)
+    {
+        string proposalId = DecisionArtifactPaths.ValidateId(refinementArtifact.ProposalId, "PROP");
+        string refinementId = DecisionArtifactPaths.ValidateId(refinementArtifact.Id, "REF");
+        await WriteAsync(
+            repository,
+            DecisionArtifactPaths.ProposalRefinementMarkdown(proposalId, refinementId),
+            RenderRefinementArtifact(refinementArtifact));
+    }
+
     public async Task ProjectDecisionAssimilationRecommendationAsync(
         Repository repository,
         DecisionAssimilationRecommendation recommendation)
@@ -109,6 +121,11 @@ public sealed class DecisionArtifactProjectionService(
             {
                 await ProjectPackageVersionAsync(repository, packageVersion);
             }
+
+            foreach (DecisionRefinementArtifact refinementArtifact in await decisionRepository.ListRefinementArtifactsAsync(repository, proposal.Id))
+            {
+                await ProjectRefinementArtifactAsync(repository, refinementArtifact);
+            }
         }
 
         await RefreshDecisionIndexAsync(repository);
@@ -138,6 +155,14 @@ public sealed class DecisionArtifactProjectionService(
                     repository,
                     DecisionArtifactPaths.ProposalPackageMarkdown(id, packageVersion.Id),
                     () => RenderPackageVersion(packageVersion));
+            }
+
+            foreach (DecisionRefinementArtifact refinementArtifact in await decisionRepository.ListRefinementArtifactsAsync(repository, id))
+            {
+                await ProjectIfMissingAsync(
+                    repository,
+                    DecisionArtifactPaths.ProposalRefinementMarkdown(id, refinementArtifact.Id),
+                    () => RenderRefinementArtifact(refinementArtifact));
             }
         }
 
@@ -1011,6 +1036,74 @@ public sealed class DecisionArtifactProjectionService(
         markdown.EmptyListIf((revision.Diagnostics ?? []).Count == 0);
         markdown.H2("Sources");
         markdown.SourceList(revision.Sources);
+        return markdown.ToString();
+    }
+
+    private static string RenderRefinementArtifact(DecisionRefinementArtifact refinementArtifact)
+    {
+        var markdown = new MarkdownProjectionBuilder();
+        markdown.H1($"{refinementArtifact.Id}: {refinementArtifact.ProposalId} Refinement");
+        markdown.Fields(
+            ("Proposal", refinementArtifact.ProposalId),
+            ("Repository", refinementArtifact.RepositoryId.ToString()),
+            ("Created", FormatTimestamp(refinementArtifact.CreatedAt)),
+            ("Requested by", refinementArtifact.Request.RequestedBy ?? "Unspecified"),
+            ("Human authoring burden", refinementArtifact.HumanAuthoringBurden.ToString()),
+            ("Base package", refinementArtifact.BasePackageId),
+            ("Base package fingerprint", refinementArtifact.BasePackageFingerprint),
+            ("Regenerated package", refinementArtifact.RegeneratedPackageId),
+            ("Regenerated package fingerprint", refinementArtifact.RegeneratedPackageFingerprint),
+            ("Recommendation changed", refinementArtifact.Comparison.RecommendationChanged.ToString()),
+            ("Options changed", refinementArtifact.Comparison.OptionsChanged.ToString()),
+            ("Risks changed", refinementArtifact.Comparison.RisksChanged.ToString()),
+            ("Context fingerprint changed", refinementArtifact.Comparison.ContextFingerprintChanged.ToString()));
+        markdown.H2("Request");
+        markdown.Fields(
+            ("Base package id", refinementArtifact.Request.BasePackageId),
+            ("Base package fingerprint", refinementArtifact.Request.BasePackageFingerprint),
+            ("Requested by", refinementArtifact.Request.RequestedBy ?? "Unspecified"));
+        markdown.H2("Plan");
+        markdown.Fields(
+            ("Analyzed", FormatTimestamp(refinementArtifact.Plan.AnalyzedAt)),
+            ("Base proposal fingerprint", refinementArtifact.Plan.BaseProposalFingerprint),
+            ("Regenerate options", refinementArtifact.Plan.RegenerateOptions.ToString()),
+            ("Reevaluate tradeoffs", refinementArtifact.Plan.ReevaluateTradeoffs.ToString()),
+            ("Reevaluate recommendation", refinementArtifact.Plan.ReevaluateRecommendation.ToString()),
+            ("Full regeneration", refinementArtifact.Plan.FullRegeneration.ToString()));
+        markdown.H2("Directives");
+        foreach (RefinementDirective directive in refinementArtifact.Directives
+            .OrderBy(directive => directive.Id, StringComparer.Ordinal))
+        {
+            markdown.Bullet($"{directive.Id} | {directive.Type} | {directive.TargetField ?? "Unspecified"} | {directive.Summary}");
+            markdown.NestedSourceList(directive.Sources ?? []);
+        }
+
+        markdown.EmptyListIf(refinementArtifact.Directives.Count == 0);
+        markdown.H2("Applied Constraints");
+        foreach (string constraint in refinementArtifact.Plan.AppliedConstraints.Order(StringComparer.Ordinal))
+        {
+            markdown.Bullet(constraint);
+        }
+
+        markdown.EmptyListIf(refinementArtifact.Plan.AppliedConstraints.Count == 0);
+        markdown.H2("Comparison");
+        foreach (DecisionRevisionFieldComparison field in refinementArtifact.Comparison.FieldComparisons
+            .OrderBy(field => field.Field, StringComparer.Ordinal))
+        {
+            markdown.H3($"{field.Field}: {field.ChangeType}");
+            markdown.Fields(
+                ("Previous", field.PreviousValue ?? "None."),
+                ("Revised", field.RevisedValue ?? "None."));
+        }
+
+        markdown.EmptyListIf(refinementArtifact.Comparison.FieldComparisons.Count == 0);
+        markdown.H2("Diagnostics");
+        foreach (string diagnostic in refinementArtifact.Diagnostics.Order(StringComparer.Ordinal))
+        {
+            markdown.Bullet(diagnostic);
+        }
+
+        markdown.EmptyListIf(refinementArtifact.Diagnostics.Count == 0);
         return markdown.ToString();
     }
 

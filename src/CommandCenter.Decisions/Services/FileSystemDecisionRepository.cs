@@ -55,6 +55,21 @@ public sealed class FileSystemDecisionRepository(IArtifactStore artifactStore) :
         return $"PKG-{next:0000}";
     }
 
+    public async Task<string> AllocateRefinementArtifactIdAsync(Repository repository, string proposalId)
+    {
+        string id = DecisionArtifactPaths.ValidateId(proposalId, "PROP");
+        string refinementsRoot = DecisionArtifactPaths.Resolve(repository, DecisionArtifactPaths.ProposalRefinementsDirectory(id));
+        IReadOnlyList<string> files = await artifactStore.ListAsync(refinementsRoot, "REF-*.json");
+        int next = files
+            .Select(Path.GetFileNameWithoutExtension)
+            .Where(refinementId => !string.IsNullOrWhiteSpace(refinementId))
+            .Select(refinementId => ParseSequence(refinementId!, "REF"))
+            .DefaultIfEmpty(0)
+            .Max() + 1;
+
+        return $"REF-{next:0000}";
+    }
+
     public async Task<string> AllocateReviewNoteIdAsync(Repository repository, string proposalId)
     {
         string id = DecisionArtifactPaths.ValidateId(proposalId, "PROP");
@@ -298,6 +313,61 @@ public sealed class FileSystemDecisionRepository(IArtifactStore artifactStore) :
 
         await WriteDocumentAsync(repository, relativePath, packageVersion, packageVersion.CreatedAt, packageVersion.CreatedAt);
         return packageVersion;
+    }
+
+    public async Task<IReadOnlyList<DecisionRefinementArtifact>> ListRefinementArtifactsAsync(
+        Repository repository,
+        string proposalId)
+    {
+        string id = DecisionArtifactPaths.ValidateId(proposalId, "PROP");
+        string refinementsRoot = DecisionArtifactPaths.Resolve(repository, DecisionArtifactPaths.ProposalRefinementsDirectory(id));
+        IReadOnlyList<string> files = await artifactStore.ListAsync(refinementsRoot, "REF-*.json");
+        var refinements = new List<DecisionRefinementArtifact>();
+
+        foreach (string file in files
+            .Where(file => string.Equals(Path.GetExtension(file), ".json", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(file => file, StringComparer.Ordinal))
+        {
+            string? refinementId = Path.GetFileNameWithoutExtension(file);
+            if (string.IsNullOrWhiteSpace(refinementId))
+            {
+                continue;
+            }
+
+            DecisionRefinementArtifact? refinement = await ReadPayloadAsync<DecisionRefinementArtifact>(
+                repository,
+                DecisionArtifactPaths.ProposalRefinementJson(id, refinementId));
+            if (refinement is not null)
+            {
+                refinements.Add(refinement);
+            }
+        }
+
+        return refinements
+            .OrderBy(refinement => refinement.Id, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    public async Task<DecisionRefinementArtifact> SaveRefinementArtifactAsync(
+        Repository repository,
+        DecisionRefinementArtifact refinementArtifact)
+    {
+        string proposalId = DecisionArtifactPaths.ValidateId(refinementArtifact.ProposalId, "PROP");
+        string refinementId = DecisionArtifactPaths.ValidateId(refinementArtifact.Id, "REF");
+        if (refinementArtifact.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException("Decision refinement artifact belongs to a different repository.");
+        }
+
+        string relativePath = DecisionArtifactPaths.ProposalRefinementJson(proposalId, refinementId);
+        string path = DecisionArtifactPaths.Resolve(repository, relativePath);
+        if (await artifactStore.ExistsAsync(path))
+        {
+            throw new InvalidOperationException($"Decision refinement artifact already exists: {refinementId}.");
+        }
+
+        await WriteDocumentAsync(repository, relativePath, refinementArtifact, refinementArtifact.CreatedAt, refinementArtifact.CreatedAt);
+        return refinementArtifact;
     }
 
     public async Task<DecisionReviewStatus?> GetReviewStatusAsync(Repository repository, string proposalId)

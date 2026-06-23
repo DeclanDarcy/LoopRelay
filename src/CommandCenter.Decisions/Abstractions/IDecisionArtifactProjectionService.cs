@@ -23,6 +23,10 @@ public interface IDecisionArtifactProjectionService
         Repository repository,
         DecisionPackageComparison comparison);
 
+    Task ProjectRefinementArtifactAsync(
+        Repository repository,
+        DecisionRefinementArtifact refinementArtifact);
+
     Task ProjectDecisionAssimilationRecommendationAsync(
         Repository repository,
         DecisionAssimilationRecommendation recommendation);

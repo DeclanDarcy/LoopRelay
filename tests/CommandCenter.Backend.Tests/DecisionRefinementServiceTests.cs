@@ -174,9 +174,27 @@ public sealed class DecisionRefinementServiceTests
         DecisionProposal? reloaded = await decisionRepository.GetProposalAsync(repository, proposal.Id);
         string basePackageJsonAfter = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/versions/PKG-0001.json");
         string comparisonMarkdown = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/versions/PKG-0001..PKG-0002.comparison.md");
+        string refinementMarkdown = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/refinements/REF-0001.md");
+        DecisionRefinementArtifact refinementArtifact = Assert.Single(await decisionRepository.ListRefinementArtifactsAsync(repository, proposal.Id));
 
         Assert.Equal("PKG-0001", result.BasePackageVersion.Id);
         Assert.Equal("PKG-0002", result.RegeneratedPackageVersion.Id);
+        Assert.NotNull(result.RefinementArtifact);
+        Assert.Equal("REF-0001", result.RefinementArtifact.Id);
+        Assert.Equal("REF-0001", refinementArtifact.Id);
+        Assert.Equal(plan.RepositoryId, refinementArtifact.Plan.RepositoryId);
+        Assert.Equal(plan.ProposalId, refinementArtifact.Plan.ProposalId);
+        Assert.Equal(plan.BaseProposalFingerprint, refinementArtifact.Plan.BaseProposalFingerprint);
+        Assert.Equal(plan.RegenerateOptions, refinementArtifact.Plan.RegenerateOptions);
+        Assert.Equal(plan.ReevaluateTradeoffs, refinementArtifact.Plan.ReevaluateTradeoffs);
+        Assert.Equal(plan.ReevaluateRecommendation, refinementArtifact.Plan.ReevaluateRecommendation);
+        Assert.Equal(plan.FullRegeneration, refinementArtifact.Plan.FullRegeneration);
+        Assert.Equal(plan.Directives.Count, refinementArtifact.Directives.Count);
+        Assert.Equal(plan.AppliedConstraints, refinementArtifact.Plan.AppliedConstraints);
+        Assert.Equal(basePackage.Id, refinementArtifact.Request.BasePackageId);
+        Assert.Equal(basePackage.PackageFingerprint, refinementArtifact.Request.BasePackageFingerprint);
+        Assert.Equal("PKG-0002", refinementArtifact.RegeneratedPackageId);
+        Assert.Equal(HumanAuthoringBurden.MajorRefinement, refinementArtifact.HumanAuthoringBurden);
         Assert.Equal(HumanAuthoringBurden.MajorRefinement, result.HumanAuthoringBurden);
         Assert.Equal(2, versions.Count);
         Assert.Equal(basePackageJsonBefore, basePackageJsonAfter);
@@ -190,6 +208,76 @@ public sealed class DecisionRefinementServiceTests
         Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Contains("Human authoring burden classified as MajorRefinement", StringComparison.Ordinal));
         Assert.Contains("Recommendation changed: True", comparisonMarkdown);
         Assert.Contains("PKG-0001..PKG-0002", comparisonMarkdown);
+        Assert.Contains("REF-0001: PROP-0001 Refinement", refinementMarkdown);
+        Assert.Contains("Human authoring burden: MajorRefinement", refinementMarkdown);
+        Assert.Contains("## Directives", refinementMarkdown);
+        Assert.Contains("## Plan", refinementMarkdown);
+        Assert.Contains("## Comparison", refinementMarkdown);
+        Assert.Contains("Regenerated package: PKG-0002", refinementMarkdown);
+    }
+
+    [Fact]
+    public async Task VersionHistoryComparisonAndRefinementArtifactsPersistAfterRestart()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        DecisionGenerationService generationService = CreateGenerationService(repository, store, decisionRepository);
+        RefinementAnalysisService analysisService = CreateAnalysisService(repository, decisionRepository);
+        var projectionService = new DecisionArtifactProjectionService(decisionRepository, store);
+        var packageService = new DecisionPackageService(decisionRepository, projectionService);
+        DecisionProposal proposal = await generationService.GenerateProposalAsync(repository.Id, candidate.Id);
+        DecisionPackageVersion basePackage = Assert.Single(await decisionRepository.ListPackageVersionsAsync(repository, proposal.Id));
+        await generationService.MarkProposalViewedAsync(repository.Id, proposal.Id, null);
+        DecisionProposal needsRefinement = await generationService.MarkProposalNeedsRefinementAsync(
+            repository.Id,
+            proposal.Id,
+            "Restart should preserve refinement trace.");
+        RefinementPlan plan = await analysisService.AnalyzeRefinementAsync(
+            repository.Id,
+            proposal.Id,
+            new DecisionRefinementAnalysisRequest(
+                "Explore another option and reevaluate risk, cost, and recommendation.",
+                "reviewer",
+                Fingerprint(needsRefinement)));
+        DecisionPackageRegenerationResult result = await packageService.RegeneratePackageAsync(
+            repository,
+            needsRefinement,
+            basePackage,
+            new DecisionPackageRegenerationRequest(plan, basePackage.Id, basePackage.PackageFingerprint, "reviewer"),
+            DateTimeOffset.UtcNow);
+
+        var restartedRepository = new FileSystemDecisionRepository(store);
+        IReadOnlyList<DecisionPackageVersion> restartedVersions =
+            await restartedRepository.ListPackageVersionsAsync(repository, proposal.Id);
+        DecisionRefinementArtifact restartedRefinement =
+            Assert.Single(await restartedRepository.ListRefinementArtifactsAsync(repository, proposal.Id));
+        string refinementMarkdown = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/refinements/REF-0001.md");
+        string comparisonMarkdown = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/versions/PKG-0001..PKG-0002.comparison.md");
+
+        Assert.Equal(["PKG-0001", "PKG-0002"], restartedVersions.Select(version => version.Id).ToArray());
+        Assert.NotNull(result.RefinementArtifact);
+        Assert.Equal(result.RefinementArtifact.Id, restartedRefinement.Id);
+        Assert.Equal(result.RefinementArtifact.RepositoryId, restartedRefinement.RepositoryId);
+        Assert.Equal(result.RefinementArtifact.ProposalId, restartedRefinement.ProposalId);
+        Assert.Equal(result.RefinementArtifact.BasePackageFingerprint, restartedRefinement.BasePackageFingerprint);
+        Assert.Equal(result.RefinementArtifact.RegeneratedPackageFingerprint, restartedRefinement.RegeneratedPackageFingerprint);
+        Assert.Equal(result.RefinementArtifact.HumanAuthoringBurden, restartedRefinement.HumanAuthoringBurden);
+        Assert.Equal(plan.Directives.Select(directive => directive.Type), restartedRefinement.Directives.Select(directive => directive.Type));
+        Assert.Equal("PKG-0001", restartedRefinement.BasePackageId);
+        Assert.Equal("PKG-0002", restartedRefinement.RegeneratedPackageId);
+        Assert.True(restartedRefinement.Comparison.OptionsChanged);
+        Assert.True(restartedRefinement.Comparison.RecommendationChanged);
+        Assert.Contains(restartedRefinement.Diagnostics, diagnostic =>
+            diagnostic.Contains("using analyzed refinement plan", StringComparison.Ordinal));
+        Assert.Contains("## Request", refinementMarkdown);
+        Assert.Contains("## Directives", refinementMarkdown);
+        Assert.Contains("## Plan", refinementMarkdown);
+        Assert.Contains("## Comparison", refinementMarkdown);
+        Assert.Contains("Human authoring burden: MajorRefinement", refinementMarkdown);
+        Assert.Contains("Recommendation changed: True", comparisonMarkdown);
     }
 
     [Fact]

@@ -10,4 +10,5 @@ public sealed record DecisionPackageRegenerationResult(
     DecisionPackageVersion RegeneratedPackageVersion,
     DecisionPackageComparison Comparison,
     HumanAuthoringBurden HumanAuthoringBurden,
-    IReadOnlyList<string> Diagnostics);
+    IReadOnlyList<string> Diagnostics,
+    DecisionRefinementArtifact? RefinementArtifact = null);

@@ -270,6 +270,25 @@ public sealed class DecisionPackageService(
             "Human authoring burden classified as MajorRefinement because reviewer guidance produced a scoped regenerated package version.",
             .. plan.Diagnostics
         ];
+        string refinementId = await decisionRepository.AllocateRefinementArtifactIdAsync(repository, proposal.Id);
+        var refinementArtifact = new DecisionRefinementArtifact(
+            refinementId,
+            repository.Id,
+            proposal.Id,
+            generatedAt,
+            request,
+            plan.Directives,
+            plan,
+            basePackageVersion.Id,
+            basePackageVersion.PackageFingerprint,
+            packageVersion.Id,
+            packageVersion.PackageFingerprint,
+            comparison,
+            HumanAuthoringBurden.MajorRefinement,
+            diagnostics);
+        await decisionRepository.SaveRefinementArtifactAsync(repository, refinementArtifact);
+        await projectionService.ProjectRefinementArtifactAsync(repository, refinementArtifact);
+
         return new DecisionPackageRegenerationResult(
             repository.Id,
             proposal.Id,
@@ -278,7 +297,8 @@ public sealed class DecisionPackageService(
             packageVersion,
             comparison,
             HumanAuthoringBurden.MajorRefinement,
-            diagnostics);
+            diagnostics,
+            refinementArtifact);
     }
 
     public DecisionPackageValidationResult ValidatePackage(DecisionPackage package)
