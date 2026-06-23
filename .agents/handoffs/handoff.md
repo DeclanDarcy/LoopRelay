@@ -2,31 +2,42 @@
 
 ## New State From This Slice
 
-- Continued the current milestone into Milestone 3 backend graph navigation.
-- Added derived read models for `ReasoningGraph`, `ReasoningGraphNode`, `ReasoningGraphRelationship`, and `ReasoningTrace`.
-- Added `IReasoningGraphService` and `ReasoningGraphService`.
-- The graph is rebuilt on demand from repository-backed reasoning events, threads, relationships, event references, event provenance, and thread membership.
-- The graph is not persisted and remains a derived navigation/read model.
-- Added graph diagnostics for unresolved artifact, reasoning event, and reasoning thread references.
-- Added backend endpoints:
-  - `GET /api/repositories/{repositoryId}/reasoning/graph`
-  - `GET /api/repositories/{repositoryId}/reasoning/trace/backward?kind=...&id=...`
-  - `GET /api/repositories/{repositoryId}/reasoning/trace/forward?kind=...&id=...`
-- Updated M3 checklist to mark backend graph/tracing work and backend tests complete, while leaving UI navigation incomplete.
-- Rotated previous handoff to `.agents/handoffs/handoff.0014.md`.
+- Completed Milestone 3 graph navigation UI work.
+- Added Tauri bridge commands:
+  - `get_reasoning_graph`
+  - `trace_reasoning_backward`
+  - `trace_reasoning_forward`
+- Added frontend graph/trace contracts for `ReasoningGraph`, `ReasoningGraphNode`, `ReasoningGraphRelationship`, `ReasoningTrace`, and `ReasoningTraceDirection`.
+- Added UI API calls and `useReasoningGraph` for loading the derived graph and requesting backend-produced backward/forward traces.
+- Added `ReasoningGraphPanel` as an accessible read-only table/list navigator with:
+  - node kind filter
+  - relationship type filter
+  - selected node details
+  - explicit derived-graph authority label
+  - graph diagnostics
+  - backward trace view
+  - forward trace view
+- Wired the graph panel into `ReasoningTrajectoryTab` and `App`.
+- Updated the development Tauri mock to derive graph nodes, graph relationships, and one-hop traces from mock reasoning events, threads, and relationships.
+- Updated characterization coverage for graph navigation and trace rendering.
+- Marked Milestone 3 UI work and navigation exit criterion complete.
+- Rotated previous handoff to `.agents/handoffs/handoff.0015.md`.
 
 ## Verification
 
-- `dotnet test tests\CommandCenter.Backend.Tests\CommandCenter.Backend.Tests.csproj --filter Reasoning` passes: 51 tests.
-- `dotnet build CommandCenter.slnx` passes with 0 warnings and 0 errors.
+- `npm run test --prefix src/CommandCenter.UI -- reasoningTrajectory` passes: 6 tests.
+- `npm run lint --prefix src/CommandCenter.UI` passes.
+- `npm run build --prefix src/CommandCenter.UI` passes.
+- `cargo build --manifest-path src/CommandCenter.Shell/Cargo.toml` passes.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter Reasoning` passes: 51 tests.
+- `cargo fmt --manifest-path src/CommandCenter.Shell/Cargo.toml` could not run because `cargo-fmt.exe` is not installed for the active Rust toolchain.
 
 ## Current Gaps
 
-- M3 UI work remains incomplete.
-- Tauri bridge commands for graph and trace endpoints remain incomplete.
-- The current graph is list/trace ready but has no dedicated UI panel yet.
-- Trace endpoints use `kind` and `id` query parameters; frontend types/API should mirror that shape unless a better request object is introduced.
+- Milestone 4 narrative reconstruction queries remain unstarted.
+- Graph visualization remains intentionally deferred; the M3 implementation is accessible table/list navigation only.
+- Trace UI currently asks the backend for traces from the selected graph node and displays returned relationships; richer multi-hop controls can be considered during query/reconstruction work if needed.
 
 ## Next Slice
 
-- Add Tauri bridge commands and UI API/hooks/types for the graph and trace endpoints, then implement `ReasoningGraphPanel` as accessible lists/tables before considering any visual graph rendering.
+- Start Milestone 4 by adding backend query/reconstruction models and services for narrative answers over graph traces, keeping persisted reports optional and user-requested.

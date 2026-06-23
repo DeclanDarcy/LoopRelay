@@ -4,7 +4,9 @@ import { ReasoningTrajectoryTab } from '../../features/reasoning/ReasoningTrajec
 import type {
   ManualReasoningCaptureTemplate,
   ReasoningEvent,
+  ReasoningGraph,
   ReasoningRelationship,
+  ReasoningTrace,
   ReasoningThread,
 } from '../../types'
 
@@ -106,6 +108,68 @@ const relationships: ReasoningRelationship[] = [
   },
 ]
 
+const graph: ReasoningGraph = {
+  repositoryId: 'repo-alpha',
+  generatedAt: '2026-06-22T16:07:00.0000000Z',
+  nodes: [
+    {
+      id: 'ReasoningEvent:EVT-0001',
+      kind: 'ReasoningEvent',
+      referenceId: 'EVT-0001',
+      label: 'Event substrate can stay narrow',
+      resolved: true,
+      reference: {
+        kind: 'ReasoningEvent',
+        id: 'EVT-0001',
+        relativePath: null,
+        section: null,
+        excerpt: 'Reasoning should begin as immutable events with provenance.',
+      },
+    },
+    {
+      id: 'ReasoningThread:THR-0001',
+      kind: 'ReasoningThread',
+      referenceId: 'THR-0001',
+      label: 'Milestone 1 ontology boundary',
+      resolved: true,
+      reference: {
+        kind: 'ReasoningThread',
+        id: 'THR-0001',
+        relativePath: null,
+        section: 'DecisionEvolution',
+        excerpt: 'Tracks why the event substrate remains explanatory.',
+      },
+    },
+  ],
+  relationships: [
+    {
+      id: 'ThreadMembership:EVT-0001:THR-0001',
+      type: 'BelongsTo',
+      sourceNodeId: 'ReasoningEvent:EVT-0001',
+      targetNodeId: 'ReasoningThread:THR-0001',
+      label: 'Event belongs to thread',
+      provenance: 'ReasoningEvent.ThreadIds',
+      relationshipId: null,
+    },
+  ],
+  diagnostics: ['Artifact reference could not be resolved: .agents/missing.md'],
+}
+
+const backwardTrace: ReasoningTrace = {
+  repositoryId: 'repo-alpha',
+  direction: 'Backward',
+  target: {
+    kind: 'ReasoningThread',
+    id: 'THR-0001',
+    relativePath: null,
+    section: null,
+    excerpt: null,
+  },
+  nodes: graph.nodes,
+  relationships: graph.relationships,
+  diagnostics: [],
+}
+
 const templates: ManualReasoningCaptureTemplate[] = [
   {
     kind: 'ContradictionResolved',
@@ -130,11 +194,16 @@ function renderTab(overrides: Partial<Parameters<typeof ReasoningTrajectoryTab>[
     events,
     threads,
     relationships,
+    graph,
+    backwardTrace: null,
+    forwardTrace: null,
     templates,
     hasSelectedRepository: true,
     isLoading: false,
+    isTracingGraph: false,
     error: null,
     onRefresh: vi.fn(),
+    onTraceGraphNode: vi.fn(),
     onCaptureManualReasoning: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   }
@@ -175,7 +244,8 @@ describe('reasoning trajectory tab', () => {
   it('filters the event feed when a thread is selected', () => {
     renderTab()
 
-    fireEvent.click(screen.getByRole('button', { name: /Milestone 1 ontology boundary/ }))
+    const threadPanel = screen.getByRole('region', { name: 'Reasoning threads' })
+    fireEvent.click(within(threadPanel).getByRole('button', { name: /Milestone 1 ontology boundary/ }))
 
     const feed = screen.getByRole('region', { name: 'Reasoning event feed' })
     expect(within(feed).getByText('Event substrate can stay narrow')).toBeInTheDocument()
@@ -191,6 +261,26 @@ describe('reasoning trajectory tab', () => {
     expect(within(feed).getByText('Specialized entity storage deferred')).toBeInTheDocument()
     expect(within(feed).queryByText('Event substrate can stay narrow')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Alternatives' })).toBeNull()
+  })
+
+  it('shows graph navigation without creating graph authority', () => {
+    const onTraceGraphNode = vi.fn()
+    renderTab({ backwardTrace, onTraceGraphNode })
+
+    const graphRegion = screen.getByRole('region', { name: 'Reasoning graph' })
+    expect(within(graphRegion).getByLabelText('Reasoning graph authority')).toHaveTextContent(
+      'Derived graph',
+    )
+    expect(within(graphRegion).getByLabelText('Reasoning graph nodes')).toHaveTextContent(
+      'Event substrate can stay narrow',
+    )
+    expect(within(graphRegion).getByText('Artifact reference could not be resolved: .agents/missing.md')).toBeInTheDocument()
+
+    fireEvent.click(within(graphRegion).getByRole('button', { name: 'Trace Node' }))
+    expect(onTraceGraphNode).toHaveBeenCalledWith(graph.nodes[0])
+    expect(within(graphRegion).getByLabelText('Backward Trace')).toHaveTextContent(
+      'ReasoningEvent:EVT-0001',
+    )
   })
 
   it('submits manual capture from backend-approved templates', async () => {

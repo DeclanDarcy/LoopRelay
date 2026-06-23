@@ -5,8 +5,11 @@ import type {
   ManualReasoningCaptureCommand,
   ManualReasoningCaptureTemplate,
   ReasoningEvent,
+  ReasoningGraph,
   ReasoningRelationship,
   ReasoningThread,
+  ReasoningTrace,
+  ReasoningReferenceKind,
 } from '../types'
 import { invokeCommand } from './tauri'
 
@@ -71,4 +74,24 @@ export function createReasoningRelationship(
     repositoryId,
     command,
   })
+}
+
+export function getReasoningGraph(repositoryId: string) {
+  return invokeCommand<ReasoningGraph>('get_reasoning_graph', { repositoryId })
+}
+
+export function traceReasoningBackward(
+  repositoryId: string,
+  kind: ReasoningReferenceKind,
+  id: string,
+) {
+  return invokeCommand<ReasoningTrace>('trace_reasoning_backward', { repositoryId, kind, id })
+}
+
+export function traceReasoningForward(
+  repositoryId: string,
+  kind: ReasoningReferenceKind,
+  id: string,
+) {
+  return invokeCommand<ReasoningTrace>('trace_reasoning_forward', { repositoryId, kind, id })
 }

@@ -17,8 +17,8 @@ Goal: create a derived graph for navigation only. The graph is not persisted as 
 
 ## UI Work
 
-- [ ] Add `ReasoningGraphPanel` with node filters, relationship filters, selected node details, backward trace, forward trace, and thread traversal.
-- [ ] Use accessible lists/tables first; add visual graph rendering only if it remains readable and tested.
+- [x] Add `ReasoningGraphPanel` with node filters, relationship filters, selected node details, backward trace, forward trace, and thread traversal.
+- [x] Use accessible lists/tables first; add visual graph rendering only if it remains readable and tested.
 
 ## Tests
 
@@ -31,7 +31,7 @@ Goal: create a derived graph for navigation only. The graph is not persisted as 
 
 ## Exit Criteria
 
-- [ ] Navigation is operational.
+- [x] Navigation is operational.
 - [x] Causal tracing is operational.
 - [x] Forward impact tracing is operational.
 - [x] Graph remains derived.

@@ -179,6 +179,44 @@ export type ReasoningRelationship = {
   provenance: ReasoningProvenance
 }
 
+export type ReasoningTraceDirection = 'Backward' | 'Forward'
+
+export type ReasoningGraphNode = {
+  id: string
+  kind: ReasoningReferenceKind
+  referenceId: string
+  label: string
+  resolved: boolean
+  reference: ReasoningReference | null
+}
+
+export type ReasoningGraphRelationship = {
+  id: string
+  type: ReasoningRelationshipType
+  sourceNodeId: string
+  targetNodeId: string
+  label: string
+  provenance: string
+  relationshipId: string | null
+}
+
+export type ReasoningGraph = {
+  repositoryId: string
+  generatedAt: string
+  nodes: ReasoningGraphNode[]
+  relationships: ReasoningGraphRelationship[]
+  diagnostics: string[]
+}
+
+export type ReasoningTrace = {
+  repositoryId: string
+  direction: ReasoningTraceDirection
+  target: ReasoningReference
+  nodes: ReasoningGraphNode[]
+  relationships: ReasoningGraphRelationship[]
+  diagnostics: string[]
+}
+
 export type ManualReasoningCaptureTemplate = {
   kind: ReasoningManualCaptureKind
   family: ReasoningEventFamily

@@ -34,7 +34,11 @@ import type {
   OperationalContextProposal,
   OperationalContextProposalSummary,
   ReasoningEvent,
+  ReasoningGraph,
+  ReasoningGraphNode,
+  ReasoningGraphRelationship,
   ReasoningRelationship,
+  ReasoningTrace,
   ReasoningThread,
   Repository,
   RepositoryDashboardProjection as DashboardEntry,
@@ -1910,6 +1914,106 @@ function createReasoningRelationships(repositoryId: string): ReasoningRelationsh
   ]
 }
 
+function createReasoningGraph(state: MockState, repositoryId: string): ReasoningGraph {
+  const events = state.reasoningEvents[repositoryId] ?? []
+  const threads = state.reasoningThreads[repositoryId] ?? []
+  const relationships = state.reasoningRelationships[repositoryId] ?? []
+  const nodes: ReasoningGraphNode[] = [
+    ...events.map((event) => ({
+      id: `ReasoningEvent:${event.id}`,
+      kind: 'ReasoningEvent' as const,
+      referenceId: event.id,
+      label: event.title,
+      resolved: true,
+      reference: {
+        kind: 'ReasoningEvent' as const,
+        id: event.id,
+        relativePath: null,
+        section: null,
+        excerpt: event.narrative.summary,
+      },
+    })),
+    ...threads.map((thread) => ({
+      id: `ReasoningThread:${thread.id}`,
+      kind: 'ReasoningThread' as const,
+      referenceId: thread.id,
+      label: thread.title,
+      resolved: true,
+      reference: {
+        kind: 'ReasoningThread' as const,
+        id: thread.id,
+        relativePath: null,
+        section: thread.theme,
+        excerpt: thread.summary,
+      },
+    })),
+  ]
+  const graphRelationships: ReasoningGraphRelationship[] = [
+    ...relationships.map((relationship) => ({
+      id: `Relationship:${relationship.id}`,
+      type: relationship.type,
+      sourceNodeId: `${relationship.source.kind}:${relationship.source.id}`,
+      targetNodeId: `${relationship.target.kind}:${relationship.target.id}`,
+      label: relationship.narrative.summary,
+      provenance: `${relationship.provenance.sourceKind} by ${relationship.provenance.capturedBy}`,
+      relationshipId: relationship.id,
+    })),
+    ...events.flatMap((event) =>
+      event.threadIds.map((threadId) => ({
+        id: `ThreadMembership:${event.id}:${threadId}`,
+        type: 'BelongsTo' as const,
+        sourceNodeId: `ReasoningEvent:${event.id}`,
+        targetNodeId: `ReasoningThread:${threadId}`,
+        label: 'Event belongs to thread',
+        provenance: 'ReasoningEvent.ThreadIds',
+        relationshipId: null,
+      })),
+    ),
+  ]
+
+  return {
+    repositoryId,
+    generatedAt: new Date().toISOString(),
+    nodes,
+    relationships: graphRelationships,
+    diagnostics: [],
+  }
+}
+
+function createReasoningTrace(
+  graph: ReasoningGraph,
+  direction: ReasoningTrace['direction'],
+  kind: ReasoningTrace['target']['kind'],
+  id: string,
+): ReasoningTrace {
+  const targetNodeId = `${kind}:${id}`
+  const relationshipSet = graph.relationships.filter((relationship) =>
+    direction === 'Backward'
+      ? relationship.targetNodeId === targetNodeId
+      : relationship.sourceNodeId === targetNodeId,
+  )
+  const nodeIds = new Set<string>([targetNodeId])
+  for (const relationship of relationshipSet) {
+    nodeIds.add(relationship.sourceNodeId)
+    nodeIds.add(relationship.targetNodeId)
+  }
+
+  return {
+    repositoryId: graph.repositoryId,
+    direction,
+    target: {
+      kind,
+      id,
+      relativePath: null,
+      section: null,
+      excerpt: null,
+    },
+    nodes: graph.nodes.filter((node) => nodeIds.has(node.id)),
+    relationships: relationshipSet,
+    diagnostics: graph.diagnostics,
+  }
+}
+
 function createContextPreview(state: MockState, repositoryId: string, milestonePath: string): ExecutionContextPreview {
   const workspace = state.workspaces[repositoryId]
   const artifactsForContext = [
@@ -3022,6 +3126,32 @@ export function installDevTauriMock() {
           state.reasoningRelationships[repositoryId] = [...relationships, relationship]
           refreshReasoningSummary(state, repositoryId)
           return clone(relationship)
+        }
+        case 'get_reasoning_graph':
+          return clone(createReasoningGraph(state, getStringArg(args, 'repositoryId')))
+        case 'trace_reasoning_backward': {
+          const repositoryId = getStringArg(args, 'repositoryId')
+          const graph = createReasoningGraph(state, repositoryId)
+          return clone(
+            createReasoningTrace(
+              graph,
+              'Backward',
+              getStringArg(args, 'kind') as ReasoningTrace['target']['kind'],
+              getStringArg(args, 'id'),
+            ),
+          )
+        }
+        case 'trace_reasoning_forward': {
+          const repositoryId = getStringArg(args, 'repositoryId')
+          const graph = createReasoningGraph(state, repositoryId)
+          return clone(
+            createReasoningTrace(
+              graph,
+              'Forward',
+              getStringArg(args, 'kind') as ReasoningTrace['target']['kind'],
+              getStringArg(args, 'id'),
+            ),
+          )
         }
         case 'start_execution':
           return clone(

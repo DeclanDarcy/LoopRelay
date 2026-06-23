@@ -53,6 +53,7 @@ import {
   useGitStatus,
   mergeExecutionEvents,
   useReasoningEvents,
+  useReasoningGraph,
   useReasoningManualCaptureTemplates,
   useReasoningRelationships,
   useReasoningThreads,
@@ -250,6 +251,16 @@ function App() {
     error: reasoningRelationshipsError,
     refresh: refreshReasoningRelationships,
   } = useReasoningRelationships(selectedRepository?.repository.id ?? null)
+  const {
+    data: reasoningGraph,
+    backwardTrace: reasoningBackwardTrace,
+    forwardTrace: reasoningForwardTrace,
+    isLoading: isReasoningGraphLoading,
+    isTracing: isReasoningGraphTracing,
+    error: reasoningGraphError,
+    refresh: refreshReasoningGraph,
+    trace: traceReasoningGraph,
+  } = useReasoningGraph(selectedRepository?.repository.id ?? null)
 
   const selectedArtifact = useMemo(() => {
     if (!workspace || !selectedArtifactPath) {
@@ -1426,6 +1437,7 @@ function App() {
       refreshReasoningManualCaptureTemplates(),
       refreshReasoningThreads(),
       refreshReasoningRelationships(),
+      refreshReasoningGraph(),
     ])
   }
 
@@ -1695,21 +1707,28 @@ function App() {
                 events={reasoningEvents}
                 threads={reasoningThreads}
                 relationships={reasoningRelationships}
+                graph={reasoningGraph}
+                backwardTrace={reasoningBackwardTrace}
+                forwardTrace={reasoningForwardTrace}
                 templates={reasoningManualCaptureTemplates}
                 hasSelectedRepository={Boolean(selectedRepository)}
                 isLoading={
                   isReasoningEventsLoading ||
                   isReasoningManualCaptureTemplatesLoading ||
                   isReasoningThreadsLoading ||
-                  isReasoningRelationshipsLoading
+                  isReasoningRelationshipsLoading ||
+                  isReasoningGraphLoading
                 }
+                isTracingGraph={isReasoningGraphTracing}
                 error={
                   reasoningEventsError ??
                   reasoningManualCaptureTemplatesError ??
                   reasoningThreadsError ??
-                  reasoningRelationshipsError
+                  reasoningRelationshipsError ??
+                  reasoningGraphError
                 }
                 onRefresh={() => void refreshReasoning()}
+                onTraceGraphNode={(node) => void traceReasoningGraph(node.kind, node.referenceId)}
                 onCaptureManualReasoning={createManualReasoningCapture}
               />
 

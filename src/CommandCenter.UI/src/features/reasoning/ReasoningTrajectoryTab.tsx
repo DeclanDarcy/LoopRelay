@@ -5,10 +5,14 @@ import type {
   ManualReasoningCaptureTemplate,
   ReasoningEvent,
   ReasoningEventFamily,
+  ReasoningGraph,
+  ReasoningGraphNode,
   ReasoningRelationship,
   ReasoningThread,
+  ReasoningTrace,
 } from '../../types'
 import { ReasoningEventFeed } from './ReasoningEventFeed'
+import { ReasoningGraphPanel } from './ReasoningGraphPanel'
 import { ReasoningThreadPanel } from './ReasoningThreadPanel'
 import { ReasoningTracePanel } from './ReasoningTracePanel'
 
@@ -16,11 +20,16 @@ type ReasoningTrajectoryTabProps = {
   events: ReasoningEvent[]
   threads: ReasoningThread[]
   relationships: ReasoningRelationship[]
+  graph: ReasoningGraph | null
+  backwardTrace: ReasoningTrace | null
+  forwardTrace: ReasoningTrace | null
   templates?: ManualReasoningCaptureTemplate[]
   hasSelectedRepository: boolean
   isLoading: boolean
+  isTracingGraph: boolean
   error: string | null
   onRefresh: () => void
+  onTraceGraphNode: (node: ReasoningGraphNode) => void
   onCaptureManualReasoning?: (command: ManualReasoningCaptureCommand) => Promise<void>
 }
 
@@ -28,11 +37,16 @@ export function ReasoningTrajectoryTab({
   events,
   threads,
   relationships,
+  graph,
+  backwardTrace,
+  forwardTrace,
   templates = [],
   hasSelectedRepository,
   isLoading,
+  isTracingGraph,
   error,
   onRefresh,
+  onTraceGraphNode,
   onCaptureManualReasoning,
 }: ReasoningTrajectoryTabProps) {
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null)
@@ -290,6 +304,14 @@ export function ReasoningTrajectoryTab({
             relationships={relationships}
             selectedThread={selectedThread}
             isLoading={isLoading}
+          />
+          <ReasoningGraphPanel
+            graph={graph}
+            backwardTrace={backwardTrace}
+            forwardTrace={forwardTrace}
+            isLoading={isLoading}
+            isTracing={isTracingGraph}
+            onTraceNode={onTraceGraphNode}
           />
         </div>
       ) : (

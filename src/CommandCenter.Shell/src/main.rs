@@ -1161,6 +1161,38 @@ fn create_reasoning_relationship(repository_id: String, command: Value) -> Resul
 }
 
 #[tauri::command]
+fn get_reasoning_graph(repository_id: String) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/graph"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "reasoning graph lookup failed")
+}
+
+#[tauri::command]
+fn trace_reasoning_backward(
+    repository_id: String,
+    kind: String,
+    id: String,
+) -> Result<Value, String> {
+    trace_reasoning(repository_id, kind, id, "backward", "reasoning backward trace failed")
+}
+
+#[tauri::command]
+fn trace_reasoning_forward(
+    repository_id: String,
+    kind: String,
+    id: String,
+) -> Result<Value, String> {
+    trace_reasoning(repository_id, kind, id, "forward", "reasoning forward trace failed")
+}
+
+#[tauri::command]
 fn get_continuity_diagnostics(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/continuity/diagnostics"
@@ -1387,6 +1419,29 @@ fn complete_handoff_decision(
     response_error(response, "handoff decision failed")
 }
 
+fn trace_reasoning(
+    repository_id: String,
+    kind: String,
+    id: String,
+    direction: &str,
+    fallback: &str,
+) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .get(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/trace/{direction}"
+        ))
+        .query(&[("kind", kind), ("id", id)])
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, fallback)
+}
+
 fn response_error<T>(response: reqwest::blocking::Response, fallback: &str) -> Result<T, String> {
     let status = response.status();
     let message = response
@@ -1554,6 +1609,9 @@ fn main() {
             append_reasoning_thread_event,
             list_reasoning_relationships,
             create_reasoning_relationship,
+            get_reasoning_graph,
+            trace_reasoning_backward,
+            trace_reasoning_forward,
             get_continuity_diagnostics,
             generate_continuity_report,
             list_continuity_reports,
