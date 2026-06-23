@@ -60,7 +60,7 @@ Tier 0 may use the existing proposal record as the first reviewable package shap
 - [x] Package identity is stable and repository-scoped.
 - [x] Package versions are immutable after creation.
 - [x] Package comparison detects recommendation and option changes.
-- [ ] Resolution snapshots reference the package/proposal fingerprint used for authority.
+- [x] Resolution snapshots reference the package/proposal fingerprint used for authority.
 
 ## Exit Criteria
 

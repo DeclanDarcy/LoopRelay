@@ -26,4 +26,12 @@ public sealed record DecisionResolvedProposalSnapshot(
     public DecisionTradeoffAnalysisDiagnostics? TradeoffAnalysisDiagnostics { get; init; }
 
     public DecisionGenerationDiagnostics? GenerationDiagnostics { get; init; }
+
+    public string? PackageId { get; init; }
+
+    public string? PackageFingerprint { get; init; }
+
+    public DateTimeOffset? PackageVersionCreatedAt { get; init; }
+
+    public DateTimeOffset? AuthorityResolvedAt { get; init; }
 }

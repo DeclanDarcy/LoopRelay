@@ -196,6 +196,10 @@ public sealed class DecisionArtifactProjectionService(
                     ("Source candidate", snapshot.CandidateId),
                     ("Source proposal state", snapshot.ProposalState.ToString()),
                     ("Source proposal fingerprint", snapshot.ProposalFingerprint),
+                    ("Source package", snapshot.PackageId ?? "None"),
+                    ("Source package fingerprint", snapshot.PackageFingerprint ?? "None"),
+                    ("Source package created", snapshot.PackageVersionCreatedAt.HasValue ? FormatTimestamp(snapshot.PackageVersionCreatedAt.Value) : "None"),
+                    ("Authority resolved", snapshot.AuthorityResolvedAt.HasValue ? FormatTimestamp(snapshot.AuthorityResolvedAt.Value) : "None"),
                     ("Captured revisions", snapshot.Revisions.Count.ToString()));
             }
 

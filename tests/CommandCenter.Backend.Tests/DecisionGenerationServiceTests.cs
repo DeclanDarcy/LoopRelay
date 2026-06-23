@@ -1167,6 +1167,10 @@ public sealed class DecisionGenerationServiceTests
         Assert.Equal(proposal.Id, decision.Resolution?.SourceProposalSnapshot?.ProposalId);
         Assert.Equal(DecisionProposalState.ReadyForResolution, decision.Resolution?.SourceProposalSnapshot?.ProposalState);
         Assert.False(string.IsNullOrWhiteSpace(decision.Resolution?.SourceProposalSnapshot?.ProposalFingerprint));
+        Assert.Equal("PKG-0001", decision.Resolution?.SourceProposalSnapshot?.PackageId);
+        Assert.False(string.IsNullOrWhiteSpace(decision.Resolution?.SourceProposalSnapshot?.PackageFingerprint));
+        Assert.NotNull(decision.Resolution?.SourceProposalSnapshot?.PackageVersionCreatedAt);
+        Assert.NotNull(decision.Resolution?.SourceProposalSnapshot?.AuthorityResolvedAt);
         Assert.True(File.Exists(Path.Combine(repository.Path, ".agents", "decisions", "records", "DEC-0001", "decision.json")));
         Assert.True(File.Exists(Path.Combine(repository.Path, ".agents", "decisions", "records", "DEC-0001", "decision.md")));
         Assert.True(File.Exists(Path.Combine(repository.Path, ".agents", "decisions", "records", "DEC-0001", "history.json")));
@@ -1750,6 +1754,66 @@ public sealed class DecisionGenerationServiceTests
         Decision? reloaded = await decisionRepository.GetDecisionAsync(repository, decision.Id);
         Assert.Equal(snapshot.ProposalFingerprint, reloaded?.Resolution?.SourceProposalSnapshot?.ProposalFingerprint);
         Assert.Equal("REV-0001", Assert.Single(reloaded!.Resolution!.SourceProposalSnapshot!.Revisions).Id);
+    }
+
+    [Fact]
+    public async Task ResolveProposalRejectsStaleProposalAuthorityFingerprint()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var service = CreateGenerationService(repository, store, decisionRepository);
+        var resolutionService = CreateResolutionService(repository, store, decisionRepository);
+        DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
+        await service.MarkProposalReadyForResolutionAsync(repository.Id, proposal.Id, "Ready for stale authority test.");
+
+        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            resolutionService.ResolveProposalAsync(
+                repository.Id,
+                proposal.Id,
+                new ResolveDecisionCommand(
+                    "Resolve with stale proposal authority.",
+                    "human-reviewer",
+                    "option-1",
+                    ExpectedProposalFingerprint: "stale-proposal-fingerprint")));
+
+        Assert.Equal(
+            "Resolution authority is stale: expected proposal fingerprint does not match the current proposal.",
+            exception.Message);
+        Assert.Empty(await decisionRepository.ListDecisionsAsync(repository));
+    }
+
+    [Fact]
+    public async Task ResolveProposalRejectsMismatchedPackageAuthorityFingerprint()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var service = CreateGenerationService(repository, store, decisionRepository);
+        var resolutionService = CreateResolutionService(repository, store, decisionRepository);
+        DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
+        DecisionPackageVersion packageVersion = Assert.Single(await decisionRepository.ListPackageVersionsAsync(repository, proposal.Id));
+        await service.MarkProposalReadyForResolutionAsync(repository.Id, proposal.Id, "Ready for package authority test.");
+
+        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            resolutionService.ResolveProposalAsync(
+                repository.Id,
+                proposal.Id,
+                new ResolveDecisionCommand(
+                    "Resolve with mismatched package authority.",
+                    "human-reviewer",
+                    "option-1",
+                    ExpectedPackageId: packageVersion.Id,
+                    ExpectedPackageFingerprint: "stale-package-fingerprint")));
+
+        Assert.Equal(
+            "Resolution authority is stale: expected package fingerprint does not match the reviewed package.",
+            exception.Message);
+        Assert.Empty(await decisionRepository.ListDecisionsAsync(repository));
     }
 
     [Fact]

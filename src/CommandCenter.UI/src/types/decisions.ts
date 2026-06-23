@@ -328,6 +328,10 @@ export type DecisionResolvedProposalSnapshot = {
   analyzedOptions?: AnalyzedDecisionOption[]
   tradeoffComparisons?: DecisionTradeoffComparison[]
   tradeoffAnalysisDiagnostics?: DecisionTradeoffAnalysisDiagnostics | null
+  packageId?: string | null
+  packageFingerprint?: string | null
+  packageVersionCreatedAt?: string | null
+  authorityResolvedAt?: string | null
 }
 
 export type DecisionResolution = {
@@ -366,6 +370,10 @@ export type ResolveDecisionCommand = {
   resolver: string
   selectedOptionId: string | null
   outcome: DecisionOutcome
+  expectedProposalFingerprint?: string | null
+  expectedPackageId?: string | null
+  expectedPackageFingerprint?: string | null
+  acknowledgeStaleAuthority?: boolean
 }
 
 export type CreateDecisionAssimilationRecommendationCommand = {

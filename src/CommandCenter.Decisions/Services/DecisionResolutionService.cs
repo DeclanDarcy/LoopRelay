@@ -59,6 +59,11 @@ public sealed class DecisionResolutionService(
         string resolver = command.Resolver.Trim();
         string selectedOptionId = selectedOption.Id;
         string proposalFingerprint = Fingerprint(proposal);
+        DecisionPackageVersion? authorityPackage = await ResolveAuthorityPackageAsync(
+            repository,
+            proposal,
+            proposalFingerprint,
+            command);
         IReadOnlyList<DecisionProposalRevision> revisions = await decisionRepository.ListProposalRevisionsAsync(repository, proposal.Id);
         DecisionState targetDecisionState = TargetStateFor(command.Outcome);
         DecisionTransitionResult decisionTransition = DecisionLifecycleRules.ValidateDecisionTransition(
@@ -117,7 +122,11 @@ public sealed class DecisionResolutionService(
                 AnalyzedOptions = proposal.AnalyzedOptions,
                 TradeoffComparisons = proposal.TradeoffComparisons,
                 TradeoffAnalysisDiagnostics = proposal.TradeoffAnalysisDiagnostics,
-                GenerationDiagnostics = proposal.GenerationDiagnostics
+                GenerationDiagnostics = proposal.GenerationDiagnostics,
+                PackageId = authorityPackage?.Id,
+                PackageFingerprint = authorityPackage?.PackageFingerprint,
+                PackageVersionCreatedAt = authorityPackage?.CreatedAt,
+                AuthorityResolvedAt = now
             });
         var decision = new Decision(
             decisionId,
@@ -339,6 +348,53 @@ public sealed class DecisionResolutionService(
     {
         byte[] bytes = Encoding.UTF8.GetBytes(Serialize(proposal));
         return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+    }
+
+    private async Task<DecisionPackageVersion?> ResolveAuthorityPackageAsync(
+        Repository repository,
+        DecisionProposal proposal,
+        string proposalFingerprint,
+        ResolveDecisionCommand command)
+    {
+        if (!command.AcknowledgeStaleAuthority &&
+            !string.IsNullOrWhiteSpace(command.ExpectedProposalFingerprint) &&
+            !string.Equals(command.ExpectedProposalFingerprint.Trim(), proposalFingerprint, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Resolution authority is stale: expected proposal fingerprint does not match the current proposal.");
+        }
+
+        IReadOnlyList<DecisionPackageVersion> packageVersions =
+            await decisionRepository.ListPackageVersionsAsync(repository, proposal.Id);
+        DecisionPackageVersion? package = null;
+        if (!string.IsNullOrWhiteSpace(command.ExpectedPackageId))
+        {
+            package = packageVersions.FirstOrDefault(version =>
+                string.Equals(version.Id, command.ExpectedPackageId.Trim(), StringComparison.Ordinal));
+            if (package is null && !command.AcknowledgeStaleAuthority)
+            {
+                throw new InvalidOperationException(
+                    $"Resolution authority package was not found: {command.ExpectedPackageId.Trim()}");
+            }
+        }
+        else
+        {
+            package = packageVersions
+                .OrderBy(version => version.CreatedAt)
+                .ThenBy(version => version.Id, StringComparer.Ordinal)
+                .LastOrDefault();
+        }
+
+        if (package is not null &&
+            !string.IsNullOrWhiteSpace(command.ExpectedPackageFingerprint) &&
+            !string.Equals(command.ExpectedPackageFingerprint.Trim(), package.PackageFingerprint, StringComparison.Ordinal) &&
+            !command.AcknowledgeStaleAuthority)
+        {
+            throw new InvalidOperationException(
+                "Resolution authority is stale: expected package fingerprint does not match the reviewed package.");
+        }
+
+        return package;
     }
 
     private static string Serialize<T>(T value)
