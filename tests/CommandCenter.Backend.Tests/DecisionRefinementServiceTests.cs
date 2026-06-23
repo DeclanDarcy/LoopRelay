@@ -375,6 +375,195 @@ public sealed class DecisionRefinementServiceTests
     }
 
     [Fact]
+    public async Task ConstraintDirectiveAffectsRecommendation()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        DecisionGenerationService generationService = CreateGenerationService(repository, store, decisionRepository);
+        RefinementAnalysisService analysisService = CreateAnalysisService(repository, decisionRepository);
+        var packageService = new DecisionPackageService(
+            decisionRepository,
+            new DecisionArtifactProjectionService(decisionRepository, store));
+        DecisionProposal proposal = await generationService.GenerateProposalAsync(repository.Id, candidate.Id);
+        DecisionPackageVersion basePackage = Assert.Single(await decisionRepository.ListPackageVersionsAsync(repository, proposal.Id));
+        await generationService.MarkProposalViewedAsync(repository.Id, proposal.Id, null);
+        DecisionProposal needsRefinement = await generationService.MarkProposalNeedsRefinementAsync(
+            repository.Id,
+            proposal.Id,
+            "Constraint should influence generated recommendation.");
+        RefinementPlan plan = await analysisService.AnalyzeRefinementAsync(
+            repository.Id,
+            proposal.Id,
+            new DecisionRefinementAnalysisRequest(
+                "Must preserve compatibility and must not replace the contested architecture; reevaluate recommendation.",
+                "reviewer",
+                Fingerprint(needsRefinement)));
+
+        DecisionPackageRegenerationResult result = await packageService.RegeneratePackageAsync(
+            repository,
+            needsRefinement,
+            basePackage,
+            new DecisionPackageRegenerationRequest(plan, basePackage.Id, basePackage.PackageFingerprint, "reviewer"),
+            DateTimeOffset.UtcNow);
+
+        DecisionTradeoffComparison replaceComparison = result.RegeneratedPackageVersion.Package.TradeoffComparisons
+            .Single(comparison => comparison.OptionId == "option-3");
+        OptionEvaluation replaceEvaluation = result.RegeneratedPackageVersion.Package.Recommendation!.OptionEvaluations
+            .Single(evaluation => evaluation.OptionId == "option-3");
+
+        Assert.True(plan.ReevaluateTradeoffs);
+        Assert.Contains(plan.AppliedConstraints, constraint => constraint.Contains("must not replace", StringComparison.OrdinalIgnoreCase));
+        Assert.True(result.Comparison.RecommendationChanged);
+        Assert.Contains(replaceComparison.DisqualifyingConstraints, constraint =>
+            constraint.Contains("Constraint may be violated", StringComparison.Ordinal));
+        Assert.Contains(replaceEvaluation.Constraints, constraint =>
+            constraint.Contains("must not replace", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task PriorityDirectiveChangesOptionEvaluation()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        DecisionGenerationService generationService = CreateGenerationService(repository, store, decisionRepository);
+        RefinementAnalysisService analysisService = CreateAnalysisService(repository, decisionRepository);
+        var packageService = new DecisionPackageService(
+            decisionRepository,
+            new DecisionArtifactProjectionService(decisionRepository, store));
+        DecisionProposal proposal = await generationService.GenerateProposalAsync(repository.Id, candidate.Id);
+        DecisionPackageVersion basePackage = Assert.Single(await decisionRepository.ListPackageVersionsAsync(repository, proposal.Id));
+        OptionEvaluation baseEvaluation = basePackage.Package.Recommendation!.OptionEvaluations
+            .Single(evaluation => evaluation.OptionId == "option-1");
+        await generationService.MarkProposalViewedAsync(repository.Id, proposal.Id, null);
+        DecisionProposal needsRefinement = await generationService.MarkProposalNeedsRefinementAsync(
+            repository.Id,
+            proposal.Id,
+            "Priority should influence option evaluation.");
+        RefinementPlan plan = await analysisService.AnalyzeRefinementAsync(
+            repository.Id,
+            proposal.Id,
+            new DecisionRefinementAnalysisRequest(
+                "Increase priority because execution is blocking; reevaluate recommendation.",
+                "reviewer",
+                Fingerprint(needsRefinement)));
+
+        DecisionPackageRegenerationResult result = await packageService.RegeneratePackageAsync(
+            repository,
+            needsRefinement,
+            basePackage,
+            new DecisionPackageRegenerationRequest(plan, basePackage.Id, basePackage.PackageFingerprint, "reviewer"),
+            DateTimeOffset.UtcNow);
+
+        OptionEvaluation regeneratedEvaluation = result.RegeneratedPackageVersion.Package.Recommendation!.OptionEvaluations
+            .Single(evaluation => evaluation.OptionId == "option-1");
+
+        Assert.True(plan.ReevaluateTradeoffs);
+        Assert.Contains(plan.Directives, directive => directive.Type == RefinementDirectiveType.IncreasePriority);
+        Assert.NotEqual(baseEvaluation.Score, regeneratedEvaluation.Score);
+        Assert.Contains("priority adjustment", regeneratedEvaluation.ScoreExplanation, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(regeneratedEvaluation.Strengths, strength =>
+            strength.Contains("Priority directive favors timely progress", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task RiskDirectiveUpdatesTradeoffAnalysis()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        DecisionGenerationService generationService = CreateGenerationService(repository, store, decisionRepository);
+        RefinementAnalysisService analysisService = CreateAnalysisService(repository, decisionRepository);
+        var packageService = new DecisionPackageService(
+            decisionRepository,
+            new DecisionArtifactProjectionService(decisionRepository, store));
+        DecisionProposal proposal = await generationService.GenerateProposalAsync(repository.Id, candidate.Id);
+        DecisionPackageVersion basePackage = Assert.Single(await decisionRepository.ListPackageVersionsAsync(repository, proposal.Id));
+        await generationService.MarkProposalViewedAsync(repository.Id, proposal.Id, null);
+        DecisionProposal needsRefinement = await generationService.MarkProposalNeedsRefinementAsync(
+            repository.Id,
+            proposal.Id,
+            "Risk should influence tradeoff analysis.");
+        RefinementPlan plan = await analysisService.AnalyzeRefinementAsync(
+            repository.Id,
+            proposal.Id,
+            new DecisionRefinementAnalysisRequest(
+                "Reevaluate risk: unsafe migration failure mode requires explicit review.",
+                "reviewer",
+                Fingerprint(needsRefinement)));
+
+        DecisionPackageRegenerationResult result = await packageService.RegeneratePackageAsync(
+            repository,
+            needsRefinement,
+            basePackage,
+            new DecisionPackageRegenerationRequest(plan, basePackage.Id, basePackage.PackageFingerprint, "reviewer"),
+            DateTimeOffset.UtcNow);
+
+        DecisionRisk[] risks = result.RegeneratedPackageVersion.Package.AnalyzedOptions
+            .SelectMany(option => option.Risks)
+            .ToArray();
+
+        Assert.True(plan.ReevaluateTradeoffs);
+        Assert.True(result.Comparison.RisksChanged);
+        Assert.Contains(risks, risk =>
+            risk.Statement.Contains("Context risk remains relevant", StringComparison.Ordinal) &&
+            risk.Statement.Contains("unsafe migration failure mode", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.RegeneratedPackageVersion.Package.TradeoffAnalysisDiagnostics!.Diagnostics, diagnostic =>
+            diagnostic.Contains("Tradeoff analysis regenerated", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task GoalClarificationTriggersFullRegeneration()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        DecisionGenerationService generationService = CreateGenerationService(repository, store, decisionRepository);
+        RefinementAnalysisService analysisService = CreateAnalysisService(repository, decisionRepository);
+        var packageService = new DecisionPackageService(
+            decisionRepository,
+            new DecisionArtifactProjectionService(decisionRepository, store));
+        DecisionProposal proposal = await generationService.GenerateProposalAsync(repository.Id, candidate.Id);
+        DecisionPackageVersion basePackage = Assert.Single(await decisionRepository.ListPackageVersionsAsync(repository, proposal.Id));
+        await generationService.MarkProposalViewedAsync(repository.Id, proposal.Id, null);
+        DecisionProposal needsRefinement = await generationService.MarkProposalNeedsRefinementAsync(
+            repository.Id,
+            proposal.Id,
+            "Goal clarification should drive full regeneration.");
+        RefinementPlan plan = await analysisService.AnalyzeRefinementAsync(
+            repository.Id,
+            proposal.Id,
+            new DecisionRefinementAnalysisRequest(
+                "Clarify the goal and scope around minimal repository persistence before recommendation.",
+                "reviewer",
+                Fingerprint(needsRefinement)));
+
+        DecisionPackageRegenerationResult result = await packageService.RegeneratePackageAsync(
+            repository,
+            needsRefinement,
+            basePackage,
+            new DecisionPackageRegenerationRequest(plan, basePackage.Id, basePackage.PackageFingerprint, "reviewer"),
+            DateTimeOffset.UtcNow);
+
+        Assert.True(plan.FullRegeneration);
+        Assert.True(plan.RegenerateOptions);
+        Assert.True(result.Comparison.ContextFingerprintChanged);
+        Assert.Contains(result.RegeneratedPackageVersion.Package.Options, option => option.Id == "option-4");
+        Assert.Contains(result.RegeneratedPackageVersion.Package.GenerationDiagnostics!.Diagnostics, diagnostic =>
+            diagnostic.Contains("Full regeneration: True", StringComparison.Ordinal));
+        Assert.Equal(HumanAuthoringBurden.MajorRefinement, result.HumanAuthoringBurden);
+    }
+
+    [Fact]
     public async Task RefinementRejectsStaleBaseProposalFingerprint()
     {
         Repository repository = CreateRepository();

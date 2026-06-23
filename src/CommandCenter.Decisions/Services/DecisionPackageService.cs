@@ -528,15 +528,42 @@ public sealed class DecisionPackageService(
                 constraint.Trim(),
                 [new DecisionEvidence($"Reviewer refinement constraint: {constraint.Trim()}", [source])]))
             .ToArray();
+        DecisionGenerationContextEntry[] priorityGoals = plan.Directives
+            .Where(directive => directive.Type is RefinementDirectiveType.IncreasePriority or RefinementDirectiveType.DecreasePriority)
+            .Select((directive, index) => new DecisionGenerationContextEntry(
+                $"refinement-priority-{index + 1}",
+                $"{directive.Type}: {directive.Instruction ?? directive.Summary}",
+                [new DecisionEvidence($"Reviewer priority directive: {directive.Instruction ?? directive.Summary}", [source])]))
+            .ToArray();
+        DecisionGenerationContextEntry[] risks = plan.Directives
+            .Where(directive => directive.Type == RefinementDirectiveType.ReevaluateRisk)
+            .Select((directive, index) => new DecisionGenerationContextEntry(
+                $"refinement-risk-{index + 1}",
+                directive.Instruction ?? directive.Summary,
+                [new DecisionEvidence($"Reviewer risk directive: {directive.Instruction ?? directive.Summary}", [source])]))
+            .ToArray();
         string[] diagnostics = [
             .. context.Diagnostics,
             $"Refinement plan analyzed at {plan.AnalyzedAt:O} was applied during package regeneration at {generatedAt:O}.",
-            $"Directive scopes: {string.Join(", ", plan.Directives.Select(directive => directive.Type).Distinct().Order())}."
+            $"Directive scopes: {string.Join(", ", plan.Directives.Select(directive => directive.Type).Distinct().Order())}.",
+            .. plan.Directives
+                .Where(directive => directive.Type is RefinementDirectiveType.IncreasePriority or RefinementDirectiveType.DecreasePriority)
+                .Select(directive => $"Priority directive applied during recommendation evaluation: {directive.Type}.")
         ];
         DecisionGenerationContext updated = context with
         {
+            Goals = context.Goals
+                .Concat(priorityGoals)
+                .DistinctBy(entry => entry.Statement, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(entry => entry.Id, StringComparer.Ordinal)
+                .ToArray(),
             Constraints = context.Constraints
                 .Concat(constraints)
+                .DistinctBy(entry => entry.Statement, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(entry => entry.Id, StringComparer.Ordinal)
+                .ToArray(),
+            Risks = context.Risks
+                .Concat(risks)
                 .DistinctBy(entry => entry.Statement, StringComparer.OrdinalIgnoreCase)
                 .OrderBy(entry => entry.Id, StringComparer.Ordinal)
                 .ToArray(),

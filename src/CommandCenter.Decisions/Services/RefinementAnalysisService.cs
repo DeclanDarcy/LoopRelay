@@ -45,8 +45,12 @@ public sealed class RefinementAnalysisService(
         bool regenerateOptions = fullRegeneration || directiveTypes.Contains(RefinementDirectiveType.ExploreAlternative);
         bool reevaluateTradeoffs = fullRegeneration ||
             regenerateOptions ||
+            directiveTypes.Contains(RefinementDirectiveType.AddConstraint) ||
+            directiveTypes.Contains(RefinementDirectiveType.RemoveConstraint) ||
             directiveTypes.Contains(RefinementDirectiveType.ReevaluateRisk) ||
-            directiveTypes.Contains(RefinementDirectiveType.ReevaluateCost);
+            directiveTypes.Contains(RefinementDirectiveType.ReevaluateCost) ||
+            directiveTypes.Contains(RefinementDirectiveType.IncreasePriority) ||
+            directiveTypes.Contains(RefinementDirectiveType.DecreasePriority);
         bool reevaluateRecommendation = fullRegeneration ||
             regenerateOptions ||
             reevaluateTradeoffs ||
@@ -68,7 +72,7 @@ public sealed class RefinementAnalysisService(
             fullRegeneration,
             directives
                 .Where(directive => directive.Type == RefinementDirectiveType.AddConstraint)
-                .Select(directive => directive.Summary)
+                .Select(directive => directive.Instruction ?? directive.Summary)
                 .ToArray(),
             BuildDiagnostics(proposal, directives));
     }

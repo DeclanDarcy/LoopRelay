@@ -45,11 +45,11 @@ let humans guide regeneration without becoming package authors.
 
 ## Tests
 
-- [ ] Constraint directive affects recommendation.
-- [ ] Priority directive changes option evaluation.
-- [ ] Risk directive updates tradeoff analysis.
+- [x] Constraint directive affects recommendation.
+- [x] Priority directive changes option evaluation.
+- [x] Risk directive updates tradeoff analysis.
 - [x] Alternative exploration adds or changes options.
-- [ ] Goal clarification can trigger full regeneration.
+- [x] Goal clarification can trigger full regeneration.
 - [x] Stale package fingerprint rejects refinement.
 - [x] Version history and comparison persist after restart.
 

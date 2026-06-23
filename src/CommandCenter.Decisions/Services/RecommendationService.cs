@@ -14,7 +14,7 @@ public sealed class RecommendationService : IRecommendationService
         IReadOnlyList<DecisionTradeoffComparison> tradeoffComparisons,
         IReadOnlyList<DecisionEvidence> evidence)
     {
-        OptionEvaluation[] evaluations = BuildEvaluations(options, analyzedOptions, tradeoffComparisons)
+        OptionEvaluation[] evaluations = BuildEvaluations(generationContext, options, analyzedOptions, tradeoffComparisons)
             .OrderByDescending(evaluation => evaluation.Score)
             .ThenBy(evaluation => evaluation.OptionId, StringComparer.Ordinal)
             .Select((evaluation, index) => evaluation with { Rank = index + 1 })
@@ -116,6 +116,7 @@ public sealed class RecommendationService : IRecommendationService
     }
 
     private static OptionEvaluation[] BuildEvaluations(
+        DecisionGenerationContext generationContext,
         IReadOnlyList<DecisionOption> options,
         IReadOnlyList<AnalyzedDecisionOption> analyzedOptions,
         IReadOnlyList<DecisionTradeoffComparison> tradeoffComparisons)
@@ -150,18 +151,31 @@ public sealed class RecommendationService : IRecommendationService
                 .Distinct(StringComparer.Ordinal)
                 .Order(StringComparer.Ordinal)
                 .ToArray() ?? risks.Select(risk => risk.Statement).ToArray();
-            int score = Score(benefits, costs, risks, dependencies, consequences, strengths, constraints);
+            int priorityAdjustment = PriorityAdjustmentFor(generationContext, option);
+            string[] adjustedStrengths = priorityAdjustment > 0
+                ? strengths.Concat([$"Priority directive favors timely progress for {option.Id}."])
+                    .Distinct(StringComparer.Ordinal)
+                    .Order(StringComparer.Ordinal)
+                    .ToArray()
+                : strengths;
+            string[] adjustedWeaknesses = priorityAdjustment < 0
+                ? weaknesses.Concat([$"Priority directive lowers fit for {option.Id}."])
+                    .Distinct(StringComparer.Ordinal)
+                    .Order(StringComparer.Ordinal)
+                    .ToArray()
+                : weaknesses;
+            int score = Score(benefits, costs, risks, dependencies, consequences, adjustedStrengths, constraints) + priorityAdjustment;
 
             evaluations.Add(new OptionEvaluation(
                 option.Id,
-                strengths,
-                weaknesses,
+                adjustedStrengths,
+                adjustedWeaknesses,
                 riskStatements,
                 constraints,
                 SummaryFor(option, benefits, costs, risks, consequences, constraints, score),
                 score,
                 0,
-                ScoreExplanationFor(benefits, costs, risks, dependencies, consequences, strengths, constraints, score),
+                ScoreExplanationFor(benefits, costs, risks, dependencies, consequences, adjustedStrengths, constraints, score, priorityAdjustment),
                 EvidenceFor(option.Id, benefits, costs, risks, dependencies, consequences, constraints, comparison)));
         }
 
@@ -323,9 +337,36 @@ public sealed class RecommendationService : IRecommendationService
         IReadOnlyList<DecisionConsequence> consequences,
         IReadOnlyList<string> strengths,
         IReadOnlyList<string> constraints,
-        int score)
+        int score,
+        int priorityAdjustment)
     {
-        return $"Score {score} = benefits {benefits.Sum(benefit => ImpactPoints(benefit.Impact))} + consequences {consequences.Sum(consequence => ImpactPoints(consequence.Impact))} + comparison strengths {strengths.Count} - costs {costs.Sum(cost => ImpactPoints(cost.Impact))} - risks {risks.Sum(risk => SeverityPoints(risk.Severity) + (risk.IsUnknown ? 2 : 0))} - dependencies {dependencies.Count} - disqualifying constraints {constraints.Count * 100}.";
+        return $"Score {score} = benefits {benefits.Sum(benefit => ImpactPoints(benefit.Impact))} + consequences {consequences.Sum(consequence => ImpactPoints(consequence.Impact))} + comparison strengths {strengths.Count} + priority adjustment {priorityAdjustment} - costs {costs.Sum(cost => ImpactPoints(cost.Impact))} - risks {risks.Sum(risk => SeverityPoints(risk.Severity) + (risk.IsUnknown ? 2 : 0))} - dependencies {dependencies.Count} - disqualifying constraints {constraints.Count * 100}.";
+    }
+
+    private static int PriorityAdjustmentFor(DecisionGenerationContext generationContext, DecisionOption option)
+    {
+        bool increasePriority = HasPriorityDirective(generationContext, "IncreasePriority");
+        bool decreasePriority = HasPriorityDirective(generationContext, "DecreasePriority");
+        if (!increasePriority && !decreasePriority)
+        {
+            return 0;
+        }
+
+        bool defersDecision = option.Type is DecisionOptionType.Delay or DecisionOptionType.Investigate;
+        if (increasePriority)
+        {
+            return defersDecision ? -2 : 2;
+        }
+
+        return defersDecision ? 2 : -1;
+    }
+
+    private static bool HasPriorityDirective(DecisionGenerationContext generationContext, string directiveType)
+    {
+        return generationContext.Goals.Any(goal =>
+                goal.Statement.Contains(directiveType, StringComparison.OrdinalIgnoreCase)) ||
+            generationContext.Diagnostics.Any(diagnostic =>
+                diagnostic.Contains(directiveType, StringComparison.OrdinalIgnoreCase));
     }
 
     private static string LosingRationale(OptionEvaluation alternative, OptionEvaluation winner)
