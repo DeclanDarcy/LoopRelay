@@ -167,6 +167,7 @@ function createWorkspace(): DecisionReviewWorkspace {
         previousTradeoffs: [],
         revisedTradeoffs: [],
         revisedAssumptions: [],
+        humanAuthoringBurden: 'MinorEdit',
       },
     ],
     diagnostics: {
@@ -177,6 +178,14 @@ function createWorkspace(): DecisionReviewWorkspace {
       assumptionCount: 1,
       noteCount: 1,
       warnings: [],
+    },
+    authority: {
+      proposalFingerprint: 'proposal-fingerprint-current',
+      packageId: 'PKG-0001',
+      packageFingerprint: 'package-fingerprint-current',
+      packageVersionCreatedAt: '2026-06-22T17:01:30.000Z',
+      packageSourceProposalFingerprint: 'proposal-fingerprint-current',
+      isPackageCurrentForProposalContent: true,
     },
   }
 }

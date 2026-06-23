@@ -768,6 +768,50 @@ fn refine_decision_proposal(
 }
 
 #[tauri::command]
+fn analyze_decision_refinement(
+    repository_id: String,
+    proposal_id: String,
+    request: Value,
+) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/{proposal_id}/refinements/analyze"
+        ))
+        .json(&request)
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision refinement analysis failed")
+}
+
+#[tauri::command]
+fn regenerate_decision_refinement(
+    repository_id: String,
+    proposal_id: String,
+    request: Value,
+) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/{proposal_id}/refinements/regenerate"
+        ))
+        .json(&request)
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision refinement regeneration failed")
+}
+
+#[tauri::command]
 fn resolve_decision_proposal(
     repository_id: String,
     proposal_id: String,
@@ -1734,6 +1778,8 @@ fn main() {
             get_decision_proposal_review,
             get_decision_proposal_lineage,
             refine_decision_proposal,
+            analyze_decision_refinement,
+            regenerate_decision_refinement,
             resolve_decision_proposal,
             get_decision_assimilation_recommendation,
             propose_decision_operational_context_assimilation,

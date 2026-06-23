@@ -13,8 +13,12 @@ import type {
   DecisionProposalBrowserItem,
   DecisionProposalLineage,
   DecisionProposalState,
+  DecisionPackageRegenerationRequest,
+  DecisionPackageRegenerationResult,
+  DecisionRefinementAnalysisRequest,
   DecisionRefinementRequest,
   DecisionReviewWorkspace,
+  RefinementPlan,
   ResolveDecisionCommand,
   DecisionSourceAttribution,
 } from '../types'
@@ -70,6 +74,30 @@ export function refineDecisionProposal(
   request: DecisionRefinementRequest,
 ) {
   return invokeCommand<DecisionProposal>('refine_decision_proposal', {
+    repositoryId,
+    proposalId,
+    request,
+  })
+}
+
+export function analyzeDecisionRefinement(
+  repositoryId: string,
+  proposalId: string,
+  request: DecisionRefinementAnalysisRequest,
+) {
+  return invokeCommand<RefinementPlan>('analyze_decision_refinement', {
+    repositoryId,
+    proposalId,
+    request,
+  })
+}
+
+export function regenerateDecisionRefinement(
+  repositoryId: string,
+  proposalId: string,
+  request: DecisionPackageRegenerationRequest,
+) {
+  return invokeCommand<DecisionPackageRegenerationResult>('regenerate_decision_refinement', {
     repositoryId,
     proposalId,
     request,

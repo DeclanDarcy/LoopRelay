@@ -233,5 +233,13 @@ function createWorkspace(repositoryId: string, proposalId: string): DecisionRevi
       noteCount: 0,
       warnings: [],
     },
+    authority: {
+      proposalFingerprint: `fingerprint-${proposalId}`,
+      packageId: null,
+      packageFingerprint: null,
+      packageVersionCreatedAt: null,
+      packageSourceProposalFingerprint: null,
+      isPackageCurrentForProposalContent: false,
+    },
   }
 }

@@ -70,6 +70,17 @@ export type HumanAuthoringBurden =
   | 'FullRewrite'
   | 'GenerationBypassed'
 
+export type RefinementDirectiveType =
+  | 'AddConstraint'
+  | 'RemoveConstraint'
+  | 'IncreasePriority'
+  | 'DecreasePriority'
+  | 'ExploreAlternative'
+  | 'ReevaluateRisk'
+  | 'ReevaluateCost'
+  | 'ReevaluateRecommendation'
+  | 'ClarifyGoal'
+
 export type RecommendationEvidenceType =
   | 'Benefit'
   | 'Cost'
@@ -292,6 +303,130 @@ export type DecisionRefinementRequest = {
   tradeoffRevisions?: DecisionTradeoffRevision[] | null
   priorityAdjustments?: DecisionPriorityAdjustment[] | null
   rejectedChanges?: string[] | null
+}
+
+export type DecisionRefinementAnalysisRequest = {
+  guidance: string
+  requestedBy?: string | null
+  baseProposalFingerprint?: string | null
+}
+
+export type RefinementDirective = {
+  id: string
+  type: RefinementDirectiveType
+  summary: string
+  targetOptionId: string | null
+  targetField: string | null
+  instruction: string | null
+  sources: DecisionSourceReference[] | null
+}
+
+export type RefinementPlan = {
+  repositoryId: string
+  proposalId: string
+  analyzedAt: string
+  baseProposalFingerprint: string
+  directives: RefinementDirective[]
+  regenerateOptions: boolean
+  reevaluateTradeoffs: boolean
+  reevaluateRecommendation: boolean
+  fullRegeneration: boolean
+  appliedConstraints: string[]
+  diagnostics: string[]
+}
+
+export type DecisionPackageRegenerationRequest = {
+  plan: RefinementPlan
+  basePackageId: string
+  basePackageFingerprint: string
+  requestedBy?: string | null
+}
+
+export type DecisionPackageMetadata = {
+  contextFingerprint: string
+  proposalFingerprint: string
+  generatorVersion: string
+  schemaVersion: string
+  diagnostics: string[]
+}
+
+export type DecisionPackage = {
+  id: string
+  repositoryId: string
+  proposalId: string
+  candidateId: string
+  title: string
+  decisionSummary: string
+  options: DecisionOption[]
+  tradeoffs: DecisionTradeoff[]
+  recommendation: DecisionRecommendation | null
+  assumptions: DecisionAssumption[]
+  openConcerns: string[]
+  evidence: DecisionEvidence[]
+  metadata: DecisionPackageMetadata
+  generatedAt: string
+}
+
+export type DecisionPackageVersion = {
+  id: string
+  repositoryId: string
+  proposalId: string
+  candidateId: string
+  createdAt: string
+  packageFingerprint: string
+  package: DecisionPackage
+}
+
+export type DecisionPackageComparison = {
+  proposalId: string
+  leftPackageId: string
+  rightPackageId: string
+  repositoryId: string
+  leftPackageFingerprint: string
+  rightPackageFingerprint: string
+  recommendationChanged: boolean
+  optionsChanged: boolean
+  evidenceChanged: boolean
+  risksChanged: boolean
+  contextFingerprintChanged: boolean
+  fieldComparisons: DecisionRevisionFieldComparison[]
+  addedOptions: DecisionOption[]
+  removedOptions: DecisionOption[]
+  modifiedOptions: DecisionOption[]
+  addedEvidence: string[]
+  removedEvidence: string[]
+  addedRisks: string[]
+  removedRisks: string[]
+  diagnostics: string[]
+}
+
+export type DecisionRefinementArtifact = {
+  id: string
+  repositoryId: string
+  proposalId: string
+  createdAt: string
+  request: DecisionPackageRegenerationRequest
+  directives: RefinementDirective[]
+  plan: RefinementPlan
+  basePackageId: string
+  basePackageFingerprint: string
+  regeneratedPackageId: string
+  regeneratedPackageFingerprint: string
+  comparison: DecisionPackageComparison
+  humanAuthoringBurden: HumanAuthoringBurden
+  diagnostics: string[]
+}
+
+export type DecisionPackageRegenerationResult = {
+  repositoryId: string
+  proposalId: string
+  plan: RefinementPlan
+  basePackageVersion: DecisionPackageVersion
+  regeneratedPackageVersion: DecisionPackageVersion
+  comparison: DecisionPackageComparison
+  humanAuthoringBurden: HumanAuthoringBurden
+  diagnostics: string[]
+  refinementArtifact: DecisionRefinementArtifact | null
 }
 
 export type DecisionProposal = {

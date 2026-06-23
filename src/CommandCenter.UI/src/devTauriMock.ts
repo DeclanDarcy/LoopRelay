@@ -15,13 +15,17 @@ import type {
   DecisionEvidenceInspection,
   DecisionGovernanceReport,
   DecisionOutcome,
+  DecisionPackageRegenerationRequest,
+  DecisionPackageRegenerationResult,
   DecisionProposal,
   DecisionOptionComparison,
   DecisionProposalBrowserItem,
   DecisionProposalLineage,
+  DecisionRefinementAnalysisRequest,
   DecisionRefinementRequest,
   DecisionReviewWorkspace,
   DecisionSourceAttribution,
+  RefinementPlan,
   ExecutionDecisionProjection,
   ExecutionContextPreview,
   ExecutionSessionState,
@@ -736,6 +740,7 @@ function createDecisionProposalReviewWorkspaces(
                   previousTradeoffs: [],
                   revisedTradeoffs: [],
                   revisedAssumptions: [],
+                  humanAuthoringBurden: 'MinorEdit',
                 },
               ]
             : [],
@@ -747,6 +752,14 @@ function createDecisionProposalReviewWorkspaces(
           assumptionCount: 1,
           noteCount: index === 0 ? 1 : 0,
           warnings: [],
+        },
+        authority: {
+          proposalFingerprint: `mock-current-fingerprint-${proposal.proposalId}`,
+          packageId: `PKG-${String(index + 1).padStart(4, '0')}`,
+          packageFingerprint: `mock-package-fingerprint-${proposal.proposalId}`,
+          packageVersionCreatedAt: timestamp,
+          packageSourceProposalFingerprint: `mock-current-fingerprint-${proposal.proposalId}`,
+          isPackageCurrentForProposalContent: true,
         },
       }
       return [proposal.proposalId, workspace]
@@ -846,6 +859,7 @@ function refineDecisionProposalMock(
     previousTradeoffs: workspace.proposal.tradeoffs,
     revisedTradeoffs: workspace.proposal.tradeoffs,
     revisedAssumptions: workspace.proposal.assumptions,
+    humanAuthoringBurden: 'MinorEdit' as const,
   }
   const refinedProposal: DecisionProposal = {
     ...workspace.proposal,
@@ -889,6 +903,236 @@ function refineDecisionProposalMock(
     ) ?? []
 
   return refinedProposal
+}
+
+function analyzeDecisionRefinementMock(
+  state: MockState,
+  repositoryId: string,
+  proposalId: string,
+  request: DecisionRefinementAnalysisRequest,
+): RefinementPlan {
+  const workspace = getDecisionReviewWorkspace(state, repositoryId, proposalId)
+  const guidance = request.guidance?.trim() ?? ''
+  if (!guidance) {
+    throw new Error('Refinement guidance is required.')
+  }
+
+  const lowered = guidance.toLowerCase()
+  const directives: RefinementPlan['directives'] = []
+  const addDirective = (type: RefinementPlan['directives'][number]['type'], summary: string, targetField: string) => {
+    directives.push({
+      id: `DIR-${String(directives.length + 1).padStart(4, '0')}`,
+      type,
+      summary,
+      targetOptionId: null,
+      targetField,
+      instruction: guidance,
+      sources: [],
+    })
+  }
+
+  if (lowered.includes('constraint') || lowered.includes('must') || lowered.includes('required')) {
+    addDirective('AddConstraint', 'Add or tighten a review constraint.', 'Constraints')
+  }
+  if (lowered.includes('remove constraint') || lowered.includes('drop constraint')) {
+    addDirective('RemoveConstraint', 'Remove or relax a stated constraint.', 'Constraints')
+  }
+  if (lowered.includes('priority') || lowered.includes('urgent') || lowered.includes('blocking')) {
+    addDirective('IncreasePriority', 'Increase priority during option evaluation.', 'Priority')
+  }
+  if (lowered.includes('alternative') || lowered.includes('another option') || lowered.includes('explore')) {
+    addDirective('ExploreAlternative', 'Explore an additional or revised option.', 'Options')
+  }
+  if (lowered.includes('risk') || lowered.includes('failure')) {
+    addDirective('ReevaluateRisk', 'Reevaluate risk analysis.', 'Risks')
+  }
+  if (lowered.includes('cost') || lowered.includes('effort')) {
+    addDirective('ReevaluateCost', 'Reevaluate cost analysis.', 'Costs')
+  }
+  if (lowered.includes('recommend')) {
+    addDirective('ReevaluateRecommendation', 'Reevaluate the recommendation.', 'Recommendation')
+  }
+  if (lowered.includes('goal') || lowered.includes('scope') || lowered.includes('clarify')) {
+    addDirective('ClarifyGoal', 'Clarify the decision goal or scope.', 'Context')
+  }
+  if (directives.length === 0) {
+    addDirective('ClarifyGoal', 'Clarify the reviewer guidance before regeneration.', 'Context')
+  }
+
+  return {
+    repositoryId,
+    proposalId,
+    analyzedAt: new Date().toISOString(),
+    baseProposalFingerprint:
+      request.baseProposalFingerprint ?? workspace.authority.proposalFingerprint,
+    directives,
+    regenerateOptions: directives.some((directive) =>
+      ['ExploreAlternative', 'ClarifyGoal'].includes(directive.type),
+    ),
+    reevaluateTradeoffs: directives.some((directive) =>
+      [
+        'AddConstraint',
+        'RemoveConstraint',
+        'IncreasePriority',
+        'DecreasePriority',
+        'ReevaluateRisk',
+        'ReevaluateCost',
+        'ClarifyGoal',
+      ].includes(directive.type),
+    ),
+    reevaluateRecommendation: directives.some((directive) =>
+      [
+        'AddConstraint',
+        'RemoveConstraint',
+        'IncreasePriority',
+        'DecreasePriority',
+        'ReevaluateRecommendation',
+        'ClarifyGoal',
+      ].includes(directive.type),
+    ),
+    fullRegeneration: directives.some((directive) => directive.type === 'ClarifyGoal'),
+    appliedConstraints: directives.some((directive) => directive.type === 'AddConstraint') ? [guidance] : [],
+    diagnostics: [`Analyzed ${directives.length} directive(s) from reviewer guidance.`],
+  }
+}
+
+function regenerateDecisionRefinementMock(
+  state: MockState,
+  repositoryId: string,
+  proposalId: string,
+  request: DecisionPackageRegenerationRequest,
+): DecisionPackageRegenerationResult {
+  const workspace = getDecisionReviewWorkspace(state, repositoryId, proposalId)
+  if (request.basePackageFingerprint !== workspace.authority.packageFingerprint) {
+    throw new Error('Base package fingerprint is stale.')
+  }
+
+  const timestamp = new Date().toISOString()
+  const basePackageVersion = createDecisionPackageVersion(
+    workspace,
+    request.basePackageId,
+    request.basePackageFingerprint,
+    workspace.proposal.recommendation,
+    timestamp,
+  )
+  const regeneratedRecommendation = workspace.proposal.recommendation
+    ? {
+        ...workspace.proposal.recommendation,
+        rationale: `${workspace.proposal.recommendation.rationale} Refined by directive guidance.`,
+      }
+    : null
+  const regeneratedPackageId = `PKG-${String(Number.parseInt(request.basePackageId.replace(/\D/g, ''), 10) + 1 || 2).padStart(4, '0')}`
+  const regeneratedPackageFingerprint = `mock-regenerated-${proposalId}-${Date.now()}`
+  const regeneratedPackageVersion = createDecisionPackageVersion(
+    workspace,
+    regeneratedPackageId,
+    regeneratedPackageFingerprint,
+    regeneratedRecommendation,
+    timestamp,
+  )
+  const comparison = {
+    proposalId,
+    leftPackageId: request.basePackageId,
+    rightPackageId: regeneratedPackageId,
+    repositoryId,
+    leftPackageFingerprint: request.basePackageFingerprint,
+    rightPackageFingerprint: regeneratedPackageFingerprint,
+    recommendationChanged: true,
+    optionsChanged: request.plan.regenerateOptions,
+    evidenceChanged: request.plan.directives.length > 0,
+    risksChanged: request.plan.reevaluateTradeoffs,
+    contextFingerprintChanged: request.plan.fullRegeneration,
+    fieldComparisons: [
+      {
+        field: 'recommendation.rationale',
+        changeType: 'Changed',
+        previousValue: workspace.proposal.recommendation?.rationale ?? null,
+        revisedValue: regeneratedRecommendation?.rationale ?? null,
+      },
+    ],
+    addedOptions: [],
+    removedOptions: [],
+    modifiedOptions: request.plan.regenerateOptions ? workspace.proposal.options.slice(0, 1) : [],
+    addedEvidence: request.plan.appliedConstraints,
+    removedEvidence: [],
+    addedRisks: request.plan.reevaluateTradeoffs ? ['Directive guidance changed risk or cost analysis.'] : [],
+    removedRisks: [],
+    diagnostics: ['Mock package comparison generated from refinement directives.'],
+  }
+  const artifact = {
+    id: `REF-${String(workspace.revisions.length + 1).padStart(4, '0')}`,
+    repositoryId,
+    proposalId,
+    createdAt: timestamp,
+    request,
+    directives: request.plan.directives,
+    plan: request.plan,
+    basePackageId: request.basePackageId,
+    basePackageFingerprint: request.basePackageFingerprint,
+    regeneratedPackageId,
+    regeneratedPackageFingerprint,
+    comparison,
+    humanAuthoringBurden: 'MajorRefinement' as const,
+    diagnostics: ['Mock refinement artifact persisted for package regeneration.'],
+  }
+
+  workspace.authority = {
+    ...workspace.authority,
+    packageId: regeneratedPackageId,
+    packageFingerprint: regeneratedPackageFingerprint,
+    packageVersionCreatedAt: timestamp,
+  }
+
+  return {
+    repositoryId,
+    proposalId,
+    plan: request.plan,
+    basePackageVersion,
+    regeneratedPackageVersion,
+    comparison,
+    humanAuthoringBurden: 'MajorRefinement',
+    diagnostics: ['Package regenerated from directive plan.'],
+    refinementArtifact: artifact,
+  }
+}
+
+function createDecisionPackageVersion(
+  workspace: DecisionReviewWorkspace,
+  packageId: string,
+  packageFingerprint: string,
+  recommendation: DecisionProposal['recommendation'],
+  timestamp: string,
+) {
+  return {
+    id: packageId,
+    repositoryId: workspace.proposal.repositoryId,
+    proposalId: workspace.proposal.id,
+    candidateId: workspace.proposal.candidateId,
+    createdAt: timestamp,
+    packageFingerprint,
+    package: {
+      id: packageId,
+      repositoryId: workspace.proposal.repositoryId,
+      proposalId: workspace.proposal.id,
+      candidateId: workspace.proposal.candidateId,
+      title: workspace.proposal.title,
+      decisionSummary: workspace.proposal.context,
+      options: workspace.proposal.options,
+      tradeoffs: workspace.proposal.tradeoffs,
+      recommendation,
+      assumptions: workspace.proposal.assumptions,
+      openConcerns: [],
+      evidence: workspace.proposal.evidence,
+      metadata: {
+        contextFingerprint: `mock-context-${workspace.proposal.id}`,
+        proposalFingerprint: workspace.authority.proposalFingerprint,
+        generatorVersion: 'mock',
+        schemaVersion: '1',
+        diagnostics: [],
+      },
+      generatedAt: timestamp,
+    },
+  }
 }
 
 function resolveDecisionProposalMock(
@@ -1463,6 +1707,7 @@ function createDecisionProposalLineage(
         retiredAssumptions: [],
         previousTradeoffs: [],
         revisedTradeoffs: workspace.proposal.tradeoffs,
+        humanAuthoringBurden: revision.humanAuthoringBurden,
         sources: revision.sources,
       },
       isCurrentProposal: false,
@@ -3207,6 +3452,30 @@ export function installDevTauriMock() {
               repositoryId,
               proposalId,
               args?.request as DecisionRefinementRequest,
+            ),
+          )
+        }
+        case 'analyze_decision_refinement': {
+          const repositoryId = getStringArg(args, 'repositoryId')
+          const proposalId = getStringArg(args, 'proposalId')
+          return clone(
+            analyzeDecisionRefinementMock(
+              state,
+              repositoryId,
+              proposalId,
+              args?.request as DecisionRefinementAnalysisRequest,
+            ),
+          )
+        }
+        case 'regenerate_decision_refinement': {
+          const repositoryId = getStringArg(args, 'repositoryId')
+          const proposalId = getStringArg(args, 'proposalId')
+          return clone(
+            regenerateDecisionRefinementMock(
+              state,
+              repositoryId,
+              proposalId,
+              args?.request as DecisionPackageRegenerationRequest,
             ),
           )
         }

@@ -120,6 +120,7 @@ function createLineage(): DecisionProposalLineage {
           previousTradeoffs: [],
           revisedTradeoffs: [],
           revisedAssumptions: [],
+          humanAuthoringBurden: 'MinorEdit',
         },
         comparison: {
           proposalId: 'PROP-0001',
@@ -148,6 +149,7 @@ function createLineage(): DecisionProposalLineage {
           retiredAssumptions: [],
           previousTradeoffs: [],
           revisedTradeoffs: [],
+          humanAuthoringBurden: 'MinorEdit',
           sources: [source],
         },
         isCurrentProposal: false,
@@ -179,6 +181,7 @@ function createLineage(): DecisionProposalLineage {
           previousTradeoffs: [],
           revisedTradeoffs: [],
           revisedAssumptions: [],
+          humanAuthoringBurden: 'MinorEdit',
         },
         comparison: {
           proposalId: 'PROP-0001',
@@ -207,6 +210,7 @@ function createLineage(): DecisionProposalLineage {
           retiredAssumptions: [],
           previousTradeoffs: [],
           revisedTradeoffs: [],
+          humanAuthoringBurden: 'MinorEdit',
           sources: [source],
         },
         isCurrentProposal: false,

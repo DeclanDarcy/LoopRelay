@@ -4,6 +4,8 @@ import { DecisionRefinementPanel } from '../../features/decisions/DecisionRefine
 import type { DecisionProposal, DecisionProposalLineage, DecisionReviewWorkspace } from '../../types'
 
 const refineMock = vi.hoisted(() => vi.fn())
+const analyzeMock = vi.hoisted(() => vi.fn())
+const regenerateMock = vi.hoisted(() => vi.fn())
 const useDecisionProposalRefinementMock = vi.hoisted(() => vi.fn())
 
 vi.mock('../../hooks', () => ({
@@ -13,6 +15,8 @@ vi.mock('../../hooks', () => ({
 afterEach(() => {
   cleanup()
   refineMock.mockReset()
+  analyzeMock.mockReset()
+  regenerateMock.mockReset()
   useDecisionProposalRefinementMock.mockReset()
 })
 
@@ -24,6 +28,8 @@ describe('DecisionRefinementPanel', () => {
     refineMock.mockResolvedValue(refinedProposal)
     useDecisionProposalRefinementMock.mockReturnValue({
       refine: refineMock,
+      analyze: analyzeMock,
+      regenerate: regenerateMock,
       isSubmitting: false,
       error: null,
     })
@@ -74,9 +80,138 @@ describe('DecisionRefinementPanel', () => {
     expect(screen.getByText('Refinement submitted for PROP-0001.')).toBeInTheDocument()
   })
 
+  it('analyzes directive guidance and regenerates a package with visible comparison output', async () => {
+    const workspace = createWorkspace('NeedsRefinement')
+    const plan = {
+      repositoryId: 'repo-alpha',
+      proposalId: 'PROP-0001',
+      analyzedAt: '2026-06-22T17:01:00.000Z',
+      baseProposalFingerprint: 'fingerprint-PROP-0001',
+      directives: [
+        {
+          id: 'DIR-0001',
+          type: 'AddConstraint' as const,
+          summary: 'Add or tighten a review constraint.',
+          targetOptionId: null,
+          targetField: 'Constraints',
+          instruction: 'Must reduce risk and recommend again.',
+          sources: [],
+        },
+        {
+          id: 'DIR-0002',
+          type: 'ReevaluateRecommendation' as const,
+          summary: 'Reevaluate the recommendation.',
+          targetOptionId: null,
+          targetField: 'Recommendation',
+          instruction: 'Must reduce risk and recommend again.',
+          sources: [],
+        },
+      ],
+      regenerateOptions: false,
+      reevaluateTradeoffs: true,
+      reevaluateRecommendation: true,
+      fullRegeneration: false,
+      appliedConstraints: ['Must reduce risk and recommend again.'],
+      diagnostics: ['Analyzed reviewer guidance.'],
+    }
+    const result = {
+      repositoryId: 'repo-alpha',
+      proposalId: 'PROP-0001',
+      plan,
+      basePackageVersion: createPackageVersion(workspace, 'PKG-0001', 'package-fingerprint-current', 'Current rationale.'),
+      regeneratedPackageVersion: createPackageVersion(
+        workspace,
+        'PKG-0002',
+        'package-fingerprint-regenerated',
+        'Regenerated rationale from directives.',
+      ),
+      comparison: {
+        proposalId: 'PROP-0001',
+        leftPackageId: 'PKG-0001',
+        rightPackageId: 'PKG-0002',
+        repositoryId: 'repo-alpha',
+        leftPackageFingerprint: 'package-fingerprint-current',
+        rightPackageFingerprint: 'package-fingerprint-regenerated',
+        recommendationChanged: true,
+        optionsChanged: false,
+        evidenceChanged: true,
+        risksChanged: true,
+        contextFingerprintChanged: false,
+        fieldComparisons: [],
+        addedOptions: [],
+        removedOptions: [],
+        modifiedOptions: [],
+        addedEvidence: ['Must reduce risk and recommend again.'],
+        removedEvidence: [],
+        addedRisks: ['Reevaluated risk.'],
+        removedRisks: [],
+        diagnostics: [],
+      },
+      humanAuthoringBurden: 'MajorRefinement' as const,
+      diagnostics: [],
+      refinementArtifact: null,
+    }
+    analyzeMock.mockResolvedValue(plan)
+    regenerateMock.mockResolvedValue(result)
+    useDecisionProposalRefinementMock.mockReturnValue({
+      refine: refineMock,
+      analyze: analyzeMock,
+      regenerate: regenerateMock,
+      isSubmitting: false,
+      error: null,
+    })
+
+    render(
+      <DecisionRefinementPanel
+        repositoryId="repo-alpha"
+        workspace={workspace}
+        lineage={createLineage(workspace)}
+        isLoading={false}
+        onRefined={vi.fn()}
+      />,
+    )
+
+    fireEvent.change(screen.getByLabelText('Requested by'), {
+      target: { value: 'reviewer' },
+    })
+    fireEvent.change(screen.getByLabelText('Reviewer guidance'), {
+      target: { value: 'Must reduce risk and recommend again.' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Analyze Guidance' }))
+
+    await waitFor(() => {
+      expect(analyzeMock).toHaveBeenCalledWith({
+        guidance: 'Must reduce risk and recommend again.',
+        requestedBy: 'reviewer',
+        baseProposalFingerprint: 'fingerprint-PROP-0001',
+      })
+    })
+    expect(await screen.findByLabelText('Refinement plan')).toHaveTextContent('Tradeoffs, Recommendation')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Regenerate Package' }))
+
+    await waitFor(() => {
+      expect(regenerateMock).toHaveBeenCalledWith({
+        plan,
+        basePackageId: 'PKG-0001',
+        basePackageFingerprint: 'package-fingerprint-current',
+        requestedBy: 'reviewer',
+      })
+    })
+    expect(await screen.findByLabelText('Regenerated package comparison')).toHaveTextContent(
+      'MajorRefinement',
+    )
+    expect(screen.getByLabelText('Recommendation diff')).toHaveTextContent('Current rationale.')
+    expect(screen.getByLabelText('Recommendation diff')).toHaveTextContent(
+      'Regenerated rationale from directives.',
+    )
+  })
+
   it('disables submission until backend proposal state is needs refinement', () => {
     useDecisionProposalRefinementMock.mockReturnValue({
       refine: refineMock,
+      analyze: analyzeMock,
+      regenerate: regenerateMock,
       isSubmitting: false,
       error: null,
     })
@@ -98,6 +233,8 @@ describe('DecisionRefinementPanel', () => {
   it('renders backend refinement errors without mutating local proposal state', () => {
     useDecisionProposalRefinementMock.mockReturnValue({
       refine: refineMock,
+      analyze: analyzeMock,
+      regenerate: regenerateMock,
       isSubmitting: false,
       error: 'Refinement base proposal fingerprint is stale.',
     })
@@ -179,6 +316,56 @@ function createWorkspace(state: DecisionProposal['state']): DecisionReviewWorksp
       assumptionCount: 0,
       noteCount: 0,
       warnings: [],
+    },
+    authority: {
+      proposalFingerprint: `fingerprint-${proposal.id}`,
+      packageId: 'PKG-0001',
+      packageFingerprint: 'package-fingerprint-current',
+      packageVersionCreatedAt: '2026-06-22T17:00:30.000Z',
+      packageSourceProposalFingerprint: `fingerprint-${proposal.id}`,
+      isPackageCurrentForProposalContent: true,
+    },
+  }
+}
+
+function createPackageVersion(
+  workspace: DecisionReviewWorkspace,
+  packageId: string,
+  packageFingerprint: string,
+  rationale: string,
+) {
+  return {
+    id: packageId,
+    repositoryId: workspace.proposal.repositoryId,
+    proposalId: workspace.proposal.id,
+    candidateId: workspace.proposal.candidateId,
+    createdAt: '2026-06-22T17:02:00.000Z',
+    packageFingerprint,
+    package: {
+      id: packageId,
+      repositoryId: workspace.proposal.repositoryId,
+      proposalId: workspace.proposal.id,
+      candidateId: workspace.proposal.candidateId,
+      title: workspace.proposal.title,
+      decisionSummary: workspace.proposal.context,
+      options: workspace.proposal.options,
+      tradeoffs: workspace.proposal.tradeoffs,
+      recommendation: {
+        optionId: 'OPT-A',
+        rationale,
+        evidence: [],
+      },
+      assumptions: workspace.proposal.assumptions,
+      openConcerns: [],
+      evidence: workspace.proposal.evidence,
+      metadata: {
+        contextFingerprint: 'context-fingerprint',
+        proposalFingerprint: `fingerprint-${workspace.proposal.id}`,
+        generatorVersion: 'test',
+        schemaVersion: '1',
+        diagnostics: [],
+      },
+      generatedAt: '2026-06-22T17:02:00.000Z',
     },
   }
 }

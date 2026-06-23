@@ -2,27 +2,34 @@
 
 ## Newly Authorized
 
-- Confirm the Milestone 7 backend directive-effect slice as correct and strategically aligned.
-- Treat directive-driven regeneration as a behavioral mechanism, not just a traceability mechanism.
-- Preserve the refinement flow where human guidance changes generation context, which then changes tradeoffs, recommendation, and regenerated package output.
-- Keep constraint guidance flowing through generation context into tradeoffs and recommendations rather than patching recommendation output directly.
-- Keep priority guidance scoped to option evaluation, not decision authority or automatic decision selection.
-- Continue preserving separate provenance paths for direct proposal revisions and package regeneration/refinement artifacts.
-- Treat the backend portion of Milestone 7 as approaching completion after directive analysis, refinement plans, scoped regeneration, behavioral directive effects, package versioning, comparison, refinement artifacts, and burden classification.
-- Shift the next Milestone 7 work to user-facing directive-driven refinement surfaces.
-- Prioritize UI workflow for:
-  - guidance analysis
-  - directive review
-  - regeneration controls
+- Close Milestone 7 as complete.
+- Treat the directive-driven refinement workflow as implemented end-to-end across backend, persistence, provenance, governance boundaries, and UI.
+- Recognize the primary Milestone 7 workflow as:
+  - human guidance
+  - directive analysis
+  - detected directives
+  - refinement plan
+  - scoped regeneration
+  - new package version
   - package comparison
-  - old/new recommendation diff
-  - visible human-authoring burden classification
-- Make the UI answer what changed, not merely whether a new package was created.
-- Surface recommendation changes, evidence changes, risk changes, and constraint changes without requiring users to read raw artifacts.
+  - recommendation diff
+  - human review
+- Keep directive-driven regeneration as the primary refinement path.
+- Keep direct proposal edits as a compatibility path, not the primary refinement architecture.
+- Preserve package authority through current package id and fingerprint during regeneration.
+- Keep human-authoring burden visible because it is foundational for quality assessment, workflow replacement validation, and certification.
+- Start Milestone 8 next.
+- Sequence Milestone 8 by adding quality signal and assessment contracts before dashboards, reports, trends, or UI-first reporting.
+- Ground quality evaluation in persisted evidence from:
+  - resolution outcome
+  - recommendation divergence
+  - refinement count
+  - human-authoring burden
+  - regeneration evidence
+- Keep quality evaluation observational and non-governing.
 
 ## Not Authorized
 
-- Do not collapse constraint guidance into hidden recommendation patching.
-- Do not let priority guidance select or resolve decisions.
-- Do not merge proposal revision provenance with package regeneration provenance.
-- Do not continue backend hardening ahead of the directive-driven UI workflow unless UI work exposes a blocking backend gap.
+- Do not continue Milestone 7 work as an open milestone.
+- Do not make quality evaluation block, mutate, or override decision lifecycle state.
+- Do not start Milestone 8 with dashboards, reports, trends, or UI-first reporting before backend quality signals and assessments exist.

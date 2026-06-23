@@ -3,10 +3,12 @@ import { EmptyState } from '../../components/design'
 import { useDecisionProposalRefinement } from '../../hooks'
 import type { FormEvent } from 'react'
 import type {
+  DecisionPackageRegenerationResult,
   DecisionProposal,
   DecisionProposalLineage,
   DecisionRefinementRequest,
   DecisionReviewWorkspace,
+  RefinementPlan,
 } from '../../types'
 
 type DecisionRefinementPanelProps = {
@@ -27,9 +29,16 @@ export function DecisionRefinementPanel({
   onRefined,
 }: DecisionRefinementPanelProps) {
   const proposalId = workspace?.proposal.id ?? null
-  const { refine, isSubmitting, error } = useDecisionProposalRefinement(repositoryId, proposalId)
+  const { refine, analyze, regenerate, isSubmitting, error } = useDecisionProposalRefinement(
+    repositoryId,
+    proposalId,
+  )
   const [reason, setReason] = useState('')
   const [requestedBy, setRequestedBy] = useState('')
+  const [guidance, setGuidance] = useState('')
+  const [plan, setPlan] = useState<RefinementPlan | null>(null)
+  const [regenerationResult, setRegenerationResult] =
+    useState<DecisionPackageRegenerationResult | null>(null)
   const [context, setContext] = useState('')
   const [recommendationRationale, setRecommendationRationale] = useState('')
   const [rejectedChanges, setRejectedChanges] = useState('')
@@ -38,6 +47,9 @@ export function DecisionRefinementPanel({
   useEffect(() => {
     setReason('')
     setRequestedBy('')
+    setGuidance('')
+    setPlan(null)
+    setRegenerationResult(null)
     setContext('')
     setRecommendationRationale('')
     setRejectedChanges('')
@@ -46,8 +58,17 @@ export function DecisionRefinementPanel({
 
   const proposal = workspace?.proposal ?? null
   const canSubmitState = proposal ? refinableStates.has(proposal.state) : false
+  const authority = workspace?.authority ?? null
   const hasChange = Boolean(context.trim() || recommendationRationale.trim() || rejectedChanges.trim())
   const canSubmit = Boolean(proposal && canSubmitState && reason.trim() && hasChange && !isSubmitting)
+  const canAnalyze = Boolean(proposal && canSubmitState && guidance.trim() && !isSubmitting)
+  const canRegenerate = Boolean(
+    plan &&
+      canSubmitState &&
+      authority?.packageId &&
+      authority.packageFingerprint &&
+      !isSubmitting,
+  )
   const baseProposalFingerprint = lineage?.currentProposalFingerprint ?? null
   const authorityText = useMemo(() => {
     if (!proposal) {
@@ -60,6 +81,47 @@ export function DecisionRefinementPanel({
 
     return 'Refinement requests update backend proposal state and reload current proposal lineage.'
   }, [canSubmitState, proposal])
+
+  async function handleAnalyze() {
+    setSuccessMessage(null)
+    setRegenerationResult(null)
+
+    if (!proposal || !canAnalyze) {
+      return
+    }
+
+    const analyzedPlan = await analyze?.({
+      guidance: guidance.trim(),
+      requestedBy: requestedBy.trim() || null,
+      baseProposalFingerprint,
+    })
+    if (!analyzedPlan) {
+      return
+    }
+
+    setPlan(analyzedPlan)
+  }
+
+  async function handleRegenerate() {
+    setSuccessMessage(null)
+
+    if (!plan || !authority?.packageId || !authority.packageFingerprint || !canRegenerate) {
+      return
+    }
+
+    const result = await regenerate?.({
+      plan,
+      basePackageId: authority.packageId,
+      basePackageFingerprint: authority.packageFingerprint,
+      requestedBy: requestedBy.trim() || null,
+    })
+    if (!result) {
+      return
+    }
+
+    setRegenerationResult(result)
+    setSuccessMessage(`Regenerated package ${result.regeneratedPackageVersion.id}.`)
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -123,7 +185,53 @@ export function DecisionRefinementPanel({
         {baseProposalFingerprint ? <small>{baseProposalFingerprint}</small> : null}
       </article>
 
+      <section className="decision-directive-refinement" aria-label="Directive-driven refinement">
+        <div className="decision-panel-heading">
+          <h6>Directive Regeneration</h6>
+          {authority?.packageId ? <span>{authority.packageId}</span> : <span>No package</span>}
+        </div>
+
+        <div className="decision-refinement-form">
+          <label>
+            <span>Reviewer guidance</span>
+            <textarea
+              className="artifact-editor"
+              value={guidance}
+              onChange={(event) => {
+                setGuidance(event.target.value)
+                setPlan(null)
+                setRegenerationResult(null)
+              }}
+              disabled={isSubmitting || !canSubmitState}
+              spellCheck={false}
+            />
+          </label>
+
+          <div className="decision-form-actions decision-form-actions-split">
+            <button type="button" className="secondary-action" disabled={!canAnalyze} onClick={handleAnalyze}>
+              {isSubmitting ? 'Analyzing...' : 'Analyze Guidance'}
+            </button>
+            <button
+              type="button"
+              className="primary-action"
+              disabled={!canRegenerate}
+              onClick={handleRegenerate}
+            >
+              {isSubmitting ? 'Regenerating...' : 'Regenerate Package'}
+            </button>
+          </div>
+        </div>
+
+        {plan ? <RefinementPlanSummary plan={plan} /> : null}
+        {regenerationResult ? <RegenerationResultSummary result={regenerationResult} /> : null}
+      </section>
+
       <form className="decision-refinement-form" onSubmit={handleSubmit}>
+        <div className="decision-panel-heading">
+          <h6>Compatibility Revision</h6>
+          <span>Direct proposal edit</span>
+        </div>
+
         <label>
           <span>Reason</span>
           <textarea
@@ -197,6 +305,97 @@ export function DecisionRefinementPanel({
         </div>
       ) : null}
     </section>
+  )
+}
+
+function RefinementPlanSummary({ plan }: { plan: RefinementPlan }) {
+  const scope = [
+    plan.regenerateOptions ? 'Options' : null,
+    plan.reevaluateTradeoffs ? 'Tradeoffs' : null,
+    plan.reevaluateRecommendation ? 'Recommendation' : null,
+    plan.fullRegeneration ? 'Full regeneration' : null,
+  ].filter(Boolean)
+
+  return (
+    <article className="decision-inspection-card" aria-label="Refinement plan">
+      <div>
+        <span>Plan Scope</span>
+        <strong>{scope.length > 0 ? scope.join(', ') : 'No mutation scope detected'}</strong>
+      </div>
+      <div className="decision-directive-grid" aria-label="Detected directives">
+        {plan.directives.map((directive) => (
+          <span key={directive.id}>
+            {directive.type}: {directive.summary}
+          </span>
+        ))}
+      </div>
+      {plan.appliedConstraints.length > 0 ? (
+        <div className="decision-warning-list" aria-label="Applied constraints">
+          {plan.appliedConstraints.map((constraint) => (
+            <span key={constraint}>{constraint}</span>
+          ))}
+        </div>
+      ) : null}
+      {plan.diagnostics.length > 0 ? (
+        <div className="decision-warning-list" aria-label="Refinement diagnostics">
+          {plan.diagnostics.map((diagnostic) => (
+            <span key={diagnostic}>{diagnostic}</span>
+          ))}
+        </div>
+      ) : null}
+    </article>
+  )
+}
+
+function RegenerationResultSummary({ result }: { result: DecisionPackageRegenerationResult }) {
+  const previousRecommendation = result.basePackageVersion.package.recommendation
+  const regeneratedRecommendation = result.regeneratedPackageVersion.package.recommendation
+  const comparisonFlags = [
+    result.comparison.recommendationChanged ? 'Recommendation changed' : null,
+    result.comparison.optionsChanged ? 'Options changed' : null,
+    result.comparison.evidenceChanged ? 'Evidence changed' : null,
+    result.comparison.risksChanged ? 'Risks changed' : null,
+    result.comparison.contextFingerprintChanged ? 'Context changed' : null,
+  ].filter(Boolean)
+
+  return (
+    <article className="decision-inspection-card" aria-label="Regenerated package comparison">
+      <div>
+        <span>Human Authoring Burden</span>
+        <strong>{result.humanAuthoringBurden}</strong>
+      </div>
+      <div className="decision-diagnostics-grid" aria-label="Package comparison flags">
+        {(comparisonFlags.length > 0 ? comparisonFlags : ['No comparison changes']).map((flag) => (
+          <span key={flag}>{flag}</span>
+        ))}
+      </div>
+      <div className="decision-recommendation-diff" aria-label="Recommendation diff">
+        <section>
+          <span>Previous Recommendation</span>
+          <strong>{previousRecommendation?.optionId ?? 'No recommendation'}</strong>
+          <p>{previousRecommendation?.rationale ?? 'No previous rationale.'}</p>
+        </section>
+        <section>
+          <span>Regenerated Recommendation</span>
+          <strong>{regeneratedRecommendation?.optionId ?? 'No recommendation'}</strong>
+          <p>{regeneratedRecommendation?.rationale ?? 'No regenerated rationale.'}</p>
+        </section>
+      </div>
+      {result.comparison.addedRisks.length > 0 || result.comparison.addedEvidence.length > 0 ? (
+        <div className="decision-warning-list" aria-label="Regeneration additions">
+          {[...result.comparison.addedRisks, ...result.comparison.addedEvidence].map((item) => (
+            <span key={item}>{item}</span>
+          ))}
+        </div>
+      ) : null}
+      {result.diagnostics.length > 0 ? (
+        <div className="decision-warning-list" aria-label="Regeneration diagnostics">
+          {result.diagnostics.map((diagnostic) => (
+            <span key={diagnostic}>{diagnostic}</span>
+          ))}
+        </div>
+      ) : null}
+    </article>
   )
 }
 
