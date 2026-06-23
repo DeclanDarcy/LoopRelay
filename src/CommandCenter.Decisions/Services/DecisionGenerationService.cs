@@ -17,7 +17,8 @@ public sealed class DecisionGenerationService(
     IDecisionContextProjectionService? contextProjectionService = null,
     ITradeoffAnalysisService? tradeoffAnalysisService = null,
     IOptionComparisonService? optionComparisonService = null,
-    IRecommendationService? recommendationService = null) : IDecisionGenerationService
+    IRecommendationService? recommendationService = null,
+    IDecisionPackageService? decisionPackageService = null) : IDecisionGenerationService
 {
     private readonly ITradeoffAnalysisService tradeoffAnalysisService =
         tradeoffAnalysisService ?? new TradeoffAnalysisService();
@@ -27,6 +28,9 @@ public sealed class DecisionGenerationService(
 
     private readonly IRecommendationService recommendationService =
         recommendationService ?? new RecommendationService();
+
+    private readonly IDecisionPackageService decisionPackageService =
+        decisionPackageService ?? new DecisionPackageService(decisionRepository, projectionService);
 
     public async Task<IReadOnlyList<DecisionProposal>> ListProposalsAsync(Guid repositoryId)
     {
@@ -128,6 +132,7 @@ public sealed class DecisionGenerationService(
 
         await decisionRepository.SaveProposalAsync(repository, proposal);
         await projectionService.ProjectProposalAsync(repository, proposal);
+        await this.decisionPackageService.CreatePackageAsync(repository, candidate, proposal, generationContext, now);
         await projectionService.RefreshDecisionIndexAsync(repository);
         return proposal;
     }

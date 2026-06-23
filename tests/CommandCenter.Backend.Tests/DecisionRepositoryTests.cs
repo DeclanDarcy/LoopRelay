@@ -68,6 +68,27 @@ public sealed class DecisionRepositoryTests
     }
 
     [Fact]
+    public async Task FileSystemRepositoryPersistsPackageVersionsAsImmutableArtifacts()
+    {
+        Repository repository = CreateRepository();
+        var decisionRepository = new FileSystemDecisionRepository(new FileSystemArtifactStore());
+        DecisionPackageVersion packageVersion = CreatePackageVersion(repository.Id);
+
+        await decisionRepository.SavePackageVersionAsync(repository, packageVersion);
+        DecisionPackageVersion? reloaded = await decisionRepository.GetPackageVersionAsync(repository, "PROP-0001", "PKG-0001");
+        IReadOnlyList<DecisionPackageVersion> versions = await decisionRepository.ListPackageVersionsAsync(repository, "PROP-0001");
+        string nextId = await decisionRepository.AllocatePackageVersionIdAsync(repository, "PROP-0001");
+
+        Assert.NotNull(reloaded);
+        Assert.Equal("PKG-0001", reloaded.Id);
+        DecisionPackageVersion listed = Assert.Single(versions);
+        Assert.Equal("PKG-0001", listed.Id);
+        Assert.Equal("PKG-0002", nextId);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            decisionRepository.SavePackageVersionAsync(repository, packageVersion));
+    }
+
+    [Fact]
     public async Task FileSystemRepositoryIsolatesRepositories()
     {
         Repository first = CreateRepository();
@@ -193,6 +214,46 @@ public sealed class DecisionRepositoryTests
             [new DecisionAssumption("assumption-1", "Markdown projections are generated later.", [])],
             [new DecisionEvidence("M0B defers markdown projections.", [])],
             [new DecisionHistoryEntry(DateTimeOffset.UtcNow, "Generated", null, DecisionProposalState.Generated.ToString(), null, [])]);
+    }
+
+    private static DecisionPackageVersion CreatePackageVersion(Guid repositoryId)
+    {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        DecisionCandidate candidate = CreateCandidate(repositoryId);
+        DecisionProposal proposal = CreateProposal(repositoryId);
+        var context = DecisionGenerationContext.Empty(repositoryId);
+        var metadata = new DecisionPackageMetadata(
+            "context-fingerprint",
+            "test-generator",
+            candidate.Id,
+            "repository-state-fingerprint",
+            "M6",
+            ".agents/milestones/m6-decision-packages.md",
+            proposal.Id,
+            "proposal-fingerprint");
+        var package = new DecisionPackage(
+            "PKG-0001",
+            repositoryId,
+            proposal.Id,
+            candidate.Id,
+            proposal.Title,
+            proposal.Context,
+            candidate,
+            context,
+            proposal.Options,
+            proposal.OptionRelationships,
+            proposal.AnalyzedOptions,
+            proposal.Tradeoffs,
+            proposal.TradeoffComparisons,
+            proposal.Recommendation,
+            proposal.Assumptions,
+            proposal.Recommendation?.Concerns ?? [],
+            proposal.Evidence,
+            metadata,
+            proposal.GenerationDiagnostics,
+            proposal.TradeoffAnalysisDiagnostics,
+            now);
+        return new DecisionPackageVersion("PKG-0001", repositoryId, proposal.Id, candidate.Id, now, "package-fingerprint", package);
     }
 
     private static Repository CreateRepository()

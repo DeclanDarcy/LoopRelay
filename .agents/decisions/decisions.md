@@ -2,23 +2,25 @@
 
 ## Newly Authorized
 
-- Close Milestone 5 as complete.
-- Treat the decisive M5 criterion as recommendation generation that is explainable, evidence-backed, and capable of declining to recommend.
-- Treat `NoRecommendation` as a first-class generated recommendation state for weak evidence, excessive uncertainty, unresolved contradictions, and no viable option.
-- Preserve recommendation output as advisory only.
-- Preserve human resolution as the only source of decision authority.
-- Begin Milestone 6 next.
-- Keep the first Milestone 6 slice narrow:
-  - introduce `DecisionPackage`
-  - introduce `DecisionPackageMetadata`
-  - introduce `DecisionPackageVersion`
-  - persist an immutable package snapshot from the generated proposal path
-- Treat the initial Milestone 6 package as governance hardening behind the existing proposal workflow, not a replacement workflow.
-- Preserve the boundary that a package is evidence and not authority.
-- Defer package validation, version history, package comparison, dashboards, quality assessment, throughput reporting, and certification until after the minimal immutable package snapshot exists.
+- Confirm the completed M6 opening slice as correct.
+- Preserve the sequencing where generation creates a proposal first, then creates an immutable package snapshot after proposal persistence/projection.
+- Treat the proposal as the active workflow object.
+- Treat the package as immutable governance evidence, not decision authority.
+- Preserve human review and human resolution as the path to decision authority.
+- Keep create-once `PKG-*` immutability as the right implementation strategy for M6.
+- Keep package persistence at the repository abstraction layer with allocate, list, read, and save semantics.
+- Continue Milestone 6 with package validation next.
+- Implement package validation before package comparison.
+- Validate required context.
+- Validate required options.
+- Validate insufficient options unless explicitly justified.
+- Require either a recommendation or a no-recommendation explanation.
+- Require evidence when a recommendation exists.
+- Verify the recommended option id exists inside the package.
 
 ## Not Authorized
 
-- Do not rebuild the workflow during Milestone 6.
-- Do not let package acceptance imply decision authority.
-- Do not move from package generation to automatic decision approval, acceptance, rejection, or resolution.
+- Do not implement package comparison yet.
+- Do not replace proposals with packages.
+- Do not let packages imply decision authority.
+- Do not add dashboards, certification, or broader package governance before package validity is established.

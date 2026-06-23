@@ -11,6 +11,7 @@ public sealed class InMemoryDecisionRepository : IDecisionRepository
     private readonly Dictionary<Guid, SortedDictionary<string, DecisionCandidate>> candidatesByRepository = [];
     private readonly Dictionary<Guid, SortedDictionary<string, DecisionProposal>> proposalsByRepository = [];
     private readonly Dictionary<Guid, SortedDictionary<string, SortedDictionary<string, DecisionProposalRevision>>> revisionsByRepository = [];
+    private readonly Dictionary<Guid, SortedDictionary<string, SortedDictionary<string, DecisionPackageVersion>>> packageVersionsByRepository = [];
     private readonly Dictionary<Guid, SortedDictionary<string, DecisionReviewStatus>> reviewStatusByRepository = [];
     private readonly Dictionary<Guid, SortedDictionary<string, SortedDictionary<string, DecisionReviewNote>>> reviewNotesByRepository = [];
     private readonly Dictionary<Guid, SortedDictionary<string, DecisionAssimilationRecommendation>> assimilationByRepository = [];
@@ -35,6 +36,11 @@ public sealed class InMemoryDecisionRepository : IDecisionRepository
     public Task<string> AllocateProposalRevisionIdAsync(Repository repository, string proposalId)
     {
         return Task.FromResult(NextId(GetRevisions(repository.Id, proposalId).Keys, "REV"));
+    }
+
+    public Task<string> AllocatePackageVersionIdAsync(Repository repository, string proposalId)
+    {
+        return Task.FromResult(NextId(GetPackageVersions(repository.Id, proposalId).Keys, "PKG"));
     }
 
     public Task<string> AllocateReviewNoteIdAsync(Repository repository, string proposalId)
@@ -122,6 +128,34 @@ public sealed class InMemoryDecisionRepository : IDecisionRepository
 
         GetRevisions(repository.Id, revision.ProposalId)[revision.Id] = revision;
         return Task.FromResult(revision);
+    }
+
+    public Task<IReadOnlyList<DecisionPackageVersion>> ListPackageVersionsAsync(Repository repository, string proposalId)
+    {
+        return Task.FromResult<IReadOnlyList<DecisionPackageVersion>>(GetPackageVersions(repository.Id, proposalId).Values.ToArray());
+    }
+
+    public Task<DecisionPackageVersion?> GetPackageVersionAsync(Repository repository, string proposalId, string packageId)
+    {
+        GetPackageVersions(repository.Id, proposalId).TryGetValue(packageId, out DecisionPackageVersion? packageVersion);
+        return Task.FromResult(packageVersion);
+    }
+
+    public Task<DecisionPackageVersion> SavePackageVersionAsync(Repository repository, DecisionPackageVersion packageVersion)
+    {
+        if (packageVersion.RepositoryId != repository.Id || packageVersion.Package.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException("Decision package version belongs to a different repository.");
+        }
+
+        SortedDictionary<string, DecisionPackageVersion> versions = GetPackageVersions(repository.Id, packageVersion.ProposalId);
+        if (versions.ContainsKey(packageVersion.Id))
+        {
+            throw new InvalidOperationException($"Decision package version already exists: {packageVersion.Id}.");
+        }
+
+        versions[packageVersion.Id] = packageVersion;
+        return Task.FromResult(packageVersion);
     }
 
     public Task<DecisionReviewStatus?> GetReviewStatusAsync(Repository repository, string proposalId)
@@ -245,6 +279,19 @@ public sealed class InMemoryDecisionRepository : IDecisionRepository
         }
 
         return revisions;
+    }
+
+    private SortedDictionary<string, DecisionPackageVersion> GetPackageVersions(Guid repositoryId, string proposalId)
+    {
+        SortedDictionary<string, SortedDictionary<string, DecisionPackageVersion>> repositoryPackageVersions =
+            GetRepositoryMap(packageVersionsByRepository, repositoryId);
+        if (!repositoryPackageVersions.TryGetValue(proposalId, out SortedDictionary<string, DecisionPackageVersion>? versions))
+        {
+            versions = new SortedDictionary<string, DecisionPackageVersion>(StringComparer.Ordinal);
+            repositoryPackageVersions[proposalId] = versions;
+        }
+
+        return versions;
     }
 
     private SortedDictionary<string, DecisionReviewNote> GetReviewNotes(Guid repositoryId, string proposalId)

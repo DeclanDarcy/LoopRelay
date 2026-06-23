@@ -40,6 +40,21 @@ public sealed class FileSystemDecisionRepository(IArtifactStore artifactStore) :
         return $"REV-{next:0000}";
     }
 
+    public async Task<string> AllocatePackageVersionIdAsync(Repository repository, string proposalId)
+    {
+        string id = DecisionArtifactPaths.ValidateId(proposalId, "PROP");
+        string versionsRoot = DecisionArtifactPaths.Resolve(repository, DecisionArtifactPaths.ProposalVersionsDirectory(id));
+        IReadOnlyList<string> files = await artifactStore.ListAsync(versionsRoot, "PKG-*.json");
+        int next = files
+            .Select(Path.GetFileNameWithoutExtension)
+            .Where(packageId => !string.IsNullOrWhiteSpace(packageId))
+            .Select(packageId => ParseSequence(packageId!, "PKG"))
+            .DefaultIfEmpty(0)
+            .Max() + 1;
+
+        return $"PKG-{next:0000}";
+    }
+
     public async Task<string> AllocateReviewNoteIdAsync(Repository repository, string proposalId)
     {
         string id = DecisionArtifactPaths.ValidateId(proposalId, "PROP");
@@ -220,6 +235,69 @@ public sealed class FileSystemDecisionRepository(IArtifactStore artifactStore) :
             revision.CreatedAt,
             revision.CreatedAt);
         return revision;
+    }
+
+    public async Task<IReadOnlyList<DecisionPackageVersion>> ListPackageVersionsAsync(Repository repository, string proposalId)
+    {
+        string id = DecisionArtifactPaths.ValidateId(proposalId, "PROP");
+        string versionsRoot = DecisionArtifactPaths.Resolve(repository, DecisionArtifactPaths.ProposalVersionsDirectory(id));
+        IReadOnlyList<string> files = await artifactStore.ListAsync(versionsRoot, "PKG-*.json");
+        var versions = new List<DecisionPackageVersion>();
+
+        foreach (string file in files
+            .Where(file => string.Equals(Path.GetExtension(file), ".json", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(file => file, StringComparer.Ordinal))
+        {
+            string? packageId = Path.GetFileNameWithoutExtension(file);
+            if (string.IsNullOrWhiteSpace(packageId))
+            {
+                continue;
+            }
+
+            DecisionPackageVersion? packageVersion = await GetPackageVersionAsync(repository, id, packageId);
+            if (packageVersion is not null)
+            {
+                versions.Add(packageVersion);
+            }
+        }
+
+        return versions
+            .OrderBy(version => version.Id, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    public async Task<DecisionPackageVersion?> GetPackageVersionAsync(
+        Repository repository,
+        string proposalId,
+        string packageId)
+    {
+        string id = DecisionArtifactPaths.ValidateId(proposalId, "PROP");
+        string versionId = DecisionArtifactPaths.ValidateId(packageId, "PKG");
+        return await ReadPayloadAsync<DecisionPackageVersion>(
+            repository,
+            DecisionArtifactPaths.ProposalPackageJson(id, versionId));
+    }
+
+    public async Task<DecisionPackageVersion> SavePackageVersionAsync(
+        Repository repository,
+        DecisionPackageVersion packageVersion)
+    {
+        string proposalId = DecisionArtifactPaths.ValidateId(packageVersion.ProposalId, "PROP");
+        string packageId = DecisionArtifactPaths.ValidateId(packageVersion.Id, "PKG");
+        if (packageVersion.RepositoryId != repository.Id || packageVersion.Package.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException("Decision package version belongs to a different repository.");
+        }
+
+        string relativePath = DecisionArtifactPaths.ProposalPackageJson(proposalId, packageId);
+        string path = DecisionArtifactPaths.Resolve(repository, relativePath);
+        if (await artifactStore.ExistsAsync(path))
+        {
+            throw new InvalidOperationException($"Decision package version already exists: {packageId}.");
+        }
+
+        await WriteDocumentAsync(repository, relativePath, packageVersion, packageVersion.CreatedAt, packageVersion.CreatedAt);
+        return packageVersion;
     }
 
     public async Task<DecisionReviewStatus?> GetReviewStatusAsync(Repository repository, string proposalId)

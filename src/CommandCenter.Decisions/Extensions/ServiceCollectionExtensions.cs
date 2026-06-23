@@ -19,6 +19,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITradeoffAnalysisService, TradeoffAnalysisService>();
         services.AddSingleton<IOptionComparisonService, OptionComparisonService>();
         services.AddSingleton<IRecommendationService, RecommendationService>();
+        services.AddSingleton<IDecisionPackageService, DecisionPackageService>();
         services.AddSingleton<IDecisionGenerationService, DecisionGenerationService>();
         services.AddSingleton<IDecisionResolutionService, DecisionResolutionService>();
         services.AddSingleton<IDecisionRefinementService, DecisionRefinementService>();

@@ -17,6 +17,8 @@ public interface IDecisionArtifactProjectionService
         Repository repository,
         DecisionProposalRevisionComparison comparison);
 
+    Task ProjectPackageVersionAsync(Repository repository, DecisionPackageVersion packageVersion);
+
     Task ProjectDecisionAssimilationRecommendationAsync(
         Repository repository,
         DecisionAssimilationRecommendation recommendation);

@@ -14,6 +14,8 @@ public interface IDecisionRepository
 
     Task<string> AllocateProposalRevisionIdAsync(Repository repository, string proposalId);
 
+    Task<string> AllocatePackageVersionIdAsync(Repository repository, string proposalId);
+
     Task<string> AllocateReviewNoteIdAsync(Repository repository, string proposalId);
 
     Task<IReadOnlyList<Decision>> ListDecisionsAsync(Repository repository);
@@ -37,6 +39,12 @@ public interface IDecisionRepository
     Task<IReadOnlyList<DecisionProposalRevision>> ListProposalRevisionsAsync(Repository repository, string proposalId);
 
     Task<DecisionProposalRevision> SaveProposalRevisionAsync(Repository repository, DecisionProposalRevision revision);
+
+    Task<IReadOnlyList<DecisionPackageVersion>> ListPackageVersionsAsync(Repository repository, string proposalId);
+
+    Task<DecisionPackageVersion?> GetPackageVersionAsync(Repository repository, string proposalId, string packageId);
+
+    Task<DecisionPackageVersion> SavePackageVersionAsync(Repository repository, DecisionPackageVersion packageVersion);
 
     Task<DecisionReviewStatus?> GetReviewStatusAsync(Repository repository, string proposalId);
 

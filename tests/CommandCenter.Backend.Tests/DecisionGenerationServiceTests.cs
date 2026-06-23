@@ -64,12 +64,29 @@ public sealed class DecisionGenerationServiceTests
         Assert.True(File.Exists(Path.Combine(repository.Path, ".agents", "decisions", "proposals", "PROP-0001", "proposal.json")));
         Assert.True(File.Exists(Path.Combine(repository.Path, ".agents", "decisions", "proposals", "PROP-0001", "proposal.md")));
         Assert.True(File.Exists(Path.Combine(repository.Path, ".agents", "decisions", "proposals", "PROP-0001", "history.json")));
+        Assert.True(File.Exists(Path.Combine(repository.Path, ".agents", "decisions", "proposals", "PROP-0001", "versions", "PKG-0001.json")));
+        Assert.True(File.Exists(Path.Combine(repository.Path, ".agents", "decisions", "proposals", "PROP-0001", "versions", "PKG-0001.md")));
+        DecisionPackageVersion packageVersion = Assert.Single(await decisionRepository.ListPackageVersionsAsync(repository, proposal.Id));
+        Assert.Equal("PKG-0001", packageVersion.Id);
+        Assert.Equal(proposal.Id, packageVersion.Package.ProposalId);
+        Assert.Equal(candidate.Id, packageVersion.Package.CandidateId);
+        Assert.Equal(proposal.Options.Count, packageVersion.Package.Options.Count);
+        Assert.Equal(proposal.AnalyzedOptions.Count, packageVersion.Package.AnalyzedOptions.Count);
+        Assert.Equal(proposal.Recommendation?.OptionId, packageVersion.Package.Recommendation?.OptionId);
+        Assert.Equal(".agents/milestones/m6-decision-packages.md", packageVersion.Package.Metadata.MilestonePath);
+        Assert.False(string.IsNullOrWhiteSpace(packageVersion.PackageFingerprint));
+        Assert.False(string.IsNullOrWhiteSpace(packageVersion.Package.Metadata.SourceProposalFingerprint));
 
         string markdown = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/proposal.md");
+        string packageMarkdown = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/versions/PKG-0001.md");
         string index = await ReadAsync(repository, ".agents/decisions/decisions.md");
         Assert.Contains("# PROP-0001: Decide persistence schema", markdown);
         Assert.Contains("## Recommendation", markdown);
         Assert.Contains("Candidate CAND-0001 was promoted for proposal generation.", markdown);
+        Assert.Contains("# PKG-0001: Decide persistence schema", packageMarkdown);
+        Assert.Contains("## Decision Summary", packageMarkdown);
+        Assert.Contains("## Tradeoff Analysis", packageMarkdown);
+        Assert.Contains("## Recommendation", packageMarkdown);
         Assert.Contains("- PROP-0001 | Generated | CAND-0001 | Decide persistence schema", index);
     }
 

@@ -48,6 +48,16 @@ public sealed class DecisionArtifactProjectionService(
             RenderProposalRevisionComparison(comparison));
     }
 
+    public async Task ProjectPackageVersionAsync(Repository repository, DecisionPackageVersion packageVersion)
+    {
+        string proposalId = DecisionArtifactPaths.ValidateId(packageVersion.ProposalId, "PROP");
+        string packageId = DecisionArtifactPaths.ValidateId(packageVersion.Id, "PKG");
+        await WriteAsync(
+            repository,
+            DecisionArtifactPaths.ProposalPackageMarkdown(proposalId, packageId),
+            RenderPackageVersion(packageVersion));
+    }
+
     public async Task ProjectDecisionAssimilationRecommendationAsync(
         Repository repository,
         DecisionAssimilationRecommendation recommendation)
@@ -82,6 +92,10 @@ public sealed class DecisionArtifactProjectionService(
         foreach (DecisionProposal proposal in await decisionRepository.ListProposalsAsync(repository))
         {
             await ProjectProposalAsync(repository, proposal);
+            foreach (DecisionPackageVersion packageVersion in await decisionRepository.ListPackageVersionsAsync(repository, proposal.Id))
+            {
+                await ProjectPackageVersionAsync(repository, packageVersion);
+            }
         }
 
         await RefreshDecisionIndexAsync(repository);
@@ -105,6 +119,13 @@ public sealed class DecisionArtifactProjectionService(
         {
             string id = DecisionArtifactPaths.ValidateId(proposal.Id, "PROP");
             await ProjectIfMissingAsync(repository, DecisionArtifactPaths.ProposalMarkdown(id), () => RenderProposal(proposal));
+            foreach (DecisionPackageVersion packageVersion in await decisionRepository.ListPackageVersionsAsync(repository, id))
+            {
+                await ProjectIfMissingAsync(
+                    repository,
+                    DecisionArtifactPaths.ProposalPackageMarkdown(id, packageVersion.Id),
+                    () => RenderPackageVersion(packageVersion));
+            }
         }
 
         await ProjectIfMissingAsync(
@@ -564,6 +585,227 @@ public sealed class DecisionArtifactProjectionService(
         markdown.H2("History");
         markdown.HistoryList(proposal.History);
         return markdown.ToString();
+    }
+
+    private static string RenderPackageVersion(DecisionPackageVersion packageVersion)
+    {
+        DecisionPackage package = packageVersion.Package;
+        var markdown = new MarkdownProjectionBuilder();
+        markdown.H1($"{packageVersion.Id}: {package.Title}");
+        markdown.Fields(
+            ("Package ID", packageVersion.Id),
+            ("Proposal ID", package.ProposalId),
+            ("Candidate ID", package.CandidateId),
+            ("Repository", package.RepositoryId.ToString()),
+            ("Generated At", FormatTimestamp(package.GeneratedAt)),
+            ("Package Fingerprint", packageVersion.PackageFingerprint),
+            ("Context Fingerprint", package.Metadata.ContextFingerprint),
+            ("Repository State Fingerprint", package.Metadata.RepositoryStateFingerprint),
+            ("Generator Version", package.Metadata.GeneratorVersion),
+            ("Source Proposal Fingerprint", package.Metadata.SourceProposalFingerprint),
+            ("Milestone", string.IsNullOrWhiteSpace(package.Metadata.MilestonePath)
+                ? package.Metadata.MilestoneId
+                : package.Metadata.MilestonePath));
+        markdown.H2("Decision Summary");
+        markdown.Paragraph(package.DecisionSummary);
+        markdown.H2("Decision Context");
+        RenderContextEntries(markdown, "Goals", package.ContextSummary.Goals);
+        RenderContextEntries(markdown, "Constraints", package.ContextSummary.Constraints);
+        RenderContextEntries(markdown, "Risks", package.ContextSummary.Risks);
+        RenderContextEntries(markdown, "Questions", package.ContextSummary.Questions);
+        RenderContextEntries(markdown, "Prior Decisions", package.ContextSummary.PriorDecisions);
+        RenderContextEntries(markdown, "Repository State", package.ContextSummary.RepositoryState);
+        RenderContextEntries(markdown, "Dependencies", package.ContextSummary.Dependencies);
+        RenderContextEntries(markdown, "Handoff State", package.ContextSummary.HandoffState);
+        markdown.H3("Context Diagnostics");
+        foreach (string diagnostic in package.ContextSummary.Diagnostics.Order(StringComparer.Ordinal))
+        {
+            markdown.Bullet(diagnostic);
+        }
+
+        markdown.EmptyListIf(package.ContextSummary.Diagnostics.Count == 0);
+        markdown.H2("Options");
+        foreach (DecisionOption option in package.Options.OrderBy(option => option.Id, StringComparer.Ordinal))
+        {
+            markdown.H3($"{option.Id}: {option.Title}");
+            markdown.Fields(("Type", option.Type.ToString()));
+            markdown.Paragraph(option.Description);
+            markdown.H4("Assumptions");
+            foreach (string assumption in option.Assumptions.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(assumption);
+            }
+
+            markdown.EmptyListIf(option.Assumptions.Count == 0);
+            markdown.H4("Dependencies");
+            foreach (string dependency in option.Dependencies.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(dependency);
+            }
+
+            markdown.EmptyListIf(option.Dependencies.Count == 0);
+            markdown.H4("Evidence");
+            markdown.EvidenceList(option.Evidence);
+        }
+
+        markdown.EmptyListIf(package.Options.Count == 0);
+        markdown.H2("Option Relationships");
+        foreach (DecisionOptionRelationship relationship in package.OptionRelationships
+            .OrderBy(relationship => relationship.SourceOptionId, StringComparer.Ordinal)
+            .ThenBy(relationship => relationship.TargetOptionId, StringComparer.Ordinal)
+            .ThenBy(relationship => relationship.Type.ToString(), StringComparer.Ordinal))
+        {
+            markdown.Bullet($"{relationship.SourceOptionId} {relationship.Type} {relationship.TargetOptionId}: {relationship.Rationale}");
+            markdown.NestedEvidenceList(relationship.Evidence);
+        }
+
+        markdown.EmptyListIf(package.OptionRelationships.Count == 0);
+        markdown.H2("Tradeoff Analysis");
+        foreach (AnalyzedDecisionOption analyzedOption in package.AnalyzedOptions
+            .OrderBy(option => option.OptionId, StringComparer.Ordinal))
+        {
+            markdown.H3(analyzedOption.OptionId);
+            markdown.H4("Benefits");
+            foreach (DecisionBenefit benefit in analyzedOption.Benefits.OrderBy(benefit => benefit.Statement, StringComparer.Ordinal))
+            {
+                markdown.Bullet($"{benefit.Impact}: {benefit.Statement}");
+                markdown.NestedEvidenceList(benefit.Evidence);
+            }
+
+            markdown.EmptyListIf(analyzedOption.Benefits.Count == 0);
+            markdown.H4("Costs");
+            foreach (DecisionCost cost in analyzedOption.Costs.OrderBy(cost => cost.Statement, StringComparer.Ordinal))
+            {
+                markdown.Bullet($"{cost.Impact}: {cost.Statement}");
+                markdown.NestedEvidenceList(cost.Evidence);
+            }
+
+            markdown.EmptyListIf(analyzedOption.Costs.Count == 0);
+            markdown.H4("Risks");
+            foreach (DecisionRisk risk in analyzedOption.Risks
+                .OrderByDescending(risk => risk.Severity)
+                .ThenBy(risk => risk.Statement, StringComparer.Ordinal))
+            {
+                string unknown = risk.IsUnknown ? "unknown; " : string.Empty;
+                markdown.Bullet($"{risk.Severity}: {unknown}{risk.Statement}");
+                markdown.NestedEvidenceList(risk.Evidence);
+            }
+
+            markdown.EmptyListIf(analyzedOption.Risks.Count == 0);
+            markdown.H4("Dependencies");
+            foreach (DecisionDependency dependency in analyzedOption.Dependencies.OrderBy(dependency => dependency.Statement, StringComparer.Ordinal))
+            {
+                markdown.Bullet(dependency.Statement);
+                markdown.NestedEvidenceList(dependency.Evidence);
+            }
+
+            markdown.EmptyListIf(analyzedOption.Dependencies.Count == 0);
+            markdown.H4("Consequences");
+            foreach (DecisionConsequence consequence in analyzedOption.Consequences.OrderBy(consequence => consequence.Statement, StringComparer.Ordinal))
+            {
+                markdown.Bullet($"{consequence.Impact}: {consequence.Statement}");
+                markdown.NestedEvidenceList(consequence.Evidence);
+            }
+
+            markdown.EmptyListIf(analyzedOption.Consequences.Count == 0);
+        }
+
+        markdown.EmptyListIf(package.AnalyzedOptions.Count == 0);
+        markdown.H2("Recommendation");
+        if (package.Recommendation is null)
+        {
+            markdown.Paragraph("No recommendation.");
+        }
+        else
+        {
+            markdown.Fields(
+                ("Mode", package.Recommendation.Mode.ToString()),
+                ("Option", string.IsNullOrWhiteSpace(package.Recommendation.OptionId)
+                    ? "None"
+                    : package.Recommendation.OptionId),
+                ("Summary", string.IsNullOrWhiteSpace(package.Recommendation.Summary)
+                    ? "None."
+                    : package.Recommendation.Summary));
+            markdown.Paragraph(package.Recommendation.Rationale);
+            markdown.H3("Recommendation Evidence");
+            foreach (RecommendationEvidence evidence in package.Recommendation.RecommendationEvidence
+                .OrderBy(evidence => evidence.Type.ToString(), StringComparer.Ordinal)
+                .ThenBy(evidence => evidence.OptionId ?? string.Empty, StringComparer.Ordinal)
+                .ThenBy(evidence => evidence.Summary, StringComparer.Ordinal))
+            {
+                string option = string.IsNullOrWhiteSpace(evidence.OptionId) ? "package" : evidence.OptionId;
+                markdown.Bullet($"{evidence.Type} | {option}: {evidence.Summary}");
+                markdown.NestedEvidenceList(evidence.Evidence);
+            }
+
+            markdown.EmptyListIf(package.Recommendation.RecommendationEvidence.Count == 0);
+            markdown.H3("Alternative Explanations");
+            foreach (string explanation in package.Recommendation.AlternativeExplanations.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(explanation);
+            }
+
+            markdown.EmptyListIf(package.Recommendation.AlternativeExplanations.Count == 0);
+        }
+
+        markdown.H2("Open Concerns");
+        foreach (string concern in package.OpenConcerns.Order(StringComparer.Ordinal))
+        {
+            markdown.Bullet(concern);
+        }
+
+        markdown.EmptyListIf(package.OpenConcerns.Count == 0);
+        markdown.H2("Assumptions");
+        foreach (DecisionAssumption assumption in package.Assumptions.OrderBy(assumption => assumption.Id, StringComparer.Ordinal))
+        {
+            markdown.Bullet($"{assumption.Id}: {assumption.Statement}");
+            markdown.NestedEvidenceList(assumption.Evidence);
+        }
+
+        markdown.EmptyListIf(package.Assumptions.Count == 0);
+        markdown.H2("Diagnostics");
+        if (package.GenerationDiagnostics is not null)
+        {
+            markdown.H3("Generation");
+            foreach (string diagnostic in package.GenerationDiagnostics.Diagnostics.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(diagnostic);
+            }
+
+            markdown.EmptyListIf(package.GenerationDiagnostics.Diagnostics.Count == 0);
+        }
+
+        if (package.TradeoffAnalysisDiagnostics is not null)
+        {
+            markdown.H3("Tradeoff Analysis");
+            foreach (string diagnostic in package.TradeoffAnalysisDiagnostics.Diagnostics.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(diagnostic);
+            }
+
+            markdown.EmptyListIf(package.TradeoffAnalysisDiagnostics.Diagnostics.Count == 0);
+        }
+
+        markdown.H2("Evidence");
+        markdown.EvidenceList(package.Evidence);
+        return markdown.ToString();
+    }
+
+    private static void RenderContextEntries(
+        MarkdownProjectionBuilder markdown,
+        string title,
+        IReadOnlyList<DecisionGenerationContextEntry> entries)
+    {
+        markdown.H3(title);
+        foreach (DecisionGenerationContextEntry entry in entries
+            .OrderBy(entry => entry.Id, StringComparer.Ordinal)
+            .ThenBy(entry => entry.Statement, StringComparer.Ordinal))
+        {
+            markdown.Bullet($"{entry.Id}: {entry.Statement}");
+            markdown.NestedEvidenceList(entry.Evidence);
+        }
+
+        markdown.EmptyListIf(entries.Count == 0);
     }
 
     private static string RenderProposalRevision(DecisionProposalRevision revision)

@@ -8,25 +8,25 @@ Tier 0 may use the existing proposal record as the first reviewable package shap
 
 ## Work
 
-- [ ] Add `DecisionPackage` as an immutable snapshot that contains:
-  - [ ] candidate
-  - [ ] typed context summary
-  - [ ] options
-  - [ ] analyzed options
-  - [ ] recommendation
-  - [ ] recommendation evidence
-  - [ ] assumptions
-  - [ ] open concerns
-  - [ ] metadata
-  - [ ] generated timestamp
-- [ ] Add `DecisionPackageMetadata`:
-  - [ ] context fingerprint/version
-  - [ ] generator version
-  - [ ] candidate id
-  - [ ] repository state fingerprint
-  - [ ] milestone id/path
-  - [ ] source proposal id
-- [ ] Add `IDecisionPackageService`.
+- [x] Add `DecisionPackage` as an immutable snapshot that contains:
+  - [x] candidate
+  - [x] typed context summary
+  - [x] options
+  - [x] analyzed options
+  - [x] recommendation
+  - [x] recommendation evidence
+  - [x] assumptions
+  - [x] open concerns
+  - [x] metadata
+  - [x] generated timestamp
+- [x] Add `DecisionPackageMetadata`:
+  - [x] context fingerprint/version
+  - [x] generator version
+  - [x] candidate id
+  - [x] repository state fingerprint
+  - [x] milestone id/path
+  - [x] source proposal id
+- [x] Add `IDecisionPackageService`.
 - [ ] Add package validation:
   - [ ] summary required
   - [ ] context required
@@ -35,17 +35,17 @@ Tier 0 may use the existing proposal record as the first reviewable package shap
   - [ ] evidence required
   - [ ] at least two options unless justified
   - [ ] recommended option id must exist when recommendation mode selects an option
-- [ ] Store package versions under each proposal.
-- [ ] Render deterministic package markdown with:
-  - [ ] decision summary
-  - [ ] context
-  - [ ] options
-  - [ ] tradeoff analysis
-  - [ ] recommendation
-  - [ ] supporting evidence
-  - [ ] open concerns
-  - [ ] assumptions
-  - [ ] diagnostics
+- [x] Store package versions under each proposal.
+- [x] Render deterministic package markdown with:
+  - [x] decision summary
+  - [x] context
+  - [x] options
+  - [x] tradeoff analysis
+  - [x] recommendation
+  - [x] supporting evidence
+  - [x] open concerns
+  - [x] assumptions
+  - [x] diagnostics
 - [ ] Add package comparison:
   - [ ] recommendation changes
   - [ ] option changes
@@ -55,10 +55,10 @@ Tier 0 may use the existing proposal record as the first reviewable package shap
 
 ## Tests
 
-- [ ] Package generation persists JSON and markdown.
+- [x] Package generation persists JSON and markdown.
 - [ ] Missing required sections fail validation.
-- [ ] Package identity is stable and repository-scoped.
-- [ ] Package versions are immutable after creation.
+- [x] Package identity is stable and repository-scoped.
+- [x] Package versions are immutable after creation.
 - [ ] Package comparison detects recommendation and option changes.
 - [ ] Resolution snapshots reference the package/proposal fingerprint used for authority.
 
