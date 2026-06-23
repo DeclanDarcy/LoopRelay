@@ -155,6 +155,37 @@ public sealed class ReasoningEndpointTests
     }
 
     [Fact]
+    public async Task ReasoningEndpointsExposeMaterializationReview()
+    {
+        Repository repository = CreateRepository();
+        await using WebApplication app = await CreateAppAsync(repository);
+        using var client = new HttpClient();
+        string root = app.Urls.Single();
+
+        await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/reasoning/events",
+            EventCommand("Direction event"));
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/reasoning/materialization-review",
+            new ReasoningMaterializationReviewRequest(
+            [
+                new ReasoningMaterializationScenario(
+                    ReasoningMaterializationConcept.Direction,
+                    "Does direction need persistence?",
+                    false,
+                    "Direction reconstructs from events.")
+            ]));
+
+        ReasoningMaterializationReviewReport report =
+            (await response.Content.ReadFromJsonAsync<ReasoningMaterializationReviewReport>(JsonOptions))!;
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains(report.Concepts, review =>
+            review.Concept == ReasoningMaterializationConcept.Direction &&
+            review.Recommendation == ReasoningMaterializationOutcome.RemainDerived);
+    }
+
+    [Fact]
     public async Task ReasoningEndpointsReturnExpectedErrorStatusCodes()
     {
         Repository repository = CreateRepository();

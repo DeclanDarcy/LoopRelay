@@ -155,3 +155,34 @@ public sealed record ReasoningReconstructionEvidence(
     string Summary,
     ReasoningReference? Reference,
     ReasoningProvenance? Provenance);
+
+public sealed record ReasoningMaterializationReviewRequest(
+    IReadOnlyList<ReasoningMaterializationScenario>? Scenarios = null);
+
+public sealed record ReasoningMaterializationScenario(
+    ReasoningMaterializationConcept Concept,
+    string Question,
+    bool ReconstructionFailed,
+    string Evidence,
+    int RepeatedWorkflowCount = 0);
+
+public sealed record ReasoningMaterializationReviewReport(
+    Guid RepositoryId,
+    DateTimeOffset GeneratedAt,
+    IReadOnlyList<ReasoningConceptMaterializationReview> Concepts,
+    IReadOnlyList<ReasoningTaxonomyMaterializationFinding> TaxonomyFindings,
+    IReadOnlyList<string> Diagnostics);
+
+public sealed record ReasoningConceptMaterializationReview(
+    ReasoningMaterializationConcept Concept,
+    ReasoningMaterializationOutcome Recommendation,
+    string Summary,
+    IReadOnlyList<string> Evidence,
+    IReadOnlyList<string> Risks);
+
+public sealed record ReasoningTaxonomyMaterializationFinding(
+    ReasoningEventFamily Family,
+    int EventTypeCount,
+    bool LifecycleRisk,
+    string Summary,
+    IReadOnlyList<string> Evidence);

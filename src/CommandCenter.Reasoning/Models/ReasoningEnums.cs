@@ -150,3 +150,21 @@ public enum ReasoningQueryCategory
     Thread,
     Assumption
 }
+
+public enum ReasoningMaterializationConcept
+{
+    Hypothesis,
+    Alternative,
+    Contradiction,
+    Direction,
+    Thread
+}
+
+public enum ReasoningMaterializationOutcome
+{
+    RemainDerived,
+    AddDerivedCache,
+    AddReadModelReport,
+    PromoteToFirstClassEntity,
+    RejectConcept
+}

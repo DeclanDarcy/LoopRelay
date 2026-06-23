@@ -103,6 +103,17 @@ public static class ReasoningEndpoints
             IReasoningReconstructionService reconstructionService) =>
             await HandleAsync(() => reconstructionService.ReconstructAsync(repositoryId, query)));
 
+        group.MapGet("/materialization-review", async (
+            Guid repositoryId,
+            IReasoningMaterializationReviewService materializationReviewService) =>
+            await HandleAsync(() => materializationReviewService.RunReviewAsync(repositoryId)));
+
+        group.MapPost("/materialization-review", async (
+            Guid repositoryId,
+            ReasoningMaterializationReviewRequest request,
+            IReasoningMaterializationReviewService materializationReviewService) =>
+            await HandleAsync(() => materializationReviewService.RunReviewAsync(repositoryId, request)));
+
         return app;
     }
 
