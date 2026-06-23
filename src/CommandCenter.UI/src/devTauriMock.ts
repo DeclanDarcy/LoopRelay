@@ -14,6 +14,7 @@ import type {
   DecisionContextSnapshot,
   DecisionEvidenceInspection,
   DecisionGovernanceReport,
+  DecisionInfluenceTrace,
   DecisionOutcome,
   DecisionPackageRegenerationRequest,
   DecisionPackageRegenerationResult,
@@ -1880,6 +1881,89 @@ function createExecutionDecisionProjection(
     diagnostics,
     context,
   }
+}
+
+function createDecisionInfluenceTrace(
+  state: MockState,
+  repositoryId: string,
+  executionSessionId: string,
+): DecisionInfluenceTrace {
+  const projection = createExecutionDecisionProjection(state, repositoryId)
+  const statements: DecisionInfluenceTrace['statements'] = [
+    ...projection.constraints.map((constraint) => ({
+      statementId: constraint.id,
+      decisionId: constraint.decisionId,
+      title: constraint.title,
+      statement: constraint.statement,
+      classification: constraint.classification,
+      projectionKind: constraint.projectionKind,
+      statementType: 'Constraint',
+      promptSection: 'Decision Constraints',
+      priorityRank: null,
+      sources: constraint.sources,
+      adherenceObservations: [],
+    })),
+    ...projection.directives.map((directive) => ({
+      statementId: directive.id,
+      decisionId: directive.decisionId,
+      title: directive.title,
+      statement: directive.statement,
+      classification: directive.classification,
+      projectionKind: directive.projectionKind,
+      statementType: 'Directive',
+      promptSection: 'Decision Directives',
+      priorityRank: null,
+      sources: directive.sources,
+      adherenceObservations: [],
+    })),
+    ...projection.priorities.map((priority) => ({
+      statementId: priority.id,
+      decisionId: priority.decisionId,
+      title: priority.title,
+      statement: priority.statement,
+      classification: priority.classification,
+      projectionKind: priority.projectionKind,
+      statementType: 'Priority',
+      promptSection: 'Decision Priorities',
+      priorityRank: priority.rank,
+      sources: priority.sources,
+      adherenceObservations: [],
+    })),
+    ...projection.architectureRules.map((rule) => ({
+      statementId: rule.id,
+      decisionId: rule.decisionId,
+      title: rule.title,
+      statement: rule.statement,
+      classification: rule.classification,
+      projectionKind: rule.projectionKind,
+      statementType: 'ArchitectureRule',
+      promptSection: 'Architecture Rules',
+      priorityRank: null,
+      sources: rule.sources,
+      adherenceObservations: [],
+    })),
+  ]
+
+  return {
+    id: `execution-${executionSessionId.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().padEnd(32, '0').slice(0, 32)}`,
+    repositoryId,
+    executionSessionId,
+    recordedAt: projection.generatedAt,
+    projectionGeneratedAt: projection.generatedAt,
+    projectionFingerprint: `mock-${repositoryId}-${statements.length}`,
+    statements,
+    diagnostics: projection.diagnostics,
+  }
+}
+
+function listDecisionInfluenceTraces(
+  state: MockState,
+  repositoryId: string,
+  decisionId: string,
+): DecisionInfluenceTrace[] {
+  return (state.workspaces[repositoryId]?.executionHistory ?? [])
+    .map((session) => createDecisionInfluenceTrace(state, repositoryId, session.sessionId))
+    .filter((trace) => trace.statements.some((statement) => statement.decisionId === decisionId))
 }
 
 function classifyMockProjectionKind(
@@ -3852,6 +3936,22 @@ export function installDevTauriMock() {
           return clone(state.decisionQualityTrends[getStringArg(args, 'repositoryId')] ?? [])
         case 'get_execution_decision_projection':
           return clone(createExecutionDecisionProjection(state, getStringArg(args, 'repositoryId')))
+        case 'get_execution_decision_influence':
+          return clone(
+            createDecisionInfluenceTrace(
+              state,
+              getStringArg(args, 'repositoryId'),
+              getStringArg(args, 'executionId'),
+            ),
+          )
+        case 'get_decision_influence':
+          return clone(
+            listDecisionInfluenceTraces(
+              state,
+              getStringArg(args, 'repositoryId'),
+              getStringArg(args, 'decisionId'),
+            ),
+          )
         case 'list_reasoning_events':
           return clone(state.reasoningEvents[getStringArg(args, 'repositoryId')] ?? [])
         case 'get_reasoning_event': {

@@ -7,6 +7,7 @@ import type {
   DecisionContextSnapshot,
   DecisionEvidenceInspection,
   DecisionGovernanceReport,
+  DecisionInfluenceTrace,
   ExecutionDecisionProjection,
   DecisionOptionComparison,
   DecisionProposal,
@@ -236,5 +237,19 @@ export function listDecisionQualityTrends(repositoryId: string) {
 export function getExecutionDecisionProjection(repositoryId: string) {
   return invokeCommand<ExecutionDecisionProjection>('get_execution_decision_projection', {
     repositoryId,
+  })
+}
+
+export function getExecutionDecisionInfluence(repositoryId: string, executionId: string) {
+  return invokeCommand<DecisionInfluenceTrace>('get_execution_decision_influence', {
+    repositoryId,
+    executionId,
+  })
+}
+
+export function getDecisionInfluence(repositoryId: string, decisionId: string) {
+  return invokeCommand<DecisionInfluenceTrace[]>('get_decision_influence', {
+    repositoryId,
+    decisionId,
   })
 }

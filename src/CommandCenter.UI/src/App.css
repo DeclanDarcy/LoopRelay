@@ -2128,6 +2128,91 @@ button:focus-visible {
   gap: 10px;
 }
 
+.execution-decision-influence,
+.execution-influence-section,
+.execution-influence-statement-list {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.execution-influence-section h5 {
+  margin: 0;
+  color: var(--fg-subtle);
+  font-size: 0.76rem;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.execution-influence-decision-list {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.execution-influence-decision-list span,
+.execution-influence-meta span,
+.execution-influence-diagnostics li {
+  min-width: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  padding: 6px 8px;
+  color: var(--fg-muted);
+  background: var(--bg-inset);
+  font-size: 0.76rem;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.execution-influence-statement {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--bg-inset);
+}
+
+.execution-influence-statement div,
+.execution-influence-statement p {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.execution-influence-statement div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.execution-influence-statement strong {
+  color: var(--fg-default);
+  font-size: 0.84rem;
+}
+
+.execution-influence-statement p,
+.execution-influence-statement span {
+  color: var(--fg-subtle);
+  font-size: 0.8rem;
+}
+
+.execution-influence-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.execution-influence-diagnostics {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 .execution-history-list {
   min-width: 0;
   display: grid;

@@ -4,6 +4,7 @@ import { formatDateTime } from '../../lib'
 import { executionSessionStatus, repositoryExecutionStatus } from '../../lib/status'
 import type {
   ExecutionContextPreview,
+  DecisionInfluenceTrace,
   ExecutionEvent,
   ExecutionSessionSummary,
   ExecutionWorkflowStep,
@@ -12,6 +13,7 @@ import type {
 import { ExecutionContextArtifactDiagnosticsList } from './ExecutionContextArtifactDiagnosticsList'
 import { ExecutionContextMissingOptionalList } from './ExecutionContextMissingOptionalList'
 import { ExecutionContextValidationList } from './ExecutionContextValidationList'
+import { ExecutionDecisionInfluencePanel } from './ExecutionDecisionInfluencePanel'
 import { ExecutionEventFeed } from './ExecutionEventFeed'
 import { ExecutionHistoryPanel } from './ExecutionHistoryPanel'
 import { ExecutionSessionPanel } from './ExecutionSessionPanel'
@@ -20,6 +22,9 @@ import { ExecutionWorkflowRail } from './ExecutionWorkflowRail'
 type ExecutionTabProps = {
   execution: ExecutionSessionSummary | null
   executionContext: ExecutionContextPreview | null
+  decisionInfluenceTrace: DecisionInfluenceTrace | null
+  isDecisionInfluenceLoading?: boolean
+  decisionInfluenceError?: string | null
   executionEvents: ExecutionEvent[]
   executionHistory: ExecutionSessionSummary[]
   workflowSteps: ExecutionWorkflowStep[]
@@ -38,6 +43,9 @@ type ExecutionTabProps = {
 export function ExecutionTab({
   execution,
   executionContext,
+  decisionInfluenceTrace,
+  isDecisionInfluenceLoading = false,
+  decisionInfluenceError = null,
   executionEvents,
   executionHistory,
   workflowSteps,
@@ -116,6 +124,12 @@ export function ExecutionTab({
           <ContextDiagnosticsPanel
             executionContext={executionContext}
             onOpenWorkspaceExecutionContext={onOpenWorkspaceExecutionContext}
+          />
+
+          <ExecutionDecisionInfluencePanel
+            trace={decisionInfluenceTrace}
+            isLoading={isDecisionInfluenceLoading}
+            error={decisionInfluenceError}
           />
 
           <LaunchReadinessPanel

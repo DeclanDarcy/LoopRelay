@@ -1003,3 +1003,34 @@ export type ExecutionDecisionProjection = {
   diagnostics: string[]
   context: ExecutionDecisionContext
 }
+
+export type DecisionAdherenceObservation = {
+  observedAt: string
+  observer: string
+  observation: string
+}
+
+export type DecisionInfluenceStatement = {
+  statementId: string
+  decisionId: string
+  title: string
+  statement: string
+  classification: DecisionClassification
+  projectionKind: ExecutionProjectionKind
+  statementType: string
+  promptSection: string
+  priorityRank: number | null
+  sources: DecisionSourceReference[]
+  adherenceObservations: DecisionAdherenceObservation[]
+}
+
+export type DecisionInfluenceTrace = {
+  id: string
+  repositoryId: string
+  executionSessionId: string
+  recordedAt: string
+  projectionGeneratedAt: string
+  projectionFingerprint: string
+  statements: DecisionInfluenceStatement[]
+  diagnostics: string[]
+}

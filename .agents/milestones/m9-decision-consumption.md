@@ -43,7 +43,7 @@ make accepted resolved decisions direct execution with explicit influence tracea
   - [ ] adherence observation when available
 - [x] Add backend endpoints for execution and decision influence lookup.
 - [x] Add Tauri bridge commands for execution and decision influence lookup.
-- [ ] Extend execution UI to show influencing decisions and directive source details.
+- [x] Extend execution UI to show influencing decisions and directive source details.
 - [x] Update prompt builder to render priorities and architecture rules separately while preserving constraints/directives.
 
 ## Tests

@@ -47,6 +47,7 @@ import {
   useDecisionContext,
   useDecisionDiscovery,
   useDecisionProposals,
+  useExecutionDecisionInfluence,
   useExecutionContextPreview,
   useExecutionEvents,
   useExecutionSession,
@@ -184,6 +185,11 @@ function App() {
     error: executionSessionError,
     refresh: refreshExecutionSessionStatus,
   } = useExecutionSession(selectedRepository?.repository.id ?? null, executionSessionId)
+  const {
+    data: decisionInfluenceTrace,
+    isLoading: isDecisionInfluenceLoading,
+    error: decisionInfluenceError,
+  } = useExecutionDecisionInfluence(selectedRepository?.repository.id ?? null, executionSessionId)
   const {
     data: streamedExecutionEvents,
     error: executionEventsError,
@@ -1800,6 +1806,9 @@ function App() {
               <ExecutionTab
                 execution={executionDisplay}
                 executionContext={executionContextMatchesSelection ? executionContext : null}
+                decisionInfluenceTrace={decisionInfluenceTrace}
+                isDecisionInfluenceLoading={isDecisionInfluenceLoading}
+                decisionInfluenceError={decisionInfluenceError}
                 executionEvents={selectedExecutionEvents}
                 executionHistory={selectedExecutionHistory}
                 workflowSteps={executionWorkflowSteps}
