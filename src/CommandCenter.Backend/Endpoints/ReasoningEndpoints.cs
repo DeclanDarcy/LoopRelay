@@ -27,6 +27,16 @@ public static class ReasoningEndpoints
             IReasoningEventService eventService) =>
             await HandleAsync(() => eventService.CreateEventAsync(repositoryId, command)));
 
+        group.MapGet("/manual-captures/templates", (
+            IReasoningManualCaptureService manualCaptureService) =>
+            Results.Ok(manualCaptureService.ListTemplates()));
+
+        group.MapPost("/manual-captures", async (
+            Guid repositoryId,
+            ManualReasoningCaptureCommand command,
+            IReasoningManualCaptureService manualCaptureService) =>
+            await HandleAsync(() => manualCaptureService.CaptureAsync(repositoryId, command)));
+
         group.MapGet("/threads", async (
             Guid repositoryId,
             IReasoningThreadService threadService) =>

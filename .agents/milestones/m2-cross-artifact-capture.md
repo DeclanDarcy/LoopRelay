@@ -4,15 +4,15 @@ Goal: use the event substrate to preserve reasoning evolution across decisions a
 
 ## Backend Work
 
-- [ ] Add explicit commands for recording decision evolution events:
-  - [ ] Decision superseded.
-  - [ ] Decision reframed.
-  - [ ] Decision reconsidered.
-  - [ ] Assumption invalidated.
-  - [ ] Constraint changed.
-- [ ] Add explicit commands for recording hypothesis, alternative, contradiction, and direction events as event classifications.
+- [x] Add explicit commands for recording decision evolution events:
+  - [x] Decision superseded.
+  - [x] Decision reframed.
+  - [x] Decision reconsidered.
+  - [x] Assumption invalidated.
+  - [x] Constraint changed.
+- [x] Add explicit commands for recording hypothesis, alternative, contradiction, and direction events as event classifications.
 - [ ] Add reference helpers for decisions, proposals, candidates, governance findings, operational-context revisions, handoffs, execution outputs, and artifacts.
-- [ ] Add event templates for common reasoning captures with required provenance fields.
+- [x] Add event templates for common reasoning captures with required provenance fields.
 - [x] Add assisted-capture adapters that pre-populate references and provenance after successful decision operations, starting with supersession. Keep the decision operation authoritative.
 - [ ] Add inferred-capture adapters for objective domain transitions once idempotency is stable:
   - [x] Decision superseded.
@@ -22,7 +22,7 @@ Goal: use the event substrate to preserve reasoning evolution across decisions a
   - [x] Operational-context proposal promoted.
   - [x] Execution handoff accepted or rejected.
 - [x] Ensure inferred capture is idempotent by fingerprinting the source transition and refusing duplicate events for the same source transition.
-- [ ] Keep manual capture available for narrative details that cannot be inferred from source artifacts.
+- [x] Keep manual capture available for narrative details that cannot be inferred from source artifacts.
 - [ ] Add workspace projection summary counts by event family and recent thread activity.
 
 ## UI Work
@@ -36,9 +36,9 @@ Goal: use the event substrate to preserve reasoning evolution across decisions a
 - [x] Decision A superseded by Decision B can explain why through events and relationships.
 - [x] Decision supersession can create an inferred event from the source transition without a second human action once the adapter is enabled.
 - [x] Inferred capture does not duplicate events when the same source transition is processed twice.
-- [ ] Alternative considered, rejected, and revisited is preserved as an event thread.
-- [ ] Contradiction discovered and resolved is preserved as an event thread.
-- [ ] Direction shift is recorded as an event and remains non-authoritative.
+- [x] Alternative considered, rejected, and revisited is preserved as an event thread.
+- [x] Contradiction discovered and resolved is preserved as an event thread.
+- [x] Direction shift is recorded as an event and remains non-authoritative.
 - [x] Existing decision and proposal state is not mutated by reasoning capture for proposal-resolution capture.
 - [ ] Existing governance, operational-context, and execution state is not mutated by reasoning capture.
   - [x] Current governance report reads do not capture reasoning events.
@@ -48,6 +48,6 @@ Goal: use the event substrate to preserve reasoning evolution across decisions a
 ## Exit Criteria
 
 - [ ] Cross-decision evolution is preservable through events.
-- [ ] Hypothesis, alternative, contradiction, and direction history can be captured as event families.
+- [x] Hypothesis, alternative, contradiction, and direction history can be captured as event families.
 - [ ] Observable source-domain transitions have an assisted or inferred capture path.
-- [ ] Reasoning capture remains append-only and non-authoritative.
+- [x] Reasoning capture remains append-only and non-authoritative.

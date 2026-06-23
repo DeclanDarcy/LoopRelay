@@ -99,3 +99,37 @@ public enum ReasoningRelationshipType
     ComparesWith,
     SelectedOver
 }
+
+public enum ReasoningManualCaptureKind
+{
+    DecisionSuperseded,
+    DecisionReframed,
+    DecisionReconsidered,
+    HypothesisRaised,
+    HypothesisSupported,
+    HypothesisChallenged,
+    HypothesisInvalidated,
+    HypothesisRetired,
+    AlternativeIntroduced,
+    AlternativeCompared,
+    AlternativeRejected,
+    AlternativeRevisited,
+    AlternativeSelected,
+    ContradictionIdentified,
+    ContradictionInvestigated,
+    ContradictionResolved,
+    ContradictionAccepted,
+    ContradictionRecurred,
+    DirectionObserved,
+    DirectionReinforced,
+    DirectionShifted,
+    DirectionAbandoned,
+    AssumptionIntroduced,
+    AssumptionChallenged,
+    AssumptionInvalidated,
+    AssumptionReplaced,
+    ConstraintIntroduced,
+    ConstraintModified,
+    ConstraintRetired,
+    EvidenceAdded
+}

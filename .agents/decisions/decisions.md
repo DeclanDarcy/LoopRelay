@@ -2,12 +2,11 @@
 
 ## Newly Authorized
 
-- Treat Milestone 2 as architecturally complete even if some checklist items remain, because inferred capture has now been exercised across Decision Lifecycle, Governance, Operational Context, and Execution without authority drift.
-- Treat remaining Milestone 2 work as expanding capture coverage and enabling manual capture rather than proving the core architecture.
-- Implement manual capture as creation of reasoning events, not materialized reasoning entities.
-- Manual capture may create event classifications such as `HypothesisRaised`, `AlternativeIntroduced`, and `ContradictionIdentified`.
-- Manual capture must not create first-class `Hypothesis`, `Alternative`, `Contradiction`, or `Direction` entities before materialization review approval.
-- Manual captures require provenance.
-- Provenance should support `UserSupplied` as a valid source kind so users can record directly observed reasoning without fabricating artifact references.
-- Continue treating semantic dilution from low-value captures as the primary current risk.
-- Continue treating authority drift, hidden lifecycle state machines, thread authority creep, materialization gate violations, workflow mirroring, and reasoning-owned execution/governance/operational-context state as risks to actively avoid.
+- Treat template-gated manual capture as the approved manual capture shape for Milestone 2; the backend owns the capture vocabulary, not the UI or arbitrary client payloads.
+- Treat `UserSupplied` provenance as an approved source kind for human-observed reasoning that exists before an authoritative artifact exists.
+- Continue preserving manual captures only as immutable reasoning events, not as first-class hypothesis, alternative, contradiction, direction, assumption, or constraint records.
+- Treat Milestone 2 as functionally complete from an architecture perspective: inferred capture and manual capture are both operational while preserving provenance, idempotency where applicable, and authority separation.
+- Treat remaining Milestone 2 work as projection and usability work rather than core capture-architecture proof.
+- Make workspace/dashboard reasoning summaries the next highest-value backend slice.
+- Reasoning summaries must remain descriptive and read-only: counts, family counts, relationship/thread counts, and latest activity are acceptable.
+- Do not introduce evaluative reasoning summaries such as reasoning score, reasoning health, reasoning quality, reasoning maturity, or similar aggregate judgments.

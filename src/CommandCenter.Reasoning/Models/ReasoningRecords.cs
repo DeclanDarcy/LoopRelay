@@ -75,3 +75,20 @@ public sealed record CreateReasoningRelationshipCommand(
     ReasoningReference Target,
     ReasoningNarrative Narrative,
     ReasoningProvenance Provenance);
+
+public sealed record ManualReasoningCaptureTemplate(
+    ReasoningManualCaptureKind Kind,
+    ReasoningEventFamily Family,
+    ReasoningEventType Type,
+    ReasoningThreadTheme SuggestedThreadTheme,
+    string ProvenanceSourceKind,
+    IReadOnlyList<ReasoningReferenceKind> SuggestedReferenceKinds);
+
+public sealed record ManualReasoningCaptureCommand(
+    ReasoningManualCaptureKind Kind,
+    string Title,
+    ReasoningNarrative Narrative,
+    IReadOnlyList<ReasoningReference>? References,
+    ReasoningProvenance Provenance,
+    IReadOnlyList<string>? ThreadIds,
+    IReadOnlyList<string>? Tags);
