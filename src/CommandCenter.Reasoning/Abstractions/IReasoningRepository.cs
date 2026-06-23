@@ -22,4 +22,8 @@ public interface IReasoningRepository
     Task<IReadOnlyList<ReasoningRelationship>> ListRelationshipsAsync(Repository repository);
 
     Task<ReasoningRelationship> CreateRelationshipAsync(Repository repository, CreateReasoningRelationshipCommand command);
+
+    Task<IReadOnlyList<ReasoningCertificationReport>> ListCertificationReportsAsync(Repository repository);
+
+    Task<ReasoningCertificationReport> SaveCertificationReportAsync(Repository repository, ReasoningCertificationReport report);
 }

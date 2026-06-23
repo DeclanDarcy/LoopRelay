@@ -2,18 +2,19 @@
 
 ## Newly Authorized
 
-- Start Milestone 8 with backend outcome-oriented reasoning certification.
-- Reuse the M7 recovery fixture shape to prove that target reasoning questions remain answerable after repository recovery and service restart.
-- Treat M8 as outcome certification over architecture expansion.
-- Do not introduce specialized reasoning entities, read models, caches, graph persistence, narrative persistence, or specialized reconstruction engines for this M8 start.
-- Preserve the validated M7 path as the basis for certification:
+- Treat M8 backend as complete and proceed to the M8 UI slice.
+- Preserve the certification authority boundary: certification reports are evidence artifacts only.
+- Certification reports must not become repository authority, reasoning authority, narrative authority, graph authority, or reconstruction source data.
+- The UI may display certification outcome, evidence, failures, diagnostics, and report history.
+- The UI must remain a presentation layer over certification artifacts and must not introduce a second reasoning authority.
+- The source of truth for reasoning reconstruction remains:
 
 ```text
 Repository
   -> Graph
   -> Trace
   -> Reconstruction
-  -> Materialization Review
 ```
 
-- Continue treating derived concepts as derived unless certification exposes a concrete answerability, persistence, recovery, or usability failure.
+- Certification continues to validate answerability using the same reconstruction path, not a specialized certification model or specialized reasoning engine.
+- The M8 UI slice should continue with `ReasoningCertificationPanel`, bridge/API integration, and characterization tests without additional backend architecture unless implementation reveals a concrete gap.

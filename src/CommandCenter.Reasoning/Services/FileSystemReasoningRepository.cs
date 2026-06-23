@@ -197,6 +197,56 @@ public sealed class FileSystemReasoningRepository(
         return relationship;
     }
 
+    public async Task<IReadOnlyList<ReasoningCertificationReport>> ListCertificationReportsAsync(Repository repository)
+    {
+        string root = ReasoningArtifactPaths.Resolve(repository, ReasoningArtifactPaths.ReportsRootPath());
+        IReadOnlyList<string> files = await artifactStore.ListAsync(root, "*.json");
+        var reports = new List<ReasoningCertificationReport>();
+        foreach (string file in files)
+        {
+            string reportId = Path.GetFileNameWithoutExtension(file);
+            try
+            {
+                ReasoningArtifactPaths.ValidateCertificationReportId(reportId);
+                ReasoningCertificationReport? report = await ReadPayloadAsync<ReasoningCertificationReport>(repository, file);
+                if (report is not null)
+                {
+                    reports.Add(report);
+                }
+            }
+            catch (ReasoningValidationException)
+            {
+            }
+            catch (ArgumentException)
+            {
+            }
+        }
+
+        return reports.OrderByDescending(report => report.GeneratedAt).ThenBy(report => report.Id, StringComparer.Ordinal).ToArray();
+    }
+
+    public async Task<ReasoningCertificationReport> SaveCertificationReportAsync(
+        Repository repository,
+        ReasoningCertificationReport report)
+    {
+        ReasoningArtifactPaths.ValidateCertificationReportId(report.Id);
+        if (report.RepositoryId != repository.Id)
+        {
+            throw new ReasoningValidationException("Reasoning certification report belongs to a different repository.");
+        }
+
+        await WriteDocumentAsync(
+            repository,
+            ReasoningArtifactPaths.CertificationReportJson(report.Id),
+            report,
+            report.GeneratedAt,
+            null);
+        await artifactStore.WriteAsync(
+            ReasoningArtifactPaths.Resolve(repository, ReasoningArtifactPaths.CertificationReportMarkdown(report.Id)),
+            projectionService.RenderCertificationReport(report));
+        return report;
+    }
+
     private async Task SaveThreadAsync(Repository repository, ReasoningThread thread)
     {
         await WriteDocumentAsync(repository, ReasoningArtifactPaths.ThreadJson(thread.Id), thread, thread.CreatedAt, thread.UpdatedAt);

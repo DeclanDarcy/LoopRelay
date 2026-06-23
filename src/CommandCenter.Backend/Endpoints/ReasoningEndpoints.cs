@@ -114,6 +114,21 @@ public static class ReasoningEndpoints
             IReasoningMaterializationReviewService materializationReviewService) =>
             await HandleAsync(() => materializationReviewService.RunReviewAsync(repositoryId, request)));
 
+        group.MapGet("/certification", async (
+            Guid repositoryId,
+            IReasoningCertificationService certificationService) =>
+            await HandleAsync(() => certificationService.GetCurrentCertificationAsync(repositoryId)));
+
+        group.MapPost("/certification", async (
+            Guid repositoryId,
+            IReasoningCertificationService certificationService) =>
+            await HandleAsync(() => certificationService.RunCertificationAsync(repositoryId)));
+
+        group.MapGet("/certification/reports", async (
+            Guid repositoryId,
+            IReasoningCertificationService certificationService) =>
+            await HandleAsync(() => certificationService.ListReportsAsync(repositoryId)));
+
         return app;
     }
 

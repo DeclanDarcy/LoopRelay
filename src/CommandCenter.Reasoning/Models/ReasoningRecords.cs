@@ -186,3 +186,23 @@ public sealed record ReasoningTaxonomyMaterializationFinding(
     bool LifecycleRisk,
     string Summary,
     IReadOnlyList<string> Evidence);
+
+public sealed record ReasoningCertificationReport(
+    string Id,
+    Guid RepositoryId,
+    DateTimeOffset GeneratedAt,
+    ReasoningCertificationResult Result,
+    IReadOnlyList<ReasoningCertificationEvidence> Evidence,
+    IReadOnlyList<string> Diagnostics);
+
+public sealed record ReasoningCertificationResult(
+    ReasoningCertificationResultKind Kind,
+    string Summary);
+
+public sealed record ReasoningCertificationEvidence(
+    string Id,
+    string Scenario,
+    bool Passed,
+    string Summary,
+    IReadOnlyList<string> Details,
+    IReadOnlyList<ReasoningReference> References);

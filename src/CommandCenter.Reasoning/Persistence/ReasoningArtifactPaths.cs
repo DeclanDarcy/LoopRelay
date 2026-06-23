@@ -12,12 +12,15 @@ public static partial class ReasoningArtifactPaths
     private const string EventsRoot = $"{ReasoningRoot}/events";
     private const string ThreadsRoot = $"{ReasoningRoot}/threads";
     private const string RelationshipsRoot = $"{ReasoningRoot}/relationships";
+    private const string ReportsRoot = $"{ReasoningRoot}/reports";
 
     public static string EventsRootPath() => EventsRoot;
 
     public static string ThreadsRootPath() => ThreadsRoot;
 
     public static string RelationshipsRootPath() => RelationshipsRoot;
+
+    public static string ReportsRootPath() => ReportsRoot;
 
     public static string EventDirectory(string id) => ArtifactPath.CombineRelative(EventsRoot, ValidateEventId(id));
 
@@ -37,6 +40,12 @@ public static partial class ReasoningArtifactPaths
 
     public static string RelationshipMarkdown(string id) => ArtifactPath.CombineRelative(RelationshipDirectory(id), "relationship.md");
 
+    public static string CertificationReportJson(string id) =>
+        ArtifactPath.CombineRelative(ReportsRoot, $"{ValidateCertificationReportId(id)}.json");
+
+    public static string CertificationReportMarkdown(string id) =>
+        ArtifactPath.CombineRelative(ReportsRoot, $"{ValidateCertificationReportId(id)}.md");
+
     public static string Resolve(Repository repository, string relativePath) => ArtifactPath.ResolveRepositoryPath(repository, relativePath);
 
     public static string ValidateEventId(string id) => ValidateId(id, "EVT");
@@ -44,6 +53,16 @@ public static partial class ReasoningArtifactPaths
     public static string ValidateThreadId(string id) => ValidateId(id, "THR");
 
     public static string ValidateRelationshipId(string id) => ValidateId(id, "REL");
+
+    public static string ValidateCertificationReportId(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id) || !CertificationReportIdPattern().IsMatch(id))
+        {
+            throw new ArgumentException("Certification report id must match certification.YYYYMMDDHHMMSSFFFFFFF.", nameof(id));
+        }
+
+        return id;
+    }
 
     public static string ValidateId(string id, string prefix)
     {
@@ -62,4 +81,7 @@ public static partial class ReasoningArtifactPaths
 
     [GeneratedRegex("^[A-Z]+-[0-9]{4}$")]
     private static partial Regex IdPattern();
+
+    [GeneratedRegex("^certification\\.[0-9]{21}$")]
+    private static partial Regex CertificationReportIdPattern();
 }

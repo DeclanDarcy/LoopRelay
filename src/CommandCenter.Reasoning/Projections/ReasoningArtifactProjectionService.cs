@@ -110,6 +110,48 @@ public sealed class ReasoningArtifactProjectionService : IReasoningArtifactProje
         return builder.ToString();
     }
 
+    public string RenderCertificationReport(ReasoningCertificationReport report)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine($"# Reasoning Certification {report.Id}");
+        builder.AppendLine();
+        builder.AppendLine($"- Report ID: {report.Id}");
+        builder.AppendLine($"- Generated At: {report.GeneratedAt:O}");
+        builder.AppendLine($"- Result: {report.Result.Kind}");
+        builder.AppendLine();
+        builder.AppendLine("## Summary");
+        builder.AppendLine();
+        builder.AppendLine(report.Result.Summary);
+        builder.AppendLine();
+        builder.AppendLine("## Evidence");
+        builder.AppendLine();
+        if (report.Evidence.Count == 0)
+        {
+            builder.AppendLine("- None");
+        }
+        else
+        {
+            foreach (ReasoningCertificationEvidence evidence in report.Evidence.OrderBy(item => item.Id, StringComparer.Ordinal))
+            {
+                builder.AppendLine($"### {evidence.Id}: {evidence.Scenario}");
+                builder.AppendLine();
+                builder.AppendLine($"- Passed: {evidence.Passed}");
+                builder.AppendLine($"- Summary: {evidence.Summary}");
+                builder.AppendLine("- Details:");
+                AppendValues(builder, evidence.Details);
+                builder.AppendLine("- References:");
+                AppendReferences(builder, evidence.References);
+                builder.AppendLine();
+            }
+        }
+
+        builder.AppendLine("## Diagnostics");
+        AppendValues(builder, report.Diagnostics);
+        builder.AppendLine();
+        builder.AppendLine("- Markdown projection is generated from certification report JSON.");
+        return builder.ToString();
+    }
+
     private static void AppendValues(StringBuilder builder, IReadOnlyList<string> values)
     {
         builder.AppendLine();

@@ -168,3 +168,9 @@ public enum ReasoningMaterializationOutcome
     PromoteToFirstClassEntity,
     RejectConcept
 }
+
+public enum ReasoningCertificationResultKind
+{
+    Passed,
+    Failed
+}

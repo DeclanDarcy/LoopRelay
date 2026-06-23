@@ -9,4 +9,6 @@ public interface IReasoningArtifactProjectionService
     string RenderThread(ReasoningThread thread, IReadOnlyList<ReasoningRelationship> relationships);
 
     string RenderRelationship(ReasoningRelationship relationship);
+
+    string RenderCertificationReport(ReasoningCertificationReport report);
 }
