@@ -1817,6 +1817,43 @@ public sealed class DecisionGenerationServiceTests
     }
 
     [Fact]
+    public async Task ResolveProposalRejectsPackageGeneratedFromDifferentProposalFingerprint()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var service = CreateGenerationService(repository, store, decisionRepository);
+        var resolutionService = CreateResolutionService(repository, store, decisionRepository);
+        DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
+        DecisionPackageVersion packageVersion = Assert.Single(await decisionRepository.ListPackageVersionsAsync(repository, proposal.Id));
+        await service.MarkProposalViewedAsync(repository.Id, proposal.Id, "Review before refinement.");
+        await service.MarkProposalNeedsRefinementAsync(repository.Id, proposal.Id, "Refine after package generation.");
+        DecisionProposal refined = await service.RefineProposalAsync(
+            repository.Id,
+            proposal.Id,
+            new DecisionRefinementRequest("Change the proposal context.", Context: "Refined after package generation."));
+        await service.MarkProposalReadyForResolutionAsync(repository.Id, refined.Id, "Ready with stale package.");
+
+        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            resolutionService.ResolveProposalAsync(
+                repository.Id,
+                proposal.Id,
+                new ResolveDecisionCommand(
+                    "Resolve with package from old proposal content.",
+                    "human-reviewer",
+                    "option-1",
+                    ExpectedPackageId: packageVersion.Id,
+                    ExpectedPackageFingerprint: packageVersion.PackageFingerprint)));
+
+        Assert.Equal(
+            "Resolution authority is stale: reviewed package content does not match the current proposal.",
+            exception.Message);
+        Assert.Empty(await decisionRepository.ListDecisionsAsync(repository));
+    }
+
+    [Fact]
     public async Task ResolveProposalRequiresReadyStateRationaleResolverAndSelectedOption()
     {
         Repository repository = CreateRepository();

@@ -1,7 +1,11 @@
 using CommandCenter.Core.Repositories;
 using CommandCenter.Decisions.Abstractions;
 using CommandCenter.Decisions.Models;
+using CommandCenter.Decisions.Persistence;
 using CommandCenter.Decisions.Primitives;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 
 namespace CommandCenter.Decisions.Services;
 
@@ -219,12 +223,23 @@ public sealed class DecisionReviewService(
             CreateDefaultReviewStatus(repository, proposal);
         IReadOnlyList<DecisionReviewNote> notes = await decisionRepository.ListReviewNotesAsync(repository, proposal.Id);
         IReadOnlyList<DecisionProposalRevision> revisions = await decisionRepository.ListProposalRevisionsAsync(repository, proposal.Id);
+        DecisionPackageVersion? package = (await decisionRepository.ListPackageVersionsAsync(repository, proposal.Id))
+            .OrderBy(version => version.CreatedAt)
+            .ThenBy(version => version.Id, StringComparer.Ordinal)
+            .LastOrDefault();
         return new DecisionReviewWorkspace(
             proposal,
             reviewStatus,
             notes,
             revisions,
-            BuildDiagnostics(proposal, notes));
+            BuildDiagnostics(proposal, notes),
+            new DecisionReviewAuthority(
+                Fingerprint(proposal),
+                package?.Id,
+                package?.PackageFingerprint,
+                package?.CreatedAt,
+                package?.Package.Metadata.SourceProposalFingerprint,
+                package is null || PackageMatchesProposalContent(package, proposal)));
     }
 
     private async Task<Repository> GetRepositoryAsync(Guid repositoryId)
@@ -374,6 +389,30 @@ public sealed class DecisionReviewService(
             $".agents/decisions/proposals/{proposal.Id}/proposal.json",
             ProposalId: proposal.Id,
             CandidateId: proposal.CandidateId);
+    }
+
+    private static string Fingerprint(DecisionProposal proposal)
+    {
+        byte[] bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(proposal, DecisionJson.Options));
+        return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+    }
+
+    private static bool PackageMatchesProposalContent(DecisionPackageVersion packageVersion, DecisionProposal proposal)
+    {
+        DecisionPackage package = packageVersion.Package;
+        return
+            string.Equals(package.Title, proposal.Title, StringComparison.Ordinal) &&
+            string.Equals(package.DecisionSummary, proposal.Context, StringComparison.Ordinal) &&
+            string.Equals(JsonSerializer.Serialize(package.Options, DecisionJson.Options), JsonSerializer.Serialize(proposal.Options, DecisionJson.Options), StringComparison.Ordinal) &&
+            string.Equals(JsonSerializer.Serialize(package.Tradeoffs, DecisionJson.Options), JsonSerializer.Serialize(proposal.Tradeoffs, DecisionJson.Options), StringComparison.Ordinal) &&
+            string.Equals(JsonSerializer.Serialize(package.Recommendation, DecisionJson.Options), JsonSerializer.Serialize(proposal.Recommendation, DecisionJson.Options), StringComparison.Ordinal) &&
+            string.Equals(JsonSerializer.Serialize(package.Assumptions, DecisionJson.Options), JsonSerializer.Serialize(proposal.Assumptions, DecisionJson.Options), StringComparison.Ordinal) &&
+            string.Equals(JsonSerializer.Serialize(package.Evidence, DecisionJson.Options), JsonSerializer.Serialize(proposal.Evidence, DecisionJson.Options), StringComparison.Ordinal) &&
+            string.Equals(JsonSerializer.Serialize(package.OptionRelationships, DecisionJson.Options), JsonSerializer.Serialize(proposal.OptionRelationships, DecisionJson.Options), StringComparison.Ordinal) &&
+            string.Equals(JsonSerializer.Serialize(package.AnalyzedOptions, DecisionJson.Options), JsonSerializer.Serialize(proposal.AnalyzedOptions, DecisionJson.Options), StringComparison.Ordinal) &&
+            string.Equals(JsonSerializer.Serialize(package.TradeoffComparisons, DecisionJson.Options), JsonSerializer.Serialize(proposal.TradeoffComparisons, DecisionJson.Options), StringComparison.Ordinal) &&
+            string.Equals(JsonSerializer.Serialize(package.TradeoffAnalysisDiagnostics, DecisionJson.Options), JsonSerializer.Serialize(proposal.TradeoffAnalysisDiagnostics, DecisionJson.Options), StringComparison.Ordinal) &&
+            string.Equals(JsonSerializer.Serialize(package.GenerationDiagnostics, DecisionJson.Options), JsonSerializer.Serialize(proposal.GenerationDiagnostics, DecisionJson.Options), StringComparison.Ordinal);
     }
 }
 

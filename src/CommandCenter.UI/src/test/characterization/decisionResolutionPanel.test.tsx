@@ -63,13 +63,52 @@ describe('DecisionResolutionPanel', () => {
         resolver: 'reviewer',
         rationale: 'Accept the divergent option with explicit rationale.',
         selectedOptionId: 'OPT-B',
+        expectedProposalFingerprint: 'proposal-fingerprint-current',
+        expectedPackageId: 'PKG-0001',
+        expectedPackageFingerprint: 'package-fingerprint-current',
       })
     })
     expect(onResolved).toHaveBeenCalledWith(decision)
   })
+
+  it('shows reviewed package authority and stale authority conflicts', () => {
+    useDecisionResolutionMock.mockReturnValue({
+      decision: null,
+      assimilationRecommendation: null,
+      isSubmitting: false,
+      isAssimilationLoading: false,
+      error: 'Resolution authority is stale: reviewed package content does not match the current proposal.',
+      resolve: resolveMock,
+      loadAssimilationRecommendation: vi.fn(),
+      proposeAssimilationRecommendation: vi.fn(),
+      reset: resetMock,
+    })
+
+    render(
+      <DecisionResolutionPanel
+        repositoryId="repo-alpha"
+        workspace={createWorkspace({
+          packageSourceProposalFingerprint: 'old-proposal-fingerprint',
+          isPackageCurrentForProposalContent: false,
+        })}
+        isLoading={false}
+        onResolved={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByLabelText('Reviewed package authority')).toHaveTextContent('PKG-0001')
+    expect(screen.getByLabelText('Package authority warning')).toHaveTextContent(
+      'Reviewed package content does not match the current proposal.',
+    )
+    expect(screen.getByRole('alert', { name: 'Resolution error' })).toHaveTextContent(
+      'Resolution authority is stale',
+    )
+  })
 })
 
-function createWorkspace(): DecisionReviewWorkspace {
+function createWorkspace(
+  authority: Partial<DecisionReviewWorkspace['authority']> = {},
+): DecisionReviewWorkspace {
   return {
     proposal: {
       id: 'PROP-0001',
@@ -120,6 +159,15 @@ function createWorkspace(): DecisionReviewWorkspace {
       assumptionCount: 0,
       noteCount: 0,
       warnings: [],
+    },
+    authority: {
+      proposalFingerprint: 'proposal-fingerprint-current',
+      packageId: 'PKG-0001',
+      packageFingerprint: 'package-fingerprint-current',
+      packageVersionCreatedAt: '2026-06-22T17:00:30.000Z',
+      packageSourceProposalFingerprint: 'proposal-fingerprint-current',
+      isPackageCurrentForProposalContent: true,
+      ...authority,
     },
   }
 }

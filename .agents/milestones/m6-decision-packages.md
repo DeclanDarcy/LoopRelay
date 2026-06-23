@@ -64,5 +64,5 @@ Tier 0 may use the existing proposal record as the first reviewable package shap
 
 ## Exit Criteria
 
-- [ ] Humans review complete packages, not raw runtime objects.
-- [ ] Generated packages are durable, inspectable, comparable, and ready for governance.
+- [x] Humans review complete packages, not raw runtime objects.
+- [x] Generated packages are durable, inspectable, comparable, and ready for governance.

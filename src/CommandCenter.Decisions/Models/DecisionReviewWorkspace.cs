@@ -5,4 +5,5 @@ public sealed record DecisionReviewWorkspace(
     DecisionReviewStatus Review,
     IReadOnlyList<DecisionReviewNote> Notes,
     IReadOnlyList<DecisionProposalRevision> Revisions,
-    DecisionReviewDiagnostics Diagnostics);
+    DecisionReviewDiagnostics Diagnostics,
+    DecisionReviewAuthority Authority);

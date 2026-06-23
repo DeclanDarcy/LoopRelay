@@ -2,36 +2,26 @@
 
 ## New State This Slice
 
-- Continued Milestone 6 with resolution authority hardening.
-- Extended `ResolveDecisionCommand` with optional expected proposal/package authority fields:
-  - `ExpectedProposalFingerprint`
-  - `ExpectedPackageId`
-  - `ExpectedPackageFingerprint`
-  - `AcknowledgeStaleAuthority`
-- Extended `DecisionResolvedProposalSnapshot` with package authority provenance:
-  - `PackageId`
-  - `PackageFingerprint`
-  - `PackageVersionCreatedAt`
-  - `AuthorityResolvedAt`
-- `DecisionResolutionService` now:
-  - records the latest package version as resolution authority when available
-  - rejects supplied stale proposal fingerprints
-  - rejects supplied missing/mismatched package authority references
-  - allows explicit stale-authority acknowledgement through the command flag
-- Decision markdown projection now includes source package and authority-resolution metadata.
-- UI decision DTO types now include the new resolution authority request/snapshot fields.
-- Updated `.agents/milestones/m6-decision-packages.md` to mark the resolution authority snapshot test complete.
+- Completed Milestone 6 exit criteria for review-facing package authority.
+- Added `DecisionReviewAuthority` and attached it to `DecisionReviewWorkspace`.
+- Review workspaces now expose:
+  - current proposal fingerprint
+  - latest package id/fingerprint/timestamp
+  - package source proposal fingerprint
+  - whether latest package content still matches current proposal content
+- `DecisionResolutionService` now rejects explicit stale package authority when the reviewed package content no longer matches the current proposal.
+- Backward-compatible resolution without explicit package authority still works: if the latest package is content-stale, no implicit package authority is attached.
+- Resolution UI now displays reviewed package authority, submits expected proposal/package authority fields automatically, and surfaces stale package-content conflicts.
+- Milestone 6 checklist is complete.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter DecisionGenerationServiceTests` passed: 66 tests.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 456 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 458 tests.
 - `dotnet build CommandCenter.slnx` passed with 0 warnings and 0 errors.
 - `npm run lint --prefix src/CommandCenter.UI` passed.
+- `npm run test --prefix src/CommandCenter.UI` passed: 48 files, 171 tests.
 
 ## Next Recommended Slice
 
-- Finish Milestone 6 exit criteria by adding a review-facing package authority path:
-  - expose/list latest package authority in the review/resolution workspace
-  - have the UI submit expected package/proposal authority fields during resolution
-  - add endpoint/UI tests proving conflicts surface cleanly when the package or proposal changes before submit
+- Start Milestone 7: interactive decision refinement.
+- First slice should add directive analysis contracts/models and a narrow backend endpoint that converts human refinement text into structured directives without mutating proposal/package authority.

@@ -515,12 +515,22 @@ export type DecisionReviewDiagnostics = {
   warnings: string[]
 }
 
+export type DecisionReviewAuthority = {
+  proposalFingerprint: string
+  packageId: string | null
+  packageFingerprint: string | null
+  packageVersionCreatedAt: string | null
+  packageSourceProposalFingerprint: string | null
+  isPackageCurrentForProposalContent: boolean
+}
+
 export type DecisionReviewWorkspace = {
   proposal: DecisionProposal
   review: DecisionReviewStatus
   notes: DecisionReviewNote[]
   revisions: DecisionProposalRevision[]
   diagnostics: DecisionReviewDiagnostics
+  authority: DecisionReviewAuthority
 }
 
 export type DecisionProposalBrowserItem = {

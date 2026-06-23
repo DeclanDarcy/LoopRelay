@@ -54,11 +54,13 @@ export function DecisionResolutionPanel({
   }, [proposalId, reset, workspace?.proposal.recommendation?.optionId])
 
   const proposal = workspace?.proposal ?? null
+  const authority = workspace?.authority ?? null
   const canResolveState = proposal ? resolvableStates.has(proposal.state) : false
   const recommendedOptionId = proposal?.recommendation?.optionId ?? null
   const recommendationDiverges = Boolean(
     recommendedOptionId && selectedOptionId && selectedOptionId !== recommendedOptionId,
   )
+  const packageMatchesProposal = authority?.isPackageCurrentForProposalContent ?? false
   const canResolve = Boolean(
     proposal &&
       canResolveState &&
@@ -94,6 +96,9 @@ export function DecisionResolutionPanel({
       resolver: resolver.trim(),
       rationale: rationale.trim(),
       selectedOptionId: selectedOptionId.trim() || null,
+      expectedProposalFingerprint: authority?.proposalFingerprint ?? null,
+      expectedPackageId: authority?.packageId ?? null,
+      expectedPackageFingerprint: authority?.packageFingerprint ?? null,
     })
 
     if (resolvedDecision) {
@@ -157,6 +162,7 @@ export function DecisionResolutionPanel({
             <Badge tone="info">{workspace.proposal.state}</Badge>
             <Badge>{workspace.review.state}</Badge>
             {recommendedOptionId ? <Badge tone="done">Recommended {recommendedOptionId}</Badge> : null}
+            {authority?.packageId ? <Badge tone="info">{authority.packageId}</Badge> : null}
           </div>
         </article>
 
@@ -173,6 +179,24 @@ export function DecisionResolutionPanel({
           ) : null}
         </article>
       </div>
+
+      <article className="decision-inspection-card" aria-label="Reviewed package authority">
+        <div>
+          <span>Reviewed Package</span>
+          <strong>{authority?.packageId ?? 'No package version'}</strong>
+        </div>
+        <div className="decision-diagnostics-grid">
+          <span>Proposal {shortFingerprint(authority?.proposalFingerprint ?? null)}</span>
+          <span>Package {shortFingerprint(authority?.packageFingerprint ?? null)}</span>
+          <span>Source {shortFingerprint(authority?.packageSourceProposalFingerprint ?? null)}</span>
+          <span>{authority?.packageVersionCreatedAt ? formatDate(authority.packageVersionCreatedAt) : 'No package timestamp'}</span>
+        </div>
+        {authority?.packageId && !packageMatchesProposal ? (
+          <div className="decision-warning-list" aria-label="Package authority warning">
+            <span>Reviewed package content does not match the current proposal.</span>
+          </div>
+        ) : null}
+      </article>
 
       <form className="decision-refinement-form decision-resolution-form" onSubmit={handleSubmit}>
         <label>
@@ -361,4 +385,12 @@ function formatDate(value: string) {
   }
 
   return date.toLocaleString()
+}
+
+function shortFingerprint(value: string | null) {
+  if (!value) {
+    return 'None'
+  }
+
+  return value.length > 12 ? value.slice(0, 12) : value
 }

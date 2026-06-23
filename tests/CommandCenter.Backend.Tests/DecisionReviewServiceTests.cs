@@ -110,6 +110,31 @@ public sealed class DecisionReviewServiceTests
     }
 
     [Fact]
+    public async Task ReviewWorkspaceExposesProposalAndLatestPackageAuthority()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        DecisionGenerationService generationService = CreateGenerationService(repository, store, decisionRepository);
+        DecisionReviewService reviewService = CreateReviewService(repository, decisionRepository, generationService);
+        DecisionProposal proposal = await generationService.GenerateProposalAsync(repository.Id, candidate.Id);
+        DecisionPackageVersion package = Assert.Single(await decisionRepository.ListPackageVersionsAsync(repository, proposal.Id));
+        DecisionReviewWorkspace workspace = await reviewService.MarkProposalReadyForResolutionAsync(
+            repository.Id,
+            proposal.Id,
+            "Ready for authority inspection.");
+
+        Assert.False(string.IsNullOrWhiteSpace(workspace.Authority.ProposalFingerprint));
+        Assert.Equal(package.Id, workspace.Authority.PackageId);
+        Assert.Equal(package.PackageFingerprint, workspace.Authority.PackageFingerprint);
+        Assert.Equal(package.CreatedAt, workspace.Authority.PackageVersionCreatedAt);
+        Assert.Equal(package.Package.Metadata.SourceProposalFingerprint, workspace.Authority.PackageSourceProposalFingerprint);
+        Assert.True(workspace.Authority.IsPackageCurrentForProposalContent);
+    }
+
+    [Fact]
     public async Task ReviewReadModelsExposeBrowserComparisonEvidenceAndSources()
     {
         Repository repository = CreateRepository();
@@ -202,6 +227,8 @@ public sealed class DecisionReviewServiceTests
         Assert.Single(notes);
         Assert.Single(workspace.Notes);
         Assert.Equal(DecisionProposalState.Viewed, workspace.Proposal.State);
+        Assert.False(string.IsNullOrWhiteSpace(workspace.Authority.ProposalFingerprint));
+        Assert.Equal("PKG-0001", workspace.Authority.PackageId);
     }
 
     [Fact]

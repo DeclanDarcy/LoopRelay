@@ -2,22 +2,17 @@
 
 ## Newly Authorized
 
-- Confirm the Milestone 6 authority-hardening slice as correct.
-- Treat resolution as the correct home for authority provenance.
-- Preserve the distinction that packages are reviewed evidence and resolutions are authority.
-- Treat `DecisionResolvedProposalSnapshot` as the correct persistence point for package authority metadata.
-- Keep stale proposal/package fingerprint rejection as the correct governance protection.
-- Keep markdown authority-provenance projection because JSON remains authoritative and markdown remains reviewable.
-- Continue Milestone 6 with UI authority submission next.
-- The review workspace should surface proposal fingerprint, package version, and package fingerprint for the reviewed artifact.
-- Resolution UI should submit expected proposal and package fingerprints automatically.
-- Package/proposal mismatch during resolution should surface as a visible conflict.
-- Scope the next slice narrowly to UI authority participation and conflict visibility.
+- Close Milestone 6 as complete.
+- Confirm the Milestone 6 package layer satisfies governance objectives: immutable evidence, validation, comparison, authority provenance, stale protection, and UI participation in authority verification.
+- Treat content-based package/proposal validation as the correct authority check, because humans approve decision content rather than lifecycle metadata.
+- Preserve strict conflict behavior for explicit UI-submitted package authority.
+- Preserve compatibility for implicit or legacy resolution workflows so stale implicit package authority does not break existing resolution paths.
+- Begin Milestone 7 next.
+- Scope the first Milestone 7 slice narrowly to directive-analysis contracts and structured refinement extraction.
+- Model Milestone 7 refinement as human guidance converted into structured directives and refinement plans before any regeneration behavior.
 
 ## Not Authorized
 
-- Do not expand the next slice into package locking.
-- Do not add review sessions.
-- Do not add reservation systems.
-- Do not add multi-user coordination infrastructure.
-- Do not treat packages as authority.
+- Do not begin Milestone 7 with direct artifact editing.
+- Do not mutate proposal or package authority during the first directive-analysis slice.
+- Do not add package mutation, version regeneration, or package comparison changes before directive extraction exists.

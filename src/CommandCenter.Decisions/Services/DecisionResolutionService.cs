@@ -394,12 +394,49 @@ public sealed class DecisionResolutionService(
                 "Resolution authority is stale: expected package fingerprint does not match the reviewed package.");
         }
 
+        bool expectedPackageAuthority = !string.IsNullOrWhiteSpace(command.ExpectedPackageId) ||
+            !string.IsNullOrWhiteSpace(command.ExpectedPackageFingerprint);
+        if (package is not null &&
+            !PackageMatchesProposalContent(package, proposal) &&
+            !expectedPackageAuthority &&
+            !command.AcknowledgeStaleAuthority)
+        {
+            return null;
+        }
+
+        if (package is not null &&
+            !PackageMatchesProposalContent(package, proposal) &&
+            expectedPackageAuthority &&
+            !command.AcknowledgeStaleAuthority)
+        {
+            throw new InvalidOperationException(
+                "Resolution authority is stale: reviewed package content does not match the current proposal.");
+        }
+
         return package;
     }
 
     private static string Serialize<T>(T value)
     {
         return JsonSerializer.Serialize(value, DecisionJson.Options);
+    }
+
+    private static bool PackageMatchesProposalContent(DecisionPackageVersion packageVersion, DecisionProposal proposal)
+    {
+        DecisionPackage package = packageVersion.Package;
+        return
+            string.Equals(package.Title, proposal.Title, StringComparison.Ordinal) &&
+            string.Equals(package.DecisionSummary, proposal.Context, StringComparison.Ordinal) &&
+            string.Equals(Serialize(package.Options), Serialize(proposal.Options), StringComparison.Ordinal) &&
+            string.Equals(Serialize(package.Tradeoffs), Serialize(proposal.Tradeoffs), StringComparison.Ordinal) &&
+            string.Equals(Serialize(package.Recommendation), Serialize(proposal.Recommendation), StringComparison.Ordinal) &&
+            string.Equals(Serialize(package.Assumptions), Serialize(proposal.Assumptions), StringComparison.Ordinal) &&
+            string.Equals(Serialize(package.Evidence), Serialize(proposal.Evidence), StringComparison.Ordinal) &&
+            string.Equals(Serialize(package.OptionRelationships), Serialize(proposal.OptionRelationships), StringComparison.Ordinal) &&
+            string.Equals(Serialize(package.AnalyzedOptions), Serialize(proposal.AnalyzedOptions), StringComparison.Ordinal) &&
+            string.Equals(Serialize(package.TradeoffComparisons), Serialize(proposal.TradeoffComparisons), StringComparison.Ordinal) &&
+            string.Equals(Serialize(package.TradeoffAnalysisDiagnostics), Serialize(proposal.TradeoffAnalysisDiagnostics), StringComparison.Ordinal) &&
+            string.Equals(Serialize(package.GenerationDiagnostics), Serialize(proposal.GenerationDiagnostics), StringComparison.Ordinal);
     }
 
     private static string ProposalPath(string proposalId)
