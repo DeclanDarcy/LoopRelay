@@ -2,35 +2,33 @@
 
 ## New State This Slice
 
-- Started Milestone 9: Decision Consumption Integration.
-- Added typed execution-consumption models:
-  - `ExecutionDecisionContext`
-  - `ExecutionDecisionPriority`
-  - `ExecutionArchitectureRule`
-- Extended `ExecutionDecisionProjection` to carry priorities, architecture rules, and the wrapped execution decision context while preserving existing constraints/directives.
-- Updated `DecisionProjectionService` so accepted resolved decisions still project through the existing constraint/directive path and now also derive:
-  - architecture rules from constraint-like architecture, technology, and repository-convention decisions
-  - priorities from strategic decisions and priority/order language
-- Strengthened projection filtering and diagnostics for superseded/archived decisions.
-- Added projected-statement conflict detection for contradictory positive/negative directives across active projected decisions.
-- Updated `ExecutionPromptBuilder` to render priorities and architecture rules as separate governed-decision sections while preserving constraint/directive rendering.
-- Updated UI decision projection types and the development Tauri mock for the new projection fields.
-- Updated `.agents/milestones/m9-decision-consumption.md` to mark the completed M9 subset.
-- Rotated prior handoff to `.agents/handoffs/handoff.0025.md`.
-
-## Verification
-
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "FullyQualifiedName~DecisionProjectionServiceTests|FullyQualifiedName~ExecutionPromptBuilderTests|FullyQualifiedName~ExecutionContextServiceTests"` passed: 33 tests.
-- `npm run lint --prefix src/CommandCenter.UI` passed.
-- `npm run build --prefix src/CommandCenter.UI` passed.
-
-## Next Recommended Slice
-
-- Continue Milestone 9 by persisting projection diagnostics.
-- First targets:
+- Continued Milestone 9: Decision Consumption Integration.
+- Added durable execution projection diagnostics under `.agents/decisions/projections/`.
+- Added `DecisionProjectionDiagnostics`, `DecisionProjectionDecisionDiagnostic`, and `DecisionProjectedStatement` models.
+- Added artifact paths for `execution.<timestamp>.json` and `execution.<timestamp>.md`.
+- Updated `DecisionProjectionService` to persist diagnostics when an `IArtifactStore` is available while preserving the existing `ExecutionDecisionProjection` return contract.
+- Persisted diagnostics now capture:
   - included decisions
   - excluded decisions
   - superseded decisions
   - projected statements
   - conflicts
-- Keep influence tracing and execution UI expansion deferred until persisted diagnostics prove the enriched projection path.
+  - projection timestamp
+  - projection fingerprint
+- Updated `.agents/milestones/m9-decision-consumption.md` to mark persisted projection diagnostics complete.
+- Rotated prior handoff to `.agents/handoffs/handoff.0026.md`.
+
+## Verification
+
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~DecisionProjectionServiceTests` passed: 11 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "FullyQualifiedName~DecisionProjectionServiceTests|FullyQualifiedName~ExecutionPromptBuilderTests|FullyQualifiedName~ExecutionContextServiceTests|FullyQualifiedName~DecisionCertificationServiceTests"` passed: 43 tests.
+
+## Next Recommended Slice
+
+- Continue Milestone 9 by adding decision influence traces per execution session.
+- First targets:
+  - trace each projected constraint/directive/priority/rule to its decision id
+  - record prompt section placement
+  - attach execution session id
+  - persist the trace under `.agents/decisions/influence/`
+- Keep execution UI expansion deferred until influence trace persistence and backend retrieval are in place.

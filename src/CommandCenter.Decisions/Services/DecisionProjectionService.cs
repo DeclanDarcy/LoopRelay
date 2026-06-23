@@ -1,6 +1,11 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using CommandCenter.Core.Artifacts;
 using CommandCenter.Core.Repositories;
 using CommandCenter.Decisions.Abstractions;
 using CommandCenter.Decisions.Models;
+using CommandCenter.Decisions.Persistence;
 using CommandCenter.Decisions.Primitives;
 
 namespace CommandCenter.Decisions.Services;
@@ -8,7 +13,8 @@ namespace CommandCenter.Decisions.Services;
 public sealed class DecisionProjectionService(
     IRepositoryService repositoryService,
     IDecisionRepository decisionRepository,
-    IDecisionGovernanceService governanceService) : IDecisionProjectionService
+    IDecisionGovernanceService governanceService,
+    IArtifactStore? artifactStore = null) : IDecisionProjectionService
 {
     private static readonly (string Prefix, bool IsPositive)[] DirectivePrefixes =
     [
@@ -99,14 +105,33 @@ public sealed class DecisionProjectionService(
         var priorities = new List<ExecutionDecisionPriority>();
         var architectureRules = new List<ExecutionArchitectureRule>();
         var diagnostics = new List<string>();
+        var includedDecisions = new List<DecisionProjectionDecisionDiagnostic>();
+        var excludedDecisions = new List<DecisionProjectionDecisionDiagnostic>();
+        var supersededDecisions = new List<DecisionProjectionDecisionDiagnostic>();
+        var projectedStatements = new List<DecisionProjectedStatement>();
 
         foreach (Decision decision in decisions.OrderBy(decision => decision.Id.Value, StringComparer.Ordinal))
         {
             if (!IsAcceptedResolvedDecision(decision))
             {
+                string reason = BuildExclusionReason(decision);
+                var excludedDecision = new DecisionProjectionDecisionDiagnostic(
+                    decision.Id.Value,
+                    decision.Title,
+                    decision.State,
+                    decision.Resolution?.Outcome,
+                    decision.Classification,
+                    reason,
+                    []);
+                excludedDecisions.Add(excludedDecision);
                 if (decision.State is DecisionState.Superseded or DecisionState.Archived)
                 {
-                    diagnostics.Add($"Excluded {decision.Id.Value}: decision state is {decision.State}.");
+                    diagnostics.Add($"Excluded {decision.Id.Value}: {reason}");
+                }
+
+                if (decision.State == DecisionState.Superseded)
+                {
+                    supersededDecisions.Add(excludedDecision);
                 }
 
                 continue;
@@ -114,17 +139,28 @@ public sealed class DecisionProjectionService(
 
             if (blockedDecisionIds.Contains(decision.Id.Value))
             {
-                diagnostics.Add($"Excluded {decision.Id.Value}: blocking governance finding prevents execution projection.");
+                const string reason = "Blocking governance finding prevents execution projection.";
+                excludedDecisions.Add(new DecisionProjectionDecisionDiagnostic(
+                    decision.Id.Value,
+                    decision.Title,
+                    decision.State,
+                    decision.Resolution?.Outcome,
+                    decision.Classification,
+                    reason,
+                    []));
+                diagnostics.Add($"Excluded {decision.Id.Value}: {reason}");
                 continue;
             }
 
             string statement = BuildStatement(decision);
             ExecutionProjectionKind projectionKind = ClassifyProjectionKind(decision, statement);
             DecisionSourceReference[] sources = BuildSources(decision);
+            var statementIds = new List<string>();
             if (ProjectsAsConstraint(projectionKind))
             {
+                string constraintId = $"ECON-{constraints.Count + 1:0000}";
                 var constraint = new ExecutionConstraint(
-                    $"ECON-{constraints.Count + 1:0000}",
+                    constraintId,
                     decision.Id.Value,
                     decision.Title,
                     statement,
@@ -132,20 +168,34 @@ public sealed class DecisionProjectionService(
                     projectionKind,
                     sources);
                 constraints.Add(constraint);
+                statementIds.Add(constraintId);
+                projectedStatements.Add(ToProjectedStatement(constraint, "Constraint"));
 
+                string ruleId = $"EARC-{architectureRules.Count + 1:0000}";
                 architectureRules.Add(new ExecutionArchitectureRule(
-                    $"EARC-{architectureRules.Count + 1:0000}",
+                    ruleId,
                     decision.Id.Value,
                     decision.Title,
                     statement,
                     decision.Classification,
                     projectionKind,
                     sources));
+                statementIds.Add(ruleId);
+                projectedStatements.Add(new DecisionProjectedStatement(
+                    ruleId,
+                    decision.Id.Value,
+                    decision.Title,
+                    statement,
+                    decision.Classification,
+                    projectionKind,
+                    "ArchitectureRule",
+                    sources));
             }
             else
             {
+                string directiveId = $"EDIR-{directives.Count + 1:0000}";
                 var directive = new ExecutionDirective(
-                    $"EDIR-{directives.Count + 1:0000}",
+                    directiveId,
                     decision.Id.Value,
                     decision.Title,
                     statement,
@@ -153,10 +203,13 @@ public sealed class DecisionProjectionService(
                     projectionKind,
                     sources);
                 directives.Add(directive);
+                statementIds.Add(directiveId);
+                projectedStatements.Add(ToProjectedStatement(directive, "Directive"));
                 if (ProjectsAsPriority(decision, statement))
                 {
+                    string priorityId = $"EPRI-{priorities.Count + 1:0000}";
                     priorities.Add(new ExecutionDecisionPriority(
-                        $"EPRI-{priorities.Count + 1:0000}",
+                        priorityId,
                         decision.Id.Value,
                         decision.Title,
                         statement,
@@ -164,8 +217,27 @@ public sealed class DecisionProjectionService(
                         projectionKind,
                         priorities.Count + 1,
                         sources));
+                    statementIds.Add(priorityId);
+                    projectedStatements.Add(new DecisionProjectedStatement(
+                        priorityId,
+                        decision.Id.Value,
+                        decision.Title,
+                        statement,
+                        decision.Classification,
+                        projectionKind,
+                        "Priority",
+                        sources));
                 }
             }
+
+            includedDecisions.Add(new DecisionProjectionDecisionDiagnostic(
+                decision.Id.Value,
+                decision.Title,
+                decision.State,
+                decision.Resolution?.Outcome,
+                decision.Classification,
+                "Accepted resolved decision projected into execution context.",
+                statementIds));
         }
 
         ExecutionDecisionConflict[] conflicts = DetectConflicts(
@@ -191,9 +263,21 @@ public sealed class DecisionProjectionService(
             conflicts,
             orderedDiagnostics);
 
+        DateTimeOffset generatedAt = DateTimeOffset.UtcNow;
+        var projectionDiagnostics = BuildProjectionDiagnostics(
+            repositoryId,
+            generatedAt,
+            includedDecisions,
+            excludedDecisions,
+            supersededDecisions,
+            projectedStatements,
+            conflicts,
+            orderedDiagnostics);
+        await PersistProjectionDiagnosticsAsync(repository, projectionDiagnostics);
+
         return new ExecutionDecisionProjection(
             repositoryId,
-            DateTimeOffset.UtcNow,
+            generatedAt,
             constraints,
             directives,
             priorities,
@@ -214,6 +298,18 @@ public sealed class DecisionProjectionService(
     {
         return decision.State == DecisionState.Resolved &&
             decision.Resolution?.Outcome == DecisionOutcome.Accepted;
+    }
+
+    private static string BuildExclusionReason(Decision decision)
+    {
+        if (decision.State != DecisionState.Resolved)
+        {
+            return $"Decision state is {decision.State}.";
+        }
+
+        return decision.Resolution?.Outcome is null
+            ? "Decision has no human resolution."
+            : $"Resolution outcome is {decision.Resolution.Outcome}.";
     }
 
     private static string BuildStatement(Decision decision)
@@ -319,6 +415,201 @@ public sealed class DecisionProjectionService(
                     $".agents/decisions/records/{decision.Id.Value}/decision.json",
                     DecisionId: decision.Id)
             ];
+    }
+
+    private static DecisionProjectedStatement ToProjectedStatement(ExecutionConstraint constraint, string category)
+    {
+        return new DecisionProjectedStatement(
+            constraint.Id,
+            constraint.DecisionId,
+            constraint.Title,
+            constraint.Statement,
+            constraint.Classification,
+            constraint.ProjectionKind,
+            category,
+            constraint.Sources);
+    }
+
+    private static DecisionProjectedStatement ToProjectedStatement(ExecutionDirective directive, string category)
+    {
+        return new DecisionProjectedStatement(
+            directive.Id,
+            directive.DecisionId,
+            directive.Title,
+            directive.Statement,
+            directive.Classification,
+            directive.ProjectionKind,
+            category,
+            directive.Sources);
+    }
+
+    private static DecisionProjectionDiagnostics BuildProjectionDiagnostics(
+        Guid repositoryId,
+        DateTimeOffset generatedAt,
+        IReadOnlyList<DecisionProjectionDecisionDiagnostic> includedDecisions,
+        IReadOnlyList<DecisionProjectionDecisionDiagnostic> excludedDecisions,
+        IReadOnlyList<DecisionProjectionDecisionDiagnostic> supersededDecisions,
+        IReadOnlyList<DecisionProjectedStatement> projectedStatements,
+        IReadOnlyList<ExecutionDecisionConflict> conflicts,
+        IReadOnlyList<string> diagnostics)
+    {
+        string id = $"execution.{generatedAt.ToUniversalTime():yyyyMMddHHmmssfffffff}";
+        string fingerprint = FingerprintProjection(
+            repositoryId,
+            includedDecisions,
+            excludedDecisions,
+            supersededDecisions,
+            projectedStatements,
+            conflicts,
+            diagnostics);
+        return new DecisionProjectionDiagnostics(
+            id,
+            repositoryId,
+            generatedAt,
+            fingerprint,
+            includedDecisions.OrderBy(decision => decision.DecisionId, StringComparer.Ordinal).ToArray(),
+            excludedDecisions.OrderBy(decision => decision.DecisionId, StringComparer.Ordinal).ToArray(),
+            supersededDecisions.OrderBy(decision => decision.DecisionId, StringComparer.Ordinal).ToArray(),
+            projectedStatements.OrderBy(statement => statement.Id, StringComparer.Ordinal).ToArray(),
+            conflicts.OrderBy(conflict => conflict.Id, StringComparer.Ordinal).ToArray(),
+            diagnostics.Order(StringComparer.Ordinal).ToArray());
+    }
+
+    private async Task PersistProjectionDiagnosticsAsync(
+        Repository repository,
+        DecisionProjectionDiagnostics diagnostics)
+    {
+        if (artifactStore is null)
+        {
+            return;
+        }
+
+        var document = new DecisionArtifactDocument<DecisionProjectionDiagnostics>(
+            DecisionArtifactPaths.SchemaVersion,
+            repository.Id,
+            diagnostics.GeneratedAt,
+            diagnostics.GeneratedAt,
+            diagnostics);
+        await artifactStore.WriteAsync(
+            DecisionArtifactPaths.Resolve(repository, DecisionArtifactPaths.ExecutionProjectionJson(diagnostics.Id)),
+            JsonSerializer.Serialize(document, DecisionJson.Options));
+        await artifactStore.WriteAsync(
+            DecisionArtifactPaths.Resolve(repository, DecisionArtifactPaths.ExecutionProjectionMarkdown(diagnostics.Id)),
+            RenderProjectionDiagnostics(diagnostics));
+    }
+
+    private static string FingerprintProjection(
+        Guid repositoryId,
+        IReadOnlyList<DecisionProjectionDecisionDiagnostic> includedDecisions,
+        IReadOnlyList<DecisionProjectionDecisionDiagnostic> excludedDecisions,
+        IReadOnlyList<DecisionProjectionDecisionDiagnostic> supersededDecisions,
+        IReadOnlyList<DecisionProjectedStatement> projectedStatements,
+        IReadOnlyList<ExecutionDecisionConflict> conflicts,
+        IReadOnlyList<string> diagnostics)
+    {
+        var payload = new
+        {
+            RepositoryId = repositoryId,
+            IncludedDecisions = includedDecisions.OrderBy(decision => decision.DecisionId, StringComparer.Ordinal),
+            ExcludedDecisions = excludedDecisions.OrderBy(decision => decision.DecisionId, StringComparer.Ordinal),
+            SupersededDecisions = supersededDecisions.OrderBy(decision => decision.DecisionId, StringComparer.Ordinal),
+            ProjectedStatements = projectedStatements.OrderBy(statement => statement.Id, StringComparer.Ordinal),
+            Conflicts = conflicts.OrderBy(conflict => conflict.Id, StringComparer.Ordinal),
+            Diagnostics = diagnostics.Order(StringComparer.Ordinal)
+        };
+        string json = JsonSerializer.Serialize(payload, DecisionJson.Options);
+        byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(json));
+        return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    private static string RenderProjectionDiagnostics(DecisionProjectionDiagnostics diagnostics)
+    {
+        var builder = new StringBuilder();
+        AppendLine($"# {diagnostics.Id}: Execution Decision Projection");
+        AppendLine();
+        AppendFields(
+            ("Repository", diagnostics.RepositoryId.ToString()),
+            ("Generated", diagnostics.GeneratedAt.ToUniversalTime().ToString("O")),
+            ("Projection fingerprint", diagnostics.ProjectionFingerprint),
+            ("Included decisions", diagnostics.IncludedDecisions.Count.ToString()),
+            ("Excluded decisions", diagnostics.ExcludedDecisions.Count.ToString()),
+            ("Superseded decisions", diagnostics.SupersededDecisions.Count.ToString()),
+            ("Projected statements", diagnostics.ProjectedStatements.Count.ToString()),
+            ("Conflicts", diagnostics.Conflicts.Count.ToString()));
+
+        AppendDecisionSection("Included Decisions", diagnostics.IncludedDecisions);
+        AppendDecisionSection("Excluded Decisions", diagnostics.ExcludedDecisions);
+        AppendDecisionSection("Superseded Decisions", diagnostics.SupersededDecisions);
+
+        AppendLine("## Projected Statements");
+        AppendLine();
+        foreach (DecisionProjectedStatement statement in diagnostics.ProjectedStatements
+            .OrderBy(statement => statement.Id, StringComparer.Ordinal))
+        {
+            AppendLine($"- {statement.Id} | {statement.ProjectionCategory} | {statement.DecisionId} | {statement.ProjectionKind} | {statement.Statement}");
+        }
+
+        AppendEmptyIf(diagnostics.ProjectedStatements.Count == 0);
+
+        AppendLine("## Conflicts");
+        AppendLine();
+        foreach (ExecutionDecisionConflict conflict in diagnostics.Conflicts.OrderBy(conflict => conflict.Id, StringComparer.Ordinal))
+        {
+            AppendLine($"- {conflict.Id} | {conflict.DecisionId} | {conflict.Statement} | conflicts with: {conflict.ConflictingExcerpt}");
+        }
+
+        AppendEmptyIf(diagnostics.Conflicts.Count == 0);
+
+        AppendLine("## Diagnostics");
+        AppendLine();
+        foreach (string diagnostic in diagnostics.Diagnostics.Order(StringComparer.Ordinal))
+        {
+            AppendLine($"- {diagnostic}");
+        }
+
+        AppendEmptyIf(diagnostics.Diagnostics.Count == 0);
+        return builder.ToString();
+
+        void AppendDecisionSection(string title, IReadOnlyList<DecisionProjectionDecisionDiagnostic> decisions)
+        {
+            AppendLine($"## {title}");
+            AppendLine();
+            foreach (DecisionProjectionDecisionDiagnostic decision in decisions.OrderBy(decision => decision.DecisionId, StringComparer.Ordinal))
+            {
+                string statementIds = decision.ProjectedStatementIds.Count == 0
+                    ? "none"
+                    : string.Join(", ", decision.ProjectedStatementIds);
+                AppendLine($"- {decision.DecisionId} | {decision.State} | {decision.Outcome?.ToString() ?? "None"} | {decision.Classification} | {decision.Reason} | statements: {statementIds}");
+            }
+
+            AppendEmptyIf(decisions.Count == 0);
+        }
+
+        void AppendFields(params (string Label, string Value)[] fields)
+        {
+            foreach ((string label, string value) in fields)
+            {
+                AppendLine($"- {label}: {value}");
+            }
+
+            AppendLine();
+        }
+
+        void AppendEmptyIf(bool condition)
+        {
+            if (condition)
+            {
+                AppendLine("- None.");
+            }
+
+            AppendLine();
+        }
+
+        void AppendLine(string text = "")
+        {
+            builder.Append(text);
+            builder.Append('\n');
+        }
     }
 
     private static ExecutionDecisionConflict[] DetectConflicts(

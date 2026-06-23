@@ -15,6 +15,7 @@ internal static partial class DecisionArtifactPaths
     private const string AssimilationRoot = $"{DecisionsRoot}/assimilation";
     private const string GovernanceRoot = $"{DecisionsRoot}/governance";
     private const string CertificationRoot = $"{DecisionsRoot}/certification";
+    private const string ProjectionsRoot = $"{DecisionsRoot}/projections";
     private const string QualityRoot = $"{DecisionsRoot}/quality";
     private const string QualityAssessmentsRoot = $"{QualityRoot}/assessments";
     private const string QualityReportsRoot = $"{QualityRoot}/reports";
@@ -157,6 +158,16 @@ internal static partial class DecisionArtifactPaths
         return ArtifactPath.CombineRelative(CertificationRoot, $"{ValidateCertificationReportId(reportId)}.json");
     }
 
+    public static string ExecutionProjectionJson(string projectionId)
+    {
+        return ArtifactPath.CombineRelative(ProjectionsRoot, $"{ValidateExecutionProjectionId(projectionId)}.json");
+    }
+
+    public static string ExecutionProjectionMarkdown(string projectionId)
+    {
+        return ArtifactPath.CombineRelative(ProjectionsRoot, $"{ValidateExecutionProjectionId(projectionId)}.md");
+    }
+
     public static string QualityAssessmentJson(string assessmentId)
     {
         return ArtifactPath.CombineRelative(QualityAssessmentsRoot, $"{ValidateQualityAssessmentId(assessmentId)}.json");
@@ -195,6 +206,11 @@ internal static partial class DecisionArtifactPaths
     public static string CertificationRootPath()
     {
         return CertificationRoot;
+    }
+
+    public static string ProjectionsRootPath()
+    {
+        return ProjectionsRoot;
     }
 
     public static string QualityAssessmentsRootPath()
@@ -275,6 +291,16 @@ internal static partial class DecisionArtifactPaths
         return id;
     }
 
+    public static string ValidateExecutionProjectionId(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id) || !ExecutionProjectionIdPattern().IsMatch(id))
+        {
+            throw new ArgumentException("Execution projection id must match execution.YYYYMMDDHHMMSSFFFFFFF.", nameof(id));
+        }
+
+        return id;
+    }
+
     public static string ValidateQualityAssessmentId(string id)
     {
         if (string.IsNullOrWhiteSpace(id) || !QualityAssessmentIdPattern().IsMatch(id))
@@ -313,6 +339,9 @@ internal static partial class DecisionArtifactPaths
 
     [GeneratedRegex("^certification\\.[0-9]{21}$")]
     private static partial Regex CertificationReportIdPattern();
+
+    [GeneratedRegex("^execution\\.[0-9]{21}$")]
+    private static partial Regex ExecutionProjectionIdPattern();
 
     [GeneratedRegex("^assessment\\.(DEC-[0-9]{4}|[0-9]{14}([0-9]{7})?)$")]
     private static partial Regex QualityAssessmentIdPattern();

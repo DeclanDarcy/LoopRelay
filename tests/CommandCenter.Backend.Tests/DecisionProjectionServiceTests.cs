@@ -1,3 +1,6 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using CommandCenter.Core.Artifacts;
 using CommandCenter.Core.Repositories;
 using CommandCenter.Decisions.Abstractions;
 using CommandCenter.Decisions.Models;
@@ -261,7 +264,53 @@ public sealed class DecisionProjectionServiceTests
         Assert.Empty(projection.Directives);
     }
 
+    [Fact]
+    public async Task ProjectionPersistsExecutionDiagnosticsArtifact()
+    {
+        Harness harness = CreateHarness(withArtifactStore: true);
+        await harness.DecisionRepository.SaveDecisionAsync(
+            harness.Repository,
+            CreateDecision(harness.Repository.Id, "DEC-0001", DecisionState.Resolved, DecisionOutcome.Accepted, DecisionClassification.Architectural));
+        await harness.DecisionRepository.SaveDecisionAsync(
+            harness.Repository,
+            CreateDecision(harness.Repository.Id, "DEC-0002", DecisionState.Superseded, DecisionOutcome.Accepted, DecisionClassification.Tactical));
+        await harness.DecisionRepository.SaveDecisionAsync(
+            harness.Repository,
+            CreateDecision(harness.Repository.Id, "DEC-0003", DecisionState.Resolved, DecisionOutcome.Rejected, DecisionClassification.Operational));
+
+        ExecutionDecisionProjection projection = await harness.Service.BuildExecutionProjectionAsync(harness.Repository.Id);
+
+        string projectionsRoot = Path.Combine(harness.Repository.Path, ".agents", "decisions", "projections");
+        string jsonPath = Assert.Single(Directory.GetFiles(projectionsRoot, "execution.*.json"));
+        string markdownPath = Assert.Single(Directory.GetFiles(projectionsRoot, "execution.*.md"));
+        string json = await File.ReadAllTextAsync(jsonPath);
+        using JsonDocument document = JsonDocument.Parse(json);
+        JsonElement root = document.RootElement;
+        var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        jsonOptions.Converters.Add(new JsonStringEnumConverter());
+        DecisionProjectionDiagnostics diagnostics =
+            JsonSerializer.Deserialize<DecisionProjectionDiagnostics>(
+                root.GetProperty("payload").GetRawText(),
+                jsonOptions)!;
+
+        Assert.Equal(harness.Repository.Id.ToString(), root.GetProperty("repositoryId").GetString());
+        Assert.Equal(projection.GeneratedAt, diagnostics.GeneratedAt);
+        Assert.Equal("DEC-0001", Assert.Single(diagnostics.IncludedDecisions).DecisionId);
+        Assert.Contains(diagnostics.ExcludedDecisions, decision => decision.DecisionId == "DEC-0002");
+        Assert.Contains(diagnostics.ExcludedDecisions, decision => decision.DecisionId == "DEC-0003");
+        Assert.Equal("DEC-0002", Assert.Single(diagnostics.SupersededDecisions).DecisionId);
+        Assert.Contains(diagnostics.ProjectedStatements, statement => statement.ProjectionCategory == "Constraint");
+        Assert.Contains(diagnostics.ProjectedStatements, statement => statement.ProjectionCategory == "ArchitectureRule");
+        Assert.False(string.IsNullOrWhiteSpace(diagnostics.ProjectionFingerprint));
+        Assert.Contains("Included Decisions", await File.ReadAllTextAsync(markdownPath), StringComparison.Ordinal);
+    }
+
     private static Harness CreateHarness(params DecisionGovernanceFinding[] findings)
+    {
+        return CreateHarness(false, findings);
+    }
+
+    private static Harness CreateHarness(bool withArtifactStore, params DecisionGovernanceFinding[] findings)
     {
         var repository = new Repository
         {
@@ -273,7 +322,11 @@ public sealed class DecisionProjectionServiceTests
         var repositoryService = new StaticRepositoryService(repository);
         var decisionRepository = new InMemoryDecisionRepository();
         var governanceService = new StaticGovernanceService(repository.Id, findings);
-        var service = new DecisionProjectionService(repositoryService, decisionRepository, governanceService);
+        var service = new DecisionProjectionService(
+            repositoryService,
+            decisionRepository,
+            governanceService,
+            withArtifactStore ? new FileSystemArtifactStore() : null);
         return new Harness(repository, decisionRepository, service);
     }
 
