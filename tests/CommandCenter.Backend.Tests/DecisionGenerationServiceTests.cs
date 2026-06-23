@@ -199,6 +199,120 @@ public sealed class DecisionGenerationServiceTests
         Assert.Contains("option-1: Valid", markdown);
     }
 
+    [Theory]
+    [InlineData("duplicate", DecisionOptionValidationIssueType.Duplicate)]
+    [InlineData("non-actionable", DecisionOptionValidationIssueType.NonActionable)]
+    [InlineData("unrelated-evidence", DecisionOptionValidationIssueType.EvidenceUnrelated)]
+    public void OptionValidationRejectsInvalidGeneratedOptions(
+        string invalidCase,
+        DecisionOptionValidationIssueType expectedIssue)
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        DecisionEvidence relatedEvidence = new(
+            "Plan requires a persistence decision.",
+            [new DecisionSourceReference("Plan", ".agents/plan.md", CandidateId: candidate.Id)]);
+        DecisionEvidence unrelatedEvidence = new(
+            "Unrelated candidate evidence.",
+            [new DecisionSourceReference("DecisionCandidate", CandidateId: "CAND-9999")]);
+        var accepted = new DecisionOption(
+            "option-1",
+            "Implement now",
+            "Resolve the candidate using repository evidence.",
+            [relatedEvidence])
+        {
+            Type = DecisionOptionType.Adopt
+        };
+        DecisionOption option = invalidCase switch
+        {
+            "duplicate" => accepted with { Id = "option-2" },
+            "non-actionable" => accepted with
+            {
+                Id = "option-2",
+                Title = "TBD",
+                Description = "Unknown resolution path."
+            },
+            _ => accepted with
+            {
+                Id = "option-2",
+                Evidence = [unrelatedEvidence]
+            }
+        };
+        DecisionOption[] acceptedOptions = invalidCase == "duplicate" ? [accepted] : [];
+        var validationService = new OptionValidationService();
+
+        DecisionOptionValidationResult result = validationService.ValidateOption(option, candidate, acceptedOptions);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Issues, issue => issue.Type == expectedIssue);
+    }
+
+    [Fact]
+    public async Task GenerateProposalPersistsRejectedOptionDiagnostics()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var relatedEvidence = new DecisionEvidence(
+            "Plan requires a persistence decision.",
+            [new DecisionSourceReference("Plan", ".agents/plan.md", CandidateId: candidate.Id)]);
+        var optionGeneration = new RejectedDiagnosticOptionGenerationService(
+            new DecisionOptionGenerationResult(
+                [
+                    new DecisionOption(
+                        "option-1",
+                        "Implement now",
+                        "Resolve the candidate using repository evidence.",
+                        [relatedEvidence]),
+                    new DecisionOption(
+                        "option-2",
+                        "Implement later",
+                        "Defer the candidate until sequencing is clearer.",
+                        [relatedEvidence])
+                    {
+                        Type = DecisionOptionType.Delay
+                    }
+                ],
+                [],
+                new DecisionGenerationDiagnostics(
+                    3,
+                    2,
+                    1,
+                    1,
+                    0,
+                    [
+                        new DecisionOptionValidationResult("option-1", true, []),
+                        new DecisionOptionValidationResult("option-2", true, []),
+                        new DecisionOptionValidationResult(
+                            "option-3",
+                            false,
+                            [new DecisionOptionValidationIssue(
+                                DecisionOptionValidationIssueType.Duplicate,
+                                "Option duplicates option-1 by normalized title, type, or overlapping evidence.")])
+                    ],
+                    ["Rejected option-3: Option duplicates option-1 by normalized title, type, or overlapping evidence."])));
+        var service = CreateGenerationService(repository, store, decisionRepository, optionGeneration);
+
+        DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
+        DecisionProposal reloaded = (await decisionRepository.GetProposalAsync(repository, proposal.Id))!;
+
+        Assert.NotNull(reloaded.GenerationDiagnostics);
+        Assert.Equal(1, reloaded.GenerationDiagnostics.RejectedOptionCount);
+        Assert.Equal(1, reloaded.GenerationDiagnostics.DeduplicatedOptionCount);
+        Assert.Contains(reloaded.GenerationDiagnostics.OptionValidationResults, result =>
+            result.OptionId == "option-3" &&
+            !result.IsValid &&
+            result.Issues.Any(issue => issue.Type == DecisionOptionValidationIssueType.Duplicate));
+
+        string markdown = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/proposal.md");
+        Assert.Contains("- Rejected options: 1", markdown);
+        Assert.Contains("- Deduplicated options: 1", markdown);
+        Assert.Contains("option-3: Invalid", markdown);
+        Assert.Contains("Duplicate: Option duplicates option-1", markdown);
+    }
+
     [Fact]
     public async Task GenerateProposalDoesNotMutateCandidateDecisionOrContextArtifacts()
     {
@@ -1612,7 +1726,8 @@ public sealed class DecisionGenerationServiceTests
     private static DecisionGenerationService CreateGenerationService(
         Repository repository,
         FileSystemArtifactStore store,
-        FileSystemDecisionRepository decisionRepository)
+        FileSystemDecisionRepository decisionRepository,
+        IOptionGenerationService? optionGenerationService = null)
     {
         var repositoryService = new StubRepositoryService(repository);
         var projectionService = new DecisionArtifactProjectionService(decisionRepository, store);
@@ -1620,7 +1735,7 @@ public sealed class DecisionGenerationServiceTests
             repositoryService,
             decisionRepository,
             projectionService,
-            new OptionGenerationService());
+            optionGenerationService ?? new OptionGenerationService());
     }
 
     private static DecisionResolutionService CreateResolutionService(
@@ -1764,6 +1879,17 @@ public sealed class DecisionGenerationServiceTests
             Name = Path.GetFileName(path),
             Path = path
         };
+    }
+
+    private sealed class RejectedDiagnosticOptionGenerationService(
+        DecisionOptionGenerationResult result) : IOptionGenerationService
+    {
+        public DecisionOptionGenerationResult GenerateOptions(
+            DecisionCandidate candidate,
+            IReadOnlyList<DecisionEvidence> evidence)
+        {
+            return result;
+        }
     }
 
     private sealed class StubRepositoryService(params Repository[] repositories) : IRepositoryService
