@@ -2,25 +2,25 @@
 
 ## Newly Authorized
 
-- Confirm the completed M6 opening slice as correct.
-- Preserve the sequencing where generation creates a proposal first, then creates an immutable package snapshot after proposal persistence/projection.
-- Treat the proposal as the active workflow object.
-- Treat the package as immutable governance evidence, not decision authority.
-- Preserve human review and human resolution as the path to decision authority.
-- Keep create-once `PKG-*` immutability as the right implementation strategy for M6.
-- Keep package persistence at the repository abstraction layer with allocate, list, read, and save semantics.
-- Continue Milestone 6 with package validation next.
-- Implement package validation before package comparison.
-- Validate required context.
-- Validate required options.
-- Validate insufficient options unless explicitly justified.
-- Require either a recommendation or a no-recommendation explanation.
-- Require evidence when a recommendation exists.
-- Verify the recommended option id exists inside the package.
+- Confirm the second Milestone 6 slice as correct.
+- Treat package validation before immutable persistence as the correct governance sequence.
+- Keep package validation at the `DecisionPackageService` boundary.
+- Preserve the responsibility chain: generation builds proposal content, package construction assembles the snapshot, package validation verifies package semantics, immutable persistence stores only valid package versions.
+- Require a recommendation or an explicit no-recommendation explanation before package persistence.
+- Require preferred recommendations to point to an option inside the package.
+- Require recommendation evidence before persisting a package with a selected recommendation.
+- Keep fallback generation context in `DecisionGenerationService` narrow and compatibility-focused.
+- Do not allow fallback generation context to become a second context construction system.
+- Continue Milestone 6 with package comparison next.
+- Implement package comparison in this order:
+  - recommendation change detection
+  - option added/removed/modified detection
+  - evidence and risk deltas
+  - context fingerprint deltas
 
 ## Not Authorized
 
-- Do not implement package comparison yet.
-- Do not replace proposals with packages.
-- Do not let packages imply decision authority.
-- Do not add dashboards, certification, or broader package governance before package validity is established.
+- Do not move package validation into `DecisionGenerationService`, repository persistence, UI, or client-side logic.
+- Do not treat packages as decision authority.
+- Do not add quality dashboards, certification, throughput reporting, package authority, or workflow mutation before package infrastructure is complete.
+- Do not expand fallback generation context beyond compatibility/test support.

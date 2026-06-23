@@ -2,29 +2,30 @@
 
 ## New State This Slice
 
-- Started Milestone 6 with the narrow immutable package snapshot slice.
-- Added package domain records:
-  - `DecisionPackage`
-  - `DecisionPackageMetadata`
-  - `DecisionPackageVersion`
-- Added `IDecisionPackageService` and `DecisionPackageService`.
-- `DecisionGenerationService` now creates `PKG-0001` immediately after persisting/projecting a generated proposal.
-- Package versions are stored under `.agents/decisions/proposals/{PROP}/versions/{PKG}.json`.
-- Package markdown is projected under `.agents/decisions/proposals/{PROP}/versions/{PKG}.md`.
-- Package snapshots include candidate, typed generation context, options, option relationships, analyzed options, tradeoffs, tradeoff comparisons, recommendation, recommendation evidence, assumptions, open concerns, evidence, diagnostics, metadata, generated timestamp, and fingerprints.
-- Filesystem and in-memory decision repositories now allocate, list, read, and save package versions.
-- Package version saves are immutable: saving an existing package id fails instead of overwriting.
-- `DecisionArtifactProjectionService` can render package markdown and recover missing package markdown projections.
-- Updated `.agents/milestones/m6-decision-packages.md` to mark the completed snapshot, metadata, service, storage, markdown, and immutability items.
+- Continued Milestone 6 with package validation.
+- Added `DecisionPackageValidationResult`.
+- Extended `IDecisionPackageService` with `ValidatePackage`.
+- `DecisionPackageService` now validates before saving/projecting package versions.
+- Validation currently enforces:
+  - decision summary present
+  - decision-generation context present
+  - at least one option present
+  - at least two options unless explicitly justified
+  - package evidence present
+  - recommendation or no-recommendation explanation present
+  - selected recommendation option id exists in package options
+  - recommendation evidence exists when a recommendation selects an option
+- `DecisionGenerationService` now creates a deterministic fallback generation context from promoted candidate evidence when no `IDecisionContextProjectionService` is configured, so package validation does not persist truly contextless packages in legacy/test construction paths.
+- Updated `.agents/milestones/m6-decision-packages.md` to mark package validation and missing-section validation tests complete.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter DecisionGenerationServiceTests` passed: 59 tests.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "DecisionGenerationServiceTests|DecisionRepositoryTests"` passed: 70 tests.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 449 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter DecisionGenerationServiceTests` passed: 62 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "DecisionGenerationServiceTests|DecisionRepositoryTests"` passed: 73 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 452 tests.
 - `dotnet build CommandCenter.slnx` passed with 0 warnings and 0 errors.
 
 ## Next Recommended Slice
 
-- Continue Milestone 6 with package validation.
-- Keep it narrow: add a validation result model/service behind `DecisionPackageService`, enforce required summary/context/options/evidence/recommendation rules before save, and add tests for invalid packages without changing package comparison or resolution behavior yet.
+- Continue Milestone 6 with package comparison.
+- Keep it narrow: compare two package versions for recommendation changes, option changes, evidence changes, risk changes, and context fingerprint changes; add tests for recommendation and option deltas first.

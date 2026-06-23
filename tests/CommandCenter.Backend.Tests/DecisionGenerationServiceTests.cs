@@ -76,6 +76,11 @@ public sealed class DecisionGenerationServiceTests
         Assert.Equal(".agents/milestones/m6-decision-packages.md", packageVersion.Package.Metadata.MilestonePath);
         Assert.False(string.IsNullOrWhiteSpace(packageVersion.PackageFingerprint));
         Assert.False(string.IsNullOrWhiteSpace(packageVersion.Package.Metadata.SourceProposalFingerprint));
+        DecisionPackageValidationResult packageValidation =
+            new DecisionPackageService(decisionRepository, new DecisionArtifactProjectionService(decisionRepository, store))
+                .ValidatePackage(packageVersion.Package);
+        Assert.True(packageValidation.IsValid);
+        Assert.Empty(packageValidation.Errors);
 
         string markdown = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/proposal.md");
         string packageMarkdown = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/versions/PKG-0001.md");
@@ -88,6 +93,90 @@ public sealed class DecisionGenerationServiceTests
         Assert.Contains("## Tradeoff Analysis", packageMarkdown);
         Assert.Contains("## Recommendation", packageMarkdown);
         Assert.Contains("- PROP-0001 | Generated | CAND-0001 | Decide persistence schema", index);
+    }
+
+    [Fact]
+    public async Task PackageValidationRejectsMissingRequiredSectionsBeforePersistence()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        var projectionService = new DecisionArtifactProjectionService(decisionRepository, store);
+        var packageService = new DecisionPackageService(decisionRepository, projectionService);
+        var proposal = new DecisionProposal(
+            "PROP-0001",
+            repository.Id,
+            candidate.Id,
+            DecisionProposalState.Generated,
+            "Invalid package proposal",
+            string.Empty,
+            [],
+            [],
+            null,
+            [],
+            [],
+            [new DecisionHistoryEntry(DateTimeOffset.UtcNow, "Generated", null, "Generated", "Seeded invalid proposal.", [])]);
+
+        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            packageService.CreatePackageAsync(repository, candidate, proposal, DecisionGenerationContext.Empty(repository.Id), DateTimeOffset.UtcNow));
+
+        Assert.Contains("Decision summary is required.", exception.Message);
+        Assert.Contains("Decision context is required.", exception.Message);
+        Assert.Contains("At least one generated option is required.", exception.Message);
+        Assert.Contains("A recommendation or no-recommendation explanation is required.", exception.Message);
+        Assert.Empty(await decisionRepository.ListPackageVersionsAsync(repository, proposal.Id));
+        Assert.False(File.Exists(Path.Combine(repository.Path, ".agents", "decisions", "proposals", proposal.Id, "versions", "PKG-0001.json")));
+    }
+
+    [Fact]
+    public async Task PackageValidationRejectsRecommendationOptionOutsidePackage()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var service = CreateGenerationService(repository, store, decisionRepository);
+        DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
+        DecisionPackageVersion packageVersion = Assert.Single(await decisionRepository.ListPackageVersionsAsync(repository, proposal.Id));
+        var packageService = new DecisionPackageService(decisionRepository, new DecisionArtifactProjectionService(decisionRepository, store));
+
+        DecisionPackageValidationResult validation = packageService.ValidatePackage(packageVersion.Package with
+        {
+            Recommendation = packageVersion.Package.Recommendation! with { OptionId = "missing-option" }
+        });
+
+        Assert.False(validation.IsValid);
+        Assert.Contains("Recommended option id 'missing-option' does not exist in the package options.", validation.Errors);
+    }
+
+    [Fact]
+    public async Task PackageValidationAcceptsNoRecommendationWithExplanation()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var service = CreateGenerationService(repository, store, decisionRepository);
+        DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
+        DecisionPackageVersion packageVersion = Assert.Single(await decisionRepository.ListPackageVersionsAsync(repository, proposal.Id));
+        var packageService = new DecisionPackageService(decisionRepository, new DecisionArtifactProjectionService(decisionRepository, store));
+
+        DecisionPackageValidationResult validation = packageService.ValidatePackage(packageVersion.Package with
+        {
+            Recommendation = packageVersion.Package.Recommendation! with
+            {
+                OptionId = string.Empty,
+                Mode = RecommendationMode.NoRecommendation,
+                Rationale = "No option can be recommended because unresolved evidence prevents a defensible preference.",
+                Summary = "No defensible recommendation."
+            }
+        });
+
+        Assert.True(validation.IsValid);
+        Assert.Empty(validation.Errors);
     }
 
     [Fact]

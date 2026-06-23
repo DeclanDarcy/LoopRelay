@@ -27,14 +27,14 @@ Tier 0 may use the existing proposal record as the first reviewable package shap
   - [x] milestone id/path
   - [x] source proposal id
 - [x] Add `IDecisionPackageService`.
-- [ ] Add package validation:
-  - [ ] summary required
-  - [ ] context required
-  - [ ] options required
-  - [ ] recommendation or no-recommendation explanation required
-  - [ ] evidence required
-  - [ ] at least two options unless justified
-  - [ ] recommended option id must exist when recommendation mode selects an option
+- [x] Add package validation:
+  - [x] summary required
+  - [x] context required
+  - [x] options required
+  - [x] recommendation or no-recommendation explanation required
+  - [x] evidence required
+  - [x] at least two options unless justified
+  - [x] recommended option id must exist when recommendation mode selects an option
 - [x] Store package versions under each proposal.
 - [x] Render deterministic package markdown with:
   - [x] decision summary
@@ -56,7 +56,7 @@ Tier 0 may use the existing proposal record as the first reviewable package shap
 ## Tests
 
 - [x] Package generation persists JSON and markdown.
-- [ ] Missing required sections fail validation.
+- [x] Missing required sections fail validation.
 - [x] Package identity is stable and repository-scoped.
 - [x] Package versions are immutable after creation.
 - [ ] Package comparison detects recommendation and option changes.

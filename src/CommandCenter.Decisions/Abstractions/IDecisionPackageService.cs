@@ -11,4 +11,6 @@ public interface IDecisionPackageService
         DecisionProposal proposal,
         DecisionGenerationContext generationContext,
         DateTimeOffset generatedAt);
+
+    DecisionPackageValidationResult ValidatePackage(DecisionPackage package);
 }

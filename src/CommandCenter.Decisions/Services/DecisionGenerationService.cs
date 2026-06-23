@@ -77,7 +77,7 @@ public sealed class DecisionGenerationService(
         DecisionOptionGenerationResult optionGeneration = optionGenerationService.GenerateOptions(candidate, evidence);
         DecisionOption[] options = optionGeneration.Options.ToArray();
         DecisionGenerationContext generationContext = contextProjectionService is null
-            ? DecisionGenerationContext.Empty(repository.Id)
+            ? BuildFallbackGenerationContext(repository.Id, candidate, evidence)
             : await contextProjectionService.BuildGenerationContextAsync(repository.Id);
         string contextFingerprint = Fingerprint(new
         {
@@ -387,6 +387,36 @@ public sealed class DecisionGenerationService(
             unknowns,
             warnings.Order(StringComparer.Ordinal).ToArray(),
             diagnostics);
+    }
+
+    private static DecisionGenerationContext BuildFallbackGenerationContext(
+        Guid repositoryId,
+        DecisionCandidate candidate,
+        IReadOnlyList<DecisionEvidence> evidence)
+    {
+        DecisionGenerationContextEntry candidateEntry = new(
+            candidate.Id,
+            candidate.Summary,
+            evidence);
+        string fingerprint = Fingerprint(new
+        {
+            RepositoryId = repositoryId,
+            CandidateId = candidate.Id,
+            candidate.Summary,
+            Evidence = evidence
+        });
+        return new DecisionGenerationContext(
+            repositoryId,
+            fingerprint,
+            [candidateEntry],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            ["Fallback decision generation context was built from the promoted candidate because no context projection service was configured."]);
     }
 
     private static DecisionAssumption[] BuildAssumptions(
