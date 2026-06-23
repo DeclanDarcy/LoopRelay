@@ -26,7 +26,7 @@ measure whether generated decisions reduce human decision-production burden.
   - [x] recommendation divergence
   - [x] refinement count
   - [x] refinement scope
-  - [ ] recommendation stability
+  - [x] recommendation stability
   - [x] alternative utilization
   - [x] rejection/archive/supersession
   - [x] human rewrite indicators
@@ -34,9 +34,9 @@ measure whether generated decisions reduce human decision-production burden.
 - [ ] Evaluate categories:
   - [x] recommendation quality
   - [x] option quality
-  - [ ] tradeoff quality
-  - [ ] context quality
-  - [ ] constraint quality
+  - [x] tradeoff quality
+  - [x] context quality
+  - [x] constraint quality
   - [x] human effort
   - [x] human authoring burden
 - [ ] Generate repository reports:
@@ -66,7 +66,7 @@ measure whether generated decisions reduce human decision-production burden.
 - [x] Alternative selection lowers recommendation quality but preserves option usefulness.
 - [x] Major refinement or rewrite increases human-effort penalty.
 - [x] Full rewrite and generation bypass are recorded separately from ordinary refinement.
-- [ ] Repeated recommendation reversal reduces stability.
+- [x] Repeated recommendation reversal reduces stability.
 - [x] Reports and trends are deterministic and persisted.
 - [x] Quality assessment, report, and trend artifacts round-trip through filesystem persistence with markdown projections.
 - [x] Quality assessment does not mutate decisions, proposals, packages, or execution projection.

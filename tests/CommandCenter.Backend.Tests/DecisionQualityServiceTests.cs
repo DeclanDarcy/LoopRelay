@@ -72,6 +72,66 @@ public sealed class DecisionQualityServiceTests
     }
 
     [Fact]
+    public async Task RepeatedRecommendationReversalReducesStability()
+    {
+        Repository repository = CreateRepository();
+        var decisionRepository = new InMemoryDecisionRepository();
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        Decision previous = CreateDecision(
+            repository.Id,
+            DecisionOutcome.Accepted,
+            "option-2",
+            recommendedOptionId: "option-1",
+            resolvedAt: now.AddMinutes(-10));
+        Decision current = CreateDecision(
+            repository.Id,
+            DecisionOutcome.Accepted,
+            "option-2",
+            recommendedOptionId: "option-1",
+            decisionId: "DEC-0002",
+            resolvedAt: now);
+        await decisionRepository.SaveDecisionAsync(repository, previous);
+        await decisionRepository.SaveDecisionAsync(repository, current);
+        IDecisionQualityAssessmentService service = CreateAssessmentService(repository, decisionRepository);
+
+        DecisionQualityAssessment assessment = await service.AssessDecisionAsync(repository.Id, current.Id.Value);
+
+        Assert.Contains(assessment.Signals, signal =>
+            signal.Category == "RecommendationStability" &&
+            signal.Direction == QualitySignalDirection.Negative &&
+            signal.Severity == QualitySignalSeverity.High &&
+            signal.Detail.Contains("2 of 2", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task QualitySignalsEvaluateTradeoffContextAndConstraintCategories()
+    {
+        Repository repository = CreateRepository();
+        var decisionRepository = new InMemoryDecisionRepository();
+        Decision decision = CreateDecision(
+            repository.Id,
+            DecisionOutcome.Accepted,
+            "option-2",
+            recommendedOptionId: "option-1",
+            disqualifyingConstraints: ["option-2 violates a preserved compatibility constraint."]);
+        await decisionRepository.SaveDecisionAsync(repository, decision);
+        IDecisionQualityAssessmentService service = CreateAssessmentService(repository, decisionRepository);
+
+        DecisionQualityAssessment assessment = await service.AssessDecisionAsync(repository.Id, decision.Id.Value);
+
+        Assert.Contains(assessment.Signals, signal =>
+            signal.Category == "TradeoffQuality" &&
+            signal.Direction == QualitySignalDirection.Positive);
+        Assert.Contains(assessment.Signals, signal =>
+            signal.Category == "ContextQuality" &&
+            signal.Direction == QualitySignalDirection.Positive);
+        Assert.Contains(assessment.Signals, signal =>
+            signal.Category == "ConstraintQuality" &&
+            signal.Direction == QualitySignalDirection.Negative &&
+            signal.Severity == QualitySignalSeverity.High);
+    }
+
+    [Fact]
     public async Task FullRewriteAndGenerationBypassAreRecordedSeparately()
     {
         Repository repository = CreateRepository();
@@ -263,10 +323,31 @@ public sealed class DecisionQualityServiceTests
         string selectedOptionId,
         string recommendedOptionId,
         string decisionId = "DEC-0001",
-        bool includeSnapshot = true)
+        bool includeSnapshot = true,
+        DateTimeOffset? resolvedAt = null,
+        IReadOnlyList<string>? disqualifyingConstraints = null)
     {
-        DateTimeOffset now = DateTimeOffset.UtcNow;
+        DateTimeOffset now = resolvedAt ?? DateTimeOffset.UtcNow;
         var id = new DecisionId(decisionId);
+        DecisionEvidence[] evidence = [new("Generated from quality test evidence.", [DecisionRecordSource(id)])];
+        DecisionTradeoff[] tradeoffs =
+        [
+            new("option-1", "Keeps recommendation quality measurable.", "May miss alternative utilization.", evidence),
+            new("option-2", "Measures alternative utilization.", "May expose recommendation divergence.", evidence)
+        ];
+        DecisionTradeoffComparison[] comparisons = disqualifyingConstraints is { Count: > 0 }
+            ?
+            [
+                new DecisionTradeoffComparison(
+                    selectedOptionId,
+                    [],
+                    [],
+                    [],
+                    [],
+                    disqualifyingConstraints,
+                    evidence)
+            ]
+            : [];
         DecisionResolvedProposalSnapshot? snapshot = includeSnapshot
             ? new DecisionResolvedProposalSnapshot(
                 "PROP-0001",
@@ -276,22 +357,39 @@ public sealed class DecisionQualityServiceTests
                 "Choose decision quality path",
                 "Decide how to assess generated decisions.",
                 Options(),
-                [],
+                tradeoffs,
                 new DecisionRecommendation(
                     recommendedOptionId,
                     "Recommended from generated evidence.",
-                    [])
+                    evidence)
                 {
-                    Summary = "Prefer generated path."
+                    Summary = "Prefer generated path.",
+                    OptionEvaluations = disqualifyingConstraints is { Count: > 0 }
+                        ?
+                        [
+                            new OptionEvaluation(
+                                selectedOptionId,
+                                [],
+                                [],
+                                [],
+                                disqualifyingConstraints,
+                                "Selected option has a disqualifying constraint.",
+                                -50,
+                                2,
+                                "Constraint penalty applied.",
+                                [])
+                        ]
+                        : []
                 },
                 [],
-                [],
+                evidence,
                 [],
                 [])
             {
                 PackageId = "PKG-0001",
                 PackageFingerprint = "package-fingerprint",
-                AuthorityResolvedAt = now
+                AuthorityResolvedAt = now,
+                TradeoffComparisons = comparisons
             }
             : null;
         bool diverged = includeSnapshot && !string.Equals(selectedOptionId, recommendedOptionId, StringComparison.Ordinal);

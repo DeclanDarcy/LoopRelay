@@ -67,6 +67,11 @@ public sealed class DecisionQualitySignalService(
                 "Generated alternative option was used.", "Alternative utilization indicates the option set contained useful generated content.", [SelectedOptionSource(snapshot, decision.Id, resolution.SelectedOptionId)]);
         }
 
+        await AddRecommendationStabilitySignalAsync(signals, repository, decision, snapshot);
+        AddTradeoffQualitySignal(signals, repository, decision, snapshot);
+        AddContextQualitySignal(signals, repository, decision, snapshot);
+        AddConstraintQualitySignal(signals, repository, decision, snapshot);
+
         IReadOnlyList<DecisionRefinementArtifact> refinements =
             await decisionRepository.ListRefinementArtifactsAsync(repository, snapshot.ProposalId);
         IReadOnlyList<DecisionProposalRevision> revisions =
@@ -104,6 +109,148 @@ public sealed class DecisionQualitySignalService(
         }
 
         return signals;
+    }
+
+    private async Task AddRecommendationStabilitySignalAsync(
+        ICollection<DecisionQualitySignal> signals,
+        Repository repository,
+        Decision decision,
+        DecisionResolvedProposalSnapshot snapshot)
+    {
+        if (snapshot.Recommendation is null ||
+            snapshot.Recommendation.Mode == RecommendationMode.NoRecommendation)
+        {
+            return;
+        }
+
+        IReadOnlyList<Decision> decisions = await decisionRepository.ListDecisionsAsync(repository);
+        Decision[] recommendationHistory = decisions
+            .Where(item => item.Resolution?.SourceProposalSnapshot?.Recommendation is not null)
+            .Where(item => item.Resolution?.SourceProposalSnapshot?.Recommendation?.Mode != RecommendationMode.NoRecommendation)
+            .Where(item => item.Resolution?.Outcome == DecisionOutcome.Accepted)
+            .OrderBy(item => item.Resolution!.ResolvedAt)
+            .ThenBy(item => item.Id.Value, StringComparer.Ordinal)
+            .ToArray();
+        if (recommendationHistory.Length < 2)
+        {
+            return;
+        }
+
+        int divergenceCount = recommendationHistory.Count(item => item.Resolution!.RecommendationDiverged);
+        if (decision.Resolution?.RecommendationDiverged == true && divergenceCount >= 2)
+        {
+            Add(signals, repository, decision, "RecommendationStability", QualitySignalDirection.Negative, QualitySignalSeverity.High,
+                "Recommendation reversals repeated across resolved decisions.",
+                $"{divergenceCount} of {recommendationHistory.Length} accepted generated decisions selected an alternative to the recommendation.",
+                RecommendationHistorySources(recommendationHistory));
+            return;
+        }
+
+        if (divergenceCount == 0)
+        {
+            Add(signals, repository, decision, "RecommendationStability", QualitySignalDirection.Positive, QualitySignalSeverity.Low,
+                "Recommendations remained stable across resolved decisions.",
+                $"{recommendationHistory.Length} accepted generated decisions aligned with their recommendations.",
+                RecommendationHistorySources(recommendationHistory));
+        }
+    }
+
+    private static void AddTradeoffQualitySignal(
+        ICollection<DecisionQualitySignal> signals,
+        Repository repository,
+        Decision decision,
+        DecisionResolvedProposalSnapshot snapshot)
+    {
+        if (snapshot.Options.Count == 0)
+        {
+            return;
+        }
+
+        HashSet<string> tradeoffOptionIds = snapshot.Tradeoffs
+            .Select(tradeoff => tradeoff.OptionId)
+            .ToHashSet(StringComparer.Ordinal);
+        string[] missingTradeoffOptionIds = snapshot.Options
+            .Select(option => option.Id)
+            .Where(optionId => !tradeoffOptionIds.Contains(optionId))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        if (missingTradeoffOptionIds.Length == 0)
+        {
+            Add(signals, repository, decision, "TradeoffQuality", QualitySignalDirection.Positive, QualitySignalSeverity.Medium,
+                "Every generated option has tradeoff analysis.",
+                $"{snapshot.Tradeoffs.Count} tradeoff record(s) cover {snapshot.Options.Count} option(s).",
+                [ProposalSource(snapshot, decision.Id)]);
+            return;
+        }
+
+        Add(signals, repository, decision, "TradeoffQuality", QualitySignalDirection.Negative, QualitySignalSeverity.Medium,
+            "Generated options are missing tradeoff analysis.",
+            $"Missing tradeoffs for option(s): {string.Join(", ", missingTradeoffOptionIds)}.",
+            [ProposalSource(snapshot, decision.Id)]);
+    }
+
+    private static void AddContextQualitySignal(
+        ICollection<DecisionQualitySignal> signals,
+        Repository repository,
+        Decision decision,
+        DecisionResolvedProposalSnapshot snapshot)
+    {
+        bool hasContext = !string.IsNullOrWhiteSpace(snapshot.Context);
+        bool hasEvidence =
+            snapshot.Evidence.Count > 0 ||
+            snapshot.Options.Any(option => option.Evidence.Count > 0) ||
+            snapshot.Tradeoffs.Any(tradeoff => tradeoff.Evidence.Count > 0) ||
+            snapshot.Recommendation?.Evidence.Count > 0 ||
+            snapshot.Recommendation?.RecommendationEvidence.Count > 0;
+        if (hasContext && hasEvidence)
+        {
+            Add(signals, repository, decision, "ContextQuality", QualitySignalDirection.Positive, QualitySignalSeverity.Low,
+                "Decision package preserved context and source evidence.",
+                "The resolved proposal snapshot includes decision context and generated evidence references.",
+                [ProposalSource(snapshot, decision.Id)]);
+            return;
+        }
+
+        Add(signals, repository, decision, "ContextQuality", QualitySignalDirection.Negative, QualitySignalSeverity.Medium,
+            "Decision package has incomplete context support.",
+            hasContext
+                ? "The resolved proposal snapshot has context but no generated evidence references."
+                : "The resolved proposal snapshot has no decision context.",
+            [ProposalSource(snapshot, decision.Id)]);
+    }
+
+    private static void AddConstraintQualitySignal(
+        ICollection<DecisionQualitySignal> signals,
+        Repository repository,
+        Decision decision,
+        DecisionResolvedProposalSnapshot snapshot)
+    {
+        string[] disqualifyingConstraints = snapshot.TradeoffComparisons
+            .SelectMany(comparison => comparison.DisqualifyingConstraints)
+            .Concat(snapshot.Recommendation?.OptionEvaluations.SelectMany(evaluation => evaluation.Constraints) ?? [])
+            .Where(constraint => !string.IsNullOrWhiteSpace(constraint))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        if (disqualifyingConstraints.Length == 0)
+        {
+            if (snapshot.TradeoffComparisons.Count == 0 &&
+                snapshot.Recommendation?.OptionEvaluations.Count is not > 0)
+            {
+                return;
+            }
+
+            Add(signals, repository, decision, "ConstraintQuality", QualitySignalDirection.Positive, QualitySignalSeverity.Low,
+                "No disqualifying constraints were carried into resolution.",
+                "Structured comparisons and recommendation evaluations did not identify blocked options.",
+                [ProposalSource(snapshot, decision.Id)]);
+            return;
+        }
+
+        Add(signals, repository, decision, "ConstraintQuality", QualitySignalDirection.Negative, QualitySignalSeverity.High,
+            "Resolution involved options with disqualifying constraints.",
+            $"Disqualifying constraint(s): {string.Join("; ", disqualifyingConstraints)}.",
+            [ProposalSource(snapshot, decision.Id)]);
     }
 
     private async Task<Repository> GetRepositoryAsync(Guid repositoryId)
@@ -177,5 +324,12 @@ public sealed class DecisionQualitySignalService(
             ProposalId: snapshot.ProposalId,
             CandidateId: snapshot.CandidateId,
             Excerpt: option?.Title);
+    }
+
+    private static IReadOnlyList<DecisionSourceReference> RecommendationHistorySources(IReadOnlyList<Decision> decisions)
+    {
+        return decisions
+            .Select(decision => DecisionRecordSource(decision.Id))
+            .ToArray();
     }
 }
