@@ -14,9 +14,9 @@ Goal: prove event-led reasoning survives large project histories.
 
 ## UI Work
 
-- [ ] Add project-level narrative reconstruction view.
-- [ ] Add horizon selector for decision, milestone, epic, project, and multi-year reconstruction.
-- [ ] Add source evidence collapse/expand controls for large reconstructions.
+- [x] Add project-level narrative reconstruction view.
+- [x] Add horizon selector for decision, milestone, epic, project, and multi-year reconstruction.
+- [x] Add source evidence collapse/expand controls for large reconstructions.
 
 ## Tests
 
@@ -38,6 +38,8 @@ Goal: prove event-led reasoning survives large project histories.
 - The answer-level tests continue to use the generic `Graph -> Trace -> Reconstruction` pipeline; no specialized read model or first-class hypothesis, alternative, contradiction, or direction entity was introduced.
 - Added grouped reconstruction details for UI consumption: evidence summary, events, relationships, external references, and threads are emitted as deterministic sections.
 - Added recovered long-horizon UI usability coverage that checks section ordering, scan-friendly line length, key evidence visibility, confidence, and absence of derived authority artifacts.
+- Added UI consumption for grouped generic reconstruction details: the reasoning reconstruction panel now renders metadata separately, exposes a project narrative view with decision/milestone/epic/project/multi-year horizon framing, and collapses grouped evidence sections for large reconstructions.
+- Added characterization coverage for project-level UI reconstruction consumption without adding category-specific narrative engines or first-class derived entities.
 
 ## Exit Criteria
 

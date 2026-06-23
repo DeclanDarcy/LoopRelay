@@ -2,14 +2,17 @@
 
 ## Newly Authorized
 
-- Treat the large-history usability issue as presentation pressure, not ontology pressure.
-- Treat grouped reconstruction details as the correct M7 response to UI-scale readability needs.
-- Do not add specialized reconstruction behavior yet.
-- Do not introduce specialized entities, read models, caches, narrative engines, direction reconstruction services, hypothesis narrative models, or alternative state summaries for the current M7 evidence.
-- Finish M7 through UI consumption before considering specialization.
-- Wire grouped generic reconstruction into the project-level UI as the next slice.
-- Add characterization coverage for project-level UI consumption.
-- Test recovered large-history answers through UI-facing models.
-- Authorize specialized reconstruction only if a concrete answer-quality failure demonstrates that grouped generic reconstruction cannot answer a required question.
-- Keep decision, direction, hypothesis, alternative, contradiction, and project narratives as query categories over traces, not separate narrative engines.
-- Prefer grouped generic reconstruction filtered by category over category-specific reconstruction services.
+- Treat the successful `Generic Reconstruction -> Project-Level UI Consumption` slice as evidence that generic reconstruction is usable at project scale.
+- Reframe the rest of M7 as answerability and usability certification rather than infrastructure expansion.
+- Do not immediately implement decision evolution reconstruction, direction reconstruction, or other specialized reconstruction behavior.
+- Do not add specialized reconstruction services, category-specific narrative engines, specialized read models, specialized caches, or first-class decision, direction, hypothesis, alternative, or contradiction entities without a demonstrated failure.
+- Make the next M7 slice `M7 Answerability Certification`.
+- Certify whether the current `Graph -> Trace -> Reconstruction -> Grouped Presentation` pipeline can answer the target reasoning-trajectory questions:
+  - why one decision replaced another,
+  - what alternative was rejected,
+  - what assumption failed,
+  - what contradiction changed direction,
+  - how the current strategy emerged.
+- If those answerability checks pass, record that specialized reconstruction is not justified for M7.
+- If an answerability check fails, identify the exact failure and first improve filtering, ordering, grouping, or evidence highlighting before considering additional reconstruction behavior.
+- Continue treating derived reasoning infrastructure as sufficient unless a reconstruction, answerability, persistence, recovery, or usability failure demonstrates otherwise.

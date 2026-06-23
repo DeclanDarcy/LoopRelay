@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react'
 import type { ReasoningReconstruction } from '../../types'
 
 type ReasoningReconstructionPanelProps = {
@@ -11,6 +12,12 @@ export function ReasoningReconstructionPanel({
   isRunning,
   error,
 }: ReasoningReconstructionPanelProps) {
+  const [horizon, setHorizon] = useState<ReasoningReconstructionHorizon>('Project')
+  const groupedDetails = useMemo(
+    () => parseReconstructionDetails(reconstruction?.narrative.details ?? ''),
+    [reconstruction],
+  )
+
   return (
     <section
       className="reasoning-panel reasoning-reconstruction-panel"
@@ -40,8 +47,62 @@ export function ReasoningReconstructionPanel({
 
           <article className="reasoning-event-row">
             <strong>{reconstruction.narrative.summary}</strong>
-            <p>{reconstruction.narrative.details}</p>
+            {groupedDetails.metadata.length > 0 ? (
+              <dl className="reasoning-reconstruction-metadata">
+                {groupedDetails.metadata.map((item) => (
+                  <div key={item.label}>
+                    <dt>{item.label}</dt>
+                    <dd>{item.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            ) : (
+              <p>{reconstruction.narrative.details}</p>
+            )}
           </article>
+
+          <section className="reasoning-project-narrative" aria-label="Project narrative reconstruction">
+            <div className="decision-panel-heading">
+              <h5>Project Narrative</h5>
+              <span>{horizon} horizon</span>
+            </div>
+            <label className="reasoning-horizon-selector">
+              Horizon
+              <select
+                value={horizon}
+                onChange={(event) => setHorizon(event.target.value as ReasoningReconstructionHorizon)}
+              >
+                {reconstructionHorizons.map((item) => (
+                  <option value={item} key={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p>{horizonNarrative(horizon, reconstruction)}</p>
+          </section>
+
+          {groupedDetails.sections.length > 0 ? (
+            <div className="reasoning-reconstruction-sections" aria-label="Grouped reconstruction details">
+              {groupedDetails.sections.map((section, index) => (
+                <details
+                  className="reasoning-reconstruction-section"
+                  key={section.title}
+                  open={index === 0}
+                >
+                  <summary>
+                    {section.title}
+                    <span>{section.items.length} items</span>
+                  </summary>
+                  <ul>
+                    {section.items.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </details>
+              ))}
+            </div>
+          ) : null}
 
           <div className="reasoning-graph-table" aria-label="Reconstruction evidence">
             <div className="reasoning-table-title">Evidence</div>
@@ -78,4 +139,71 @@ export function ReasoningReconstructionPanel({
       )}
     </section>
   )
+}
+
+type ReasoningReconstructionHorizon = 'Decision' | 'Milestone' | 'Epic' | 'Project' | 'Multi-year'
+
+type ParsedReconstructionDetails = {
+  metadata: Array<{ label: string; value: string }>
+  sections: Array<{ title: string; items: string[] }>
+}
+
+const reconstructionHorizons: ReasoningReconstructionHorizon[] = [
+  'Decision',
+  'Milestone',
+  'Epic',
+  'Project',
+  'Multi-year',
+]
+
+const groupedSectionTitles = new Set(['Events', 'Relationships', 'External References', 'Threads'])
+
+function parseReconstructionDetails(details: string): ParsedReconstructionDetails {
+  const metadata: ParsedReconstructionDetails['metadata'] = []
+  const sections: ParsedReconstructionDetails['sections'] = []
+  let currentSection: ParsedReconstructionDetails['sections'][number] | null = null
+
+  details
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .forEach((line) => {
+      const sectionTitle = line.endsWith(':') ? line.slice(0, -1) : null
+      if (sectionTitle && groupedSectionTitles.has(sectionTitle)) {
+        currentSection = { title: sectionTitle, items: [] }
+        sections.push(currentSection)
+        return
+      }
+
+      if (currentSection && line.startsWith('- ')) {
+        currentSection.items.push(line.slice(2))
+        return
+      }
+
+      currentSection = null
+      const separatorIndex = line.indexOf(':')
+      if (separatorIndex > 0) {
+        metadata.push({
+          label: line.slice(0, separatorIndex),
+          value: line.slice(separatorIndex + 1).trim(),
+        })
+      } else {
+        metadata.push({ label: 'Detail', value: line })
+      }
+    })
+
+  return { metadata, sections }
+}
+
+function horizonNarrative(
+  horizon: ReasoningReconstructionHorizon,
+  reconstruction: ReasoningReconstruction,
+) {
+  const eventCount = reconstruction.evidence.filter((item) => item.kind === 'Event').length
+  const relationshipCount = reconstruction.evidence.filter(
+    (item) => item.kind === 'Relationship' || item.kind === 'GraphRelationship',
+  ).length
+  const referenceCount = reconstruction.evidence.filter((item) => item.reference !== null).length
+
+  return `${horizon} reconstruction uses ${eventCount} event evidence item(s), ${relationshipCount} relationship evidence item(s), and ${referenceCount} referenced source item(s) without promoting hypotheses, alternatives, contradictions, or direction into authority.`
 }

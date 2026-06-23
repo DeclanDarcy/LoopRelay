@@ -999,6 +999,117 @@ button:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.reasoning-reconstruction-metadata,
+.reasoning-project-narrative,
+.reasoning-reconstruction-sections {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.reasoning-reconstruction-metadata {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+}
+
+.reasoning-reconstruction-metadata div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--bg-inset);
+}
+
+.reasoning-reconstruction-metadata dt,
+.reasoning-horizon-selector {
+  color: var(--fg-muted);
+  font-size: 0.74rem;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.reasoning-reconstruction-metadata dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--fg-default);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.reasoning-project-narrative {
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--bg-inset);
+}
+
+.reasoning-horizon-selector {
+  display: grid;
+  gap: 6px;
+}
+
+.reasoning-horizon-selector select {
+  min-height: 38px;
+  min-width: 0;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-6);
+  padding: 0 10px;
+  color: var(--fg-default);
+  background: var(--surface-1);
+  font: inherit;
+  text-transform: none;
+}
+
+.reasoning-project-narrative p {
+  min-width: 0;
+  margin: 0;
+  color: var(--fg-subtle);
+  font-size: 0.84rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.reasoning-reconstruction-section {
+  min-width: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--surface-1);
+}
+
+.reasoning-reconstruction-section summary {
+  min-width: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  color: var(--fg-default);
+  cursor: pointer;
+  font-size: 0.84rem;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.reasoning-reconstruction-section summary span {
+  color: var(--fg-subtle);
+  white-space: nowrap;
+}
+
+.reasoning-reconstruction-section ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0 10px 10px 28px;
+  color: var(--fg-subtle);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.reasoning-reconstruction-section li {
+  overflow-wrap: anywhere;
+}
+
 .reasoning-derived-status {
   padding: 10px 12px;
   border: 1px solid var(--accent-muted);

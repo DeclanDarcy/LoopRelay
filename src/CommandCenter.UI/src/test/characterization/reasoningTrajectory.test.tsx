@@ -209,7 +209,8 @@ const reconstruction: ReasoningReconstruction = {
   },
   narrative: {
     summary: 'The decision question is reconstructed from one event and one relationship.',
-    details: 'Question: Why did this decision change?\nEvidence:\n- Event EVT-0001',
+    details:
+      'Question: Why did this decision change?\nTarget: ReasoningEvent EVT-0001\nTrace direction: Backward\nEvidence summary: 1 event(s), 1 relationship edge(s), 0 external reference(s), 1 thread(s).\nEvents:\n- Event EVT-0001: HypothesisRaised: Event substrate can stay narrow - Reasoning should begin as immutable events with provenance.\nRelationships:\n- GraphRelationship ThreadMembership:EVT-0001:THR-0001: BelongsTo - Event belongs to thread\nExternal References:\n- None\nThreads:\n- Thread THR-0001: Milestone 1 ontology boundary - Tracks why the event substrate remains explanatory.',
   },
   confidence: 'High',
   trace: backwardTrace,
@@ -463,6 +464,22 @@ describe('reasoning trajectory tab', () => {
     expect(within(reconstructionRegion).getByLabelText('Reconstruction evidence')).toHaveTextContent(
       'HypothesisRaised: Event substrate can stay narrow',
     )
+    expect(within(reconstructionRegion).getByLabelText('Project narrative reconstruction')).toHaveTextContent(
+      'Project reconstruction uses 1 event evidence item(s)',
+    )
+    fireEvent.change(within(reconstructionRegion).getByLabelText('Horizon'), {
+      target: { value: 'Multi-year' },
+    })
+    expect(within(reconstructionRegion).getByLabelText('Project narrative reconstruction')).toHaveTextContent(
+      'Multi-year reconstruction uses 1 event evidence item(s)',
+    )
+    const groupedDetails = within(reconstructionRegion).getByLabelText('Grouped reconstruction details')
+    expect(within(groupedDetails).getByText('Events')).toBeInTheDocument()
+    expect(within(groupedDetails).getByText('Relationships')).toBeInTheDocument()
+    expect(within(groupedDetails).getByText('External References')).toBeInTheDocument()
+    expect(within(groupedDetails).getByText('Threads')).toBeInTheDocument()
+    expect(groupedDetails).toHaveTextContent('Event substrate can stay narrow')
+    expect(groupedDetails).toHaveTextContent('Milestone 1 ontology boundary')
 
     fireEvent.change(within(queryRegion).getByLabelText('Question'), {
       target: { value: 'Why did the event substrate remain narrow?' },
