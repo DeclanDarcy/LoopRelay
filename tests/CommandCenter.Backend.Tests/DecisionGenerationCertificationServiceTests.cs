@@ -143,6 +143,189 @@ public sealed class DecisionGenerationCertificationServiceTests
     }
 
     [Fact]
+    public async Task CertificationFailsWhenRecommendationIsOrderBasedInsteadOfTopEvaluatedOption()
+    {
+        CertificationHarness harness = await CreateGeneratedDecisionHarnessAsync(proposal =>
+        {
+            DecisionRecommendation recommendation = proposal.Recommendation!;
+            OptionEvaluation[] evaluations = recommendation.OptionEvaluations
+                .Select(evaluation => evaluation.OptionId == recommendation.OptionId
+                    ? evaluation with { Score = 0, Rank = 2 }
+                    : evaluation with { Score = 100, Rank = 1 })
+                .ToArray();
+            return proposal with
+            {
+                Recommendation = recommendation with { OptionEvaluations = evaluations }
+            };
+        });
+
+        DecisionGenerationCertificationReport report =
+            await harness.CertificationService.GetCurrentCertificationAsync(harness.Repository.Id);
+
+        Assert.False(report.Result.Certified);
+        Assert.False(report.Result.GenerationCertified);
+        Assert.Contains(report.Result.Failures, failure => failure.StartsWith("GEN-006:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task CertificationFailsWhenResolvedGeneratedDecisionHasOnlyOneOption()
+    {
+        CertificationHarness harness = await CreateGeneratedDecisionHarnessAsync(proposal =>
+        {
+            DecisionOption selected = proposal.Options[0];
+            return proposal with
+            {
+                Options = [selected],
+                Tradeoffs = proposal.Tradeoffs
+                    .Where(tradeoff => tradeoff.OptionId == selected.Id)
+                    .ToArray(),
+                Recommendation = proposal.Recommendation! with
+                {
+                    OptionEvaluations = proposal.Recommendation.OptionEvaluations
+                        .Where(evaluation => evaluation.OptionId == selected.Id)
+                        .ToArray(),
+                    RecommendationEvidence = proposal.Recommendation.RecommendationEvidence
+                        .Where(evidence => evidence.OptionId == selected.Id)
+                        .ToArray()
+                }
+            };
+        });
+
+        DecisionGenerationCertificationReport report =
+            await harness.CertificationService.GetCurrentCertificationAsync(harness.Repository.Id);
+
+        Assert.False(report.Result.Certified);
+        Assert.False(report.Result.GenerationCertified);
+        Assert.Contains(report.Result.Failures, failure => failure.StartsWith("GEN-002:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task CertificationFailsWhenRecommendationLacksEvidence()
+    {
+        CertificationHarness harness = await CreateGeneratedDecisionHarnessAsync(proposal =>
+            proposal with
+            {
+                Recommendation = proposal.Recommendation! with
+                {
+                    Evidence = [],
+                    RecommendationEvidence = []
+                }
+            });
+
+        DecisionGenerationCertificationReport report =
+            await harness.CertificationService.GetCurrentCertificationAsync(harness.Repository.Id);
+
+        Assert.False(report.Result.Certified);
+        Assert.False(report.Result.GenerationCertified);
+        Assert.Contains(report.Result.Failures, failure => failure.StartsWith("GEN-006:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task CertificationFailsWhenRecommendationIsMissing()
+    {
+        CertificationHarness harness = await CreateGeneratedDecisionHarnessAsync(proposal =>
+            proposal with { Recommendation = null });
+
+        DecisionGenerationCertificationReport report =
+            await harness.CertificationService.GetCurrentCertificationAsync(harness.Repository.Id);
+
+        Assert.False(report.Result.Certified);
+        Assert.False(report.Result.GenerationCertified);
+        Assert.Contains(report.Result.Failures, failure => failure.StartsWith("GEN-004:", StringComparison.Ordinal));
+        Assert.Contains(report.Result.Failures, failure => failure.StartsWith("GEN-006:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task CertificationFailsWhenResolvedGeneratedDecisionLacksTradeoffCoverage()
+    {
+        CertificationHarness harness = await CreateGeneratedDecisionHarnessAsync(proposal =>
+            proposal with { Tradeoffs = proposal.Tradeoffs.Take(1).ToArray() });
+
+        DecisionGenerationCertificationReport report =
+            await harness.CertificationService.GetCurrentCertificationAsync(harness.Repository.Id);
+
+        Assert.False(report.Result.Certified);
+        Assert.False(report.Result.GenerationCertified);
+        Assert.Contains(report.Result.Failures, failure => failure.StartsWith("GEN-003:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task CertificationFailsWhenResolvedGeneratedDecisionHasNoQualityAssessment()
+    {
+        CertificationHarness harness = await CreateGeneratedDecisionHarnessAsync(saveQualityAssessment: false);
+
+        DecisionGenerationCertificationReport report =
+            await harness.CertificationService.GetCurrentCertificationAsync(harness.Repository.Id);
+
+        Assert.False(report.Result.Certified);
+        Assert.False(report.Result.QualityCertified);
+        Assert.Contains(report.Result.Failures, failure => failure.StartsWith("QLT-001:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task CertificationFailsWhenGeneratedDecisionRequiresFullRewrite()
+    {
+        CertificationHarness harness = await CreateGeneratedDecisionHarnessAsync(
+            revisionBurden: HumanAuthoringBurden.FullRewrite);
+
+        DecisionGenerationCertificationReport report =
+            await harness.CertificationService.GetCurrentCertificationAsync(harness.Repository.Id);
+
+        Assert.False(report.Result.Certified);
+        Assert.False(report.Result.WorkflowReplacementCertified);
+        Assert.Equal(1, report.HumanAuthoringBurden.FullRewriteCount);
+        Assert.Contains(report.Result.Failures, failure => failure.StartsWith("BUR-001:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task CertificationFailsWhenManualDecisionBypassesGeneration()
+    {
+        CertificationHarness harness = await CreateGeneratedDecisionHarnessAsync();
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        await harness.DecisionRepository.SaveDecisionAsync(
+            harness.Repository,
+            new Decision(
+                new DecisionId("DEC-9999"),
+                DecisionState.Resolved,
+                DecisionClassification.Tactical,
+                "Manual bypass decision",
+                "Manual decision should count as generation bypass evidence.",
+                new DecisionMetadata(harness.Repository.Id, now, now),
+                new DecisionResolution(
+                    DecisionOutcome.Accepted,
+                    "manual-option",
+                    "Resolved outside generated proposal flow.",
+                    "human-reviewer",
+                    false,
+                    now,
+                    [new DecisionSourceReference("ManualDecision", ".agents/decisions/records/DEC-9999/decision.json")]),
+                [],
+                [],
+                []));
+
+        DecisionGenerationCertificationReport report =
+            await harness.CertificationService.GetCurrentCertificationAsync(harness.Repository.Id);
+
+        Assert.False(report.Result.Certified);
+        Assert.False(report.Result.WorkflowReplacementCertified);
+        Assert.Equal(1, report.HumanAuthoringBurden.GenerationBypassedCount);
+        Assert.Contains(report.Result.Failures, failure => failure.StartsWith("BUR-001:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task CertificationFailsWhenGeneratedDecisionClaimsSystemResolutionAuthority()
+    {
+        CertificationHarness harness = await CreateGeneratedDecisionHarnessAsync(resolver: "system");
+
+        DecisionGenerationCertificationReport report =
+            await harness.CertificationService.GetCurrentCertificationAsync(harness.Repository.Id);
+
+        Assert.False(report.Result.Certified);
+        Assert.False(report.Result.GovernanceCertified);
+        Assert.Contains(report.Result.Failures, failure => failure.StartsWith("GOV-001:", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task GenerationCertificationEndpointsReturnCurrentReportPersistedRunAndHistory()
     {
         Repository repository = CreateRepository();
@@ -239,6 +422,142 @@ public sealed class DecisionGenerationCertificationServiceTests
             Path = path
         };
     }
+
+    private static async Task<CertificationHarness> CreateGeneratedDecisionHarnessAsync(
+        Func<DecisionProposal, DecisionProposal>? mutateProposal = null,
+        bool saveQualityAssessment = true,
+        bool recordInfluence = true,
+        HumanAuthoringBurden? revisionBurden = null,
+        string resolver = "human-reviewer")
+    {
+        Repository repository = CreateRepository();
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var repositoryService = new StubRepositoryService(repository);
+        var projectionService = new DecisionArtifactProjectionService(decisionRepository, store);
+        var generationService = new DecisionGenerationService(
+            repositoryService,
+            decisionRepository,
+            projectionService,
+            new OptionGenerationService(),
+            new DecisionContextService(repositoryService, store, decisionRepository));
+        var resolutionService = new DecisionResolutionService(repositoryService, decisionRepository, projectionService);
+        DecisionProposal proposal = await generationService.GenerateProposalAsync(repository.Id, candidate.Id);
+        if (mutateProposal is not null)
+        {
+            proposal = mutateProposal(proposal);
+            await decisionRepository.SaveProposalAsync(repository, proposal);
+            await SaveMatchingPackageVersionAsync(repository, decisionRepository, proposal);
+        }
+
+        await generationService.MarkProposalReadyForResolutionAsync(repository.Id, proposal.Id, "Ready for human governance.");
+        if (revisionBurden is not null)
+        {
+            await decisionRepository.SaveProposalRevisionAsync(
+                repository,
+                new DecisionProposalRevision(
+                    "REV-9999",
+                    repository.Id,
+                    proposal.Id,
+                    DateTimeOffset.UtcNow,
+                    "Seed certification burden fixture.",
+                    ["Options", "Tradeoffs", "Recommendation"],
+                    "fixture-fingerprint",
+                    [new DecisionSourceReference(
+                        "DecisionProposal",
+                        $".agents/decisions/proposals/{proposal.Id}/proposal.json",
+                        ProposalId: proposal.Id,
+                        CandidateId: proposal.CandidateId)],
+                    RequestedBy: "human-reviewer",
+                    HumanAuthoringBurden: revisionBurden.Value));
+        }
+
+        string selectedOptionId = string.IsNullOrWhiteSpace(proposal.Recommendation?.OptionId)
+            ? proposal.Options[0].Id
+            : proposal.Recommendation.OptionId;
+        Decision decision = await resolutionService.ResolveProposalAsync(
+            repository.Id,
+            proposal.Id,
+            new ResolveDecisionCommand("Accept generated option after human review.", resolver, selectedOptionId));
+        var burdenService = new HumanAuthoringBurdenService(repositoryService, decisionRepository);
+        if (saveQualityAssessment)
+        {
+            var qualityService = new DecisionQualityAssessmentService(
+                repositoryService,
+                decisionRepository,
+                new DecisionQualitySignalService(repositoryService, decisionRepository, burdenService),
+                burdenService,
+                projectionService);
+            await qualityService.AssessAndSaveDecisionAsync(repository.Id, decision.Id.Value);
+        }
+
+        var executionProjectionService = new DecisionProjectionService(
+            repositoryService,
+            decisionRepository,
+            new HealthyGovernanceService(repository.Id),
+            store);
+        ExecutionDecisionProjection executionProjection =
+            await executionProjectionService.BuildExecutionProjectionAsync(repository.Id);
+        var influenceService = new DecisionInfluenceService(repositoryService, store);
+        if (recordInfluence)
+        {
+            await influenceService.RecordExecutionInfluenceAsync(repository.Id, Guid.NewGuid(), executionProjection);
+        }
+
+        var certificationService = new DecisionGenerationCertificationService(
+            repositoryService,
+            decisionRepository,
+            executionProjectionService,
+            influenceService,
+            burdenService);
+        return new CertificationHarness(repository, decisionRepository, certificationService);
+    }
+
+    private static async Task SaveMatchingPackageVersionAsync(
+        Repository repository,
+        IDecisionRepository decisionRepository,
+        DecisionProposal proposal)
+    {
+        DecisionPackageVersion latestPackage = (await decisionRepository.ListPackageVersionsAsync(repository, proposal.Id))
+            .OrderBy(version => version.CreatedAt)
+            .ThenBy(version => version.Id, StringComparer.Ordinal)
+            .Last();
+        const string packageId = "PKG-9999";
+        DecisionPackage package = latestPackage.Package with
+        {
+            Id = packageId,
+            Title = proposal.Title,
+            DecisionSummary = proposal.Context,
+            Options = proposal.Options,
+            OptionRelationships = proposal.OptionRelationships,
+            AnalyzedOptions = proposal.AnalyzedOptions,
+            Tradeoffs = proposal.Tradeoffs,
+            TradeoffComparisons = proposal.TradeoffComparisons,
+            Recommendation = proposal.Recommendation,
+            Assumptions = proposal.Assumptions,
+            Evidence = proposal.Evidence,
+            OpenConcerns = proposal.Recommendation?.Concerns ?? [],
+            GenerationDiagnostics = proposal.GenerationDiagnostics,
+            TradeoffAnalysisDiagnostics = proposal.TradeoffAnalysisDiagnostics
+        };
+        await decisionRepository.SavePackageVersionAsync(
+            repository,
+            new DecisionPackageVersion(
+                packageId,
+                repository.Id,
+                proposal.Id,
+                proposal.CandidateId,
+                DateTimeOffset.UtcNow.AddSeconds(1),
+                "mutated-package-fingerprint",
+                package));
+    }
+
+    private sealed record CertificationHarness(
+        Repository Repository,
+        IDecisionRepository DecisionRepository,
+        DecisionGenerationCertificationService CertificationService);
 
     private static JsonSerializerOptions CreateJsonOptions()
     {

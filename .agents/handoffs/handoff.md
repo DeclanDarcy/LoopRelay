@@ -2,36 +2,34 @@
 
 ## New State This Slice
 
-- Continued Milestone 10 automated decision generation certification.
-- Added Tauri bridge commands for the generation-certification backend endpoints:
-  - `get_decision_generation_certification`
-  - `run_decision_generation_certification`
-  - `list_decision_generation_certification_reports`
-- Added UI support for generation certification:
-  - `DecisionGenerationCertificationReport` TypeScript model and related finding/result/burden types
-  - `get/run/listDecisionGenerationCertification*` API helpers
-  - `useDecisionGenerationCertification` hook
-  - `DecisionGenerationCertificationPanel`
-  - Decisions workspace integration beside lifecycle certification
-  - dev Tauri mock command handling and persisted mock report history
-- Added characterization coverage for the generation certification panel and updated lifecycle navigation mocks.
-- Updated `.agents/milestones/m10-generation-certification.md` to mark Tauri/UI exposure complete.
-- Rotated prior handoff to `.agents/handoffs/handoff.0034.md`.
+- Continued Milestone 10 automated decision generation certification false-positive hardening.
+- Tightened `DecisionGenerationCertificationService` so core generation findings for options, tradeoffs, and recommendation presence evaluate the resolved generated decision source snapshots instead of accepting unrelated repository-level proposal evidence.
+- Added `GEN-006` recommendation derivation certification:
+  - preferred recommendations must select the top viable evaluated option
+  - preferred recommendations must carry recommendation evidence
+  - no-recommendation packages must include rationale, concerns, option evaluations, and evidence
+- Added backend negative fixtures for:
+  - order-based or hardcoded recommendation failure
+  - single-option resolved generated decision
+  - missing recommendation evidence
+  - missing recommendation data
+  - missing tradeoff coverage
+  - missing quality assessment after generated resolution
+  - full rewrite burden
+  - manual generation bypass
+  - system-owned/generated resolution authority
+- Updated `.agents/milestones/m10-generation-certification.md` to mark the covered M10 failure-condition tests complete.
+- Rotated prior handoff to `.agents/handoffs/handoff.0035.md`.
 
 ## Verification
 
-- `cargo check --manifest-path src/CommandCenter.Shell/Cargo.toml` passed.
-- `npm run test --prefix src/CommandCenter.UI -- decisionGenerationCertificationPanel decisionLifecycleNavigation` passed: 2 tests.
-- `npm run lint --prefix src/CommandCenter.UI` passed.
-- `npm run test --prefix src/CommandCenter.UI` passed: 177 tests across 51 files.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter DecisionGenerationCertificationServiceTests` passed: 12 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 502 tests.
 
 ## Next Recommended Slice
 
-- Implement the remaining M10 negative certification fixtures:
-  - missing options
-  - missing quality evidence after resolved generated decisions
-  - full rewrite dominance
-  - generation bypass dominance
-  - governance resolution bypass
-  - order-based or hardcoded recommendation failure
-- Prioritize order-based recommendation detection because it directly guards the Tier 0 claim that recommendations are derived rather than `options[0]`.
+- Finish the remaining M10 certification gaps:
+  - add explicit pass fixture that exercises discovery through execution influence
+  - add execution-projection-absent failure coverage distinct from missing influence trace
+  - decide whether "recommendations ignored repeatedly" should be a certification failure or a quality/throughput warning, then implement the corresponding fixture
+  - add scenario fixtures for architectural fork, workflow priority decision, contradiction with withheld recommendation, refinement after assumption changes, and end-to-end repository lifecycle

@@ -53,12 +53,12 @@ certify that automated decision generation replaces human decision production wi
   - [x] execution consumes accepted resolved decisions
   - [x] influence is traceable
 - [ ] Certification failure conditions:
-  - [ ] hardcoded recommendations
-  - [ ] single-option generation without justification
-  - [ ] missing evidence
-  - [ ] resolution bypass
-  - [ ] humans rewriting most generated packages
-  - [ ] generated decisions frequently classified as `FullRewrite` or `GenerationBypassed`
+  - [x] hardcoded recommendations
+  - [x] single-option generation without justification
+  - [x] missing evidence
+  - [x] resolution bypass
+  - [x] humans rewriting most generated packages
+  - [x] generated decisions frequently classified as `FullRewrite` or `GenerationBypassed`
   - [ ] recommendations ignored repeatedly
   - [ ] execution projection absent
   - [x] influence not traceable
@@ -77,12 +77,12 @@ certify that automated decision generation replaces human decision production wi
 ## Tests
 
 - [ ] Certification passes for fixtures that exercise discovery through execution influence.
-- [ ] Certification fails when recommendation is hardcoded or order-based.
-- [ ] Certification fails when options are missing.
-- [ ] Certification fails when governance resolution is bypassed.
-- [ ] Certification fails when no quality evidence exists after resolved generated decisions.
-- [ ] Certification fails when most generated decisions require `FullRewrite`.
-- [ ] Certification fails when manual decisions bypass generation more often than generated decisions reach resolution.
+- [x] Certification fails when recommendation is hardcoded or order-based.
+- [x] Certification fails when options are missing.
+- [x] Certification fails when governance resolution is bypassed.
+- [x] Certification fails when no quality evidence exists after resolved generated decisions.
+- [x] Certification fails when most generated decisions require `FullRewrite`.
+- [x] Certification fails when manual decisions bypass generation more often than generated decisions reach resolution.
 - [x] Certification fails when execution influence cannot be traced.
 - [x] Certification report persists and reloads after restart.
 

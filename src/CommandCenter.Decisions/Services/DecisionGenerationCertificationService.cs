@@ -55,6 +55,9 @@ public sealed class DecisionGenerationCertificationService(
             .Where(IsGeneratedResolvedDecision)
             .OrderBy(decision => decision.Id.Value, StringComparer.Ordinal)
             .ToArray();
+        DecisionResolvedProposalSnapshot[] generatedResolvedSnapshots = generatedResolvedDecisions
+            .Select(decision => decision.Resolution!.SourceProposalSnapshot!)
+            .ToArray();
         var influenceTracesByDecision = new Dictionary<string, IReadOnlyList<DecisionInfluenceTrace>>(StringComparer.Ordinal);
         foreach (Decision decision in generatedResolvedDecisions)
         {
@@ -78,35 +81,40 @@ public sealed class DecisionGenerationCertificationService(
             findings,
             "GEN-002",
             "Generation",
-            proposals.Any(proposal => proposal.Options.Count >= 2),
-            "Generated proposals contain multiple options.",
-            $"Read {proposals.Count} proposal(s); at least one generated proposal must contain two or more options.",
-            proposals.Select(ProposalSource).ToArray(),
-            [],
-            proposals.Select(proposal => proposal.CandidateId).ToArray(),
-            proposals.Select(proposal => proposal.Id).ToArray());
+            generatedResolvedSnapshots.Length > 0 &&
+            generatedResolvedSnapshots.All(snapshot => snapshot.Options.Count >= 2),
+            "Resolved generated decisions were backed by multiple options.",
+            $"Read {generatedResolvedSnapshots.Length} resolved generated source snapshot(s); every resolved generated decision must be backed by two or more options.",
+            generatedResolvedDecisions.Select(DecisionSource).ToArray(),
+            generatedResolvedDecisions.Select(decision => decision.Id.Value).ToArray(),
+            generatedResolvedSnapshots.Select(snapshot => snapshot.CandidateId).ToArray(),
+            generatedResolvedSnapshots.Select(snapshot => snapshot.ProposalId).ToArray());
         AddFinding(
             findings,
             "GEN-003",
             "Generation",
-            proposals.Any(proposal => proposal.Tradeoffs.Count >= proposal.Options.Count && proposal.Options.Count >= 2),
-            "Generated proposals include tradeoff analysis for options.",
-            "At least one generated proposal must provide tradeoff analysis for every generated option.",
-            proposals.Select(ProposalSource).ToArray(),
-            [],
-            proposals.Select(proposal => proposal.CandidateId).ToArray(),
-            proposals.Select(proposal => proposal.Id).ToArray());
+            generatedResolvedSnapshots.Length > 0 &&
+            generatedResolvedSnapshots.All(snapshot =>
+                snapshot.Options.Count >= 2 &&
+                snapshot.Tradeoffs.Count >= snapshot.Options.Count),
+            "Resolved generated decisions include tradeoff analysis for every option.",
+            "Every resolved generated decision must provide tradeoff analysis for each generated option.",
+            generatedResolvedDecisions.Select(DecisionSource).ToArray(),
+            generatedResolvedDecisions.Select(decision => decision.Id.Value).ToArray(),
+            generatedResolvedSnapshots.Select(snapshot => snapshot.CandidateId).ToArray(),
+            generatedResolvedSnapshots.Select(snapshot => snapshot.ProposalId).ToArray());
         AddFinding(
             findings,
             "GEN-004",
             "Generation",
-            proposals.Any(proposal => proposal.Recommendation is not null),
-            "Generated proposals include a recommendation or explicit recommendation mode.",
-            "At least one generated proposal must carry recommendation data for human review.",
-            proposals.Select(ProposalSource).ToArray(),
-            [],
-            proposals.Select(proposal => proposal.CandidateId).ToArray(),
-            proposals.Select(proposal => proposal.Id).ToArray());
+            generatedResolvedSnapshots.Length > 0 &&
+            generatedResolvedSnapshots.All(snapshot => snapshot.Recommendation is not null),
+            "Resolved generated decisions include recommendation data.",
+            "Every resolved generated decision must carry recommendation data or an explicit no-recommendation mode for human review.",
+            generatedResolvedDecisions.Select(DecisionSource).ToArray(),
+            generatedResolvedDecisions.Select(decision => decision.Id.Value).ToArray(),
+            generatedResolvedSnapshots.Select(snapshot => snapshot.CandidateId).ToArray(),
+            generatedResolvedSnapshots.Select(snapshot => snapshot.ProposalId).ToArray());
         AddFinding(
             findings,
             "GEN-005",
@@ -118,6 +126,18 @@ public sealed class DecisionGenerationCertificationService(
             [],
             packageVersions.Select(version => version.CandidateId).ToArray(),
             packageVersions.Select(version => version.ProposalId).ToArray());
+        AddFinding(
+            findings,
+            "GEN-006",
+            "Generation",
+            generatedResolvedSnapshots.Length > 0 &&
+            generatedResolvedSnapshots.All(RecommendationIsDerived),
+            "Recommendations are evidence-backed and derived from option evaluation.",
+            "Preferred recommendations must select the top viable evaluated option; withheld recommendations must include evaluation evidence and concerns.",
+            generatedResolvedDecisions.Select(DecisionSource).ToArray(),
+            generatedResolvedDecisions.Select(decision => decision.Id.Value).ToArray(),
+            generatedResolvedSnapshots.Select(snapshot => snapshot.CandidateId).ToArray(),
+            generatedResolvedSnapshots.Select(snapshot => snapshot.ProposalId).ToArray());
         AddFinding(
             findings,
             "GOV-001",
@@ -270,6 +290,51 @@ public sealed class DecisionGenerationCertificationService(
             string.Equals(value, "governance", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(value, "execution", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(value, "certification", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool RecommendationIsDerived(DecisionResolvedProposalSnapshot snapshot)
+    {
+        if (snapshot.Recommendation is not { } recommendation)
+        {
+            return false;
+        }
+
+        bool hasEvidence = recommendation.Evidence.Count > 0 || recommendation.RecommendationEvidence.Count > 0;
+        if (recommendation.Mode == RecommendationMode.NoRecommendation)
+        {
+            return string.IsNullOrWhiteSpace(recommendation.OptionId) &&
+                !string.IsNullOrWhiteSpace(recommendation.Rationale) &&
+                recommendation.Concerns.Count > 0 &&
+                recommendation.OptionEvaluations.Count >= snapshot.Options.Count &&
+                hasEvidence;
+        }
+
+        if (string.IsNullOrWhiteSpace(recommendation.OptionId) ||
+            !snapshot.Options.Any(option => string.Equals(option.Id, recommendation.OptionId, StringComparison.Ordinal)) ||
+            !hasEvidence)
+        {
+            return false;
+        }
+
+        OptionEvaluation? selected = recommendation.OptionEvaluations
+            .FirstOrDefault(evaluation => string.Equals(evaluation.OptionId, recommendation.OptionId, StringComparison.Ordinal));
+        if (selected is null || selected.Constraints.Count > 0)
+        {
+            return false;
+        }
+
+        OptionEvaluation[] viable = recommendation.OptionEvaluations
+            .Where(evaluation => evaluation.Constraints.Count == 0)
+            .ToArray();
+        if (viable.Length == 0 ||
+            viable.Select(evaluation => evaluation.OptionId).Distinct(StringComparer.Ordinal).Count() < snapshot.Options.Count)
+        {
+            return false;
+        }
+
+        int topScore = viable.Max(evaluation => evaluation.Score);
+        int topRank = viable.Min(evaluation => evaluation.Rank);
+        return selected.Score == topScore && selected.Rank == topRank;
     }
 
     private static bool Passed(IReadOnlyList<DecisionGenerationCertificationFinding> findings, string idPrefix)
