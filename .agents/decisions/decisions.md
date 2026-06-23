@@ -2,15 +2,20 @@
 
 ## Newly Authorized
 
-- Close Milestone 3 as complete.
-- Treat the missing `cargo-fmt.exe` component as a repository hygiene item, not a Milestone 3 architectural blocker.
-- Start Milestone 4 from the boundary that narrative work is `Narrative Reconstruction`, not open-ended narrative generation.
-- Adopt `Narrative = Projection` for Milestone 4, matching the Milestone 3 `Graph = Projection` boundary.
-- Keep narrative reconstructions derived, disposable, rebuildable, and non-authoritative.
-- Do not store narrative, explanation, summary, or reasoning story artifacts as reasoning authority.
-- Use `ReasoningTrace` as the unit of reconstruction for Milestone 4.
-- Do not use `ReasoningThread` as the primary reconstruction unit, because that risks turning threads into workflow containers.
-- Do not use repository-wide narrative as the primary reconstruction unit, because it becomes subjective and weakens deterministic reconstruction.
-- Preserve reconstruction inputs as `ReasoningTrace`, relationships, evidence, references, and provenance.
-- Preserve existing M4 authority boundaries: reconstruction may explain reasoning evolution, but it may not approve decisions, mutate operational context, create execution directives, or become a competing source of truth.
-
+- Treat the completed work as the correct Milestone 4 opening slice.
+- Preserve `ReasoningTrace -> Reconstruction` as the M4 reconstruction boundary.
+- Continue rejecting `Repository -> Reconstruction` and `Thread -> Reconstruction` as primary reconstruction paths.
+- Keep reconstructions response-only for now.
+- Do not introduce persisted narrative, reasoning story, historical summary, explanation record, graph, hypothesis, alternative, contradiction, or direction artifacts.
+- Keep query and reconstruction as separate concerns: query discovers trace candidates, reconstruction explains trace candidates.
+- Avoid collapsing query into direct narrative generation.
+- Keep category-specific narration shallow until stronger evidence proves richer templates are needed.
+- Narration may consume event classifications, but must not materialize classified concepts into new ontology or lifecycle state.
+- Treat Narrative Authority as the main Milestone 4 risk.
+- Model and present `ReasoningReconstruction` as a derived explanation, not historical fact.
+- Execute the next slice in this order:
+  - Add Tauri bridge commands `query_reasoning` and `reconstruct_reasoning`.
+  - Add thin UI API/types/hooks for query and reconstruction.
+  - Add `ReasoningQueryPanel` focused on question, candidate traces, evidence counts, and relationship counts.
+  - Add `ReasoningReconstructionPanel` focused on reconstruction, supporting events, references, and provenance.
+- Do not add reconstruction caching or local persistence in the next slice.

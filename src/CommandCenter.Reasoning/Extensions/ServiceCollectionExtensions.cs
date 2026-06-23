@@ -16,6 +16,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IReasoningThreadService, ReasoningThreadService>();
         services.AddSingleton<IReasoningRelationshipService, ReasoningRelationshipService>();
         services.AddSingleton<IReasoningGraphService, ReasoningGraphService>();
+        services.AddSingleton<IReasoningReconstructionService, ReasoningReconstructionService>();
+        services.AddSingleton<IReasoningQueryService, ReasoningQueryService>();
         return services;
     }
 }

@@ -1,0 +1,196 @@
+using CommandCenter.Core.Repositories;
+using CommandCenter.Reasoning.Abstractions;
+using CommandCenter.Reasoning.Models;
+
+namespace CommandCenter.Reasoning.Services;
+
+public sealed class ReasoningReconstructionService(
+    IRepositoryService repositoryService,
+    IReasoningRepository reasoningRepository,
+    IReasoningGraphService graphService)
+    : IReasoningReconstructionService
+{
+    public async Task<ReasoningReconstruction> ReconstructAsync(Guid repositoryId, ReasoningQuery query)
+    {
+        ValidateQuery(query);
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        ReasoningTrace trace = query.Direction == ReasoningTraceDirection.Forward
+            ? await graphService.TraceForwardAsync(repositoryId, query.Target)
+            : await graphService.TraceBackwardAsync(repositoryId, query.Target);
+        IReadOnlyList<ReasoningEvent> events = await reasoningRepository.ListEventsAsync(repository);
+        IReadOnlyList<ReasoningRelationship> relationships = await reasoningRepository.ListRelationshipsAsync(repository);
+        IReadOnlyList<ReasoningThread> threads = await reasoningRepository.ListThreadsAsync(repository);
+        EvidenceContext context = BuildEvidence(trace, events, relationships, threads);
+        string summary = BuildSummary(query, context);
+        string details = BuildDetails(query, context);
+        var diagnostics = trace.Diagnostics.ToList();
+        if (context.Evidence.Count == 0)
+        {
+            diagnostics.Add("No cited reasoning evidence was found for the requested trace.");
+        }
+
+        return new ReasoningReconstruction(
+            repositoryId,
+            DateTimeOffset.UtcNow,
+            query,
+            new ReasoningNarrative(summary, details),
+            CalculateConfidence(context, trace),
+            trace,
+            context.Evidence,
+            diagnostics.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray());
+    }
+
+    private static EvidenceContext BuildEvidence(
+        ReasoningTrace trace,
+        IReadOnlyList<ReasoningEvent> events,
+        IReadOnlyList<ReasoningRelationship> relationships,
+        IReadOnlyList<ReasoningThread> threads)
+    {
+        var evidence = new List<ReasoningReconstructionEvidence>();
+        var eventsById = events.ToDictionary(reasoningEvent => reasoningEvent.Id, StringComparer.Ordinal);
+        var relationshipsById = relationships.ToDictionary(relationship => relationship.Id, StringComparer.Ordinal);
+        var threadsById = threads.ToDictionary(thread => thread.Id, StringComparer.Ordinal);
+
+        foreach (ReasoningGraphNode node in trace.Nodes.OrderBy(node => node.Id, StringComparer.Ordinal))
+        {
+            if (node.Kind == ReasoningReferenceKind.ReasoningEvent && eventsById.TryGetValue(node.ReferenceId, out ReasoningEvent? reasoningEvent))
+            {
+                evidence.Add(new ReasoningReconstructionEvidence(
+                    "Event",
+                    reasoningEvent.Id,
+                    $"{reasoningEvent.Type}: {reasoningEvent.Title}",
+                    reasoningEvent.Narrative.Summary,
+                    new ReasoningReference(ReasoningReferenceKind.ReasoningEvent, reasoningEvent.Id),
+                    reasoningEvent.Provenance));
+            }
+            else if (node.Kind == ReasoningReferenceKind.ReasoningThread && threadsById.TryGetValue(node.ReferenceId, out ReasoningThread? thread))
+            {
+                evidence.Add(new ReasoningReconstructionEvidence(
+                    "Thread",
+                    thread.Id,
+                    $"{thread.Theme}: {thread.Title}",
+                    thread.Summary,
+                    new ReasoningReference(ReasoningReferenceKind.ReasoningThread, thread.Id),
+                    null));
+            }
+            else if (node.Reference is not null)
+            {
+                evidence.Add(new ReasoningReconstructionEvidence(
+                    "Reference",
+                    node.ReferenceId,
+                    $"{node.Kind}: {node.Label}",
+                    node.Reference.Excerpt ?? node.Label,
+                    node.Reference,
+                    null));
+            }
+        }
+
+        foreach (ReasoningGraphRelationship graphRelationship in trace.Relationships.OrderBy(relationship => relationship.Id, StringComparer.Ordinal))
+        {
+            if (graphRelationship.RelationshipId is not null &&
+                relationshipsById.TryGetValue(graphRelationship.RelationshipId, out ReasoningRelationship? relationship))
+            {
+                evidence.Add(new ReasoningReconstructionEvidence(
+                    "Relationship",
+                    relationship.Id,
+                    relationship.Type.ToString(),
+                    relationship.Narrative.Summary,
+                    relationship.Target,
+                    relationship.Provenance));
+            }
+            else
+            {
+                evidence.Add(new ReasoningReconstructionEvidence(
+                    "GraphRelationship",
+                    graphRelationship.Id,
+                    graphRelationship.Type.ToString(),
+                    graphRelationship.Label,
+                    null,
+                    null));
+            }
+        }
+
+        return new EvidenceContext(evidence);
+    }
+
+    private static string BuildSummary(ReasoningQuery query, EvidenceContext context)
+    {
+        string target = $"{query.Target.Kind} {query.Target.Id}";
+        string category = query.Category.ToString().ToLowerInvariant();
+        if (context.EventEvidence.Count == 0 && context.RelationshipEvidence.Count == 0)
+        {
+            return $"No reasoning trace currently explains {target} for this {category} question.";
+        }
+
+        string leadingEvent = context.EventEvidence.FirstOrDefault()?.Title ?? context.RelationshipEvidence.First().Title;
+        return $"The {category} question about {target} is reconstructed from {context.EventEvidence.Count} event(s) and {context.RelationshipEvidence.Count} relationship edge(s), led by {leadingEvent}.";
+    }
+
+    private static string BuildDetails(ReasoningQuery query, EvidenceContext context)
+    {
+        var lines = new List<string>
+        {
+            $"Question: {query.Question}",
+            $"Target: {query.Target.Kind} {query.Target.Id}",
+            $"Trace direction: {query.Direction}",
+            "Evidence:"
+        };
+
+        if (context.Evidence.Count == 0)
+        {
+            lines.Add("- None");
+            return string.Join(Environment.NewLine, lines);
+        }
+
+        foreach (ReasoningReconstructionEvidence item in context.Evidence)
+        {
+            lines.Add($"- {item.Kind} {item.Id}: {item.Title} - {item.Summary}");
+        }
+
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private static string CalculateConfidence(EvidenceContext context, ReasoningTrace trace)
+    {
+        if (context.EventEvidence.Count > 0 && context.RelationshipEvidence.Count > 0 && trace.Diagnostics.Count == 0)
+        {
+            return "High";
+        }
+
+        if (context.EventEvidence.Count > 0 || context.RelationshipEvidence.Count > 0)
+        {
+            return "Medium";
+        }
+
+        return "Low";
+    }
+
+    private static void ValidateQuery(ReasoningQuery query)
+    {
+        if (string.IsNullOrWhiteSpace(query.Question))
+        {
+            throw new ReasoningValidationException("Reasoning reconstruction question is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(query.Target.Id))
+        {
+            throw new ReasoningValidationException("Reasoning reconstruction target id is required.");
+        }
+    }
+
+    private async Task<Repository> GetRepositoryAsync(Guid repositoryId)
+    {
+        Repository? repository = (await repositoryService.GetAllAsync())
+            .FirstOrDefault(repository => repository.Id == repositoryId);
+        return repository ?? throw new KeyNotFoundException($"Repository was not found: {repositoryId}");
+    }
+
+    private sealed record EvidenceContext(IReadOnlyList<ReasoningReconstructionEvidence> Evidence)
+    {
+        public IReadOnlyList<ReasoningReconstructionEvidence> EventEvidence { get; } =
+            Evidence.Where(item => item.Kind == "Event").ToArray();
+
+        public IReadOnlyList<ReasoningReconstructionEvidence> RelationshipEvidence { get; } =
+            Evidence.Where(item => item.Kind is "Relationship" or "GraphRelationship").ToArray();
+    }
+}

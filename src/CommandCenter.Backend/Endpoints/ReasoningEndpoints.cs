@@ -91,6 +91,18 @@ public static class ReasoningEndpoints
             IReasoningGraphService graphService) =>
             await HandleAsync(() => graphService.TraceForwardAsync(repositoryId, CreateTraceTarget(kind, id))));
 
+        group.MapPost("/queries", async (
+            Guid repositoryId,
+            ReasoningQuery query,
+            IReasoningQueryService queryService) =>
+            await HandleAsync(() => queryService.RunQueryAsync(repositoryId, query)));
+
+        group.MapPost("/reconstructions", async (
+            Guid repositoryId,
+            ReasoningQuery query,
+            IReasoningReconstructionService reconstructionService) =>
+            await HandleAsync(() => reconstructionService.ReconstructAsync(repositoryId, query)));
+
         return app;
     }
 

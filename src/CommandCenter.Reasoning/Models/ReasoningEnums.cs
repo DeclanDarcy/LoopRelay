@@ -139,3 +139,14 @@ public enum ReasoningTraceDirection
     Backward,
     Forward
 }
+
+public enum ReasoningQueryCategory
+{
+    Decision,
+    Hypothesis,
+    Alternative,
+    Contradiction,
+    Direction,
+    Thread,
+    Assumption
+}

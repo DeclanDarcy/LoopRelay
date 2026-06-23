@@ -124,3 +124,34 @@ public sealed record ReasoningTrace(
     IReadOnlyList<ReasoningGraphNode> Nodes,
     IReadOnlyList<ReasoningGraphRelationship> Relationships,
     IReadOnlyList<string> Diagnostics);
+
+public sealed record ReasoningQuery(
+    ReasoningQueryCategory Category,
+    string Question,
+    ReasoningReference Target,
+    ReasoningTraceDirection Direction = ReasoningTraceDirection.Backward);
+
+public sealed record ReasoningQueryResult(
+    Guid RepositoryId,
+    DateTimeOffset GeneratedAt,
+    ReasoningQuery Query,
+    ReasoningReconstruction Reconstruction,
+    IReadOnlyList<string> Diagnostics);
+
+public sealed record ReasoningReconstruction(
+    Guid RepositoryId,
+    DateTimeOffset GeneratedAt,
+    ReasoningQuery Query,
+    ReasoningNarrative Narrative,
+    string Confidence,
+    ReasoningTrace Trace,
+    IReadOnlyList<ReasoningReconstructionEvidence> Evidence,
+    IReadOnlyList<string> Diagnostics);
+
+public sealed record ReasoningReconstructionEvidence(
+    string Kind,
+    string Id,
+    string Title,
+    string Summary,
+    ReasoningReference? Reference,
+    ReasoningProvenance? Provenance);

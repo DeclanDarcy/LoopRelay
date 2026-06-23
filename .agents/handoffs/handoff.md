@@ -2,42 +2,38 @@
 
 ## New State From This Slice
 
-- Completed Milestone 3 graph navigation UI work.
-- Added Tauri bridge commands:
-  - `get_reasoning_graph`
-  - `trace_reasoning_backward`
-  - `trace_reasoning_forward`
-- Added frontend graph/trace contracts for `ReasoningGraph`, `ReasoningGraphNode`, `ReasoningGraphRelationship`, `ReasoningTrace`, and `ReasoningTraceDirection`.
-- Added UI API calls and `useReasoningGraph` for loading the derived graph and requesting backend-produced backward/forward traces.
-- Added `ReasoningGraphPanel` as an accessible read-only table/list navigator with:
-  - node kind filter
-  - relationship type filter
-  - selected node details
-  - explicit derived-graph authority label
-  - graph diagnostics
-  - backward trace view
-  - forward trace view
-- Wired the graph panel into `ReasoningTrajectoryTab` and `App`.
-- Updated the development Tauri mock to derive graph nodes, graph relationships, and one-hop traces from mock reasoning events, threads, and relationships.
-- Updated characterization coverage for graph navigation and trace rendering.
-- Marked Milestone 3 UI work and navigation exit criterion complete.
-- Rotated previous handoff to `.agents/handoffs/handoff.0015.md`.
+- Started Milestone 4 narrative reconstruction queries with a backend-only foundation slice.
+- Added `ReasoningQueryCategory`, `ReasoningQuery`, `ReasoningQueryResult`, `ReasoningReconstruction`, and `ReasoningReconstructionEvidence`.
+- Added and registered:
+  - `IReasoningQueryService`
+  - `IReasoningReconstructionService`
+  - `ReasoningQueryService`
+  - `ReasoningReconstructionService`
+- Added reasoning endpoints:
+  - `POST /api/repositories/{repositoryId}/reasoning/queries`
+  - `POST /api/repositories/{repositoryId}/reasoning/reconstructions`
+- Reconstruction currently uses `ReasoningTrace` as input, gathers cited events, relationships, threads, external references, provenance, diagnostics, and returns a derived narrative plus confidence.
+- Reconstruction remains response-only and non-authoritative; no report persistence was added in this slice.
+- Updated `.agents/milestones/m4-narrative-reconstruction.md` to mark the completed backend query/reconstruction foundation and keep historical reconstruction, persisted reports, and UI work open.
+- Added backend tests for:
+  - decision supersession reconstruction
+  - unchanged query path/evidence reproducibility
+  - query and reconstruction endpoints
+  - no materialized hypothesis/alternative/contradiction/direction directories
+- Rotated previous handoff to `.agents/handoffs/handoff.0016.md`.
 
 ## Verification
 
-- `npm run test --prefix src/CommandCenter.UI -- reasoningTrajectory` passes: 6 tests.
-- `npm run lint --prefix src/CommandCenter.UI` passes.
-- `npm run build --prefix src/CommandCenter.UI` passes.
-- `cargo build --manifest-path src/CommandCenter.Shell/Cargo.toml` passes.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter Reasoning` passes: 51 tests.
-- `cargo fmt --manifest-path src/CommandCenter.Shell/Cargo.toml` could not run because `cargo-fmt.exe` is not installed for the active Rust toolchain.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter Reasoning` passes: 54 tests.
 
 ## Current Gaps
 
-- Milestone 4 narrative reconstruction queries remain unstarted.
-- Graph visualization remains intentionally deferred; the M3 implementation is accessible table/list navigation only.
-- Trace UI currently asks the backend for traces from the selected graph node and displays returned relationships; richer multi-hop controls can be considered during query/reconstruction work if needed.
+- Historical state reconstruction from event timelines is not implemented.
+- Persisted reconstruction report generation/listing is not implemented.
+- Category-specific narrative templates remain shallow; current reconstruction is generic trace-to-evidence narration.
+- UI query and reconstruction panels are not implemented.
+- Tauri bridge commands for query/reconstruction are not implemented.
 
 ## Next Slice
 
-- Start Milestone 4 by adding backend query/reconstruction models and services for narrative answers over graph traces, keeping persisted reports optional and user-requested.
+- Add Tauri bridge commands and UI API/types/hooks for query and reconstruction, then implement `ReasoningQueryPanel` and `ReasoningReconstructionPanel` against the new backend endpoints.

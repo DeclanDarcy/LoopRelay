@@ -115,6 +115,46 @@ public sealed class ReasoningEndpointTests
     }
 
     [Fact]
+    public async Task ReasoningEndpointsExposeQueryAndReconstructionResults()
+    {
+        Repository repository = CreateRepository();
+        await using WebApplication app = await CreateAppAsync(repository);
+        using var client = new HttpClient();
+        string root = app.Urls.Single();
+
+        ReasoningEvent source = (await (await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/reasoning/events",
+            EventCommand("Direction shift"))).Content.ReadFromJsonAsync<ReasoningEvent>(JsonOptions))!;
+        await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/reasoning/relationships",
+            new CreateReasoningRelationshipCommand(
+                ReasoningRelationshipType.LeadsTo,
+                new ReasoningReference(ReasoningReferenceKind.ReasoningEvent, source.Id),
+                new ReasoningReference(ReasoningReferenceKind.Decision, "DEC-0002"),
+                new ReasoningNarrative("The event led to the decision."),
+                Provenance()));
+        var query = new ReasoningQuery(
+            ReasoningQueryCategory.Direction,
+            "Why does current strategy exist?",
+            new ReasoningReference(ReasoningReferenceKind.Decision, "DEC-0002"));
+
+        HttpResponseMessage queryResponse = await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/reasoning/queries",
+            query);
+        HttpResponseMessage reconstructionResponse = await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/reasoning/reconstructions",
+            query);
+
+        ReasoningQueryResult queryResult = (await queryResponse.Content.ReadFromJsonAsync<ReasoningQueryResult>(JsonOptions))!;
+        ReasoningReconstruction reconstruction = (await reconstructionResponse.Content.ReadFromJsonAsync<ReasoningReconstruction>(JsonOptions))!;
+
+        Assert.Equal(HttpStatusCode.OK, queryResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, reconstructionResponse.StatusCode);
+        Assert.Contains(queryResult.Reconstruction.Evidence, evidence => evidence.Id == source.Id);
+        Assert.Contains(source.Id, reconstruction.Narrative.Details, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ReasoningEndpointsReturnExpectedErrorStatusCodes()
     {
         Repository repository = CreateRepository();
