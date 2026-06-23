@@ -2,50 +2,35 @@
 
 ## New State From This Slice
 
-- Closure review found stale-but-real incomplete M4 checklist items after M8 completion.
-- Completed the remaining Milestone 4 narrative reconstruction work:
-  - "What killed this hypothesis?" now reconstructs contradicting evidence through trace relationships.
-  - Historical reconstruction now supports point-in-time event-timeline queries through optional `ReasoningQuery.HistoricalAt`.
-  - Historical reconstruction covers derived hypothesis, alternative, contradiction, direction, assumption, and decision event families without adding first-class derived entities.
-  - Transient reconstruction remains the default.
-  - Persisted reconstruction reports are created only through explicit reconstruction runs.
-- Added persisted reconstruction reports:
-  - `ReasoningReconstructionReport`.
-  - `IReasoningReconstructionService.RunReconstructionAsync`.
-  - `IReasoningReconstructionService.ListReportsAsync`.
-  - repository save/list support for `reconstruction.YYYYMMDDHHMMSSFFFFFFF.{json,md}`.
-  - backend endpoints:
-    - `GET /api/repositories/{repositoryId}/reasoning/reconstructions`
-    - `POST /api/repositories/{repositoryId}/reasoning/reconstructions/reports`
-  - Tauri bridge commands:
-    - `run_reasoning_reconstruction`
-    - `list_reasoning_reconstructions`
-  - UI API/type support for reconstruction reports.
-- Added reasoning artifacts to artifact discovery and workspace inventory:
-  - event markdown projections,
-  - thread markdown projections,
-  - relationship markdown projections,
-  - persisted reconstruction reports,
-  - persisted certification reports.
-- Updated `.agents/milestones/m4-narrative-reconstruction.md` to mark all remaining checklist items complete.
-- Rotated the previous handoff to `.agents/handoffs/handoff.0029.md`.
+- Performed the milestone-set closure review for Reasoning Trajectory Preservation after all M0-M8 checklists were complete.
+- Added `.agents/milestones/reasoning-trajectory-closure.md`.
+- Closure review attempted to falsify the event-led architecture against:
+  - historical reconstruction correctness,
+  - reference integrity,
+  - recovery determinism,
+  - answerability determinism,
+  - authority leakage.
+- No concrete failure case was found that justifies a Milestone 9 or new first-class persisted hypothesis, alternative, contradiction, direction, graph, query, specialized read-model, specialized reconstruction-engine, or historical-state artifact.
+- Reasoning Trajectory Preservation is now closed by documentation and verification.
+- Rotated the previous handoff to `.agents/handoffs/handoff.0030.md`.
 
 ## Verification
 
+- First `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` run failed once on `ExecutionSessionServiceTests.AppStartupRunsExecutionRecovery` due to a Windows temp-file lock on `execution-sessions.json`.
+- Rerun of `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 427 tests.
 - `dotnet build CommandCenter.slnx` passes.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes: 427 tests.
 - `npm run lint --prefix src/CommandCenter.UI` passes.
 - `npm run test --prefix src/CommandCenter.UI` passes: 48 files, 170 tests.
 - `npm run build --prefix src/CommandCenter.UI` passes.
 - `cargo build --manifest-path src/CommandCenter.Shell/Cargo.toml` passes.
 
-## Notes
+## High-Leverage Decisions Currently Relevant
 
-- All milestone checkboxes under `.agents/milestones` are now complete.
-- Reconstruction reports are explicit persisted reports, not the default reconstruction path.
-- Historical state is still derived from events and does not introduce hypothesis, alternative, contradiction, or direction entities.
+- Close Reasoning Trajectory Preservation rather than creating an exploratory Milestone 9 because the falsification review found no concrete architectural failure.
+- Keep future pressure for specialized persistence routed through materialization review, with concrete failed reconstruction or repeated workflow duplication as the bar.
+- Treat the one backend test failure as a transient execution temp-file lock because the immediate rerun passed without code changes.
 
 ## Next Slice
 
-- Perform the milestone-set closure review and decide whether any architectural risk remains after full verification.
-- If no concrete risk is found, close the Reasoning Trajectory Preservation milestone set rather than creating a Milestone 9.
+- Rotate `decisions.md`, create a new `.agents/decisions/decisions.md` with only the closure decisions authorized by this slice, then stage, commit, and push this closure work.
+- After commit/push, begin Epic 6: Continuity Fidelity. The first slice should define the boundary between transfer-success evidence and existing reasoning/operational-context artifacts before adding implementation.
