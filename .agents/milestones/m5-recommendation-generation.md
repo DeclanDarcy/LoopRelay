@@ -7,14 +7,14 @@ derive a recommendation from context, options, tradeoffs, constraints, risks, an
 ## Work
 
 - [x] Add `IRecommendationService`.
-- [ ] Add `OptionEvaluation` containing:
+- [x] Add `OptionEvaluation` containing:
   - [x] strengths
   - [x] weaknesses
   - [x] risks
   - [x] constraints
   - [x] summary
   - [x] score/ranking metadata only if it remains explainable
-- [ ] Add `DecisionRecommendation` fields if needed:
+- [x] Add `DecisionRecommendation` fields if needed:
   - [x] summary
   - [x] rationale
   - [x] supporting factors
@@ -22,7 +22,7 @@ derive a recommendation from context, options, tradeoffs, constraints, risks, an
   - [x] assumptions
   - [x] alternative explanation
   - [x] mode
-- [ ] Add `RecommendationEvidence` and evidence types:
+- [x] Add `RecommendationEvidence` and evidence types:
   - [x] benefit
   - [x] cost
   - [x] risk
@@ -31,13 +31,13 @@ derive a recommendation from context, options, tradeoffs, constraints, risks, an
   - [x] constraint
   - [x] prior decision
   - [x] repository state
-- [ ] Support recommendation modes:
+- [x] Support recommendation modes:
   - [x] preferred option
   - [x] preferred plus alternative
   - [x] no recommendation
-- [ ] Allow no recommendation when evidence is insufficient, uncertainty is excessive, or contradiction remains unresolved.
+- [x] Allow no recommendation when evidence is insufficient, uncertainty is excessive, or contradiction remains unresolved.
   - [x] Excessive uncertainty and all-options-disqualified cases produce no recommendation.
-  - [ ] Evidence-insufficient and contradiction-specific no-recommendation heuristics remain.
+  - [x] Evidence-insufficient and contradiction-specific no-recommendation heuristics are implemented.
 - [x] Explain why the recommended option won and why each alternative lost.
 - [x] Generate concerns and assumptions for every recommendation.
 - [x] Refuse to recommend an option that violates hard constraints unless the recommendation mode is no recommendation or escalation.
@@ -52,8 +52,11 @@ derive a recommendation from context, options, tradeoffs, constraints, risks, an
 - [x] Concerns and assumptions are present.
 - [x] Excessive uncertainty produces no recommendation.
 - [x] Constraint violation prevents recommendation or produces escalation/no-recommendation.
+- [x] Insufficient evidence produces no recommendation.
+- [x] Unresolved contradiction produces no recommendation.
+- [x] Prior-decision and repository-state recommendation evidence is explicit.
 
 ## Exit Criteria
 
 - [x] The system can answer what it recommends, why, what evidence supports it, what assumptions matter, and why alternatives are weaker.
-- [ ] At this point the generated proposal contains enough system-authored content for a human to resolve without writing the decision manually.
+- [x] At this point the generated proposal contains enough system-authored content for a human to resolve without writing the decision manually.

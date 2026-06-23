@@ -413,6 +413,99 @@ public sealed class DecisionGenerationServiceTests
     }
 
     [Fact]
+    public async Task InsufficientEvidenceProducesNoRecommendation()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(
+            repository.Id,
+            DecisionCandidateState.Promoted,
+            includeEvidence: false);
+        DecisionEvidence syntheticEvidence = new(
+            "Candidate was promoted without repository source evidence.",
+            [new DecisionSourceReference("DecisionCandidate", ".agents/decisions/candidates/CAND-0001/candidate.json", CandidateId: candidate.Id)]);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var service = CreateGenerationService(
+            repository,
+            store,
+            decisionRepository,
+            new RejectedDiagnosticOptionGenerationService(OptionGenerationResult([
+                TestOption("option-adopt", "Adopt persistence schema", DecisionOptionType.Adopt, syntheticEvidence),
+                TestOption("option-refactor", "Refactor persistence schema", DecisionOptionType.Refactor, syntheticEvidence)
+            ])));
+
+        DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
+
+        Assert.NotNull(proposal.Recommendation);
+        Assert.Equal(RecommendationMode.NoRecommendation, proposal.Recommendation.Mode);
+        Assert.Equal(string.Empty, proposal.Recommendation.OptionId);
+        Assert.Contains(proposal.Recommendation.Concerns, concern =>
+            concern.Contains("evidence is insufficient", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task UnresolvedContradictionProducesNoRecommendation()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(
+            repository.Id,
+            DecisionCandidateState.Promoted,
+            signalKind: "Contradiction",
+            summary: "Contradiction between persistence schema directions.");
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var service = CreateGenerationService(repository, store, decisionRepository);
+
+        DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
+
+        Assert.NotNull(proposal.Recommendation);
+        Assert.Equal(RecommendationMode.NoRecommendation, proposal.Recommendation.Mode);
+        Assert.Equal(string.Empty, proposal.Recommendation.OptionId);
+        Assert.Contains(proposal.Recommendation.Concerns, concern =>
+            concern.Contains("unresolved contradiction", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task RecommendationCarriesPriorDecisionAndRepositoryStateEvidence()
+    {
+        Repository repository = CreateRepository();
+        await WriteAsync(
+            repository,
+            ".agents/plan.md",
+            """
+            # Plan
+
+            - Goal: decide persistence schema with automated decision generation.
+            """);
+        await WriteAsync(
+            repository,
+            ".agents/milestones/m5-recommendation-generation.md",
+            """
+            # Milestone 5
+
+            - Recommendation generation must derive from repository evidence.
+            """);
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveDecisionAsync(repository, CreatePriorDecision(repository.Id));
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var service = CreateGenerationService(repository, store, decisionRepository);
+
+        DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
+
+        Assert.NotNull(proposal.Recommendation);
+        Assert.Contains(proposal.Recommendation.RecommendationEvidence, item =>
+            item.Type == RecommendationEvidenceType.PriorDecision);
+        Assert.Contains(proposal.Recommendation.RecommendationEvidence, item =>
+            item.Type == RecommendationEvidenceType.RepositoryState &&
+            item.Evidence.SelectMany(evidence => evidence.Sources).Any(source =>
+                source.RelativePath == ".agents/plan.md"));
+    }
+
+    [Fact]
     public async Task ConstraintConflictsSurfaceAsTradeoffDisqualifiers()
     {
         Repository repository = CreateRepository();
@@ -2098,6 +2191,22 @@ public sealed class DecisionGenerationServiceTests
                 ["Generated by recommendation test."]));
     }
 
+    private static Decision CreatePriorDecision(Guid repositoryId)
+    {
+        DateTimeOffset now = new(2026, 06, 22, 12, 00, 00, TimeSpan.Zero);
+        return new Decision(
+            new DecisionId("DEC-0001"),
+            DecisionState.Resolved,
+            DecisionClassification.Architectural,
+            "Repository files remain authoritative",
+            "Prior decision context for recommendation evidence.",
+            new DecisionMetadata(repositoryId, now, now),
+            null,
+            [],
+            [new DecisionEvidence("Prior decision requires repository files as authority.", [new DecisionSourceReference("Decision", ".agents/decisions/records/DEC-0001/decision.json", DecisionId: new DecisionId("DEC-0001"))])],
+            [new DecisionHistoryEntry(now, "Resolved", null, DecisionState.Resolved.ToString(), "Seeded by recommendation test.", [])]);
+    }
+
     private static DecisionGenerationService CreateGenerationService(
         Repository repository,
         FileSystemArtifactStore store,
@@ -2178,8 +2287,31 @@ public sealed class DecisionGenerationServiceTests
         DecisionCandidateState state,
         string signalKind = "MissingDirection",
         string summary = "Need to decide repository-backed persistence schema.",
-        DecisionClassification classification = DecisionClassification.Architectural)
+        DecisionClassification classification = DecisionClassification.Architectural,
+        bool includeEvidence = true)
     {
+        DecisionEvidence[] evidence = includeEvidence
+            ? [
+                new DecisionEvidence(
+                    "Plan requires a persistence decision.",
+                    [new DecisionSourceReference(
+                        "Plan",
+                        ".agents/plan.md",
+                        Section: "Plan",
+                        ItemId: "plan",
+                        Excerpt: summary)])
+            ]
+            : [];
+        DecisionSourceReference[] sources = includeEvidence
+            ? [
+                new DecisionSourceReference(
+                    "Plan",
+                    ".agents/plan.md",
+                    Section: "Plan",
+                    ItemId: "plan",
+                    Excerpt: summary)
+            ]
+            : [];
         return new DecisionCandidate(
             "CAND-0001",
             repositoryId,
@@ -2202,20 +2334,8 @@ public sealed class DecisionGenerationServiceTests
                         Section: "Plan",
                         ItemId: "plan",
                         Excerpt: summary)])])],
-            [new DecisionEvidence(
-                "Plan requires a persistence decision.",
-                [new DecisionSourceReference(
-                    "Plan",
-                    ".agents/plan.md",
-                    Section: "Plan",
-                    ItemId: "plan",
-                    Excerpt: summary)])],
-            [new DecisionSourceReference(
-                "Plan",
-                ".agents/plan.md",
-                Section: "Plan",
-                ItemId: "plan",
-                Excerpt: summary)],
+            evidence,
+            sources,
             ["Created by generation test."],
             [new DecisionHistoryEntry(
                 DateTimeOffset.UtcNow,

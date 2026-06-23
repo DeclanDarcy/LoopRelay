@@ -23,6 +23,7 @@ public sealed class RecommendationService : IRecommendationService
             .Where(evaluation => evaluation.Constraints.Count == 0)
             .ToArray();
         DecisionEvidence[] recommendationEvidence = EvidenceForRecommendation(candidate, evidence);
+        RecommendationEvidence[] contextEvidence = ContextEvidenceForRecommendation(generationContext);
 
         if (viable.Length == 0)
         {
@@ -31,7 +32,30 @@ public sealed class RecommendationService : IRecommendationService
                 candidate,
                 generationContext,
                 evaluations,
-                recommendationEvidence);
+                recommendationEvidence,
+                contextEvidence);
+        }
+
+        if (HasInsufficientEvidence(evidence))
+        {
+            return NoRecommendation(
+                "No option can be recommended because candidate evidence is insufficient to support decision authority.",
+                candidate,
+                generationContext,
+                evaluations,
+                recommendationEvidence,
+                contextEvidence);
+        }
+
+        if (HasUnresolvedContradiction(candidate))
+        {
+            return NoRecommendation(
+                "No option can be recommended because the candidate contains an unresolved contradiction that requires human review.",
+                candidate,
+                generationContext,
+                evaluations,
+                recommendationEvidence,
+                contextEvidence);
         }
 
         OptionEvaluation best = viable[0];
@@ -43,7 +67,8 @@ public sealed class RecommendationService : IRecommendationService
                 candidate,
                 generationContext,
                 evaluations,
-                recommendationEvidence);
+                recommendationEvidence,
+                contextEvidence);
         }
 
         string[] supportingFactors = best.Strengths
@@ -83,7 +108,9 @@ public sealed class RecommendationService : IRecommendationService
             Assumptions = AssumptionsFor(candidate, generationContext),
             AlternativeExplanations = alternatives,
             Mode = mode,
-            RecommendationEvidence = best.Evidence,
+            RecommendationEvidence = best.Evidence
+                .Concat(contextEvidence.Select(item => item with { OptionId = best.OptionId }))
+                .ToArray(),
             OptionEvaluations = evaluations
         };
     }
@@ -208,7 +235,8 @@ public sealed class RecommendationService : IRecommendationService
         DecisionCandidate candidate,
         DecisionGenerationContext generationContext,
         IReadOnlyList<OptionEvaluation> evaluations,
-        IReadOnlyList<DecisionEvidence> evidence)
+        IReadOnlyList<DecisionEvidence> evidence,
+        IReadOnlyList<RecommendationEvidence> contextEvidence)
     {
         return new DecisionRecommendation(
             string.Empty,
@@ -224,9 +252,26 @@ public sealed class RecommendationService : IRecommendationService
                 .Select(evaluation => $"{evaluation.OptionId} was not recommended because {evaluation.Summary}")
                 .ToArray(),
             Mode = RecommendationMode.NoRecommendation,
-            RecommendationEvidence = evaluations.SelectMany(evaluation => evaluation.Evidence).ToArray(),
+            RecommendationEvidence = evaluations
+                .SelectMany(evaluation => evaluation.Evidence)
+                .Concat(contextEvidence)
+                .ToArray(),
             OptionEvaluations = evaluations
         };
+    }
+
+    private static bool HasInsufficientEvidence(IReadOnlyList<DecisionEvidence> evidence)
+    {
+        return !evidence.Any(item => item.Sources.Any(source =>
+            source.RelativePath is not null &&
+            !source.RelativePath.Contains(".agents/decisions/candidates/", StringComparison.OrdinalIgnoreCase) &&
+            !source.RelativePath.Contains(".agents/decisions/proposals/", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static bool HasUnresolvedContradiction(DecisionCandidate candidate)
+    {
+        return candidate.Signals.Any(signal =>
+            signal.Kind.Contains("Contradiction", StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool HasExcessiveUncertainty(IReadOnlyList<OptionEvaluation> viable)
@@ -327,6 +372,25 @@ public sealed class RecommendationService : IRecommendationService
                 item.Sources.Any(source => source.CandidateId == candidate.Id || source.RelativePath is not null))
             .OrderBy(item => item.Summary, StringComparer.Ordinal)
             .Take(4)
+            .ToArray();
+    }
+
+    private static RecommendationEvidence[] ContextEvidenceForRecommendation(DecisionGenerationContext generationContext)
+    {
+        return generationContext.PriorDecisions
+            .Take(3)
+            .Select(entry => new RecommendationEvidence(
+                RecommendationEvidenceType.PriorDecision,
+                string.Empty,
+                entry.Statement,
+                entry.Evidence))
+            .Concat(generationContext.RepositoryState
+                .Take(3)
+                .Select(entry => new RecommendationEvidence(
+                    RecommendationEvidenceType.RepositoryState,
+                    string.Empty,
+                    entry.Statement,
+                    entry.Evidence)))
             .ToArray();
     }
 
