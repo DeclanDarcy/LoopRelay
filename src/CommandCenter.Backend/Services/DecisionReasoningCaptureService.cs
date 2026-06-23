@@ -111,6 +111,41 @@ public sealed class DecisionReasoningCaptureService(
             reasoningEvent.Id);
     }
 
+    public async Task CaptureDecisionArchivedAsync(
+        Guid repositoryId,
+        Decision archivedDecision,
+        ArchiveDecisionCommand command)
+    {
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        string rationale = RequireText(command.Rationale, "Archive rationale is required.");
+        string resolver = RequireText(command.Resolver, "Resolver metadata is required.");
+        DecisionHistoryEntry archiveEntry = archivedDecision.History
+            .LastOrDefault(entry =>
+                string.Equals(entry.Event, "Archived", StringComparison.Ordinal) &&
+                string.Equals(entry.ToState, DecisionState.Archived.ToString(), StringComparison.Ordinal))
+            ?? throw new InvalidOperationException($"Decision {archivedDecision.Id.Value} does not contain archive history metadata.");
+
+        string transitionFingerprint = Fingerprint(new
+        {
+            Transition = "DecisionArchived",
+            RepositoryId = repository.Id,
+            DecisionId = archivedDecision.Id.Value,
+            FromState = archiveEntry.FromState,
+            ToState = archiveEntry.ToState,
+            ArchivedAt = archiveEntry.Timestamp,
+            Rationale = rationale,
+            Resolver = resolver
+        });
+
+        await GetOrCreateDecisionArchivedEventAsync(
+            repository,
+            archivedDecision,
+            archiveEntry,
+            rationale,
+            resolver,
+            transitionFingerprint);
+    }
+
     private async Task<ReasoningEvent> GetOrCreateProposalResolvedEventAsync(
         Repository repository,
         Decision decision,
@@ -217,7 +252,13 @@ public sealed class DecisionReasoningCaptureService(
                     DecisionReference(supersededDecision),
                     DecisionReference(replacementDecision)
                 ],
-                Provenance(supersededDecision, rationale, resolver, transitionFingerprint),
+                DecisionProvenance(
+                    supersededDecision,
+                    "InferredDecisionSupersession",
+                    "History: Superseded",
+                    rationale,
+                    resolver,
+                    transitionFingerprint),
                 [],
                 ["decision-evolution", "inferred-capture", "supersession"]));
     }
@@ -253,12 +294,57 @@ public sealed class DecisionReasoningCaptureService(
                     new ReasoningNarrative(
                         $"Decision {replacementDecision.Id.Value} supersedes decision {supersededDecision.Id.Value}.",
                         $"Captured from reasoning event {reasoningEventId}. Rationale: {rationale}"),
-                    Provenance(supersededDecision, rationale, resolver, transitionFingerprint)));
+                    DecisionProvenance(
+                        supersededDecision,
+                        "InferredDecisionSupersession",
+                        "History: Superseded",
+                        rationale,
+                        resolver,
+                        transitionFingerprint)));
         }
         catch (ReasoningConflictException)
         {
             // Another capture path recorded the same explanatory relationship first.
         }
+    }
+
+    private async Task<ReasoningEvent> GetOrCreateDecisionArchivedEventAsync(
+        Repository repository,
+        Decision archivedDecision,
+        DecisionHistoryEntry archiveEntry,
+        string rationale,
+        string resolver,
+        string transitionFingerprint)
+    {
+        IReadOnlyList<ReasoningEvent> existingEvents = await reasoningRepository.ListEventsAsync(repository);
+        ReasoningEvent? existing = existingEvents.FirstOrDefault(reasoningEvent =>
+            reasoningEvent.Family == ReasoningEventFamily.DecisionEvolution &&
+            reasoningEvent.Type == ReasoningEventType.EvidenceAdded &&
+            string.Equals(reasoningEvent.Provenance.Fingerprint, transitionFingerprint, StringComparison.Ordinal));
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        return await reasoningRepository.CreateEventAsync(
+            repository,
+            new CreateReasoningEventCommand(
+                ReasoningEventFamily.DecisionEvolution,
+                ReasoningEventType.EvidenceAdded,
+                $"Decision {archivedDecision.Id.Value} archived",
+                new ReasoningNarrative(
+                    $"Decision {archivedDecision.Id.Value} was archived after reaching terminal authority state.",
+                    $"The authoritative decision lifecycle transition already occurred from {archiveEntry.FromState} to {archiveEntry.ToState}. Rationale: {rationale}"),
+                [DecisionReference(archivedDecision)],
+                DecisionProvenance(
+                    archivedDecision,
+                    "InferredDecisionArchival",
+                    "History: Archived",
+                    rationale,
+                    resolver,
+                    transitionFingerprint),
+                [],
+                ["decision-evolution", "inferred-capture", "archival"]));
     }
 
     private async Task<Repository> GetRepositoryAsync(Guid repositoryId)
@@ -321,17 +407,19 @@ public sealed class DecisionReasoningCaptureService(
             transitionFingerprint);
     }
 
-    private static ReasoningProvenance Provenance(
-        Decision supersededDecision,
+    private static ReasoningProvenance DecisionProvenance(
+        Decision decision,
+        string sourceKind,
+        string section,
         string rationale,
         string resolver,
         string transitionFingerprint)
     {
         return new ReasoningProvenance(
-            "InferredDecisionSupersession",
+            sourceKind,
             resolver,
-            DecisionPath(supersededDecision.Id),
-            "History: Superseded",
+            DecisionPath(decision.Id),
+            section,
             rationale,
             transitionFingerprint);
     }

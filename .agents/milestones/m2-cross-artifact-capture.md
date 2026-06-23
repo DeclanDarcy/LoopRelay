@@ -17,7 +17,7 @@ Goal: use the event substrate to preserve reasoning evolution across decisions a
 - [ ] Add inferred-capture adapters for objective domain transitions once idempotency is stable:
   - [x] Decision superseded.
   - [x] Proposal resolved.
-  - [ ] Decision archived.
+  - [x] Decision archived.
   - [ ] Governance report generated with contradiction findings.
   - [ ] Operational-context proposal promoted.
   - [ ] Execution handoff accepted or rejected.

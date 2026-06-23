@@ -2,13 +2,12 @@
 
 ## Newly Authorized
 
-- Treat proposal-resolution inferred capture as architecturally correct when modeled as `Evidence` / `EvidenceAdded` rather than a reasoning-owned proposal resolution authority.
-- Treat the `DerivesFrom` relationship from decision to proposal as the correct explanatory relationship for proposal-resolution capture.
-- Preserve the post-authoritative-transition boundary for proposal resolution: successful resolution may append reasoning; failed resolution must append no reasoning.
-- Anchor inferred-capture idempotency to source transition identity rather than reasoning narrative text.
-- Consider the supersession and proposal-resolution capture slices sufficient architectural proof for the core Milestone 2 inferred-capture pattern.
-- Proceed next with decision archival capture as the next inferred-capture slice.
-- Avoid adding event types such as `DecisionArchived`, `DecisionRetired`, or `DecisionClosed` if they would mirror the decision lifecycle inside reasoning.
-- Evaluate archival capture through the smallest explanatory vocabulary that fits, such as `DecisionEvolution`, `Evidence`, or `ConstraintEvolution`, depending on what rationale is preserved.
-- Treat taxonomy drift as the primary emerging risk for upcoming Milestone 2 slices.
-- Prefer a small reasoning vocabulary with rich provenance and authoritative references over adding one reasoning event type for every source-domain state transition.
+- Continue using `DecisionEvolution` plus `EvidenceAdded` for decision archival capture rather than introducing a `DecisionArchived` reasoning event type.
+- Treat archival relationships as unnecessary unless they communicate a new explanatory edge not already present in the event references and provenance.
+- Preserve the post-authoritative-transition boundary for all inferred capture: source-domain transition succeeds first, reasoning observes afterward.
+- Treat the current inferred-capture architecture as proven for Milestone 2 across decision supersession, proposal resolution, and decision archival.
+- Proceed next with governance contradiction capture, but model the meaningful reasoning event as contradiction observation rather than governance report generation.
+- Use governance reports as provenance, references, and evidence sources for contradiction-related reasoning events.
+- Treat event inflation as the main current architecture risk for upcoming Milestone 2 work.
+- Before adding any new event type, first test whether an existing event family/type plus richer provenance can represent the capture.
+- Prefer reusing existing reasoning vocabulary unless the source-domain observation cannot be represented accurately without a new event type.

@@ -823,7 +823,8 @@ public static class DecisionEndpoints
             Guid repositoryId,
             string decisionId,
             ArchiveDecisionCommand? request,
-            IDecisionResolutionService resolutionService) =>
+            IDecisionResolutionService resolutionService,
+            IDecisionReasoningCaptureService reasoningCaptureService) =>
         {
             try
             {
@@ -832,7 +833,9 @@ public static class DecisionEndpoints
                     return Results.BadRequest(new { error = "Archive command is required." });
                 }
 
-                return Results.Ok(await resolutionService.ArchiveDecisionAsync(repositoryId, decisionId, request));
+                Decision archived = await resolutionService.ArchiveDecisionAsync(repositoryId, decisionId, request);
+                await reasoningCaptureService.CaptureDecisionArchivedAsync(repositoryId, archived, request);
+                return Results.Ok(archived);
             }
             catch (KeyNotFoundException exception)
             {

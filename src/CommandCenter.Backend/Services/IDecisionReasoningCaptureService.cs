@@ -13,4 +13,9 @@ public interface IDecisionReasoningCaptureService
         Guid repositoryId,
         Decision supersededDecision,
         SupersedeDecisionCommand command);
+
+    Task CaptureDecisionArchivedAsync(
+        Guid repositoryId,
+        Decision archivedDecision,
+        ArchiveDecisionCommand command);
 }

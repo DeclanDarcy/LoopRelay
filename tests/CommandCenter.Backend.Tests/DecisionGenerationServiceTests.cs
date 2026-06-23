@@ -721,6 +721,67 @@ public sealed class DecisionGenerationServiceTests
     }
 
     [Fact]
+    public async Task DecisionArchivalReasoningCaptureIsIdempotent()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate firstCandidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        DecisionCandidate secondCandidate = CreateCandidate(
+            repository.Id,
+            DecisionCandidateState.Promoted,
+            summary: "Need to decide replacement authority.") with
+        {
+            Id = "CAND-0002",
+            Title = "Decide replacement authority"
+        };
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, firstCandidate);
+        await decisionRepository.SaveCandidateAsync(repository, secondCandidate);
+        var generationService = CreateGenerationService(repository, store, decisionRepository);
+        var resolutionService = CreateResolutionService(repository, store, decisionRepository);
+        var reasoningRepository = new FileSystemReasoningRepository(
+            store,
+            new ReasoningArtifactProjectionService());
+        var captureService = new DecisionReasoningCaptureService(
+            new StubRepositoryService(repository),
+            decisionRepository,
+            reasoningRepository);
+        Decision firstDecision = await ResolveAcceptedDecisionAsync(repository, generationService, resolutionService, firstCandidate.Id);
+        Decision replacementDecision = await ResolveAcceptedDecisionAsync(repository, generationService, resolutionService, secondCandidate.Id);
+        Decision superseded = await resolutionService.SupersedeDecisionAsync(
+            repository.Id,
+            firstDecision.Id.Value,
+            new SupersedeDecisionCommand(
+                replacementDecision.Id.Value,
+                "Replacement captures the current authority.",
+                "human-reviewer"));
+        var command = new ArchiveDecisionCommand(
+            "Superseded authority is no longer active.",
+            "human-reviewer");
+        Decision archived = await resolutionService.ArchiveDecisionAsync(repository.Id, superseded.Id.Value, command);
+
+        await captureService.CaptureDecisionArchivedAsync(repository.Id, archived, command);
+        await captureService.CaptureDecisionArchivedAsync(repository.Id, archived, command);
+
+        IReadOnlyList<ReasoningEvent> events = await reasoningRepository.ListEventsAsync(repository);
+        IReadOnlyList<ReasoningRelationship> relationships = await reasoningRepository.ListRelationshipsAsync(repository);
+        ReasoningEvent reasoningEvent = Assert.Single(events);
+        Decision? decisionAfterCapture = await decisionRepository.GetDecisionAsync(repository, archived.Id);
+
+        Assert.Equal(ReasoningEventFamily.DecisionEvolution, reasoningEvent.Family);
+        Assert.Equal(ReasoningEventType.EvidenceAdded, reasoningEvent.Type);
+        Assert.Equal("InferredDecisionArchival", reasoningEvent.Provenance.SourceKind);
+        Assert.Equal("human-reviewer", reasoningEvent.Provenance.CapturedBy);
+        Assert.NotNull(reasoningEvent.Provenance.Fingerprint);
+        Assert.Contains(reasoningEvent.References, reference =>
+            reference.Kind == ReasoningReferenceKind.Decision &&
+            reference.Id == firstDecision.Id.Value);
+        Assert.Empty(relationships);
+        Assert.Equal(DecisionState.Archived, decisionAfterCapture?.State);
+        Assert.Equal(archived.History.Count, decisionAfterCapture?.History.Count);
+    }
+
+    [Fact]
     public async Task ArchiveDecisionPersistsTerminalStateAfterSupersession()
     {
         Repository repository = CreateRepository();
@@ -1286,14 +1347,21 @@ public sealed class DecisionGenerationServiceTests
         Assert.Equal(HttpStatusCode.Conflict, archiveResolvedResponse.StatusCode);
         Assert.Equal(DecisionState.Superseded, superseded.State);
         Assert.Equal(DecisionState.Archived, archived.State);
-        Assert.Equal(3, reasoningEvents.Length);
+        Assert.Equal(4, reasoningEvents.Length);
         Assert.Equal(3, reasoningRelationships.Length);
-        ReasoningEvent reasoningEvent = Assert.Single(reasoningEvents, reasoningEvent =>
+        ReasoningEvent supersededEvent = Assert.Single(reasoningEvents, reasoningEvent =>
             reasoningEvent.Type == ReasoningEventType.DecisionSuperseded);
+        ReasoningEvent archivedEvent = Assert.Single(reasoningEvents, reasoningEvent =>
+            reasoningEvent.Type == ReasoningEventType.EvidenceAdded &&
+            reasoningEvent.Family == ReasoningEventFamily.DecisionEvolution);
         ReasoningRelationship relationship = Assert.Single(reasoningRelationships, relationship =>
             relationship.Type == ReasoningRelationshipType.Supersedes);
-        Assert.Equal(ReasoningEventType.DecisionSuperseded, reasoningEvent.Type);
-        Assert.Equal(ReasoningEventFamily.DecisionEvolution, reasoningEvent.Family);
+        Assert.Equal(ReasoningEventType.DecisionSuperseded, supersededEvent.Type);
+        Assert.Equal(ReasoningEventFamily.DecisionEvolution, supersededEvent.Family);
+        Assert.Equal("InferredDecisionArchival", archivedEvent.Provenance.SourceKind);
+        Assert.Contains(archivedEvent.References, reference =>
+            reference.Kind == ReasoningReferenceKind.Decision &&
+            reference.Id == firstDecision.Id.Value);
         Assert.Equal(ReasoningRelationshipType.Supersedes, relationship.Type);
         Assert.Equal(replacementDecision.Id.Value, relationship.Source.Id);
         Assert.Equal(firstDecision.Id.Value, relationship.Target.Id);
