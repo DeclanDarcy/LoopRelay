@@ -136,6 +136,154 @@ public sealed class DecisionRefinementServiceTests
     }
 
     [Fact]
+    public async Task ScopedPackageRegenerationCreatesImmutablePackageVersionAndComparison()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        DecisionGenerationService generationService = CreateGenerationService(repository, store, decisionRepository);
+        RefinementAnalysisService analysisService = CreateAnalysisService(repository, decisionRepository);
+        var projectionService = new DecisionArtifactProjectionService(decisionRepository, store);
+        var packageService = new DecisionPackageService(decisionRepository, projectionService);
+        DecisionProposal proposal = await generationService.GenerateProposalAsync(repository.Id, candidate.Id);
+        DecisionPackageVersion basePackage = Assert.Single(await decisionRepository.ListPackageVersionsAsync(repository, proposal.Id));
+        string basePackageJsonBefore = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/versions/PKG-0001.json");
+        await generationService.MarkProposalViewedAsync(repository.Id, proposal.Id, null);
+        DecisionProposal needsRefinement = await generationService.MarkProposalNeedsRefinementAsync(
+            repository.Id,
+            proposal.Id,
+            "Reviewer wants scoped package regeneration.");
+        RefinementPlan plan = await analysisService.AnalyzeRefinementAsync(
+            repository.Id,
+            proposal.Id,
+            new DecisionRefinementAnalysisRequest(
+                "Must preserve package authority, explore another option, reevaluate risk, cost, and recommendation.",
+                "reviewer",
+                Fingerprint(needsRefinement)));
+
+        DecisionPackageRegenerationResult result = await packageService.RegeneratePackageAsync(
+            repository,
+            needsRefinement,
+            basePackage,
+            new DecisionPackageRegenerationRequest(plan, basePackage.Id, basePackage.PackageFingerprint, "reviewer"),
+            DateTimeOffset.UtcNow);
+
+        IReadOnlyList<DecisionPackageVersion> versions = await decisionRepository.ListPackageVersionsAsync(repository, proposal.Id);
+        DecisionProposal? reloaded = await decisionRepository.GetProposalAsync(repository, proposal.Id);
+        string basePackageJsonAfter = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/versions/PKG-0001.json");
+        string comparisonMarkdown = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/versions/PKG-0001..PKG-0002.comparison.md");
+
+        Assert.Equal("PKG-0001", result.BasePackageVersion.Id);
+        Assert.Equal("PKG-0002", result.RegeneratedPackageVersion.Id);
+        Assert.Equal(2, versions.Count);
+        Assert.Equal(basePackageJsonBefore, basePackageJsonAfter);
+        Assert.Equal(DecisionProposalState.NeedsRefinement, reloaded?.State);
+        Assert.Empty(await decisionRepository.ListProposalRevisionsAsync(repository, proposal.Id));
+        Assert.True(result.Comparison.OptionsChanged);
+        Assert.True(result.Comparison.RecommendationChanged);
+        Assert.Contains(result.RegeneratedPackageVersion.Package.Options, option => option.Id == "option-4");
+        Assert.Equal(Fingerprint(needsRefinement), result.RegeneratedPackageVersion.Package.Metadata.SourceProposalFingerprint);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Contains("prior package versions remain immutable", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains("Recommendation changed: True", comparisonMarkdown);
+        Assert.Contains("PKG-0001..PKG-0002", comparisonMarkdown);
+    }
+
+    [Fact]
+    public async Task ScopedPackageRegenerationRejectsStalePackageFingerprint()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        DecisionGenerationService generationService = CreateGenerationService(repository, store, decisionRepository);
+        RefinementAnalysisService analysisService = CreateAnalysisService(repository, decisionRepository);
+        var packageService = new DecisionPackageService(
+            decisionRepository,
+            new DecisionArtifactProjectionService(decisionRepository, store));
+        DecisionProposal proposal = await generationService.GenerateProposalAsync(repository.Id, candidate.Id);
+        DecisionPackageVersion basePackage = Assert.Single(await decisionRepository.ListPackageVersionsAsync(repository, proposal.Id));
+        await generationService.MarkProposalViewedAsync(repository.Id, proposal.Id, null);
+        DecisionProposal needsRefinement = await generationService.MarkProposalNeedsRefinementAsync(
+            repository.Id,
+            proposal.Id,
+            "Reviewer wants scoped package regeneration.");
+        RefinementPlan plan = await analysisService.AnalyzeRefinementAsync(
+            repository.Id,
+            proposal.Id,
+            new DecisionRefinementAnalysisRequest(
+                "Explore another option and reevaluate recommendation.",
+                BaseProposalFingerprint: Fingerprint(needsRefinement)));
+
+        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            packageService.RegeneratePackageAsync(
+                repository,
+                needsRefinement,
+                basePackage,
+                new DecisionPackageRegenerationRequest(plan, basePackage.Id, "stale-package-fingerprint"),
+                DateTimeOffset.UtcNow));
+
+        Assert.Equal("Package regeneration base package fingerprint is stale.", exception.Message);
+        DecisionPackageVersion onlyPackage = Assert.Single(await decisionRepository.ListPackageVersionsAsync(repository, proposal.Id));
+        Assert.Equal("PKG-0001", onlyPackage.Id);
+    }
+
+    [Fact]
+    public async Task ScopedPackageRegenerationEndpointReturnsNewPackageVersion()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        DecisionGenerationService generationService = CreateGenerationService(repository, store, decisionRepository);
+        DecisionProposal proposal = await generationService.GenerateProposalAsync(repository.Id, candidate.Id);
+        DecisionPackageVersion basePackage = Assert.Single(await decisionRepository.ListPackageVersionsAsync(repository, proposal.Id));
+        await generationService.MarkProposalViewedAsync(repository.Id, proposal.Id, null);
+        DecisionProposal needsRefinement = await generationService.MarkProposalNeedsRefinementAsync(
+            repository.Id,
+            proposal.Id,
+            "Endpoint should regenerate package.");
+        RefinementPlan plan = await CreateAnalysisService(repository, decisionRepository).AnalyzeRefinementAsync(
+            repository.Id,
+            proposal.Id,
+            new DecisionRefinementAnalysisRequest(
+                "Explore another option and reevaluate risk, cost, and recommendation.",
+                "reviewer",
+                Fingerprint(needsRefinement)));
+
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services => services.AddSingleton<IRepositoryService>(new StubRepositoryService(repository)));
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+        using var client = new HttpClient();
+        string root = app.Urls.Single();
+        JsonSerializerOptions jsonOptions = CreateJsonOptions();
+
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/proposals/{proposal.Id}/refinements/regenerate",
+            new DecisionPackageRegenerationRequest(plan, basePackage.Id, basePackage.PackageFingerprint, "reviewer"),
+            jsonOptions);
+        DecisionPackageRegenerationResult result =
+            (await response.Content.ReadFromJsonAsync<DecisionPackageRegenerationResult>(jsonOptions))!;
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("PKG-0002", result.RegeneratedPackageVersion.Id);
+        Assert.True(result.Comparison.OptionsChanged);
+        Assert.True(File.Exists(Path.Combine(
+            repository.Path,
+            ".agents",
+            "decisions",
+            "proposals",
+            "PROP-0001",
+            "versions",
+            "PKG-0001..PKG-0002.comparison.md")));
+    }
+
+    [Fact]
     public async Task RefinementRejectsStaleBaseProposalFingerprint()
     {
         Repository repository = CreateRepository();

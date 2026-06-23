@@ -58,6 +58,19 @@ public sealed class DecisionArtifactProjectionService(
             RenderPackageVersion(packageVersion));
     }
 
+    public async Task ProjectPackageComparisonAsync(
+        Repository repository,
+        DecisionPackageComparison comparison)
+    {
+        string proposalId = DecisionArtifactPaths.ValidateId(comparison.ProposalId, "PROP");
+        string leftPackageId = DecisionArtifactPaths.ValidateId(comparison.LeftPackageId, "PKG");
+        string rightPackageId = DecisionArtifactPaths.ValidateId(comparison.RightPackageId, "PKG");
+        await WriteAsync(
+            repository,
+            DecisionArtifactPaths.ProposalPackageComparisonMarkdown(proposalId, leftPackageId, rightPackageId),
+            RenderPackageComparison(comparison));
+    }
+
     public async Task ProjectDecisionAssimilationRecommendationAsync(
         Repository repository,
         DecisionAssimilationRecommendation recommendation)
@@ -792,6 +805,78 @@ public sealed class DecisionArtifactProjectionService(
 
         markdown.H2("Evidence");
         markdown.EvidenceList(package.Evidence);
+        return markdown.ToString();
+    }
+
+    private static string RenderPackageComparison(DecisionPackageComparison comparison)
+    {
+        var markdown = new MarkdownProjectionBuilder();
+        markdown.H1($"{comparison.LeftPackageId}..{comparison.RightPackageId}: {comparison.ProposalId} Package Comparison");
+        markdown.Fields(
+            ("Proposal", comparison.ProposalId),
+            ("Repository", comparison.RepositoryId.ToString()),
+            ("Left package", comparison.LeftPackageId),
+            ("Right package", comparison.RightPackageId),
+            ("Left fingerprint", comparison.LeftPackageFingerprint),
+            ("Right fingerprint", comparison.RightPackageFingerprint),
+            ("Recommendation changed", comparison.RecommendationChanged.ToString()),
+            ("Options changed", comparison.OptionsChanged.ToString()),
+            ("Evidence changed", comparison.EvidenceChanged.ToString()),
+            ("Risks changed", comparison.RisksChanged.ToString()),
+            ("Context fingerprint changed", comparison.ContextFingerprintChanged.ToString()));
+        markdown.H2("Field Comparisons");
+        foreach (DecisionRevisionFieldComparison field in comparison.FieldComparisons
+            .OrderBy(field => field.Field, StringComparer.Ordinal))
+        {
+            markdown.H3($"{field.Field}: {field.ChangeType}");
+            markdown.Fields(
+                ("Previous", field.PreviousValue ?? "None."),
+                ("Revised", field.RevisedValue ?? "None."));
+        }
+
+        markdown.EmptyListIf(comparison.FieldComparisons.Count == 0);
+        markdown.H2("Added Options");
+        foreach (DecisionOption option in comparison.AddedOptions.OrderBy(option => option.Id, StringComparer.Ordinal))
+        {
+            markdown.Bullet($"{option.Id}: {option.Title} - {option.Description}");
+        }
+
+        markdown.EmptyListIf(comparison.AddedOptions.Count == 0);
+        markdown.H2("Modified Options");
+        foreach (DecisionOption option in comparison.ModifiedOptions.OrderBy(option => option.Id, StringComparer.Ordinal))
+        {
+            markdown.Bullet($"{option.Id}: {option.Title} - {option.Description}");
+        }
+
+        markdown.EmptyListIf(comparison.ModifiedOptions.Count == 0);
+        markdown.H2("Removed Options");
+        foreach (DecisionOption option in comparison.RemovedOptions.OrderBy(option => option.Id, StringComparer.Ordinal))
+        {
+            markdown.Bullet($"{option.Id}: {option.Title} - {option.Description}");
+        }
+
+        markdown.EmptyListIf(comparison.RemovedOptions.Count == 0);
+        markdown.H2("Added Evidence");
+        foreach (string evidence in comparison.AddedEvidence.Order(StringComparer.Ordinal))
+        {
+            markdown.Bullet(evidence);
+        }
+
+        markdown.EmptyListIf(comparison.AddedEvidence.Count == 0);
+        markdown.H2("Added Risks");
+        foreach (string risk in comparison.AddedRisks.Order(StringComparer.Ordinal))
+        {
+            markdown.Bullet(risk);
+        }
+
+        markdown.EmptyListIf(comparison.AddedRisks.Count == 0);
+        markdown.H2("Diagnostics");
+        foreach (string diagnostic in comparison.Diagnostics.Order(StringComparer.Ordinal))
+        {
+            markdown.Bullet(diagnostic);
+        }
+
+        markdown.EmptyListIf(comparison.Diagnostics.Count == 0);
         return markdown.ToString();
     }
 

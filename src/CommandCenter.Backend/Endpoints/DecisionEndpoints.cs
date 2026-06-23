@@ -1,4 +1,5 @@
 using CommandCenter.Backend.Services;
+using CommandCenter.Core.Repositories;
 using CommandCenter.Decisions.Abstractions;
 using CommandCenter.Decisions.Models;
 using CommandCenter.Decisions.Primitives;
@@ -32,6 +33,7 @@ public static class DecisionEndpoints
         app.MapListDecisionReviewNotes();
         app.MapAddDecisionReviewNote();
         app.MapAnalyzeDecisionProposalRefinement();
+        app.MapRegenerateDecisionProposalPackage();
         app.MapRefineDecisionProposal();
         app.MapGetDecisionProposalLineage();
         app.MapListDecisionProposalRevisions();
@@ -710,6 +712,59 @@ public static class DecisionEndpoints
             }
         });
 
+    private static void MapRegenerateDecisionProposalPackage(this IEndpointRouteBuilder app) =>
+        app.MapPost("/api/repositories/{repositoryId:guid}/decisions/proposals/{proposalId}/refinements/regenerate", async (
+            Guid repositoryId,
+            string proposalId,
+            DecisionPackageRegenerationRequest? request,
+            IRepositoryService repositoryService,
+            IDecisionRepository decisionRepository,
+            IDecisionPackageService packageService) =>
+        {
+            try
+            {
+                if (request is null)
+                {
+                    return Results.BadRequest(new { error = "Package regeneration request is required." });
+                }
+
+                Repository repository = await GetRepositoryAsync(repositoryService, repositoryId);
+                DecisionProposal? proposal = await decisionRepository.GetProposalAsync(repository, proposalId);
+                if (proposal is null)
+                {
+                    return Results.NotFound(new { error = $"Decision proposal was not found: {proposalId}" });
+                }
+
+                DecisionPackageVersion? packageVersion = await decisionRepository.GetPackageVersionAsync(
+                    repository,
+                    proposalId,
+                    request.BasePackageId);
+                if (packageVersion is null)
+                {
+                    return Results.NotFound(new { error = $"Decision package version was not found: {request.BasePackageId}" });
+                }
+
+                return Results.Ok(await packageService.RegeneratePackageAsync(
+                    repository,
+                    proposal,
+                    packageVersion,
+                    request,
+                    DateTimeOffset.UtcNow));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
     private static void MapGetDecisionProposalLineage(this IEndpointRouteBuilder app) =>
         app.MapGet("/api/repositories/{repositoryId:guid}/decisions/proposals/{proposalId}/lineage", async (
             Guid repositoryId,
@@ -1126,5 +1181,14 @@ public static class DecisionEndpoints
         }
 
         return parsed;
+    }
+
+    private static async Task<Repository> GetRepositoryAsync(
+        IRepositoryService repositoryService,
+        Guid repositoryId)
+    {
+        Repository? repository = (await repositoryService.GetAllAsync())
+            .FirstOrDefault(repository => repository.Id == repositoryId);
+        return repository ?? throw new KeyNotFoundException($"Repository was not found: {repositoryId}");
     }
 }

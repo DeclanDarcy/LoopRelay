@@ -12,6 +12,13 @@ public interface IDecisionPackageService
         DecisionGenerationContext generationContext,
         DateTimeOffset generatedAt);
 
+    Task<DecisionPackageRegenerationResult> RegeneratePackageAsync(
+        Repository repository,
+        DecisionProposal proposal,
+        DecisionPackageVersion basePackageVersion,
+        DecisionPackageRegenerationRequest request,
+        DateTimeOffset generatedAt);
+
     DecisionPackageValidationResult ValidatePackage(DecisionPackage package);
 
     DecisionPackageComparison ComparePackages(DecisionPackageVersion left, DecisionPackageVersion right);

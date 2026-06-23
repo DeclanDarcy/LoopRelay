@@ -27,20 +27,20 @@ let humans guide regeneration without becoming package authors.
 - [ ] Keep current direct `DecisionRefinementRequest` support for compatibility, but prefer directive-driven refinement in UI.
 - [ ] Add endpoints to analyze refinement before mutation and regenerate scoped package versions.
   - [x] Analyze refinement before mutation.
-  - [ ] Regenerate scoped package versions.
+  - [x] Regenerate scoped package versions.
 - [ ] Preserve every refinement as:
   - [ ] request
   - [ ] directives
   - [ ] plan
-  - [ ] old package version
-  - [ ] new package version
-  - [ ] comparison
-  - [ ] diagnostics
+  - [x] old package version
+  - [x] new package version
+  - [x] comparison
+  - [x] diagnostics
 - [ ] Classify the refinement's human authoring burden:
   - [ ] small directive-only adjustment is `MinorEdit`
   - [ ] scoped regeneration is `MajorRefinement`
   - [ ] replacement of generated content with human-authored content is `FullRewrite`
-- [ ] Ensure refinement never mutates prior package versions.
+- [x] Ensure refinement never mutates prior package versions.
 - [ ] Add UI controls for structured directives and show old/new recommendation diff.
 
 ## Tests
@@ -48,9 +48,9 @@ let humans guide regeneration without becoming package authors.
 - [ ] Constraint directive affects recommendation.
 - [ ] Priority directive changes option evaluation.
 - [ ] Risk directive updates tradeoff analysis.
-- [ ] Alternative exploration adds or changes options.
+- [x] Alternative exploration adds or changes options.
 - [ ] Goal clarification can trigger full regeneration.
-- [ ] Stale package fingerprint rejects refinement.
+- [x] Stale package fingerprint rejects refinement.
 - [ ] Version history and comparison persist after restart.
 
 ## Exit Criteria
