@@ -18,6 +18,7 @@ public sealed class InMemoryDecisionRepository : IDecisionRepository
     private readonly Dictionary<Guid, SortedDictionary<string, DecisionAssimilationRecommendation>> assimilationByRepository = [];
     private readonly Dictionary<Guid, SortedDictionary<string, DecisionGovernanceReport>> governanceReportsByRepository = [];
     private readonly Dictionary<Guid, SortedDictionary<string, DecisionCertificationReport>> certificationReportsByRepository = [];
+    private readonly Dictionary<Guid, SortedDictionary<string, DecisionGenerationCertificationReport>> generationCertificationReportsByRepository = [];
     private readonly Dictionary<Guid, SortedDictionary<string, DecisionQualityAssessment>> qualityAssessmentsByRepository = [];
     private readonly Dictionary<Guid, SortedDictionary<string, DecisionQualityReport>> qualityReportsByRepository = [];
     private readonly Dictionary<Guid, SortedDictionary<string, DecisionQualityTrend>> qualityTrendsByRepository = [];
@@ -282,6 +283,26 @@ public sealed class InMemoryDecisionRepository : IDecisionRepository
         return Task.FromResult(report);
     }
 
+    public Task<IReadOnlyList<DecisionGenerationCertificationReport>> ListGenerationCertificationReportsAsync(
+        Repository repository)
+    {
+        return Task.FromResult<IReadOnlyList<DecisionGenerationCertificationReport>>(
+            GetGenerationCertificationReports(repository.Id).Values.ToArray());
+    }
+
+    public Task<DecisionGenerationCertificationReport> SaveGenerationCertificationReportAsync(
+        Repository repository,
+        DecisionGenerationCertificationReport report)
+    {
+        if (report.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException("Decision generation certification report belongs to a different repository.");
+        }
+
+        GetGenerationCertificationReports(repository.Id)[report.Id] = report;
+        return Task.FromResult(report);
+    }
+
     public Task<IReadOnlyList<DecisionQualityAssessment>> ListQualityAssessmentsAsync(Repository repository)
     {
         return Task.FromResult<IReadOnlyList<DecisionQualityAssessment>>(GetQualityAssessments(repository.Id).Values.ToArray());
@@ -421,6 +442,11 @@ public sealed class InMemoryDecisionRepository : IDecisionRepository
     private SortedDictionary<string, DecisionCertificationReport> GetCertificationReports(Guid repositoryId)
     {
         return GetRepositoryMap(certificationReportsByRepository, repositoryId);
+    }
+
+    private SortedDictionary<string, DecisionGenerationCertificationReport> GetGenerationCertificationReports(Guid repositoryId)
+    {
+        return GetRepositoryMap(generationCertificationReportsByRepository, repositoryId);
     }
 
     private SortedDictionary<string, DecisionQualityAssessment> GetQualityAssessments(Guid repositoryId)

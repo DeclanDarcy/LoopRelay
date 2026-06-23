@@ -6,38 +6,38 @@ certify that automated decision generation replaces human decision production wi
 
 ## Work
 
-- [ ] Add `DecisionGenerationCertificationResult`:
-  - [ ] generation certified
-  - [ ] governance certified
-  - [ ] throughput certified
-  - [ ] quality certified
-  - [ ] consumption certified
-  - [ ] workflow replacement certified
-  - [ ] findings
-  - [ ] failures
-- [ ] Add `DecisionGenerationCertificationReport`.
-- [ ] Add `IDecisionGenerationCertificationService`.
-- [ ] Evaluate certification categories:
-  - [ ] generation capability
-  - [ ] governance compatibility
-  - [ ] throughput improvement
-  - [ ] human authoring burden reduction
-  - [ ] decision quality
-  - [ ] execution influence
-  - [ ] workflow replacement alignment
+- [x] Add `DecisionGenerationCertificationResult`:
+  - [x] generation certified
+  - [x] governance certified
+  - [x] throughput certified
+  - [x] quality certified
+  - [x] consumption certified
+  - [x] workflow replacement certified
+  - [x] findings
+  - [x] failures
+- [x] Add `DecisionGenerationCertificationReport`.
+- [x] Add `IDecisionGenerationCertificationService`.
+- [x] Evaluate certification categories:
+  - [x] generation capability
+  - [x] governance compatibility
+  - [x] throughput improvement
+  - [x] human authoring burden reduction
+  - [x] decision quality
+  - [x] execution influence
+  - [x] workflow replacement alignment
 - [ ] Certification requirements:
   - [ ] candidates discovered automatically
-  - [ ] multiple options generated
-  - [ ] tradeoffs generated
-  - [ ] recommendations generated or responsibly withheld
-  - [ ] packages generated and persisted
-  - [ ] humans review/refine/resolve
-  - [ ] humans do not author most final decision content
+  - [x] multiple options generated
+  - [x] tradeoffs generated
+  - [x] recommendations generated or responsibly withheld
+  - [x] packages generated and persisted
+  - [x] humans review/refine/resolve
+  - [x] humans do not author most final decision content
   - [ ] history preserved
-  - [ ] quality assessments available
-  - [ ] human authoring burden assessments available
-  - [ ] execution consumes accepted resolved decisions
-  - [ ] influence is traceable
+  - [x] quality assessments available
+  - [x] human authoring burden assessments available
+  - [x] execution consumes accepted resolved decisions
+  - [x] influence is traceable
 - [ ] Certification failure conditions:
   - [ ] hardcoded recommendations
   - [ ] single-option generation without justification
@@ -47,7 +47,7 @@ certify that automated decision generation replaces human decision production wi
   - [ ] generated decisions frequently classified as `FullRewrite` or `GenerationBypassed`
   - [ ] recommendations ignored repeatedly
   - [ ] execution projection absent
-  - [ ] influence not traceable
+  - [x] influence not traceable
 - [ ] Add certification scenarios:
   - [ ] architectural fork
   - [ ] workflow priority decision
@@ -69,8 +69,8 @@ certify that automated decision generation replaces human decision production wi
 - [ ] Certification fails when no quality evidence exists after resolved generated decisions.
 - [ ] Certification fails when most generated decisions require `FullRewrite`.
 - [ ] Certification fails when manual decisions bypass generation more often than generated decisions reach resolution.
-- [ ] Certification fails when execution influence cannot be traced.
-- [ ] Certification report persists and reloads after restart.
+- [x] Certification fails when execution influence cannot be traced.
+- [x] Certification report persists and reloads after restart.
 
 ## Exit Criteria
 

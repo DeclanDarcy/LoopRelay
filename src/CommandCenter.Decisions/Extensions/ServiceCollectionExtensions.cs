@@ -31,6 +31,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IDecisionInfluenceService, DecisionInfluenceService>();
         services.AddSingleton<IDecisionCertificationService, DecisionCertificationService>();
         services.AddSingleton<IHumanAuthoringBurdenService, HumanAuthoringBurdenService>();
+        services.AddSingleton<IDecisionGenerationCertificationService, DecisionGenerationCertificationService>();
         services.AddSingleton<IDecisionQualitySignalService, DecisionQualitySignalService>();
         services.AddSingleton<IDecisionQualityAssessmentService, DecisionQualityAssessmentService>();
         services.AddSingleton<IDecisionQualityReportService, DecisionQualityReportService>();

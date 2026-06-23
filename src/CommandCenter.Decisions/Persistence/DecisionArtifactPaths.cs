@@ -159,6 +159,11 @@ internal static partial class DecisionArtifactPaths
         return ArtifactPath.CombineRelative(CertificationRoot, $"{ValidateCertificationReportId(reportId)}.json");
     }
 
+    public static string GenerationCertificationReportJson(string reportId)
+    {
+        return ArtifactPath.CombineRelative(CertificationRoot, $"{ValidateGenerationCertificationReportId(reportId)}.json");
+    }
+
     public static string ExecutionProjectionJson(string projectionId)
     {
         return ArtifactPath.CombineRelative(ProjectionsRoot, $"{ValidateExecutionProjectionId(projectionId)}.json");
@@ -307,6 +312,16 @@ internal static partial class DecisionArtifactPaths
         return id;
     }
 
+    public static string ValidateGenerationCertificationReportId(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id) || !GenerationCertificationReportIdPattern().IsMatch(id))
+        {
+            throw new ArgumentException("Generation certification report id must match generation-certification.YYYYMMDDHHMMSSFFFFFFF.", nameof(id));
+        }
+
+        return id;
+    }
+
     public static string ValidateExecutionProjectionId(string id)
     {
         if (string.IsNullOrWhiteSpace(id) || !ExecutionProjectionIdPattern().IsMatch(id))
@@ -365,6 +380,9 @@ internal static partial class DecisionArtifactPaths
 
     [GeneratedRegex("^certification\\.[0-9]{21}$")]
     private static partial Regex CertificationReportIdPattern();
+
+    [GeneratedRegex("^generation-certification\\.[0-9]{21}$")]
+    private static partial Regex GenerationCertificationReportIdPattern();
 
     [GeneratedRegex("^execution\\.[0-9]{21}$")]
     private static partial Regex ExecutionProjectionIdPattern();

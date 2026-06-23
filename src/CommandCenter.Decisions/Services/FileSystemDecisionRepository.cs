@@ -554,6 +554,55 @@ public sealed class FileSystemDecisionRepository(IArtifactStore artifactStore) :
         return report;
     }
 
+    public async Task<IReadOnlyList<DecisionGenerationCertificationReport>> ListGenerationCertificationReportsAsync(
+        Repository repository)
+    {
+        string root = DecisionArtifactPaths.Resolve(repository, DecisionArtifactPaths.CertificationRootPath());
+        IReadOnlyList<string> files = await artifactStore.ListAsync(root, "generation-certification.*.json");
+        var reports = new List<DecisionGenerationCertificationReport>();
+
+        foreach (string file in files.OrderBy(file => file, StringComparer.Ordinal))
+        {
+            string? reportId = Path.GetFileNameWithoutExtension(file);
+            if (string.IsNullOrWhiteSpace(reportId))
+            {
+                continue;
+            }
+
+            DecisionGenerationCertificationReport? report =
+                await ReadPayloadAsync<DecisionGenerationCertificationReport>(
+                    repository,
+                    DecisionArtifactPaths.GenerationCertificationReportJson(reportId));
+            if (report is not null)
+            {
+                reports.Add(report);
+            }
+        }
+
+        return reports
+            .OrderBy(report => report.Id, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    public async Task<DecisionGenerationCertificationReport> SaveGenerationCertificationReportAsync(
+        Repository repository,
+        DecisionGenerationCertificationReport report)
+    {
+        DecisionArtifactPaths.ValidateGenerationCertificationReportId(report.Id);
+        if (report.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException("Decision generation certification report belongs to a different repository.");
+        }
+
+        await WriteDocumentAsync(
+            repository,
+            DecisionArtifactPaths.GenerationCertificationReportJson(report.Id),
+            report,
+            report.GeneratedAt,
+            report.GeneratedAt);
+        return report;
+    }
+
     public async Task<IReadOnlyList<DecisionQualityAssessment>> ListQualityAssessmentsAsync(Repository repository)
     {
         string root = DecisionArtifactPaths.Resolve(repository, DecisionArtifactPaths.QualityAssessmentsRootPath());

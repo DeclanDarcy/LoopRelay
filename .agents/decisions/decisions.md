@@ -2,15 +2,16 @@
 
 ## Newly Authorized
 
-- Close Milestone 9 as complete.
-- Treat the implemented Tier 0 backend validation as sufficient evidence that generated decisions can influence execution while preserving human governance.
-- Preserve the invariant that generated recommendations become execution guidance only after explicit accepted human resolution.
-- Start Milestone 10 as workflow evaluation and certification, not new workflow mutation.
-- Open Milestone 10 with `DecisionGenerationCertificationResult`, `DecisionGenerationCertificationReport`, and `IDecisionGenerationCertificationService`.
-- Focus the first M10 certification slice on generation capability, governance compatibility, execution consumption, and human authoring burden.
-- Make the first certification question: did a generated decision reach execution influence through human resolution?
+- Treat the M10 opening slice as correctly scoped.
+- Preserve the M10 invariant that generation certification is observational evidence evaluation, not workflow authority.
+- Keep the governing distinction: evaluate does not equal govern.
+- Certify generated-decision workflow replacement only when a generated decision reaches human accepted resolution, execution projection, and traceable execution influence.
+- Require quality and human-authoring burden evidence before certification can claim workflow replacement.
+- Keep persisted certification reports as historical evidence rather than transient runtime output.
+- Split the next M10 slice into backend endpoints first, then Tauri/UI after endpoint tests pass, then additional negative fixtures.
+- Prioritize negative certification fixtures for missing options, missing quality evidence, full rewrite dominance, generation bypass dominance, order-based recommendation failure, and missing execution influence.
 
 ## Not Authorized
 
-- Do not let Milestone 10 introduce new workflow authority or mutation behavior.
-- Certification should observe, measure, and certify downstream workflow evidence only.
+- Do not let M10 certification accept, reject, resolve, supersede, archive, or otherwise govern decisions.
+- Do not implement Tauri/UI generation certification surfaces before backend endpoint tests pass.

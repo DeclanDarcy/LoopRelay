@@ -2,24 +2,29 @@
 
 ## New State This Slice
 
-- Completed the Milestone 9 Tier 0-style backend validation path.
-- Added `GeneratedRecommendationCanBeResolvedProjectedPromptedAndMeasuredForBurden` in `DecisionGenerationServiceTests`.
-- The new validation proves one generated recommendation can:
-  - generate at least two options and tradeoffs
-  - be marked ready for human resolution
-  - be accepted by explicit human resolution
-  - project into governed execution context
-  - render into the execution prompt
-  - produce `ReviewOnly` human authoring burden with no full rewrite or generation bypass
-- Updated `.agents/milestones/m9-decision-consumption.md` exit criteria to complete.
-- Rotated prior handoff to `.agents/handoffs/handoff.0031.md`.
+- Started Milestone 10 automated decision generation certification.
+- Added backend generation-certification models:
+  - `DecisionGenerationCertificationResult`
+  - `DecisionGenerationCertificationFinding`
+  - `DecisionGenerationCertificationReport`
+- Added `IDecisionGenerationCertificationService` and `DecisionGenerationCertificationService`.
+- Generation certification is observational only. It reads existing decision lifecycle artifacts, generated packages, human resolutions, persisted quality assessments, burden signals, execution projection, and influence traces.
+- Added repository persistence for `generation-certification.YYYYMMDDHHMMSSFFFFFFF` reports under `.agents/decisions/certification/`.
+- Registered generation certification in decision DI.
+- Added in-memory repository support for generation-certification reports.
+- Added `DecisionGenerationCertificationServiceTests` covering:
+  - pass when a generated package is human-resolved, quality-assessed, projected into execution, influence-traced, and persisted/reloaded
+  - fail when a generated resolved decision lacks an influence trace
+- Updated `.agents/milestones/m10-generation-certification.md` to mark the completed backend foundation items.
+- Rotated prior handoff to `.agents/handoffs/handoff.0032.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter GeneratedRecommendationCanBeResolvedProjectedPromptedAndMeasuredForBurden` passed: 1 test.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "DecisionGenerationServiceTests|DecisionProjectionServiceTests|ExecutionPromptBuilderTests|DecisionQualityServiceTests"` passed: 101 tests.
+- `dotnet build CommandCenter.slnx` passed.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter DecisionGenerationCertificationServiceTests` passed: 2 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "DecisionGenerationCertificationServiceTests|DecisionGenerationServiceTests|DecisionProjectionServiceTests|DecisionQualityServiceTests|DecisionCertificationServiceTests"` passed: 104 tests.
 
 ## Next Recommended Slice
 
-- Start Milestone 10 automated decision generation certification.
-- Keep adherence observation deferred until execution-result evidence exists.
+- Add backend API endpoints, Tauri bridge commands, UI types/hooks, and a focused certification panel for generation certification.
+- Then add the remaining negative certification fixtures: missing options, missing quality evidence, generation bypass dominance, full rewrite dominance, and recommendation/order-based failure detection.

@@ -76,6 +76,12 @@ public interface IDecisionRepository
 
     Task<DecisionCertificationReport> SaveCertificationReportAsync(Repository repository, DecisionCertificationReport report);
 
+    Task<IReadOnlyList<DecisionGenerationCertificationReport>> ListGenerationCertificationReportsAsync(Repository repository);
+
+    Task<DecisionGenerationCertificationReport> SaveGenerationCertificationReportAsync(
+        Repository repository,
+        DecisionGenerationCertificationReport report);
+
     Task<IReadOnlyList<DecisionQualityAssessment>> ListQualityAssessmentsAsync(Repository repository);
 
     Task<DecisionQualityAssessment> SaveQualityAssessmentAsync(Repository repository, DecisionQualityAssessment assessment);
