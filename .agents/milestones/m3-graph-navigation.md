@@ -4,16 +4,16 @@ Goal: create a derived graph for navigation only. The graph is not persisted as 
 
 ## Backend Work
 
-- [ ] Add `ReasoningGraph`, `ReasoningGraphNode`, `ReasoningGraphRelationship`, and `ReasoningTrace` models as derived read models.
-- [ ] Implement `IReasoningGraphService`.
-- [ ] Build graph nodes from events, threads, relationships, and external references.
-- [ ] Build graph relationships from persisted relationships, event thread membership, references, and event provenance.
-- [ ] Implement backward traceability.
-- [ ] Implement forward impact traceability.
-- [ ] Implement thread traversal.
-- [ ] Add graph read endpoint.
-- [ ] Add backward and forward trace endpoints.
-- [ ] Keep graph rebuild in memory unless a later cache is justified.
+- [x] Add `ReasoningGraph`, `ReasoningGraphNode`, `ReasoningGraphRelationship`, and `ReasoningTrace` models as derived read models.
+- [x] Implement `IReasoningGraphService`.
+- [x] Build graph nodes from events, threads, relationships, and external references.
+- [x] Build graph relationships from persisted relationships, event thread membership, references, and event provenance.
+- [x] Implement backward traceability.
+- [x] Implement forward impact traceability.
+- [x] Implement thread traversal.
+- [x] Add graph read endpoint.
+- [x] Add backward and forward trace endpoints.
+- [x] Keep graph rebuild in memory unless a later cache is justified.
 
 ## UI Work
 
@@ -22,16 +22,16 @@ Goal: create a derived graph for navigation only. The graph is not persisted as 
 
 ## Tests
 
-- [ ] Graph nodes resolve or report missing external reference diagnostics.
-- [ ] No orphan persisted reasoning relationships are produced.
-- [ ] Backward trace for a decision can explain causes.
-- [ ] Forward trace from a hypothesis event can show resulting alternatives, decisions, contradictions, or direction events.
-- [ ] Thread traversal reconstructs event order.
-- [ ] Graph output is reproducible from the same repository state.
+- [x] Graph nodes resolve or report missing external reference diagnostics.
+- [x] No orphan persisted reasoning relationships are produced.
+- [x] Backward trace for a decision can explain causes.
+- [x] Forward trace from a hypothesis event can show resulting alternatives, decisions, contradictions, or direction events.
+- [x] Thread traversal reconstructs event order.
+- [x] Graph output is reproducible from the same repository state.
 
 ## Exit Criteria
 
 - [ ] Navigation is operational.
-- [ ] Causal tracing is operational.
-- [ ] Forward impact tracing is operational.
-- [ ] Graph remains derived.
+- [x] Causal tracing is operational.
+- [x] Forward impact tracing is operational.
+- [x] Graph remains derived.

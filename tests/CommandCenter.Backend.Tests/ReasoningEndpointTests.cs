@@ -73,6 +73,48 @@ public sealed class ReasoningEndpointTests
     }
 
     [Fact]
+    public async Task ReasoningEndpointsExposeDerivedGraphAndTraces()
+    {
+        Repository repository = CreateRepository();
+        await using WebApplication app = await CreateAppAsync(repository);
+        using var client = new HttpClient();
+        string root = app.Urls.Single();
+
+        ReasoningEvent source = (await (await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/reasoning/events",
+            EventCommand("Source"))).Content.ReadFromJsonAsync<ReasoningEvent>(JsonOptions))!;
+        ReasoningEvent target = (await (await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/reasoning/events",
+            EventCommand("Target"))).Content.ReadFromJsonAsync<ReasoningEvent>(JsonOptions))!;
+        await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/reasoning/relationships",
+            new CreateReasoningRelationshipCommand(
+                ReasoningRelationshipType.Supports,
+                new ReasoningReference(ReasoningReferenceKind.ReasoningEvent, source.Id),
+                new ReasoningReference(ReasoningReferenceKind.ReasoningEvent, target.Id),
+                new ReasoningNarrative("Source supports target."),
+                Provenance()));
+
+        HttpResponseMessage graphResponse = await client.GetAsync(
+            $"{root}/api/repositories/{repository.Id}/reasoning/graph");
+        HttpResponseMessage backwardTraceResponse = await client.GetAsync(
+            $"{root}/api/repositories/{repository.Id}/reasoning/trace/backward?kind=ReasoningEvent&id={target.Id}");
+        HttpResponseMessage forwardTraceResponse = await client.GetAsync(
+            $"{root}/api/repositories/{repository.Id}/reasoning/trace/forward?kind=ReasoningEvent&id={source.Id}");
+
+        ReasoningGraph graph = (await graphResponse.Content.ReadFromJsonAsync<ReasoningGraph>(JsonOptions))!;
+        ReasoningTrace backwardTrace = (await backwardTraceResponse.Content.ReadFromJsonAsync<ReasoningTrace>(JsonOptions))!;
+        ReasoningTrace forwardTrace = (await forwardTraceResponse.Content.ReadFromJsonAsync<ReasoningTrace>(JsonOptions))!;
+
+        Assert.Equal(HttpStatusCode.OK, graphResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, backwardTraceResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, forwardTraceResponse.StatusCode);
+        Assert.Contains(graph.Relationships, relationship => relationship.RelationshipId == "REL-0001");
+        Assert.Contains(backwardTrace.Nodes, node => node.ReferenceId == source.Id);
+        Assert.Contains(forwardTrace.Nodes, node => node.ReferenceId == target.Id);
+    }
+
+    [Fact]
     public async Task ReasoningEndpointsReturnExpectedErrorStatusCodes()
     {
         Repository repository = CreateRepository();

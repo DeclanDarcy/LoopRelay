@@ -72,6 +72,25 @@ public static class ReasoningEndpoints
             IReasoningRelationshipService relationshipService) =>
             await HandleAsync(() => relationshipService.CreateRelationshipAsync(repositoryId, command)));
 
+        group.MapGet("/graph", async (
+            Guid repositoryId,
+            IReasoningGraphService graphService) =>
+            await HandleAsync(() => graphService.GetGraphAsync(repositoryId)));
+
+        group.MapGet("/trace/backward", async (
+            Guid repositoryId,
+            string kind,
+            string id,
+            IReasoningGraphService graphService) =>
+            await HandleAsync(() => graphService.TraceBackwardAsync(repositoryId, CreateTraceTarget(kind, id))));
+
+        group.MapGet("/trace/forward", async (
+            Guid repositoryId,
+            string kind,
+            string id,
+            IReasoningGraphService graphService) =>
+            await HandleAsync(() => graphService.TraceForwardAsync(repositoryId, CreateTraceTarget(kind, id))));
+
         return app;
     }
 
@@ -97,6 +116,16 @@ public static class ReasoningEndpoints
         {
             return Results.BadRequest(new { error = exception.Message });
         }
+    }
+
+    private static ReasoningReference CreateTraceTarget(string kind, string id)
+    {
+        if (!Enum.TryParse(kind, ignoreCase: true, out ReasoningReferenceKind referenceKind))
+        {
+            throw new ArgumentException($"Unsupported reasoning reference kind: {kind}");
+        }
+
+        return new ReasoningReference(referenceKind, id);
     }
 }
 

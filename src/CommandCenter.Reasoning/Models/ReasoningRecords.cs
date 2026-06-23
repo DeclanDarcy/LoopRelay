@@ -92,3 +92,35 @@ public sealed record ManualReasoningCaptureCommand(
     ReasoningProvenance Provenance,
     IReadOnlyList<string>? ThreadIds,
     IReadOnlyList<string>? Tags);
+
+public sealed record ReasoningGraph(
+    Guid RepositoryId,
+    DateTimeOffset GeneratedAt,
+    IReadOnlyList<ReasoningGraphNode> Nodes,
+    IReadOnlyList<ReasoningGraphRelationship> Relationships,
+    IReadOnlyList<string> Diagnostics);
+
+public sealed record ReasoningGraphNode(
+    string Id,
+    ReasoningReferenceKind Kind,
+    string ReferenceId,
+    string Label,
+    bool Resolved,
+    ReasoningReference? Reference);
+
+public sealed record ReasoningGraphRelationship(
+    string Id,
+    ReasoningRelationshipType Type,
+    string SourceNodeId,
+    string TargetNodeId,
+    string Label,
+    string Provenance,
+    string? RelationshipId);
+
+public sealed record ReasoningTrace(
+    Guid RepositoryId,
+    ReasoningTraceDirection Direction,
+    ReasoningReference Target,
+    IReadOnlyList<ReasoningGraphNode> Nodes,
+    IReadOnlyList<ReasoningGraphRelationship> Relationships,
+    IReadOnlyList<string> Diagnostics);

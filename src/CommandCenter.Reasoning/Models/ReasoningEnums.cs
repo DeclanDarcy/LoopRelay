@@ -133,3 +133,9 @@ public enum ReasoningManualCaptureKind
     ConstraintRetired,
     EvidenceAdded
 }
+
+public enum ReasoningTraceDirection
+{
+    Backward,
+    Forward
+}
