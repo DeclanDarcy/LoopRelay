@@ -224,6 +224,28 @@ public sealed class DecisionGenerationCertificationServiceTests
     }
 
     [Fact]
+    public async Task CertificationTracksRepeatedIgnoredRecommendationsWithoutFailingCertification()
+    {
+        CertificationHarness harness = await CreateGeneratedDecisionHarnessAsync(selectAlternativeOption: true);
+        await AddRepeatedRecommendationDivergenceAsync(harness);
+
+        DecisionGenerationCertificationReport report =
+            await harness.CertificationService.GetCurrentCertificationAsync(harness.Repository.Id);
+
+        Assert.True(report.Result.Certified);
+        DecisionGenerationCertificationFinding finding = Assert.Single(
+            report.Result.Findings,
+            finding => finding.Id == "QLT-002");
+        Assert.True(finding.Passed);
+        Assert.Contains("advisory quality signals", finding.Summary, StringComparison.Ordinal);
+        Assert.DoesNotContain(report.Result.Failures, failure => failure.StartsWith("QLT-002:", StringComparison.Ordinal));
+        Assert.Contains(
+            report.QualityAssessments.SelectMany(assessment => assessment.Signals),
+            signal => signal.Category == "RecommendationStability" &&
+                signal.Direction == QualitySignalDirection.Negative);
+    }
+
+    [Fact]
     public async Task CertificationFailsWhenManualDecisionBypassesGeneration()
     {
         CertificationHarness harness = await CreateGeneratedDecisionHarnessAsync();
@@ -374,7 +396,8 @@ public sealed class DecisionGenerationCertificationServiceTests
         bool saveQualityAssessment = true,
         bool recordInfluence = true,
         HumanAuthoringBurden? revisionBurden = null,
-        string resolver = "human-reviewer")
+        string resolver = "human-reviewer",
+        bool selectAlternativeOption = false)
     {
         Repository repository = CreateRepository();
         await WriteAsync(
@@ -441,9 +464,12 @@ public sealed class DecisionGenerationCertificationServiceTests
                     HumanAuthoringBurden: revisionBurden.Value));
         }
 
-        string selectedOptionId = string.IsNullOrWhiteSpace(proposal.Recommendation?.OptionId)
-            ? proposal.Options[0].Id
-            : proposal.Recommendation.OptionId;
+        string selectedOptionId = selectAlternativeOption
+            ? proposal.Options.First(option =>
+                !string.Equals(option.Id, proposal.Recommendation?.OptionId, StringComparison.Ordinal)).Id
+            : string.IsNullOrWhiteSpace(proposal.Recommendation?.OptionId)
+                ? proposal.Options[0].Id
+                : proposal.Recommendation.OptionId;
         Decision decision = await resolutionService.ResolveProposalAsync(
             repository.Id,
             proposal.Id,
@@ -486,6 +512,81 @@ public sealed class DecisionGenerationCertificationServiceTests
             certificationService,
             burdenService,
             influenceService);
+    }
+
+    private static async Task AddRepeatedRecommendationDivergenceAsync(CertificationHarness harness)
+    {
+        Decision firstDecision = (await harness.DecisionRepository.ListDecisionsAsync(harness.Repository))
+            .Single();
+        DecisionResolvedProposalSnapshot snapshot = firstDecision.Resolution!.SourceProposalSnapshot!;
+        string selectedOptionId = snapshot.Options
+            .First(option => !string.Equals(option.Id, snapshot.Recommendation?.OptionId, StringComparison.Ordinal))
+            .Id;
+        DecisionId decisionId = await harness.DecisionRepository.AllocateDecisionIdAsync(harness.Repository);
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        var decision = new Decision(
+            decisionId,
+            DecisionState.Resolved,
+            firstDecision.Classification,
+            $"{firstDecision.Title} follow-up",
+            firstDecision.Context,
+            new DecisionMetadata(harness.Repository.Id, now, now),
+            new DecisionResolution(
+                DecisionOutcome.Accepted,
+                selectedOptionId,
+                "Accept generated alternative again after human review.",
+                "human-reviewer",
+                true,
+                now,
+                [
+                    new DecisionSourceReference(
+                        "DecisionProposal",
+                        $".agents/decisions/proposals/{snapshot.ProposalId}/proposal.json",
+                        DecisionId: decisionId,
+                        ProposalId: snapshot.ProposalId,
+                        CandidateId: snapshot.CandidateId),
+                    new DecisionSourceReference(
+                        "DecisionOption",
+                        $".agents/decisions/proposals/{snapshot.ProposalId}/proposal.json",
+                        Section: "Options",
+                        ItemId: selectedOptionId,
+                        DecisionId: decisionId,
+                        ProposalId: snapshot.ProposalId,
+                        CandidateId: snapshot.CandidateId)
+                ],
+                snapshot with { AuthorityResolvedAt = now }),
+            [],
+            firstDecision.Evidence,
+            [
+                new DecisionHistoryEntry(
+                    now,
+                    "Resolved",
+                    DecisionState.Open.ToString(),
+                    DecisionState.Resolved.ToString(),
+                    "Accept generated alternative again after human review.",
+                    [])
+            ]);
+        await harness.DecisionRepository.SaveDecisionAsync(harness.Repository, decision);
+
+        var projectionService = new DecisionArtifactProjectionService(
+            harness.DecisionRepository,
+            new FileSystemArtifactStore());
+        var qualityService = new DecisionQualityAssessmentService(
+            harness.RepositoryService,
+            harness.DecisionRepository,
+            new DecisionQualitySignalService(harness.RepositoryService, harness.DecisionRepository, harness.BurdenService),
+            harness.BurdenService,
+            projectionService);
+        await qualityService.AssessAndSaveDecisionAsync(harness.Repository.Id, decision.Id.Value);
+
+        var executionProjectionService = new DecisionProjectionService(
+            harness.RepositoryService,
+            harness.DecisionRepository,
+            new HealthyGovernanceService(harness.Repository.Id),
+            new FileSystemArtifactStore());
+        ExecutionDecisionProjection executionProjection =
+            await executionProjectionService.BuildExecutionProjectionAsync(harness.Repository.Id);
+        await harness.InfluenceService.RecordExecutionInfluenceAsync(harness.Repository.Id, Guid.NewGuid(), executionProjection);
     }
 
     private static async Task WriteAsync(Repository repository, string relativePath, string content)

@@ -59,7 +59,7 @@ certify that automated decision generation replaces human decision production wi
   - [x] resolution bypass
   - [x] humans rewriting most generated packages
   - [x] generated decisions frequently classified as `FullRewrite` or `GenerationBypassed`
-  - [ ] recommendations ignored repeatedly
+  - [x] recommendations ignored repeatedly as advisory quality signals, not automatic certification failures
   - [x] execution projection absent
   - [x] influence not traceable
 - [ ] Add certification scenarios:

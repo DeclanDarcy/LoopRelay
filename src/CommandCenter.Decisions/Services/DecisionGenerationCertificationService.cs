@@ -177,6 +177,29 @@ public sealed class DecisionGenerationCertificationService(
             qualityAssessments.Select(assessment => assessment.DecisionId).ToArray(),
             [],
             []);
+        DecisionQualitySignal[] repeatedRecommendationDivergenceSignals = qualityAssessments
+            .SelectMany(assessment => assessment.Signals)
+            .Where(signal =>
+                signal.Category == "RecommendationStability" &&
+                signal.Direction == QualitySignalDirection.Negative)
+            .OrderBy(signal => signal.DecisionId, StringComparer.Ordinal)
+            .ThenBy(signal => signal.Id, StringComparer.Ordinal)
+            .ToArray();
+        AddFinding(
+            findings,
+            "QLT-002",
+            "Quality",
+            true,
+            repeatedRecommendationDivergenceSignals.Length == 0
+                ? "Repeated recommendation overrides were not observed."
+                : "Repeated recommendation overrides are tracked as advisory quality signals.",
+            repeatedRecommendationDivergenceSignals.Length == 0
+                ? "Recommendation divergence remains a quality observation and is not an automatic certification failure."
+                : $"Read {repeatedRecommendationDivergenceSignals.Length} repeated recommendation override signal(s); certification remains advisory unless stronger evidence shows structural generation ineffectiveness.",
+            repeatedRecommendationDivergenceSignals.SelectMany(signal => signal.Sources).ToArray(),
+            repeatedRecommendationDivergenceSignals.Select(signal => signal.DecisionId).ToArray(),
+            [],
+            []);
         AddFinding(
             findings,
             "BUR-001",
