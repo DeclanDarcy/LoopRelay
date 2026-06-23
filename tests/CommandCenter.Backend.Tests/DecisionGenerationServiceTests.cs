@@ -10,6 +10,8 @@ using CommandCenter.Decisions.Abstractions;
 using CommandCenter.Decisions.Models;
 using CommandCenter.Decisions.Primitives;
 using CommandCenter.Decisions.Services;
+using CommandCenter.Execution.Models;
+using CommandCenter.Execution.Services;
 using CommandCenter.Reasoning.Models;
 using CommandCenter.Reasoning.Projections;
 using CommandCenter.Reasoning.Services;
@@ -1192,6 +1194,56 @@ public sealed class DecisionGenerationServiceTests
         Assert.Contains("- PROP-0001 | Resolved | CAND-0001 | Decide persistence schema", index);
         Assert.Equal(operationalContextBefore, operationalContextAfter);
         Assert.False(Directory.Exists(Path.Combine(repository.Path, ".agents", "decisions", "assimilation")));
+    }
+
+    [Fact]
+    public async Task GeneratedRecommendationCanBeResolvedProjectedPromptedAndMeasuredForBurden()
+    {
+        Repository repository = CreateRepository();
+        await WriteAsync(repository, ".agents/plan.md", "# Plan\n\nNeed to decide repository-backed persistence schema.");
+        await WriteAsync(repository, ".agents/milestones/m9-decision-consumption.md", "# Milestone 9\n\nProject accepted decisions into execution.");
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var generationService = CreateGenerationService(repository, store, decisionRepository);
+        var resolutionService = CreateResolutionService(repository, store, decisionRepository);
+        var projectionService = CreateProjectionService(repository, decisionRepository, store);
+        var burdenService = new HumanAuthoringBurdenService(new StubRepositoryService(repository), decisionRepository);
+
+        DecisionProposal proposal = await generationService.GenerateProposalAsync(repository.Id, candidate.Id);
+        Assert.True(proposal.Options.Count >= 2);
+        Assert.NotNull(proposal.Recommendation);
+        Assert.NotEmpty(proposal.Tradeoffs);
+        await generationService.MarkProposalReadyForResolutionAsync(repository.Id, proposal.Id, "Generated package is ready for human resolution.");
+
+        Decision decision = await resolutionService.ResolveProposalAsync(
+            repository.Id,
+            proposal.Id,
+            new ResolveDecisionCommand(
+                "Accept the generated recommendation for Tier 0 validation.",
+                "human-reviewer",
+                proposal.Recommendation!.OptionId));
+        ExecutionDecisionProjection projection = await projectionService.BuildExecutionProjectionAsync(repository.Id);
+        ExecutionPrompt prompt = new ExecutionPromptBuilder().Build(CreateExecutionContext(repository, projection));
+        HumanAuthoringBurdenReport burdenReport = await burdenService.GenerateReportAsync(repository.Id);
+
+        Assert.Equal(DecisionState.Resolved, decision.State);
+        Assert.Equal(DecisionOutcome.Accepted, decision.Resolution?.Outcome);
+        Assert.False(decision.Resolution?.RecommendationDiverged);
+        Assert.Equal(proposal.Recommendation.OptionId, decision.Resolution?.SelectedOptionId);
+        Assert.Equal("PKG-0001", decision.Resolution?.SourceProposalSnapshot?.PackageId);
+        Assert.True(
+            projection.Constraints.Any(item => item.DecisionId == decision.Id.Value) ||
+            projection.Directives.Any(item => item.DecisionId == decision.Id.Value));
+        Assert.Contains(decision.Id.Value, prompt.Text, StringComparison.Ordinal);
+        Assert.Contains("## Governed Decision Projection", prompt.Text, StringComparison.Ordinal);
+        HumanAuthoringBurdenSignal signal = Assert.Single(burdenReport.Signals);
+        Assert.Equal(decision.Id.Value, signal.DecisionId);
+        Assert.Equal(HumanAuthoringBurden.ReviewOnly, signal.Burden);
+        Assert.Equal(1, burdenReport.ReviewOnlyCount);
+        Assert.Equal(0, burdenReport.FullRewriteCount);
+        Assert.Equal(0, burdenReport.GenerationBypassedCount);
     }
 
     [Fact]
@@ -2557,6 +2609,66 @@ public sealed class DecisionGenerationServiceTests
         return new DecisionResolutionService(repositoryService, decisionRepository, projectionService);
     }
 
+    private static DecisionProjectionService CreateProjectionService(
+        Repository repository,
+        FileSystemDecisionRepository decisionRepository,
+        FileSystemArtifactStore store)
+    {
+        return new DecisionProjectionService(
+            new StubRepositoryService(repository),
+            decisionRepository,
+            new HealthyGovernanceService(repository.Id),
+            store);
+    }
+
+    private static ExecutionContext CreateExecutionContext(
+        Repository repository,
+        ExecutionDecisionProjection projection)
+    {
+        const string planContent = "# Plan\n\nNeed to decide repository-backed persistence schema.";
+        const string milestoneContent = "# Milestone 9\n\nProject accepted decisions into execution.";
+        return new ExecutionContext
+        {
+            RepositoryId = repository.Id,
+            RepositoryName = repository.Name,
+            RepositoryPath = repository.Path,
+            MilestonePath = ".agents/milestones/m9-decision-consumption.md",
+            GeneratedAt = new DateTimeOffset(2026, 6, 23, 12, 0, 0, TimeSpan.Zero),
+            Artifacts =
+            [
+                Artifact("Plan", ".agents/plan.md", planContent),
+                Artifact("Milestone", ".agents/milestones/m9-decision-consumption.md", milestoneContent)
+            ],
+            RepositorySnapshot = new ExecutionRepositorySnapshot
+            {
+                Branch = "main",
+                DirtyState = new RepositoryDirtyState(),
+                CapturedAt = new DateTimeOffset(2026, 6, 23, 12, 0, 0, TimeSpan.Zero)
+            },
+            DecisionProjection = projection,
+            Diagnostics = new ExecutionContextDiagnostics
+            {
+                TotalBytes = planContent.Length + milestoneContent.Length,
+                TotalCharacters = planContent.Length + milestoneContent.Length,
+                WarningThresholdBytes = 128 * 1024,
+                HardLimitBytes = 512 * 1024
+            }
+        };
+    }
+
+    private static ExecutionContextArtifact Artifact(string role, string relativePath, string content)
+    {
+        return new ExecutionContextArtifact
+        {
+            Role = role,
+            RelativePath = relativePath,
+            Name = Path.GetFileName(relativePath),
+            Content = content,
+            ByteCount = content.Length,
+            CharacterCount = content.Length
+        };
+    }
+
     private static DecisionOperationalContextAssimilationService CreateAssimilationService(
         Repository repository,
         FileSystemArtifactStore store,
@@ -2727,6 +2839,38 @@ public sealed class DecisionGenerationServiceTests
         public Task RemoveAsync(Guid repositoryId)
         {
             throw new NotSupportedException();
+        }
+    }
+
+    private sealed class HealthyGovernanceService(Guid repositoryId) : IDecisionGovernanceService
+    {
+        public Task<DecisionGovernanceReport> GetCurrentReportAsync(Guid requestedRepositoryId)
+        {
+            return Task.FromResult(CreateReport(requestedRepositoryId));
+        }
+
+        public Task<DecisionGovernanceReport> GenerateReportAsync(Guid requestedRepositoryId)
+        {
+            return Task.FromResult(CreateReport(requestedRepositoryId));
+        }
+
+        public Task<IReadOnlyList<DecisionGovernanceReport>> ListReportsAsync(Guid requestedRepositoryId)
+        {
+            return Task.FromResult<IReadOnlyList<DecisionGovernanceReport>>([CreateReport(requestedRepositoryId)]);
+        }
+
+        private DecisionGovernanceReport CreateReport(Guid requestedRepositoryId)
+        {
+            Assert.Equal(repositoryId, requestedRepositoryId);
+            return new DecisionGovernanceReport(
+                "governance.test",
+                repositoryId,
+                DateTimeOffset.UtcNow,
+                "fingerprint",
+                DecisionHealthAssessment.Healthy,
+                new DecisionGovernanceSummary(0, 0, 0, 0, 0, 0, 0),
+                [],
+                []);
         }
     }
 }

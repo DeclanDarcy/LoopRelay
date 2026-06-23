@@ -59,6 +59,6 @@ make accepted resolved decisions direct execution with explicit influence tracea
 
 ## Exit Criteria
 
-- [ ] Every execution session can explain which decisions directed it and why.
-- [ ] Execution receives no unresolved decision authority.
-- [ ] A generated recommendation can be human-resolved, projected to execution, and measured for human authoring burden before Tier 1 hardening work begins.
+- [x] Every execution session can explain which decisions directed it and why.
+- [x] Execution receives no unresolved decision authority.
+- [x] A generated recommendation can be human-resolved, projected to execution, and measured for human authoring burden before Tier 1 hardening work begins.
