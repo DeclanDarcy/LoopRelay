@@ -41,12 +41,64 @@ public sealed class DecisionGenerationCertificationServiceTests
         DecisionCandidate candidate = Assert.Single(await harness.DecisionRepository.ListCandidatesAsync(harness.Repository));
         Assert.Contains(candidate.History, entry => entry.Event == "Discovered");
         Assert.Contains(candidate.History, entry => entry.Event == "Promoted");
+        DecisionGenerationCertificationFinding historyFinding = Assert.Single(
+            report.Result.Findings,
+            finding => finding.Id == "GOV-002");
+        Assert.True(historyFinding.Passed);
         Assert.True(File.Exists(Path.Combine(
             harness.Repository.Path,
             ".agents",
             "decisions",
             "certification",
             $"{report.Id}.json")));
+    }
+
+    [Fact]
+    public async Task CertificationPreservesRefinementRevisionHistoryThroughResolutionAuthority()
+    {
+        CertificationHarness harness = await CreateGeneratedDecisionHarnessAsync(
+            revisionBurden: HumanAuthoringBurden.MinorEdit);
+
+        DecisionGenerationCertificationReport report =
+            await harness.CertificationService.GetCurrentCertificationAsync(harness.Repository.Id);
+
+        Assert.True(report.Result.Certified);
+        DecisionGenerationCertificationFinding historyFinding = Assert.Single(
+            report.Result.Findings,
+            finding => finding.Id == "GOV-002");
+        Assert.True(historyFinding.Passed);
+        Assert.Contains(
+            historyFinding.Sources,
+            source => source.SourceKind == "DecisionProposalRevision" &&
+                source.RelativePath?.EndsWith("/REV-9999.json", StringComparison.Ordinal) == true);
+        Decision decision = Assert.Single(await harness.DecisionRepository.ListDecisionsAsync(harness.Repository));
+        DecisionProposalRevision revision = Assert.Single(decision.Resolution!.SourceProposalSnapshot!.Revisions);
+        Assert.Equal("REV-9999", revision.Id);
+        Assert.Equal(HumanAuthoringBurden.MinorEdit, revision.HumanAuthoringBurden);
+    }
+
+    [Fact]
+    public async Task CertificationFailsWhenGeneratedResolutionLosesProposalHistorySnapshot()
+    {
+        CertificationHarness harness = await CreateGeneratedDecisionHarnessAsync();
+        Decision decision = Assert.Single(await harness.DecisionRepository.ListDecisionsAsync(harness.Repository));
+        DecisionResolution resolution = decision.Resolution!;
+        await harness.DecisionRepository.SaveDecisionAsync(
+            harness.Repository,
+            decision with
+            {
+                Resolution = resolution with
+                {
+                    SourceProposalSnapshot = resolution.SourceProposalSnapshot! with { History = [] }
+                }
+            });
+
+        DecisionGenerationCertificationReport report =
+            await harness.CertificationService.GetCurrentCertificationAsync(harness.Repository.Id);
+
+        Assert.False(report.Result.Certified);
+        Assert.False(report.Result.GovernanceCertified);
+        Assert.Contains(report.Result.Failures, failure => failure.StartsWith("GOV-002:", StringComparison.Ordinal));
     }
 
     [Fact]

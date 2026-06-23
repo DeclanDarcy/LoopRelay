@@ -47,7 +47,7 @@ certify that automated decision generation replaces human decision production wi
   - [x] packages generated and persisted
   - [x] humans review/refine/resolve
   - [x] humans do not author most final decision content
-  - [ ] history preserved
+  - [x] history preserved
   - [x] quality assessments available
   - [x] human authoring burden assessments available
   - [x] execution consumes accepted resolved decisions

@@ -44,6 +44,10 @@ public sealed class DecisionGenerationCertificationService(
             await ListPackageVersionsAsync(repository, proposals);
         IReadOnlyList<DecisionPackageVersion> packageVersions =
             packageVersionsByProposal.SelectMany(pair => pair.Value).ToArray();
+        IReadOnlyDictionary<string, IReadOnlyList<DecisionProposalRevision>> revisionsByProposal =
+            await ListProposalRevisionsAsync(repository, proposals);
+        IReadOnlyList<DecisionProposalRevision> proposalRevisions =
+            revisionsByProposal.SelectMany(pair => pair.Value).ToArray();
         IReadOnlyList<DecisionQualityAssessment> qualityAssessments =
             await decisionRepository.ListQualityAssessmentsAsync(repository);
         HumanAuthoringBurdenReport burdenReport =
@@ -150,6 +154,24 @@ public sealed class DecisionGenerationCertificationService(
             "Generated decisions reached authority only through human resolution.",
             $"Certified {generatedResolvedDecisions.Length} generated resolved decision(s).",
             generatedResolvedDecisions.Select(DecisionSource).ToArray(),
+            generatedResolvedDecisions.Select(decision => decision.Id.Value).ToArray(),
+            generatedResolvedDecisions.Select(decision => decision.Resolution!.SourceProposalSnapshot!.CandidateId).ToArray(),
+            generatedResolvedDecisions.Select(decision => decision.Resolution!.SourceProposalSnapshot!.ProposalId).ToArray());
+        AddFinding(
+            findings,
+            "GOV-002",
+            "Governance",
+            generatedResolvedDecisions.Length > 0 &&
+            generatedResolvedDecisions.All(decision => PreservesGeneratedDecisionHistory(
+                decision,
+                packageVersionsByProposal,
+                revisionsByProposal)),
+            "Generated decision lifecycle history is preserved through resolution authority.",
+            $"Certified {generatedResolvedDecisions.Length} generated resolved decision(s), {packageVersions.Count} package version(s), and {proposalRevisions.Count} proposal revision(s) for preserved authority lineage.",
+            generatedResolvedDecisions.Select(DecisionSource)
+                .Concat(packageVersions.Select(PackageSource))
+                .Concat(proposalRevisions.Select(RevisionSource))
+                .ToArray(),
             generatedResolvedDecisions.Select(decision => decision.Id.Value).ToArray(),
             generatedResolvedDecisions.Select(decision => decision.Resolution!.SourceProposalSnapshot!.CandidateId).ToArray(),
             generatedResolvedDecisions.Select(decision => decision.Resolution!.SourceProposalSnapshot!.ProposalId).ToArray());
@@ -268,7 +290,7 @@ public sealed class DecisionGenerationCertificationService(
             $"generation-certification.{DateTimeOffset.UtcNow:yyyyMMddHHmmssfffffff}",
             repository.Id,
             DateTimeOffset.UtcNow,
-            FingerprintInputs(candidates, proposals, decisions, packageVersions, qualityAssessments, burdenReport, executionProjection, influenceTracesByDecision),
+            FingerprintInputs(candidates, proposals, decisions, packageVersions, proposalRevisions, qualityAssessments, burdenReport, executionProjection, influenceTracesByDecision),
             result,
             candidates.Count,
             proposals.Count,
@@ -293,6 +315,19 @@ public sealed class DecisionGenerationCertificationService(
         }
 
         return versions;
+    }
+
+    private async Task<IReadOnlyDictionary<string, IReadOnlyList<DecisionProposalRevision>>> ListProposalRevisionsAsync(
+        Repository repository,
+        IReadOnlyList<DecisionProposal> proposals)
+    {
+        var revisions = new Dictionary<string, IReadOnlyList<DecisionProposalRevision>>(StringComparer.Ordinal);
+        foreach (DecisionProposal proposal in proposals)
+        {
+            revisions[proposal.Id] = await decisionRepository.ListProposalRevisionsAsync(repository, proposal.Id);
+        }
+
+        return revisions;
     }
 
     private async Task<Repository> GetRepositoryAsync(Guid repositoryId)
@@ -370,6 +405,46 @@ public sealed class DecisionGenerationCertificationService(
         return selected.Score == topScore && selected.Rank == topRank;
     }
 
+    private static bool PreservesGeneratedDecisionHistory(
+        Decision decision,
+        IReadOnlyDictionary<string, IReadOnlyList<DecisionPackageVersion>> packageVersionsByProposal,
+        IReadOnlyDictionary<string, IReadOnlyList<DecisionProposalRevision>> revisionsByProposal)
+    {
+        DecisionResolvedProposalSnapshot? snapshot = decision.Resolution?.SourceProposalSnapshot;
+        if (snapshot is null ||
+            decision.History.Count == 0 ||
+            snapshot.History.Count == 0 ||
+            string.IsNullOrWhiteSpace(snapshot.PackageId) ||
+            string.IsNullOrWhiteSpace(snapshot.PackageFingerprint))
+        {
+            return false;
+        }
+
+        if (!packageVersionsByProposal.TryGetValue(snapshot.ProposalId, out IReadOnlyList<DecisionPackageVersion>? packageVersions) ||
+            !packageVersions.Any(version =>
+                string.Equals(version.Id, snapshot.PackageId, StringComparison.Ordinal) &&
+                string.Equals(version.PackageFingerprint, snapshot.PackageFingerprint, StringComparison.Ordinal)))
+        {
+            return false;
+        }
+
+        if (!revisionsByProposal.TryGetValue(snapshot.ProposalId, out IReadOnlyList<DecisionProposalRevision>? persistedRevisions))
+        {
+            persistedRevisions = [];
+        }
+
+        string[] snapshotRevisionIds = snapshot.Revisions
+            .Select(revision => revision.Id)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        string[] persistedRevisionIds = persistedRevisions
+            .Select(revision => revision.Id)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        return snapshotRevisionIds.SequenceEqual(persistedRevisionIds, StringComparer.Ordinal);
+    }
+
     private static bool Passed(IReadOnlyList<DecisionGenerationCertificationFinding> findings, string idPrefix)
     {
         return findings
@@ -406,6 +481,7 @@ public sealed class DecisionGenerationCertificationService(
         IReadOnlyList<DecisionProposal> proposals,
         IReadOnlyList<Decision> decisions,
         IReadOnlyList<DecisionPackageVersion> packages,
+        IReadOnlyList<DecisionProposalRevision> revisions,
         IReadOnlyList<DecisionQualityAssessment> qualityAssessments,
         HumanAuthoringBurdenReport burdenReport,
         ExecutionDecisionProjection executionProjection,
@@ -417,6 +493,7 @@ public sealed class DecisionGenerationCertificationService(
             Proposals = proposals.OrderBy(proposal => proposal.Id, StringComparer.Ordinal),
             Decisions = decisions.OrderBy(decision => decision.Id.Value, StringComparer.Ordinal),
             Packages = packages.OrderBy(package => package.Id, StringComparer.Ordinal),
+            Revisions = revisions.OrderBy(revision => revision.Id, StringComparer.Ordinal),
             QualityAssessments = qualityAssessments.OrderBy(assessment => assessment.Id, StringComparer.Ordinal),
             BurdenReport = burdenReport,
             ExecutionProjection = executionProjection,
@@ -464,6 +541,14 @@ public sealed class DecisionGenerationCertificationService(
             $".agents/decisions/proposals/{packageVersion.ProposalId}/versions/{packageVersion.Id}.json",
             ProposalId: packageVersion.ProposalId,
             CandidateId: packageVersion.CandidateId);
+    }
+
+    private static DecisionSourceReference RevisionSource(DecisionProposalRevision revision)
+    {
+        return new DecisionSourceReference(
+            "DecisionProposalRevision",
+            $".agents/decisions/proposals/{revision.ProposalId}/revisions/{revision.Id}.json",
+            ProposalId: revision.ProposalId);
     }
 
     private static DecisionSourceReference AssessmentSource(DecisionQualityAssessment assessment)
