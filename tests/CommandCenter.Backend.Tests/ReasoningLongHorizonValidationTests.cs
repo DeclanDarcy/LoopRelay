@@ -130,6 +130,44 @@ public sealed class ReasoningLongHorizonValidationTests
         await AssertNoDerivedAuthorityArtifactsAsync(store, repository);
     }
 
+    [Fact]
+    public async Task LongHorizonReconstructionDetailsRemainUsableForUiConsumption()
+    {
+        var store = new MemoryArtifactStore();
+        Repository repository = CreateRepository();
+        ReasoningServices initial = CreateServices(repository, store);
+        LongHorizonFixture fixture = await CreateLongHorizonFixtureAsync(repository, store, initial.Repository);
+        Repository recoveredRepository = new()
+        {
+            Id = repository.Id,
+            Name = "Recovered Repo",
+            Path = repository.Path
+        };
+        ReasoningServices recovered = CreateServices(recoveredRepository, store);
+        ReasoningQueryResult result = await recovered.Query.RunQueryAsync(
+            recoveredRepository.Id,
+            new ReasoningQuery(
+                ReasoningQueryCategory.Direction,
+                "Why does the current strategy exist?",
+                new ReasoningReference(ReasoningReferenceKind.Decision, "DEC-STRATEGY-CURRENT")));
+
+        string details = result.Reconstruction.Narrative.Details;
+        AssertSectionOrder(details, "Evidence summary:", "Events:", "Relationships:", "External References:", "Threads:");
+        Assert.Contains("Evidence summary:", details, StringComparison.Ordinal);
+        Assert.Contains("- None", details, StringComparison.Ordinal);
+        Assert.Contains(fixture.SelectedAlternativeId, details, StringComparison.Ordinal);
+        Assert.Contains(fixture.RejectedAlternativeId, details, StringComparison.Ordinal);
+        Assert.Contains(fixture.InvalidatedAssumptionId, details, StringComparison.Ordinal);
+        Assert.Contains(fixture.RecurringContradictionId, details, StringComparison.Ordinal);
+        Assert.Contains(fixture.DirectionShiftId, details, StringComparison.Ordinal);
+        Assert.Contains("Event EVT-", details, StringComparison.Ordinal);
+        Assert.Contains("Relationship REL-", details, StringComparison.Ordinal);
+        Assert.Contains("Reference DEC-STRATEGY-CURRENT", details, StringComparison.Ordinal);
+        Assert.True(details.Split(Environment.NewLine).All(line => line.Length <= 220));
+        Assert.Equal("High", result.Reconstruction.Confidence);
+        await AssertNoDerivedAuthorityArtifactsAsync(store, repository);
+    }
+
     private static async Task<LongHorizonFixture> CreateLongHorizonFixtureAsync(
         Repository repository,
         IArtifactStore store,
@@ -323,6 +361,17 @@ public sealed class ReasoningLongHorizonValidationTests
             .Concat(result.Diagnostics.Select(diagnostic => $"query-diagnostic:{diagnostic}"))
             .Order(StringComparer.Ordinal)
             .ToArray();
+    }
+
+    private static void AssertSectionOrder(string text, params string[] headings)
+    {
+        int previous = -1;
+        foreach (string heading in headings)
+        {
+            int current = text.IndexOf(heading, StringComparison.Ordinal);
+            Assert.True(current > previous, $"Expected heading '{heading}' after index {previous} in reconstruction details.");
+            previous = current;
+        }
     }
 
     private static async Task AssertNoDerivedAuthorityArtifactsAsync(

@@ -26,7 +26,7 @@ Goal: prove event-led reasoning survives large project histories.
 - [x] A large fixture can list failed assumptions and their outcomes.
 - [x] A large fixture can identify contradictions that changed direction.
 - [x] Reconstruction remains traceable to events and source evidence.
-- [ ] Reconstruction remains usable enough for UI consumption.
+- [x] Reconstruction remains usable enough for UI consumption.
 
 ## Slice Notes
 
@@ -36,6 +36,8 @@ Goal: prove event-led reasoning survives large project histories.
 - The test also verifies no derived authority directories are created for hypotheses, alternatives, contradictions, directions, graphs, or queries.
 - Added recovered answer-level query coverage for architecture choice, rejected alternatives, failed assumptions, and contradictions that changed direction.
 - The answer-level tests continue to use the generic `Graph -> Trace -> Reconstruction` pipeline; no specialized read model or first-class hypothesis, alternative, contradiction, or direction entity was introduced.
+- Added grouped reconstruction details for UI consumption: evidence summary, events, relationships, external references, and threads are emitted as deterministic sections.
+- Added recovered long-horizon UI usability coverage that checks section ordering, scan-friendly line length, key evidence visibility, confidence, and absence of derived authority artifacts.
 
 ## Exit Criteria
 

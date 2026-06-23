@@ -2,30 +2,31 @@
 
 ## New State From This Slice
 
-- Continued Milestone 7 from recovery-equivalence validation into answer-level long-horizon reconstruction validation.
-- Added `ReasoningLongHorizonValidationTests.LongHorizonAnswerLevelQueriesSurviveRepositoryRecovery`.
-- The recovered-query test now certifies that repository-backed reasoning can answer, after service/repository recovery:
-  - why the repository event substrate was chosen over provider-session continuity,
-  - which alternative was rejected and why,
-  - what assumption failed and what challenged it,
-  - which contradiction changed direction.
-- The answer-level test uses the existing generic `Graph -> Trace -> Reconstruction` path; no specialized reconstruction engine, cache, read model, or first-class hypothesis/alternative/contradiction/direction entity was introduced.
-- The long-horizon fixture relationship between rejected and selected alternatives now uses `ComparesWith` to better match the selected-vs-rejected answer being certified.
-- Updated `.agents/milestones/m7-long-horizon-validation.md` to mark the four answer-level test objectives complete.
-- Rotated the previous handoff to `.agents/handoffs/handoff.0023.md`.
+- Continued Milestone 7 from answer-level recovery validation into UI-consumable reconstruction validation.
+- Updated `ReasoningReconstructionService` so `ReasoningNarrative.Details` remains API-compatible but is now deterministically grouped into:
+  - evidence summary,
+  - events,
+  - relationships,
+  - external references,
+  - threads.
+- Added `ReasoningLongHorizonValidationTests.LongHorizonReconstructionDetailsRemainUsableForUiConsumption`.
+- The new test certifies that recovered long-horizon reconstruction details are sectioned in stable order, include key evidence, keep lines scan-friendly, preserve high confidence, and still avoid derived authority artifacts.
+- Updated `.agents/milestones/m7-long-horizon-validation.md` to mark `Reconstruction remains usable enough for UI consumption` complete and add slice notes.
+- Rotated the previous handoff to `.agents/handoffs/handoff.0024.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter ReasoningLongHorizonValidationTests` passes: 2 tests.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes: 414 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter ReasoningLongHorizonValidationTests` passes: 3 tests.
+- First full backend suite run hit an unrelated file-sharing failure in `ExecutionSessionServiceTests.AppStartupRunsExecutionRecovery`.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter AppStartupRunsExecutionRecovery` passes on rerun.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes on rerun: 415 tests.
 
 ## Current Gaps
 
-- M7 production reconstruction remains generic evidence-list reconstruction; this slice did not add specialized decision, direction, hypothesis, contradiction, or project-narrative builders.
-- `Reconstruction remains usable enough for UI consumption` is still open.
-- UI, lint, shell, and e2e checks were not rerun because this slice changed backend tests plus milestone/handoff documentation only.
+- M7 production reconstruction remains generic; this slice improved presentation only and did not add specialized decision, direction, hypothesis, contradiction, or project-narrative builders.
+- M7 exit criteria for operational specialized reconstructions are still open.
+- UI, lint, shell, and e2e checks were not rerun because this slice changed backend reasoning presentation, backend tests, and milestone/handoff documentation only.
 
 ## Next Slice
 
-- Assess whether the generic reconstruction narrative is good enough for UI consumption at large history sizes.
-- If it is not, improve reconstruction presentation with grouped/ordered evidence sections while keeping authority in events, relationships, references, threads, and provenance.
+- Decide whether to implement the M7 specialized reconstruction exit criteria or first add project-level UI surfaces that consume the now-grouped generic reconstruction details.

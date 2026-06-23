@@ -133,21 +133,40 @@ public sealed class ReasoningReconstructionService(
             $"Question: {query.Question}",
             $"Target: {query.Target.Kind} {query.Target.Id}",
             $"Trace direction: {query.Direction}",
-            "Evidence:"
+            $"Evidence summary: {context.EventEvidence.Count} event(s), {context.RelationshipEvidence.Count} relationship edge(s), {context.ReferenceEvidence.Count} external reference(s), {context.ThreadEvidence.Count} thread(s)."
         };
 
         if (context.Evidence.Count == 0)
         {
+            lines.Add("Events:");
             lines.Add("- None");
             return string.Join(Environment.NewLine, lines);
         }
 
-        foreach (ReasoningReconstructionEvidence item in context.Evidence)
+        AppendEvidenceSection(lines, "Events", context.EventEvidence);
+        AppendEvidenceSection(lines, "Relationships", context.RelationshipEvidence);
+        AppendEvidenceSection(lines, "External References", context.ReferenceEvidence);
+        AppendEvidenceSection(lines, "Threads", context.ThreadEvidence);
+
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private static void AppendEvidenceSection(
+        ICollection<string> lines,
+        string heading,
+        IReadOnlyList<ReasoningReconstructionEvidence> evidence)
+    {
+        lines.Add($"{heading}:");
+        if (evidence.Count == 0)
+        {
+            lines.Add("- None");
+            return;
+        }
+
+        foreach (ReasoningReconstructionEvidence item in evidence)
         {
             lines.Add($"- {item.Kind} {item.Id}: {item.Title} - {item.Summary}");
         }
-
-        return string.Join(Environment.NewLine, lines);
     }
 
     private static string CalculateConfidence(EvidenceContext context, ReasoningTrace trace)
@@ -192,5 +211,11 @@ public sealed class ReasoningReconstructionService(
 
         public IReadOnlyList<ReasoningReconstructionEvidence> RelationshipEvidence { get; } =
             Evidence.Where(item => item.Kind is "Relationship" or "GraphRelationship").ToArray();
+
+        public IReadOnlyList<ReasoningReconstructionEvidence> ReferenceEvidence { get; } =
+            Evidence.Where(item => item.Kind == "Reference").ToArray();
+
+        public IReadOnlyList<ReasoningReconstructionEvidence> ThreadEvidence { get; } =
+            Evidence.Where(item => item.Kind == "Thread").ToArray();
     }
 }
