@@ -1149,6 +1149,37 @@ fn get_execution_decision_projection(repository_id: String) -> Result<Value, Str
 }
 
 #[tauri::command]
+fn get_execution_decision_influence(
+    repository_id: String,
+    execution_id: String,
+) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/influence/executions/{execution_id}"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "execution decision influence lookup failed")
+}
+
+#[tauri::command]
+fn get_decision_influence(repository_id: String, decision_id: String) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/influence/decisions/{decision_id}"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision influence lookup failed")
+}
+
+#[tauri::command]
 fn list_reasoning_events(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/events"
@@ -1922,6 +1953,8 @@ fn main() {
             generate_decision_quality_trend,
             list_decision_quality_trends,
             get_execution_decision_projection,
+            get_execution_decision_influence,
+            get_decision_influence,
             list_reasoning_events,
             get_reasoning_event,
             create_reasoning_event,

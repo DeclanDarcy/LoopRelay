@@ -24,7 +24,7 @@ public sealed class DecisionInfluenceService(
             ? FingerprintProjection(projection)
             : projection.ProjectionFingerprint;
         var trace = new DecisionInfluenceTrace(
-            $"execution-{executionSessionId:N}",
+            BuildInfluenceId(executionSessionId),
             repositoryId,
             executionSessionId,
             recordedAt,
@@ -48,11 +48,88 @@ public sealed class DecisionInfluenceService(
         return trace;
     }
 
+    public async Task<DecisionInfluenceTrace?> GetExecutionInfluenceAsync(
+        Guid repositoryId,
+        Guid executionSessionId)
+    {
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        string influenceId = BuildInfluenceId(executionSessionId);
+        return await ReadTraceAsync(repository, DecisionArtifactPaths.DecisionInfluenceJson(influenceId));
+    }
+
+    public async Task<IReadOnlyList<DecisionInfluenceTrace>> ListDecisionInfluenceAsync(
+        Guid repositoryId,
+        string decisionId)
+    {
+        if (string.IsNullOrWhiteSpace(decisionId))
+        {
+            throw new ArgumentException("Decision id is required.", nameof(decisionId));
+        }
+
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        string id = DecisionArtifactPaths.ValidateId(decisionId.Trim(), "DEC");
+        string root = DecisionArtifactPaths.Resolve(repository, DecisionArtifactPaths.InfluenceRootPath());
+        IReadOnlyList<string> files = await artifactStore.ListAsync(root, "execution-*.json");
+        var traces = new List<DecisionInfluenceTrace>();
+
+        foreach (string file in files
+            .Where(file => string.Equals(Path.GetExtension(file), ".json", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(file => file, StringComparer.Ordinal))
+        {
+            DecisionInfluenceTrace? trace = await ReadTraceAsync(
+                repository,
+                DecisionArtifactPaths.DecisionInfluenceJson(Path.GetFileNameWithoutExtension(file) ?? string.Empty));
+            if (trace is not null &&
+                trace.Statements.Any(statement => string.Equals(statement.DecisionId, id, StringComparison.Ordinal)))
+            {
+                traces.Add(trace);
+            }
+        }
+
+        return traces
+            .OrderByDescending(trace => trace.RecordedAt)
+            .ThenBy(trace => trace.Id, StringComparer.Ordinal)
+            .ToArray();
+    }
+
     private async Task<Repository> GetRepositoryAsync(Guid repositoryId)
     {
         Repository? repository = (await repositoryService.GetAllAsync())
             .FirstOrDefault(repository => repository.Id == repositoryId);
         return repository ?? throw new KeyNotFoundException($"Repository was not found: {repositoryId}");
+    }
+
+    private async Task<DecisionInfluenceTrace?> ReadTraceAsync(Repository repository, string relativePath)
+    {
+        string? json = await artifactStore.ReadAsync(DecisionArtifactPaths.Resolve(repository, relativePath));
+        if (json is null)
+        {
+            return null;
+        }
+
+        DecisionArtifactDocument<DecisionInfluenceTrace>? document =
+            JsonSerializer.Deserialize<DecisionArtifactDocument<DecisionInfluenceTrace>>(json, DecisionJson.Options);
+        if (document is null)
+        {
+            return null;
+        }
+
+        if (!string.Equals(document.SchemaVersion, DecisionArtifactPaths.SchemaVersion, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"Unsupported decision artifact schema version '{document.SchemaVersion}'.");
+        }
+
+        if (document.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException("Decision influence trace belongs to a different repository.");
+        }
+
+        return document.Payload;
+    }
+
+    private static string BuildInfluenceId(Guid executionSessionId)
+    {
+        return $"execution-{executionSessionId:N}";
     }
 
     private static DecisionInfluenceStatement[] BuildStatements(ExecutionDecisionProjection projection)

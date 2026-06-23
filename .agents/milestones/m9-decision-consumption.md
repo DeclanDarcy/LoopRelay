@@ -38,7 +38,11 @@ make accepted resolved decisions direct execution with explicit influence tracea
   - [x] projected directive/constraint/priority/rule
   - [x] prompt section
   - [x] execution session id
+  - [x] retrieval by execution session id
+  - [x] retrieval by decision id
   - [ ] adherence observation when available
+- [x] Add backend endpoints for execution and decision influence lookup.
+- [x] Add Tauri bridge commands for execution and decision influence lookup.
 - [ ] Extend execution UI to show influencing decisions and directive source details.
 - [x] Update prompt builder to render priorities and architecture rules separately while preserving constraints/directives.
 
@@ -51,6 +55,7 @@ make accepted resolved decisions direct execution with explicit influence tracea
 - [x] Conflicting directives fail validation or block launch.
 - [x] Execution prompt includes constraints, directives, priorities, and architecture rules.
 - [x] Influence trace can answer which decisions affected an execution session.
+- [x] Influence endpoints return persisted execution and decision traces.
 
 ## Exit Criteria
 

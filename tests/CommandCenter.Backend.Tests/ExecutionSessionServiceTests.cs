@@ -478,6 +478,95 @@ public sealed class ExecutionSessionServiceTests
         Assert.Contains(trace.Statements, statement =>
             statement.StatementId == "EARC-0001" &&
             statement.PromptSection == "Governed Decision Projection / Architecture Rules");
+
+        var influenceService = new DecisionInfluenceService(harness.RepositoryService, new FileSystemArtifactStore());
+        DecisionInfluenceTrace? reloadedTrace =
+            await influenceService.GetExecutionInfluenceAsync(harness.Repository.Id, summary.SessionId);
+        IReadOnlyList<DecisionInfluenceTrace> decisionInfluence =
+            await influenceService.ListDecisionInfluenceAsync(harness.Repository.Id, "DEC-0002");
+
+        Assert.NotNull(reloadedTrace);
+        Assert.Equal(trace.Id, reloadedTrace.Id);
+        DecisionInfluenceTrace filteredTrace = Assert.Single(decisionInfluence);
+        Assert.Equal(trace.Id, filteredTrace.Id);
+        Assert.All(filteredTrace.Statements.Where(statement => statement.DecisionId == "DEC-0002"), statement =>
+            Assert.Contains(statement.StatementType, new[] { "Directive", "Priority" }));
+    }
+
+    [Fact]
+    public async Task DecisionInfluenceEndpointsReturnPersistedExecutionAndDecisionTraces()
+    {
+        var projection = new ExecutionDecisionProjection(
+            Guid.Empty,
+            DateTimeOffset.UtcNow,
+            [
+                new ExecutionConstraint(
+                    "ECON-0001",
+                    "DEC-0001",
+                    "Use repository artifacts",
+                    "Use repository artifacts as authority.",
+                    DecisionClassification.Architectural,
+                    ExecutionProjectionKind.RepositoryConvention,
+                    [])
+            ],
+            [
+                new ExecutionDirective(
+                    "EDIR-0001",
+                    "DEC-0002",
+                    "Apply handoff rotation",
+                    "Apply handoff rotation before completing.",
+                    DecisionClassification.Tactical,
+                    ExecutionProjectionKind.ImplementationDirective,
+                    [])
+            ],
+            [],
+            [],
+            [],
+            [],
+            new ExecutionDecisionContext([], [], [], [], [], []),
+            "projection-fingerprint");
+        Harness harness = await CreateHarnessAsync(decisionProjection: projection);
+        await WriteReadyArtifactsAsync(harness.Repository);
+        ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
+            harness.Repository.Id,
+            new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
+
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services => services.AddSingleton<IRepositoryService>(harness.RepositoryService));
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+        using var client = new HttpClient();
+        string root = app.Urls.Single();
+        var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        jsonOptions.Converters.Add(new JsonStringEnumConverter());
+
+        HttpResponseMessage executionResponse = await client.GetAsync(
+            $"{root}/api/repositories/{harness.Repository.Id}/decisions/influence/executions/{summary.SessionId}");
+        HttpResponseMessage decisionResponse = await client.GetAsync(
+            $"{root}/api/repositories/{harness.Repository.Id}/decisions/influence/decisions/DEC-0002");
+        HttpResponseMessage missingExecutionResponse = await client.GetAsync(
+            $"{root}/api/repositories/{harness.Repository.Id}/decisions/influence/executions/{Guid.NewGuid()}");
+        HttpResponseMessage invalidDecisionResponse = await client.GetAsync(
+            $"{root}/api/repositories/{harness.Repository.Id}/decisions/influence/decisions/not-a-decision");
+
+        Assert.Equal(HttpStatusCode.OK, executionResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, decisionResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, missingExecutionResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, invalidDecisionResponse.StatusCode);
+
+        DecisionInfluenceTrace executionTrace =
+            (await executionResponse.Content.ReadFromJsonAsync<DecisionInfluenceTrace>(jsonOptions))!;
+        DecisionInfluenceTrace[] decisionTraces =
+            (await decisionResponse.Content.ReadFromJsonAsync<DecisionInfluenceTrace[]>(jsonOptions))!;
+
+        Assert.Equal(summary.SessionId, executionTrace.ExecutionSessionId);
+        Assert.Equal("projection-fingerprint", executionTrace.ProjectionFingerprint);
+        DecisionInfluenceTrace decisionTrace = Assert.Single(decisionTraces);
+        Assert.Equal(executionTrace.Id, decisionTrace.Id);
+        Assert.Contains(decisionTrace.Statements, statement =>
+            statement.DecisionId == "DEC-0002" &&
+            statement.StatementType == "Directive");
     }
 
     [Fact]

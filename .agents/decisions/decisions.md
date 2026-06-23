@@ -2,18 +2,26 @@
 
 ## Newly Authorized
 
-- Treat the Milestone 9 influence trace persistence slice as correct.
-- Preserve projection fingerprint plus execution session id as the historical join for execution influence.
-- Continue Milestone 9 with backend influence trace retrieval before API, Tauri, or UI expansion.
-- Add retrieval for influence trace by execution session id.
-- Add retrieval for influence traces by decision id.
-- Expose backend endpoints after retrieval contracts are implemented and tested.
-- Add Tauri bridge commands after backend endpoints pass tests.
-- Keep execution UI influence surfaces deferred until retrieval contracts are stable.
-- Keep adherence observations deferred until concrete execution outcome evidence exists.
+- Treat the Milestone 9 backend traceability chain as the correct completed retrieval slice:
+  `Resolved Decision -> Projection -> Projection Fingerprint -> Execution Session -> Influence Trace -> Retrieval`.
+- Proceed next to a focused execution influence UI surface.
+- Implement the UI work in this order:
+  `Frontend Types -> Frontend API -> Hooks -> Execution Influence Panel`.
+- Keep the first execution influence UI surface narrow.
+- For a selected execution session, show:
+  - execution session
+  - projection fingerprint
+  - influencing decisions
+  - projected constraints
+  - projected directives
+  - projected priorities
+  - projected architecture rules
+- Keep the UI grounded in persisted influence records loaded from execution session influence traces.
 
 ## Not Authorized
 
-- Do not tie execution influence history to mutable current decision state.
-- Do not infer adherence observations without execution outcome evidence.
-- Do not expand execution UI influence surfaces before backend retrieval contracts are stable.
+- Do not recompute execution influence from current decisions for historical execution sessions.
+- Do not expand this UI slice into execution analytics.
+- Do not expand this UI slice into adherence metrics.
+- Do not expand this UI slice into recommendation metrics.
+- Do not start broader execution observability before the focused influence surface is stable.

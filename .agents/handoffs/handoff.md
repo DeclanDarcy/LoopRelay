@@ -3,35 +3,27 @@
 ## New State This Slice
 
 - Continued Milestone 9: Decision Consumption Integration.
-- Added persisted decision influence traces under `.agents/decisions/influence/`.
-- Added `DecisionInfluenceTrace`, `DecisionInfluenceStatement`, and `DecisionAdherenceObservation` models.
-- Added `IDecisionInfluenceService` and `DecisionInfluenceService`.
-- Added influence artifact paths for `execution-<session-id>.json` and `execution-<session-id>.md`.
-- Added `ProjectionFingerprint` to `ExecutionDecisionProjection` and populated it from projection diagnostics.
-- Updated `ExecutionSessionService.StartAsync` to persist an influence trace when a decision projection is present.
-- Influence traces now capture:
-  - execution session id
-  - projection generated timestamp
-  - projection fingerprint
-  - decision id
-  - projected statement id
-  - statement type: constraint, directive, priority, or architecture rule
-  - prompt section
-  - priority rank when available
-  - source references
-- Updated `.agents/milestones/m9-decision-consumption.md` to mark core influence trace persistence and the answering test complete.
-- Rotated prior handoff to `.agents/handoffs/handoff.0027.md`.
+- Added persisted decision influence retrieval to `IDecisionInfluenceService` and `DecisionInfluenceService`.
+- Influence traces can now be retrieved by execution session id.
+- Influence traces can now be listed by decision id when any persisted projected statement references that decision.
+- Added backend endpoints:
+  - `GET /api/repositories/{repositoryId}/decisions/influence/executions/{executionId}`
+  - `GET /api/repositories/{repositoryId}/decisions/influence/decisions/{decisionId}`
+- Added Tauri bridge commands:
+  - `get_execution_decision_influence`
+  - `get_decision_influence`
+- Updated `.agents/milestones/m9-decision-consumption.md` to mark influence retrieval, backend endpoints, Tauri bridge commands, and endpoint tests complete.
+- Rotated prior handoff to `.agents/handoffs/handoff.0028.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "FullyQualifiedName~DecisionProjectionServiceTests|FullyQualifiedName~ExecutionPromptBuilderTests|FullyQualifiedName~ExecutionContextServiceTests|FullyQualifiedName~DecisionCertificationServiceTests|FullyQualifiedName~ExecutionSessionServiceTests.StartPersistsDecisionInfluenceTraceForProjectedDecisions"` passed: 44 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "FullyQualifiedName~ExecutionSessionServiceTests.StartPersistsDecisionInfluenceTraceForProjectedDecisions|FullyQualifiedName~ExecutionSessionServiceTests.DecisionInfluenceEndpointsReturnPersistedExecutionAndDecisionTraces"` passed: 2 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "FullyQualifiedName~DecisionProjectionServiceTests|FullyQualifiedName~ExecutionPromptBuilderTests|FullyQualifiedName~ExecutionContextServiceTests|FullyQualifiedName~DecisionCertificationServiceTests|FullyQualifiedName~ExecutionSessionServiceTests.StartPersistsDecisionInfluenceTraceForProjectedDecisions|FullyQualifiedName~ExecutionSessionServiceTests.DecisionInfluenceEndpointsReturnPersistedExecutionAndDecisionTraces"` passed: 45 tests.
+- `cargo build --manifest-path src/CommandCenter.Shell/Cargo.toml` passed.
+- `dotnet build CommandCenter.slnx` passed.
 
 ## Next Recommended Slice
 
-- Continue Milestone 9 by adding backend retrieval for influence traces.
-- First targets:
-  - get influence trace by execution session id
-  - list influence traces by decision id
-  - add API endpoints matching the planned M9 contract
-  - add Tauri bridge commands after backend endpoints pass tests
-- Keep adherence observations and execution UI expansion deferred until retrieval is available.
+- Continue Milestone 9 by wiring frontend API/types/hooks for the influence lookup commands.
+- Then add a small execution UI surface that shows influencing decisions and projected statement source details for a selected execution session.
+- Keep adherence observations deferred until concrete execution outcome evidence exists.

@@ -55,6 +55,8 @@ public static class DecisionEndpoints
         app.MapGenerateDecisionQualityTrend();
         app.MapListDecisionQualityTrends();
         app.MapGetExecutionDecisionProjection();
+        app.MapGetExecutionDecisionInfluence();
+        app.MapListDecisionInfluence();
         app.MapGetDecisionCertification();
         app.MapRunDecisionCertification();
         app.MapListDecisionCertificationReports();
@@ -1291,6 +1293,57 @@ public static class DecisionEndpoints
                     repositoryId,
                     executionRequest,
                     milestoneContent));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGetExecutionDecisionInfluence(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/decisions/influence/executions/{executionId:guid}", async (
+            Guid repositoryId,
+            Guid executionId,
+            IDecisionInfluenceService influenceService) =>
+        {
+            try
+            {
+                DecisionInfluenceTrace? trace = await influenceService.GetExecutionInfluenceAsync(repositoryId, executionId);
+                return trace is null
+                    ? Results.NotFound(new { error = $"Decision influence trace was not found for execution session: {executionId}" })
+                    : Results.Ok(trace);
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapListDecisionInfluence(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/decisions/influence/decisions/{decisionId}", async (
+            Guid repositoryId,
+            string decisionId,
+            IDecisionInfluenceService influenceService) =>
+        {
+            try
+            {
+                return Results.Ok(await influenceService.ListDecisionInfluenceAsync(repositoryId, decisionId));
             }
             catch (KeyNotFoundException exception)
             {
