@@ -94,6 +94,33 @@ public sealed class DecisionArtifactProjectionService(
             RenderAssimilationRecommendation(recommendation));
     }
 
+    public async Task ProjectQualityAssessmentAsync(Repository repository, DecisionQualityAssessment assessment)
+    {
+        string id = DecisionArtifactPaths.ValidateQualityAssessmentId(assessment.Id);
+        await WriteAsync(
+            repository,
+            DecisionArtifactPaths.QualityAssessmentMarkdown(id),
+            RenderQualityAssessment(assessment));
+    }
+
+    public async Task ProjectQualityReportAsync(Repository repository, DecisionQualityReport report)
+    {
+        string id = DecisionArtifactPaths.ValidateQualityReportId(report.Id);
+        await WriteAsync(
+            repository,
+            DecisionArtifactPaths.QualityReportMarkdown(id),
+            RenderQualityReport(report));
+    }
+
+    public async Task ProjectQualityTrendAsync(Repository repository, DecisionQualityTrend trend)
+    {
+        string id = DecisionArtifactPaths.ValidateQualityTrendId(trend.Id);
+        await WriteAsync(
+            repository,
+            DecisionArtifactPaths.QualityTrendMarkdown(id),
+            RenderQualityTrend(trend));
+    }
+
     public async Task RefreshDecisionIndexAsync(Repository repository)
     {
         IReadOnlyList<Decision> decisions = await decisionRepository.ListDecisionsAsync(repository);
@@ -126,6 +153,21 @@ public sealed class DecisionArtifactProjectionService(
             {
                 await ProjectRefinementArtifactAsync(repository, refinementArtifact);
             }
+        }
+
+        foreach (DecisionQualityAssessment assessment in await decisionRepository.ListQualityAssessmentsAsync(repository))
+        {
+            await ProjectQualityAssessmentAsync(repository, assessment);
+        }
+
+        foreach (DecisionQualityReport report in await decisionRepository.ListQualityReportsAsync(repository))
+        {
+            await ProjectQualityReportAsync(repository, report);
+        }
+
+        foreach (DecisionQualityTrend trend in await decisionRepository.ListQualityTrendsAsync(repository))
+        {
+            await ProjectQualityTrendAsync(repository, trend);
         }
 
         await RefreshDecisionIndexAsync(repository);
@@ -164,6 +206,30 @@ public sealed class DecisionArtifactProjectionService(
                     DecisionArtifactPaths.ProposalRefinementMarkdown(id, refinementArtifact.Id),
                     () => RenderRefinementArtifact(refinementArtifact));
             }
+        }
+
+        foreach (DecisionQualityAssessment assessment in await decisionRepository.ListQualityAssessmentsAsync(repository))
+        {
+            await ProjectIfMissingAsync(
+                repository,
+                DecisionArtifactPaths.QualityAssessmentMarkdown(assessment.Id),
+                () => RenderQualityAssessment(assessment));
+        }
+
+        foreach (DecisionQualityReport report in await decisionRepository.ListQualityReportsAsync(repository))
+        {
+            await ProjectIfMissingAsync(
+                repository,
+                DecisionArtifactPaths.QualityReportMarkdown(report.Id),
+                () => RenderQualityReport(report));
+        }
+
+        foreach (DecisionQualityTrend trend in await decisionRepository.ListQualityTrendsAsync(repository))
+        {
+            await ProjectIfMissingAsync(
+                repository,
+                DecisionArtifactPaths.QualityTrendMarkdown(trend.Id),
+                () => RenderQualityTrend(trend));
         }
 
         await ProjectIfMissingAsync(
@@ -1214,6 +1280,118 @@ public sealed class DecisionArtifactProjectionService(
         return markdown.ToString();
     }
 
+    private static string RenderQualityAssessment(DecisionQualityAssessment assessment)
+    {
+        var markdown = new MarkdownProjectionBuilder();
+        markdown.H1($"{assessment.Id}: Decision Quality Assessment");
+        markdown.Fields(
+            ("Repository", assessment.RepositoryId.ToString()),
+            ("Decision", assessment.DecisionId),
+            ("Assessed", FormatTimestamp(assessment.AssessedAt)),
+            ("Rating", assessment.Rating.ToString()),
+            ("Score", assessment.Score.ToString()));
+        markdown.H2("Quality Signals");
+        foreach (DecisionQualitySignal signal in assessment.Signals
+            .OrderBy(signal => signal.Category, StringComparer.Ordinal)
+            .ThenBy(signal => signal.Id, StringComparer.Ordinal))
+        {
+            markdown.Bullet($"{signal.Id} | {signal.Category} | {signal.Direction} | {signal.Severity} | {signal.Summary}");
+            if (!string.IsNullOrWhiteSpace(signal.Detail))
+            {
+                markdown.NestedText("Detail", signal.Detail);
+            }
+
+            markdown.NestedSourceList(signal.Sources);
+        }
+
+        markdown.EmptyListIf(assessment.Signals.Count == 0);
+        markdown.H2("Human Authoring Burden Signals");
+        foreach (HumanAuthoringBurdenSignal signal in assessment.HumanAuthoringBurdenSignals
+            .OrderBy(signal => signal.Burden.ToString(), StringComparer.Ordinal)
+            .ThenBy(signal => signal.Id, StringComparer.Ordinal))
+        {
+            markdown.Bullet($"{signal.Id} | {signal.Burden} | {signal.SourceKind} | {signal.Summary}");
+            markdown.NestedSourceList(signal.Sources);
+        }
+
+        markdown.EmptyListIf(assessment.HumanAuthoringBurdenSignals.Count == 0);
+        markdown.H2("Diagnostics");
+        foreach (string diagnostic in assessment.Diagnostics.Order(StringComparer.Ordinal))
+        {
+            markdown.Bullet(diagnostic);
+        }
+
+        markdown.EmptyListIf(assessment.Diagnostics.Count == 0);
+        return markdown.ToString();
+    }
+
+    private static string RenderQualityReport(DecisionQualityReport report)
+    {
+        var markdown = new MarkdownProjectionBuilder();
+        markdown.H1($"{report.Id}: Decision Quality Report");
+        markdown.Fields(
+            ("Repository", report.RepositoryId.ToString()),
+            ("Generated", FormatTimestamp(report.GeneratedAt)),
+            ("Rating", report.Rating.ToString()),
+            ("Decision count", report.DecisionCount.ToString()),
+            ("Generated package count", report.GeneratedPackageCount.ToString()));
+        markdown.H2("Outcome Metrics");
+        markdown.Fields(
+            ("Accepted", FormatCountRate(report.AcceptedCount, report.AcceptedRate)),
+            ("Rejected", FormatCountRate(report.RejectedCount, report.RejectedRate)),
+            ("Superseded", FormatCountRate(report.SupersededCount, report.SupersededRate)),
+            ("Modified", FormatCountRate(report.ModifiedCount, report.ModifiedRate)),
+            ("Recommendation divergence", FormatCountRate(report.RecommendationDivergenceCount, report.RecommendationDivergenceRate)),
+            ("Alternative utilization", FormatCountRate(report.AlternativeUtilizationCount, report.AlternativeUtilizationRate)));
+        markdown.H2("Human Authoring Burden");
+        markdown.Fields(
+            ("Review only", FormatCountRate(report.ReviewOnlyCount, report.ReviewOnlyRate)),
+            ("Minor edit", FormatCountRate(report.MinorEditCount, report.MinorEditRate)),
+            ("Major refinement", FormatCountRate(report.MajorRefinementCount, report.MajorRefinementRate)),
+            ("Full rewrite", FormatCountRate(report.FullRewriteCount, report.FullRewriteRate)),
+            ("Generation bypassed", FormatCountRate(report.GenerationBypassedCount, report.GenerationBypassedRate)));
+        markdown.H2("Assessments");
+        foreach (DecisionQualityAssessment assessment in report.Assessments
+            .OrderBy(assessment => assessment.DecisionId, StringComparer.Ordinal)
+            .ThenBy(assessment => assessment.Id, StringComparer.Ordinal))
+        {
+            markdown.Bullet($"{assessment.DecisionId} | {assessment.Rating} | score {assessment.Score} | {assessment.Id}");
+        }
+
+        markdown.EmptyListIf(report.Assessments.Count == 0);
+        markdown.H2("Diagnostics");
+        foreach (string diagnostic in report.Diagnostics.Order(StringComparer.Ordinal))
+        {
+            markdown.Bullet(diagnostic);
+        }
+
+        markdown.EmptyListIf(report.Diagnostics.Count == 0);
+        return markdown.ToString();
+    }
+
+    private static string RenderQualityTrend(DecisionQualityTrend trend)
+    {
+        var markdown = new MarkdownProjectionBuilder();
+        markdown.H1($"{trend.Id}: Decision Quality Trend");
+        markdown.Fields(
+            ("Repository", trend.RepositoryId.ToString()),
+            ("Generated", FormatTimestamp(trend.GeneratedAt)),
+            ("Assessment count", trend.AssessmentCount.ToString()),
+            ("Current rating", trend.CurrentRating.ToString()),
+            ("Previous rating", trend.PreviousRating.ToString()),
+            ("Current average score", trend.CurrentAverageScore.ToString("0.##")),
+            ("Previous average score", trend.PreviousAverageScore.ToString("0.##")),
+            ("Direction", trend.Direction.ToString()));
+        markdown.H2("Diagnostics");
+        foreach (string diagnostic in trend.Diagnostics.Order(StringComparer.Ordinal))
+        {
+            markdown.Bullet(diagnostic);
+        }
+
+        markdown.EmptyListIf(trend.Diagnostics.Count == 0);
+        return markdown.ToString();
+    }
+
     private static string RenderIndex(
         IReadOnlyList<Decision> decisions,
         IReadOnlyList<DecisionCandidate> candidates,
@@ -1250,6 +1428,11 @@ public sealed class DecisionArtifactProjectionService(
     private static string FormatTimestamp(DateTimeOffset timestamp)
     {
         return timestamp.ToUniversalTime().ToString("O");
+    }
+
+    private static string FormatCountRate(int count, double rate)
+    {
+        return $"{count} ({rate:P2})";
     }
 
     private sealed class MarkdownProjectionBuilder
@@ -1385,6 +1568,11 @@ public sealed class DecisionArtifactProjectionService(
             {
                 AppendLine($"{indent}- Source: {FormatSource(source)}");
             }
+        }
+
+        public void NestedText(string label, string text, string indent = "  ")
+        {
+            AppendLine($"{indent}- {label}: {text.Trim()}");
         }
 
         private static IEnumerable<DecisionSourceReference> SortSources(IReadOnlyList<DecisionSourceReference> sources)

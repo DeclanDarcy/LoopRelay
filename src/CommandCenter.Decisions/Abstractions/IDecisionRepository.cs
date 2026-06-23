@@ -75,4 +75,16 @@ public interface IDecisionRepository
     Task<IReadOnlyList<DecisionCertificationReport>> ListCertificationReportsAsync(Repository repository);
 
     Task<DecisionCertificationReport> SaveCertificationReportAsync(Repository repository, DecisionCertificationReport report);
+
+    Task<IReadOnlyList<DecisionQualityAssessment>> ListQualityAssessmentsAsync(Repository repository);
+
+    Task<DecisionQualityAssessment> SaveQualityAssessmentAsync(Repository repository, DecisionQualityAssessment assessment);
+
+    Task<IReadOnlyList<DecisionQualityReport>> ListQualityReportsAsync(Repository repository);
+
+    Task<DecisionQualityReport> SaveQualityReportAsync(Repository repository, DecisionQualityReport report);
+
+    Task<IReadOnlyList<DecisionQualityTrend>> ListQualityTrendsAsync(Repository repository);
+
+    Task<DecisionQualityTrend> SaveQualityTrendAsync(Repository repository, DecisionQualityTrend trend);
 }

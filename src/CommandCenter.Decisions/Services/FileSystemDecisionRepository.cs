@@ -554,6 +554,147 @@ public sealed class FileSystemDecisionRepository(IArtifactStore artifactStore) :
         return report;
     }
 
+    public async Task<IReadOnlyList<DecisionQualityAssessment>> ListQualityAssessmentsAsync(Repository repository)
+    {
+        string root = DecisionArtifactPaths.Resolve(repository, DecisionArtifactPaths.QualityAssessmentsRootPath());
+        IReadOnlyList<string> files = await artifactStore.ListAsync(root, "assessment.*.json");
+        var assessments = new List<DecisionQualityAssessment>();
+
+        foreach (string file in files.OrderBy(file => file, StringComparer.Ordinal))
+        {
+            string? assessmentId = Path.GetFileNameWithoutExtension(file);
+            if (string.IsNullOrWhiteSpace(assessmentId))
+            {
+                continue;
+            }
+
+            DecisionQualityAssessment? assessment = await ReadPayloadAsync<DecisionQualityAssessment>(
+                repository,
+                DecisionArtifactPaths.QualityAssessmentJson(assessmentId));
+            if (assessment is not null)
+            {
+                assessments.Add(assessment);
+            }
+        }
+
+        return assessments
+            .OrderBy(assessment => assessment.Id, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    public async Task<DecisionQualityAssessment> SaveQualityAssessmentAsync(
+        Repository repository,
+        DecisionQualityAssessment assessment)
+    {
+        DecisionArtifactPaths.ValidateQualityAssessmentId(assessment.Id);
+        if (assessment.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException("Decision quality assessment belongs to a different repository.");
+        }
+
+        await WriteDocumentAsync(
+            repository,
+            DecisionArtifactPaths.QualityAssessmentJson(assessment.Id),
+            assessment,
+            assessment.AssessedAt,
+            assessment.AssessedAt);
+        return assessment;
+    }
+
+    public async Task<IReadOnlyList<DecisionQualityReport>> ListQualityReportsAsync(Repository repository)
+    {
+        string root = DecisionArtifactPaths.Resolve(repository, DecisionArtifactPaths.QualityReportsRootPath());
+        IReadOnlyList<string> files = await artifactStore.ListAsync(root, "quality.*.json");
+        var reports = new List<DecisionQualityReport>();
+
+        foreach (string file in files.OrderBy(file => file, StringComparer.Ordinal))
+        {
+            string? reportId = Path.GetFileNameWithoutExtension(file);
+            if (string.IsNullOrWhiteSpace(reportId))
+            {
+                continue;
+            }
+
+            DecisionQualityReport? report = await ReadPayloadAsync<DecisionQualityReport>(
+                repository,
+                DecisionArtifactPaths.QualityReportJson(reportId));
+            if (report is not null)
+            {
+                reports.Add(report);
+            }
+        }
+
+        return reports
+            .OrderBy(report => report.Id, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    public async Task<DecisionQualityReport> SaveQualityReportAsync(
+        Repository repository,
+        DecisionQualityReport report)
+    {
+        DecisionArtifactPaths.ValidateQualityReportId(report.Id);
+        if (report.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException("Decision quality report belongs to a different repository.");
+        }
+
+        await WriteDocumentAsync(
+            repository,
+            DecisionArtifactPaths.QualityReportJson(report.Id),
+            report,
+            report.GeneratedAt,
+            report.GeneratedAt);
+        return report;
+    }
+
+    public async Task<IReadOnlyList<DecisionQualityTrend>> ListQualityTrendsAsync(Repository repository)
+    {
+        string root = DecisionArtifactPaths.Resolve(repository, DecisionArtifactPaths.QualityTrendsRootPath());
+        IReadOnlyList<string> files = await artifactStore.ListAsync(root, "trend.*.json");
+        var trends = new List<DecisionQualityTrend>();
+
+        foreach (string file in files.OrderBy(file => file, StringComparer.Ordinal))
+        {
+            string? trendId = Path.GetFileNameWithoutExtension(file);
+            if (string.IsNullOrWhiteSpace(trendId))
+            {
+                continue;
+            }
+
+            DecisionQualityTrend? trend = await ReadPayloadAsync<DecisionQualityTrend>(
+                repository,
+                DecisionArtifactPaths.QualityTrendJson(trendId));
+            if (trend is not null)
+            {
+                trends.Add(trend);
+            }
+        }
+
+        return trends
+            .OrderBy(trend => trend.Id, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    public async Task<DecisionQualityTrend> SaveQualityTrendAsync(
+        Repository repository,
+        DecisionQualityTrend trend)
+    {
+        DecisionArtifactPaths.ValidateQualityTrendId(trend.Id);
+        if (trend.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException("Decision quality trend belongs to a different repository.");
+        }
+
+        await WriteDocumentAsync(
+            repository,
+            DecisionArtifactPaths.QualityTrendJson(trend.Id),
+            trend,
+            trend.GeneratedAt,
+            trend.GeneratedAt);
+        return trend;
+    }
+
     private async Task<string> AllocateIdAsync(Repository repository, DecisionArtifactKind kind, string prefix)
     {
         IReadOnlyList<string> directories = await ListArtifactDirectoriesAsync(repository, kind);

@@ -2,21 +2,24 @@
 
 ## Newly Authorized
 
-- Accept the opening Milestone 8 slice as correct.
-- Continue treating quality evaluation as advisory, non-mutating, and backend-first.
-- Preserve the boundary that quality assessment observes decision workflow outcomes and does not become governance authority.
-- Treat human-authoring burden as the primary workflow-replacement metric.
-- Use the highest-burden evidence as the dominant report classification.
-- Keep backend contracts and semantics ahead of persistence, endpoints, and UI.
-- Continue Milestone 8 with persisted quality artifacts next.
-- Add deterministic JSON and markdown projections for:
-  - `.agents/decisions/quality/assessments/`
-  - `.agents/decisions/quality/reports/`
-  - `.agents/decisions/quality/trends/`
-- Add reload/persistence tests before backend endpoints.
+- Accept the second Milestone 8 persistence slice as correct.
+- Treat quality evaluation as historical evidence, not mutable current state.
+- Keep quality artifacts as first-class durable artifacts under `.agents/decisions/quality/`.
+- Preserve timestamp snapshot semantics for quality assessments, reports, and trends so repeated generation does not overwrite prior evidence.
+- Continue ordering Milestone 8 as persist, recover, and verify before serving or displaying through endpoints and UI.
+- Continue preserving the advisory model: quality observes workflow outcomes and does not become decision authority.
+- Implement service-level quality history operations next:
+  - save assessments through quality services
+  - list assessments through quality services
+  - save reports through quality services
+  - list reports through quality services
+  - save trends through quality services
+  - list trends through quality services
+- Generate trends from persisted assessment history rather than recomputing history from current repository state.
+- Defer endpoints, reports APIs, and dashboards until persisted quality-history semantics are covered by tests.
 
 ## Not Authorized
 
-- Do not build dashboards yet.
+- Do not introduce endpoints, reports APIs, or dashboards before service-level persisted-history operations and tests.
 - Do not make quality assessment block, mutate, or override decision lifecycle state.
-- Do not add endpoints before persisted quality artifacts and reload tests exist.
+- Do not treat trends as a recomputed latest assessment over current repository state.

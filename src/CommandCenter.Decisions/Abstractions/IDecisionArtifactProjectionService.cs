@@ -31,6 +31,12 @@ public interface IDecisionArtifactProjectionService
         Repository repository,
         DecisionAssimilationRecommendation recommendation);
 
+    Task ProjectQualityAssessmentAsync(Repository repository, DecisionQualityAssessment assessment);
+
+    Task ProjectQualityReportAsync(Repository repository, DecisionQualityReport report);
+
+    Task ProjectQualityTrendAsync(Repository repository, DecisionQualityTrend trend);
+
     Task RefreshDecisionIndexAsync(Repository repository);
 
     Task RefreshAllAsync(Repository repository);

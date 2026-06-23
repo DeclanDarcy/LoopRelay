@@ -31,11 +31,12 @@ public sealed class DecisionQualityReportService(
         int fullRewrite = EffectiveBurdenCount(assessments, HumanAuthoringBurden.FullRewrite);
         int generationBypassed = EffectiveBurdenCount(assessments, HumanAuthoringBurden.GenerationBypassed);
         double averageScore = assessments.Count == 0 ? 0 : assessments.Average(assessment => assessment.Score);
+        DateTimeOffset generatedAt = DateTimeOffset.UtcNow;
 
         return new DecisionQualityReport(
-            $"quality.{DateTimeOffset.UtcNow:yyyyMMddHHmmss}",
+            $"quality.{generatedAt:yyyyMMddHHmmssFFFFFFF}",
             repository.Id,
-            DateTimeOffset.UtcNow,
+            generatedAt,
             count,
             generatedPackages,
             accepted,
@@ -77,11 +78,12 @@ public sealed class DecisionQualityReportService(
             : currentAverage < previousAverage
                 ? QualitySignalDirection.Negative
                 : QualitySignalDirection.Neutral;
+        DateTimeOffset generatedAt = DateTimeOffset.UtcNow;
 
         return new DecisionQualityTrend(
-            $"trend.{DateTimeOffset.UtcNow:yyyyMMddHHmmss}",
+            $"trend.{generatedAt:yyyyMMddHHmmssFFFFFFF}",
             repositoryId,
-            DateTimeOffset.UtcNow,
+            generatedAt,
             currentAssessments.Count,
             RatingForAverage(currentAverage),
             RatingForAverage(previousAverage),

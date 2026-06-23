@@ -18,6 +18,9 @@ public sealed class InMemoryDecisionRepository : IDecisionRepository
     private readonly Dictionary<Guid, SortedDictionary<string, DecisionAssimilationRecommendation>> assimilationByRepository = [];
     private readonly Dictionary<Guid, SortedDictionary<string, DecisionGovernanceReport>> governanceReportsByRepository = [];
     private readonly Dictionary<Guid, SortedDictionary<string, DecisionCertificationReport>> certificationReportsByRepository = [];
+    private readonly Dictionary<Guid, SortedDictionary<string, DecisionQualityAssessment>> qualityAssessmentsByRepository = [];
+    private readonly Dictionary<Guid, SortedDictionary<string, DecisionQualityReport>> qualityReportsByRepository = [];
+    private readonly Dictionary<Guid, SortedDictionary<string, DecisionQualityTrend>> qualityTrendsByRepository = [];
 
     public Task<DecisionId> AllocateDecisionIdAsync(Repository repository)
     {
@@ -279,6 +282,60 @@ public sealed class InMemoryDecisionRepository : IDecisionRepository
         return Task.FromResult(report);
     }
 
+    public Task<IReadOnlyList<DecisionQualityAssessment>> ListQualityAssessmentsAsync(Repository repository)
+    {
+        return Task.FromResult<IReadOnlyList<DecisionQualityAssessment>>(GetQualityAssessments(repository.Id).Values.ToArray());
+    }
+
+    public Task<DecisionQualityAssessment> SaveQualityAssessmentAsync(
+        Repository repository,
+        DecisionQualityAssessment assessment)
+    {
+        if (assessment.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException("Decision quality assessment belongs to a different repository.");
+        }
+
+        GetQualityAssessments(repository.Id)[assessment.Id] = assessment;
+        return Task.FromResult(assessment);
+    }
+
+    public Task<IReadOnlyList<DecisionQualityReport>> ListQualityReportsAsync(Repository repository)
+    {
+        return Task.FromResult<IReadOnlyList<DecisionQualityReport>>(GetQualityReports(repository.Id).Values.ToArray());
+    }
+
+    public Task<DecisionQualityReport> SaveQualityReportAsync(
+        Repository repository,
+        DecisionQualityReport report)
+    {
+        if (report.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException("Decision quality report belongs to a different repository.");
+        }
+
+        GetQualityReports(repository.Id)[report.Id] = report;
+        return Task.FromResult(report);
+    }
+
+    public Task<IReadOnlyList<DecisionQualityTrend>> ListQualityTrendsAsync(Repository repository)
+    {
+        return Task.FromResult<IReadOnlyList<DecisionQualityTrend>>(GetQualityTrends(repository.Id).Values.ToArray());
+    }
+
+    public Task<DecisionQualityTrend> SaveQualityTrendAsync(
+        Repository repository,
+        DecisionQualityTrend trend)
+    {
+        if (trend.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException("Decision quality trend belongs to a different repository.");
+        }
+
+        GetQualityTrends(repository.Id)[trend.Id] = trend;
+        return Task.FromResult(trend);
+    }
+
     private SortedDictionary<string, Decision> GetDecisions(Guid repositoryId)
     {
         return GetRepositoryMap(decisionsByRepository, repositoryId);
@@ -364,6 +421,21 @@ public sealed class InMemoryDecisionRepository : IDecisionRepository
     private SortedDictionary<string, DecisionCertificationReport> GetCertificationReports(Guid repositoryId)
     {
         return GetRepositoryMap(certificationReportsByRepository, repositoryId);
+    }
+
+    private SortedDictionary<string, DecisionQualityAssessment> GetQualityAssessments(Guid repositoryId)
+    {
+        return GetRepositoryMap(qualityAssessmentsByRepository, repositoryId);
+    }
+
+    private SortedDictionary<string, DecisionQualityReport> GetQualityReports(Guid repositoryId)
+    {
+        return GetRepositoryMap(qualityReportsByRepository, repositoryId);
+    }
+
+    private SortedDictionary<string, DecisionQualityTrend> GetQualityTrends(Guid repositoryId)
+    {
+        return GetRepositoryMap(qualityTrendsByRepository, repositoryId);
     }
 
     private static SortedDictionary<string, T> GetRepositoryMap<T>(

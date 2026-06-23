@@ -15,6 +15,10 @@ internal static partial class DecisionArtifactPaths
     private const string AssimilationRoot = $"{DecisionsRoot}/assimilation";
     private const string GovernanceRoot = $"{DecisionsRoot}/governance";
     private const string CertificationRoot = $"{DecisionsRoot}/certification";
+    private const string QualityRoot = $"{DecisionsRoot}/quality";
+    private const string QualityAssessmentsRoot = $"{QualityRoot}/assessments";
+    private const string QualityReportsRoot = $"{QualityRoot}/reports";
+    private const string QualityTrendsRoot = $"{QualityRoot}/trends";
 
     public static string DecisionDirectory(string id)
     {
@@ -153,6 +157,36 @@ internal static partial class DecisionArtifactPaths
         return ArtifactPath.CombineRelative(CertificationRoot, $"{ValidateCertificationReportId(reportId)}.json");
     }
 
+    public static string QualityAssessmentJson(string assessmentId)
+    {
+        return ArtifactPath.CombineRelative(QualityAssessmentsRoot, $"{ValidateQualityAssessmentId(assessmentId)}.json");
+    }
+
+    public static string QualityAssessmentMarkdown(string assessmentId)
+    {
+        return ArtifactPath.CombineRelative(QualityAssessmentsRoot, $"{ValidateQualityAssessmentId(assessmentId)}.md");
+    }
+
+    public static string QualityReportJson(string reportId)
+    {
+        return ArtifactPath.CombineRelative(QualityReportsRoot, $"{ValidateQualityReportId(reportId)}.json");
+    }
+
+    public static string QualityReportMarkdown(string reportId)
+    {
+        return ArtifactPath.CombineRelative(QualityReportsRoot, $"{ValidateQualityReportId(reportId)}.md");
+    }
+
+    public static string QualityTrendJson(string trendId)
+    {
+        return ArtifactPath.CombineRelative(QualityTrendsRoot, $"{ValidateQualityTrendId(trendId)}.json");
+    }
+
+    public static string QualityTrendMarkdown(string trendId)
+    {
+        return ArtifactPath.CombineRelative(QualityTrendsRoot, $"{ValidateQualityTrendId(trendId)}.md");
+    }
+
     public static string GovernanceRootPath()
     {
         return GovernanceRoot;
@@ -161,6 +195,21 @@ internal static partial class DecisionArtifactPaths
     public static string CertificationRootPath()
     {
         return CertificationRoot;
+    }
+
+    public static string QualityAssessmentsRootPath()
+    {
+        return QualityAssessmentsRoot;
+    }
+
+    public static string QualityReportsRootPath()
+    {
+        return QualityReportsRoot;
+    }
+
+    public static string QualityTrendsRootPath()
+    {
+        return QualityTrendsRoot;
     }
 
     public static string DecisionsIndex()
@@ -226,6 +275,36 @@ internal static partial class DecisionArtifactPaths
         return id;
     }
 
+    public static string ValidateQualityAssessmentId(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id) || !QualityAssessmentIdPattern().IsMatch(id))
+        {
+            throw new ArgumentException("Quality assessment id must match assessment.DEC-NNNN or assessment.YYYYMMDDHHMMSS[FFFFFFF].", nameof(id));
+        }
+
+        return id;
+    }
+
+    public static string ValidateQualityReportId(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id) || !QualityReportIdPattern().IsMatch(id))
+        {
+            throw new ArgumentException("Quality report id must match quality.YYYYMMDDHHMMSS[FFFFFFF].", nameof(id));
+        }
+
+        return id;
+    }
+
+    public static string ValidateQualityTrendId(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id) || !QualityTrendIdPattern().IsMatch(id))
+        {
+            throw new ArgumentException("Quality trend id must match trend.YYYYMMDDHHMMSS[FFFFFFF].", nameof(id));
+        }
+
+        return id;
+    }
+
     [GeneratedRegex("^[A-Z]+-[0-9]{4}$")]
     private static partial Regex IdPattern();
 
@@ -234,6 +313,15 @@ internal static partial class DecisionArtifactPaths
 
     [GeneratedRegex("^certification\\.[0-9]{21}$")]
     private static partial Regex CertificationReportIdPattern();
+
+    [GeneratedRegex("^assessment\\.(DEC-[0-9]{4}|[0-9]{14}([0-9]{7})?)$")]
+    private static partial Regex QualityAssessmentIdPattern();
+
+    [GeneratedRegex("^quality\\.[0-9]{14}([0-9]{7})?$")]
+    private static partial Regex QualityReportIdPattern();
+
+    [GeneratedRegex("^trend\\.[0-9]{14}([0-9]{7})?$")]
+    private static partial Regex QualityTrendIdPattern();
 }
 
 internal enum DecisionArtifactKind

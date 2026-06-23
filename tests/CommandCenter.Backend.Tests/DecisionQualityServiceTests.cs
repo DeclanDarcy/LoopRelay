@@ -1,4 +1,5 @@
 using CommandCenter.Backend.Services;
+using CommandCenter.Core.Artifacts;
 using CommandCenter.Core.Repositories;
 using CommandCenter.Decisions.Abstractions;
 using CommandCenter.Decisions.Models;
@@ -141,6 +142,49 @@ public sealed class DecisionQualityServiceTests
         Assert.Equal(decision, reloadedDecision);
         Assert.Equal(proposal, reloadedProposal);
         Assert.Equal(package, reloadedPackage);
+    }
+
+    [Fact]
+    public async Task FileSystemRepositoryPersistsQualityArtifactsAndMarkdownProjections()
+    {
+        Repository repository = CreateRepository();
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        Decision decision = CreateDecision(repository.Id, DecisionOutcome.Accepted, "option-1", recommendedOptionId: "option-1");
+        await decisionRepository.SaveDecisionAsync(repository, decision);
+        IDecisionQualityAssessmentService assessmentService = CreateAssessmentService(repository, decisionRepository);
+        IDecisionQualityReportService reportService = CreateReportService(repository, decisionRepository, assessmentService);
+        DecisionQualityAssessment assessment = await assessmentService.AssessDecisionAsync(repository.Id, decision.Id.Value);
+        DecisionQualityReport report = await reportService.GenerateReportAsync(repository.Id);
+        DecisionQualityTrend trend = reportService.GenerateTrend(repository.Id, [], [assessment]);
+
+        await decisionRepository.SaveQualityAssessmentAsync(repository, assessment);
+        await decisionRepository.SaveQualityReportAsync(repository, report);
+        await decisionRepository.SaveQualityTrendAsync(repository, trend);
+        var projectionService = new DecisionArtifactProjectionService(decisionRepository, store);
+        await projectionService.ProjectQualityAssessmentAsync(repository, assessment);
+        await projectionService.ProjectQualityReportAsync(repository, report);
+        await projectionService.ProjectQualityTrendAsync(repository, trend);
+
+        var restartedRepository = new FileSystemDecisionRepository(store);
+        DecisionQualityAssessment reloadedAssessment = Assert.Single(await restartedRepository.ListQualityAssessmentsAsync(repository));
+        DecisionQualityReport reloadedReport = Assert.Single(await restartedRepository.ListQualityReportsAsync(repository));
+        DecisionQualityTrend reloadedTrend = Assert.Single(await restartedRepository.ListQualityTrendsAsync(repository));
+
+        Assert.Equal(assessment.Id, reloadedAssessment.Id);
+        Assert.Equal(report.Id, reloadedReport.Id);
+        Assert.Equal(trend.Id, reloadedTrend.Id);
+        Assert.Equal(decision.Id.Value, reloadedAssessment.DecisionId);
+        Assert.Contains(reloadedReport.Assessments, item => item.DecisionId == decision.Id.Value);
+        Assert.True(File.Exists(PathFor(repository, $".agents/decisions/quality/assessments/{assessment.Id}.json")));
+        Assert.True(File.Exists(PathFor(repository, $".agents/decisions/quality/assessments/{assessment.Id}.md")));
+        Assert.True(File.Exists(PathFor(repository, $".agents/decisions/quality/reports/{report.Id}.json")));
+        Assert.True(File.Exists(PathFor(repository, $".agents/decisions/quality/reports/{report.Id}.md")));
+        Assert.True(File.Exists(PathFor(repository, $".agents/decisions/quality/trends/{trend.Id}.json")));
+        Assert.True(File.Exists(PathFor(repository, $".agents/decisions/quality/trends/{trend.Id}.md")));
+        Assert.Contains("# " + assessment.Id + ": Decision Quality Assessment", await File.ReadAllTextAsync(PathFor(repository, $".agents/decisions/quality/assessments/{assessment.Id}.md")));
+        Assert.Contains("## Human Authoring Burden", await File.ReadAllTextAsync(PathFor(repository, $".agents/decisions/quality/reports/{report.Id}.md")));
+        Assert.Contains("- Direction: Positive", await File.ReadAllTextAsync(PathFor(repository, $".agents/decisions/quality/trends/{trend.Id}.md")));
     }
 
     private static IDecisionQualityAssessmentService CreateAssessmentService(
@@ -326,6 +370,11 @@ public sealed class DecisionQualityServiceTests
             Name = Path.GetFileName(path),
             Path = path
         };
+    }
+
+    private static string PathFor(Repository repository, string relativePath)
+    {
+        return Path.Combine(repository.Path, relativePath.Replace('/', Path.DirectorySeparatorChar));
     }
 
     private sealed class StubRepositoryService(params Repository[] repositories) : IRepositoryService

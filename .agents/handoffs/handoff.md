@@ -2,48 +2,31 @@
 
 ## New State This Slice
 
-- Started Milestone 8: Decision Quality Evaluation.
-- Added backend quality primitives and models:
+- Continued Milestone 8: Decision Quality Evaluation with persisted quality artifacts.
+- Added repository contracts and filesystem/in-memory implementations for:
   - `DecisionQualityAssessment`
-  - `DecisionQualityRating`
-  - `DecisionQualitySignal`
-  - `QualitySignalDirection`
-  - `QualitySignalSeverity`
   - `DecisionQualityReport`
   - `DecisionQualityTrend`
-  - `HumanAuthoringBurdenSignal`
-  - `HumanAuthoringBurdenReport`
-- Added backend service contracts:
-  - `IDecisionQualitySignalService`
-  - `IDecisionQualityAssessmentService`
-  - `IDecisionQualityReportService`
-  - `IHumanAuthoringBurdenService`
-- Added advisory, non-mutating backend services:
-  - `HumanAuthoringBurdenService`
-  - `DecisionQualitySignalService`
-  - `DecisionQualityAssessmentService`
-  - `DecisionQualityReportService`
-- Registered the quality services in decision DI.
-- Quality signal extraction now covers:
-  - accepted/rejected/deferred resolution outcomes
-  - accepted recommended option
-  - recommendation divergence
-  - generated alternative utilization
-  - refinement/revision human effort
-  - full rewrite evidence
-  - generation bypass evidence
-- Repository reports now compute advisory counts/rates for generated package usage, accepted/rejected/superseded decisions, modifications, recommendation divergence, alternative utilization, and human-authoring burden categories.
-- Added `DecisionQualityServiceTests` covering accepted recommendation, rejection, alternative selection, full rewrite vs generation bypass, and non-mutation of decision/proposal/package state.
-- Updated `.agents/milestones/m8-decision-quality.md` to mark only this completed backend slice.
-- Rotated prior handoff to `.agents/handoffs/handoff.0019.md`.
+- Added quality artifact paths under:
+  - `.agents/decisions/quality/assessments/`
+  - `.agents/decisions/quality/reports/`
+  - `.agents/decisions/quality/trends/`
+- Added deterministic markdown projection methods for quality assessments, reports, and trends.
+- `RefreshAllAsync` and `RecoverMissingProjectionsAsync` now include quality artifact markdown.
+- Quality assessment/report/trend IDs are now timestamp snapshot IDs so repeated generated artifacts do not overwrite previous quality evidence.
+- Added filesystem persistence/reload test coverage that saves generated quality assessment, report, and trend artifacts and verifies JSON plus markdown projections.
+- Updated `.agents/milestones/m8-decision-quality.md` to mark only this persistence/projection slice complete.
+- Rotated prior handoff to `.agents/handoffs/handoff.0020.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter DecisionQualityServiceTests` passed: 5 tests.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 474 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter DecisionQualityServiceTests` passed: 6 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 475 tests.
 
 ## Next Recommended Slice
 
-- Continue Milestone 8 by adding persistence and projections for quality assessments/reports/trends under `.agents/decisions/quality`.
-- Add repository methods and filesystem paths before adding backend endpoints.
-- Keep quality artifacts advisory and read-only with respect to decisions, proposals, packages, and execution projection.
+- Continue Milestone 8 by adding service-level persisted quality history operations:
+  - save generated assessments/reports/trends through quality services
+  - list persisted assessments/reports/trends
+  - generate trends from persisted prior/current assessment sets
+- Keep endpoints and UI deferred until persisted-history semantics are covered by tests.

@@ -20,11 +20,12 @@ public sealed class DecisionQualityAssessmentService(
             await humanAuthoringBurdenService.ExtractSignalsAsync(repositoryId, decisionId);
         int score = Math.Clamp(50 + signals.Sum(ScoreContribution), 0, 100);
         DecisionQualityRating rating = RatingFor(score, signals);
+        DateTimeOffset assessedAt = DateTimeOffset.UtcNow;
         return new DecisionQualityAssessment(
-            $"assessment.{decision.Id.Value}",
+            $"assessment.{assessedAt:yyyyMMddHHmmssFFFFFFF}",
             repository.Id,
             decision.Id.Value,
-            DateTimeOffset.UtcNow,
+            assessedAt,
             rating,
             score,
             signals,
