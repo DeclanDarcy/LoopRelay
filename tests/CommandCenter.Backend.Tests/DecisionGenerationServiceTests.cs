@@ -390,6 +390,7 @@ public sealed class DecisionGenerationServiceTests
         var captureService = new DecisionReasoningCaptureService(
             new StubRepositoryService(repository),
             decisionRepository,
+            store,
             reasoningRepository);
         DecisionProposal proposal = await generationService.GenerateProposalAsync(repository.Id, candidate.Id);
         await generationService.MarkProposalReadyForResolutionAsync(repository.Id, proposal.Id, "Ready for human resolution.");
@@ -687,6 +688,7 @@ public sealed class DecisionGenerationServiceTests
         var captureService = new DecisionReasoningCaptureService(
             new StubRepositoryService(repository),
             decisionRepository,
+            store,
             reasoningRepository);
         Decision firstDecision = await ResolveAcceptedDecisionAsync(repository, generationService, resolutionService, firstCandidate.Id);
         Decision replacementDecision = await ResolveAcceptedDecisionAsync(repository, generationService, resolutionService, secondCandidate.Id);
@@ -745,6 +747,7 @@ public sealed class DecisionGenerationServiceTests
         var captureService = new DecisionReasoningCaptureService(
             new StubRepositoryService(repository),
             decisionRepository,
+            store,
             reasoningRepository);
         Decision firstDecision = await ResolveAcceptedDecisionAsync(repository, generationService, resolutionService, firstCandidate.Id);
         Decision replacementDecision = await ResolveAcceptedDecisionAsync(repository, generationService, resolutionService, secondCandidate.Id);

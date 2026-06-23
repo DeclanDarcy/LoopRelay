@@ -1,5 +1,6 @@
 using CommandCenter.Continuity.Models;
 using CommandCenter.Decisions.Models;
+using CommandCenter.Execution.Models;
 
 namespace CommandCenter.Backend.Services;
 
@@ -27,4 +28,8 @@ public interface IDecisionReasoningCaptureService
     Task CaptureOperationalContextPromotionAsync(
         Guid repositoryId,
         OperationalContextProposal proposal);
+
+    Task CaptureExecutionHandoffDecisionAsync(
+        ExecutionSession session,
+        bool accepted);
 }

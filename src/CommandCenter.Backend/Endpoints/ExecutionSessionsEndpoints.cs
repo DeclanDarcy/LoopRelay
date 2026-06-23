@@ -1,6 +1,7 @@
 using CommandCenter.Execution;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using CommandCenter.Backend.Services;
 using CommandCenter.Execution.Abstractions;
 using CommandCenter.Execution.Models;
 
@@ -85,11 +86,19 @@ public static class ExecutionSessionsEndpoints
         app.MapPost("/api/execution-sessions/{sessionId:guid}/accept", async (
             Guid sessionId,
             ExecutionAcceptanceRequest request,
-            IExecutionSessionService executionSessionService) =>
+            IExecutionSessionService executionSessionService,
+            IDecisionReasoningCaptureService reasoningCaptureService) =>
         {
             try
             {
-                return Results.Ok(await executionSessionService.AcceptAsync(sessionId, request));
+                ExecutionSessionSummary summary = await executionSessionService.AcceptAsync(sessionId, request);
+                ExecutionSession? session = await executionSessionService.GetSessionAsync(sessionId);
+                if (session is not null)
+                {
+                    await reasoningCaptureService.CaptureExecutionHandoffDecisionAsync(session, accepted: true);
+                }
+
+                return Results.Ok(summary);
             }
             catch (KeyNotFoundException exception)
             {
@@ -105,11 +114,19 @@ public static class ExecutionSessionsEndpoints
         app.MapPost("/api/execution-sessions/{sessionId:guid}/reject", async (
             Guid sessionId,
             ExecutionAcceptanceRequest request,
-            IExecutionSessionService executionSessionService) =>
+            IExecutionSessionService executionSessionService,
+            IDecisionReasoningCaptureService reasoningCaptureService) =>
         {
             try
             {
-                return Results.Ok(await executionSessionService.RejectAsync(sessionId, request));
+                ExecutionSessionSummary summary = await executionSessionService.RejectAsync(sessionId, request);
+                ExecutionSession? session = await executionSessionService.GetSessionAsync(sessionId);
+                if (session is not null)
+                {
+                    await reasoningCaptureService.CaptureExecutionHandoffDecisionAsync(session, accepted: false);
+                }
+
+                return Results.Ok(summary);
             }
             catch (KeyNotFoundException exception)
             {

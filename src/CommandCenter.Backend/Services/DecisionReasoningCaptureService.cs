@@ -4,10 +4,12 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using CommandCenter.Continuity.Models;
 using CommandCenter.Continuity.Primitives;
+using CommandCenter.Core.Artifacts;
 using CommandCenter.Core.Repositories;
 using CommandCenter.Decisions.Abstractions;
 using CommandCenter.Decisions.Models;
 using CommandCenter.Decisions.Primitives;
+using CommandCenter.Execution.Models;
 using CommandCenter.Reasoning.Abstractions;
 using CommandCenter.Reasoning.Models;
 using CommandCenter.Reasoning.Services;
@@ -17,6 +19,7 @@ namespace CommandCenter.Backend.Services;
 public sealed class DecisionReasoningCaptureService(
     IRepositoryService repositoryService,
     IDecisionRepository decisionRepository,
+    IArtifactStore artifactStore,
     IReasoningRepository reasoningRepository)
     : IDecisionReasoningCaptureService
 {
@@ -221,6 +224,74 @@ public sealed class DecisionReasoningCaptureService(
                 tag,
                 transitionFingerprint);
         }
+    }
+
+    public async Task CaptureExecutionHandoffDecisionAsync(
+        ExecutionSession session,
+        bool accepted)
+    {
+        Repository repository = await GetRepositoryAsync(session.RepositoryId);
+        string? handoffPath = NormalizeRelativePath(session.HandoffPath);
+        if (handoffPath is null)
+        {
+            return;
+        }
+
+        string? handoffContent = await artifactStore.ReadAsync(ArtifactPath.ResolveRepositoryPath(repository, handoffPath));
+        if (string.IsNullOrWhiteSpace(handoffContent) &&
+            string.IsNullOrWhiteSpace(session.DecisionNote))
+        {
+            return;
+        }
+
+        string semanticText = $"{session.DecisionNote}\n{handoffContent}";
+        if (!TryClassifyExecutionHandoffSignal(
+                semanticText,
+                accepted,
+                out ReasoningEventFamily family,
+                out ReasoningEventType type,
+                out string tag,
+                out string signal))
+        {
+            return;
+        }
+
+        DateTimeOffset? decidedAt = accepted ? session.AcceptedAt : session.RejectedAt;
+        if (decidedAt is null)
+        {
+            throw new InvalidOperationException("Execution session does not contain successful handoff decision metadata.");
+        }
+
+        string handoffFingerprint = Fingerprint(new
+        {
+            Path = handoffPath,
+            Content = handoffContent ?? string.Empty
+        });
+        string transitionFingerprint = Fingerprint(new
+        {
+            Transition = accepted ? "ExecutionHandoffAcceptedReasoningObserved" : "ExecutionHandoffRejectedReasoningObserved",
+            RepositoryId = repository.Id,
+            SessionId = session.Id,
+            session.MilestonePath,
+            DecidedAt = decidedAt,
+            session.DecisionNote,
+            HandoffPath = handoffPath,
+            HandoffFingerprint = handoffFingerprint,
+            Signal = signal
+        });
+
+        await GetOrCreateExecutionHandoffDecisionEventAsync(
+            repository,
+            session,
+            accepted,
+            handoffPath,
+            handoffContent ?? string.Empty,
+            handoffFingerprint,
+            family,
+            type,
+            tag,
+            signal,
+            transitionFingerprint);
     }
 
     private async Task<ReasoningEvent> GetOrCreateProposalResolvedEventAsync(
@@ -489,6 +560,45 @@ public sealed class DecisionReasoningCaptureService(
                 ["operational-context", "promotion", "inferred-capture", tag]));
     }
 
+    private async Task<ReasoningEvent> GetOrCreateExecutionHandoffDecisionEventAsync(
+        Repository repository,
+        ExecutionSession session,
+        bool accepted,
+        string handoffPath,
+        string handoffContent,
+        string handoffFingerprint,
+        ReasoningEventFamily family,
+        ReasoningEventType type,
+        string tag,
+        string signal,
+        string transitionFingerprint)
+    {
+        IReadOnlyList<ReasoningEvent> existingEvents = await reasoningRepository.ListEventsAsync(repository);
+        ReasoningEvent? existing = existingEvents.FirstOrDefault(reasoningEvent =>
+            reasoningEvent.Family == family &&
+            reasoningEvent.Type == type &&
+            string.Equals(reasoningEvent.Provenance.Fingerprint, transitionFingerprint, StringComparison.Ordinal));
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        string sourceAction = accepted ? "accepted" : "rejected";
+        return await reasoningRepository.CreateEventAsync(
+            repository,
+            new CreateReasoningEventCommand(
+                family,
+                type,
+                ExecutionHandoffDecisionEventTitle(session, signal),
+                new ReasoningNarrative(
+                    ExecutionHandoffDecisionSummary(session, signal),
+                    $"Execution remains workflow authority; reasoning records the semantic meaning observed when execution output was {sourceAction}. {Excerpt(semanticText: session.DecisionNote ?? handoffContent, maxLength: 320)}"),
+                ExecutionHandoffDecisionReferences(session, handoffPath, handoffContent, handoffFingerprint),
+                ExecutionHandoffDecisionProvenance(session, sourceAction, handoffPath, transitionFingerprint),
+                [],
+                ["execution", "handoff", "inferred-capture", tag]));
+    }
+
     private async Task<Repository> GetRepositoryAsync(Guid repositoryId)
     {
         Repository? repository = (await repositoryService.GetAllAsync())
@@ -620,6 +730,39 @@ public sealed class DecisionReasoningCaptureService(
         return references;
     }
 
+    private static IReadOnlyList<ReasoningReference> ExecutionHandoffDecisionReferences(
+        ExecutionSession session,
+        string handoffPath,
+        string handoffContent,
+        string handoffFingerprint)
+    {
+        return
+        [
+            new ReasoningReference(
+                ReasoningReferenceKind.Handoff,
+                handoffPath,
+                handoffPath,
+                Section: "Current Handoff",
+                Excerpt: Excerpt(handoffContent),
+                Fingerprint: handoffFingerprint),
+            new ReasoningReference(
+                ReasoningReferenceKind.ExecutionOutput,
+                session.Id.ToString("D"),
+                Section: "Execution Session",
+                Excerpt: $"Milestone: {session.MilestonePath}",
+                Fingerprint: Fingerprint(new
+                {
+                    session.Id,
+                    session.MilestonePath,
+                    session.StartedAt,
+                    session.CompletedAt,
+                    session.AcceptedAt,
+                    session.RejectedAt,
+                    session.DecisionNote
+                }))
+        ];
+    }
+
     private static ReasoningProvenance Provenance(
         DecisionResolvedProposalSnapshot proposal,
         string rationale,
@@ -632,6 +775,25 @@ public sealed class DecisionReasoningCaptureService(
             ProposalPath(proposal.ProposalId),
             "History: Resolved",
             rationale,
+            transitionFingerprint);
+    }
+
+    private static ReasoningProvenance ExecutionHandoffDecisionProvenance(
+        ExecutionSession session,
+        string sourceAction,
+        string handoffPath,
+        string transitionFingerprint)
+    {
+        return new ReasoningProvenance(
+            sourceAction == "accepted"
+                ? "InferredExecutionHandoffAcceptance"
+                : "InferredExecutionHandoffRejection",
+            "execution-session-service",
+            handoffPath,
+            $"Execution output {sourceAction}",
+            string.IsNullOrWhiteSpace(session.DecisionNote)
+                ? $"Execution output for milestone {session.MilestonePath} was {sourceAction}."
+                : session.DecisionNote.Trim(),
             transitionFingerprint);
     }
 
@@ -755,6 +917,84 @@ public sealed class DecisionReasoningCaptureService(
         }
     }
 
+    private static bool TryClassifyExecutionHandoffSignal(
+        string semanticText,
+        bool accepted,
+        out ReasoningEventFamily family,
+        out ReasoningEventType type,
+        out string tag,
+        out string signal)
+    {
+        string text = semanticText.ToLowerInvariant();
+        if (ContainsAny(text, "direction", "strategy", "strategic", "pivot", "shifted direction", "direction shifted"))
+        {
+            family = ReasoningEventFamily.Direction;
+            type = accepted ? ReasoningEventType.DirectionShifted : ReasoningEventType.DirectionAbandoned;
+            tag = "direction";
+            signal = accepted ? "direction shifted" : "direction abandoned";
+            return true;
+        }
+
+        if (ContainsAny(text, "assumption", "assume", "assumed"))
+        {
+            family = ReasoningEventFamily.AssumptionEvolution;
+            type = ContainsAny(text, "invalid", "failed", "false", "wrong")
+                ? ReasoningEventType.AssumptionInvalidated
+                : ReasoningEventType.AssumptionReplaced;
+            tag = "assumption-evolution";
+            signal = type == ReasoningEventType.AssumptionInvalidated
+                ? "assumption invalidated"
+                : "assumption replaced";
+            return true;
+        }
+
+        if (ContainsAny(text, "constraint", "required", "requirement", "must", "cannot"))
+        {
+            family = ReasoningEventFamily.ConstraintEvolution;
+            type = ReasoningEventType.ConstraintModified;
+            tag = "constraint-evolution";
+            signal = "constraint modified";
+            return true;
+        }
+
+        if (ContainsAny(text, "contradiction", "conflict", "conflicts", "inconsistent"))
+        {
+            family = ReasoningEventFamily.Contradiction;
+            type = ContainsAny(text, "resolved", "fixed")
+                ? ReasoningEventType.ContradictionResolved
+                : ReasoningEventType.ContradictionIdentified;
+            tag = "contradiction";
+            signal = type == ReasoningEventType.ContradictionResolved
+                ? "contradiction resolved"
+                : "contradiction identified";
+            return true;
+        }
+
+        if (ContainsAny(text, "decision", "superseded", "reframed", "reconsidered"))
+        {
+            family = ReasoningEventFamily.DecisionEvolution;
+            type = ReasoningEventType.EvidenceAdded;
+            tag = "decision-evolution";
+            signal = "decision evidence added";
+            return true;
+        }
+
+        if (ContainsAny(text, "evidence", "proved", "proven", "finding", "findings"))
+        {
+            family = ReasoningEventFamily.Evidence;
+            type = ReasoningEventType.EvidenceAdded;
+            tag = "evidence";
+            signal = "evidence added";
+            return true;
+        }
+
+        family = default;
+        type = default;
+        tag = string.Empty;
+        signal = string.Empty;
+        return false;
+    }
+
     private static string OperationalContextPromotionEventTitle(
         OperationalContextProposal proposal,
         OperationalContextSemanticChange change)
@@ -767,6 +1007,43 @@ public sealed class DecisionReasoningCaptureService(
         OperationalContextSemanticChange change)
     {
         return $"Promotion {proposal.ProposalId} changed project understanding: {change.Description}";
+    }
+
+    private static string ExecutionHandoffDecisionEventTitle(
+        ExecutionSession session,
+        string signal)
+    {
+        return $"Execution output {signal} for {Path.GetFileNameWithoutExtension(session.MilestonePath)}";
+    }
+
+    private static string ExecutionHandoffDecisionSummary(
+        ExecutionSession session,
+        string signal)
+    {
+        return $"Execution output for milestone {session.MilestonePath} showed that {signal}.";
+    }
+
+    private static string? NormalizeRelativePath(string? relativePath)
+    {
+        if (string.IsNullOrWhiteSpace(relativePath))
+        {
+            return null;
+        }
+
+        return relativePath.Replace('\\', '/').Trim();
+    }
+
+    private static bool ContainsAny(string value, params string[] needles)
+    {
+        return needles.Any(needle => value.Contains(needle, StringComparison.Ordinal));
+    }
+
+    private static string Excerpt(string semanticText, int maxLength = 240)
+    {
+        string normalized = string.Join(
+            " ",
+            semanticText.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        return normalized.Length <= maxLength ? normalized : $"{normalized[..maxLength]}...";
     }
 
     private static string Fingerprint<T>(T value)

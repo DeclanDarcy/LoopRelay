@@ -14,6 +14,10 @@ using CommandCenter.Decisions.Abstractions;
 using CommandCenter.Decisions.Models;
 using CommandCenter.Decisions.Primitives;
 using CommandCenter.Decisions.Services;
+using CommandCenter.Execution.Abstractions;
+using CommandCenter.Execution.Models;
+using CommandCenter.Execution.Modules;
+using CommandCenter.Execution.Primitives;
 using CommandCenter.Reasoning.Models;
 using CommandCenter.Reasoning.Projections;
 using CommandCenter.Reasoning.Services;
@@ -35,6 +39,7 @@ public sealed class DecisionReasoningCaptureServiceTests
         var captureService = new DecisionReasoningCaptureService(
             new StubRepositoryService(repository),
             decisionRepository,
+            new FileSystemArtifactStore(),
             reasoningRepository);
         OperationalContextProposal proposal = CreatePromotedOperationalContextProposal(repository.Id);
 
@@ -137,6 +142,175 @@ public sealed class DecisionReasoningCaptureServiceTests
     }
 
     [Fact]
+    public async Task ExecutionHandoffDecisionCaptureIsIdempotentAndSemantic()
+    {
+        Repository repository = CreateRepository();
+        await WriteAsync(repository, ".agents/handoffs/handoff.md", """
+            # Handoff
+
+            ## New State
+
+            - Direction shifted from workflow capture to semantic reasoning evidence.
+            """);
+        var reasoningRepository = new FileSystemReasoningRepository(
+            new FileSystemArtifactStore(),
+            new ReasoningArtifactProjectionService());
+        var captureService = new DecisionReasoningCaptureService(
+            new StubRepositoryService(repository),
+            new InMemoryDecisionRepository(),
+            new FileSystemArtifactStore(),
+            reasoningRepository);
+        ExecutionSession session = CreateDecidedExecutionSession(repository, accepted: true, "Direction shifted after review.");
+
+        await captureService.CaptureExecutionHandoffDecisionAsync(session, accepted: true);
+        await captureService.CaptureExecutionHandoffDecisionAsync(session, accepted: true);
+
+        ReasoningEvent reasoningEvent = Assert.Single(await reasoningRepository.ListEventsAsync(repository));
+        Assert.Equal(ReasoningEventFamily.Direction, reasoningEvent.Family);
+        Assert.Equal(ReasoningEventType.DirectionShifted, reasoningEvent.Type);
+        Assert.Equal("InferredExecutionHandoffAcceptance", reasoningEvent.Provenance.SourceKind);
+        Assert.Contains("Execution remains workflow authority", reasoningEvent.Narrative.Details);
+        Assert.Contains(reasoningEvent.References, reference =>
+            reference.Kind == ReasoningReferenceKind.Handoff &&
+            reference.Id == ".agents/handoffs/handoff.md");
+        Assert.Contains(reasoningEvent.References, reference =>
+            reference.Kind == ReasoningReferenceKind.ExecutionOutput &&
+            reference.Id == session.Id.ToString("D"));
+    }
+
+    [Fact]
+    public async Task ExecutionHandoffDecisionCaptureSkipsWorkflowOnlyTransitions()
+    {
+        Repository repository = CreateRepository();
+        await WriteAsync(repository, ".agents/handoffs/handoff.md", "# Handoff\n\nCompleted requested work.");
+        var reasoningRepository = new FileSystemReasoningRepository(
+            new FileSystemArtifactStore(),
+            new ReasoningArtifactProjectionService());
+        var captureService = new DecisionReasoningCaptureService(
+            new StubRepositoryService(repository),
+            new InMemoryDecisionRepository(),
+            new FileSystemArtifactStore(),
+            reasoningRepository);
+        ExecutionSession session = CreateDecidedExecutionSession(repository, accepted: true, "accepted");
+
+        await captureService.CaptureExecutionHandoffDecisionAsync(session, accepted: true);
+
+        Assert.Empty(await reasoningRepository.ListEventsAsync(repository));
+    }
+
+    [Fact]
+    public async Task ExecutionHandoffRejectionCapturesSemanticReasonWhenPresent()
+    {
+        Repository repository = CreateRepository();
+        await WriteAsync(repository, ".agents/handoffs/handoff.md", """
+            # Handoff
+
+            ## Review Outcome
+
+            - Proposed direction conflicts with the repository authority boundary.
+            """);
+        var reasoningRepository = new FileSystemReasoningRepository(
+            new FileSystemArtifactStore(),
+            new ReasoningArtifactProjectionService());
+        var captureService = new DecisionReasoningCaptureService(
+            new StubRepositoryService(repository),
+            new InMemoryDecisionRepository(),
+            new FileSystemArtifactStore(),
+            reasoningRepository);
+        ExecutionSession session = CreateDecidedExecutionSession(repository, accepted: false, "Direction should be abandoned.");
+
+        await captureService.CaptureExecutionHandoffDecisionAsync(session, accepted: false);
+
+        ReasoningEvent reasoningEvent = Assert.Single(await reasoningRepository.ListEventsAsync(repository));
+        Assert.Equal(ReasoningEventFamily.Direction, reasoningEvent.Family);
+        Assert.Equal(ReasoningEventType.DirectionAbandoned, reasoningEvent.Type);
+        Assert.Equal("InferredExecutionHandoffRejection", reasoningEvent.Provenance.SourceKind);
+    }
+
+    [Fact]
+    public async Task ExecutionHandoffAcceptEndpointCapturesReasoningAfterAcceptancePersists()
+    {
+        Repository repository = CreateRepository();
+        string storePath = Path.Combine(repository.Path, "execution-sessions.json");
+        await WriteAsync(repository, ".agents/handoffs/handoff.md", """
+            # Handoff
+
+            ## New State
+
+            - Assumption invalidated: handoff workflow state alone is not meaningful reasoning.
+            """);
+        ExecutionSession session = CreateAwaitingAcceptanceExecutionSession(repository);
+        await new CommandCenter.Execution.Services.FileSystemExecutionSessionStore(storePath).SaveAsync([session]);
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services =>
+            {
+                services.AddSingleton<IRepositoryService>(new StubRepositoryService(repository));
+                services.AddSingleton<IExecutionProvider>(new FakeExecutionProvider());
+                services.AddSingleton<IExecutionSessionStore>(
+                    new CommandCenter.Execution.Services.FileSystemExecutionSessionStore(storePath));
+                services.AddSingleton<IGitService>(new FakeGitService());
+            });
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+        using var client = new HttpClient();
+        JsonSerializerOptions jsonOptions = CreateJsonOptions();
+
+        HttpResponseMessage acceptResponse = await client.PostAsJsonAsync(
+            $"{app.Urls.Single()}/api/execution-sessions/{session.Id}/accept",
+            new ExecutionAcceptanceRequest { DecisionNote = "Assumption invalidated by the execution output." },
+            jsonOptions);
+        ReasoningEvent[] reasoningEvents = (await (await client.GetAsync(
+            $"{app.Urls.Single()}/api/repositories/{repository.Id}/reasoning/events"))
+            .Content.ReadFromJsonAsync<ReasoningEvent[]>(jsonOptions))!;
+        ExecutionSession persistedSession = (await new CommandCenter.Execution.Services.FileSystemExecutionSessionStore(storePath)
+                .LoadAsync())
+            .Single(storedSession => storedSession.Id == session.Id);
+
+        Assert.Equal(HttpStatusCode.OK, acceptResponse.StatusCode);
+        Assert.NotNull(persistedSession.AcceptedAt);
+        ReasoningEvent reasoningEvent = Assert.Single(reasoningEvents);
+        Assert.Equal(ReasoningEventFamily.AssumptionEvolution, reasoningEvent.Family);
+        Assert.Equal(ReasoningEventType.AssumptionInvalidated, reasoningEvent.Type);
+        Assert.Equal("InferredExecutionHandoffAcceptance", reasoningEvent.Provenance.SourceKind);
+    }
+
+    [Fact]
+    public async Task FailedExecutionHandoffAcceptanceDoesNotCaptureReasoning()
+    {
+        Repository repository = CreateRepository();
+        string storePath = Path.Combine(repository.Path, "execution-sessions.json");
+        await WriteAsync(repository, ".agents/handoffs/handoff.md", "# Handoff\n\nDirection shifted.");
+        ExecutionSession session = CreateDecidedExecutionSession(repository, accepted: true, "Already accepted.");
+        await new CommandCenter.Execution.Services.FileSystemExecutionSessionStore(storePath).SaveAsync([session]);
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services =>
+            {
+                services.AddSingleton<IRepositoryService>(new StubRepositoryService(repository));
+                services.AddSingleton<IExecutionProvider>(new FakeExecutionProvider());
+                services.AddSingleton<IExecutionSessionStore>(
+                    new CommandCenter.Execution.Services.FileSystemExecutionSessionStore(storePath));
+                services.AddSingleton<IGitService>(new FakeGitService());
+            });
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+        using var client = new HttpClient();
+        JsonSerializerOptions jsonOptions = CreateJsonOptions();
+
+        HttpResponseMessage acceptResponse = await client.PostAsJsonAsync(
+            $"{app.Urls.Single()}/api/execution-sessions/{session.Id}/accept",
+            new ExecutionAcceptanceRequest { DecisionNote = "Direction shifted." },
+            jsonOptions);
+        ReasoningEvent[] reasoningEvents = (await (await client.GetAsync(
+            $"{app.Urls.Single()}/api/repositories/{repository.Id}/reasoning/events"))
+            .Content.ReadFromJsonAsync<ReasoningEvent[]>(jsonOptions))!;
+
+        Assert.Equal(HttpStatusCode.Conflict, acceptResponse.StatusCode);
+        Assert.Empty(reasoningEvents);
+    }
+
+    [Fact]
     public async Task GovernanceContradictionCaptureIsIdempotentAndSelective()
     {
         Repository repository = CreateRepository();
@@ -147,6 +321,7 @@ public sealed class DecisionReasoningCaptureServiceTests
         var captureService = new DecisionReasoningCaptureService(
             new StubRepositoryService(repository),
             decisionRepository,
+            new FileSystemArtifactStore(),
             reasoningRepository);
         DecisionGovernanceReport report = CreateGovernanceReport(repository.Id);
 
@@ -389,6 +564,51 @@ public sealed class DecisionReasoningCaptureServiceTests
             [new DecisionHistoryEntry(now, "Resolved", DecisionState.Open.ToString(), DecisionState.Resolved.ToString(), "Resolved by test.", [])]);
     }
 
+    private static ExecutionSession CreateAwaitingAcceptanceExecutionSession(Repository repository)
+    {
+        DateTimeOffset startedAt = DateTimeOffset.Parse("2026-06-23T00:00:00Z");
+        return new ExecutionSession
+        {
+            Id = Guid.NewGuid(),
+            RepositoryId = repository.Id,
+            RepositoryPath = repository.Path,
+            MilestonePath = ".agents/milestones/m2-cross-artifact-capture.md",
+            StartedAt = startedAt,
+            CompletedAt = startedAt.AddMinutes(5),
+            LastActivityAt = startedAt.AddMinutes(5),
+            State = ExecutionSessionState.Completed,
+            RepositoryState = RepositoryExecutionState.AwaitingAcceptance,
+            ProviderName = "fake",
+            HandoffPath = ".agents/handoffs/handoff.md"
+        };
+    }
+
+    private static ExecutionSession CreateDecidedExecutionSession(
+        Repository repository,
+        bool accepted,
+        string decisionNote)
+    {
+        DateTimeOffset startedAt = DateTimeOffset.Parse("2026-06-23T00:00:00Z");
+        DateTimeOffset decidedAt = DateTimeOffset.Parse("2026-06-23T00:06:00Z");
+        return new ExecutionSession
+        {
+            Id = Guid.NewGuid(),
+            RepositoryId = repository.Id,
+            RepositoryPath = repository.Path,
+            MilestonePath = ".agents/milestones/m2-cross-artifact-capture.md",
+            StartedAt = startedAt,
+            CompletedAt = startedAt.AddMinutes(5),
+            LastActivityAt = decidedAt,
+            State = ExecutionSessionState.Completed,
+            RepositoryState = accepted ? RepositoryExecutionState.AwaitingCommit : RepositoryExecutionState.Ready,
+            ProviderName = "fake",
+            AcceptedAt = accepted ? decidedAt : null,
+            RejectedAt = accepted ? null : decidedAt,
+            DecisionNote = decisionNote,
+            HandoffPath = ".agents/handoffs/handoff.md"
+        };
+    }
+
     private static string Fingerprint(DecisionProposal proposal)
     {
         byte[] bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(proposal, CreateJsonOptions()));
@@ -449,6 +669,52 @@ public sealed class DecisionReasoningCaptureServiceTests
         }
 
         public Task RemoveAsync(Guid repositoryId)
+        {
+            throw new NotSupportedException();
+        }
+    }
+
+    private sealed class FakeGitService : IGitService
+    {
+        public Task<ExecutionRepositorySnapshot> GetSnapshotAsync(Repository repository)
+        {
+            return Task.FromResult(new ExecutionRepositorySnapshot
+            {
+                Branch = "main",
+                DirtyState = new RepositoryDirtyState
+                {
+                    IsClean = false,
+                    ModifiedPaths = ["src/changed.cs"]
+                },
+                CapturedAt = DateTimeOffset.UtcNow
+            });
+        }
+
+        public Task<RepositoryGitStatus> GetStatusAsync(Repository repository)
+        {
+            return Task.FromResult(new RepositoryGitStatus());
+        }
+
+        public Task<CommitPreparation> PrepareCommitAsync(Repository repository, ExecutionSession session)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<CommitStatusSnapshot> GetCommitStatusSnapshotAsync(Repository repository)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<CommitResult> CommitAsync(
+            Repository repository,
+            string message,
+            IReadOnlyList<string> selectedPaths,
+            string preparationSnapshotId)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<PushResult> PushAsync(Repository repository, string? commitSha)
         {
             throw new NotSupportedException();
         }
