@@ -29,6 +29,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IDecisionGovernanceService, DecisionGovernanceService>();
         services.AddSingleton<IDecisionProjectionService, DecisionProjectionService>();
         services.AddSingleton<IDecisionCertificationService, DecisionCertificationService>();
+        services.AddSingleton<IHumanAuthoringBurdenService, HumanAuthoringBurdenService>();
+        services.AddSingleton<IDecisionQualitySignalService, DecisionQualitySignalService>();
+        services.AddSingleton<IDecisionQualityAssessmentService, DecisionQualityAssessmentService>();
+        services.AddSingleton<IDecisionQualityReportService, DecisionQualityReportService>();
         return services;
     }
 }
