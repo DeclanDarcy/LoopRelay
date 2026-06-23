@@ -111,13 +111,66 @@ public sealed class ExecutionPromptBuilderTests
                 ],
                 [],
                 [],
-                [])));
+                [
+                    new ExecutionArchitectureRule(
+                        "EARC-0001",
+                        "DEC-0001",
+                        "Architecture",
+                        "Use repository artifacts",
+                        DecisionClassification.Architectural,
+                        ExecutionProjectionKind.RepositoryConvention,
+                        [])
+                ],
+                [],
+                [],
+                new ExecutionDecisionContext([], [], [], [], [], []))));
 
         Assert.Contains("## Governed Decision Projection", prompt.Text);
         Assert.Contains("- DEC-0001 (RepositoryConvention, Architectural): Use repository artifacts", prompt.Text);
+        Assert.Contains("Architecture Rules:", prompt.Text);
         Assert.True(
             prompt.Text.IndexOf("## Governed Decision Projection", StringComparison.Ordinal) <
             prompt.Text.IndexOf("CurrentDecisions: .agents/decisions/decisions.md", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void PromptRendersDecisionPrioritiesAndArchitectureRulesSeparately()
+    {
+        ExecutionPrompt prompt = new ExecutionPromptBuilder().Build(CreateContext(
+            decisionProjection: new ExecutionDecisionProjection(
+                Guid.Parse("00000000-0000-0000-0000-000000000001"),
+                DateTimeOffset.UtcNow,
+                [],
+                [],
+                [
+                    new ExecutionDecisionPriority(
+                        "EPRI-0001",
+                        "DEC-0002",
+                        "Priority",
+                        "Prioritize governance-safe execution before automation breadth.",
+                        DecisionClassification.Strategic,
+                        ExecutionProjectionKind.WorkflowPolicy,
+                        1,
+                        [])
+                ],
+                [
+                    new ExecutionArchitectureRule(
+                        "EARC-0001",
+                        "DEC-0001",
+                        "Architecture",
+                        "Use repository artifacts",
+                        DecisionClassification.Architectural,
+                        ExecutionProjectionKind.RepositoryConvention,
+                        [])
+                ],
+                [],
+                [],
+                new ExecutionDecisionContext([], [], [], [], [], []))));
+
+        Assert.Contains("Priorities:", prompt.Text);
+        Assert.Contains("- P1 DEC-0002 (WorkflowPolicy, Strategic): Prioritize governance-safe execution before automation breadth.", prompt.Text);
+        Assert.Contains("Architecture Rules:", prompt.Text);
+        Assert.Contains("- DEC-0001 (RepositoryConvention, Architectural): Use repository artifacts", prompt.Text);
     }
 
     [Fact]

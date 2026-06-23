@@ -1014,6 +1014,127 @@ fn list_decision_certification_reports(repository_id: String) -> Result<Value, S
 }
 
 #[tauri::command]
+fn assess_decision_quality(repository_id: String, proposal_id: String) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/{proposal_id}/quality/assess"
+        ))
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision quality assessment failed")
+}
+
+#[tauri::command]
+fn list_decision_quality_assessments(repository_id: String) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/assessments"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision quality assessment listing failed")
+}
+
+#[tauri::command]
+fn get_decision_quality_report(repository_id: String) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/reports/current"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision quality report lookup failed")
+}
+
+#[tauri::command]
+fn generate_decision_quality_report(repository_id: String) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/reports"
+        ))
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision quality report generation failed")
+}
+
+#[tauri::command]
+fn list_decision_quality_reports(repository_id: String) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/reports"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision quality report listing failed")
+}
+
+#[tauri::command]
+fn get_decision_quality_trend(repository_id: String) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/trends/current"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision quality trend lookup failed")
+}
+
+#[tauri::command]
+fn generate_decision_quality_trend(repository_id: String) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/trends"
+        ))
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision quality trend generation failed")
+}
+
+#[tauri::command]
+fn list_decision_quality_trends(repository_id: String) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/trends"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision quality trend listing failed")
+}
+
+#[tauri::command]
 fn get_execution_decision_projection(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/execution-projection"
@@ -1792,6 +1913,14 @@ fn main() {
             get_decision_certification,
             run_decision_certification,
             list_decision_certification_reports,
+            assess_decision_quality,
+            list_decision_quality_assessments,
+            get_decision_quality_report,
+            generate_decision_quality_report,
+            list_decision_quality_reports,
+            get_decision_quality_trend,
+            generate_decision_quality_trend,
+            list_decision_quality_trends,
             get_execution_decision_projection,
             list_reasoning_events,
             get_reasoning_event,

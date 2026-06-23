@@ -13,6 +13,7 @@ import {
   useDecisionOptionComparison,
   useDecisionProposalLineage,
   useDecisionProposalReview,
+  useDecisionQuality,
   useDecisionSourceAttributions,
 } from '../../hooks'
 import { DecisionCandidateBrowser } from './DecisionCandidateBrowser'
@@ -22,6 +23,7 @@ import { DecisionGovernancePanel } from './DecisionGovernancePanel'
 import { DecisionOptionComparison } from './DecisionOptionComparison'
 import { DecisionProposalBrowser } from './DecisionProposalBrowser'
 import { DecisionProposalViewer } from './DecisionProposalViewer'
+import { DecisionQualityPanel } from './DecisionQualityPanel'
 import { DecisionRefinementPanel } from './DecisionRefinementPanel'
 import { DecisionResolutionPanel } from './DecisionResolutionPanel'
 import { DecisionRevisionHistory } from './DecisionRevisionHistory'
@@ -93,6 +95,22 @@ export function DecisionLifecycleTab({
     refresh: refreshCertification,
     runCertification,
   } = useDecisionCertification(repositoryId)
+  const {
+    assessments: qualityAssessments,
+    currentReport: qualityReport,
+    reports: qualityReports,
+    currentTrend: qualityTrend,
+    trends: qualityTrends,
+    isLoading: isQualityLoading,
+    isAssessing: isQualityAssessing,
+    isGeneratingReport: isQualityGeneratingReport,
+    isGeneratingTrend: isQualityGeneratingTrend,
+    error: qualityError,
+    refresh: refreshQuality,
+    assessProposal: assessProposalQuality,
+    generateReport: generateQualityReport,
+    generateTrend: generateQualityTrend,
+  } = useDecisionQuality(repositoryId)
   const activeCandidateCount = candidates.filter((candidate) =>
     candidate.state === 'Discovered' || candidate.state === 'Promoted',
   ).length
@@ -161,6 +179,7 @@ export function DecisionLifecycleTab({
                 refreshOptionComparison(),
                 refreshEvidenceInspection(),
                 refreshSourceAttributions(),
+                refreshQuality(),
               ])
               onRefresh()
             }}
@@ -177,6 +196,7 @@ export function DecisionLifecycleTab({
                 refreshOptionComparison(),
                 refreshEvidenceInspection(),
                 refreshSourceAttributions(),
+                refreshQuality(),
               ])
               onRefresh()
             }}
@@ -208,6 +228,35 @@ export function DecisionLifecycleTab({
             onGenerateReport={async () => {
               await generateGovernanceReport()
               await refreshGovernance()
+              onRefresh()
+            }}
+          />
+
+          <DecisionQualityPanel
+            assessments={qualityAssessments}
+            currentReport={qualityReport}
+            reports={qualityReports}
+            currentTrend={qualityTrend}
+            trends={qualityTrends}
+            selectedProposalId={selectedProposalId}
+            isLoading={isQualityLoading}
+            isAssessing={isQualityAssessing}
+            isGeneratingReport={isQualityGeneratingReport}
+            isGeneratingTrend={isQualityGeneratingTrend}
+            error={qualityError}
+            onAssessProposal={async () => {
+              await assessProposalQuality(selectedProposalId)
+              await refreshQuality()
+              onRefresh()
+            }}
+            onGenerateReport={async () => {
+              await generateQualityReport()
+              await refreshQuality()
+              onRefresh()
+            }}
+            onGenerateTrend={async () => {
+              await generateQualityTrend()
+              await refreshQuality()
               onRefresh()
             }}
           />

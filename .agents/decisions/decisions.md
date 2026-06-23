@@ -2,17 +2,18 @@
 
 ## Newly Authorized
 
-- Accept the Milestone 8 backend quality endpoint slice as correctly preserving the generation, resolution, quality-assessment, persistence, and endpoint boundary.
-- Treat unresolved proposals returning `409 Conflict` from proposal-scoped quality assessment as the intended endpoint behavior.
-- Keep resolution snapshots as the quality assessment boundary; assess the human-resolved decision outcome rather than mutable current proposal state.
-- Keep markdown projection mandatory for persisted quality assessment, report, and trend artifacts.
-- Proceed next with M8 quality UI consumption in this order: Tauri commands, UI types, API hooks, then a narrow quality surface.
-- Build the first UI quality surface around assessment, report, and trend retrieval before adding a full dashboard.
-- Preserve `DecisionQualitySignal` as the primary UI abstraction; keep overall score secondary.
-- Prioritize visible signal categories in the narrow UI surface: human authoring burden, recommendation stability, tradeoff quality, context quality, and constraint quality.
+- Continue Milestone 9 in the current diagnostic-first sequence.
+- Treat the first M9 slice as accepted: enriched execution context may include constraints, directives, priorities, and architecture rules while preserving the existing authority boundary.
+- Persist M9 projection diagnostics before adding decision influence tracing.
+- Persist diagnostics for included decisions, excluded decisions, superseded decisions, projected statements, projection conflicts, projection timestamp, and projection fingerprint.
+- Keep `ArchitectureRules` and `Priorities` as execution context elements derived from resolved authority.
+- Continue deriving execution guidance only from accepted, resolved, governance-passing decisions.
+- Preserve compatibility with the existing constraints/directives prompt contract while enriching execution context.
+- Keep conflict detection in the projection layer before influence tracing.
 
 ## Not Authorized
 
-- Do not build the full dashboard before proving backend-to-Tauri-to-UI quality retrieval.
-- Do not present the overall score as the primary quality UI abstraction.
-- Do not assess unresolved generated proposals before human resolution authority exists.
+- Do not project generated recommendations directly into execution guidance.
+- Do not derive priorities or architecture rules from current unresolved recommendations.
+- Do not add `ExecutionInfluenceTrace` before durable projection diagnostics exist.
+- Do not expand execution UI influence surfaces before persisted diagnostics prove the enriched projection path.

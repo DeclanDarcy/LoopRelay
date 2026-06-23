@@ -269,7 +269,10 @@ public sealed class ExecutionContextServiceTests
                     [])
             ],
             [],
-            []);
+            [],
+            [],
+            [],
+            new ExecutionDecisionContext([], [], [], [], [], []));
         Harness harness = await CreateHarnessAsync(decisionProjection: projection);
         await WriteAsync(harness.Repository, ".agents/plan.md", "plan");
         await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");

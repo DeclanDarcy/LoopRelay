@@ -96,12 +96,19 @@ public sealed class DecisionProjectionService(
             .ToHashSet(StringComparer.Ordinal);
         var constraints = new List<ExecutionConstraint>();
         var directives = new List<ExecutionDirective>();
+        var priorities = new List<ExecutionDecisionPriority>();
+        var architectureRules = new List<ExecutionArchitectureRule>();
         var diagnostics = new List<string>();
 
         foreach (Decision decision in decisions.OrderBy(decision => decision.Id.Value, StringComparer.Ordinal))
         {
             if (!IsAcceptedResolvedDecision(decision))
             {
+                if (decision.State is DecisionState.Superseded or DecisionState.Archived)
+                {
+                    diagnostics.Add($"Excluded {decision.Id.Value}: decision state is {decision.State}.");
+                }
+
                 continue;
             }
 
@@ -116,8 +123,18 @@ public sealed class DecisionProjectionService(
             DecisionSourceReference[] sources = BuildSources(decision);
             if (ProjectsAsConstraint(projectionKind))
             {
-                constraints.Add(new ExecutionConstraint(
+                var constraint = new ExecutionConstraint(
                     $"ECON-{constraints.Count + 1:0000}",
+                    decision.Id.Value,
+                    decision.Title,
+                    statement,
+                    decision.Classification,
+                    projectionKind,
+                    sources);
+                constraints.Add(constraint);
+
+                architectureRules.Add(new ExecutionArchitectureRule(
+                    $"EARC-{architectureRules.Count + 1:0000}",
                     decision.Id.Value,
                     decision.Title,
                     statement,
@@ -127,14 +144,27 @@ public sealed class DecisionProjectionService(
             }
             else
             {
-                directives.Add(new ExecutionDirective(
+                var directive = new ExecutionDirective(
                     $"EDIR-{directives.Count + 1:0000}",
                     decision.Id.Value,
                     decision.Title,
                     statement,
                     decision.Classification,
                     projectionKind,
-                    sources));
+                    sources);
+                directives.Add(directive);
+                if (ProjectsAsPriority(decision, statement))
+                {
+                    priorities.Add(new ExecutionDecisionPriority(
+                        $"EPRI-{priorities.Count + 1:0000}",
+                        decision.Id.Value,
+                        decision.Title,
+                        statement,
+                        decision.Classification,
+                        projectionKind,
+                        priorities.Count + 1,
+                        sources));
+                }
             }
         }
 
@@ -152,13 +182,25 @@ public sealed class DecisionProjectionService(
             executionRequest,
             milestoneContent);
 
+        string[] orderedDiagnostics = diagnostics.Order(StringComparer.Ordinal).ToArray();
+        var context = new ExecutionDecisionContext(
+            constraints,
+            directives,
+            priorities,
+            architectureRules,
+            conflicts,
+            orderedDiagnostics);
+
         return new ExecutionDecisionProjection(
             repositoryId,
             DateTimeOffset.UtcNow,
             constraints,
             directives,
+            priorities,
+            architectureRules,
             conflicts,
-            diagnostics.Order(StringComparer.Ordinal).ToArray());
+            orderedDiagnostics,
+            context);
     }
 
     private async Task<Repository> GetRepositoryAsync(Guid repositoryId)
@@ -196,6 +238,16 @@ public sealed class DecisionProjectionService(
         return projectionKind is ExecutionProjectionKind.ArchitecturalConstraint
             or ExecutionProjectionKind.TechnologyChoice
             or ExecutionProjectionKind.RepositoryConvention;
+    }
+
+    private static bool ProjectsAsPriority(Decision decision, string statement)
+    {
+        string searchable = Normalize(string.Join(" ", decision.Title, decision.Context, statement));
+        return decision.Classification == DecisionClassification.Strategic ||
+            searchable.Contains("priority", StringComparison.Ordinal) ||
+            searchable.Contains("prioritize", StringComparison.Ordinal) ||
+            searchable.Contains("before ", StringComparison.Ordinal) ||
+            searchable.Contains("first ", StringComparison.Ordinal);
     }
 
     private static ExecutionProjectionKind ClassifyProjectionKind(Decision decision, string statement)
@@ -274,14 +326,15 @@ public sealed class DecisionProjectionService(
         string? executionRequest,
         string? milestoneContent)
     {
+        var conflicts = new List<ExecutionDecisionConflict>();
+        DetectProjectedStatementConflicts(statements, conflicts);
         string combinedInput = string.Join(Environment.NewLine, new[] { executionRequest, milestoneContent }
             .Where(value => !string.IsNullOrWhiteSpace(value)));
         if (string.IsNullOrWhiteSpace(combinedInput))
         {
-            return [];
+            return conflicts.ToArray();
         }
 
-        var conflicts = new List<ExecutionDecisionConflict>();
         string normalizedInput = Normalize(combinedInput);
         foreach (ProjectedStatement statement in statements)
         {
@@ -310,6 +363,42 @@ public sealed class DecisionProjectionService(
         }
 
         return conflicts.ToArray();
+    }
+
+    private static void DetectProjectedStatementConflicts(
+        IReadOnlyList<ProjectedStatement> statements,
+        List<ExecutionDecisionConflict> conflicts)
+    {
+        ProjectedDirective[] directives = statements
+            .Select(statement =>
+            {
+                (bool hasDirective, bool isPositive, string subject) = ParseDirective(statement.Statement);
+                return new ProjectedDirective(statement, hasDirective, isPositive, subject);
+            })
+            .Where(directive => directive.HasDirective && directive.Subject.Length >= 3)
+            .ToArray();
+
+        for (int leftIndex = 0; leftIndex < directives.Length; leftIndex++)
+        {
+            for (int rightIndex = leftIndex + 1; rightIndex < directives.Length; rightIndex++)
+            {
+                ProjectedDirective left = directives[leftIndex];
+                ProjectedDirective right = directives[rightIndex];
+                if (left.IsPositive == right.IsPositive ||
+                    !string.Equals(left.Subject, right.Subject, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                conflicts.Add(new ExecutionDecisionConflict(
+                    $"ECONFLICT-{conflicts.Count + 1:0000}",
+                    left.Statement.DecisionId,
+                    left.Statement.Title,
+                    left.Statement.Statement,
+                    $"{right.Statement.DecisionId}: {right.Statement.Statement}",
+                    [.. left.Statement.Sources, .. right.Statement.Sources]));
+            }
+        }
     }
 
     private static (bool HasDirective, bool IsPositive, string Subject) ParseDirective(string statement)
@@ -345,4 +434,10 @@ public sealed class DecisionProjectionService(
         string Title,
         string Statement,
         IReadOnlyList<DecisionSourceReference> Sources);
+
+    private sealed record ProjectedDirective(
+        ProjectedStatement Statement,
+        bool HasDirective,
+        bool IsPositive,
+        string Subject);
 }

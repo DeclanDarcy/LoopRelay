@@ -74,6 +74,8 @@ public sealed class ExecutionPromptBuilder : IExecutionPromptBuilder
         AppendConflicts(builder, projection.Conflicts);
         AppendConstraints(builder, projection.Constraints);
         AppendDirectives(builder, projection.Directives);
+        AppendPriorities(builder, projection.Priorities);
+        AppendArchitectureRules(builder, projection.ArchitectureRules);
         builder.AppendLine();
     }
 
@@ -134,6 +136,38 @@ public sealed class ExecutionPromptBuilder : IExecutionPromptBuilder
         foreach (ExecutionDirective directive in directives.OrderBy(directive => directive.DecisionId, StringComparer.Ordinal))
         {
             builder.AppendLine($"- {directive.DecisionId} ({directive.ProjectionKind}, {directive.Classification}): {directive.Statement}");
+        }
+    }
+
+    private static void AppendPriorities(StringBuilder builder, IReadOnlyList<ExecutionDecisionPriority> priorities)
+    {
+        builder.AppendLine("Priorities:");
+        if (priorities.Count == 0)
+        {
+            builder.AppendLine("- none");
+            return;
+        }
+
+        foreach (ExecutionDecisionPriority priority in priorities
+            .OrderBy(priority => priority.Rank)
+            .ThenBy(priority => priority.DecisionId, StringComparer.Ordinal))
+        {
+            builder.AppendLine($"- P{priority.Rank} {priority.DecisionId} ({priority.ProjectionKind}, {priority.Classification}): {priority.Statement}");
+        }
+    }
+
+    private static void AppendArchitectureRules(StringBuilder builder, IReadOnlyList<ExecutionArchitectureRule> architectureRules)
+    {
+        builder.AppendLine("Architecture Rules:");
+        if (architectureRules.Count == 0)
+        {
+            builder.AppendLine("- none");
+            return;
+        }
+
+        foreach (ExecutionArchitectureRule rule in architectureRules.OrderBy(rule => rule.DecisionId, StringComparer.Ordinal))
+        {
+            builder.AppendLine($"- {rule.DecisionId} ({rule.ProjectionKind}, {rule.Classification}): {rule.Statement}");
         }
     }
 

@@ -17,6 +17,7 @@ const useDecisionEvidenceInspectionMock = vi.hoisted(() => vi.fn())
 const useDecisionSourceAttributionsMock = vi.hoisted(() => vi.fn())
 const useDecisionGovernanceMock = vi.hoisted(() => vi.fn())
 const useDecisionCertificationMock = vi.hoisted(() => vi.fn())
+const useDecisionQualityMock = vi.hoisted(() => vi.fn())
 
 vi.mock('../../hooks', () => ({
   useDecisionCertification: useDecisionCertificationMock,
@@ -26,6 +27,7 @@ vi.mock('../../hooks', () => ({
   useDecisionProposalLineage: useDecisionProposalLineageMock,
   useDecisionProposalReview: useDecisionProposalReviewMock,
   useDecisionProposalRefinement: useDecisionProposalRefinementMock,
+  useDecisionQuality: useDecisionQualityMock,
   useDecisionResolution: useDecisionResolutionMock,
   useDecisionSourceAttributions: useDecisionSourceAttributionsMock,
 }))
@@ -41,6 +43,7 @@ afterEach(() => {
   useDecisionSourceAttributionsMock.mockReset()
   useDecisionGovernanceMock.mockReset()
   useDecisionCertificationMock.mockReset()
+  useDecisionQualityMock.mockReset()
 })
 
 describe('DecisionLifecycleTab navigation', () => {
@@ -73,6 +76,22 @@ describe('DecisionLifecycleTab navigation', () => {
       error: null,
       refresh: vi.fn(),
       runCertification: vi.fn(),
+    })
+    useDecisionQualityMock.mockReturnValue({
+      assessments: [],
+      currentReport: null,
+      reports: [],
+      currentTrend: null,
+      trends: [],
+      isLoading: false,
+      isAssessing: false,
+      isGeneratingReport: false,
+      isGeneratingTrend: false,
+      error: null,
+      refresh: vi.fn(),
+      assessProposal: vi.fn(),
+      generateReport: vi.fn(),
+      generateTrend: vi.fn(),
     })
     useDecisionProposalRefinementMock.mockReturnValue({
       refine: vi.fn(),

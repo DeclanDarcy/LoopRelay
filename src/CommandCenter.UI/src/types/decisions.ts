@@ -49,6 +49,12 @@ export type DecisionHealthAssessment = 'Healthy' | 'AdvisoryFindings' | 'Blocked
 
 export type DecisionLifecycleCertificationResultKind = 'Passed' | 'Failed'
 
+export type DecisionQualityRating = 'Unknown' | 'Poor' | 'Mixed' | 'Good' | 'Excellent'
+
+export type QualitySignalDirection = 'Neutral' | 'Positive' | 'Negative'
+
+export type QualitySignalSeverity = 'Info' | 'Low' | 'Medium' | 'High' | 'Critical'
+
 export type ExecutionProjectionKind =
   | 'ArchitecturalConstraint'
   | 'ImplementationDirective'
@@ -847,6 +853,86 @@ export type DecisionCertificationReport = {
   diagnostics: string[]
 }
 
+export type DecisionQualitySignal = {
+  id: string
+  repositoryId: string
+  decisionId: string
+  category: string
+  direction: QualitySignalDirection
+  severity: QualitySignalSeverity
+  summary: string
+  detail: string
+  sources: DecisionSourceReference[]
+}
+
+export type HumanAuthoringBurdenSignal = {
+  id: string
+  repositoryId: string
+  decisionId: string
+  burden: HumanAuthoringBurden
+  sourceKind: string
+  summary: string
+  sources: DecisionSourceReference[]
+}
+
+export type DecisionQualityAssessment = {
+  id: string
+  repositoryId: string
+  decisionId: string
+  assessedAt: string
+  rating: DecisionQualityRating
+  score: number
+  signals: DecisionQualitySignal[]
+  humanAuthoringBurdenSignals: HumanAuthoringBurdenSignal[]
+  diagnostics: string[]
+}
+
+export type DecisionQualityReport = {
+  id: string
+  repositoryId: string
+  generatedAt: string
+  decisionCount: number
+  generatedPackageCount: number
+  acceptedCount: number
+  acceptedRate: number
+  modifiedCount: number
+  modifiedRate: number
+  rejectedCount: number
+  rejectedRate: number
+  supersededCount: number
+  supersededRate: number
+  recommendationDivergenceCount: number
+  recommendationDivergenceRate: number
+  alternativeUtilizationCount: number
+  alternativeUtilizationRate: number
+  reviewOnlyCount: number
+  reviewOnlyRate: number
+  minorEditCount: number
+  minorEditRate: number
+  majorRefinementCount: number
+  majorRefinementRate: number
+  fullRewriteCount: number
+  fullRewriteRate: number
+  generationBypassedCount: number
+  generationBypassedRate: number
+  rating: DecisionQualityRating
+  assessments: DecisionQualityAssessment[]
+  diagnostics: string[]
+}
+
+export type DecisionQualityTrend = {
+  id: string
+  repositoryId: string
+  generatedAt: string
+  assessmentCount: number
+  currentRating: DecisionQualityRating
+  previousRating: DecisionQualityRating
+  currentAverageScore: number
+  previousAverageScore: number
+  direction: QualitySignalDirection
+  diagnostics: string[]
+}
+
 export type ExecutionConstraint = {
   id: string
   decisionId: string
@@ -867,6 +953,27 @@ export type ExecutionDirective = {
   sources: DecisionSourceReference[]
 }
 
+export type ExecutionDecisionPriority = {
+  id: string
+  decisionId: string
+  title: string
+  statement: string
+  classification: DecisionClassification
+  projectionKind: ExecutionProjectionKind
+  rank: number
+  sources: DecisionSourceReference[]
+}
+
+export type ExecutionArchitectureRule = {
+  id: string
+  decisionId: string
+  title: string
+  statement: string
+  classification: DecisionClassification
+  projectionKind: ExecutionProjectionKind
+  sources: DecisionSourceReference[]
+}
+
 export type ExecutionDecisionConflict = {
   id: string
   decisionId: string
@@ -876,11 +983,23 @@ export type ExecutionDecisionConflict = {
   sources: DecisionSourceReference[]
 }
 
+export type ExecutionDecisionContext = {
+  constraints: ExecutionConstraint[]
+  directives: ExecutionDirective[]
+  priorities: ExecutionDecisionPriority[]
+  architectureRules: ExecutionArchitectureRule[]
+  conflicts: ExecutionDecisionConflict[]
+  diagnostics: string[]
+}
+
 export type ExecutionDecisionProjection = {
   repositoryId: string
   generatedAt: string
   constraints: ExecutionConstraint[]
   directives: ExecutionDirective[]
+  priorities: ExecutionDecisionPriority[]
+  architectureRules: ExecutionArchitectureRule[]
   conflicts: ExecutionDecisionConflict[]
   diagnostics: string[]
+  context: ExecutionDecisionContext
 }

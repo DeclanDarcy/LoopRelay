@@ -57,7 +57,7 @@ measure whether generated decisions reduce human decision-production burden.
 - [x] Generate deterministic markdown projections for persisted quality assessments, reports, and trends.
 - [x] Reload persisted quality assessments, reports, and trends from filesystem artifacts.
 - [x] Add backend endpoints for proposal-scoped quality assessment, persisted assessment history, current and persisted quality reports, and current and persisted quality trends.
-- [ ] Add UI quality dashboard and trend view.
+- [x] Add UI quality dashboard and trend view.
 - [x] Keep quality advisory and non-mutating.
 
 ## Tests
@@ -75,4 +75,4 @@ measure whether generated decisions reduce human decision-production burden.
 
 ## Exit Criteria
 
-- [ ] Command Center can answer whether generated decisions are useful, how much human effort remains, whether recommendations are improving, and whether alternatives/tradeoffs are valuable.
+- [x] Command Center can answer whether generated decisions are useful, how much human effort remains, whether recommendations are improving, and whether alternatives/tradeoffs are valuable.

@@ -125,6 +125,9 @@ public sealed class DecisionProjectionServiceTests
         ExecutionDirective directive = Assert.Single(projection.Directives);
         Assert.Equal("DEC-0001", directive.DecisionId);
         Assert.Equal(ExecutionProjectionKind.WorkflowPolicy, directive.ProjectionKind);
+        ExecutionDecisionPriority priority = Assert.Single(projection.Priorities);
+        Assert.Equal("DEC-0001", priority.DecisionId);
+        Assert.Equal(1, priority.Rank);
         Assert.Empty(projection.Constraints);
     }
 
@@ -148,7 +151,71 @@ public sealed class DecisionProjectionServiceTests
         ExecutionConstraint constraint = Assert.Single(projection.Constraints);
         Assert.Equal("DEC-0001", constraint.DecisionId);
         Assert.Equal(ExecutionProjectionKind.RepositoryConvention, constraint.ProjectionKind);
+        ExecutionArchitectureRule rule = Assert.Single(projection.ArchitectureRules);
+        Assert.Equal("DEC-0001", rule.DecisionId);
         Assert.Empty(projection.Directives);
+    }
+
+    [Fact]
+    public async Task ProjectionExcludesSupersededAuthorityAndProjectsReplacement()
+    {
+        Harness harness = CreateHarness();
+        await harness.DecisionRepository.SaveDecisionAsync(
+            harness.Repository,
+            CreateDecision(harness.Repository.Id, "DEC-0001", DecisionState.Superseded, DecisionOutcome.Accepted, DecisionClassification.Architectural));
+        await harness.DecisionRepository.SaveDecisionAsync(
+            harness.Repository,
+            CreateDecision(
+                harness.Repository.Id,
+                "DEC-0002",
+                DecisionState.Resolved,
+                DecisionOutcome.Accepted,
+                DecisionClassification.Architectural,
+                "Use current repository layout",
+                relationships:
+                [
+                    new DecisionRelationship(
+                        new DecisionId("DEC-0002"),
+                        new DecisionId("DEC-0001"),
+                        DecisionRelationshipType.Supersedes,
+                        "Replacement authority.")
+                ]));
+
+        ExecutionDecisionProjection projection = await harness.Service.BuildExecutionProjectionAsync(harness.Repository.Id);
+
+        ExecutionConstraint constraint = Assert.Single(projection.Constraints);
+        Assert.Equal("DEC-0002", constraint.DecisionId);
+        Assert.Contains(projection.Diagnostics, diagnostic => diagnostic.Contains("DEC-0001", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ProjectionDetectsContradictoryProjectedDirectives()
+    {
+        Harness harness = CreateHarness();
+        await harness.DecisionRepository.SaveDecisionAsync(
+            harness.Repository,
+            CreateDecision(
+                harness.Repository.Id,
+                "DEC-0001",
+                DecisionState.Resolved,
+                DecisionOutcome.Accepted,
+                DecisionClassification.Tactical,
+                "Use provider abstraction"));
+        await harness.DecisionRepository.SaveDecisionAsync(
+            harness.Repository,
+            CreateDecision(
+                harness.Repository.Id,
+                "DEC-0002",
+                DecisionState.Resolved,
+                DecisionOutcome.Accepted,
+                DecisionClassification.Tactical,
+                "Avoid provider abstraction"));
+
+        ExecutionDecisionProjection projection = await harness.Service.BuildExecutionProjectionAsync(harness.Repository.Id);
+
+        ExecutionDecisionConflict conflict = Assert.Single(projection.Conflicts);
+        Assert.Equal("DEC-0001", conflict.DecisionId);
+        Assert.Contains("DEC-0002", conflict.ConflictingExcerpt, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -217,7 +284,8 @@ public sealed class DecisionProjectionServiceTests
         DecisionOutcome outcome,
         DecisionClassification classification,
         string selectedOptionTitle = "Use repository artifacts",
-        string selectedOptionDescription = "")
+        string selectedOptionDescription = "",
+        IReadOnlyList<DecisionRelationship>? relationships = null)
     {
         var id = new DecisionId(decisionId);
         var source = new DecisionSourceReference(
@@ -252,7 +320,7 @@ public sealed class DecisionProjectionServiceTests
             "Decision context",
             new DecisionMetadata(repositoryId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
             new DecisionResolution(outcome, "OPT-0001", "Use repository artifacts.", "user", false, DateTimeOffset.UtcNow, [source], snapshot),
-            [],
+            relationships ?? [],
             [new DecisionEvidence("Repository artifacts are authoritative.", [source])],
             []);
     }

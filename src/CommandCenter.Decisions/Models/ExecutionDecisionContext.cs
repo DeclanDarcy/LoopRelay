@@ -1,12 +1,9 @@
 namespace CommandCenter.Decisions.Models;
 
-public sealed record ExecutionDecisionProjection(
-    Guid RepositoryId,
-    DateTimeOffset GeneratedAt,
+public sealed record ExecutionDecisionContext(
     IReadOnlyList<ExecutionConstraint> Constraints,
     IReadOnlyList<ExecutionDirective> Directives,
     IReadOnlyList<ExecutionDecisionPriority> Priorities,
     IReadOnlyList<ExecutionArchitectureRule> ArchitectureRules,
     IReadOnlyList<ExecutionDecisionConflict> Conflicts,
-    IReadOnlyList<string> Diagnostics,
-    ExecutionDecisionContext Context);
+    IReadOnlyList<string> Diagnostics);

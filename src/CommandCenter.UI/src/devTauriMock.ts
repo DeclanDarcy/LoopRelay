@@ -21,6 +21,9 @@ import type {
   DecisionOptionComparison,
   DecisionProposalBrowserItem,
   DecisionProposalLineage,
+  DecisionQualityAssessment,
+  DecisionQualityReport,
+  DecisionQualityTrend,
   DecisionRefinementAnalysisRequest,
   DecisionRefinementRequest,
   DecisionReviewWorkspace,
@@ -74,6 +77,9 @@ type MockState = {
   decisionAssimilationRecommendations: Record<string, Record<string, DecisionAssimilationRecommendation>>
   decisionGovernanceReports: Record<string, DecisionGovernanceReport[]>
   decisionCertificationReports: Record<string, DecisionCertificationReport[]>
+  decisionQualityAssessments: Record<string, DecisionQualityAssessment[]>
+  decisionQualityReports: Record<string, DecisionQualityReport[]>
+  decisionQualityTrends: Record<string, DecisionQualityTrend[]>
   reasoningEvents: Record<string, ReasoningEvent[]>
   reasoningThreads: Record<string, ReasoningThread[]>
   reasoningRelationships: Record<string, ReasoningRelationship[]>
@@ -1530,6 +1536,255 @@ function createDecisionCertificationReport(
   return report
 }
 
+function assessDecisionQualityMock(
+  state: MockState,
+  repositoryId: string,
+  proposalId: string,
+): DecisionQualityAssessment {
+  const decision = Object.values(state.decisions[repositoryId] ?? {}).find(
+    (item) => item.resolution?.sourceProposalSnapshot?.proposalId === proposalId,
+  )
+  if (!decision) {
+    throw new Error(`Decision proposal has not been resolved: ${proposalId}`)
+  }
+
+  const existing = state.decisionQualityAssessments[repositoryId] ?? []
+  const assessment = createDecisionQualityAssessment(repositoryId, decision, existing.length + 1)
+  state.decisionQualityAssessments[repositoryId] = [assessment, ...existing]
+  return assessment
+}
+
+function createDecisionQualityReport(
+  state: MockState,
+  repositoryId: string,
+  persist: boolean,
+): DecisionQualityReport {
+  const decisions = Object.values(state.decisions[repositoryId] ?? {})
+  const assessments = state.decisionQualityAssessments[repositoryId] ?? []
+  const generatedPackageCount = decisions.filter(
+    (decision) => decision.resolution?.sourceProposalSnapshot?.packageId,
+  ).length
+  const acceptedCount = decisions.filter((decision) => decision.resolution?.outcome === 'Accepted').length
+  const rejectedCount = decisions.filter((decision) => decision.resolution?.outcome === 'Rejected').length
+  const recommendationDivergenceCount = decisions.filter(
+    (decision) => decision.resolution?.recommendationDiverged,
+  ).length
+  const alternativeUtilizationCount = recommendationDivergenceCount
+  const reviewOnlyCount = assessments.filter((assessment) =>
+    assessment.humanAuthoringBurdenSignals.some((signal) => signal.burden === 'ReviewOnly'),
+  ).length
+  const minorEditCount = assessments.filter((assessment) =>
+    assessment.humanAuthoringBurdenSignals.some((signal) => signal.burden === 'MinorEdit'),
+  ).length
+  const majorRefinementCount = assessments.filter((assessment) =>
+    assessment.humanAuthoringBurdenSignals.some((signal) => signal.burden === 'MajorRefinement'),
+  ).length
+  const fullRewriteCount = assessments.filter((assessment) =>
+    assessment.humanAuthoringBurdenSignals.some((signal) => signal.burden === 'FullRewrite'),
+  ).length
+  const generationBypassedCount = decisions.filter(
+    (decision) => !decision.resolution?.sourceProposalSnapshot,
+  ).length
+  const modifiedCount = minorEditCount + majorRefinementCount + fullRewriteCount
+  const rating = fullRewriteCount > 0 || generationBypassedCount > 0
+    ? 'Mixed'
+    : acceptedCount > 0 && recommendationDivergenceCount === 0
+      ? 'Good'
+      : 'Unknown'
+  const report: DecisionQualityReport = {
+    id: persist ? `quality.${Date.now().toString().padStart(21, '0')}` : 'quality.current',
+    repositoryId,
+    generatedAt: new Date().toISOString(),
+    decisionCount: decisions.length,
+    generatedPackageCount,
+    acceptedCount,
+    acceptedRate: rate(acceptedCount, decisions.length),
+    modifiedCount,
+    modifiedRate: rate(modifiedCount, decisions.length),
+    rejectedCount,
+    rejectedRate: rate(rejectedCount, decisions.length),
+    supersededCount: decisions.filter((decision) => decision.state === 'Superseded').length,
+    supersededRate: rate(decisions.filter((decision) => decision.state === 'Superseded').length, decisions.length),
+    recommendationDivergenceCount,
+    recommendationDivergenceRate: rate(recommendationDivergenceCount, decisions.length),
+    alternativeUtilizationCount,
+    alternativeUtilizationRate: rate(alternativeUtilizationCount, decisions.length),
+    reviewOnlyCount,
+    reviewOnlyRate: rate(reviewOnlyCount, assessments.length),
+    minorEditCount,
+    minorEditRate: rate(minorEditCount, assessments.length),
+    majorRefinementCount,
+    majorRefinementRate: rate(majorRefinementCount, assessments.length),
+    fullRewriteCount,
+    fullRewriteRate: rate(fullRewriteCount, assessments.length),
+    generationBypassedCount,
+    generationBypassedRate: rate(generationBypassedCount, decisions.length),
+    rating,
+    assessments,
+    diagnostics: persist
+      ? ['Mock quality report was persisted to generated report history.']
+      : ['Mock current quality report is an inspection and is not persisted.'],
+  }
+
+  if (persist) {
+    state.decisionQualityReports[repositoryId] = [
+      report,
+      ...(state.decisionQualityReports[repositoryId] ?? []),
+    ]
+  }
+
+  return report
+}
+
+function createDecisionQualityTrend(
+  state: MockState,
+  repositoryId: string,
+  persist: boolean,
+): DecisionQualityTrend {
+  const assessments = state.decisionQualityAssessments[repositoryId] ?? []
+  const currentAverageScore = average(assessments.map((assessment) => assessment.score))
+  const previousAverageScore = average(assessments.slice(1).map((assessment) => assessment.score))
+  const currentRating = assessments[0]?.rating ?? 'Unknown'
+  const previousRating = assessments[1]?.rating ?? 'Unknown'
+  const trend: DecisionQualityTrend = {
+    id: persist ? `trend.${Date.now().toString().padStart(21, '0')}` : 'trend.current',
+    repositoryId,
+    generatedAt: new Date().toISOString(),
+    assessmentCount: assessments.length,
+    currentRating,
+    previousRating,
+    currentAverageScore,
+    previousAverageScore,
+    direction: currentAverageScore > previousAverageScore
+      ? 'Positive'
+      : currentAverageScore < previousAverageScore
+        ? 'Negative'
+        : 'Neutral',
+    diagnostics: persist
+      ? ['Mock quality trend was persisted to generated trend history.']
+      : ['Mock current quality trend is calculated from saved assessments.'],
+  }
+
+  if (persist) {
+    state.decisionQualityTrends[repositoryId] = [
+      trend,
+      ...(state.decisionQualityTrends[repositoryId] ?? []),
+    ]
+  }
+
+  return trend
+}
+
+function createDecisionQualityAssessment(
+  repositoryId: string,
+  decision: Decision,
+  sequence: number,
+): DecisionQualityAssessment {
+  const recommendationDiverged = decision.resolution?.recommendationDiverged ?? false
+  const burden = decision.resolution?.sourceProposalSnapshot?.revisions.length
+    ? 'MajorRefinement'
+    : decision.resolution?.sourceProposalSnapshot
+      ? 'ReviewOnly'
+      : 'GenerationBypassed'
+  const rating = decision.resolution?.outcome === 'Accepted' && !recommendationDiverged
+    ? 'Good'
+    : decision.resolution?.outcome === 'Rejected'
+      ? 'Mixed'
+      : 'Unknown'
+  const source = decisionSource(
+    `.agents/decisions/records/${decision.id}/decision.json`,
+    'Human resolution remains the quality assessment boundary.',
+  )
+
+  return {
+    id: `assessment.${String(sequence).padStart(4, '0')}`,
+    repositoryId,
+    decisionId: decision.id,
+    assessedAt: new Date().toISOString(),
+    rating,
+    score: rating === 'Good' ? 80 : rating === 'Mixed' ? 55 : 0,
+    signals: [
+      {
+        id: `QS-${String(sequence).padStart(4, '0')}-burden`,
+        repositoryId,
+        decisionId: decision.id,
+        category: 'HumanAuthoringBurden',
+        direction: burden === 'ReviewOnly' ? 'Positive' : 'Negative',
+        severity: burden === 'GenerationBypassed' ? 'High' : 'Info',
+        summary: `Burden classified as ${burden}.`,
+        detail: 'Mock assessment derives burden from resolution and revision evidence.',
+        sources: [source],
+      },
+      {
+        id: `QS-${String(sequence).padStart(4, '0')}-recommendation`,
+        repositoryId,
+        decisionId: decision.id,
+        category: 'RecommendationStability',
+        direction: recommendationDiverged ? 'Negative' : 'Positive',
+        severity: recommendationDiverged ? 'Medium' : 'Info',
+        summary: recommendationDiverged
+          ? 'Human selected an alternative to the recommendation.'
+          : 'Human selected the recommended option.',
+        detail: 'Mock quality keeps recommendation stability visible without making it authoritative.',
+        sources: [source],
+      },
+      {
+        id: `QS-${String(sequence).padStart(4, '0')}-tradeoff`,
+        repositoryId,
+        decisionId: decision.id,
+        category: 'TradeoffQuality',
+        direction: decision.resolution?.sourceProposalSnapshot?.tradeoffs.length ? 'Positive' : 'Negative',
+        severity: decision.resolution?.sourceProposalSnapshot?.tradeoffs.length ? 'Info' : 'Medium',
+        summary: 'Resolved proposal tradeoffs remain inspectable.',
+        detail: 'Tradeoff signals come from the frozen source proposal snapshot.',
+        sources: [source],
+      },
+      {
+        id: `QS-${String(sequence).padStart(4, '0')}-context`,
+        repositoryId,
+        decisionId: decision.id,
+        category: 'ContextQuality',
+        direction: decision.context ? 'Positive' : 'Negative',
+        severity: decision.context ? 'Info' : 'Medium',
+        summary: 'Decision context is available for assessment.',
+        detail: 'Context quality remains observational and does not alter the decision.',
+        sources: [source],
+      },
+      {
+        id: `QS-${String(sequence).padStart(4, '0')}-constraint`,
+        repositoryId,
+        decisionId: decision.id,
+        category: 'ConstraintQuality',
+        direction: 'Neutral',
+        severity: 'Info',
+        summary: 'Constraint quality is visible as a separate signal.',
+        detail: 'Mock data keeps constraint quality distinct from overall rating.',
+        sources: [source],
+      },
+    ],
+    humanAuthoringBurdenSignals: [
+      {
+        id: `HAB-${String(sequence).padStart(4, '0')}`,
+        repositoryId,
+        decisionId: decision.id,
+        burden,
+        sourceKind: 'ResolutionSnapshot',
+        summary: `Human authoring burden classified as ${burden}.`,
+        sources: [source],
+      },
+    ],
+    diagnostics: ['Mock assessment is advisory and did not mutate decision authority.'],
+  }
+}
+
+function rate(count: number, total: number) {
+  return total > 0 ? count / total : 0
+}
+
+function average(values: number[]) {
+  return values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : 0
+}
+
 function createExecutionDecisionProjection(
   state: MockState,
   repositoryId: string,
@@ -1543,6 +1798,8 @@ function createExecutionDecisionProjection(
   )
   const constraints: ExecutionDecisionProjection['constraints'] = []
   const directives: ExecutionDecisionProjection['directives'] = []
+  const priorities: ExecutionDecisionProjection['priorities'] = []
+  const architectureRules: ExecutionDecisionProjection['architectureRules'] = []
   const diagnostics: string[] = []
 
   for (const decision of decisions.sort((left, right) => left.id.localeCompare(right.id))) {
@@ -1582,9 +1839,34 @@ function createExecutionDecisionProjection(
       projectionKind === 'RepositoryConvention'
     ) {
       constraints.push({ ...item, id: `ECON-${String(constraints.length + 1).padStart(4, '0')}` })
+      architectureRules.push({ ...item, id: `EARC-${String(architectureRules.length + 1).padStart(4, '0')}` })
     } else {
       directives.push({ ...item, id: `EDIR-${String(directives.length + 1).padStart(4, '0')}` })
+      const priorityText = `${decision.title} ${decision.context} ${statement}`.toLowerCase()
+      if (
+        decision.classification === 'Strategic' ||
+        priorityText.includes('priority') ||
+        priorityText.includes('prioritize') ||
+        priorityText.includes('before ') ||
+        priorityText.includes('first ')
+      ) {
+        priorities.push({
+          ...item,
+          id: `EPRI-${String(priorities.length + 1).padStart(4, '0')}`,
+          rank: priorities.length + 1,
+        })
+      }
     }
+  }
+
+  const conflicts: ExecutionDecisionProjection['conflicts'] = []
+  const context: ExecutionDecisionProjection['context'] = {
+    constraints,
+    directives,
+    priorities,
+    architectureRules,
+    conflicts,
+    diagnostics,
   }
 
   return {
@@ -1592,8 +1874,11 @@ function createExecutionDecisionProjection(
     generatedAt: new Date().toISOString(),
     constraints,
     directives,
-    conflicts: [],
+    priorities,
+    architectureRules,
+    conflicts,
     diagnostics,
+    context,
   }
 }
 
@@ -1896,6 +2181,9 @@ function createInitialState(): MockState {
     decisionAssimilationRecommendations: {},
     decisionGovernanceReports: {},
     decisionCertificationReports: {},
+    decisionQualityAssessments: {},
+    decisionQualityReports: {},
+    decisionQualityTrends: {},
     reasoningEvents: {},
     reasoningThreads: {},
     reasoningRelationships: {},
@@ -1915,6 +2203,9 @@ function createInitialState(): MockState {
     state.decisionAssimilationRecommendations[repository.id] = {}
     state.decisionGovernanceReports[repository.id] = []
     state.decisionCertificationReports[repository.id] = []
+    state.decisionQualityAssessments[repository.id] = []
+    state.decisionQualityReports[repository.id] = []
+    state.decisionQualityTrends[repository.id] = []
     state.reasoningEvents[repository.id] = repository.id === alphaRepository.id
       ? createReasoningEvents(repository.id)
       : []
@@ -3540,6 +3831,25 @@ export function installDevTauriMock() {
           return clone(createDecisionCertificationReport(state, getStringArg(args, 'repositoryId'), true))
         case 'list_decision_certification_reports':
           return clone(state.decisionCertificationReports[getStringArg(args, 'repositoryId')] ?? [])
+        case 'assess_decision_quality': {
+          const repositoryId = getStringArg(args, 'repositoryId')
+          const proposalId = getStringArg(args, 'proposalId')
+          return clone(assessDecisionQualityMock(state, repositoryId, proposalId))
+        }
+        case 'list_decision_quality_assessments':
+          return clone(state.decisionQualityAssessments[getStringArg(args, 'repositoryId')] ?? [])
+        case 'get_decision_quality_report':
+          return clone(createDecisionQualityReport(state, getStringArg(args, 'repositoryId'), false))
+        case 'generate_decision_quality_report':
+          return clone(createDecisionQualityReport(state, getStringArg(args, 'repositoryId'), true))
+        case 'list_decision_quality_reports':
+          return clone(state.decisionQualityReports[getStringArg(args, 'repositoryId')] ?? [])
+        case 'get_decision_quality_trend':
+          return clone(createDecisionQualityTrend(state, getStringArg(args, 'repositoryId'), false))
+        case 'generate_decision_quality_trend':
+          return clone(createDecisionQualityTrend(state, getStringArg(args, 'repositoryId'), true))
+        case 'list_decision_quality_trends':
+          return clone(state.decisionQualityTrends[getStringArg(args, 'repositoryId')] ?? [])
         case 'get_execution_decision_projection':
           return clone(createExecutionDecisionProjection(state, getStringArg(args, 'repositoryId')))
         case 'list_reasoning_events':

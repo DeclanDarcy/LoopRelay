@@ -17,6 +17,9 @@ import type {
   DecisionPackageRegenerationResult,
   DecisionRefinementAnalysisRequest,
   DecisionRefinementRequest,
+  DecisionQualityAssessment,
+  DecisionQualityReport,
+  DecisionQualityTrend,
   DecisionReviewWorkspace,
   RefinementPlan,
   ResolveDecisionCommand,
@@ -185,6 +188,47 @@ export function runDecisionCertification(repositoryId: string) {
 
 export function listDecisionCertificationReports(repositoryId: string) {
   return invokeCommand<DecisionCertificationReport[]>('list_decision_certification_reports', {
+    repositoryId,
+  })
+}
+
+export function assessDecisionQuality(repositoryId: string, proposalId: string) {
+  return invokeCommand<DecisionQualityAssessment>('assess_decision_quality', {
+    repositoryId,
+    proposalId,
+  })
+}
+
+export function listDecisionQualityAssessments(repositoryId: string) {
+  return invokeCommand<DecisionQualityAssessment[]>('list_decision_quality_assessments', {
+    repositoryId,
+  })
+}
+
+export function getDecisionQualityReport(repositoryId: string) {
+  return invokeCommand<DecisionQualityReport>('get_decision_quality_report', { repositoryId })
+}
+
+export function generateDecisionQualityReport(repositoryId: string) {
+  return invokeCommand<DecisionQualityReport>('generate_decision_quality_report', { repositoryId })
+}
+
+export function listDecisionQualityReports(repositoryId: string) {
+  return invokeCommand<DecisionQualityReport[]>('list_decision_quality_reports', {
+    repositoryId,
+  })
+}
+
+export function getDecisionQualityTrend(repositoryId: string) {
+  return invokeCommand<DecisionQualityTrend>('get_decision_quality_trend', { repositoryId })
+}
+
+export function generateDecisionQualityTrend(repositoryId: string) {
+  return invokeCommand<DecisionQualityTrend>('generate_decision_quality_trend', { repositoryId })
+}
+
+export function listDecisionQualityTrends(repositoryId: string) {
+  return invokeCommand<DecisionQualityTrend[]>('list_decision_quality_trends', {
     repositoryId,
   })
 }
