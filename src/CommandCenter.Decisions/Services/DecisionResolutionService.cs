@@ -112,6 +112,9 @@ public sealed class DecisionResolutionService(
                 revisions)
             {
                 OptionRelationships = proposal.OptionRelationships,
+                AnalyzedOptions = proposal.AnalyzedOptions,
+                TradeoffComparisons = proposal.TradeoffComparisons,
+                TradeoffAnalysisDiagnostics = proposal.TradeoffAnalysisDiagnostics,
                 GenerationDiagnostics = proposal.GenerationDiagnostics
             });
         var decision = new Decision(

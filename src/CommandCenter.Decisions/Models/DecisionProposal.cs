@@ -18,5 +18,11 @@ public sealed record DecisionProposal(
 {
     public IReadOnlyList<DecisionOptionRelationship> OptionRelationships { get; init; } = [];
 
+    public IReadOnlyList<AnalyzedDecisionOption> AnalyzedOptions { get; init; } = [];
+
+    public IReadOnlyList<DecisionTradeoffComparison> TradeoffComparisons { get; init; } = [];
+
+    public DecisionTradeoffAnalysisDiagnostics? TradeoffAnalysisDiagnostics { get; init; }
+
     public DecisionGenerationDiagnostics? GenerationDiagnostics { get; init; }
 }

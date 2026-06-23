@@ -6,52 +6,52 @@ analyze benefits, costs, risks, dependencies, consequences, and cross-option com
 
 ## Work
 
-- [ ] Add structured analysis models:
-  - [ ] `AnalyzedDecisionOption`
-  - [ ] `DecisionBenefit`
-  - [ ] `DecisionCost`
-  - [ ] `DecisionRisk`
-  - [ ] `DecisionDependency`
-  - [ ] `DecisionConsequence`
-  - [ ] `TradeoffImpact`
-  - [ ] `TradeoffSeverity`
-- [ ] Preserve existing `DecisionTradeoff` fields during migration, but make the generated package use structured analysis.
-- [ ] Add `ITradeoffAnalysisService`.
-- [ ] Add `IOptionComparisonService`.
+- [x] Add structured analysis models:
+  - [x] `AnalyzedDecisionOption`
+  - [x] `DecisionBenefit`
+  - [x] `DecisionCost`
+  - [x] `DecisionRisk`
+  - [x] `DecisionDependency`
+  - [x] `DecisionConsequence`
+  - [x] `TradeoffImpact`
+  - [x] `TradeoffSeverity`
+- [x] Preserve existing `DecisionTradeoff` fields during migration, but make the generated package use structured analysis.
+- [x] Add `ITradeoffAnalysisService`.
+- [x] Add `IOptionComparisonService`.
 - [ ] Analyze each option against:
-  - [ ] candidate type
+  - [x] candidate type
   - [ ] typed context goals
   - [ ] constraints
   - [ ] risks
   - [ ] prior decisions
   - [ ] repository state
-  - [ ] dependencies
+  - [x] dependencies
 - [ ] Require every option to have at least:
-  - [ ] one benefit
-  - [ ] one cost
-  - [ ] one risk
-- [ ] Represent unknown risk explicitly instead of omitting risk.
-- [ ] Add cross-option comparison:
-  - [ ] relative strengths
-  - [ ] relative weaknesses
-  - [ ] unique advantages
-  - [ ] unique risks
-  - [ ] disqualifying constraints
-- [ ] Persist analysis diagnostics:
-  - [ ] input option
-  - [ ] context fingerprint
-  - [ ] generated analysis
-  - [ ] unknowns
-  - [ ] validation warnings
+  - [x] one benefit
+  - [x] one cost
+  - [x] one risk
+- [x] Represent unknown risk explicitly instead of omitting risk.
+- [x] Add cross-option comparison:
+  - [x] relative strengths
+  - [x] relative weaknesses
+  - [x] unique advantages
+  - [x] unique risks
+  - [x] disqualifying constraints
+- [x] Persist analysis diagnostics:
+  - [x] input option
+  - [x] context fingerprint
+  - [x] generated analysis
+  - [x] unknowns
+  - [x] validation warnings
 
 ## Tests
 
-- [ ] Benefits, costs, risks, dependencies, and consequences are generated for every option.
-- [ ] Unknowns are explicit.
-- [ ] Analysis is candidate-specific, not generic filler.
-- [ ] Cross-option comparison identifies differences.
-- [ ] Constraint-violating options are surfaced as risks or disqualifiers, not silently recommended.
-- [ ] Diagnostics explain generated analysis.
+- [x] Benefits, costs, risks, dependencies, and consequences are generated for every option.
+- [x] Unknowns are explicit.
+- [x] Analysis is candidate-specific, not generic filler.
+- [x] Cross-option comparison identifies differences.
+- [x] Constraint-violating options are surfaced as risks or disqualifiers, not silently recommended.
+- [x] Diagnostics explain generated analysis.
 
 ## Exit Criteria
 

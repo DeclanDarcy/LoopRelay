@@ -199,6 +199,130 @@ public sealed class DecisionGenerationServiceTests
         Assert.Contains("option-1: Valid", markdown);
     }
 
+    [Fact]
+    public async Task GenerateProposalPersistsStructuredTradeoffAnalysisForEveryOption()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(
+            repository.Id,
+            DecisionCandidateState.Promoted,
+            signalKind: "ArchitecturalFork",
+            classification: DecisionClassification.Architectural);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var service = CreateGenerationService(repository, store, decisionRepository);
+
+        DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
+        DecisionProposal reloaded = (await decisionRepository.GetProposalAsync(repository, proposal.Id))!;
+
+        Assert.Equal(proposal.Options.Count, proposal.AnalyzedOptions.Count);
+        Assert.Equal(proposal.Options.Count, proposal.Tradeoffs.Count);
+        Assert.All(proposal.Options, option =>
+        {
+            AnalyzedDecisionOption analyzed = Assert.Single(proposal.AnalyzedOptions, item => item.OptionId == option.Id);
+            Assert.NotEmpty(analyzed.Benefits);
+            Assert.NotEmpty(analyzed.Costs);
+            Assert.NotEmpty(analyzed.Risks);
+            Assert.NotEmpty(analyzed.Dependencies);
+            Assert.NotEmpty(analyzed.Consequences);
+            Assert.Contains(analyzed.Diagnostics, diagnostic =>
+                diagnostic.Contains(candidate.Classification.ToString(), StringComparison.Ordinal));
+            DecisionTradeoff legacyTradeoff = Assert.Single(proposal.Tradeoffs, tradeoff => tradeoff.OptionId == option.Id);
+            Assert.Equal(analyzed.Benefits[0].Statement, legacyTradeoff.Benefit);
+            Assert.Equal(analyzed.Costs[0].Statement, legacyTradeoff.Cost);
+        });
+        Assert.Equal(proposal.AnalyzedOptions.Count, reloaded.AnalyzedOptions.Count);
+        Assert.NotNull(reloaded.TradeoffAnalysisDiagnostics);
+        Assert.Equal(proposal.Options.Count, reloaded.TradeoffAnalysisDiagnostics.AnalyzedOptionCount);
+        Assert.NotEmpty(reloaded.TradeoffAnalysisDiagnostics.ContextFingerprint);
+
+        string markdown = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/proposal.md");
+        Assert.Contains("## Structured Tradeoff Analysis", markdown);
+        Assert.Contains("#### Benefits", markdown);
+        Assert.Contains("#### Risks", markdown);
+        Assert.Contains("## Tradeoff Analysis Diagnostics", markdown);
+    }
+
+    [Fact]
+    public async Task GenerateProposalRepresentsUnknownRisksExplicitly()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(
+            repository.Id,
+            DecisionCandidateState.Promoted,
+            signalKind: "OperationalBlocker",
+            classification: DecisionClassification.Operational);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var service = CreateGenerationService(repository, store, decisionRepository);
+
+        DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
+
+        AnalyzedDecisionOption delayedOption = Assert.Single(proposal.AnalyzedOptions, option =>
+            proposal.Options.Any(source => source.Id == option.OptionId && source.Type == DecisionOptionType.Delay));
+        Assert.Contains(delayedOption.Risks, risk => risk.IsUnknown);
+        Assert.NotNull(proposal.TradeoffAnalysisDiagnostics);
+        Assert.Contains(proposal.TradeoffAnalysisDiagnostics.Unknowns, unknown =>
+            unknown.Contains(delayedOption.OptionId, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task GenerateProposalComparesOptionsWithoutRecommending()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(
+            repository.Id,
+            DecisionCandidateState.Promoted,
+            signalKind: "MissingDirection",
+            classification: DecisionClassification.Strategic);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var service = CreateGenerationService(repository, store, decisionRepository);
+
+        DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
+
+        Assert.Equal(proposal.Options.Count, proposal.TradeoffComparisons.Count);
+        Assert.All(proposal.TradeoffComparisons, comparison =>
+        {
+            Assert.NotEmpty(comparison.RelativeStrengths);
+            Assert.NotEmpty(comparison.RelativeWeaknesses);
+            Assert.NotEmpty(comparison.UniqueAdvantages);
+            Assert.NotEmpty(comparison.UniqueRisks);
+            Assert.DoesNotContain(comparison.RelativeStrengths, strength =>
+                strength.Contains("recommend", StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(comparison.RelativeWeaknesses, weakness =>
+                weakness.Contains("recommend", StringComparison.OrdinalIgnoreCase));
+        });
+        Assert.Contains(proposal.TradeoffComparisons, comparison =>
+            comparison.UniqueRisks.Any(risk => risk.Contains("Unknown downstream impact", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    [Fact]
+    public async Task ConstraintConflictsSurfaceAsTradeoffDisqualifiers()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(
+            repository.Id,
+            DecisionCandidateState.Promoted,
+            signalKind: "ConstraintConflict",
+            summary: "Constraint conflict between package versioning and near-term validation.");
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var service = CreateGenerationService(repository, store, decisionRepository);
+
+        DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
+
+        Assert.Contains(proposal.TradeoffComparisons, comparison =>
+            comparison.DisqualifyingConstraints.Any(constraint =>
+                constraint.Contains("constraint conflict", StringComparison.OrdinalIgnoreCase)));
+        Assert.Contains(proposal.AnalyzedOptions.SelectMany(option => option.Risks), risk =>
+            risk.Statement.Contains("Constraint conflict", StringComparison.OrdinalIgnoreCase));
+    }
+
     [Theory]
     [InlineData("duplicate", DecisionOptionValidationIssueType.Duplicate)]
     [InlineData("non-actionable", DecisionOptionValidationIssueType.NonActionable)]

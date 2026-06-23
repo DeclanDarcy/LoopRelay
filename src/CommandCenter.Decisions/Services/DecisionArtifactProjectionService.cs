@@ -293,6 +293,113 @@ public sealed class DecisionArtifactProjectionService(
             markdown.NestedEvidenceList(tradeoff.Evidence);
         }
 
+        markdown.H2("Structured Tradeoff Analysis");
+        foreach (AnalyzedDecisionOption analyzedOption in proposal.AnalyzedOptions
+            .OrderBy(option => option.OptionId, StringComparer.Ordinal))
+        {
+            markdown.H3(analyzedOption.OptionId);
+            markdown.H4("Benefits");
+            foreach (DecisionBenefit benefit in analyzedOption.Benefits
+                .OrderBy(benefit => benefit.Statement, StringComparer.Ordinal))
+            {
+                markdown.Bullet($"{benefit.Impact}: {benefit.Statement}");
+                markdown.NestedEvidenceList(benefit.Evidence);
+            }
+
+            markdown.EmptyListIf(analyzedOption.Benefits.Count == 0);
+            markdown.H4("Costs");
+            foreach (DecisionCost cost in analyzedOption.Costs
+                .OrderBy(cost => cost.Statement, StringComparer.Ordinal))
+            {
+                markdown.Bullet($"{cost.Impact}: {cost.Statement}");
+                markdown.NestedEvidenceList(cost.Evidence);
+            }
+
+            markdown.EmptyListIf(analyzedOption.Costs.Count == 0);
+            markdown.H4("Risks");
+            foreach (DecisionRisk risk in analyzedOption.Risks
+                .OrderByDescending(risk => risk.Severity)
+                .ThenBy(risk => risk.Statement, StringComparer.Ordinal))
+            {
+                string unknown = risk.IsUnknown ? "unknown; " : string.Empty;
+                markdown.Bullet($"{risk.Severity}: {unknown}{risk.Statement}");
+                markdown.NestedEvidenceList(risk.Evidence);
+            }
+
+            markdown.EmptyListIf(analyzedOption.Risks.Count == 0);
+            markdown.H4("Dependencies");
+            foreach (DecisionDependency dependency in analyzedOption.Dependencies
+                .OrderBy(dependency => dependency.Statement, StringComparer.Ordinal))
+            {
+                markdown.Bullet(dependency.Statement);
+                markdown.NestedEvidenceList(dependency.Evidence);
+            }
+
+            markdown.EmptyListIf(analyzedOption.Dependencies.Count == 0);
+            markdown.H4("Consequences");
+            foreach (DecisionConsequence consequence in analyzedOption.Consequences
+                .OrderBy(consequence => consequence.Statement, StringComparer.Ordinal))
+            {
+                markdown.Bullet($"{consequence.Impact}: {consequence.Statement}");
+                markdown.NestedEvidenceList(consequence.Evidence);
+            }
+
+            markdown.EmptyListIf(analyzedOption.Consequences.Count == 0);
+            markdown.H4("Diagnostics");
+            foreach (string diagnostic in analyzedOption.Diagnostics.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(diagnostic);
+            }
+
+            markdown.EmptyListIf(analyzedOption.Diagnostics.Count == 0);
+        }
+
+        markdown.EmptyListIf(proposal.AnalyzedOptions.Count == 0);
+        markdown.H2("Tradeoff Comparisons");
+        foreach (DecisionTradeoffComparison comparison in proposal.TradeoffComparisons
+            .OrderBy(comparison => comparison.OptionId, StringComparer.Ordinal))
+        {
+            markdown.H3(comparison.OptionId);
+            markdown.H4("Relative Strengths");
+            foreach (string strength in comparison.RelativeStrengths.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(strength);
+            }
+
+            markdown.EmptyListIf(comparison.RelativeStrengths.Count == 0);
+            markdown.H4("Relative Weaknesses");
+            foreach (string weakness in comparison.RelativeWeaknesses.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(weakness);
+            }
+
+            markdown.EmptyListIf(comparison.RelativeWeaknesses.Count == 0);
+            markdown.H4("Unique Advantages");
+            foreach (string advantage in comparison.UniqueAdvantages.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(advantage);
+            }
+
+            markdown.EmptyListIf(comparison.UniqueAdvantages.Count == 0);
+            markdown.H4("Unique Risks");
+            foreach (string risk in comparison.UniqueRisks.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(risk);
+            }
+
+            markdown.EmptyListIf(comparison.UniqueRisks.Count == 0);
+            markdown.H4("Disqualifying Constraints");
+            foreach (string constraint in comparison.DisqualifyingConstraints.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(constraint);
+            }
+
+            markdown.EmptyListIf(comparison.DisqualifyingConstraints.Count == 0);
+            markdown.H4("Evidence");
+            markdown.EvidenceList(comparison.Evidence);
+        }
+
+        markdown.EmptyListIf(proposal.TradeoffComparisons.Count == 0);
         markdown.H2("Recommendation");
         if (proposal.Recommendation is null)
         {
@@ -344,6 +451,41 @@ public sealed class DecisionArtifactProjectionService(
             }
 
             markdown.EmptyListIf(diagnostics.OptionValidationResults.Count == 0);
+            markdown.H3("Diagnostics");
+            foreach (string diagnostic in diagnostics.Diagnostics.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(diagnostic);
+            }
+
+            markdown.EmptyListIf(diagnostics.Diagnostics.Count == 0);
+        }
+
+        markdown.H2("Tradeoff Analysis Diagnostics");
+        if (proposal.TradeoffAnalysisDiagnostics is null)
+        {
+            markdown.Bullet("None.");
+            markdown.EmptyListIf(false);
+        }
+        else
+        {
+            DecisionTradeoffAnalysisDiagnostics diagnostics = proposal.TradeoffAnalysisDiagnostics;
+            markdown.Fields(
+                ("Analyzed options", diagnostics.AnalyzedOptionCount.ToString()),
+                ("Context fingerprint", diagnostics.ContextFingerprint));
+            markdown.H3("Unknowns");
+            foreach (string unknown in diagnostics.Unknowns.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(unknown);
+            }
+
+            markdown.EmptyListIf(diagnostics.Unknowns.Count == 0);
+            markdown.H3("Validation Warnings");
+            foreach (string warning in diagnostics.ValidationWarnings.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(warning);
+            }
+
+            markdown.EmptyListIf(diagnostics.ValidationWarnings.Count == 0);
             markdown.H3("Diagnostics");
             foreach (string diagnostic in diagnostics.Diagnostics.Order(StringComparer.Ordinal))
             {

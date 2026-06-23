@@ -374,6 +374,9 @@ public sealed class DecisionGovernanceService(
             snapshot.History)
         {
             OptionRelationships = snapshot.OptionRelationships,
+            AnalyzedOptions = snapshot.AnalyzedOptions,
+            TradeoffComparisons = snapshot.TradeoffComparisons,
+            TradeoffAnalysisDiagnostics = snapshot.TradeoffAnalysisDiagnostics,
             GenerationDiagnostics = snapshot.GenerationDiagnostics
         });
         if (!string.Equals(snapshot.ProposalFingerprint, actualFingerprint, StringComparison.Ordinal))

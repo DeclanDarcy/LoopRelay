@@ -13,8 +13,16 @@ public sealed class DecisionGenerationService(
     IRepositoryService repositoryService,
     IDecisionRepository decisionRepository,
     IDecisionArtifactProjectionService projectionService,
-    IOptionGenerationService optionGenerationService) : IDecisionGenerationService
+    IOptionGenerationService optionGenerationService,
+    ITradeoffAnalysisService? tradeoffAnalysisService = null,
+    IOptionComparisonService? optionComparisonService = null) : IDecisionGenerationService
 {
+    private readonly ITradeoffAnalysisService tradeoffAnalysisService =
+        tradeoffAnalysisService ?? new TradeoffAnalysisService();
+
+    private readonly IOptionComparisonService optionComparisonService =
+        optionComparisonService ?? new OptionComparisonService();
+
     public async Task<IReadOnlyList<DecisionProposal>> ListProposalsAsync(Guid repositoryId)
     {
         Repository repository = await GetRepositoryAsync(repositoryId);
@@ -59,7 +67,20 @@ public sealed class DecisionGenerationService(
             .ToArray();
         DecisionOptionGenerationResult optionGeneration = optionGenerationService.GenerateOptions(candidate, evidence);
         DecisionOption[] options = optionGeneration.Options.ToArray();
-        DecisionTradeoff[] tradeoffs = BuildTradeoffs(candidate, options, evidence);
+        string contextFingerprint = Fingerprint(new
+        {
+            Candidate = candidate,
+            Evidence = evidence,
+            Options = options
+        });
+        AnalyzedDecisionOption[] analyzedOptions = this.tradeoffAnalysisService
+            .AnalyzeOptions(candidate, options, evidence, contextFingerprint)
+            .ToArray();
+        DecisionTradeoffComparison[] tradeoffComparisons = this.optionComparisonService
+            .CompareOptions(candidate, analyzedOptions, optionGeneration.Relationships, evidence)
+            .ToArray();
+        DecisionTradeoffAnalysisDiagnostics tradeoffDiagnostics = BuildTradeoffDiagnostics(analyzedOptions, contextFingerprint);
+        DecisionTradeoff[] tradeoffs = BuildTradeoffs(analyzedOptions);
         DecisionAssumption[] assumptions = BuildAssumptions(candidate, options, evidence);
         var recommendation = new DecisionRecommendation(
             options[0].Id,
@@ -87,6 +108,9 @@ public sealed class DecisionGenerationService(
                 [new DecisionSourceReference("DecisionCandidate", CandidatePath(candidate.Id), CandidateId: candidate.Id)])])
         {
             OptionRelationships = optionGeneration.Relationships,
+            AnalyzedOptions = analyzedOptions,
+            TradeoffComparisons = tradeoffComparisons,
+            TradeoffAnalysisDiagnostics = tradeoffDiagnostics,
             GenerationDiagnostics = optionGeneration.Diagnostics
         };
 
@@ -295,30 +319,57 @@ public sealed class DecisionGenerationService(
         return candidate ?? throw new KeyNotFoundException($"Decision candidate was not found: {candidateId}");
     }
 
-    private static DecisionTradeoff[] BuildTradeoffs(
-        DecisionCandidate candidate,
-        IReadOnlyList<DecisionOption> options,
-        IReadOnlyList<DecisionEvidence> evidence)
+    private static DecisionTradeoff[] BuildTradeoffs(IReadOnlyList<AnalyzedDecisionOption> analyzedOptions)
     {
-        var tradeoffs = new List<DecisionTradeoff>
-        {
-            new(
-                "option-1",
-                "Creates an explicit lifecycle proposal from promoted candidate evidence.",
-                "May resolve direction before all downstream implementation details are known.",
-                EvidenceForRecommendation(evidence, candidate))
-        };
+        return analyzedOptions
+            .OrderBy(option => option.OptionId, StringComparer.Ordinal)
+            .Select(option => new DecisionTradeoff(
+                option.OptionId,
+                option.Benefits.FirstOrDefault()?.Statement ?? "No generated benefit.",
+                option.Costs.FirstOrDefault()?.Statement ?? "No generated cost.",
+                option.Evidence))
+            .ToArray();
+    }
 
-        if (options.Any(option => option.Id == "option-2"))
+    private static DecisionTradeoffAnalysisDiagnostics BuildTradeoffDiagnostics(
+        IReadOnlyList<AnalyzedDecisionOption> analyzedOptions,
+        string contextFingerprint)
+    {
+        string[] unknowns = analyzedOptions
+            .SelectMany(option => option.Risks
+                .Where(risk => risk.IsUnknown)
+                .Select(risk => $"{option.OptionId}: {risk.Statement}"))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var warnings = new List<string>();
+        foreach (AnalyzedDecisionOption option in analyzedOptions.OrderBy(option => option.OptionId, StringComparer.Ordinal))
         {
-            tradeoffs.Add(new DecisionTradeoff(
-                "option-2",
-                "Avoids premature commitment while evidence is incomplete.",
-                "Leaves the promoted candidate unresolved and may keep execution blocked.",
-                evidence.Where(item => item.Sources.Any(source => source.CandidateId == candidate.Id)).ToArray()));
+            if (option.Benefits.Count == 0)
+            {
+                warnings.Add($"{option.OptionId} has no generated benefits.");
+            }
+
+            if (option.Costs.Count == 0)
+            {
+                warnings.Add($"{option.OptionId} has no generated costs.");
+            }
+
+            if (option.Risks.Count == 0)
+            {
+                warnings.Add($"{option.OptionId} has no generated risks.");
+            }
         }
 
-        return tradeoffs.ToArray();
+        string[] diagnostics = analyzedOptions
+            .SelectMany(option => option.Diagnostics)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        return new DecisionTradeoffAnalysisDiagnostics(
+            analyzedOptions.Count,
+            contextFingerprint,
+            unknowns,
+            warnings.Order(StringComparer.Ordinal).ToArray(),
+            diagnostics);
     }
 
     private static DecisionAssumption[] BuildAssumptions(
@@ -382,9 +433,9 @@ public sealed class DecisionGenerationService(
         }
     }
 
-    private static string Fingerprint(DecisionProposal proposal)
+    private static string Fingerprint<T>(T value)
     {
-        byte[] bytes = Encoding.UTF8.GetBytes(Serialize(proposal));
+        byte[] bytes = Encoding.UTF8.GetBytes(Serialize(value));
         return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
     }
 

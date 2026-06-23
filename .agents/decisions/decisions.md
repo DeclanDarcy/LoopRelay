@@ -2,26 +2,33 @@
 
 ## Newly Authorized
 
-- Formally close Milestone 3 as complete.
-- Begin Milestone 4 structured tradeoff analysis next.
-- Keep `IOptionValidationService` as the ownership boundary for filtering generated options before tradeoff analysis.
-- M4 tradeoff analysis must consume validated options, not raw generated options.
-- Keep proposal/API compatibility intact during M4 unless additive fields are explicitly required.
-- M4 should be additive and may introduce structured analysis concepts such as:
-  - `AnalyzedDecisionOption`
-  - `DecisionBenefit`
-  - `DecisionCost`
-  - `DecisionRisk`
-  - `DecisionDependency`
-  - `DecisionConsequence`
-- Do not break existing `DecisionProposal` or `DecisionTradeoff` while the structured analysis path is stabilizing.
-- Continue deferring a standalone `diagnostics.json` artifact; proposal-level diagnostics remain sufficient for Tier 0.
-- M4 tradeoffs must be candidate-aware and option-aware rather than generic.
-- M4 should represent missing evidence as explicit unknown risks or consequences instead of silently omitting risk.
-- M4 must not choose winners or leak recommendation logic into tradeoff analysis; M4 describes tradeoffs, M5 recommends.
+- Accept the first Milestone 4 structured tradeoff analysis slice as the correct initial M4 direction.
+- Keep Milestone 4 open.
+- Continue preserving legacy `DecisionTradeoff` compatibility by deriving legacy tradeoff projection from structured analysis during migration.
+- Preserve the sequencing boundary:
+  - M4 describes tradeoffs.
+  - M5 decides recommendations.
+- Keep benefits, costs, risks, dependencies, consequences, unknowns, and disqualifiers inside M4.
+- Keep preferred option, preferred-plus-alternative, and no-recommendation modes inside M5.
+- Preserve structured tradeoff analysis through human resolution snapshots because it is governance evidence.
+- Treat the current analysis layer as an acceptable first structural slice if it is primarily derived from option metadata.
+- Do not attempt to finish context integration and tradeoff generation in one jump.
+- Next M4 slice should add or reuse a `DecisionGenerationContext` projection boundary before enriching tradeoff generation.
+- `TradeoffAnalysisService` should consume `DecisionGenerationContext`, not read repository, milestone, handoff, operational-context, decision, or repository-state files directly.
+- The context service should remain the sole owner of extracting goals, constraints, risks, questions, decision history, repository state, and handoff state.
+- Continue M4 by making analysis context-aware against:
+  - goals
+  - constraints
+  - risks
+  - prior decisions
+  - repository state
+  - dependencies
+- Model absence of information explicitly as unknown risk, unknown dependency, or unknown consequence where applicable.
+- Surface constraint-violating options as tradeoff analysis output, not recommendation output.
+- Improve comparison quality so comparisons identify concrete differences between options rather than generic stronger/weaker boilerplate.
 
 ## Not Authorized
 
-- Do not add standalone diagnostics artifacts during M4 unless Tier 0 validation proves proposal-level diagnostics insufficient.
-- Do not introduce package infrastructure, quality systems, certification machinery, or governance complexity as part of closing M3.
-- Do not let M4 structured tradeoff analysis resolve, rank, or recommend decisions.
+- Do not start M5 recommendation generation yet.
+- Do not add projections, dashboards, package infrastructure, certification machinery, or recommendation logic before M4 analysis becomes context-aware.
+- Do not create a second context-construction system inside tradeoff analysis.

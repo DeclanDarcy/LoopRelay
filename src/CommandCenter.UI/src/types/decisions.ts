@@ -56,6 +56,10 @@ export type ExecutionProjectionKind =
   | 'WorkflowPolicy'
   | 'RepositoryConvention'
 
+export type TradeoffImpact = 'Low' | 'Medium' | 'High' | 'Blocking'
+
+export type TradeoffSeverity = 'Info' | 'Low' | 'Medium' | 'High' | 'Blocking'
+
 export type DecisionSourceReference = {
   sourceKind: string
   relativePath: string | null
@@ -118,6 +122,65 @@ export type DecisionTradeoff = {
   benefit: string
   cost: string
   evidence: DecisionEvidence[]
+}
+
+export type DecisionBenefit = {
+  statement: string
+  impact: TradeoffImpact
+  evidence: DecisionEvidence[]
+}
+
+export type DecisionCost = {
+  statement: string
+  impact: TradeoffImpact
+  evidence: DecisionEvidence[]
+}
+
+export type DecisionRisk = {
+  statement: string
+  severity: TradeoffSeverity
+  isUnknown: boolean
+  evidence: DecisionEvidence[]
+}
+
+export type DecisionDependency = {
+  statement: string
+  evidence: DecisionEvidence[]
+}
+
+export type DecisionConsequence = {
+  statement: string
+  impact: TradeoffImpact
+  evidence: DecisionEvidence[]
+}
+
+export type AnalyzedDecisionOption = {
+  optionId: string
+  benefits: DecisionBenefit[]
+  costs: DecisionCost[]
+  risks: DecisionRisk[]
+  dependencies: DecisionDependency[]
+  consequences: DecisionConsequence[]
+  diagnostics: string[]
+  evidence: DecisionEvidence[]
+}
+
+export type DecisionTradeoffComparison = {
+  optionId: string
+  relativeStrengths: string[]
+  relativeWeaknesses: string[]
+  uniqueAdvantages: string[]
+  uniqueRisks: string[]
+  disqualifyingConstraints: string[]
+  evidence: DecisionEvidence[]
+}
+
+export type DecisionTradeoffAnalysisDiagnostics = {
+  analyzedOptionCount: number
+  contextFingerprint: string
+  unknowns: string[]
+  validationWarnings: string[]
+  diagnostics: string[]
 }
 
 export type DecisionRecommendation = {
@@ -196,6 +259,9 @@ export type DecisionProposal = {
   assumptions: DecisionAssumption[]
   evidence: DecisionEvidence[]
   history: DecisionHistoryEntry[]
+  analyzedOptions?: AnalyzedDecisionOption[]
+  tradeoffComparisons?: DecisionTradeoffComparison[]
+  tradeoffAnalysisDiagnostics?: DecisionTradeoffAnalysisDiagnostics | null
 }
 
 export type DecisionMetadata = {
@@ -219,6 +285,9 @@ export type DecisionResolvedProposalSnapshot = {
   evidence: DecisionEvidence[]
   history: DecisionHistoryEntry[]
   revisions: DecisionProposalRevision[]
+  analyzedOptions?: AnalyzedDecisionOption[]
+  tradeoffComparisons?: DecisionTradeoffComparison[]
+  tradeoffAnalysisDiagnostics?: DecisionTradeoffAnalysisDiagnostics | null
 }
 
 export type DecisionResolution = {
