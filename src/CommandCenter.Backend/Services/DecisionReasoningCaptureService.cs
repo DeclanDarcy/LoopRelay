@@ -146,6 +146,36 @@ public sealed class DecisionReasoningCaptureService(
             transitionFingerprint);
     }
 
+    public async Task CaptureGovernanceContradictionsAsync(
+        Guid repositoryId,
+        DecisionGovernanceReport report)
+    {
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        if (report.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException("Governance report belongs to a different repository.");
+        }
+
+        foreach (DecisionGovernanceFinding finding in report.Findings.Where(IsContradictionFinding))
+        {
+            string transitionFingerprint = Fingerprint(new
+            {
+                Transition = "GovernanceContradictionObserved",
+                RepositoryId = repository.Id,
+                ReportId = report.Id,
+                report.InputFingerprint,
+                report.GeneratedAt,
+                Finding = finding
+            });
+
+            await GetOrCreateGovernanceContradictionEventAsync(
+                repository,
+                report,
+                finding,
+                transitionFingerprint);
+        }
+    }
+
     private async Task<ReasoningEvent> GetOrCreateProposalResolvedEventAsync(
         Repository repository,
         Decision decision,
@@ -347,6 +377,37 @@ public sealed class DecisionReasoningCaptureService(
                 ["decision-evolution", "inferred-capture", "archival"]));
     }
 
+    private async Task<ReasoningEvent> GetOrCreateGovernanceContradictionEventAsync(
+        Repository repository,
+        DecisionGovernanceReport report,
+        DecisionGovernanceFinding finding,
+        string transitionFingerprint)
+    {
+        IReadOnlyList<ReasoningEvent> existingEvents = await reasoningRepository.ListEventsAsync(repository);
+        ReasoningEvent? existing = existingEvents.FirstOrDefault(reasoningEvent =>
+            reasoningEvent.Family == ReasoningEventFamily.Contradiction &&
+            reasoningEvent.Type == ReasoningEventType.ContradictionIdentified &&
+            string.Equals(reasoningEvent.Provenance.Fingerprint, transitionFingerprint, StringComparison.Ordinal));
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        return await reasoningRepository.CreateEventAsync(
+            repository,
+            new CreateReasoningEventCommand(
+                ReasoningEventFamily.Contradiction,
+                ReasoningEventType.ContradictionIdentified,
+                $"Governance contradiction observed: {finding.Title}",
+                new ReasoningNarrative(
+                    $"Governance report {report.Id} identified {finding.Title}.",
+                    $"Governance remains advisory; reasoning records the contradiction as explanatory evidence. {finding.Detail}"),
+                GovernanceContradictionReferences(report, finding),
+                GovernanceProvenance(report, finding, transitionFingerprint),
+                [],
+                ["contradiction", "governance", "inferred-capture"]));
+    }
+
     private async Task<Repository> GetRepositoryAsync(Guid repositoryId)
     {
         Repository? repository = (await repositoryService.GetAllAsync())
@@ -392,6 +453,45 @@ public sealed class DecisionReasoningCaptureService(
             }));
     }
 
+    private static IReadOnlyList<ReasoningReference> GovernanceContradictionReferences(
+        DecisionGovernanceReport report,
+        DecisionGovernanceFinding finding)
+    {
+        List<ReasoningReference> references =
+        [
+            new ReasoningReference(
+                ReasoningReferenceKind.GovernanceFinding,
+                finding.Id,
+                GovernanceReportPath(report.Id),
+                Section: $"Finding: {finding.Title}",
+                Excerpt: finding.Detail,
+                Fingerprint: Fingerprint(finding))
+        ];
+
+        references.AddRange(finding.RelatedDecisionIds.Select(decisionId =>
+            new ReasoningReference(
+                ReasoningReferenceKind.Decision,
+                decisionId,
+                DecisionPath(new DecisionId(decisionId)),
+                Section: "Related Governance Decision")));
+
+        references.AddRange(finding.RelatedCandidateIds.Select(candidateId =>
+            new ReasoningReference(
+                ReasoningReferenceKind.Candidate,
+                candidateId,
+                $".agents/decisions/candidates/{candidateId}/candidate.json",
+                Section: "Related Governance Candidate")));
+
+        references.AddRange(finding.RelatedProposalIds.Select(proposalId =>
+            new ReasoningReference(
+                ReasoningReferenceKind.Proposal,
+                proposalId,
+                ProposalPath(proposalId),
+                Section: "Related Governance Proposal")));
+
+        return references;
+    }
+
     private static ReasoningProvenance Provenance(
         DecisionResolvedProposalSnapshot proposal,
         string rationale,
@@ -424,6 +524,20 @@ public sealed class DecisionReasoningCaptureService(
             transitionFingerprint);
     }
 
+    private static ReasoningProvenance GovernanceProvenance(
+        DecisionGovernanceReport report,
+        DecisionGovernanceFinding finding,
+        string transitionFingerprint)
+    {
+        return new ReasoningProvenance(
+            "InferredGovernanceContradiction",
+            "decision-governance-service",
+            GovernanceReportPath(report.Id),
+            $"Finding: {finding.Id}",
+            finding.Detail,
+            transitionFingerprint);
+    }
+
     private static string DecisionPath(DecisionId decisionId)
     {
         return $".agents/decisions/records/{decisionId.Value}/decision.json";
@@ -432,6 +546,21 @@ public sealed class DecisionReasoningCaptureService(
     private static string ProposalPath(string proposalId)
     {
         return $".agents/decisions/proposals/{proposalId}/proposal.json";
+    }
+
+    private static string GovernanceReportPath(string reportId)
+    {
+        return $".agents/decisions/governance/{reportId}.json";
+    }
+
+    private static bool IsContradictionFinding(DecisionGovernanceFinding finding)
+    {
+        return finding.Category is
+            DecisionGovernanceCategory.Consistency or
+            DecisionGovernanceCategory.SupersessionLineage or
+            DecisionGovernanceCategory.AuthorityBoundary or
+            DecisionGovernanceCategory.ExecutionProjectionReadiness or
+            DecisionGovernanceCategory.FingerprintIntegrity;
     }
 
     private static string Fingerprint<T>(T value)

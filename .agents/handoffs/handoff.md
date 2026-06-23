@@ -2,28 +2,30 @@
 
 ## New State From This Slice
 
-- Continued Milestone 2 by adding inferred reasoning capture for decision archival.
-- Extended `IDecisionReasoningCaptureService` and `DecisionReasoningCaptureService` with `CaptureDecisionArchivedAsync`.
-- Wired the decision archive endpoint so authoritative archival completes first, then reasoning records explanatory evidence.
-- Captured archival as a `DecisionEvolution` / `EvidenceAdded` reasoning event rather than adding an archive-specific reasoning lifecycle event.
-- Used archive history metadata plus repository, decision, rationale, resolver, archived timestamp, and transition states as the source-transition fingerprint for idempotency.
-- Did not create a reasoning relationship for archival because the event directly references the archived decision and no cross-artifact explanatory edge is introduced by the archive transition.
-- Added tests proving decision-archival capture is idempotent, endpoint archival records reasoning, invalid endpoint archival records no archival reasoning, and capture does not mutate decision state.
-- Updated `.agents/milestones/m2-cross-artifact-capture.md` for completed decision-archival capture.
-- Rotated previous handoff to `.agents/handoffs/handoff.0006.md`.
+- Continued Milestone 2 by adding inferred reasoning capture for generated governance reports that contain contradiction-shaped findings.
+- Extended `IDecisionReasoningCaptureService` and `DecisionReasoningCaptureService` with `CaptureGovernanceContradictionsAsync`.
+- Wired the governance report generation endpoint so the authoritative governance report is generated and persisted first, then reasoning observes the report.
+- Captured eligible governance findings as `Contradiction` / `ContradictionIdentified` reasoning events.
+- Treated governance findings as eligible contradiction observations when their categories are `Consistency`, `SupersessionLineage`, `AuthorityBoundary`, `ExecutionProjectionReadiness`, or `FingerprintIntegrity`.
+- Preserved governance as advisory by using governance reports and findings only as provenance, references, and evidence for reasoning events.
+- Used report id, input fingerprint, generated timestamp, repository id, and finding content as the source-transition fingerprint for idempotency.
+- Did not capture `DecisionCoverage` or `ProposalQuality` findings as contradictions in this slice to avoid event inflation.
+- Added tests proving governance contradiction capture is idempotent and selective, generated-report endpoint capture runs after report persistence, and current governance reads do not create reasoning events.
+- Updated `.agents/milestones/m2-cross-artifact-capture.md` for completed governance contradiction capture.
+- Rotated previous handoff to `.agents/handoffs/handoff.0007.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter DecisionGenerationServiceTests` passes: 38 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter DecisionReasoningCaptureServiceTests` passes: 3 tests.
 - `dotnet build CommandCenter.slnx` passes with 0 warnings and 0 errors.
 
 ## Current Gaps
 
 - Milestone 2 still lacks explicit manual capture commands/templates for decision evolution, hypothesis, alternative, contradiction, direction, assumption, and constraint events.
-- Governance contradiction report, operational-context promotion, and execution handoff capture paths remain unimplemented.
+- Operational-context promotion and execution handoff capture paths remain unimplemented.
 - Workspace projection reasoning summary counts remain unimplemented.
 - UI creation forms, nearby "record reasoning" affordances, and family filters remain unimplemented.
 
 ## Next Slice
 
-- Add inferred capture for governance report generation when contradiction findings are present, preserving governance as advisory detection and reasoning as explanatory evidence.
+- Add inferred capture for operational-context proposal promotion, preserving operational context as authoritative current understanding and reasoning as explanatory evidence for the promotion transition.

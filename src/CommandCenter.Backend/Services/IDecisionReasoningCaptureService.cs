@@ -18,4 +18,8 @@ public interface IDecisionReasoningCaptureService
         Guid repositoryId,
         Decision archivedDecision,
         ArchiveDecisionCommand command);
+
+    Task CaptureGovernanceContradictionsAsync(
+        Guid repositoryId,
+        DecisionGovernanceReport report);
 }

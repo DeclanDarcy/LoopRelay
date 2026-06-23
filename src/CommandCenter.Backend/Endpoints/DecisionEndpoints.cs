@@ -933,11 +933,14 @@ public static class DecisionEndpoints
     private static void MapGenerateDecisionGovernanceReport(this IEndpointRouteBuilder app) =>
         app.MapPost("/api/repositories/{repositoryId:guid}/decisions/governance/reports", async (
             Guid repositoryId,
-            IDecisionGovernanceService governanceService) =>
+            IDecisionGovernanceService governanceService,
+            IDecisionReasoningCaptureService reasoningCaptureService) =>
         {
             try
             {
-                return Results.Ok(await governanceService.GenerateReportAsync(repositoryId));
+                DecisionGovernanceReport report = await governanceService.GenerateReportAsync(repositoryId);
+                await reasoningCaptureService.CaptureGovernanceContradictionsAsync(repositoryId, report);
+                return Results.Ok(report);
             }
             catch (KeyNotFoundException exception)
             {

@@ -18,7 +18,7 @@ Goal: use the event substrate to preserve reasoning evolution across decisions a
   - [x] Decision superseded.
   - [x] Proposal resolved.
   - [x] Decision archived.
-  - [ ] Governance report generated with contradiction findings.
+  - [x] Governance report generated with contradiction findings.
   - [ ] Operational-context proposal promoted.
   - [ ] Execution handoff accepted or rejected.
 - [x] Ensure inferred capture is idempotent by fingerprinting the source transition and refusing duplicate events for the same source transition.
@@ -41,6 +41,7 @@ Goal: use the event substrate to preserve reasoning evolution across decisions a
 - [ ] Direction shift is recorded as an event and remains non-authoritative.
 - [x] Existing decision and proposal state is not mutated by reasoning capture for proposal-resolution capture.
 - [ ] Existing governance, operational-context, and execution state is not mutated by reasoning capture.
+  - [x] Current governance report reads do not capture reasoning events.
 
 ## Exit Criteria
 
