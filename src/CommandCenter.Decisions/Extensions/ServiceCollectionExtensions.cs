@@ -28,6 +28,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IDecisionOperationalContextAssimilationService, DecisionOperationalContextAssimilationService>();
         services.AddSingleton<IDecisionGovernanceService, DecisionGovernanceService>();
         services.AddSingleton<IDecisionProjectionService, DecisionProjectionService>();
+        services.AddSingleton<IDecisionInfluenceService, DecisionInfluenceService>();
         services.AddSingleton<IDecisionCertificationService, DecisionCertificationService>();
         services.AddSingleton<IHumanAuthoringBurdenService, HumanAuthoringBurdenService>();
         services.AddSingleton<IDecisionQualitySignalService, DecisionQualitySignalService>();

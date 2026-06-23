@@ -34,10 +34,10 @@ make accepted resolved decisions direct execution with explicit influence tracea
   - [x] projected statements
   - [x] conflicts
 - [ ] Add influence traces per execution session:
-  - [ ] decision id
-  - [ ] projected directive/constraint/priority/rule
-  - [ ] prompt section
-  - [ ] execution session id
+  - [x] decision id
+  - [x] projected directive/constraint/priority/rule
+  - [x] prompt section
+  - [x] execution session id
   - [ ] adherence observation when available
 - [ ] Extend execution UI to show influencing decisions and directive source details.
 - [x] Update prompt builder to render priorities and architecture rules separately while preserving constraints/directives.
@@ -50,7 +50,7 @@ make accepted resolved decisions direct execution with explicit influence tracea
 - [x] Supersession projects only the active replacement.
 - [x] Conflicting directives fail validation or block launch.
 - [x] Execution prompt includes constraints, directives, priorities, and architecture rules.
-- [ ] Influence trace can answer which decisions affected an execution session.
+- [x] Influence trace can answer which decisions affected an execution session.
 
 ## Exit Criteria
 

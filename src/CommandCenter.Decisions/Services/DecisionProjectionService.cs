@@ -284,7 +284,8 @@ public sealed class DecisionProjectionService(
             architectureRules,
             conflicts,
             orderedDiagnostics,
-            context);
+            context,
+            projectionDiagnostics.ProjectionFingerprint);
     }
 
     private async Task<Repository> GetRepositoryAsync(Guid repositoryId)

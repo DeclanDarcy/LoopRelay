@@ -1,4 +1,5 @@
 using CommandCenter.Core.Repositories;
+using CommandCenter.Decisions.Abstractions;
 using CommandCenter.Execution.Abstractions;
 using CommandCenter.Execution.Models;
 using CommandCenter.Execution.Primitives;
@@ -11,7 +12,8 @@ public sealed class ExecutionSessionService(
     IExecutionProvider executionProvider,
     IExecutionPromptBuilder promptBuilder,
     IExecutionMonitoringService monitoringService,
-    IGitService gitService) : IExecutionSessionService
+    IGitService gitService,
+    IDecisionInfluenceService? decisionInfluenceService = null) : IExecutionSessionService
 {
     public const string OrphanedProviderFailureReason =
         "Active provider process could not be reattached after backend restart.";
@@ -185,6 +187,13 @@ public sealed class ExecutionSessionService(
             await sessionStore.SaveAsync(sessions);
 
             ExecutionPrompt prompt = promptBuilder.Build(context);
+            if (context.DecisionProjection is not null && decisionInfluenceService is not null)
+            {
+                await decisionInfluenceService.RecordExecutionInfluenceAsync(
+                    context.RepositoryId,
+                    session.Id,
+                    context.DecisionProjection);
+            }
 
             ExecutionProviderStartResult startResult;
             try

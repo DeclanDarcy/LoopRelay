@@ -11,6 +11,10 @@ using CommandCenter.Execution;
 using CommandCenter.Core.Planning;
 using CommandCenter.Core.Projections;
 using CommandCenter.Core.Repositories;
+using CommandCenter.Decisions.Abstractions;
+using CommandCenter.Decisions.Models;
+using CommandCenter.Decisions.Primitives;
+using CommandCenter.Decisions.Services;
 using CommandCenter.Execution.Abstractions;
 using CommandCenter.Execution.Models;
 using CommandCenter.Execution.Modules;
@@ -383,6 +387,97 @@ public sealed class ExecutionSessionServiceTests
         Assert.NotNull(provider.LastPrompt);
         Assert.Contains("Produce or update `.agents/handoffs/handoff.md`", provider.LastPrompt.Text);
         Assert.Equal(".agents/milestones/m2.md", provider.LastPrompt.Metadata.MilestonePath);
+    }
+
+    [Fact]
+    public async Task StartPersistsDecisionInfluenceTraceForProjectedDecisions()
+    {
+        var projection = new ExecutionDecisionProjection(
+            Guid.Empty,
+            DateTimeOffset.UtcNow,
+            [
+                new ExecutionConstraint(
+                    "ECON-0001",
+                    "DEC-0001",
+                    "Use repository artifacts",
+                    "Use repository artifacts as authority.",
+                    DecisionClassification.Architectural,
+                    ExecutionProjectionKind.RepositoryConvention,
+                    [])
+            ],
+            [
+                new ExecutionDirective(
+                    "EDIR-0001",
+                    "DEC-0002",
+                    "Apply handoff rotation",
+                    "Apply handoff rotation before completing.",
+                    DecisionClassification.Tactical,
+                    ExecutionProjectionKind.ImplementationDirective,
+                    [])
+            ],
+            [
+                new ExecutionDecisionPriority(
+                    "EPRI-0001",
+                    "DEC-0002",
+                    "Apply handoff rotation",
+                    "Apply handoff rotation before completing.",
+                    DecisionClassification.Tactical,
+                    ExecutionProjectionKind.ImplementationDirective,
+                    1,
+                    [])
+            ],
+            [
+                new ExecutionArchitectureRule(
+                    "EARC-0001",
+                    "DEC-0001",
+                    "Use repository artifacts",
+                    "Use repository artifacts as authority.",
+                    DecisionClassification.Architectural,
+                    ExecutionProjectionKind.RepositoryConvention,
+                    [])
+            ],
+            [],
+            [],
+            new ExecutionDecisionContext([], [], [], [], [], []),
+            "projection-fingerprint");
+        Harness harness = await CreateHarnessAsync(decisionProjection: projection);
+        await WriteReadyArtifactsAsync(harness.Repository);
+
+        ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
+            harness.Repository.Id,
+            new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
+
+        string influencePath = Path.Combine(
+            harness.Repository.Path,
+            ".agents",
+            "decisions",
+            "influence",
+            $"execution-{summary.SessionId:N}.json");
+        Assert.True(File.Exists(influencePath));
+        using JsonDocument document = JsonDocument.Parse(await File.ReadAllTextAsync(influencePath));
+        var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        jsonOptions.Converters.Add(new JsonStringEnumConverter());
+        DecisionInfluenceTrace trace = JsonSerializer.Deserialize<DecisionInfluenceTrace>(
+            document.RootElement.GetProperty("payload").GetRawText(),
+            jsonOptions)!;
+
+        Assert.Equal(summary.SessionId, trace.ExecutionSessionId);
+        Assert.Equal("projection-fingerprint", trace.ProjectionFingerprint);
+        Assert.Contains(trace.Statements, statement =>
+            statement.StatementId == "ECON-0001" &&
+            statement.DecisionId == "DEC-0001" &&
+            statement.PromptSection == "Governed Decision Projection / Constraints");
+        Assert.Contains(trace.Statements, statement =>
+            statement.StatementId == "EDIR-0001" &&
+            statement.DecisionId == "DEC-0002" &&
+            statement.PromptSection == "Governed Decision Projection / Directives");
+        Assert.Contains(trace.Statements, statement =>
+            statement.StatementId == "EPRI-0001" &&
+            statement.PriorityRank == 1 &&
+            statement.PromptSection == "Governed Decision Projection / Priorities");
+        Assert.Contains(trace.Statements, statement =>
+            statement.StatementId == "EARC-0001" &&
+            statement.PromptSection == "Governed Decision Projection / Architecture Rules");
     }
 
     [Fact]
@@ -1055,7 +1150,8 @@ public sealed class ExecutionSessionServiceTests
         RepositoryDirtyState? dirtyState = null,
         string? gitFailure = null,
         IExecutionProvider? provider = null,
-        IGitService? gitService = null)
+        IGitService? gitService = null,
+        ExecutionDecisionProjection? decisionProjection = null)
     {
         var repositoryService = new RepositoryService(
             new ApplicationConfigurationStore(Path.Combine(CreateTemporaryDirectory(), "configuration.json")));
@@ -1065,7 +1161,8 @@ public sealed class ExecutionSessionServiceTests
             repositoryService,
             new ArtifactService(artifactStore),
             new PlanningService(artifactStore),
-            gitService ?? new FakeGitService(dirtyState, gitFailure));
+            gitService ?? new FakeGitService(dirtyState, gitFailure),
+            decisionProjection is null ? null : new FakeDecisionProjectionService(decisionProjection));
         string storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");
         var store = new FileSystemExecutionSessionStore(storePath);
         ExecutionMonitoringService monitoringService = CreateMonitoringService(store);
@@ -1075,7 +1172,8 @@ public sealed class ExecutionSessionServiceTests
             provider ?? new FakeExecutionProvider(),
             new ExecutionPromptBuilder(),
             monitoringService,
-            gitService ?? new FakeGitService(dirtyState, gitFailure));
+            gitService ?? new FakeGitService(dirtyState, gitFailure),
+            new DecisionInfluenceService(repositoryService, artifactStore));
 
         return new Harness(repositoryService, repository, contextService, store, storePath, monitoringService, sessionService);
     }
@@ -1292,6 +1390,17 @@ public sealed class ExecutionSessionServiceTests
         string StorePath,
         ExecutionMonitoringService MonitoringService,
         ExecutionSessionService SessionService);
+
+    private sealed class FakeDecisionProjectionService(ExecutionDecisionProjection projection) : IDecisionProjectionService
+    {
+        public Task<ExecutionDecisionProjection> BuildExecutionProjectionAsync(
+            Guid repositoryId,
+            string? executionRequest = null,
+            string? milestoneContent = null)
+        {
+            return Task.FromResult(projection with { RepositoryId = repositoryId });
+        }
+    }
 
     private sealed class FakeGitService(RepositoryDirtyState? dirtyState, string? failure) : IGitService
     {

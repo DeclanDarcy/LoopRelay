@@ -9,4 +9,5 @@ public sealed record ExecutionDecisionProjection(
     IReadOnlyList<ExecutionArchitectureRule> ArchitectureRules,
     IReadOnlyList<ExecutionDecisionConflict> Conflicts,
     IReadOnlyList<string> Diagnostics,
-    ExecutionDecisionContext Context);
+    ExecutionDecisionContext Context,
+    string ProjectionFingerprint = "");
