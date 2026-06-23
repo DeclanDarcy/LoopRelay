@@ -2,28 +2,25 @@
 
 ## New State From This Slice
 
-- Restored full UI regression reliability before Milestone 6.
-- Added accessible labels for primary UI controls that were previously ambiguous in the combined tab DOM:
-  - `Artifact markdown editor` on the artifact workspace editor.
-  - `Execution milestone` on the execution context milestone selector.
-- Updated `app.smoke.test.tsx` to target explicit controls:
-  - Artifact editor queries now use the artifact editor label.
-  - Execution milestone queries now use the milestone selector label.
-  - Commit-message assertions are scoped inside the Git Workflow panel and use the existing `Commit message` label.
-- No Milestone 6 implementation was started.
+- Closed Milestone 6 as a no-op specialization slice because Milestone 5 produced advisory recommendations only and did not authorize specialized persistence.
+- Added `ReasoningSpecializedReadModelBoundaryTests` to prove advisory `AddReadModelReport` and `AddDerivedCache` materialization recommendations:
+  - do not create specialized artifact directories or reports,
+  - do not change reasoning graph output,
+  - do not change reasoning query/reconstruction output.
+- Updated `.agents/milestones/m6-specialized-read-models.md` to mark constraints, tests, and exit criteria complete with the no-op rationale.
+- Rotated the previous handoff to `.agents/handoffs/handoff.0021.md`.
 
 ## Verification
 
-- `npm run test --prefix src/CommandCenter.UI -- src/test/characterization/app.smoke.test.tsx` passes: 16 tests.
-- `npm run test --prefix src/CommandCenter.UI` passes: 48 files, 168 tests.
-- `npm run lint --prefix src/CommandCenter.UI` passes.
-- `npm run build --prefix src/CommandCenter.UI` passes.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter ReasoningSpecializedReadModelBoundaryTests` passes: 1 test.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes: 412 tests.
 
 ## Current Gaps
 
-- Backend build/test suite was not rerun because this slice only changed UI accessibility attributes and UI tests.
-- Shell build was not rerun because no Tauri/Rust code changed.
+- Full solution build was not rerun separately because backend test execution compiled all backend projects.
+- UI, lint, shell, and e2e checks were not rerun because this slice changed only backend tests and milestone documentation.
 
 ## Next Slice
 
-- Start Milestone 6 only after confirming the current materialization review remains advisory and all M5 recommendations can be ignored without affecting repository correctness.
+- Start Milestone 7 long-horizon validation from the green backend baseline.
+- Focus on repository recovery/restart survivability: create reasoning history across multiple event/thread/relationship generations, reload from repository-backed artifacts, and prove reconstruction answers remain stable without graph or materialization authority.

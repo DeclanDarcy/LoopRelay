@@ -2,26 +2,18 @@
 
 ## Newly Authorized
 
-- Pause before opening Milestone 6 to certify M5 readiness.
-- Treat the smoke-test fix as the correct resolution pattern because it used explicit accessibility labels and scoped queries rather than weakened assertions.
-- Certify the M5 invariant that Materialization Review remains advisory only.
-- Before M6 implementation, verify that materialization-review recommendations can be ignored without changing repository correctness.
-- The M6 pre-check must confirm that ignoring every materialization-review recommendation leaves these functioning identically:
-  - Reasoning Graph
-  - Reasoning Queries
-  - Reasoning Reconstruction
-  - Decision Lifecycle
-  - Operational Context
-  - Governance
-  - Execution
-- Materialization-review output may affect human understanding only.
-- Materialization-review output must not affect behavior, persistence, projection, reconstruction, or authority.
-- Treat any dependency from graph generation, reconstruction quality, or reasoning storage mutation on review recommendations as authority leakage.
-- If the advisory-independence check passes, start Milestone 6 from the green baseline.
-- Evaluate Milestone 6 primarily on whether existing boundaries remain intact:
-  - no graph authority
-  - no narrative authority
-  - no materialized hypotheses
-  - no materialized alternatives
-  - no materialized directions
-  - no materialized contradictions
+- Accept Milestone 6 as complete specifically because it finished with almost no implementation.
+- Treat `Materialization Recommendation != Materialization Authorization` as a formal invariant.
+- Treat `Materialization Recommendation != Read Model Creation` as a formal invariant.
+- Treat the new specialized read-model boundary test as the required M5-to-M6 certification.
+- Raise the burden of proof for future materialization:
+  - show a reconstruction failure,
+  - show a graph failure,
+  - show a query failure,
+  - show a repository survivability failure,
+  - or show an inability to answer required questions.
+- Start Milestone 7 from the core invariant: `Repository Truth -> Recovered Repository -> Equivalent Reconstruction`.
+- Structure Milestone 7 around proving persisted events, threads, relationships, references, and provenance are sufficient to rebuild graphs, queries, traces, and reconstructions after recovery.
+- Include M7 certification scenarios for repository restart, partial historical repository loading, missing derived state, and replay equivalence.
+- Do not allow long-horizon validation to become long-horizon caching.
+- In M7, delete or ignore every derived artifact and recover solely from authoritative persistence when certifying equivalent answers.
