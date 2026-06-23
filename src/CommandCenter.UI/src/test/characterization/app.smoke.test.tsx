@@ -13,6 +13,9 @@ afterEach(() => {
 })
 
 describe('workspace certification mock', () => {
+  const findArtifactEditor = () => screen.findByRole('textbox', { name: 'Artifact markdown editor' })
+  const getExecutionMilestoneSelector = () => screen.getByRole('combobox', { name: 'Execution milestone' })
+
   it('renders the repository workspace using the dev Tauri mock', async () => {
     renderWithWorkspaceCertification(<App />)
 
@@ -46,7 +49,7 @@ describe('workspace certification mock', () => {
 
     render(<App />)
 
-    const editor = await screen.findByRole('textbox')
+    const editor = await findArtifactEditor()
     await waitFor(() => expect(editor).toHaveValue('# Plan\n\nInitial plan content.'))
 
     const projectionCommands = [
@@ -133,7 +136,7 @@ describe('workspace certification mock', () => {
 
     render(<App />)
 
-    const editor = await screen.findByRole('textbox')
+    const editor = await findArtifactEditor()
     await waitFor(() => expect(editor).toHaveValue('# Plan\n\nInitial plan content.'))
 
     fireEvent.click(screen.getByRole('button', { name: /decisions\.md/ }))
@@ -196,7 +199,7 @@ describe('workspace certification mock', () => {
 
     render(<App />)
 
-    const milestoneSelector = await screen.findByRole('combobox')
+    const milestoneSelector = await screen.findByRole('combobox', { name: 'Execution milestone' })
     await waitFor(() => expect(milestoneSelector).toHaveValue('.agents/milestones/m5.md'))
     expect(invokeSpy.mock.calls.some(([command]) => command === 'preview_execution_context')).toBe(false)
 
@@ -242,7 +245,7 @@ describe('workspace certification mock', () => {
 
     render(<App />)
 
-    const editor = await screen.findByRole('textbox')
+    const editor = await findArtifactEditor()
     await waitFor(() => expect(editor).toHaveValue('# Plan\n\nInitial plan content.'))
 
     const artifactWorkflowCommands = [
@@ -359,7 +362,7 @@ describe('workspace certification mock', () => {
     expect(invokeSpy.mock.calls.some(([command]) => command === 'accept_execution_handoff')).toBe(false)
     expect(invokeSpy.mock.calls.some(([command]) => command === 'reject_execution_handoff')).toBe(false)
 
-    await waitFor(() => expect(screen.getByRole('combobox')).toHaveValue('.agents/milestones/m5.md'))
+    await waitFor(() => expect(getExecutionMilestoneSelector()).toHaveValue('.agents/milestones/m5.md'))
     const buildContextButton = screen.getByRole('button', { name: 'Build Execution Context' })
     await waitFor(() => expect(buildContextButton).not.toBeDisabled())
     fireEvent.click(buildContextButton)
@@ -495,13 +498,9 @@ describe('workspace certification mock', () => {
     await waitFor(() =>
       expect(screen.getByText('Preparation: prep-cert-repo-cert-awaiting-commit')).toBeInTheDocument(),
     )
-    const commitMessageEditor = screen
-      .getAllByRole('textbox')
-      .find((textbox) => !textbox.classList.contains('artifact-editor'))
-    expect(commitMessageEditor).toBeDefined()
-    if (!commitMessageEditor) {
-      return
-    }
+    const commitMessageEditor = within(commitWorkflowPanel as HTMLElement).getByRole('textbox', {
+      name: 'Commit message',
+    })
     expect(commitMessageEditor).toHaveValue('m5\n\n- 2 files changed')
 
     const prepareCallCount = invokeSpy.mock.calls.filter(([command]) => command === 'prepare_commit').length
@@ -902,7 +901,7 @@ describe('workspace certification mock', () => {
     render(<App />)
 
     await screen.findAllByRole('heading', { name: 'AlphaRepo' })
-    const editor = await screen.findByRole('textbox')
+    const editor = await findArtifactEditor()
     await waitFor(() => expect(editor).toHaveValue('# Plan\n\nInitial plan content.'))
     await screen.findByRole('button', { name: 'Proposal' })
     await new Promise((resolve) => window.setTimeout(resolve, 0))

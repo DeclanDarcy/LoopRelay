@@ -110,6 +110,7 @@ export function ArtifactWorkspace({
                 </div>
               </div>
               <textarea
+                aria-label="Artifact markdown editor"
                 className="artifact-editor"
                 value={draftContent}
                 onChange={(event) => onDraftContentChange(event.target.value)}

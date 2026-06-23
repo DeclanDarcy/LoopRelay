@@ -51,6 +51,7 @@ export function ExecutionContextPanel({
         actions={
           <div className="context-controls">
             <select
+              aria-label="Execution milestone"
               value={selectedMilestonePath ?? ''}
               onChange={(event) => onSelectMilestone(event.target.value || null)}
               disabled={milestoneOptions.length === 0 || isContextLoading}
