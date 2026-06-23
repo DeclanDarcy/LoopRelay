@@ -10,6 +10,7 @@ public sealed class TradeoffAnalysisService : ITradeoffAnalysisService
         DecisionCandidate candidate,
         IReadOnlyList<DecisionOption> options,
         IReadOnlyList<DecisionEvidence> evidence,
+        DecisionGenerationContext generationContext,
         string contextFingerprint)
     {
         DecisionEvidence[] candidateEvidence = EvidenceForAnalysis(candidate, evidence);
@@ -21,30 +22,12 @@ public sealed class TradeoffAnalysisService : ITradeoffAnalysisService
             DecisionEvidence[] optionEvidence = option.Evidence.Count == 0
                 ? candidateEvidence
                 : option.Evidence.ToArray();
-            DecisionBenefit[] benefits = [
-                new(
-                    BenefitFor(candidate, option, signalSummary),
-                    BenefitImpact(option),
-                    optionEvidence)
-            ];
-            DecisionCost[] costs = [
-                new(
-                    CostFor(candidate, option),
-                    CostImpact(option),
-                    optionEvidence)
-            ];
-            DecisionRisk[] risks = RisksFor(candidate, option, candidateEvidence);
-            DecisionDependency[] dependencies = DependenciesFor(option, candidateEvidence);
-            DecisionConsequence[] consequences = [
-                new(
-                    ConsequenceFor(candidate, option),
-                    ConsequenceImpact(option),
-                    optionEvidence)
-            ];
-            string[] diagnostics = [
-                $"Analyzed {option.Id} as {option.Type} for {candidate.Classification} candidate {candidate.Id}.",
-                $"Context fingerprint: {contextFingerprint}."
-            ];
+            DecisionBenefit[] benefits = BenefitsFor(candidate, option, signalSummary, optionEvidence, generationContext);
+            DecisionCost[] costs = CostsFor(candidate, option, optionEvidence, generationContext);
+            DecisionRisk[] risks = RisksFor(candidate, option, candidateEvidence, generationContext);
+            DecisionDependency[] dependencies = DependenciesFor(option, candidateEvidence, generationContext);
+            DecisionConsequence[] consequences = ConsequencesFor(candidate, option, optionEvidence, generationContext);
+            string[] diagnostics = DiagnosticsFor(candidate, option, generationContext, contextFingerprint);
 
             analyzed.Add(new AnalyzedDecisionOption(
                 option.Id,
@@ -60,10 +43,73 @@ public sealed class TradeoffAnalysisService : ITradeoffAnalysisService
         return analyzed.ToArray();
     }
 
+    private static DecisionBenefit[] BenefitsFor(
+        DecisionCandidate candidate,
+        DecisionOption option,
+        string signalSummary,
+        IReadOnlyList<DecisionEvidence> optionEvidence,
+        DecisionGenerationContext generationContext)
+    {
+        var benefits = new List<DecisionBenefit>
+        {
+            new(
+                BenefitFor(candidate, option, signalSummary),
+                BenefitImpact(option),
+                optionEvidence)
+        };
+
+        DecisionGenerationContextEntry? goal = BestMatch(generationContext.Goals, candidate, option);
+        if (goal is not null)
+        {
+            benefits.Add(new DecisionBenefit(
+                $"Supports current generation-context goal: {goal.Statement}",
+                TradeoffImpact.High,
+                goal.Evidence));
+        }
+
+        DecisionGenerationContextEntry? repositoryState = BestMatch(generationContext.RepositoryState, candidate, option);
+        if (repositoryState is not null)
+        {
+            benefits.Add(new DecisionBenefit(
+                $"Connects the option to repository state: {repositoryState.Statement}",
+                TradeoffImpact.Medium,
+                repositoryState.Evidence));
+        }
+
+        return benefits.ToArray();
+    }
+
+    private static DecisionCost[] CostsFor(
+        DecisionCandidate candidate,
+        DecisionOption option,
+        IReadOnlyList<DecisionEvidence> optionEvidence,
+        DecisionGenerationContext generationContext)
+    {
+        var costs = new List<DecisionCost>
+        {
+            new(
+                CostFor(candidate, option),
+                CostImpact(option),
+                optionEvidence)
+        };
+
+        DecisionGenerationContextEntry? constraint = BestMatch(generationContext.Constraints, candidate, option);
+        if (constraint is not null)
+        {
+            costs.Add(new DecisionCost(
+                $"Must account for active constraint: {constraint.Statement}",
+                TradeoffImpact.Medium,
+                constraint.Evidence));
+        }
+
+        return costs.ToArray();
+    }
+
     private static DecisionRisk[] RisksFor(
         DecisionCandidate candidate,
         DecisionOption option,
-        IReadOnlyList<DecisionEvidence> evidence)
+        IReadOnlyList<DecisionEvidence> evidence,
+        DecisionGenerationContext generationContext)
     {
         var risks = new List<DecisionRisk>
         {
@@ -73,6 +119,36 @@ public sealed class TradeoffAnalysisService : ITradeoffAnalysisService
                 false,
                 evidence)
         };
+
+        DecisionGenerationContextEntry? conflictingConstraint = ConstraintConflictFor(generationContext, option, candidate);
+        if (conflictingConstraint is not null)
+        {
+            risks.Add(new DecisionRisk(
+                $"Constraint may be violated by {option.Title}: {conflictingConstraint.Statement}",
+                TradeoffSeverity.High,
+                false,
+                conflictingConstraint.Evidence));
+        }
+
+        DecisionGenerationContextEntry? contextualRisk = BestMatch(generationContext.Risks, candidate, option);
+        if (contextualRisk is not null)
+        {
+            risks.Add(new DecisionRisk(
+                $"Context risk remains relevant for {option.Title}: {contextualRisk.Statement}",
+                TradeoffSeverity.Medium,
+                false,
+                contextualRisk.Evidence));
+        }
+
+        DecisionGenerationContextEntry? question = BestMatch(generationContext.Questions, candidate, option);
+        if (question is not null)
+        {
+            risks.Add(new DecisionRisk(
+                $"Unknown answer may affect {option.Title}: {question.Statement}",
+                TradeoffSeverity.Medium,
+                true,
+                question.Evidence));
+        }
 
         if (option.Evidence.Count == 0 ||
             option.Type is DecisionOptionType.Replace or DecisionOptionType.Delay or DecisionOptionType.Investigate or DecisionOptionType.Constrain)
@@ -89,16 +165,73 @@ public sealed class TradeoffAnalysisService : ITradeoffAnalysisService
 
     private static DecisionDependency[] DependenciesFor(
         DecisionOption option,
-        IReadOnlyList<DecisionEvidence> evidence)
+        IReadOnlyList<DecisionEvidence> evidence,
+        DecisionGenerationContext generationContext)
     {
-        string[] dependencies = option.Dependencies.Count == 0
+        string[] optionDependencies = option.Dependencies.Count == 0
             ? ["Repository evidence remains available for human review."]
             : option.Dependencies.ToArray();
 
-        return dependencies
+        return optionDependencies
             .Order(StringComparer.Ordinal)
             .Select(dependency => new DecisionDependency(dependency, evidence))
+            .Concat(generationContext.Dependencies
+                .Take(3)
+                .Select(dependency => new DecisionDependency(
+                    $"Generation context dependency: {dependency.Statement}",
+                    dependency.Evidence)))
+            .DistinctBy(dependency => dependency.Statement, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(dependency => dependency.Statement, StringComparer.Ordinal)
             .ToArray();
+    }
+
+    private static DecisionConsequence[] ConsequencesFor(
+        DecisionCandidate candidate,
+        DecisionOption option,
+        IReadOnlyList<DecisionEvidence> optionEvidence,
+        DecisionGenerationContext generationContext)
+    {
+        var consequences = new List<DecisionConsequence>
+        {
+            new(
+                ConsequenceFor(candidate, option),
+                ConsequenceImpact(option),
+                optionEvidence)
+        };
+
+        DecisionGenerationContextEntry? priorDecision = BestMatch(generationContext.PriorDecisions, candidate, option);
+        if (priorDecision is not null)
+        {
+            consequences.Add(new DecisionConsequence(
+                $"May affect prior decision context: {priorDecision.Statement}",
+                TradeoffImpact.Medium,
+                priorDecision.Evidence));
+        }
+
+        DecisionGenerationContextEntry? handoff = BestMatch(generationContext.HandoffState, candidate, option);
+        if (handoff is not null)
+        {
+            consequences.Add(new DecisionConsequence(
+                $"Should preserve current handoff continuity: {handoff.Statement}",
+                TradeoffImpact.Medium,
+                handoff.Evidence));
+        }
+
+        return consequences.ToArray();
+    }
+
+    private static string[] DiagnosticsFor(
+        DecisionCandidate candidate,
+        DecisionOption option,
+        DecisionGenerationContext generationContext,
+        string contextFingerprint)
+    {
+        return [
+            $"Analyzed {option.Id} as {option.Type} for {candidate.Classification} candidate {candidate.Id}.",
+            $"Context fingerprint: {contextFingerprint}.",
+            $"Generation context fingerprint: {generationContext.Fingerprint}.",
+            $"Generation context inputs: goals={generationContext.Goals.Count}, constraints={generationContext.Constraints.Count}, risks={generationContext.Risks.Count}, questions={generationContext.Questions.Count}, priorDecisions={generationContext.PriorDecisions.Count}, repositoryState={generationContext.RepositoryState.Count}, dependencies={generationContext.Dependencies.Count}, handoffState={generationContext.HandoffState.Count}."
+        ];
     }
 
     private static string BenefitFor(
@@ -249,6 +382,68 @@ public sealed class TradeoffAnalysisService : ITradeoffAnalysisService
             .Order(StringComparer.Ordinal)
             .ToArray();
         return kinds.Length == 0 ? "the candidate signal" : string.Join(", ", kinds);
+    }
+
+    private static DecisionGenerationContextEntry? BestMatch(
+        IReadOnlyList<DecisionGenerationContextEntry> entries,
+        DecisionCandidate candidate,
+        DecisionOption option)
+    {
+        return entries
+            .OrderByDescending(entry => MatchScore(entry.Statement, candidate, option))
+            .ThenBy(entry => entry.Id, StringComparer.Ordinal)
+            .FirstOrDefault(entry => MatchScore(entry.Statement, candidate, option) > 0) ??
+            entries.OrderBy(entry => entry.Id, StringComparer.Ordinal).FirstOrDefault();
+    }
+
+    private static DecisionGenerationContextEntry? ConstraintConflictFor(
+        DecisionGenerationContext generationContext,
+        DecisionOption option,
+        DecisionCandidate candidate)
+    {
+        return generationContext.Constraints
+            .OrderByDescending(entry => MatchScore(entry.Statement, candidate, option))
+            .ThenBy(entry => entry.Id, StringComparer.Ordinal)
+            .FirstOrDefault(entry => OptionViolatesConstraint(option, entry.Statement));
+    }
+
+    private static bool OptionViolatesConstraint(DecisionOption option, string constraint)
+    {
+        if (option.Type == DecisionOptionType.Replace &&
+            ContainsAny(constraint, "must not replace", "avoid replacement", "preserve", "compatibility"))
+        {
+            return true;
+        }
+
+        if (option.Type == DecisionOptionType.Delay &&
+            ContainsAny(constraint, "must decide", "must resolve", "do not defer", "no deferral"))
+        {
+            return true;
+        }
+
+        if (option.Type == DecisionOptionType.Expand &&
+            ContainsAny(constraint, "constrain", "narrow", "minimal", "bounded"))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static int MatchScore(string statement, DecisionCandidate candidate, DecisionOption option)
+    {
+        string[] terms = candidate.Title
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Concat(option.Title.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Where(term => term.Length >= 4)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        return terms.Count(term => statement.Contains(term, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool ContainsAny(string value, params string[] needles)
+    {
+        return needles.Any(needle => value.Contains(needle, StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool IsConstraintSignal(string kind)

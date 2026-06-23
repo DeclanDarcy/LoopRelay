@@ -8,5 +8,6 @@ public interface ITradeoffAnalysisService
         DecisionCandidate candidate,
         IReadOnlyList<DecisionOption> options,
         IReadOnlyList<DecisionEvidence> evidence,
+        DecisionGenerationContext generationContext,
         string contextFingerprint);
 }

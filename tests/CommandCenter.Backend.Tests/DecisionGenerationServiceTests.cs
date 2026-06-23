@@ -323,6 +323,63 @@ public sealed class DecisionGenerationServiceTests
             risk.Statement.Contains("Constraint conflict", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public async Task GenerateProposalUsesDecisionGenerationContextInTradeoffAnalysis()
+    {
+        Repository repository = CreateRepository();
+        await WriteAsync(
+            repository,
+            ".agents/plan.md",
+            """
+            # Plan
+
+            - Goal: decide persistence schema with automated decision generation.
+            - Constraint: preserve compatibility for persistence schema consumers.
+            - Dependency: requires migration plan before execution guidance.
+            - Open question: Which storage engine migration path is least disruptive?
+            """);
+        await WriteAsync(
+            repository,
+            ".agents/handoffs/handoff.md",
+            """
+            # Handoff
+
+            - Current slice is enriching Milestone 4 tradeoff analysis.
+            """);
+        DecisionCandidate candidate = CreateCandidate(
+            repository.Id,
+            DecisionCandidateState.Promoted,
+            signalKind: "ArchitecturalFork",
+            classification: DecisionClassification.Architectural);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var service = CreateGenerationService(repository, store, decisionRepository);
+
+        DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
+
+        Assert.Contains(proposal.AnalyzedOptions.SelectMany(option => option.Benefits), benefit =>
+            benefit.Statement.Contains("generation-context goal", StringComparison.OrdinalIgnoreCase) &&
+            benefit.Statement.Contains("persistence schema", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(proposal.AnalyzedOptions.SelectMany(option => option.Costs), cost =>
+            cost.Statement.Contains("active constraint", StringComparison.OrdinalIgnoreCase) &&
+            cost.Statement.Contains("preserve compatibility", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(proposal.AnalyzedOptions.SelectMany(option => option.Dependencies), dependency =>
+            dependency.Statement.Contains("Generation context dependency", StringComparison.OrdinalIgnoreCase) &&
+            dependency.Statement.Contains("migration plan", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(proposal.AnalyzedOptions.SelectMany(option => option.Risks), risk =>
+            risk.IsUnknown &&
+            risk.Statement.Contains("storage engine migration path", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(proposal.AnalyzedOptions.Where(option =>
+                proposal.Options.Any(source => source.Id == option.OptionId && source.Type == DecisionOptionType.Replace))
+            .SelectMany(option => option.Risks), risk =>
+                risk.Statement.Contains("Constraint may be violated", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(proposal.AnalyzedOptions.SelectMany(option => option.Consequences), consequence =>
+            consequence.Statement.Contains("handoff continuity", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(proposal.AnalyzedOptions.SelectMany(option => option.Diagnostics), diagnostic =>
+            diagnostic.Contains("Generation context inputs", StringComparison.Ordinal));
+    }
+
     [Theory]
     [InlineData("duplicate", DecisionOptionValidationIssueType.Duplicate)]
     [InlineData("non-actionable", DecisionOptionValidationIssueType.NonActionable)]
@@ -1855,11 +1912,13 @@ public sealed class DecisionGenerationServiceTests
     {
         var repositoryService = new StubRepositoryService(repository);
         var projectionService = new DecisionArtifactProjectionService(decisionRepository, store);
+        var contextService = new DecisionContextService(repositoryService, store, decisionRepository);
         return new DecisionGenerationService(
             repositoryService,
             decisionRepository,
             projectionService,
-            optionGenerationService ?? new OptionGenerationService());
+            optionGenerationService ?? new OptionGenerationService(),
+            contextService);
     }
 
     private static DecisionResolutionService CreateResolutionService(

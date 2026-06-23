@@ -2,33 +2,27 @@
 
 ## Newly Authorized
 
-- Accept the first Milestone 4 structured tradeoff analysis slice as the correct initial M4 direction.
+- Accept the context-aware Milestone 4 slice as the correct architectural direction.
 - Keep Milestone 4 open.
-- Continue preserving legacy `DecisionTradeoff` compatibility by deriving legacy tradeoff projection from structured analysis during migration.
-- Preserve the sequencing boundary:
-  - M4 describes tradeoffs.
-  - M5 decides recommendations.
-- Keep benefits, costs, risks, dependencies, consequences, unknowns, and disqualifiers inside M4.
-- Keep preferred option, preferred-plus-alternative, and no-recommendation modes inside M5.
-- Preserve structured tradeoff analysis through human resolution snapshots because it is governance evidence.
-- Treat the current analysis layer as an acceptable first structural slice if it is primarily derived from option metadata.
-- Do not attempt to finish context integration and tradeoff generation in one jump.
-- Next M4 slice should add or reuse a `DecisionGenerationContext` projection boundary before enriching tradeoff generation.
-- `TradeoffAnalysisService` should consume `DecisionGenerationContext`, not read repository, milestone, handoff, operational-context, decision, or repository-state files directly.
-- The context service should remain the sole owner of extracting goals, constraints, risks, questions, decision history, repository state, and handoff state.
-- Continue M4 by making analysis context-aware against:
-  - goals
-  - constraints
-  - risks
-  - prior decisions
-  - repository state
-  - dependencies
-- Model absence of information explicitly as unknown risk, unknown dependency, or unknown consequence where applicable.
-- Surface constraint-violating options as tradeoff analysis output, not recommendation output.
-- Improve comparison quality so comparisons identify concrete differences between options rather than generic stronger/weaker boilerplate.
+- Continue treating `DecisionContextService` as the sole extractor and interpretation owner for repository decision context.
+- Preserve the projection boundary:
+  - repository evidence flows into `DecisionContextService`
+  - `DecisionContextService` emits `DecisionGenerationContext`
+  - downstream generation services consume that projection
+- Treat `IDecisionContextProjectionService` as a central extension point for later M5, M6, M8, M9, and M10 work.
+- Keep `DecisionGenerationContext` additive and scoped to what M4 needs right now.
+- Continue resisting package-version, quality, certification, dashboard, and recommendation work until M4 closes.
+- Continue M4 next by improving context-derived option comparison quality.
+- Comparison output should explain why options differ, not only how they differ.
+- Comparison output must remain descriptive and non-recommendational.
+- Add disqualifying constraint detection as M4 tradeoff analysis output.
+- Constraint-derived disqualifiers belong in analysis/comparison, not recommendation authority.
+- Verify unknown handling remains explicit after context integration.
+- Preserve explicit unknown risk, unknown dependency, and unknown consequence modeling when evidence is insufficient.
+- Require context-aware comparisons, disqualifying constraints, and unknown validation before starting M5.
 
 ## Not Authorized
 
 - Do not start M5 recommendation generation yet.
-- Do not add projections, dashboards, package infrastructure, certification machinery, or recommendation logic before M4 analysis becomes context-aware.
-- Do not create a second context-construction system inside tradeoff analysis.
+- Do not add package/version, quality, dashboard, certification, or recommendation machinery before M4 analysis closes.
+- Do not let recommendation logic compensate for weak tradeoff analysis.

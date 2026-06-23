@@ -16,7 +16,7 @@ public sealed partial class DecisionContextService(
     IRepositoryService repositoryService,
     IArtifactStore artifactStore,
     IDecisionRepository decisionRepository,
-    IContinuityDiagnosticsService? continuityDiagnosticsService = null) : IDecisionContextService
+    IContinuityDiagnosticsService? continuityDiagnosticsService = null) : IDecisionContextService, IDecisionContextProjectionService
 {
     private const string PlanPath = ".agents/plan.md";
     private const string MilestonesPath = ".agents/milestones";
@@ -116,6 +116,46 @@ public sealed partial class DecisionContextService(
         return snapshots
             .OrderBy(snapshot => snapshot.SnapshotId, StringComparer.Ordinal)
             .ToArray();
+    }
+
+    public async Task<DecisionGenerationContext> BuildGenerationContextAsync(Guid repositoryId)
+    {
+        DecisionContext context = await BuildContextAsync(repositoryId);
+        DecisionGenerationContextEntry[] goals = ProjectEntries(context, IsGoalLine, "goal").ToArray();
+        DecisionGenerationContextEntry[] constraints = ProjectEntries(context, IsConstraintLine, "constraint").ToArray();
+        DecisionGenerationContextEntry[] risks = ProjectEntries(context, IsRiskLine, "risk").ToArray();
+        DecisionGenerationContextEntry[] questions = ProjectEntries(context, IsQuestionLine, "question").ToArray();
+        DecisionGenerationContextEntry[] priorDecisions = ProjectPriorDecisions(context).ToArray();
+        DecisionGenerationContextEntry[] repositoryState = ProjectRepositoryState(context).ToArray();
+        DecisionGenerationContextEntry[] dependencies = ProjectEntries(context, IsDependencyLine, "dependency").ToArray();
+        DecisionGenerationContextEntry[] handoffState = ProjectHandoffState(context).ToArray();
+        string fingerprint = FingerprintContextProjection(
+            context.Fingerprint,
+            goals,
+            constraints,
+            risks,
+            questions,
+            priorDecisions,
+            repositoryState,
+            dependencies,
+            handoffState);
+        string[] diagnostics = [
+            $"Projected decision generation context from {context.Items.Count} context items.",
+            $"Goals: {goals.Length}; constraints: {constraints.Length}; risks: {risks.Length}; questions: {questions.Length}; prior decisions: {priorDecisions.Length}; repository state: {repositoryState.Length}; dependencies: {dependencies.Length}; handoff entries: {handoffState.Length}."
+        ];
+
+        return new DecisionGenerationContext(
+            context.RepositoryId,
+            fingerprint,
+            goals,
+            constraints,
+            risks,
+            questions,
+            priorDecisions,
+            repositoryState,
+            dependencies,
+            handoffState,
+            diagnostics);
     }
 
     private async Task LoadSingleMarkdownAsync(
@@ -462,6 +502,152 @@ public sealed partial class DecisionContextService(
                     .Append(source.DecisionId).Append('|')
                     .Append(source.ProposalId).Append('|')
                     .Append(source.CandidateId).Append('\n');
+            }
+        }
+
+        return Fingerprint(builder.ToString());
+    }
+
+    private static IEnumerable<DecisionGenerationContextEntry> ProjectEntries(
+        DecisionContext context,
+        Func<string, bool> predicate,
+        string category)
+    {
+        foreach (DecisionContextItem item in context.Items.OrderBy(item => item.Kind, StringComparer.Ordinal).ThenBy(item => item.Id, StringComparer.Ordinal))
+        {
+            string[] matches = ExtractContextLines(item.Content)
+                .Where(predicate)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Order(StringComparer.Ordinal)
+                .Take(6)
+                .ToArray();
+            for (int index = 0; index < matches.Length; index++)
+            {
+                yield return new DecisionGenerationContextEntry(
+                    StableItemId($"{category}-{index + 1}", $"{item.Id}-{matches[index]}"),
+                    matches[index],
+                    EvidenceForContextItem(item, matches[index]));
+            }
+        }
+    }
+
+    private static IEnumerable<DecisionGenerationContextEntry> ProjectPriorDecisions(DecisionContext context)
+    {
+        foreach (DecisionContextItem item in context.Items.Where(item =>
+            item.Kind is "Decision" or "DecisionProposal" or "CurrentDecisionMarkdown").OrderBy(item => item.Id, StringComparer.Ordinal))
+        {
+            string statement = item.Kind == "CurrentDecisionMarkdown"
+                ? FirstContextLine(item.Content)
+                : item.Title;
+            if (string.IsNullOrWhiteSpace(statement))
+            {
+                continue;
+            }
+
+            yield return new DecisionGenerationContextEntry(
+                StableItemId("prior-decision", $"{item.Kind}-{item.Id}"),
+                statement,
+                EvidenceForContextItem(item, statement));
+        }
+    }
+
+    private static IEnumerable<DecisionGenerationContextEntry> ProjectRepositoryState(DecisionContext context)
+    {
+        foreach (DecisionContextItem item in context.Items.Where(item =>
+            item.Kind is "Plan" or "Milestone" or "OperationalContext" or "ContinuityDiagnostics").OrderBy(item => item.Kind, StringComparer.Ordinal).ThenBy(item => item.Id, StringComparer.Ordinal))
+        {
+            string statement = item.Kind == "ContinuityDiagnostics"
+                ? "Continuity diagnostics are available for repository-state analysis."
+                : item.Title;
+            yield return new DecisionGenerationContextEntry(
+                StableItemId("repository-state", $"{item.Kind}-{item.Id}"),
+                statement,
+                EvidenceForContextItem(item, statement));
+        }
+    }
+
+    private static IEnumerable<DecisionGenerationContextEntry> ProjectHandoffState(DecisionContext context)
+    {
+        foreach (DecisionContextItem item in context.Items.Where(item => item.Kind == "RecentHandoff").OrderBy(item => item.Id, StringComparer.Ordinal))
+        {
+            foreach (string line in ExtractContextLines(item.Content).Take(8))
+            {
+                yield return new DecisionGenerationContextEntry(
+                    StableItemId("handoff", $"{item.Id}-{line}"),
+                    line,
+                    EvidenceForContextItem(item, line));
+            }
+        }
+    }
+
+    private static DecisionEvidence[] EvidenceForContextItem(DecisionContextItem item, string statement)
+    {
+        return [
+            new DecisionEvidence(
+                statement,
+                item.Sources.Count == 0
+                    ? [new DecisionSourceReference(item.Kind, ItemId: item.Id, Excerpt: statement)]
+                    : item.Sources
+                        .Select(source => source with { Excerpt = string.IsNullOrWhiteSpace(source.Excerpt) ? statement : source.Excerpt })
+                        .ToArray())
+        ];
+    }
+
+    private static IEnumerable<string> ExtractContextLines(string content)
+    {
+        return NormalizeContent(content)
+            .Split('\n')
+            .Select(line => line.Trim().TrimStart('-', '*').Trim())
+            .Where(line => line.Length > 0 && !line.StartsWith("#", StringComparison.Ordinal))
+            .Select(line => line.Length <= 240 ? line : $"{line[..237]}...");
+    }
+
+    private static string FirstContextLine(string content)
+    {
+        return ExtractContextLines(content).FirstOrDefault() ?? string.Empty;
+    }
+
+    private static bool IsGoalLine(string line)
+    {
+        return ContainsAny(line, "goal", "objective", "milestone", "delivery target", "success", "exit state");
+    }
+
+    private static bool IsConstraintLine(string line)
+    {
+        return ContainsAny(line, "constraint", "must", "must not", "do not", "rule", "non-goal", "non-goals", "boundary");
+    }
+
+    private static bool IsRiskLine(string line)
+    {
+        return ContainsAny(line, "risk", "blocker", "blocking", "unknown", "warning", "conflict", "contradiction", "stale");
+    }
+
+    private static bool IsQuestionLine(string line)
+    {
+        return line.Contains('?') || ContainsAny(line, "question", "open issue", "unresolved");
+    }
+
+    private static bool IsDependencyLine(string line)
+    {
+        return ContainsAny(line, "dependency", "depends", "requires", "prerequisite", "sequencing");
+    }
+
+    private static bool ContainsAny(string value, params string[] needles)
+    {
+        return needles.Any(needle => value.Contains(needle, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string FingerprintContextProjection(
+        string contextFingerprint,
+        params IReadOnlyList<DecisionGenerationContextEntry>[] entryGroups)
+    {
+        var builder = new StringBuilder();
+        builder.Append(contextFingerprint).Append('\n');
+        foreach (IReadOnlyList<DecisionGenerationContextEntry> entries in entryGroups)
+        {
+            foreach (DecisionGenerationContextEntry entry in entries.OrderBy(entry => entry.Id, StringComparer.Ordinal))
+            {
+                builder.Append(entry.Id).Append('|').Append(entry.Statement).Append('\n');
             }
         }
 

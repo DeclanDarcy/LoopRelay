@@ -14,6 +14,7 @@ public sealed class DecisionGenerationService(
     IDecisionRepository decisionRepository,
     IDecisionArtifactProjectionService projectionService,
     IOptionGenerationService optionGenerationService,
+    IDecisionContextProjectionService? contextProjectionService = null,
     ITradeoffAnalysisService? tradeoffAnalysisService = null,
     IOptionComparisonService? optionComparisonService = null) : IDecisionGenerationService
 {
@@ -67,14 +68,18 @@ public sealed class DecisionGenerationService(
             .ToArray();
         DecisionOptionGenerationResult optionGeneration = optionGenerationService.GenerateOptions(candidate, evidence);
         DecisionOption[] options = optionGeneration.Options.ToArray();
+        DecisionGenerationContext generationContext = contextProjectionService is null
+            ? DecisionGenerationContext.Empty(repository.Id)
+            : await contextProjectionService.BuildGenerationContextAsync(repository.Id);
         string contextFingerprint = Fingerprint(new
         {
             Candidate = candidate,
             Evidence = evidence,
-            Options = options
+            Options = options,
+            GenerationContext = generationContext
         });
         AnalyzedDecisionOption[] analyzedOptions = this.tradeoffAnalysisService
-            .AnalyzeOptions(candidate, options, evidence, contextFingerprint)
+            .AnalyzeOptions(candidate, options, evidence, generationContext, contextFingerprint)
             .ToArray();
         DecisionTradeoffComparison[] tradeoffComparisons = this.optionComparisonService
             .CompareOptions(candidate, analyzedOptions, optionGeneration.Relationships, evidence)

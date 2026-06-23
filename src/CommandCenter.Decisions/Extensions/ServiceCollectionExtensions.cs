@@ -10,7 +10,9 @@ public static class ServiceCollectionExtensions
     {
         services.AddSingleton<IDecisionRepository, FileSystemDecisionRepository>();
         services.AddSingleton<IDecisionArtifactProjectionService, DecisionArtifactProjectionService>();
-        services.AddSingleton<IDecisionContextService, DecisionContextService>();
+        services.AddSingleton<DecisionContextService>();
+        services.AddSingleton<IDecisionContextService>(provider => provider.GetRequiredService<DecisionContextService>());
+        services.AddSingleton<IDecisionContextProjectionService>(provider => provider.GetRequiredService<DecisionContextService>());
         services.AddSingleton<IDecisionDiscoveryService, DecisionDiscoveryService>();
         services.AddSingleton<IOptionValidationService, OptionValidationService>();
         services.AddSingleton<IOptionGenerationService, OptionGenerationService>();
