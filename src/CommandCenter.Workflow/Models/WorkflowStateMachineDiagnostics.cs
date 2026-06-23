@@ -2,14 +2,13 @@ using CommandCenter.Workflow.Primitives;
 
 namespace CommandCenter.Workflow.Models;
 
-public sealed record WorkflowInstance(
+public sealed record WorkflowStateMachineDiagnostics(
     Guid RepositoryId,
     WorkflowStage CurrentStage,
     WorkflowProgressState ProgressState,
     WorkflowGateType BlockingGate,
-    string RequiredHumanAction,
-    IReadOnlyList<WorkflowStage> NextPossibleStages,
+    IReadOnlyList<WorkflowStage> CandidateStages,
     IReadOnlyList<WorkflowTransitionResult> ValidTransitions,
     IReadOnlyList<WorkflowTransitionResult> BlockedTransitions,
-    IReadOnlyList<WorkflowTimelineEntry> Timeline,
-    WorkflowProjectionDiagnostics Diagnostics);
+    IReadOnlyList<string> Reasoning,
+    IReadOnlyList<string> RejectedTransitions);

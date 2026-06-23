@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using CommandCenter.Backend;
+using CommandCenter.Core.Artifacts;
 using CommandCenter.Continuity.Abstractions;
 using CommandCenter.Continuity.Models;
 using CommandCenter.Continuity.Primitives;
@@ -15,16 +16,73 @@ using CommandCenter.Execution.Models;
 using CommandCenter.Execution.Primitives;
 using CommandCenter.Workflow.Abstractions;
 using CommandCenter.Workflow.Models;
+using CommandCenter.Workflow.Persistence;
 using CommandCenter.Workflow.Primitives;
 using CommandCenter.Workflow.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 
 namespace CommandCenter.Backend.Tests;
 
 public sealed class WorkflowProjectionServiceTests
 {
+    [Fact]
+    public void StateMachineExposesCanonicalGraph()
+    {
+        var service = new WorkflowStateMachineService();
+
+        IReadOnlyList<WorkflowTransition> graph = service.GetCanonicalGraph();
+
+        Assert.Equal(
+            [
+                WorkflowStage.WorkSelection,
+                WorkflowStage.Execution,
+                WorkflowStage.Handoff,
+                WorkflowStage.Decision,
+                WorkflowStage.OperationalContext,
+                WorkflowStage.Commit,
+                WorkflowStage.Push
+            ],
+            graph.Select(transition => transition.FromStage).ToArray());
+        Assert.Equal(WorkflowStage.Completed, graph.Last().ToStage);
+    }
+
+    [Fact]
+    public void StateMachineAcceptsValidCanonicalTransition()
+    {
+        var service = new WorkflowStateMachineService();
+
+        WorkflowTransitionResult result = service.ValidateTransition(
+            WorkflowStage.Handoff,
+            WorkflowStage.Decision,
+            WorkflowProgressState.Ready,
+            WorkflowGateType.None,
+            "No human action required.");
+
+        Assert.True(result.IsValid);
+        Assert.False(result.IsBlocked);
+    }
+
+    [Fact]
+    public void StateMachineRejectsInvalidTransitionWithExplanation()
+    {
+        var service = new WorkflowStateMachineService();
+
+        WorkflowTransitionResult result = service.ValidateTransition(
+            WorkflowStage.Execution,
+            WorkflowStage.Commit,
+            WorkflowProgressState.Ready,
+            WorkflowGateType.None,
+            "No human action required.");
+
+        Assert.False(result.IsValid);
+        Assert.True(result.IsBlocked);
+        Assert.Equal(WorkflowBlockingCondition.UnknownState, result.BlockingCondition);
+        Assert.Contains("No canonical transition", result.Reason);
+    }
+
     [Fact]
     public async Task ExecutionAwaitingAcceptanceMapsToHandoffAcceptanceGate()
     {
@@ -44,6 +102,8 @@ public sealed class WorkflowProjectionServiceTests
         Assert.Equal(WorkflowStage.Handoff, projection.CurrentStage);
         Assert.Equal(WorkflowGateType.ExecutionAcceptance, projection.BlockingGate);
         Assert.Equal(WorkflowProgressState.AwaitingGate, projection.ProgressState);
+        Assert.Equal([WorkflowStage.Decision], projection.NextPossibleStages);
+        Assert.Contains(projection.BlockedTransitions, transition => transition.BlockingCondition == WorkflowBlockingCondition.PendingHandoffAcceptance);
         Assert.Contains(projection.Timeline, entry => entry.EventType == WorkflowTimelineEventType.ExecutionCompleted);
         Assert.Contains(projection.Diagnostics.Reasoning, reason => reason.Contains("handoff acceptance", StringComparison.OrdinalIgnoreCase));
     }
@@ -61,6 +121,7 @@ public sealed class WorkflowProjectionServiceTests
         Assert.Equal(WorkflowStage.Decision, projection.CurrentStage);
         Assert.Equal(WorkflowGateType.DecisionResolution, projection.BlockingGate);
         Assert.Equal(WorkflowProgressState.AwaitingGate, projection.ProgressState);
+        Assert.Contains(projection.BlockedTransitions, transition => transition.BlockingCondition == WorkflowBlockingCondition.UnresolvedDecision);
     }
 
     [Fact]
@@ -81,6 +142,28 @@ public sealed class WorkflowProjectionServiceTests
 
         Assert.Equal(WorkflowStage.OperationalContext, projection.CurrentStage);
         Assert.Equal(WorkflowGateType.OperationalContextReview, projection.BlockingGate);
+        Assert.Contains(projection.BlockedTransitions, transition => transition.BlockingCondition == WorkflowBlockingCondition.PendingContextReview);
+    }
+
+    [Fact]
+    public async Task AcceptedOperationalContextBlocksCommitUntilPromotion()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+        fixture.Proposals.Add(new OperationalContextProposal
+        {
+            ProposalId = "ctx-0001",
+            RepositoryId = fixture.Repository.Id,
+            GeneratedAt = DateTimeOffset.Parse("2026-06-23T11:00:00Z"),
+            Status = OperationalContextProposalStatus.Accepted
+        });
+
+        WorkflowInstance projection = await fixture.CreateService().ProjectAsync(fixture.Repository.Id);
+
+        Assert.Equal(WorkflowStage.OperationalContext, projection.CurrentStage);
+        Assert.Equal(WorkflowGateType.OperationalContextPromotion, projection.BlockingGate);
+        Assert.Contains(projection.BlockedTransitions, transition => transition.BlockingCondition == WorkflowBlockingCondition.PendingContextPromotion);
     }
 
     [Fact]
@@ -94,6 +177,7 @@ public sealed class WorkflowProjectionServiceTests
 
         Assert.Equal(WorkflowStage.Commit, projection.CurrentStage);
         Assert.Equal(WorkflowGateType.CommitApproval, projection.BlockingGate);
+        Assert.Contains(projection.BlockedTransitions, transition => transition.BlockingCondition == WorkflowBlockingCondition.PendingCommitApproval);
     }
 
     [Fact]
@@ -120,6 +204,20 @@ public sealed class WorkflowProjectionServiceTests
     }
 
     [Fact]
+    public async Task AwaitingPushBlocksCompletionUntilPushApproval()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingPush;
+        fixture.Session = AwaitingPushCommittedSession();
+
+        WorkflowInstance projection = await fixture.CreateService().ProjectAsync(fixture.Repository.Id);
+
+        Assert.Equal(WorkflowStage.Push, projection.CurrentStage);
+        Assert.Equal(WorkflowGateType.PushApproval, projection.BlockingGate);
+        Assert.Contains(projection.BlockedTransitions, transition => transition.BlockingCondition == WorkflowBlockingCondition.PendingPushApproval);
+    }
+
+    [Fact]
     public async Task PushedSessionMapsToCompletedAndIsDeterministic()
     {
         TestFixture fixture = TestFixture.Create();
@@ -134,6 +232,7 @@ public sealed class WorkflowProjectionServiceTests
         Assert.Equal(first.CurrentStage, second.CurrentStage);
         Assert.Equal(first.ProgressState, second.ProgressState);
         Assert.Equal(first.BlockingGate, second.BlockingGate);
+        Assert.Empty(first.NextPossibleStages);
         Assert.Equal(first.Diagnostics.ProjectionInputs, second.Diagnostics.ProjectionInputs);
         Assert.Equal(first.Timeline, second.Timeline);
         Assert.Contains(first.Timeline, entry => entry.EventType == WorkflowTimelineEventType.CommitExecuted);
@@ -160,6 +259,147 @@ public sealed class WorkflowProjectionServiceTests
         Assert.Equal(WorkflowStage.WorkSelection, projection.CurrentStage);
     }
 
+    [Fact]
+    public async Task WorkflowTransitionsEndpointReturnsStateMachineDiagnostics()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingCommit;
+        fixture.Session = CompletedAcceptedSession(RepositoryExecutionState.AwaitingCommit);
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services => fixture.ReplaceServices(services));
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+
+        using var client = new HttpClient();
+        HttpResponseMessage response = await client.GetAsync(app.Urls.Single() + $"/api/repositories/{fixture.Repository.Id}/workflow/transitions");
+        WorkflowStateMachineDiagnostics? diagnostics = await response.Content.ReadFromJsonAsync<WorkflowStateMachineDiagnostics>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(diagnostics);
+        Assert.Equal(WorkflowStage.Commit, diagnostics.CurrentStage);
+        Assert.Contains(diagnostics.BlockedTransitions, transition => transition.BlockingCondition == WorkflowBlockingCondition.PendingCommitApproval);
+    }
+
+    [Fact]
+    public async Task WorkflowRepositorySavesLoadsListsAndFindsLatestTimeline()
+    {
+        TestFixture fixture = TestFixture.Create();
+        var store = new MemoryArtifactStore();
+        var repository = new FileSystemWorkflowRepository(store);
+        WorkflowTimeline older = CreateTimeline(fixture.Repository.Id, DateTimeOffset.Parse("2026-06-23T10:00:00Z"), WorkflowStage.Execution);
+        WorkflowTimeline newer = CreateTimeline(fixture.Repository.Id, DateTimeOffset.Parse("2026-06-23T11:00:00Z"), WorkflowStage.Handoff);
+
+        await repository.SaveTimelineAsync(fixture.Repository, newer);
+        await repository.SaveTimelineAsync(fixture.Repository, older);
+
+        WorkflowTimeline? loaded = await repository.LoadTimelineAsync(fixture.Repository, "workflow.20260623T110000.0000000Z");
+        IReadOnlyList<WorkflowTimeline> listed = await repository.ListTimelinesAsync(fixture.Repository);
+        WorkflowTimeline? latest = await repository.GetLatestTimelineAsync(fixture.Repository);
+
+        Assert.NotNull(loaded);
+        Assert.Equal(newer.Fingerprint, loaded.Fingerprint);
+        Assert.Equal([older.GeneratedAt, newer.GeneratedAt], listed.Select(timeline => timeline.GeneratedAt).ToArray());
+        Assert.NotNull(latest);
+        Assert.Equal(newer.Fingerprint, latest.Fingerprint);
+        await repository.SaveReportAsync(fixture.Repository, "repository.20260623T110000Z", "{\"ok\":true}", "# Report");
+        Assert.True(await store.ExistsAsync(WorkflowArtifactPaths.Resolve(fixture.Repository, WorkflowArtifactPaths.TimelineMarkdown("workflow.20260623T110000.0000000Z"))));
+        Assert.True(await store.ExistsAsync(WorkflowArtifactPaths.Resolve(fixture.Repository, WorkflowArtifactPaths.ReportJson("repository.20260623T110000Z"))));
+        Assert.True(await store.ExistsAsync(WorkflowArtifactPaths.Resolve(fixture.Repository, WorkflowArtifactPaths.ReportMarkdown("repository.20260623T110000Z"))));
+    }
+
+    [Fact]
+    public async Task RecoveryRebuildsMissingWorkflowArtifactsFromDomainProjection()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingAcceptance;
+        fixture.Session = CompletedAcceptedSession(RepositoryExecutionState.AwaitingAcceptance);
+        var store = new MemoryArtifactStore();
+        var workflowRepository = new FileSystemWorkflowRepository(store);
+        var recovery = fixture.CreateRecoveryService(workflowRepository);
+
+        WorkflowRecoveryResult result = await recovery.RecoverCurrentWorkflowAsync(fixture.Repository.Id);
+        WorkflowTimeline? latest = await workflowRepository.GetLatestTimelineAsync(fixture.Repository);
+
+        Assert.True(result.Diagnostics.Rebuilt);
+        Assert.Equal(WorkflowStage.Handoff, result.Timeline.CurrentStage);
+        Assert.NotNull(latest);
+        Assert.Equal(result.Timeline.Fingerprint, latest.Fingerprint);
+    }
+
+    [Fact]
+    public async Task RecoveryRebuildsCorruptWorkflowArtifactsFromDomainProjection()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingCommit;
+        fixture.Session = CompletedAcceptedSession(RepositoryExecutionState.AwaitingCommit);
+        var store = new MemoryArtifactStore();
+        string corruptPath = WorkflowArtifactPaths.Resolve(
+            fixture.Repository,
+            WorkflowArtifactPaths.TimelineJson("workflow.20260623T100000.0000000Z"));
+        await store.WriteAsync(corruptPath, "{ not valid json");
+        var workflowRepository = new FileSystemWorkflowRepository(store);
+        var recovery = fixture.CreateRecoveryService(workflowRepository);
+
+        WorkflowRecoveryResult result = await recovery.RecoverCurrentWorkflowAsync(fixture.Repository.Id);
+
+        Assert.True(result.Diagnostics.Rebuilt);
+        Assert.Contains(result.Diagnostics.Diagnostics, diagnostic => diagnostic.Contains("could not be loaded", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(WorkflowStage.Commit, result.Timeline.CurrentStage);
+    }
+
+    [Fact]
+    public async Task WorkflowFingerprintsAreStableAndDetectDivergence()
+    {
+        WorkflowTimeline first = CreateTimeline(Guid.Parse("11111111-1111-1111-1111-111111111111"), DateTimeOffset.Parse("2026-06-23T10:00:00Z"), WorkflowStage.Commit);
+        WorkflowTimeline second = CreateTimeline(Guid.Parse("11111111-1111-1111-1111-111111111111"), DateTimeOffset.Parse("2026-06-23T11:00:00Z"), WorkflowStage.Commit);
+        WorkflowTimeline diverged = CreateTimeline(Guid.Parse("11111111-1111-1111-1111-111111111111"), DateTimeOffset.Parse("2026-06-23T10:00:00Z"), WorkflowStage.Push);
+
+        Assert.Equal(first.Fingerprint, second.Fingerprint);
+        Assert.NotEqual(first.Fingerprint, diverged.Fingerprint);
+    }
+
+    [Fact]
+    public async Task DeletingWorkflowArtifactsDoesNotChangeDomainProjection()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingPush;
+        fixture.Session = AwaitingPushCommittedSession();
+        var store = new MemoryArtifactStore();
+        var workflowRepository = new FileSystemWorkflowRepository(store);
+        var recovery = fixture.CreateRecoveryService(workflowRepository);
+        WorkflowInstance before = await fixture.CreateService().ProjectAsync(fixture.Repository.Id);
+        WorkflowRecoveryResult recovered = await recovery.RecoverCurrentWorkflowAsync(fixture.Repository.Id);
+        string timelineId = WorkflowArtifactPaths.TimelineId(recovered.Timeline.GeneratedAt);
+
+        await store.DeleteAsync(WorkflowArtifactPaths.Resolve(fixture.Repository, WorkflowArtifactPaths.TimelineJson(timelineId)));
+        await store.DeleteAsync(WorkflowArtifactPaths.Resolve(fixture.Repository, WorkflowArtifactPaths.TimelineMarkdown(timelineId)));
+        WorkflowInstance after = await fixture.CreateService().ProjectAsync(fixture.Repository.Id);
+
+        Assert.Equal(before.CurrentStage, after.CurrentStage);
+        Assert.Equal(before.BlockingGate, after.BlockingGate);
+        Assert.Equal(before.ValidTransitions, after.ValidTransitions);
+    }
+
+    [Fact]
+    public async Task StartupRecoveryRestoresWorkflowEvidenceWithoutDomainMutation()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingAcceptance;
+        fixture.Session = CompletedAcceptedSession(RepositoryExecutionState.AwaitingAcceptance);
+        var store = new MemoryArtifactStore();
+        var workflowRepository = new FileSystemWorkflowRepository(store);
+        var hosted = new WorkflowRecoveryHostedService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateRecoveryService(workflowRepository));
+
+        await hosted.StartAsync(CancellationToken.None);
+
+        WorkflowTimeline? latest = await workflowRepository.GetLatestTimelineAsync(fixture.Repository);
+        Assert.NotNull(latest);
+        Assert.Equal(WorkflowStage.Handoff, latest.CurrentStage);
+    }
+
     private static ExecutionSessionSummary CompletedAcceptedSession(
         RepositoryExecutionState repositoryState = RepositoryExecutionState.Accepted) => new()
     {
@@ -169,6 +409,18 @@ public sealed class WorkflowProjectionServiceTests
         StartedAt = DateTimeOffset.Parse("2026-06-23T10:00:00Z"),
         CompletedAt = DateTimeOffset.Parse("2026-06-23T10:10:00Z"),
         AcceptedAt = DateTimeOffset.Parse("2026-06-23T10:15:00Z")
+    };
+
+    private static ExecutionSessionSummary AwaitingPushCommittedSession() => new()
+    {
+        SessionId = Guid.NewGuid(),
+        State = ExecutionSessionState.Completed,
+        RepositoryState = RepositoryExecutionState.AwaitingPush,
+        StartedAt = DateTimeOffset.Parse("2026-06-23T10:00:00Z"),
+        CompletedAt = DateTimeOffset.Parse("2026-06-23T10:10:00Z"),
+        AcceptedAt = DateTimeOffset.Parse("2026-06-23T10:15:00Z"),
+        CommittedAt = DateTimeOffset.Parse("2026-06-23T12:00:00Z"),
+        CommitSha = "abc123"
     };
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
@@ -203,6 +455,42 @@ public sealed class WorkflowProjectionServiceTests
             [],
             []);
 
+    private static WorkflowTimeline CreateTimeline(Guid repositoryId, DateTimeOffset generatedAt, WorkflowStage currentStage)
+    {
+        WorkflowTimelineEntry entry = new(
+            WorkflowTimelineEventType.ExecutionCompleted,
+            WorkflowStage.Handoff,
+            DateTimeOffset.Parse("2026-06-23T10:10:00Z"),
+            "Execution session completed.",
+            "execution",
+            "session-1",
+            WorkflowFingerprint.ForEntry(
+                WorkflowTimelineEventType.ExecutionCompleted,
+                WorkflowStage.Handoff,
+                DateTimeOffset.Parse("2026-06-23T10:10:00Z"),
+                "Execution session completed.",
+                "execution",
+                "session-1").Value);
+        string fingerprint = WorkflowFingerprint.ForTimeline(
+            repositoryId,
+            currentStage,
+            WorkflowStage.Handoff,
+            WorkflowProgressState.AwaitingGate,
+            WorkflowGateType.CommitApproval,
+            [entry],
+            [WorkflowBlockingCondition.PendingCommitApproval]).Value;
+
+        return new WorkflowTimeline(
+            repositoryId,
+            currentStage,
+            WorkflowStage.Handoff,
+            WorkflowProgressState.AwaitingGate,
+            WorkflowGateType.CommitApproval,
+            generatedAt,
+            [entry],
+            fingerprint);
+    }
+
     private sealed class TestFixture
     {
         public Repository Repository { get; } = new()
@@ -235,23 +523,36 @@ public sealed class WorkflowProjectionServiceTests
                 new ExecutionSessionServiceStub(this),
                 new DecisionRepositoryStub(this),
                 new OperationalContextProposalStoreStub(this),
-                new GitServiceStub(this));
+                new GitServiceStub(this),
+                new WorkflowStateMachineService());
+
+        public WorkflowRecoveryService CreateRecoveryService(IWorkflowRepository workflowRepository) =>
+            new(new RepositoryServiceStub(Repository), CreateService(), workflowRepository);
 
         public void ReplaceServices(IServiceCollection services)
         {
             services.RemoveAll<IRepositoryService>();
+            services.RemoveAll<IArtifactStore>();
             services.RemoveAll<IExecutionSessionService>();
             services.RemoveAll<IDecisionRepository>();
             services.RemoveAll<IOperationalContextProposalStore>();
             services.RemoveAll<IGitService>();
+            services.RemoveAll<IWorkflowStateMachineService>();
             services.RemoveAll<IWorkflowProjectionService>();
+            services.RemoveAll<IWorkflowRepository>();
+            services.RemoveAll<IWorkflowRecoveryService>();
+            services.RemoveAll<IHostedService>();
 
             services.AddSingleton<IRepositoryService>(new RepositoryServiceStub(Repository));
+            services.AddSingleton<IArtifactStore, MemoryArtifactStore>();
             services.AddSingleton<IExecutionSessionService>(new ExecutionSessionServiceStub(this));
             services.AddSingleton<IDecisionRepository>(new DecisionRepositoryStub(this));
             services.AddSingleton<IOperationalContextProposalStore>(new OperationalContextProposalStoreStub(this));
             services.AddSingleton<IGitService>(new GitServiceStub(this));
+            services.AddSingleton<IWorkflowRepository, FileSystemWorkflowRepository>();
+            services.AddSingleton<IWorkflowStateMachineService, WorkflowStateMachineService>();
             services.AddSingleton<IWorkflowProjectionService, WorkflowProjectionService>();
+            services.AddSingleton<IWorkflowRecoveryService, WorkflowRecoveryService>();
         }
     }
 

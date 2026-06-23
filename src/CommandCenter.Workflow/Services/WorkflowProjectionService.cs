@@ -19,7 +19,8 @@ public sealed class WorkflowProjectionService(
     IExecutionSessionService executionSessionService,
     IDecisionRepository decisionRepository,
     IOperationalContextProposalStore operationalContextProposalStore,
-    IGitService gitService) : IWorkflowProjectionService
+    IGitService gitService,
+    IWorkflowStateMachineService stateMachineService) : IWorkflowProjectionService
 {
     public async Task<WorkflowInstance> ProjectAsync(Guid repositoryId)
     {
@@ -27,12 +28,22 @@ public sealed class WorkflowProjectionService(
         ProjectionEvidence evidence = await LoadEvidenceAsync(repository);
         IReadOnlyList<WorkflowTimelineEntry> timeline = BuildTimeline(evidence);
         ProjectionChoice choice = ChooseProjection(evidence);
+        WorkflowStateMachineDiagnostics stateMachine = stateMachineService.Evaluate(
+            repository.Id,
+            choice.Stage,
+            choice.ProgressState,
+            choice.Gate,
+            choice.RequiredHumanAction);
 
         var diagnostics = new WorkflowProjectionDiagnostics(
             repository.Id,
             BuildInputs(evidence),
             choice.Stage,
             choice.Gate,
+            stateMachine.CandidateStages,
+            stateMachine.ValidTransitions,
+            stateMachine.BlockedTransitions,
+            stateMachine,
             choice.Reasoning,
             choice.UnknownStates,
             choice.Conflicts);
@@ -43,6 +54,9 @@ public sealed class WorkflowProjectionService(
             choice.ProgressState,
             choice.Gate,
             choice.RequiredHumanAction,
+            stateMachine.CandidateStages,
+            stateMachine.ValidTransitions,
+            stateMachine.BlockedTransitions,
             timeline,
             diagnostics);
     }
@@ -201,68 +215,90 @@ public sealed class WorkflowProjectionService(
 
         if (session?.StartedAt is DateTimeOffset startedAt)
         {
-            entries.Add(new WorkflowTimelineEntry(
+            entries.Add(CreateTimelineEntry(
                 WorkflowTimelineEventType.ExecutionStarted,
                 WorkflowStage.Execution,
                 startedAt,
                 "Execution session started.",
+                "execution",
                 session.SessionId.ToString()));
         }
 
         if (session?.CompletedAt is DateTimeOffset completedAt)
         {
-            entries.Add(new WorkflowTimelineEntry(
+            entries.Add(CreateTimelineEntry(
                 WorkflowTimelineEventType.ExecutionCompleted,
                 WorkflowStage.Handoff,
                 completedAt,
                 "Execution session completed.",
+                "execution",
                 session.SessionId.ToString()));
         }
 
         entries.AddRange(evidence.Decisions
             .Where(decision => decision.State is DecisionState.Resolved && decision.Resolution is not null)
-            .Select(decision => new WorkflowTimelineEntry(
+            .Select(decision => CreateTimelineEntry(
                 WorkflowTimelineEventType.DecisionResolved,
                 WorkflowStage.Decision,
                 decision.Resolution!.ResolvedAt,
                 $"Decision {decision.Id.Value} resolved.",
+                "decisions",
                 decision.Id.Value)));
 
         entries.AddRange(evidence.Proposals
             .Where(proposal => proposal.Status is OperationalContextProposalStatus.Promoted && proposal.Promotion.PromotedAt is not null)
-            .Select(proposal => new WorkflowTimelineEntry(
+            .Select(proposal => CreateTimelineEntry(
                 WorkflowTimelineEventType.OperationalContextPromoted,
                 WorkflowStage.OperationalContext,
                 proposal.Promotion.PromotedAt!.Value,
                 $"Operational-context proposal {proposal.ProposalId} promoted.",
+                "continuity",
                 proposal.ProposalId)));
 
         if (session?.CommittedAt is DateTimeOffset committedAt)
         {
-            entries.Add(new WorkflowTimelineEntry(
+            entries.Add(CreateTimelineEntry(
                 WorkflowTimelineEventType.CommitExecuted,
                 WorkflowStage.Commit,
                 committedAt,
                 "Execution changes committed.",
+                "git",
                 session.CommitSha ?? session.SessionId.ToString()));
         }
 
         if (session?.PushedAt is DateTimeOffset pushedAt)
         {
-            entries.Add(new WorkflowTimelineEntry(
+            entries.Add(CreateTimelineEntry(
                 WorkflowTimelineEventType.PushExecuted,
                 WorkflowStage.Push,
                 pushedAt,
                 "Execution commit pushed.",
+                "git",
                 session.PushedCommitSha ?? session.CommitSha ?? session.SessionId.ToString()));
         }
 
         return entries
             .OrderBy(entry => entry.OccurredAt)
             .ThenBy(entry => entry.EventType)
-            .ThenBy(entry => entry.EvidenceId, StringComparer.Ordinal)
+            .ThenBy(entry => entry.SourceArtifact, StringComparer.Ordinal)
             .ToArray();
     }
+
+    private static WorkflowTimelineEntry CreateTimelineEntry(
+        WorkflowTimelineEventType eventType,
+        WorkflowStage stage,
+        DateTimeOffset occurredAt,
+        string summary,
+        string sourceDomain,
+        string sourceArtifact) =>
+        new(
+            eventType,
+            stage,
+            occurredAt,
+            summary,
+            sourceDomain,
+            sourceArtifact,
+            WorkflowFingerprint.ForEntry(eventType, stage, occurredAt, summary, sourceDomain, sourceArtifact).Value);
 
     private sealed record ProjectionEvidence(
         Repository Repository,

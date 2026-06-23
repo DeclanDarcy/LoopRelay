@@ -7,4 +7,6 @@ public sealed record WorkflowTimelineEntry(
     WorkflowStage Stage,
     DateTimeOffset OccurredAt,
     string Summary,
-    string EvidenceId);
+    string SourceDomain,
+    string SourceArtifact,
+    string Fingerprint);

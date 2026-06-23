@@ -8,7 +8,11 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddWorkflow(this IServiceCollection services)
     {
+        services.AddSingleton<IWorkflowRepository, FileSystemWorkflowRepository>();
+        services.AddSingleton<IWorkflowStateMachineService, WorkflowStateMachineService>();
         services.AddSingleton<IWorkflowProjectionService, WorkflowProjectionService>();
+        services.AddSingleton<IWorkflowRecoveryService, WorkflowRecoveryService>();
+        services.AddHostedService<WorkflowRecoveryHostedService>();
         return services;
     }
 }
