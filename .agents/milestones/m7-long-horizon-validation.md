@@ -4,7 +4,7 @@ Goal: prove event-led reasoning survives large project histories.
 
 ## Backend Work
 
-- [ ] Add long-horizon fixture builders for many decisions, many reasoning events, repeated alternatives, recurring contradictions, failed assumptions, and strategic shifts.
+- [x] Add long-horizon fixture builders for many decisions, many reasoning events, repeated alternatives, recurring contradictions, failed assumptions, and strategic shifts.
 - [ ] Implement decision evolution reconstruction for chains, branches, convergence, supersession, and replacement.
 - [ ] Implement direction reconstruction as an emergent narrative from events and traces.
 - [ ] Implement hypothesis reconstruction for raised, supported, challenged, invalidated, and retired hypothesis events.
@@ -20,13 +20,20 @@ Goal: prove event-led reasoning survives large project histories.
 
 ## Tests
 
-- [ ] A large fixture can answer why current strategy exists.
+- [x] A large fixture can answer why current strategy exists.
 - [ ] A large fixture can answer why an architecture was chosen.
 - [ ] A large fixture can list rejected alternatives and their rationale.
 - [ ] A large fixture can list failed assumptions and their outcomes.
 - [ ] A large fixture can identify contradictions that changed direction.
-- [ ] Reconstruction remains traceable to events and source evidence.
+- [x] Reconstruction remains traceable to events and source evidence.
 - [ ] Reconstruction remains usable enough for UI consumption.
+
+## Slice Notes
+
+- Added a long-horizon repository recovery characterization test for `Repository Truth -> Recovered Repository -> Equivalent Reconstruction`.
+- The fixture includes historical evidence, rejected and selected alternatives, a supported hypothesis, an invalidated assumption, a recurring contradiction, a direction shift, and a decision supersession.
+- The test recreates repository and reasoning service instances against the same repository-backed artifacts, then compares graph and query signatures excluding generated timestamps.
+- The test also verifies no derived authority directories are created for hypotheses, alternatives, contradictions, directions, graphs, or queries.
 
 ## Exit Criteria
 

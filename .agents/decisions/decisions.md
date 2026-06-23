@@ -2,18 +2,25 @@
 
 ## Newly Authorized
 
-- Accept Milestone 6 as complete specifically because it finished with almost no implementation.
-- Treat `Materialization Recommendation != Materialization Authorization` as a formal invariant.
-- Treat `Materialization Recommendation != Read Model Creation` as a formal invariant.
-- Treat the new specialized read-model boundary test as the required M5-to-M6 certification.
-- Raise the burden of proof for future materialization:
-  - show a reconstruction failure,
-  - show a graph failure,
-  - show a query failure,
-  - show a repository survivability failure,
-  - or show an inability to answer required questions.
-- Start Milestone 7 from the core invariant: `Repository Truth -> Recovered Repository -> Equivalent Reconstruction`.
-- Structure Milestone 7 around proving persisted events, threads, relationships, references, and provenance are sufficient to rebuild graphs, queries, traces, and reconstructions after recovery.
-- Include M7 certification scenarios for repository restart, partial historical repository loading, missing derived state, and replay equivalence.
-- Do not allow long-horizon validation to become long-horizon caching.
-- In M7, delete or ignore every derived artifact and recover solely from authoritative persistence when certifying equivalent answers.
+- Treat the first M7 slice as correct because it certified what was tested: `Repository Truth -> Recovery -> Equivalent Reconstruction`.
+- Define the M7 objective as proving reconstruction can survive time, not merely proving reconstruction can work.
+- Treat M7 as validation of durability of meaning: the system must still answer later.
+- Continue treating `Materialization pressure != Materialization authorization` as the key architectural invariant.
+- In survivability validation, continue proving derived reasoning remains sufficient before permitting any additional persisted artifacts.
+- Do not add caches, specialized read models, or entity directories as a result of validation pressure alone.
+- Move the next M7 layer from graph-equivalence infrastructure tests to answer-level certification tests.
+- Certify architecture choice reconstruction after recovery: why approach B was selected over approach A.
+- Certify rejected-alternative reconstruction after recovery without introducing Alternative entities.
+- Certify failed-assumption reconstruction after recovery using assumption classifications, contradicting evidence, and later traces.
+- Prioritize contradiction-that-changed-direction reconstruction as the highest-value next answer-level test.
+- Certify contradiction and direction answers without materializing Direction or Contradiction entities.
+- Consider M7 complete when the system reliably answers these questions after persistence, recovery, restart, and reconstruction:
+  - Why did we choose this?
+  - Why did we stop doing that?
+  - What assumption failed?
+  - What contradiction mattered?
+  - What changed our thinking?
+- Keep events, relationships, references, threads, and provenance as the only authoritative reasoning inputs for M7 completion.
+- Resist specialized reconstruction engines unless answer-level tests demonstrate that the generic `Graph -> Trace -> Reconstruction` pipeline cannot answer the required question.
+- Improve reconstruction output only when a real usability gap is demonstrated.
+- Keep current program status as M0-M6 complete and M7 in progress.
