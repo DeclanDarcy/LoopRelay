@@ -6,25 +6,21 @@ namespace CommandCenter.Decisions.Services;
 
 public sealed class OptionGenerationService : IOptionGenerationService
 {
-    public IReadOnlyList<DecisionOption> GenerateOptions(
+    public DecisionOptionGenerationResult GenerateOptions(
         DecisionCandidate candidate,
         IReadOnlyList<DecisionEvidence> evidence)
     {
         DecisionEvidence[] optionEvidence = EvidenceForOption(evidence, candidate);
         IReadOnlyList<OptionTemplate> templates = TemplatesFor(candidate);
         var options = new List<DecisionOption>();
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var rejected = new List<DecisionOptionValidationResult>();
+        var acceptedValidation = new List<DecisionOptionValidationResult>();
+        var diagnostics = new List<string>();
         int optionNumber = 1;
 
         foreach (OptionTemplate template in templates)
         {
-            string key = $"{template.Type}|{Normalize(template.Title)}";
-            if (!seen.Add(key))
-            {
-                continue;
-            }
-
-            options.Add(new DecisionOption(
+            DecisionOption option = new(
                 $"option-{optionNumber++}",
                 template.Title,
                 string.Format(template.Description, candidate.Title, candidate.Summary),
@@ -34,12 +30,51 @@ public sealed class OptionGenerationService : IOptionGenerationService
                 Assumptions = template.Assumptions,
                 Dependencies = template.Dependencies,
                 Diagnostics = template.Diagnostics
-            });
+            };
+            DecisionOptionValidationResult validation = ValidateOption(option, candidate, options);
+            if (!validation.IsValid)
+            {
+                rejected.Add(validation);
+                diagnostics.Add($"Rejected {option.Id}: {string.Join("; ", validation.Issues.Select(issue => issue.Message))}");
+                continue;
+            }
+
+            acceptedValidation.Add(validation);
+            options.Add(option);
         }
 
-        return options.Count >= 2
-            ? options
-            : AddFallbackOption(options, candidate, optionEvidence);
+        int fallbackCount = 0;
+        while (options.Count < 2)
+        {
+            DecisionOption fallback = CreateFallbackOption(options.Count + 1, candidate, optionEvidence);
+            DecisionOptionValidationResult fallbackValidation = ValidateOption(fallback, candidate, options);
+            if (!fallbackValidation.IsValid)
+            {
+                rejected.Add(fallbackValidation);
+                break;
+            }
+
+            options.Add(fallback);
+            acceptedValidation.Add(fallbackValidation);
+            fallbackCount++;
+        }
+
+        if (fallbackCount > 0)
+        {
+            diagnostics.Add($"Added {fallbackCount} fallback option(s) because generation produced fewer than two valid unique options.");
+        }
+
+        DecisionOptionRelationship[] relationships = BuildRelationships(candidate, options, optionEvidence);
+        var generationDiagnostics = new DecisionGenerationDiagnostics(
+            templates.Count + fallbackCount,
+            options.Count,
+            rejected.Count,
+            rejected.Count(result => result.Issues.Any(issue => issue.Type == DecisionOptionValidationIssueType.Duplicate)),
+            fallbackCount,
+            acceptedValidation.Concat(rejected).OrderBy(result => result.OptionId, StringComparer.Ordinal).ToArray(),
+            diagnostics.Order(StringComparer.Ordinal).ToArray());
+
+        return new DecisionOptionGenerationResult(options, relationships, generationDiagnostics);
     }
 
     private static IReadOnlyList<OptionTemplate> TemplatesFor(DecisionCandidate candidate)
@@ -181,24 +216,201 @@ public sealed class OptionGenerationService : IOptionGenerationService
         ];
     }
 
-    private static IReadOnlyList<DecisionOption> AddFallbackOption(
-        IReadOnlyList<DecisionOption> options,
+    private static DecisionOption CreateFallbackOption(
+        int optionNumber,
         DecisionCandidate candidate,
         IReadOnlyList<DecisionEvidence> evidence)
     {
-        return options.Concat([
-            new DecisionOption(
-                $"option-{options.Count + 1}",
-                "Investigate before resolution",
-                $"Collect more evidence before resolving {candidate.Title}.",
-                evidence)
+        return new DecisionOption(
+            $"option-{optionNumber}",
+            "Investigate before resolution",
+            $"Collect more evidence before resolving {candidate.Title}.",
+            evidence)
+        {
+            Type = DecisionOptionType.Investigate,
+            Assumptions = ["Current evidence may not support multiple actionable paths."],
+            Dependencies = ["Reviewer identifies the missing evidence needed for resolution."],
+            Diagnostics = ["Fallback option added because generation produced fewer than two valid unique options."]
+        };
+    }
+
+    private static DecisionOptionValidationResult ValidateOption(
+        DecisionOption option,
+        DecisionCandidate candidate,
+        IReadOnlyList<DecisionOption> acceptedOptions)
+    {
+        var issues = new List<DecisionOptionValidationIssue>();
+        if (string.IsNullOrWhiteSpace(option.Title))
+        {
+            issues.Add(new DecisionOptionValidationIssue(
+                DecisionOptionValidationIssueType.MissingTitle,
+                "Option title is required."));
+        }
+
+        if (string.IsNullOrWhiteSpace(option.Description))
+        {
+            issues.Add(new DecisionOptionValidationIssue(
+                DecisionOptionValidationIssueType.MissingDescription,
+                "Option description is required."));
+        }
+
+        if (!IsActionable(option))
+        {
+            issues.Add(new DecisionOptionValidationIssue(
+                DecisionOptionValidationIssueType.NonActionable,
+                "Option must describe an actionable resolution path."));
+        }
+
+        if (option.Evidence.Count == 0)
+        {
+            issues.Add(new DecisionOptionValidationIssue(
+                DecisionOptionValidationIssueType.MissingEvidence,
+                "Option requires supporting evidence."));
+        }
+        else if (!HasRelatedEvidence(option, candidate))
+        {
+            issues.Add(new DecisionOptionValidationIssue(
+                DecisionOptionValidationIssueType.EvidenceUnrelated,
+                "Option evidence is not related to the candidate or repository context."));
+        }
+
+        DecisionOption? duplicate = acceptedOptions.FirstOrDefault(accepted => IsDuplicate(option, accepted));
+        if (duplicate is not null)
+        {
+            issues.Add(new DecisionOptionValidationIssue(
+                DecisionOptionValidationIssueType.Duplicate,
+                $"Option duplicates {duplicate.Id} by normalized title, type, or overlapping evidence."));
+        }
+
+        return new DecisionOptionValidationResult(option.Id, issues.Count == 0, issues);
+    }
+
+    private static DecisionOptionRelationship[] BuildRelationships(
+        DecisionCandidate candidate,
+        IReadOnlyList<DecisionOption> options,
+        IReadOnlyList<DecisionEvidence> evidence)
+    {
+        var relationships = new List<DecisionOptionRelationship>();
+        for (int index = 0; index < options.Count; index++)
+        {
+            for (int otherIndex = index + 1; otherIndex < options.Count; otherIndex++)
             {
-                Type = DecisionOptionType.Investigate,
-                Assumptions = ["Current evidence may not support multiple actionable paths."],
-                Dependencies = ["Reviewer identifies the missing evidence needed for resolution."],
-                Diagnostics = ["Fallback option added because generation produced fewer than two unique options."]
+                DecisionOption left = options[index];
+                DecisionOption right = options[otherIndex];
+                DecisionOptionRelationshipType type = RelationshipType(candidate, left, right);
+                relationships.Add(new DecisionOptionRelationship(
+                    left.Id,
+                    right.Id,
+                    type,
+                    RelationshipRationale(type, left, right),
+                    evidence));
             }
-        ]).ToArray();
+        }
+
+        return relationships.ToArray();
+    }
+
+    private static DecisionOptionRelationshipType RelationshipType(
+        DecisionCandidate candidate,
+        DecisionOption left,
+        DecisionOption right)
+    {
+        bool conflictCandidate = candidate.Signals.Any(signal => IsConflict(signal.Kind));
+        if (conflictCandidate ||
+            left.Type is DecisionOptionType.Replace or DecisionOptionType.Remove or DecisionOptionType.Constrain ||
+            right.Type is DecisionOptionType.Replace or DecisionOptionType.Remove or DecisionOptionType.Constrain)
+        {
+            return DecisionOptionRelationshipType.ConflictsWith;
+        }
+
+        if (left.Type == DecisionOptionType.Investigate ||
+            right.Type == DecisionOptionType.Investigate ||
+            left.Type == DecisionOptionType.Delay ||
+            right.Type == DecisionOptionType.Delay)
+        {
+            return DecisionOptionRelationshipType.DependsOn;
+        }
+
+        return DecisionOptionRelationshipType.AlternativeTo;
+    }
+
+    private static string RelationshipRationale(
+        DecisionOptionRelationshipType type,
+        DecisionOption left,
+        DecisionOption right)
+    {
+        return type switch
+        {
+            DecisionOptionRelationshipType.ConflictsWith =>
+                $"{left.Title} and {right.Title} choose incompatible resolution paths.",
+            DecisionOptionRelationshipType.DependsOn =>
+                $"{left.Title} and {right.Title} differ based on prerequisite evidence or sequencing.",
+            _ => $"{left.Title} and {right.Title} are alternative ways to resolve the same candidate."
+        };
+    }
+
+    private static bool IsActionable(DecisionOption option)
+    {
+        string text = $"{option.Title} {option.Description}";
+        return !string.IsNullOrWhiteSpace(option.Title) &&
+            !string.IsNullOrWhiteSpace(option.Description) &&
+            !text.Contains("TBD", StringComparison.OrdinalIgnoreCase) &&
+            !text.Contains("unknown", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasRelatedEvidence(DecisionOption option, DecisionCandidate candidate)
+    {
+        return option.Evidence.Any(evidence =>
+            evidence.Sources.Count == 0 ||
+            evidence.Sources.Any(source =>
+                string.Equals(source.CandidateId, candidate.Id, StringComparison.Ordinal) ||
+                !string.IsNullOrWhiteSpace(source.RelativePath)));
+    }
+
+    private static bool IsDuplicate(DecisionOption option, DecisionOption accepted)
+    {
+        if (option.Type == accepted.Type &&
+            string.Equals(Normalize(option.Title), Normalize(accepted.Title), StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return option.Type == accepted.Type && EvidenceOverlap(option, accepted) >= 0.75;
+    }
+
+    private static double EvidenceOverlap(DecisionOption option, DecisionOption accepted)
+    {
+        HashSet<string> left = EvidenceKeys(option.Evidence);
+        HashSet<string> right = EvidenceKeys(accepted.Evidence);
+        if (left.Count == 0 || right.Count == 0)
+        {
+            return 0;
+        }
+
+        int intersection = left.Intersect(right, StringComparer.OrdinalIgnoreCase).Count();
+        int union = left.Union(right, StringComparer.OrdinalIgnoreCase).Count();
+        return union == 0 ? 0 : (double)intersection / union;
+    }
+
+    private static HashSet<string> EvidenceKeys(IReadOnlyList<DecisionEvidence> evidence)
+    {
+        return evidence
+            .Select(item => Normalize($"{item.Summary}|{string.Join('|', item.Sources.Select(SourceKey))}"))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static string SourceKey(DecisionSourceReference source)
+    {
+        return string.Join('|', [
+            source.SourceKind,
+            source.RelativePath ?? string.Empty,
+            source.Section ?? string.Empty,
+            source.ItemId ?? string.Empty,
+            source.DecisionId?.Value ?? string.Empty,
+            source.ProposalId ?? string.Empty,
+            source.CandidateId ?? string.Empty,
+            source.Excerpt ?? string.Empty
+        ]);
     }
 
     private static DecisionEvidence[] EvidenceForOption(

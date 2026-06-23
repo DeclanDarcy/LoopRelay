@@ -57,7 +57,8 @@ public sealed class DecisionGenerationService(
             .Concat([candidateEvidence])
             .OrderBy(evidence => evidence.Summary, StringComparer.Ordinal)
             .ToArray();
-        DecisionOption[] options = optionGenerationService.GenerateOptions(candidate, evidence).ToArray();
+        DecisionOptionGenerationResult optionGeneration = optionGenerationService.GenerateOptions(candidate, evidence);
+        DecisionOption[] options = optionGeneration.Options.ToArray();
         DecisionTradeoff[] tradeoffs = BuildTradeoffs(candidate, options, evidence);
         DecisionAssumption[] assumptions = BuildAssumptions(candidate, options, evidence);
         var recommendation = new DecisionRecommendation(
@@ -83,7 +84,11 @@ public sealed class DecisionGenerationService(
                 null,
                 DecisionProposalState.Generated.ToString(),
                 "Generated from promoted decision candidate.",
-                [new DecisionSourceReference("DecisionCandidate", CandidatePath(candidate.Id), CandidateId: candidate.Id)])]);
+                [new DecisionSourceReference("DecisionCandidate", CandidatePath(candidate.Id), CandidateId: candidate.Id)])])
+        {
+            OptionRelationships = optionGeneration.Relationships,
+            GenerationDiagnostics = optionGeneration.Diagnostics
+        };
 
         await decisionRepository.SaveProposalAsync(repository, proposal);
         await projectionService.ProjectProposalAsync(repository, proposal);

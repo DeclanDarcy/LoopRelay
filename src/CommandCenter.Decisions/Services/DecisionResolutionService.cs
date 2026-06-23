@@ -109,7 +109,11 @@ public sealed class DecisionResolutionService(
                 proposal.Assumptions,
                 proposal.Evidence,
                 proposal.History,
-                revisions));
+                revisions)
+            {
+                OptionRelationships = proposal.OptionRelationships,
+                GenerationDiagnostics = proposal.GenerationDiagnostics
+            });
         var decision = new Decision(
             decisionId,
             targetDecisionState,

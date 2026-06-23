@@ -15,4 +15,9 @@ public sealed record DecisionResolvedProposalSnapshot(
     IReadOnlyList<DecisionAssumption> Assumptions,
     IReadOnlyList<DecisionEvidence> Evidence,
     IReadOnlyList<DecisionHistoryEntry> History,
-    IReadOnlyList<DecisionProposalRevision> Revisions);
+    IReadOnlyList<DecisionProposalRevision> Revisions)
+{
+    public IReadOnlyList<DecisionOptionRelationship> OptionRelationships { get; init; } = [];
+
+    public DecisionGenerationDiagnostics? GenerationDiagnostics { get; init; }
+}

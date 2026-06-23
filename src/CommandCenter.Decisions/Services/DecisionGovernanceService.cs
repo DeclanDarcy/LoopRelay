@@ -371,7 +371,11 @@ public sealed class DecisionGovernanceService(
             snapshot.Recommendation,
             snapshot.Assumptions,
             snapshot.Evidence,
-            snapshot.History));
+            snapshot.History)
+        {
+            OptionRelationships = snapshot.OptionRelationships,
+            GenerationDiagnostics = snapshot.GenerationDiagnostics
+        });
         if (!string.Equals(snapshot.ProposalFingerprint, actualFingerprint, StringComparison.Ordinal))
         {
             AddFinding(

@@ -152,6 +152,54 @@ public sealed class DecisionGenerationServiceTests
     }
 
     [Fact]
+    public async Task GenerateProposalPersistsOptionValidationDiagnosticsAndRelationships()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(
+            repository.Id,
+            DecisionCandidateState.Promoted,
+            signalKind: "ConstraintConflict",
+            summary: "Constraint conflict between package versioning and near-term validation.");
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var service = CreateGenerationService(repository, store, decisionRepository);
+
+        DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
+        DecisionProposal reloaded = (await decisionRepository.GetProposalAsync(repository, proposal.Id))!;
+
+        Assert.NotNull(proposal.GenerationDiagnostics);
+        Assert.Equal(proposal.Options.Count, proposal.GenerationDiagnostics.AcceptedOptionCount);
+        Assert.Equal(0, proposal.GenerationDiagnostics.RejectedOptionCount);
+        Assert.All(proposal.GenerationDiagnostics.OptionValidationResults, result => Assert.True(result.IsValid));
+        Assert.NotEmpty(proposal.OptionRelationships);
+        Assert.Contains(proposal.OptionRelationships, relationship =>
+            relationship.Type == DecisionOptionRelationshipType.ConflictsWith &&
+            relationship.Evidence.Count > 0);
+        Assert.Equal(proposal.OptionRelationships.Count, reloaded.OptionRelationships.Count);
+        Assert.All(proposal.OptionRelationships, relationship =>
+            Assert.Contains(reloaded.OptionRelationships, reloadedRelationship =>
+                reloadedRelationship.SourceOptionId == relationship.SourceOptionId &&
+                reloadedRelationship.TargetOptionId == relationship.TargetOptionId &&
+                reloadedRelationship.Type == relationship.Type &&
+                reloadedRelationship.Rationale == relationship.Rationale &&
+                reloadedRelationship.Evidence.Count == relationship.Evidence.Count));
+        Assert.NotNull(reloaded.GenerationDiagnostics);
+        Assert.Equal(proposal.GenerationDiagnostics.GeneratedOptionCount, reloaded.GenerationDiagnostics.GeneratedOptionCount);
+        Assert.Equal(proposal.GenerationDiagnostics.AcceptedOptionCount, reloaded.GenerationDiagnostics.AcceptedOptionCount);
+        Assert.Equal(proposal.GenerationDiagnostics.RejectedOptionCount, reloaded.GenerationDiagnostics.RejectedOptionCount);
+        Assert.Equal(
+            proposal.GenerationDiagnostics.OptionValidationResults.Select(result => result.OptionId),
+            reloaded.GenerationDiagnostics.OptionValidationResults.Select(result => result.OptionId));
+
+        string markdown = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/proposal.md");
+        Assert.Contains("## Option Relationships", markdown);
+        Assert.Contains("## Generation Diagnostics", markdown);
+        Assert.Contains("- Accepted options:", markdown);
+        Assert.Contains("option-1: Valid", markdown);
+    }
+
+    [Fact]
     public async Task GenerateProposalDoesNotMutateCandidateDecisionOrContextArtifacts()
     {
         Repository repository = CreateRepository();

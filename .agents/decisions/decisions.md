@@ -2,17 +2,16 @@
 
 ## Newly Authorized
 
-- M3 is progressing correctly but is not ready to close.
-- Continue with M3 hardening before starting M4 tradeoff analysis.
-- Persist generation diagnostics before tradeoff analysis begins.
-- Add option validation before M4 so tradeoff analysis does not operate on invalid, duplicate, non-actionable, or evidence-unrelated options.
-- Add option deduplication using normalized title, option type, and semantic evidence overlap.
-- Add `DecisionOptionRelationship` infrastructure for option conflicts and dependencies before M4 invents a parallel representation.
-- Keep `IOptionGenerationService` isolated from recommendation logic; recommendation derivation remains M5 ownership.
-- Preserve the additive, backward-compatible `DecisionOption` metadata approach.
-- Treat explicit conflict, contradiction, and constraint signals as stronger than broad architectural classification when choosing option-generation patterns.
+- The current M3 option-generation architecture is accepted as the right direction because `IOptionGenerationService` now returns a richer `DecisionOptionGenerationResult`.
+- Persist generation diagnostics on the proposal for Tier 0 instead of creating a standalone `diagnostics.json` artifact now.
+- Preserve option relationships and generation diagnostics through `DecisionResolvedProposalSnapshot`.
+- Keep option validation deterministic so future provider-backed generation remains reproducible after validation.
+- Complete one final M3 hardening slice before starting M4.
+- The final M3 hardening slice must add explicit tests proving rejection of duplicate, non-actionable, and evidence-unrelated options, with corresponding diagnostics persisted.
+- After those invalid-option validation tests exist, M3 can close and M4 structured tradeoff analysis can begin.
 
 ## Not Authorized
 
-- Do not move into M4 until M3 validation, deduplication, relationships, and diagnostics are in place.
-- Do not add recommendation logic, package versioning, model-backed generation, lifecycle redesign, quality dashboards, or certification work in the next slice.
+- Do not create a standalone proposal diagnostics artifact before Tier 0 validation requires it.
+- Do not expand into package infrastructure, quality reporting, certification, or diagnostics-history work before M4.
+- Do not begin M4 until duplicate, non-actionable, and evidence-unrelated option rejection is directly covered.

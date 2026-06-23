@@ -14,4 +14,9 @@ public sealed record DecisionProposal(
     DecisionRecommendation? Recommendation,
     IReadOnlyList<DecisionAssumption> Assumptions,
     IReadOnlyList<DecisionEvidence> Evidence,
-    IReadOnlyList<DecisionHistoryEntry> History);
+    IReadOnlyList<DecisionHistoryEntry> History)
+{
+    public IReadOnlyList<DecisionOptionRelationship> OptionRelationships { get; init; } = [];
+
+    public DecisionGenerationDiagnostics? GenerationDiagnostics { get; init; }
+}

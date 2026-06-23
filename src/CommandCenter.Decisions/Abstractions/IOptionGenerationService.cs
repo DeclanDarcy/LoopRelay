@@ -4,7 +4,7 @@ namespace CommandCenter.Decisions.Abstractions;
 
 public interface IOptionGenerationService
 {
-    IReadOnlyList<DecisionOption> GenerateOptions(
+    DecisionOptionGenerationResult GenerateOptions(
         DecisionCandidate candidate,
         IReadOnlyList<DecisionEvidence> evidence);
 }

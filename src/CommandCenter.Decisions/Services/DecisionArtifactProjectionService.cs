@@ -271,6 +271,18 @@ public sealed class DecisionArtifactProjectionService(
             markdown.EvidenceList(option.Evidence);
         }
 
+        markdown.H2("Option Relationships");
+        foreach (DecisionOptionRelationship relationship in proposal.OptionRelationships
+            .OrderBy(relationship => relationship.SourceOptionId, StringComparer.Ordinal)
+            .ThenBy(relationship => relationship.TargetOptionId, StringComparer.Ordinal)
+            .ThenBy(relationship => relationship.Type.ToString(), StringComparer.Ordinal)
+            .ThenBy(relationship => relationship.Rationale, StringComparer.Ordinal))
+        {
+            markdown.Bullet($"{relationship.SourceOptionId} {relationship.Type} {relationship.TargetOptionId}: {relationship.Rationale}");
+            markdown.NestedEvidenceList(relationship.Evidence);
+        }
+
+        markdown.EmptyListIf(proposal.OptionRelationships.Count == 0);
         markdown.H2("Tradeoffs");
         foreach (DecisionTradeoff tradeoff in proposal.Tradeoffs
             .OrderBy(tradeoff => tradeoff.OptionId, StringComparer.Ordinal)
@@ -303,6 +315,44 @@ public sealed class DecisionArtifactProjectionService(
 
         markdown.H2("Evidence");
         markdown.EvidenceList(proposal.Evidence);
+        markdown.H2("Generation Diagnostics");
+        if (proposal.GenerationDiagnostics is null)
+        {
+            markdown.Bullet("None.");
+            markdown.EmptyListIf(false);
+        }
+        else
+        {
+            DecisionGenerationDiagnostics diagnostics = proposal.GenerationDiagnostics;
+            markdown.Fields(
+                ("Generated options", diagnostics.GeneratedOptionCount.ToString()),
+                ("Accepted options", diagnostics.AcceptedOptionCount.ToString()),
+                ("Rejected options", diagnostics.RejectedOptionCount.ToString()),
+                ("Deduplicated options", diagnostics.DeduplicatedOptionCount.ToString()),
+                ("Fallback options", diagnostics.FallbackOptionCount.ToString()));
+            markdown.H3("Validation Results");
+            foreach (DecisionOptionValidationResult validation in diagnostics.OptionValidationResults
+                .OrderBy(validation => validation.OptionId, StringComparer.Ordinal))
+            {
+                markdown.Bullet($"{validation.OptionId}: {(validation.IsValid ? "Valid" : "Invalid")}");
+                foreach (DecisionOptionValidationIssue issue in validation.Issues
+                    .OrderBy(issue => issue.Type.ToString(), StringComparer.Ordinal)
+                    .ThenBy(issue => issue.Message, StringComparer.Ordinal))
+                {
+                    markdown.Bullet($"{validation.OptionId} | {issue.Type}: {issue.Message}");
+                }
+            }
+
+            markdown.EmptyListIf(diagnostics.OptionValidationResults.Count == 0);
+            markdown.H3("Diagnostics");
+            foreach (string diagnostic in diagnostics.Diagnostics.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(diagnostic);
+            }
+
+            markdown.EmptyListIf(diagnostics.Diagnostics.Count == 0);
+        }
+
         markdown.H2("History");
         markdown.HistoryList(proposal.History);
         return markdown.ToString();
