@@ -9,7 +9,8 @@ public sealed class DecisionQualityAssessmentService(
     IRepositoryService repositoryService,
     IDecisionRepository decisionRepository,
     IDecisionQualitySignalService signalService,
-    IHumanAuthoringBurdenService humanAuthoringBurdenService) : IDecisionQualityAssessmentService
+    IHumanAuthoringBurdenService humanAuthoringBurdenService,
+    IDecisionArtifactProjectionService projectionService) : IDecisionQualityAssessmentService
 {
     public async Task<DecisionQualityAssessment> AssessDecisionAsync(Guid repositoryId, string decisionId)
     {
@@ -79,7 +80,9 @@ public sealed class DecisionQualityAssessmentService(
                 $"Quality assessment {assessment.Id} belongs to repository {assessment.RepositoryId}, not {repository.Id}.");
         }
 
-        return await decisionRepository.SaveQualityAssessmentAsync(repository, assessment);
+        DecisionQualityAssessment saved = await decisionRepository.SaveQualityAssessmentAsync(repository, assessment);
+        await projectionService.ProjectQualityAssessmentAsync(repository, saved);
+        return saved;
     }
 
     private async Task<Repository> GetRepositoryAsync(Guid repositoryId)

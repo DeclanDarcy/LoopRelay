@@ -20,7 +20,7 @@ measure whether generated decisions reduce human decision-production burden.
 - [x] Add `IDecisionQualityAssessmentService`.
 - [x] Add `IDecisionQualityReportService`.
 - [x] Add `IHumanAuthoringBurdenService` if burden classification is not implemented inside the quality services.
-- [ ] Extract signals from:
+- [x] Extract signals from:
   - [x] resolution outcome
   - [x] selected option
   - [x] recommendation divergence
@@ -31,7 +31,7 @@ measure whether generated decisions reduce human decision-production burden.
   - [x] rejection/archive/supersession
   - [x] human rewrite indicators
   - [x] generation bypass indicators
-- [ ] Evaluate categories:
+- [x] Evaluate categories:
   - [x] recommendation quality
   - [x] option quality
   - [x] tradeoff quality
@@ -39,7 +39,7 @@ measure whether generated decisions reduce human decision-production burden.
   - [x] constraint quality
   - [x] human effort
   - [x] human authoring burden
-- [ ] Generate repository reports:
+- [x] Generate repository reports:
   - [x] generated package count
   - [x] accepted count/rate
   - [x] modified count/rate
@@ -56,6 +56,7 @@ measure whether generated decisions reduce human decision-production burden.
 - [x] Persist quality assessments, reports, and trends as repository JSON artifacts.
 - [x] Generate deterministic markdown projections for persisted quality assessments, reports, and trends.
 - [x] Reload persisted quality assessments, reports, and trends from filesystem artifacts.
+- [x] Add backend endpoints for proposal-scoped quality assessment, persisted assessment history, current and persisted quality reports, and current and persisted quality trends.
 - [ ] Add UI quality dashboard and trend view.
 - [x] Keep quality advisory and non-mutating.
 
@@ -69,6 +70,7 @@ measure whether generated decisions reduce human decision-production burden.
 - [x] Repeated recommendation reversal reduces stability.
 - [x] Reports and trends are deterministic and persisted.
 - [x] Quality assessment, report, and trend artifacts round-trip through filesystem persistence with markdown projections.
+- [x] Quality endpoints return expected success and error status codes.
 - [x] Quality assessment does not mutate decisions, proposals, packages, or execution projection.
 
 ## Exit Criteria

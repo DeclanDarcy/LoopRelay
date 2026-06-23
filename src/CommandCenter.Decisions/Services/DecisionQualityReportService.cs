@@ -8,7 +8,8 @@ namespace CommandCenter.Decisions.Services;
 public sealed class DecisionQualityReportService(
     IRepositoryService repositoryService,
     IDecisionRepository decisionRepository,
-    IDecisionQualityAssessmentService assessmentService) : IDecisionQualityReportService
+    IDecisionQualityAssessmentService assessmentService,
+    IDecisionArtifactProjectionService projectionService) : IDecisionQualityReportService
 {
     public async Task<DecisionQualityReport> GenerateReportAsync(Guid repositoryId)
     {
@@ -41,7 +42,9 @@ public sealed class DecisionQualityReportService(
                 $"Quality report {report.Id} belongs to repository {report.RepositoryId}, not {repository.Id}.");
         }
 
-        return await decisionRepository.SaveQualityReportAsync(repository, report);
+        DecisionQualityReport saved = await decisionRepository.SaveQualityReportAsync(repository, report);
+        await projectionService.ProjectQualityReportAsync(repository, saved);
+        return saved;
     }
 
     public DecisionQualityTrend GenerateTrend(
@@ -109,7 +112,9 @@ public sealed class DecisionQualityReportService(
                 $"Quality trend {trend.Id} belongs to repository {trend.RepositoryId}, not {repository.Id}.");
         }
 
-        return await decisionRepository.SaveQualityTrendAsync(repository, trend);
+        DecisionQualityTrend saved = await decisionRepository.SaveQualityTrendAsync(repository, trend);
+        await projectionService.ProjectQualityTrendAsync(repository, saved);
+        return saved;
     }
 
     private static DecisionQualityReport BuildReport(

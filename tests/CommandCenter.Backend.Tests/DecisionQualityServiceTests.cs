@@ -1,3 +1,8 @@
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using CommandCenter.Backend;
 using CommandCenter.Backend.Services;
 using CommandCenter.Core.Artifacts;
 using CommandCenter.Core.Repositories;
@@ -5,6 +10,8 @@ using CommandCenter.Decisions.Abstractions;
 using CommandCenter.Decisions.Models;
 using CommandCenter.Decisions.Primitives;
 using CommandCenter.Decisions.Services;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CommandCenter.Backend.Tests;
 
@@ -299,14 +306,130 @@ public sealed class DecisionQualityServiceTests
             diagnostic.Contains("Compared 1 previous assessment(s) with 1 current assessment(s).", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task QualityEndpointsExposeAssessmentReportTrendAndPersistedHistory()
+    {
+        Repository repository = CreateRepository();
+        var decisionRepository = new FileSystemDecisionRepository(new FileSystemArtifactStore());
+        DecisionProposal proposal = CreateProposal(repository.Id);
+        Decision decision = CreateDecision(repository.Id, DecisionOutcome.Accepted, "option-1", recommendedOptionId: "option-1");
+        await decisionRepository.SaveProposalAsync(repository, proposal);
+        await decisionRepository.SaveDecisionAsync(repository, decision);
+
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services => services.AddSingleton<IRepositoryService>(new StubRepositoryService(repository)));
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+        using var client = new HttpClient();
+        string root = app.Urls.Single();
+        JsonSerializerOptions jsonOptions = CreateJsonOptions();
+
+        HttpResponseMessage assessmentResponse = await client.PostAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/proposals/{proposal.Id}/quality/assess",
+            null);
+        HttpResponseMessage assessmentsResponse = await client.GetAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/quality/assessments");
+        HttpResponseMessage currentReportResponse = await client.GetAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/quality/reports/current");
+        HttpResponseMessage reportResponse = await client.PostAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/quality/reports",
+            null);
+        HttpResponseMessage reportsResponse = await client.GetAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/quality/reports");
+        HttpResponseMessage currentTrendResponse = await client.GetAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/quality/trends/current");
+        HttpResponseMessage trendResponse = await client.PostAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/quality/trends",
+            null);
+        HttpResponseMessage trendsResponse = await client.GetAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/quality/trends");
+
+        Assert.Equal(HttpStatusCode.OK, assessmentResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, assessmentsResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, currentReportResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, reportResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, reportsResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, currentTrendResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, trendResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, trendsResponse.StatusCode);
+
+        DecisionQualityAssessment assessment =
+            (await assessmentResponse.Content.ReadFromJsonAsync<DecisionQualityAssessment>(jsonOptions))!;
+        DecisionQualityAssessment[] assessments =
+            (await assessmentsResponse.Content.ReadFromJsonAsync<DecisionQualityAssessment[]>(jsonOptions))!;
+        DecisionQualityReport currentReport =
+            (await currentReportResponse.Content.ReadFromJsonAsync<DecisionQualityReport>(jsonOptions))!;
+        DecisionQualityReport report =
+            (await reportResponse.Content.ReadFromJsonAsync<DecisionQualityReport>(jsonOptions))!;
+        DecisionQualityReport[] reports =
+            (await reportsResponse.Content.ReadFromJsonAsync<DecisionQualityReport[]>(jsonOptions))!;
+        DecisionQualityTrend currentTrend =
+            (await currentTrendResponse.Content.ReadFromJsonAsync<DecisionQualityTrend>(jsonOptions))!;
+        DecisionQualityTrend trend =
+            (await trendResponse.Content.ReadFromJsonAsync<DecisionQualityTrend>(jsonOptions))!;
+        DecisionQualityTrend[] trends =
+            (await trendsResponse.Content.ReadFromJsonAsync<DecisionQualityTrend[]>(jsonOptions))!;
+
+        Assert.Equal(decision.Id.Value, assessment.DecisionId);
+        Assert.Contains(assessment.Signals, signal => signal.Category == "RecommendationQuality");
+        Assert.Single(assessments);
+        Assert.Equal(assessment.Id, assessments[0].Id);
+        Assert.Equal(1, currentReport.DecisionCount);
+        Assert.Equal(1, report.GeneratedPackageCount);
+        Assert.Contains(report.Assessments, item => item.DecisionId == decision.Id.Value);
+        Assert.Single(reports);
+        Assert.Equal(report.Id, reports[0].Id);
+        Assert.Equal(1, currentTrend.AssessmentCount);
+        Assert.Single(trends);
+        Assert.Equal(trend.Id, trends[0].Id);
+        Assert.True(File.Exists(PathFor(repository, $".agents/decisions/quality/assessments/{assessment.Id}.md")));
+        Assert.True(File.Exists(PathFor(repository, $".agents/decisions/quality/reports/{report.Id}.md")));
+        Assert.True(File.Exists(PathFor(repository, $".agents/decisions/quality/trends/{trend.Id}.md")));
+    }
+
+    [Fact]
+    public async Task QualityEndpointsReturnExpectedErrorStatusCodes()
+    {
+        Repository repository = CreateRepository();
+        var decisionRepository = new FileSystemDecisionRepository(new FileSystemArtifactStore());
+        await decisionRepository.SaveProposalAsync(repository, CreateProposal(repository.Id));
+
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services => services.AddSingleton<IRepositoryService>(new StubRepositoryService(repository)));
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+        using var client = new HttpClient();
+        string root = app.Urls.Single();
+
+        HttpResponseMessage missingRepositoryResponse = await client.GetAsync(
+            $"{root}/api/repositories/{Guid.NewGuid()}/decisions/quality/assessments");
+        HttpResponseMessage missingProposalResponse = await client.PostAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/proposals/PROP-9999/quality/assess",
+            null);
+        HttpResponseMessage invalidProposalResponse = await client.PostAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/proposals/%20/quality/assess",
+            null);
+        HttpResponseMessage unresolvedProposalResponse = await client.PostAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/proposals/PROP-0001/quality/assess",
+            null);
+
+        Assert.Equal(HttpStatusCode.NotFound, missingRepositoryResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, missingProposalResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, invalidProposalResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, unresolvedProposalResponse.StatusCode);
+    }
+
     private static IDecisionQualityAssessmentService CreateAssessmentService(
         Repository repository,
         IDecisionRepository decisionRepository)
     {
         var repositoryService = new StubRepositoryService(repository);
+        var projectionService = new DecisionArtifactProjectionService(decisionRepository, new FileSystemArtifactStore());
         var burdenService = new HumanAuthoringBurdenService(repositoryService, decisionRepository);
         var signalService = new DecisionQualitySignalService(repositoryService, decisionRepository, burdenService);
-        return new DecisionQualityAssessmentService(repositoryService, decisionRepository, signalService, burdenService);
+        return new DecisionQualityAssessmentService(repositoryService, decisionRepository, signalService, burdenService, projectionService);
     }
 
     private static IDecisionQualityReportService CreateReportService(
@@ -314,7 +437,11 @@ public sealed class DecisionQualityServiceTests
         IDecisionRepository decisionRepository,
         IDecisionQualityAssessmentService assessmentService)
     {
-        return new DecisionQualityReportService(new StubRepositoryService(repository), decisionRepository, assessmentService);
+        return new DecisionQualityReportService(
+            new StubRepositoryService(repository),
+            decisionRepository,
+            assessmentService,
+            new DecisionArtifactProjectionService(decisionRepository, new FileSystemArtifactStore()));
     }
 
     private static Decision CreateDecision(
@@ -544,6 +671,13 @@ public sealed class DecisionQualityServiceTests
     private static string PathFor(Repository repository, string relativePath)
     {
         return Path.Combine(repository.Path, relativePath.Replace('/', Path.DirectorySeparatorChar));
+    }
+
+    private static JsonSerializerOptions CreateJsonOptions()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        options.Converters.Add(new JsonStringEnumConverter());
+        return options;
     }
 
     private sealed class StubRepositoryService(params Repository[] repositories) : IRepositoryService

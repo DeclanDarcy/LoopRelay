@@ -46,6 +46,14 @@ public static class DecisionEndpoints
         app.MapGetDecisionGovernance();
         app.MapGenerateDecisionGovernanceReport();
         app.MapListDecisionGovernanceReports();
+        app.MapAssessDecisionProposalQuality();
+        app.MapListDecisionQualityAssessments();
+        app.MapGetCurrentDecisionQualityReport();
+        app.MapGenerateDecisionQualityReport();
+        app.MapListDecisionQualityReports();
+        app.MapGetCurrentDecisionQualityTrend();
+        app.MapGenerateDecisionQualityTrend();
+        app.MapListDecisionQualityTrends();
         app.MapGetExecutionDecisionProjection();
         app.MapGetDecisionCertification();
         app.MapRunDecisionCertification();
@@ -1065,6 +1073,211 @@ public static class DecisionEndpoints
             }
         });
 
+    private static void MapAssessDecisionProposalQuality(this IEndpointRouteBuilder app) =>
+        app.MapPost("/api/repositories/{repositoryId:guid}/decisions/proposals/{proposalId}/quality/assess", async (
+            Guid repositoryId,
+            string proposalId,
+            IRepositoryService repositoryService,
+            IDecisionRepository decisionRepository,
+            IDecisionQualityAssessmentService assessmentService) =>
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(proposalId))
+                {
+                    return Results.BadRequest(new { error = "Decision proposal id is required." });
+                }
+
+                Repository repository = await GetRepositoryAsync(repositoryService, repositoryId);
+                DecisionProposal? proposal = await decisionRepository.GetProposalAsync(repository, proposalId);
+                Decision? decision = await GetResolvedDecisionForProposalAsync(decisionRepository, repository, proposalId);
+                if (proposal is null && decision is null)
+                {
+                    return Results.NotFound(new { error = $"Decision proposal was not found: {proposalId}" });
+                }
+
+                if (decision is null)
+                {
+                    return Results.Conflict(new { error = $"Decision proposal has not been resolved: {proposalId}" });
+                }
+
+                return Results.Ok(await assessmentService.AssessAndSaveDecisionAsync(repositoryId, decision.Id.Value));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapListDecisionQualityAssessments(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/decisions/quality/assessments", async (
+            Guid repositoryId,
+            IDecisionQualityAssessmentService assessmentService) =>
+        {
+            try
+            {
+                return Results.Ok(await assessmentService.ListAssessmentsAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGetCurrentDecisionQualityReport(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/decisions/quality/reports/current", async (
+            Guid repositoryId,
+            IDecisionQualityReportService reportService) =>
+        {
+            try
+            {
+                return Results.Ok(await reportService.GenerateReportAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGenerateDecisionQualityReport(this IEndpointRouteBuilder app) =>
+        app.MapPost("/api/repositories/{repositoryId:guid}/decisions/quality/reports", async (
+            Guid repositoryId,
+            IDecisionQualityReportService reportService) =>
+        {
+            try
+            {
+                return Results.Ok(await reportService.GenerateAndSaveReportAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapListDecisionQualityReports(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/decisions/quality/reports", async (
+            Guid repositoryId,
+            IDecisionQualityReportService reportService) =>
+        {
+            try
+            {
+                return Results.Ok(await reportService.ListReportsAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGetCurrentDecisionQualityTrend(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/decisions/quality/trends/current", async (
+            Guid repositoryId,
+            IDecisionQualityReportService reportService) =>
+        {
+            try
+            {
+                return Results.Ok(await reportService.GenerateTrendFromHistoryAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGenerateDecisionQualityTrend(this IEndpointRouteBuilder app) =>
+        app.MapPost("/api/repositories/{repositoryId:guid}/decisions/quality/trends", async (
+            Guid repositoryId,
+            IDecisionQualityReportService reportService) =>
+        {
+            try
+            {
+                return Results.Ok(await reportService.GenerateAndSaveTrendFromHistoryAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapListDecisionQualityTrends(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/decisions/quality/trends", async (
+            Guid repositoryId,
+            IDecisionQualityReportService reportService) =>
+        {
+            try
+            {
+                return Results.Ok(await reportService.ListTrendsAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
     private static void MapGetExecutionDecisionProjection(this IEndpointRouteBuilder app) =>
         app.MapGet("/api/repositories/{repositoryId:guid}/decisions/execution-projection", async (
             Guid repositoryId,
@@ -1181,6 +1394,20 @@ public static class DecisionEndpoints
         }
 
         return parsed;
+    }
+
+    private static async Task<Decision?> GetResolvedDecisionForProposalAsync(
+        IDecisionRepository decisionRepository,
+        Repository repository,
+        string proposalId)
+    {
+        IReadOnlyList<Decision> decisions = await decisionRepository.ListDecisionsAsync(repository);
+        return decisions
+            .OrderByDescending(decision => decision.Resolution?.ResolvedAt ?? decision.Metadata.UpdatedAt)
+            .FirstOrDefault(decision => string.Equals(
+                decision.Resolution?.SourceProposalSnapshot?.ProposalId,
+                proposalId,
+                StringComparison.Ordinal));
     }
 
     private static async Task<Repository> GetRepositoryAsync(

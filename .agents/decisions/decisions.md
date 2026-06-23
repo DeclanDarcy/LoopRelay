@@ -2,16 +2,17 @@
 
 ## Newly Authorized
 
-- Accept the Milestone 8 backend quality-semantics slice as the intended prerequisite before opening API surface.
-- Preserve `DecisionQualitySignal` as the primary explainability abstraction; keep scores as secondary aggregation.
-- Treat the current backend quality model as sufficiently complete to expose through stable backend API contracts.
-- Proceed next with backend quality assessment, report, and trend endpoints.
-- Include API behavior tests for `200`, `400`, `404`, and `409` outcomes where applicable.
-- Keep returned quality payloads signal-first, with recommendation stability, tradeoff quality, context quality, constraint quality, and human authoring burden visible as first-class response content.
-- Continue sequencing Milestone 8 as backend endpoints before Tauri commands, React hooks, dashboards, or UI reporting surfaces.
+- Accept the Milestone 8 backend quality endpoint slice as correctly preserving the generation, resolution, quality-assessment, persistence, and endpoint boundary.
+- Treat unresolved proposals returning `409 Conflict` from proposal-scoped quality assessment as the intended endpoint behavior.
+- Keep resolution snapshots as the quality assessment boundary; assess the human-resolved decision outcome rather than mutable current proposal state.
+- Keep markdown projection mandatory for persisted quality assessment, report, and trend artifacts.
+- Proceed next with M8 quality UI consumption in this order: Tauri commands, UI types, API hooks, then a narrow quality surface.
+- Build the first UI quality surface around assessment, report, and trend retrieval before adding a full dashboard.
+- Preserve `DecisionQualitySignal` as the primary UI abstraction; keep overall score secondary.
+- Prioritize visible signal categories in the narrow UI surface: human authoring burden, recommendation stability, tradeoff quality, context quality, and constraint quality.
 
 ## Not Authorized
 
-- Do not make overall score the primary endpoint response shape.
-- Do not introduce Tauri wiring, React hooks, dashboards, or UI reporting surfaces before backend endpoint contracts are stable.
-- Do not let quality results become governance authority; quality remains observational.
+- Do not build the full dashboard before proving backend-to-Tauri-to-UI quality retrieval.
+- Do not present the overall score as the primary quality UI abstraction.
+- Do not assess unresolved generated proposals before human resolution authority exists.
