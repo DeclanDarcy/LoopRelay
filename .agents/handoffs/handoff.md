@@ -2,42 +2,46 @@
 
 ## New State From This Slice
 
-- Continued Milestone 5 by implementing the backend materialization review decision point.
-- Added materialization review models and enums:
-  - `ReasoningMaterializationReviewRequest`
-  - `ReasoningMaterializationScenario`
+- Completed the Milestone 5 UI exposure path for materialization review.
+- Added Tauri bridge commands:
+  - `get_reasoning_materialization_review`
+  - `run_reasoning_materialization_review`
+- Added UI materialization review types, API calls, and hook:
   - `ReasoningMaterializationReviewReport`
   - `ReasoningConceptMaterializationReview`
   - `ReasoningTaxonomyMaterializationFinding`
-  - `ReasoningMaterializationConcept`
-  - `ReasoningMaterializationOutcome`
-- Added `IReasoningMaterializationReviewService` and `ReasoningMaterializationReviewService`.
-- Registered the materialization review service in `AddReasoning()`.
-- Added backend endpoints:
-  - `GET /api/repositories/{repositoryId}/reasoning/materialization-review`
-  - `POST /api/repositories/{repositoryId}/reasoning/materialization-review`
-- Review behavior is advisory only:
-  - Ordinary event volume recommends `RemainDerived`.
-  - Repeated explicit failed reconstruction scenarios recommend `AddReadModelReport`.
-  - Repeated workflow friction can recommend `AddDerivedCache`.
-  - Direction remains derived unless explicit repeated failure evidence is supplied.
-  - Thread identity is reviewed as a grouping mechanism, not authority.
-  - Event-family/type growth that resembles a hidden lifecycle is flagged as taxonomy risk.
-- Added backend tests for reconstructable scenarios, direction deferral, repeated failure evidence, thread review, taxonomy lifecycle risk, endpoint exposure, and no specialized artifact-family creation.
-- Updated `.agents/milestones/m5-materialization-review.md` to mark backend work, backend tests, and backend exit criteria complete.
-- Rotated previous handoff to `.agents/handoffs/handoff.0018.md`.
+  - `useReasoningMaterializationReview`
+- Added `ReasoningMaterializationReviewPanel` and wired it into `ReasoningTrajectoryTab`.
+- The panel is intentionally advisory:
+  - Displays architecture-review authority text.
+  - Shows concept recommendation, evidence, and risks.
+  - Uses advisory labels such as `Derived remains sufficient`, `Materialization pressure observed`, and `Further review recommended`.
+  - Does not introduce approval/rejection language, status management, or review-history lifecycle.
+- Added dev Tauri mock support for materialization review commands.
+- Added command-palette/navigation target for `reasoning-materialization-review`.
+- Updated `.agents/milestones/m5-materialization-review.md` to mark M5 UI work complete.
+- Rotated previous handoff to `.agents/handoffs/handoff.0019.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter Reasoning` passes: 60 tests.
-- `dotnet build CommandCenter.slnx` passes with 0 warnings and 0 errors.
+- `npm run test --prefix src/CommandCenter.UI -- reasoningTrajectory.test.tsx` passes: 8 tests.
+- `npm run test --prefix src/CommandCenter.UI -- navigation.test.ts` passes: 2 files, 3 tests.
+- `npm run lint --prefix src/CommandCenter.UI` passes.
+- `npm run build --prefix src/CommandCenter.UI` passes.
+- `cargo build --manifest-path src/CommandCenter.Shell/Cargo.toml` passes.
+
+## Verification Notes
+
+- Full `npm run test --prefix src/CommandCenter.UI` was attempted and currently fails in `src/test/characterization/app.smoke.test.tsx`.
+- The observed failures are existing broad-selector smoke-test issues: tests use global `findByRole('textbox')` / `getByRole('combobox')` while the app renders multiple tab panels and form controls. The failures are not specific to the new materialization panel, which adds no text inputs.
 
 ## Current Gaps
 
-- M5 UI work is still open: `ReasoningMaterializationReviewPanel` is not implemented.
-- Tauri shell commands and UI API/hooks/types do not yet expose the materialization review endpoint.
-- Full backend test suite, UI lint/tests/build, shell build, and e2e certification were not rerun in this slice.
+- M5 appears functionally complete.
+- Backend full suite and `dotnet build CommandCenter.slnx` were not rerun in this slice because backend logic was not changed.
+- Full UI smoke suite still needs either test selector tightening or a render strategy that hides inactive tab panels from accessibility queries.
 
 ## Next Slice
 
-- Implement the M5 UI exposure path: Tauri bridge command, UI models/API/hook, dev mock response, `ReasoningMaterializationReviewPanel`, tab wiring, and focused characterization tests.
+- Start Milestone 6 only if the user wants to continue the roadmap.
+- Otherwise, first stabilize `app.smoke.test.tsx` selectors so full UI tests can be used as a reliable regression gate before adding more reasoning UI.

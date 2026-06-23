@@ -202,6 +202,15 @@ const staticSectionTargets: Pick<
     sectionId: 'reasoning-thread-view',
   },
   {
+    id: 'section-reasoning-materialization-review',
+    kind: 'section',
+    group: 'Inspector Sections',
+    label: 'Reasoning Materialization Review',
+    description: 'Open reasoning materialization review.',
+    tab: 'reasoning',
+    sectionId: 'reasoning-materialization-review',
+  },
+  {
     id: 'section-continuity-diagnostics',
     kind: 'section',
     group: 'Inspector Sections',

@@ -37,6 +37,7 @@ import type {
   ReasoningGraph,
   ReasoningGraphNode,
   ReasoningGraphRelationship,
+  ReasoningMaterializationReviewReport,
   ReasoningQuery,
   ReasoningQueryResult,
   ReasoningReconstruction,
@@ -2126,6 +2127,69 @@ function createReasoningReconstruction(
   }
 }
 
+function createReasoningMaterializationReview(
+  state: MockState,
+  repositoryId: string,
+): ReasoningMaterializationReviewReport {
+  const events = state.reasoningEvents[repositoryId] ?? []
+  const threads = state.reasoningThreads[repositoryId] ?? []
+  const relationships = state.reasoningRelationships[repositoryId] ?? []
+  const familyCounts = events.reduce<Record<string, number>>((counts, event) => {
+    counts[event.family] = (counts[event.family] ?? 0) + 1
+    return counts
+  }, {})
+
+  return {
+    repositoryId,
+    generatedAt: new Date().toISOString(),
+    concepts: [
+      {
+        concept: 'Hypothesis',
+        recommendation: 'RemainDerived',
+        summary: 'Hypothesis remains reconstructable from reasoning events and trace evidence.',
+        evidence: [`${familyCounts.Hypothesis ?? 0} hypothesis events`],
+        risks: ['Promoting hypotheses would imply a lifecycle not owned by reasoning.'],
+      },
+      {
+        concept: 'Alternative',
+        recommendation: 'RemainDerived',
+        summary: 'Alternatives remain explanatory classifications until failed reconstruction evidence appears.',
+        evidence: [`${familyCounts.Alternative ?? 0} alternative events`],
+        risks: ['Alternative status belongs in reconstruction, not mutation authority.'],
+      },
+      {
+        concept: 'Contradiction',
+        recommendation: 'RemainDerived',
+        summary: 'Contradictions remain trace-derived unless repeated ambiguity is demonstrated.',
+        evidence: [`${familyCounts.Contradiction ?? 0} contradiction events`],
+        risks: ['A first-class contradiction object could overlap governance findings.'],
+      },
+      {
+        concept: 'Direction',
+        recommendation: 'RemainDerived',
+        summary: 'Direction remains derived because direction events alone do not justify stronger persistence.',
+        evidence: [`${familyCounts.Direction ?? 0} direction events`],
+        risks: ['Direction persistence could imply strategic authority.'],
+      },
+      {
+        concept: 'Thread',
+        recommendation: 'RemainDerived',
+        summary: 'Thread identity remains a grouping aid and not an authoritative artifact family.',
+        evidence: [`${threads.length} threads`, `${relationships.length} relationships`],
+        risks: ['Thread persistence must stay subject to future materialization review.'],
+      },
+    ],
+    taxonomyFindings: Object.entries(familyCounts).map(([family, count]) => ({
+      family: family as ReasoningMaterializationReviewReport['taxonomyFindings'][number]['family'],
+      eventTypeCount: new Set(events.filter((event) => event.family === family).map((event) => event.type)).size,
+      lifecycleRisk: false,
+      summary: `${family} remains classification vocabulary in the mock review.`,
+      evidence: [`${count} events`],
+    })),
+    diagnostics: [],
+  }
+}
+
 function createReasoningQueryResult(
   state: MockState,
   repositoryId: string,
@@ -3288,6 +3352,9 @@ export function installDevTauriMock() {
           const repositoryId = getStringArg(args, 'repositoryId')
           return clone(createReasoningReconstruction(state, repositoryId, args?.query as ReasoningQuery))
         }
+        case 'get_reasoning_materialization_review':
+        case 'run_reasoning_materialization_review':
+          return clone(createReasoningMaterializationReview(state, getStringArg(args, 'repositoryId')))
         case 'start_execution':
           return clone(
             startExecution(

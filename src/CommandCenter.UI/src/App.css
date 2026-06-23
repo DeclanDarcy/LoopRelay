@@ -877,7 +877,8 @@ button:focus-visible {
 .reasoning-trace-panel,
 .reasoning-graph-panel,
 .reasoning-query-panel,
-.reasoning-reconstruction-panel {
+.reasoning-reconstruction-panel,
+.reasoning-materialization-review-panel {
   grid-column: 1 / -1;
 }
 
@@ -1014,10 +1015,39 @@ button:focus-visible {
 .reasoning-graph-layout,
 .reasoning-trace-grid,
 .reasoning-query-result,
-.reasoning-reconstruction-body {
+.reasoning-reconstruction-body,
+.reasoning-materialization-grid {
   min-width: 0;
   display: grid;
   gap: 10px;
+}
+
+.reasoning-materialization-grid {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.reasoning-materialization-card {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--surface-2);
+  border-radius: var(--radius-6);
+  background: var(--surface-1);
+}
+
+.reasoning-materialization-card p,
+.reasoning-materialization-card span,
+.reasoning-materialization-card strong {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.reasoning-materialization-card p {
+  color: var(--fg-subtle);
+  font-size: 0.82rem;
+  line-height: 1.5;
 }
 
 .reasoning-graph-filters {

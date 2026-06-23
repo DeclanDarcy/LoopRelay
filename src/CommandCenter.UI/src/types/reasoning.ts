@@ -190,6 +190,20 @@ export type ReasoningQueryCategory =
   | 'Thread'
   | 'Assumption'
 
+export type ReasoningMaterializationConcept =
+  | 'Hypothesis'
+  | 'Alternative'
+  | 'Contradiction'
+  | 'Direction'
+  | 'Thread'
+
+export type ReasoningMaterializationOutcome =
+  | 'RemainDerived'
+  | 'AddDerivedCache'
+  | 'AddReadModelReport'
+  | 'PromoteToFirstClassEntity'
+  | 'RejectConcept'
+
 export type ReasoningGraphNode = {
   id: string
   kind: ReasoningReferenceKind
@@ -258,6 +272,42 @@ export type ReasoningQueryResult = {
   generatedAt: string
   query: ReasoningQuery
   reconstruction: ReasoningReconstruction
+  diagnostics: string[]
+}
+
+export type ReasoningMaterializationScenario = {
+  concept: ReasoningMaterializationConcept
+  question: string
+  reconstructionFailed: boolean
+  evidence: string
+  repeatedWorkflowCount?: number
+}
+
+export type ReasoningMaterializationReviewRequest = {
+  scenarios?: ReasoningMaterializationScenario[]
+}
+
+export type ReasoningConceptMaterializationReview = {
+  concept: ReasoningMaterializationConcept
+  recommendation: ReasoningMaterializationOutcome
+  summary: string
+  evidence: string[]
+  risks: string[]
+}
+
+export type ReasoningTaxonomyMaterializationFinding = {
+  family: ReasoningEventFamily
+  eventTypeCount: number
+  lifecycleRisk: boolean
+  summary: string
+  evidence: string[]
+}
+
+export type ReasoningMaterializationReviewReport = {
+  repositoryId: string
+  generatedAt: string
+  concepts: ReasoningConceptMaterializationReview[]
+  taxonomyFindings: ReasoningTaxonomyMaterializationFinding[]
   diagnostics: string[]
 }
 

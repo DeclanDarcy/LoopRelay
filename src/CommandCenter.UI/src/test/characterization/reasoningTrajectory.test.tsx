@@ -5,6 +5,7 @@ import type {
   ManualReasoningCaptureTemplate,
   ReasoningEvent,
   ReasoningGraph,
+  ReasoningMaterializationReviewReport,
   ReasoningQueryResult,
   ReasoningReconstruction,
   ReasoningRelationship,
@@ -247,6 +248,44 @@ const queryResult: ReasoningQueryResult = {
   diagnostics: [],
 }
 
+const materializationReview: ReasoningMaterializationReviewReport = {
+  repositoryId: 'repo-alpha',
+  generatedAt: '2026-06-22T16:09:00.0000000Z',
+  concepts: [
+    {
+      concept: 'Hypothesis',
+      recommendation: 'RemainDerived',
+      summary: 'Hypothesis remains reconstructable from reasoning events and trace evidence.',
+      evidence: ['1 hypothesis event', '0 failed reconstruction scenarios'],
+      risks: ['Promoting hypotheses would imply lifecycle authority.'],
+    },
+    {
+      concept: 'Direction',
+      recommendation: 'RemainDerived',
+      summary: 'Direction remains derived because direction events alone do not justify stronger persistence.',
+      evidence: ['0 direction events'],
+      risks: ['Direction persistence could imply strategic authority.'],
+    },
+    {
+      concept: 'Thread',
+      recommendation: 'RemainDerived',
+      summary: 'Thread identity remains a grouping aid and not an authoritative artifact family.',
+      evidence: ['1 thread'],
+      risks: ['Thread persistence must stay subject to future materialization review.'],
+    },
+  ],
+  taxonomyFindings: [
+    {
+      family: 'Hypothesis',
+      eventTypeCount: 1,
+      lifecycleRisk: false,
+      summary: 'Hypothesis remains classification vocabulary.',
+      evidence: ['1 event types observed'],
+    },
+  ],
+  diagnostics: [],
+}
+
 function renderTab(overrides: Partial<Parameters<typeof ReasoningTrajectoryTab>[0]> = {}) {
   const props = {
     events,
@@ -257,18 +296,23 @@ function renderTab(overrides: Partial<Parameters<typeof ReasoningTrajectoryTab>[
     forwardTrace: null,
     queryResult: null,
     reconstruction: null,
+    materializationReview,
     templates,
     hasSelectedRepository: true,
     isLoading: false,
     isTracingGraph: false,
     isQuerying: false,
     isReconstructing: false,
+    isLoadingMaterializationReview: false,
+    isRunningMaterializationReview: false,
     error: null,
     queryError: null,
     reconstructionError: null,
+    materializationReviewError: null,
     onRefresh: vi.fn(),
     onTraceGraphNode: vi.fn(),
     onRunQuery: vi.fn().mockResolvedValue(undefined),
+    onRunMaterializationReview: vi.fn(),
     onCaptureManualReasoning: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   }
@@ -438,5 +482,25 @@ describe('reasoning trajectory tab', () => {
       },
       direction: 'Backward',
     })
+  })
+
+  it('shows materialization review findings as advisory architecture review', () => {
+    const onRunMaterializationReview = vi.fn()
+    renderTab({ onRunMaterializationReview })
+
+    const reviewRegion = screen.getByRole('region', { name: 'Reasoning materialization review' })
+    expect(within(reviewRegion).getByLabelText('Reasoning materialization authority')).toHaveTextContent(
+      'Architecture review',
+    )
+    expect(within(reviewRegion).getByText('Hypothesis')).toBeInTheDocument()
+    expect(within(reviewRegion).getAllByText('Derived remains sufficient')).toHaveLength(3)
+    expect(within(reviewRegion).getByLabelText('Materialization taxonomy findings')).toHaveTextContent(
+      'Hypothesis remains classification vocabulary.',
+    )
+    expect(within(reviewRegion).queryByText('Approved')).toBeNull()
+    expect(within(reviewRegion).queryByText('Rejected')).toBeNull()
+
+    fireEvent.click(within(reviewRegion).getByRole('button', { name: 'Run Review' }))
+    expect(onRunMaterializationReview).toHaveBeenCalledTimes(1)
   })
 })

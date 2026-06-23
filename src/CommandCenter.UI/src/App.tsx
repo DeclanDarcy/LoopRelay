@@ -55,6 +55,7 @@ import {
   useReasoningEvents,
   useReasoningGraph,
   useReasoningManualCaptureTemplates,
+  useReasoningMaterializationReview,
   useReasoningQuery,
   useReasoningRelationships,
   useReasoningReconstruction,
@@ -276,6 +277,14 @@ function App() {
     error: reasoningReconstructionError,
     run: runReasoningReconstruction,
   } = useReasoningReconstruction(selectedRepository?.repository.id ?? null)
+  const {
+    data: reasoningMaterializationReview,
+    isLoading: isReasoningMaterializationReviewLoading,
+    isRunning: isReasoningMaterializationReviewRunning,
+    error: reasoningMaterializationReviewError,
+    refresh: refreshReasoningMaterializationReview,
+    run: runReasoningMaterializationReview,
+  } = useReasoningMaterializationReview(selectedRepository?.repository.id ?? null)
 
   const selectedArtifact = useMemo(() => {
     if (!workspace || !selectedArtifactPath) {
@@ -1453,6 +1462,7 @@ function App() {
       refreshReasoningThreads(),
       refreshReasoningRelationships(),
       refreshReasoningGraph(),
+      refreshReasoningMaterializationReview(),
     ])
   }
 
@@ -1732,6 +1742,7 @@ function App() {
                 forwardTrace={reasoningForwardTrace}
                 queryResult={reasoningQueryResult}
                 reconstruction={reasoningReconstruction}
+                materializationReview={reasoningMaterializationReview}
                 templates={reasoningManualCaptureTemplates}
                 hasSelectedRepository={Boolean(selectedRepository)}
                 isLoading={
@@ -1739,11 +1750,14 @@ function App() {
                   isReasoningManualCaptureTemplatesLoading ||
                   isReasoningThreadsLoading ||
                   isReasoningRelationshipsLoading ||
-                  isReasoningGraphLoading
+                  isReasoningGraphLoading ||
+                  isReasoningMaterializationReviewLoading
                 }
                 isTracingGraph={isReasoningGraphTracing}
                 isQuerying={isReasoningQueryRunning}
                 isReconstructing={isReasoningReconstructionRunning}
+                isLoadingMaterializationReview={isReasoningMaterializationReviewLoading}
+                isRunningMaterializationReview={isReasoningMaterializationReviewRunning}
                 error={
                   reasoningEventsError ??
                   reasoningManualCaptureTemplatesError ??
@@ -1751,13 +1765,16 @@ function App() {
                   reasoningRelationshipsError ??
                   reasoningGraphError ??
                   reasoningQueryError ??
-                  reasoningReconstructionError
+                  reasoningReconstructionError ??
+                  reasoningMaterializationReviewError
                 }
                 queryError={reasoningQueryError}
                 reconstructionError={reasoningReconstructionError}
+                materializationReviewError={reasoningMaterializationReviewError}
                 onRefresh={() => void refreshReasoning()}
                 onTraceGraphNode={(node) => void traceReasoningGraph(node.kind, node.referenceId)}
                 onRunQuery={queryReasoningTrajectory}
+                onRunMaterializationReview={() => void runReasoningMaterializationReview({})}
                 onCaptureManualReasoning={createManualReasoningCapture}
               />
 

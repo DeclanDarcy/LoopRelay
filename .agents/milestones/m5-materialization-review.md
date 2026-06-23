@@ -25,8 +25,8 @@ Goal: decide whether any analytical category, including threads, needs first-cla
 
 ## UI Work
 
-- [ ] Add `ReasoningMaterializationReviewPanel`.
-- [ ] Show each concept's current status, reconstruction evidence, recommendation, and risk.
+- [x] Add `ReasoningMaterializationReviewPanel`.
+- [x] Show each concept's current status, reconstruction evidence, recommendation, and risk.
 
 ## Tests
 
