@@ -137,7 +137,8 @@ public sealed class DecisionReviewServiceTests
         Assert.Equal(DecisionCandidatePriority.High, browserItem.Priority);
         Assert.False(browserItem.IsResolved);
 
-        DecisionOptionComparisonItem option = Assert.Single(comparison.Options);
+        Assert.True(comparison.Options.Count >= 3);
+        DecisionOptionComparisonItem option = Assert.Single(comparison.Options, option => option.IsRecommended);
         Assert.True(option.IsRecommended);
         Assert.NotEmpty(option.Benefits);
         Assert.NotEmpty(option.Costs);
@@ -263,7 +264,11 @@ public sealed class DecisionReviewServiceTests
     {
         var repositoryService = new StubRepositoryService(repository);
         var projectionService = new DecisionArtifactProjectionService(decisionRepository, store);
-        return new DecisionGenerationService(repositoryService, decisionRepository, projectionService);
+        return new DecisionGenerationService(
+            repositoryService,
+            decisionRepository,
+            projectionService,
+            new OptionGenerationService());
     }
 
     private static DecisionReviewService CreateReviewService(

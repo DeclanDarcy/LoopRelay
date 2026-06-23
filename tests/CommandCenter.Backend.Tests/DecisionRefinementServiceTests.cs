@@ -119,7 +119,7 @@ public sealed class DecisionRefinementServiceTests
         Assert.Contains(revision.RetiredAssumptions ?? [], assumption => assumption.Id == "assumption-1");
         Assert.Contains(revision.Constraints ?? [], constraint => constraint.Id == "constraint-1");
         Assert.Contains(revision.RejectedChanges ?? [], change => change == "Do not resolve the proposal during refinement.");
-        Assert.Contains(revision.Diagnostics ?? [], diagnostic => diagnostic.Contains("Retired 1 option", StringComparison.Ordinal));
+        Assert.Contains(revision.Diagnostics ?? [], diagnostic => diagnostic.Contains("Retired 2 option", StringComparison.Ordinal));
         Assert.Equal("Narrower rationale after reviewer challenge.", revision.RevisedRecommendationRationale);
 
         string markdown = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/revisions/REV-0001.md");
@@ -337,7 +337,11 @@ public sealed class DecisionRefinementServiceTests
     {
         var repositoryService = new StubRepositoryService(repository);
         var projectionService = new DecisionArtifactProjectionService(decisionRepository, store);
-        return new DecisionGenerationService(repositoryService, decisionRepository, projectionService);
+        return new DecisionGenerationService(
+            repositoryService,
+            decisionRepository,
+            projectionService,
+            new OptionGenerationService());
     }
 
     private static DecisionRefinementService CreateRefinementService(

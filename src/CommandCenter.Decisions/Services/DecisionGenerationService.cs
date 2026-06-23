@@ -12,7 +12,8 @@ namespace CommandCenter.Decisions.Services;
 public sealed class DecisionGenerationService(
     IRepositoryService repositoryService,
     IDecisionRepository decisionRepository,
-    IDecisionArtifactProjectionService projectionService) : IDecisionGenerationService
+    IDecisionArtifactProjectionService projectionService,
+    IOptionGenerationService optionGenerationService) : IDecisionGenerationService
 {
     public async Task<IReadOnlyList<DecisionProposal>> ListProposalsAsync(Guid repositoryId)
     {
@@ -56,7 +57,7 @@ public sealed class DecisionGenerationService(
             .Concat([candidateEvidence])
             .OrderBy(evidence => evidence.Summary, StringComparer.Ordinal)
             .ToArray();
-        DecisionOption[] options = BuildOptions(candidate, evidence);
+        DecisionOption[] options = optionGenerationService.GenerateOptions(candidate, evidence).ToArray();
         DecisionTradeoff[] tradeoffs = BuildTradeoffs(candidate, options, evidence);
         DecisionAssumption[] assumptions = BuildAssumptions(candidate, options, evidence);
         var recommendation = new DecisionRecommendation(
@@ -287,29 +288,6 @@ public sealed class DecisionGenerationService(
     {
         DecisionCandidate? candidate = await decisionRepository.GetCandidateAsync(repository, candidateId);
         return candidate ?? throw new KeyNotFoundException($"Decision candidate was not found: {candidateId}");
-    }
-
-    private static DecisionOption[] BuildOptions(DecisionCandidate candidate, IReadOnlyList<DecisionEvidence> evidence)
-    {
-        var options = new List<DecisionOption>
-        {
-            new(
-                "option-1",
-                $"Resolve {candidate.Title}",
-                $"Adopt a project direction that directly addresses the promoted candidate: {candidate.Summary}",
-                EvidenceForRecommendation(evidence, candidate))
-        };
-
-        if (candidate.Signals.Any(signal => signal.Kind is "Conflict" or "ArchitecturalFork"))
-        {
-            options.Add(new DecisionOption(
-                "option-2",
-                "Preserve current direction until stronger evidence exists",
-                "Defer authoritative direction and keep existing behavior unchanged while collecting clearer evidence.",
-                evidence.Where(item => item.Sources.Any(source => source.CandidateId == candidate.Id)).ToArray()));
-        }
-
-        return options.ToArray();
     }
 
     private static DecisionTradeoff[] BuildTradeoffs(

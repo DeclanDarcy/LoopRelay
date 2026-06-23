@@ -244,7 +244,29 @@ public sealed class DecisionArtifactProjectionService(
         foreach (DecisionOption option in proposal.Options.OrderBy(option => option.Id, StringComparer.Ordinal))
         {
             markdown.H3($"{option.Id}: {option.Title}");
+            markdown.Fields(("Type", option.Type.ToString()));
             markdown.Paragraph(option.Description);
+            markdown.H4("Assumptions");
+            foreach (string assumption in option.Assumptions.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(assumption);
+            }
+
+            markdown.EmptyListIf(option.Assumptions.Count == 0);
+            markdown.H4("Dependencies");
+            foreach (string dependency in option.Dependencies.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(dependency);
+            }
+
+            markdown.EmptyListIf(option.Dependencies.Count == 0);
+            markdown.H4("Diagnostics");
+            foreach (string diagnostic in option.Diagnostics.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(diagnostic);
+            }
+
+            markdown.EmptyListIf(option.Diagnostics.Count == 0);
             markdown.H4("Evidence");
             markdown.EvidenceList(option.Evidence);
         }

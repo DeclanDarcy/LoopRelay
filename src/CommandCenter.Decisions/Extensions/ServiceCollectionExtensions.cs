@@ -12,6 +12,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IDecisionArtifactProjectionService, DecisionArtifactProjectionService>();
         services.AddSingleton<IDecisionContextService, DecisionContextService>();
         services.AddSingleton<IDecisionDiscoveryService, DecisionDiscoveryService>();
+        services.AddSingleton<IOptionGenerationService, OptionGenerationService>();
         services.AddSingleton<IDecisionGenerationService, DecisionGenerationService>();
         services.AddSingleton<IDecisionResolutionService, DecisionResolutionService>();
         services.AddSingleton<IDecisionRefinementService, DecisionRefinementService>();

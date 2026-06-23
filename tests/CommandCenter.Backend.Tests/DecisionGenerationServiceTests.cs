@@ -52,12 +52,15 @@ public sealed class DecisionGenerationServiceTests
         Assert.Equal("PROP-0001", proposal.Id);
         Assert.Equal(candidate.Id, proposal.CandidateId);
         Assert.Equal(DecisionProposalState.Generated, proposal.State);
-        Assert.Single(proposal.Options);
+        Assert.True(proposal.Options.Count >= 2);
         Assert.NotNull(proposal.Recommendation);
         Assert.NotEmpty(proposal.Tradeoffs);
         Assert.NotEmpty(proposal.Assumptions);
-        Assert.Contains(proposal.Assumptions, assumption =>
-            assumption.Statement == "Only one viable option is currently represented in repository evidence; no unsupported alternatives were generated.");
+        Assert.All(proposal.Options, option =>
+        {
+            Assert.NotEmpty(option.Assumptions);
+            Assert.NotEmpty(option.Dependencies);
+        });
         Assert.True(File.Exists(Path.Combine(repository.Path, ".agents", "decisions", "proposals", "PROP-0001", "proposal.json")));
         Assert.True(File.Exists(Path.Combine(repository.Path, ".agents", "decisions", "proposals", "PROP-0001", "proposal.md")));
         Assert.True(File.Exists(Path.Combine(repository.Path, ".agents", "decisions", "proposals", "PROP-0001", "history.json")));
@@ -108,11 +111,44 @@ public sealed class DecisionGenerationServiceTests
 
         DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
 
-        Assert.Equal(2, proposal.Options.Count);
-        Assert.Contains(proposal.Options, option => option.Id == "option-2" && option.Title == "Preserve current direction until stronger evidence exists");
+        Assert.True(proposal.Options.Count >= 2);
+        Assert.Contains(proposal.Options, option => option.Type == DecisionOptionType.Investigate);
         Assert.DoesNotContain(proposal.Assumptions, assumption =>
             assumption.Statement.Contains("Only one viable option", StringComparison.Ordinal));
         Assert.Contains(proposal.Tradeoffs, tradeoff => tradeoff.OptionId == "option-2");
+    }
+
+    [Theory]
+    [InlineData(DecisionClassification.Architectural, "ArchitecturalFork", DecisionOptionType.Preserve, DecisionOptionType.Refactor, DecisionOptionType.Replace)]
+    [InlineData(DecisionClassification.Operational, "OperationalBlocker", DecisionOptionType.Adopt, DecisionOptionType.Refactor, DecisionOptionType.Delay)]
+    [InlineData(DecisionClassification.Strategic, "MissingDirection", DecisionOptionType.Expand, DecisionOptionType.Preserve, DecisionOptionType.Constrain)]
+    [InlineData(DecisionClassification.Tactical, "MissingDirection", DecisionOptionType.Adopt, DecisionOptionType.Delay, DecisionOptionType.Refactor)]
+    public async Task GenerateProposalCreatesCandidateSpecificTypedOptions(
+        DecisionClassification classification,
+        string signalKind,
+        DecisionOptionType first,
+        DecisionOptionType second,
+        DecisionOptionType third)
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(
+            repository.Id,
+            DecisionCandidateState.Promoted,
+            signalKind: signalKind,
+            classification: classification);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var service = CreateGenerationService(repository, store, decisionRepository);
+
+        DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
+
+        Assert.True(proposal.Options.Count >= 3);
+        Assert.Contains(proposal.Options, option => option.Type == first);
+        Assert.Contains(proposal.Options, option => option.Type == second);
+        Assert.Contains(proposal.Options, option => option.Type == third);
+        Assert.All(proposal.Options, option => Assert.NotEmpty(option.Evidence));
+        Assert.Equal("option-1", proposal.Recommendation?.OptionId);
     }
 
     [Fact]
@@ -1532,7 +1568,11 @@ public sealed class DecisionGenerationServiceTests
     {
         var repositoryService = new StubRepositoryService(repository);
         var projectionService = new DecisionArtifactProjectionService(decisionRepository, store);
-        return new DecisionGenerationService(repositoryService, decisionRepository, projectionService);
+        return new DecisionGenerationService(
+            repositoryService,
+            decisionRepository,
+            projectionService,
+            new OptionGenerationService());
     }
 
     private static DecisionResolutionService CreateResolutionService(
@@ -1597,21 +1637,22 @@ public sealed class DecisionGenerationServiceTests
         Guid repositoryId,
         DecisionCandidateState state,
         string signalKind = "MissingDirection",
-        string summary = "Need to decide repository-backed persistence schema.")
+        string summary = "Need to decide repository-backed persistence schema.",
+        DecisionClassification classification = DecisionClassification.Architectural)
     {
         return new DecisionCandidate(
             "CAND-0001",
             repositoryId,
             state,
             DecisionCandidatePriority.High,
-            DecisionClassification.Architectural,
+            classification,
             "Decide persistence schema",
             summary,
             "source-fingerprint",
             [new DecisionSignal(
                 signalKind,
                 summary,
-                DecisionClassification.Architectural,
+                classification,
                 DecisionCandidatePriority.High,
                 [new DecisionEvidence(
                     "Plan requires a persistence decision.",
