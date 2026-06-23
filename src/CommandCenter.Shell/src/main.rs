@@ -38,6 +38,7 @@ struct RepositoryDashboardProjection {
     has_current_handoff: bool,
     has_current_decisions: bool,
     continuity_summary: RepositoryContinuitySummary,
+    reasoning_summary: RepositoryReasoningSummary,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -49,6 +50,29 @@ struct RepositoryContinuitySummary {
     open_question_count: i32,
     active_risk_count: i32,
     pending_proposal_exists: bool,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RepositoryReasoningSummary {
+    event_count: i32,
+    thread_count: i32,
+    relationship_count: i32,
+    hypothesis_event_count: i32,
+    alternative_event_count: i32,
+    contradiction_event_count: i32,
+    direction_event_count: i32,
+    decision_evolution_event_count: i32,
+    assumption_evolution_event_count: i32,
+    constraint_evolution_event_count: i32,
+    evidence_event_count: i32,
+    last_event_at: Option<String>,
+    last_thread_activity_at: Option<String>,
+    last_relationship_at: Option<String>,
+    last_activity_at: Option<String>,
+    last_reconstruction_at: Option<String>,
+    last_certification_at: Option<String>,
+    certification_result: Option<String>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -191,6 +215,7 @@ struct RepositoryWorkspaceProjection {
     has_current_decisions: bool,
     operational_context_proposal_summary: OperationalContextProposalSummary,
     operational_context: OperationalContextProjection,
+    reasoning_summary: RepositoryReasoningSummary,
 }
 
 #[derive(Deserialize, Serialize)]

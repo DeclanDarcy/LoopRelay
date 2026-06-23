@@ -30,4 +30,6 @@ public sealed class RepositoryDashboardProjection
     public bool HasCurrentDecisions { get; init; }
 
     public RepositoryContinuitySummary ContinuitySummary { get; init; } = new();
+
+    public RepositoryReasoningSummary ReasoningSummary { get; init; } = new();
 }

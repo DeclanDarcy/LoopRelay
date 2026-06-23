@@ -201,7 +201,73 @@ function createWorkspace(repository: Repository, inventory: ArtifactInventory): 
     hasCurrentDecisions: inventory.currentDecisions !== null,
     operationalContextProposalSummary,
     operationalContext: createOperationalContextProjection(inventory, operationalContextProposalSummary),
+    reasoningSummary: createEmptyReasoningSummary(),
   }
+}
+
+function createEmptyReasoningSummary(): Workspace['reasoningSummary'] {
+  return {
+    eventCount: 0,
+    threadCount: 0,
+    relationshipCount: 0,
+    hypothesisEventCount: 0,
+    alternativeEventCount: 0,
+    contradictionEventCount: 0,
+    directionEventCount: 0,
+    decisionEvolutionEventCount: 0,
+    assumptionEvolutionEventCount: 0,
+    constraintEvolutionEventCount: 0,
+    evidenceEventCount: 0,
+    lastEventAt: null,
+    lastThreadActivityAt: null,
+    lastRelationshipAt: null,
+    lastActivityAt: null,
+    lastReconstructionAt: null,
+    lastCertificationAt: null,
+    certificationResult: null,
+  }
+}
+
+function refreshReasoningSummary(state: MockState, repositoryId: string) {
+  const workspace = state.workspaces[repositoryId]
+  if (!workspace) {
+    return
+  }
+
+  const events = state.reasoningEvents[repositoryId] ?? []
+  const threads = state.reasoningThreads[repositoryId] ?? []
+  const relationships = state.reasoningRelationships[repositoryId] ?? []
+  const lastEventAt = latestTimestamp(events.map((event) => event.createdAt))
+  const lastThreadActivityAt = latestTimestamp(threads.map((thread) => thread.updatedAt))
+  const lastRelationshipAt = latestTimestamp(relationships.map((relationship) => relationship.createdAt))
+
+  workspace.reasoningSummary = {
+    eventCount: events.length,
+    threadCount: threads.length,
+    relationshipCount: relationships.length,
+    hypothesisEventCount: events.filter((event) => event.family === 'Hypothesis').length,
+    alternativeEventCount: events.filter((event) => event.family === 'Alternative').length,
+    contradictionEventCount: events.filter((event) => event.family === 'Contradiction').length,
+    directionEventCount: events.filter((event) => event.family === 'Direction').length,
+    decisionEvolutionEventCount: events.filter((event) => event.family === 'DecisionEvolution').length,
+    assumptionEvolutionEventCount: events.filter((event) => event.family === 'AssumptionEvolution').length,
+    constraintEvolutionEventCount: events.filter((event) => event.family === 'ConstraintEvolution').length,
+    evidenceEventCount: events.filter((event) => event.family === 'Evidence').length,
+    lastEventAt,
+    lastThreadActivityAt,
+    lastRelationshipAt,
+    lastActivityAt: latestTimestamp([lastEventAt, lastThreadActivityAt, lastRelationshipAt]),
+    lastReconstructionAt: null,
+    lastCertificationAt: null,
+    certificationResult: null,
+  }
+}
+
+function latestTimestamp(values: Array<string | null | undefined>): string | null {
+  return values
+    .filter((value): value is string => typeof value === 'string' && value.length > 0)
+    .sort()
+    .at(-1) ?? null
 }
 
 function createOperationalContextProjection(
@@ -1599,6 +1665,7 @@ function createInitialState(): MockState {
     state.reasoningRelationships[repository.id] = repository.id === alphaRepository.id
       ? createReasoningRelationships(repository.id)
       : []
+    refreshReasoningSummary(state, repository.id)
   })
 
   seedCertificationSession(state, certificationRepositories[0], 'Executing', 'Executing')
@@ -1700,6 +1767,7 @@ function dashboardEntry(workspace: Workspace): DashboardEntry {
       activeRiskCount: workspace.operationalContext.activeRisks.length,
       pendingProposalExists: workspace.operationalContextProposalSummary.pendingProposalExists,
     },
+    reasoningSummary: workspace.reasoningSummary,
   }
 }
 
@@ -2795,6 +2863,7 @@ export function installDevTauriMock() {
             tags: command.tags ?? [],
           }
           state.reasoningEvents[repositoryId] = [...events, event]
+          refreshReasoningSummary(state, repositoryId)
           return clone(event)
         }
         case 'list_reasoning_threads':
@@ -2826,6 +2895,7 @@ export function installDevTauriMock() {
             tags: command.tags ?? [],
           }
           state.reasoningThreads[repositoryId] = [...threads, thread]
+          refreshReasoningSummary(state, repositoryId)
           return clone(thread)
         }
         case 'append_reasoning_thread_event': {
@@ -2846,6 +2916,7 @@ export function installDevTauriMock() {
           state.reasoningThreads[repositoryId] = threads.map((item) =>
             item.id === threadId ? updatedThread : item,
           )
+          refreshReasoningSummary(state, repositoryId)
           return clone(updatedThread)
         }
         case 'list_reasoning_relationships':
@@ -2884,6 +2955,7 @@ export function installDevTauriMock() {
             },
           }
           state.reasoningRelationships[repositoryId] = [...relationships, relationship]
+          refreshReasoningSummary(state, repositoryId)
           return clone(relationship)
         }
         case 'start_execution':

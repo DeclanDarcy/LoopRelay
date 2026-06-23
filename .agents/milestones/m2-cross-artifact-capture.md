@@ -23,7 +23,7 @@ Goal: use the event substrate to preserve reasoning evolution across decisions a
   - [x] Execution handoff accepted or rejected.
 - [x] Ensure inferred capture is idempotent by fingerprinting the source transition and refusing duplicate events for the same source transition.
 - [x] Keep manual capture available for narrative details that cannot be inferred from source artifacts.
-- [ ] Add workspace projection summary counts by event family and recent thread activity.
+- [x] Add workspace projection summary counts by event family and recent thread activity.
 
 ## UI Work
 

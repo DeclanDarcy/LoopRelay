@@ -54,6 +54,26 @@ const repository = {
     activeRiskCount: 1,
     pendingProposalExists: true,
   },
+  reasoningSummary: {
+    eventCount: 0,
+    threadCount: 0,
+    relationshipCount: 0,
+    hypothesisEventCount: 0,
+    alternativeEventCount: 0,
+    contradictionEventCount: 0,
+    directionEventCount: 0,
+    decisionEvolutionEventCount: 0,
+    assumptionEvolutionEventCount: 0,
+    constraintEvolutionEventCount: 0,
+    evidenceEventCount: 0,
+    lastEventAt: null,
+    lastThreadActivityAt: null,
+    lastRelationshipAt: null,
+    lastActivityAt: null,
+    lastReconstructionAt: null,
+    lastCertificationAt: null,
+    certificationResult: null,
+  },
 } satisfies RepositoryDashboardProjection
 
 const proposalSummary = {

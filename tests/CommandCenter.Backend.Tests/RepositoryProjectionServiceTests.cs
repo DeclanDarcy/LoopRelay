@@ -17,6 +17,10 @@ using CommandCenter.Execution.Models;
 using CommandCenter.Execution.Primitives;
 using CommandCenter.Execution.Services;
 using CommandCenter.Middle.Projections;
+using CommandCenter.Reasoning.Abstractions;
+using CommandCenter.Reasoning.Models;
+using CommandCenter.Reasoning.Projections;
+using CommandCenter.Reasoning.Services;
 
 namespace CommandCenter.Backend.Tests;
 
@@ -265,6 +269,66 @@ public sealed class RepositoryProjectionServiceTests
     }
 
     [Fact]
+    public async Task DashboardAndWorkspaceExposeReadOnlyReasoningSummary()
+    {
+        string repositoryPath = CreateGitRepositoryDirectory();
+        RepositoryService repositoryService = CreateRepositoryService();
+        Repository repository = await repositoryService.RegisterAsync(repositoryPath);
+        IReasoningRepository reasoningRepository = CreateReasoningRepository();
+        ReasoningEvent hypothesis = await reasoningRepository.CreateEventAsync(repository, EventCommand(
+            ReasoningEventFamily.Hypothesis,
+            ReasoningEventType.HypothesisRaised,
+            "Hypothesis raised"));
+        ReasoningEvent alternative = await reasoningRepository.CreateEventAsync(repository, EventCommand(
+            ReasoningEventFamily.Alternative,
+            ReasoningEventType.AlternativeRejected,
+            "Alternative rejected"));
+        ReasoningEvent contradiction = await reasoningRepository.CreateEventAsync(repository, EventCommand(
+            ReasoningEventFamily.Contradiction,
+            ReasoningEventType.ContradictionResolved,
+            "Contradiction resolved"));
+        ReasoningEvent direction = await reasoningRepository.CreateEventAsync(repository, EventCommand(
+            ReasoningEventFamily.Direction,
+            ReasoningEventType.DirectionShifted,
+            "Direction shifted"));
+        ReasoningThread thread = await reasoningRepository.CreateThreadAsync(repository, new CreateReasoningThreadCommand(
+            "Reasoning summary thread",
+            ReasoningThreadTheme.StrategicMovement,
+            "Tracks recent reasoning activity.",
+            [hypothesis.Id, alternative.Id, contradiction.Id, direction.Id],
+            []));
+        await reasoningRepository.CreateRelationshipAsync(repository, new CreateReasoningRelationshipCommand(
+            ReasoningRelationshipType.LeadsTo,
+            new ReasoningReference(ReasoningReferenceKind.ReasoningEvent, contradiction.Id),
+            new ReasoningReference(ReasoningReferenceKind.ReasoningEvent, direction.Id),
+            new ReasoningNarrative("The resolved contradiction led to a direction shift."),
+            Provenance()));
+        RepositoryProjectionService projectionService = CreateProjectionService(repositoryService, reasoningRepository);
+
+        IReadOnlyList<RepositoryDashboardProjection> dashboard = await projectionService.GetDashboardAsync();
+        RepositoryWorkspaceProjection workspace = await projectionService.GetWorkspaceAsync(repository.Id);
+
+        RepositoryReasoningSummary dashboardSummary = Assert.Single(dashboard).ReasoningSummary;
+        Assert.Equal(4, dashboardSummary.EventCount);
+        Assert.Equal(1, dashboardSummary.ThreadCount);
+        Assert.Equal(1, dashboardSummary.RelationshipCount);
+        Assert.Equal(1, dashboardSummary.HypothesisEventCount);
+        Assert.Equal(1, dashboardSummary.AlternativeEventCount);
+        Assert.Equal(1, dashboardSummary.ContradictionEventCount);
+        Assert.Equal(1, dashboardSummary.DirectionEventCount);
+        Assert.Equal(0, dashboardSummary.DecisionEvolutionEventCount);
+        Assert.NotNull(dashboardSummary.LastEventAt);
+        Assert.NotNull(dashboardSummary.LastThreadActivityAt);
+        Assert.NotNull(dashboardSummary.LastRelationshipAt);
+        Assert.NotNull(dashboardSummary.LastActivityAt);
+        Assert.Null(dashboardSummary.LastReconstructionAt);
+        Assert.Null(dashboardSummary.LastCertificationAt);
+        Assert.Null(dashboardSummary.CertificationResult);
+        Assert.Equal(dashboardSummary.EventCount, workspace.ReasoningSummary.EventCount);
+        Assert.Equal(thread.Id, (await reasoningRepository.ListThreadsAsync(repository)).Single().Id);
+    }
+
+    [Fact]
     public async Task WorkspaceProjectionIncludesLatestProposalReviewStateAndWarnings()
     {
         string repositoryPath = CreateGitRepositoryDirectory();
@@ -430,8 +494,20 @@ public sealed class RepositoryProjectionServiceTests
 
     private static RepositoryProjectionService CreateProjectionService(
         IRepositoryService repositoryService,
+        IReasoningRepository reasoningRepository)
+    {
+        return CreateProjectionService(
+            repositoryService,
+            new ReadyExecutionSessionService(),
+            null,
+            reasoningRepository);
+    }
+
+    private static RepositoryProjectionService CreateProjectionService(
+        IRepositoryService repositoryService,
         IExecutionSessionService executionSessionService,
-        IDecisionArtifactProjectionService? decisionArtifactProjectionService = null)
+        IDecisionArtifactProjectionService? decisionArtifactProjectionService = null,
+        IReasoningRepository? reasoningRepository = null)
     {
         return new RepositoryProjectionService(
             repositoryService,
@@ -441,7 +517,39 @@ public sealed class RepositoryProjectionServiceTests
             new FileSystemOperationalContextProposalStore(new FileSystemArtifactStore()),
             new MarkdownOperationalContextParser(),
             new FileSystemArtifactStore(),
-            decisionArtifactProjectionService);
+            decisionArtifactProjectionService,
+            reasoningRepository);
+    }
+
+    private static IReasoningRepository CreateReasoningRepository()
+    {
+        return new FileSystemReasoningRepository(
+            new FileSystemArtifactStore(),
+            new ReasoningArtifactProjectionService());
+    }
+
+    private static CreateReasoningEventCommand EventCommand(
+        ReasoningEventFamily family,
+        ReasoningEventType type,
+        string title)
+    {
+        return new CreateReasoningEventCommand(
+            family,
+            type,
+            title,
+            new ReasoningNarrative($"{title} summary."),
+            [],
+            Provenance(),
+            [],
+            []);
+    }
+
+    private static ReasoningProvenance Provenance()
+    {
+        return new ReasoningProvenance(
+            "UserSupplied",
+            "RepositoryProjectionServiceTests",
+            ".agents/decisions/decisions.md");
     }
 
     private static async Task WriteAsync(Repository repository, string relativePath, string content)

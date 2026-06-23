@@ -10,6 +10,8 @@ using CommandCenter.Continuity.Models;
 using CommandCenter.Continuity.Primitives;
 using CommandCenter.Decisions.Abstractions;
 using CommandCenter.Execution.Abstractions;
+using CommandCenter.Reasoning.Abstractions;
+using CommandCenter.Reasoning.Models;
 
 namespace CommandCenter.Middle.Projections;
 
@@ -21,7 +23,8 @@ public sealed class RepositoryProjectionService(
     IOperationalContextProposalStore operationalContextProposalStore,
     IOperationalContextParser operationalContextParser,
     IArtifactStore artifactStore,
-    IDecisionArtifactProjectionService? decisionArtifactProjectionService = null) : IRepositoryProjectionService
+    IDecisionArtifactProjectionService? decisionArtifactProjectionService = null,
+    IReasoningRepository? reasoningRepository = null) : IRepositoryProjectionService
 {
     private readonly ConcurrentDictionary<Guid, ArtifactInventory> inventoryCache = new();
 
@@ -34,6 +37,7 @@ public sealed class RepositoryProjectionService(
         {
             ArtifactInventory inventory = await GetOrBuildInventoryAsync(repository);
             OperationalContextProjection operationalContext = await BuildOperationalContextProjectionAsync(repository, inventory);
+            RepositoryReasoningSummary reasoningSummary = await BuildReasoningSummaryAsync(repository);
             projections.Add(new RepositoryDashboardProjection
             {
                 Repository = repository,
@@ -54,7 +58,8 @@ public sealed class RepositoryProjectionService(
                     OpenQuestionCount = operationalContext.OpenQuestions.Count,
                     ActiveRiskCount = operationalContext.ActiveRisks.Count,
                     PendingProposalExists = operationalContext.PendingProposalSummary.PendingProposalExists
-                }
+                },
+                ReasoningSummary = reasoningSummary
             });
         }
 
@@ -86,6 +91,7 @@ public sealed class RepositoryProjectionService(
         ArtifactInventory inventory)
     {
         OperationalContextProjection operationalContext = await BuildOperationalContextProjectionAsync(repository, inventory);
+        RepositoryReasoningSummary reasoningSummary = await BuildReasoningSummaryAsync(repository);
         return new RepositoryWorkspaceProjection
         {
             Repository = repository,
@@ -101,7 +107,43 @@ public sealed class RepositoryProjectionService(
             HasCurrentHandoff = inventory.CurrentHandoff is not null,
             HasCurrentDecisions = inventory.CurrentDecisions is not null,
             OperationalContextProposalSummary = operationalContext.PendingProposalSummary,
-            OperationalContext = operationalContext
+            OperationalContext = operationalContext,
+            ReasoningSummary = reasoningSummary
+        };
+    }
+
+    private async Task<RepositoryReasoningSummary> BuildReasoningSummaryAsync(Repository repository)
+    {
+        if (reasoningRepository is null)
+        {
+            return new RepositoryReasoningSummary();
+        }
+
+        IReadOnlyList<ReasoningEvent> events = await reasoningRepository.ListEventsAsync(repository);
+        IReadOnlyList<ReasoningThread> threads = await reasoningRepository.ListThreadsAsync(repository);
+        IReadOnlyList<ReasoningRelationship> relationships = await reasoningRepository.ListRelationshipsAsync(repository);
+
+        DateTimeOffset? lastEventAt = MaxOrNull(events.Select(reasoningEvent => (DateTimeOffset?)reasoningEvent.CreatedAt));
+        DateTimeOffset? lastThreadActivityAt = MaxOrNull(threads.Select(thread => (DateTimeOffset?)thread.UpdatedAt));
+        DateTimeOffset? lastRelationshipAt = MaxOrNull(relationships.Select(relationship => (DateTimeOffset?)relationship.CreatedAt));
+
+        return new RepositoryReasoningSummary
+        {
+            EventCount = events.Count,
+            ThreadCount = threads.Count,
+            RelationshipCount = relationships.Count,
+            HypothesisEventCount = CountFamily(events, ReasoningEventFamily.Hypothesis),
+            AlternativeEventCount = CountFamily(events, ReasoningEventFamily.Alternative),
+            ContradictionEventCount = CountFamily(events, ReasoningEventFamily.Contradiction),
+            DirectionEventCount = CountFamily(events, ReasoningEventFamily.Direction),
+            DecisionEvolutionEventCount = CountFamily(events, ReasoningEventFamily.DecisionEvolution),
+            AssumptionEvolutionEventCount = CountFamily(events, ReasoningEventFamily.AssumptionEvolution),
+            ConstraintEvolutionEventCount = CountFamily(events, ReasoningEventFamily.ConstraintEvolution),
+            EvidenceEventCount = CountFamily(events, ReasoningEventFamily.Evidence),
+            LastEventAt = lastEventAt,
+            LastThreadActivityAt = lastThreadActivityAt,
+            LastRelationshipAt = lastRelationshipAt,
+            LastActivityAt = MaxOrNull([lastEventAt, lastThreadActivityAt, lastRelationshipAt])
         };
     }
 
@@ -187,6 +229,16 @@ public sealed class RepositoryProjectionService(
     private static DateTimeOffset? GetLastWriteTime(string path)
     {
         return File.Exists(path) ? new DateTimeOffset(File.GetLastWriteTimeUtc(path), TimeSpan.Zero) : null;
+    }
+
+    private static int CountFamily(IReadOnlyList<ReasoningEvent> events, ReasoningEventFamily family)
+    {
+        return events.Count(reasoningEvent => reasoningEvent.Family == family);
+    }
+
+    private static DateTimeOffset? MaxOrNull(IEnumerable<DateTimeOffset?> values)
+    {
+        return values.Max();
     }
 
     private static int GetHighestHistoricalRevisionNumber(IReadOnlyList<Artifact> historicalOperationalContexts)

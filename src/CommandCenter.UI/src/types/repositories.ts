@@ -19,6 +19,27 @@ export type RepositoryContinuitySummary = {
   pendingProposalExists: boolean
 }
 
+export type RepositoryReasoningSummary = {
+  eventCount: number
+  threadCount: number
+  relationshipCount: number
+  hypothesisEventCount: number
+  alternativeEventCount: number
+  contradictionEventCount: number
+  directionEventCount: number
+  decisionEvolutionEventCount: number
+  assumptionEvolutionEventCount: number
+  constraintEvolutionEventCount: number
+  evidenceEventCount: number
+  lastEventAt: string | null
+  lastThreadActivityAt: string | null
+  lastRelationshipAt: string | null
+  lastActivityAt: string | null
+  lastReconstructionAt: string | null
+  lastCertificationAt: string | null
+  certificationResult: string | null
+}
+
 export type RepositoryDashboardProjection = {
   repository: Repository
   availability: RepositoryAvailability
@@ -31,6 +52,7 @@ export type RepositoryDashboardProjection = {
   hasCurrentHandoff: boolean
   hasCurrentDecisions: boolean
   continuitySummary: RepositoryContinuitySummary
+  reasoningSummary: RepositoryReasoningSummary
 }
 
 export type RepositoryWorkspaceProjection = {
@@ -48,4 +70,5 @@ export type RepositoryWorkspaceProjection = {
   hasCurrentDecisions: boolean
   operationalContextProposalSummary: OperationalContextProposalSummary
   operationalContext: OperationalContextProjection
+  reasoningSummary: RepositoryReasoningSummary
 }
