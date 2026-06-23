@@ -374,6 +374,16 @@ public sealed class DecisionGenerationServiceTests
                 proposal.Options.Any(source => source.Id == option.OptionId && source.Type == DecisionOptionType.Replace))
             .SelectMany(option => option.Risks), risk =>
                 risk.Statement.Contains("Constraint may be violated", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(proposal.TradeoffComparisons.Where(comparison =>
+                proposal.Options.Any(source => source.Id == comparison.OptionId && source.Type == DecisionOptionType.Replace))
+            .SelectMany(comparison => comparison.DisqualifyingConstraints), constraint =>
+                constraint.Contains("Constraint may be violated", StringComparison.OrdinalIgnoreCase) &&
+                constraint.Contains("preserve compatibility", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(proposal.TradeoffComparisons.SelectMany(comparison => comparison.UniqueAdvantages), advantage =>
+            advantage.Contains("Distinct", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(proposal.TradeoffComparisons.SelectMany(comparison => comparison.RelativeWeaknesses), weakness =>
+            weakness.Contains("Dependency load", StringComparison.OrdinalIgnoreCase) ||
+            weakness.Contains("cost is at least as significant", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(proposal.AnalyzedOptions.SelectMany(option => option.Consequences), consequence =>
             consequence.Statement.Contains("handoff continuity", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(proposal.AnalyzedOptions.SelectMany(option => option.Diagnostics), diagnostic =>

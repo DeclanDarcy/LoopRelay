@@ -2,27 +2,35 @@
 
 ## Newly Authorized
 
-- Accept the context-aware Milestone 4 slice as the correct architectural direction.
-- Keep Milestone 4 open.
-- Continue treating `DecisionContextService` as the sole extractor and interpretation owner for repository decision context.
-- Preserve the projection boundary:
-  - repository evidence flows into `DecisionContextService`
-  - `DecisionContextService` emits `DecisionGenerationContext`
-  - downstream generation services consume that projection
-- Treat `IDecisionContextProjectionService` as a central extension point for later M5, M6, M8, M9, and M10 work.
-- Keep `DecisionGenerationContext` additive and scoped to what M4 needs right now.
-- Continue resisting package-version, quality, certification, dashboard, and recommendation work until M4 closes.
-- Continue M4 next by improving context-derived option comparison quality.
-- Comparison output should explain why options differ, not only how they differ.
-- Comparison output must remain descriptive and non-recommendational.
-- Add disqualifying constraint detection as M4 tradeoff analysis output.
-- Constraint-derived disqualifiers belong in analysis/comparison, not recommendation authority.
-- Verify unknown handling remains explicit after context integration.
-- Preserve explicit unknown risk, unknown dependency, and unknown consequence modeling when evidence is insufficient.
-- Require context-aware comparisons, disqualifying constraints, and unknown validation before starting M5.
+- Close Milestone 4 as complete.
+- Treat the final M4 comparison/disqualifier slice as sufficient for recommendation generation to begin.
+- Begin Milestone 5 immediately.
+- Replace the remaining `options[0]` recommendation default as quickly as possible.
+- Introduce M5 around:
+  - `IRecommendationService`
+  - `OptionEvaluation`
+  - `RecommendationEvidence`
+  - `RecommendationMode`
+- Recommendation generation should consume:
+  - `DecisionGenerationContext`
+  - validated options
+  - structured tradeoff analysis
+  - option comparisons
+  - disqualifying constraints
+  - known risks
+  - source evidence
+- Recommendation generation must reuse the existing projected context boundary and must not introduce competing repository parsing or context extraction.
+- Recommendation output must be explainable and reconstructable from generated benefits, costs, risks, constraints, dependencies, and consequences.
+- Recommendation generation must respect disqualifying constraints and must not silently prefer constraint-violating options.
+- Recommendation generation must support a no-recommendation mode when evidence is insufficient, contradictions are unresolved, or unknown risk prevents a defensible preference.
+- Keep recommendation output advisory and separate from human resolution authority.
 
 ## Not Authorized
 
-- Do not start M5 recommendation generation yet.
-- Do not add package/version, quality, dashboard, certification, or recommendation machinery before M4 analysis closes.
-- Do not let recommendation logic compensate for weak tradeoff analysis.
+- Do not start package versioning before M5 recommendation generation is complete.
+- Do not start quality assessment before M5 recommendation generation is complete.
+- Do not start dashboards before M5 recommendation generation is complete.
+- Do not start certification before M5 recommendation generation is complete.
+- Do not start throughput reporting before M5 recommendation generation is complete.
+- Do not use opaque hidden ranking as the basis for recommendations.
+- Do not allow recommendation generation to create new decision authority concepts.

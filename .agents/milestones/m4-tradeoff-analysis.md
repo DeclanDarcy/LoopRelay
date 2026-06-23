@@ -18,15 +18,15 @@ analyze benefits, costs, risks, dependencies, consequences, and cross-option com
 - [x] Preserve existing `DecisionTradeoff` fields during migration, but make the generated package use structured analysis.
 - [x] Add `ITradeoffAnalysisService`.
 - [x] Add `IOptionComparisonService`.
-- [ ] Analyze each option against:
+- [x] Analyze each option against:
   - [x] candidate type
-  - [ ] typed context goals
-  - [ ] constraints
-  - [ ] risks
-  - [ ] prior decisions
-  - [ ] repository state
+  - [x] typed context goals
+  - [x] constraints
+  - [x] risks
+  - [x] prior decisions
+  - [x] repository state
   - [x] dependencies
-- [ ] Require every option to have at least:
+- [x] Require every option to have at least:
   - [x] one benefit
   - [x] one cost
   - [x] one risk
@@ -55,5 +55,5 @@ analyze benefits, costs, risks, dependencies, consequences, and cross-option com
 
 ## Exit Criteria
 
-- [ ] Humans can compare consequences without producing the analysis manually.
-- [ ] Recommendation generation has structured evidence to consume.
+- [x] Humans can compare consequences without producing the analysis manually.
+- [x] Recommendation generation has structured evidence to consume.

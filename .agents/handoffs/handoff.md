@@ -2,32 +2,17 @@
 
 ## New State This Slice
 
-- Continued Milestone 4 by adding a typed decision-generation context projection boundary.
-- Added `IDecisionContextProjectionService`.
-- Added generation-context models:
-  - `DecisionGenerationContext`
-  - `DecisionGenerationContextEntry`
-- Extended `DecisionContextService` to implement the projection boundary and derive categorized context from existing authoritative context items:
-  - goals
-  - constraints
-  - risks
-  - questions
-  - prior decisions
-  - repository state
-  - dependencies
-  - handoff state
-- Registered `DecisionContextService` as the shared implementation for both `IDecisionContextService` and `IDecisionContextProjectionService`.
-- Updated `DecisionGenerationService` to build `DecisionGenerationContext` before tradeoff analysis and include it in the analysis fingerprint.
-- Updated `ITradeoffAnalysisService` / `TradeoffAnalysisService` so structured tradeoff analysis consumes `DecisionGenerationContext`.
-- Tradeoff analysis now adds context-derived:
-  - goal and repository-state benefits
-  - active-constraint costs
-  - context risks and unknown-question risks
-  - generation-context dependencies
-  - prior-decision and handoff-continuity consequences
-  - diagnostics reporting generation-context input counts
-- Constraint-violating options can now surface context-derived high-severity tradeoff risks, still without recommendation authority.
-- Added backend coverage proving generated proposals use projected context in structured tradeoff analysis.
+- Completed Milestone 4 tradeoff-analysis closure work.
+- Enhanced `OptionComparisonService` so generated comparisons now derive from structured analysis instead of only generic strongest-benefit/highest-risk strings.
+- Cross-option comparison now emits:
+  - relative strengths based on benefit impact and execution consequences
+  - relative weaknesses based on cost impact and dependency load
+  - distinct benefits and consequences when an option differs from alternatives
+  - distinct/shared highest risks plus explicit unknown risks
+- Context-derived high-severity constraint-violation risks now flow into `DecisionTradeoffComparison.DisqualifyingConstraints`.
+- Kept comparison output descriptive and non-recommendational.
+- Added backend regression coverage proving context-derived constraint violations become comparison disqualifiers and richer comparison deltas are generated.
+- Marked `.agents/milestones/m4-tradeoff-analysis.md` complete.
 
 ## Verification
 
@@ -37,8 +22,6 @@
 
 ## Next Slice
 
-- Continue Milestone 4 by improving comparison quality using the new structured context:
-  - distinguish concrete option deltas instead of generic stronger/weaker language
-  - include context-derived constraint conflicts in `DecisionTradeoffComparison.DisqualifyingConstraints`
-  - ensure comparison output remains descriptive and non-recommendational
-- Consider adding direct tests for `IDecisionContextProjectionService` extraction categories before broadening the projection shape.
+- Start Milestone 5 recommendation generation.
+- First M5 slice should introduce the recommendation service boundary and make recommendation selection consume structured options, tradeoffs, comparisons, context-derived disqualifiers, risks, and evidence instead of defaulting to `options[0]`.
+- Preserve human authority: recommendation output remains advisory and must not resolve or mutate decisions.
