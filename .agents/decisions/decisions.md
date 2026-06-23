@@ -2,24 +2,18 @@
 
 ## Newly Authorized
 
-- Accept the second Milestone 8 persistence slice as correct.
-- Treat quality evaluation as historical evidence, not mutable current state.
-- Keep quality artifacts as first-class durable artifacts under `.agents/decisions/quality/`.
-- Preserve timestamp snapshot semantics for quality assessments, reports, and trends so repeated generation does not overwrite prior evidence.
-- Continue ordering Milestone 8 as persist, recover, and verify before serving or displaying through endpoints and UI.
-- Continue preserving the advisory model: quality observes workflow outcomes and does not become decision authority.
-- Implement service-level quality history operations next:
-  - save assessments through quality services
-  - list assessments through quality services
-  - save reports through quality services
-  - list reports through quality services
-  - save trends through quality services
-  - list trends through quality services
-- Generate trends from persisted assessment history rather than recomputing history from current repository state.
-- Defer endpoints, reports APIs, and dashboards until persisted quality-history semantics are covered by tests.
+- Accept the Milestone 8 service-level persisted quality-history slice as correct.
+- Preserve the architectural rule that persisted assessments are the source for trend history, not freshly recomputed repository state.
+- Continue keeping quality semantics in quality services while repository implementations remain persistence mechanisms.
+- Treat fixed, validator-compatible quality artifact timestamp IDs as required before endpoints, reports APIs, or dashboards.
+- Continue finishing Milestone 8 backend semantics before adding endpoints or UI dashboards.
+- Implement recommendation stability next as a quality signal derived from historical recommendation behavior.
+- Implement tradeoff quality, context quality, and constraint quality as explainable quality signals, not opaque score-only aggregation.
+- Keep `DecisionQualitySignal` as the primary abstraction and use scores only as secondary aggregation.
+- Preserve the backend-first, evidence-first ordering so Milestone 8 can provide durable evidence for later Milestone 10 certification.
 
 ## Not Authorized
 
-- Do not introduce endpoints, reports APIs, or dashboards before service-level persisted-history operations and tests.
-- Do not make quality assessment block, mutate, or override decision lifecycle state.
-- Do not treat trends as a recomputed latest assessment over current repository state.
+- Do not introduce endpoints, reports APIs, or dashboards before recommendation stability, tradeoff quality, context quality, and constraint quality semantics are covered by backend tests.
+- Do not replace explainable quality signals with a single opaque quality score.
+- Do not reconstruct quality trend history from current repository state when persisted assessment history is available.

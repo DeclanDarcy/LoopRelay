@@ -15,6 +15,109 @@ public sealed class DecisionQualityReportService(
         Repository repository = await GetRepositoryAsync(repositoryId);
         IReadOnlyList<Decision> decisions = await decisionRepository.ListDecisionsAsync(repository);
         IReadOnlyList<DecisionQualityAssessment> assessments = await assessmentService.AssessRepositoryAsync(repositoryId);
+        DateTimeOffset generatedAt = DateTimeOffset.UtcNow;
+
+        return BuildReport(repository.Id, generatedAt, decisions, assessments);
+    }
+
+    public async Task<DecisionQualityReport> GenerateAndSaveReportAsync(Guid repositoryId)
+    {
+        DecisionQualityReport report = await GenerateReportAsync(repositoryId);
+        return await SaveReportAsync(repositoryId, report);
+    }
+
+    public async Task<IReadOnlyList<DecisionQualityReport>> ListReportsAsync(Guid repositoryId)
+    {
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        return await decisionRepository.ListQualityReportsAsync(repository);
+    }
+
+    public async Task<DecisionQualityReport> SaveReportAsync(Guid repositoryId, DecisionQualityReport report)
+    {
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        if (report.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException(
+                $"Quality report {report.Id} belongs to repository {report.RepositoryId}, not {repository.Id}.");
+        }
+
+        return await decisionRepository.SaveQualityReportAsync(repository, report);
+    }
+
+    public DecisionQualityTrend GenerateTrend(
+        Guid repositoryId,
+        IReadOnlyList<DecisionQualityAssessment> previousAssessments,
+        IReadOnlyList<DecisionQualityAssessment> currentAssessments)
+    {
+        double previousAverage = previousAssessments.Count == 0 ? 0 : previousAssessments.Average(assessment => assessment.Score);
+        double currentAverage = currentAssessments.Count == 0 ? 0 : currentAssessments.Average(assessment => assessment.Score);
+        QualitySignalDirection direction = currentAverage > previousAverage
+            ? QualitySignalDirection.Positive
+            : currentAverage < previousAverage
+                ? QualitySignalDirection.Negative
+                : QualitySignalDirection.Neutral;
+        DateTimeOffset generatedAt = DateTimeOffset.UtcNow;
+
+        return new DecisionQualityTrend(
+            $"trend.{generatedAt:yyyyMMddHHmmssfffffff}",
+            repositoryId,
+            generatedAt,
+            currentAssessments.Count,
+            RatingForAverage(currentAverage),
+            RatingForAverage(previousAverage),
+            currentAverage,
+            previousAverage,
+            direction,
+            ["Quality trend compares supplied assessment sets and is advisory only."]);
+    }
+
+    public async Task<DecisionQualityTrend> GenerateTrendFromHistoryAsync(Guid repositoryId)
+    {
+        IReadOnlyList<DecisionQualityAssessment> persistedAssessments =
+            await assessmentService.ListAssessmentsAsync(repositoryId);
+        (IReadOnlyList<DecisionQualityAssessment> previousAssessments, IReadOnlyList<DecisionQualityAssessment> currentAssessments) =
+            SplitAssessmentHistory(persistedAssessments);
+        DecisionQualityTrend trend = GenerateTrend(repositoryId, previousAssessments, currentAssessments);
+        return trend with
+        {
+            Diagnostics =
+            [
+                "Quality trend was generated from persisted assessment history and is advisory only.",
+                $"Compared {previousAssessments.Count} previous assessment(s) with {currentAssessments.Count} current assessment(s)."
+            ]
+        };
+    }
+
+    public async Task<DecisionQualityTrend> GenerateAndSaveTrendFromHistoryAsync(Guid repositoryId)
+    {
+        DecisionQualityTrend trend = await GenerateTrendFromHistoryAsync(repositoryId);
+        return await SaveTrendAsync(repositoryId, trend);
+    }
+
+    public async Task<IReadOnlyList<DecisionQualityTrend>> ListTrendsAsync(Guid repositoryId)
+    {
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        return await decisionRepository.ListQualityTrendsAsync(repository);
+    }
+
+    public async Task<DecisionQualityTrend> SaveTrendAsync(Guid repositoryId, DecisionQualityTrend trend)
+    {
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        if (trend.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException(
+                $"Quality trend {trend.Id} belongs to repository {trend.RepositoryId}, not {repository.Id}.");
+        }
+
+        return await decisionRepository.SaveQualityTrendAsync(repository, trend);
+    }
+
+    private static DecisionQualityReport BuildReport(
+        Guid repositoryId,
+        DateTimeOffset generatedAt,
+        IReadOnlyList<Decision> decisions,
+        IReadOnlyList<DecisionQualityAssessment> assessments)
+    {
         int count = decisions.Count;
         int accepted = decisions.Count(decision => decision.Resolution?.Outcome == DecisionOutcome.Accepted);
         int rejected = decisions.Count(decision => decision.Resolution?.Outcome == DecisionOutcome.Rejected);
@@ -31,11 +134,10 @@ public sealed class DecisionQualityReportService(
         int fullRewrite = EffectiveBurdenCount(assessments, HumanAuthoringBurden.FullRewrite);
         int generationBypassed = EffectiveBurdenCount(assessments, HumanAuthoringBurden.GenerationBypassed);
         double averageScore = assessments.Count == 0 ? 0 : assessments.Average(assessment => assessment.Score);
-        DateTimeOffset generatedAt = DateTimeOffset.UtcNow;
 
         return new DecisionQualityReport(
-            $"quality.{generatedAt:yyyyMMddHHmmssFFFFFFF}",
-            repository.Id,
+            $"quality.{generatedAt:yyyyMMddHHmmssfffffff}",
+            repositoryId,
             generatedAt,
             count,
             generatedPackages,
@@ -66,31 +168,34 @@ public sealed class DecisionQualityReportService(
             ["Quality report is advisory and does not mutate lifecycle artifacts."]);
     }
 
-    public DecisionQualityTrend GenerateTrend(
-        Guid repositoryId,
-        IReadOnlyList<DecisionQualityAssessment> previousAssessments,
-        IReadOnlyList<DecisionQualityAssessment> currentAssessments)
+    private static (
+        IReadOnlyList<DecisionQualityAssessment> PreviousAssessments,
+        IReadOnlyList<DecisionQualityAssessment> CurrentAssessments) SplitAssessmentHistory(
+            IReadOnlyList<DecisionQualityAssessment> assessments)
     {
-        double previousAverage = previousAssessments.Count == 0 ? 0 : previousAssessments.Average(assessment => assessment.Score);
-        double currentAverage = currentAssessments.Count == 0 ? 0 : currentAssessments.Average(assessment => assessment.Score);
-        QualitySignalDirection direction = currentAverage > previousAverage
-            ? QualitySignalDirection.Positive
-            : currentAverage < previousAverage
-                ? QualitySignalDirection.Negative
-                : QualitySignalDirection.Neutral;
-        DateTimeOffset generatedAt = DateTimeOffset.UtcNow;
+        var previousAssessments = new List<DecisionQualityAssessment>();
+        var currentAssessments = new List<DecisionQualityAssessment>();
+        foreach (IGrouping<string, DecisionQualityAssessment> decisionAssessments in assessments
+            .GroupBy(assessment => assessment.DecisionId, StringComparer.Ordinal))
+        {
+            DecisionQualityAssessment[] ordered = decisionAssessments
+                .OrderByDescending(assessment => assessment.AssessedAt)
+                .ThenByDescending(assessment => assessment.Id, StringComparer.Ordinal)
+                .ToArray();
+            if (ordered.Length > 0)
+            {
+                currentAssessments.Add(ordered[0]);
+            }
 
-        return new DecisionQualityTrend(
-            $"trend.{generatedAt:yyyyMMddHHmmssFFFFFFF}",
-            repositoryId,
-            generatedAt,
-            currentAssessments.Count,
-            RatingForAverage(currentAverage),
-            RatingForAverage(previousAverage),
-            currentAverage,
-            previousAverage,
-            direction,
-            ["Quality trend compares supplied assessment sets and is advisory only."]);
+            if (ordered.Length > 1)
+            {
+                previousAssessments.Add(ordered[1]);
+            }
+        }
+
+        return (
+            previousAssessments.OrderBy(assessment => assessment.DecisionId, StringComparer.Ordinal).ToArray(),
+            currentAssessments.OrderBy(assessment => assessment.DecisionId, StringComparer.Ordinal).ToArray());
     }
 
     private async Task<Repository> GetRepositoryAsync(Guid repositoryId)

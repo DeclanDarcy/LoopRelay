@@ -187,6 +187,58 @@ public sealed class DecisionQualityServiceTests
         Assert.Contains("- Direction: Positive", await File.ReadAllTextAsync(PathFor(repository, $".agents/decisions/quality/trends/{trend.Id}.md")));
     }
 
+    [Fact]
+    public async Task QualityServicesSaveAndListPersistedHistory()
+    {
+        Repository repository = CreateRepository();
+        var decisionRepository = new InMemoryDecisionRepository();
+        Decision decision = CreateDecision(repository.Id, DecisionOutcome.Accepted, "option-1", recommendedOptionId: "option-1");
+        await decisionRepository.SaveDecisionAsync(repository, decision);
+        IDecisionQualityAssessmentService assessmentService = CreateAssessmentService(repository, decisionRepository);
+        IDecisionQualityReportService reportService = CreateReportService(repository, decisionRepository, assessmentService);
+
+        DecisionQualityAssessment assessment =
+            await assessmentService.AssessAndSaveDecisionAsync(repository.Id, decision.Id.Value);
+        DecisionQualityReport report = await reportService.GenerateAndSaveReportAsync(repository.Id);
+        DecisionQualityTrend trend = await reportService.GenerateAndSaveTrendFromHistoryAsync(repository.Id);
+
+        DecisionQualityAssessment persistedAssessment =
+            Assert.Single(await assessmentService.ListAssessmentsAsync(repository.Id));
+        DecisionQualityReport persistedReport = Assert.Single(await reportService.ListReportsAsync(repository.Id));
+        DecisionQualityTrend persistedTrend = Assert.Single(await reportService.ListTrendsAsync(repository.Id));
+        Assert.Equal(assessment.Id, persistedAssessment.Id);
+        Assert.Equal(report.Id, persistedReport.Id);
+        Assert.Equal(trend.Id, persistedTrend.Id);
+        Assert.Contains(report.Assessments, item => item.DecisionId == decision.Id.Value);
+        Assert.Contains(trend.Diagnostics, diagnostic =>
+            diagnostic.Contains("persisted assessment history", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task QualityTrendUsesPersistedAssessmentHistory()
+    {
+        Repository repository = CreateRepository();
+        var decisionRepository = new InMemoryDecisionRepository();
+        Decision decision = CreateDecision(repository.Id, DecisionOutcome.Accepted, "option-1", recommendedOptionId: "option-1");
+        await decisionRepository.SaveDecisionAsync(repository, decision);
+        IDecisionQualityAssessmentService assessmentService = CreateAssessmentService(repository, decisionRepository);
+        IDecisionQualityReportService reportService = CreateReportService(repository, decisionRepository, assessmentService);
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        DecisionQualityAssessment previous = CreateAssessment(repository.Id, decision.Id.Value, "assessment.202606230101010000000", now.AddMinutes(-5), 40);
+        DecisionQualityAssessment current = CreateAssessment(repository.Id, decision.Id.Value, "assessment.202606230102010000000", now, 80);
+        await assessmentService.SaveAssessmentAsync(repository.Id, previous);
+        await assessmentService.SaveAssessmentAsync(repository.Id, current);
+
+        DecisionQualityTrend trend = await reportService.GenerateTrendFromHistoryAsync(repository.Id);
+
+        Assert.Equal(1, trend.AssessmentCount);
+        Assert.Equal(80, trend.CurrentAverageScore);
+        Assert.Equal(40, trend.PreviousAverageScore);
+        Assert.Equal(QualitySignalDirection.Positive, trend.Direction);
+        Assert.Contains(trend.Diagnostics, diagnostic =>
+            diagnostic.Contains("Compared 1 previous assessment(s) with 1 current assessment(s).", StringComparison.Ordinal));
+    }
+
     private static IDecisionQualityAssessmentService CreateAssessmentService(
         Repository repository,
         IDecisionRepository decisionRepository)
@@ -339,6 +391,25 @@ public sealed class DecisionQualityServiceTests
             new DecisionOption("option-1", "Assess from resolution evidence", "Use generated decision lifecycle evidence.", []),
             new DecisionOption("option-2", "Assess from alternative usage", "Measure whether alternatives were selected.", [])
         ];
+    }
+
+    private static DecisionQualityAssessment CreateAssessment(
+        Guid repositoryId,
+        string decisionId,
+        string assessmentId,
+        DateTimeOffset assessedAt,
+        int score)
+    {
+        return new DecisionQualityAssessment(
+            assessmentId,
+            repositoryId,
+            decisionId,
+            assessedAt,
+            DecisionQualityRating.Mixed,
+            score,
+            [],
+            [],
+            ["Seeded persisted quality assessment."]);
     }
 
     private static DecisionSourceReference DecisionRecordSource(DecisionId decisionId)

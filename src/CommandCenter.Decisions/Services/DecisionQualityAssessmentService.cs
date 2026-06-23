@@ -22,7 +22,7 @@ public sealed class DecisionQualityAssessmentService(
         DecisionQualityRating rating = RatingFor(score, signals);
         DateTimeOffset assessedAt = DateTimeOffset.UtcNow;
         return new DecisionQualityAssessment(
-            $"assessment.{assessedAt:yyyyMMddHHmmssFFFFFFF}",
+            $"assessment.{assessedAt:yyyyMMddHHmmssfffffff}",
             repository.Id,
             decision.Id.Value,
             assessedAt,
@@ -44,6 +44,42 @@ public sealed class DecisionQualityAssessmentService(
         }
 
         return assessments;
+    }
+
+    public async Task<DecisionQualityAssessment> AssessAndSaveDecisionAsync(Guid repositoryId, string decisionId)
+    {
+        DecisionQualityAssessment assessment = await AssessDecisionAsync(repositoryId, decisionId);
+        return await SaveAssessmentAsync(repositoryId, assessment);
+    }
+
+    public async Task<IReadOnlyList<DecisionQualityAssessment>> AssessAndSaveRepositoryAsync(Guid repositoryId)
+    {
+        IReadOnlyList<DecisionQualityAssessment> assessments = await AssessRepositoryAsync(repositoryId);
+        var savedAssessments = new List<DecisionQualityAssessment>();
+        foreach (DecisionQualityAssessment assessment in assessments.OrderBy(assessment => assessment.DecisionId, StringComparer.Ordinal))
+        {
+            savedAssessments.Add(await SaveAssessmentAsync(repositoryId, assessment));
+        }
+
+        return savedAssessments;
+    }
+
+    public async Task<IReadOnlyList<DecisionQualityAssessment>> ListAssessmentsAsync(Guid repositoryId)
+    {
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        return await decisionRepository.ListQualityAssessmentsAsync(repository);
+    }
+
+    public async Task<DecisionQualityAssessment> SaveAssessmentAsync(Guid repositoryId, DecisionQualityAssessment assessment)
+    {
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        if (assessment.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException(
+                $"Quality assessment {assessment.Id} belongs to repository {assessment.RepositoryId}, not {repository.Id}.");
+        }
+
+        return await decisionRepository.SaveQualityAssessmentAsync(repository, assessment);
     }
 
     private async Task<Repository> GetRepositoryAsync(Guid repositoryId)

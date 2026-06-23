@@ -52,7 +52,7 @@ measure whether generated decisions reduce human decision-production burden.
   - [x] major-refinement count/rate
   - [x] full-rewrite count/rate
   - [x] generation-bypassed count/rate
-- [ ] Generate trend reports over persisted assessments.
+- [x] Generate trend reports over persisted assessments.
 - [x] Persist quality assessments, reports, and trends as repository JSON artifacts.
 - [x] Generate deterministic markdown projections for persisted quality assessments, reports, and trends.
 - [x] Reload persisted quality assessments, reports, and trends from filesystem artifacts.
@@ -67,7 +67,7 @@ measure whether generated decisions reduce human decision-production burden.
 - [x] Major refinement or rewrite increases human-effort penalty.
 - [x] Full rewrite and generation bypass are recorded separately from ordinary refinement.
 - [ ] Repeated recommendation reversal reduces stability.
-- [ ] Reports and trends are deterministic and persisted.
+- [x] Reports and trends are deterministic and persisted.
 - [x] Quality assessment, report, and trend artifacts round-trip through filesystem persistence with markdown projections.
 - [x] Quality assessment does not mutate decisions, proposals, packages, or execution projection.
 
