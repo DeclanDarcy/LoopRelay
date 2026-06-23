@@ -18,54 +18,12 @@ public sealed class DecisionGenerationCertificationServiceTests
     [Fact]
     public async Task CertificationPassesForGeneratedResolvedDecisionWithQualityAndInfluence()
     {
-        Repository repository = CreateRepository();
-        var store = new FileSystemArtifactStore();
-        var decisionRepository = new FileSystemDecisionRepository(store);
-        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
-        await decisionRepository.SaveCandidateAsync(repository, candidate);
-        var repositoryService = new StubRepositoryService(repository);
-        var projectionService = new DecisionArtifactProjectionService(decisionRepository, store);
-        var generationService = new DecisionGenerationService(
-            repositoryService,
-            decisionRepository,
-            projectionService,
-            new OptionGenerationService(),
-            new DecisionContextService(repositoryService, store, decisionRepository));
-        var resolutionService = new DecisionResolutionService(repositoryService, decisionRepository, projectionService);
-        DecisionProposal proposal = await generationService.GenerateProposalAsync(repository.Id, candidate.Id);
-        await generationService.MarkProposalReadyForResolutionAsync(repository.Id, proposal.Id, "Ready for human governance.");
-        Decision decision = await resolutionService.ResolveProposalAsync(
-            repository.Id,
-            proposal.Id,
-            new ResolveDecisionCommand("Accept generated option after human review.", "human-reviewer", "option-1"));
-        var burdenService = new HumanAuthoringBurdenService(repositoryService, decisionRepository);
-        var qualityService = new DecisionQualityAssessmentService(
-            repositoryService,
-            decisionRepository,
-            new DecisionQualitySignalService(repositoryService, decisionRepository, burdenService),
-            burdenService,
-            projectionService);
-        await qualityService.AssessAndSaveDecisionAsync(repository.Id, decision.Id.Value);
-        var executionProjectionService = new DecisionProjectionService(
-            repositoryService,
-            decisionRepository,
-            new HealthyGovernanceService(repository.Id),
-            store);
-        ExecutionDecisionProjection executionProjection =
-            await executionProjectionService.BuildExecutionProjectionAsync(repository.Id);
-        var influenceService = new DecisionInfluenceService(repositoryService, store);
-        await influenceService.RecordExecutionInfluenceAsync(repository.Id, Guid.NewGuid(), executionProjection);
-        var certificationService = new DecisionGenerationCertificationService(
-            repositoryService,
-            decisionRepository,
-            executionProjectionService,
-            influenceService,
-            burdenService);
+        CertificationHarness harness = await CreateGeneratedDecisionHarnessAsync();
 
         DecisionGenerationCertificationReport report =
-            await certificationService.RunCertificationAsync(repository.Id);
+            await harness.CertificationService.RunCertificationAsync(harness.Repository.Id);
         IReadOnlyList<DecisionGenerationCertificationReport> reloaded =
-            await certificationService.ListReportsAsync(repository.Id);
+            await harness.CertificationService.ListReportsAsync(harness.Repository.Id);
 
         Assert.True(report.Result.Certified);
         Assert.True(report.Result.GenerationCertified);
@@ -80,8 +38,11 @@ public sealed class DecisionGenerationCertificationServiceTests
         Assert.Single(report.QualityAssessments);
         DecisionGenerationCertificationReport persisted = Assert.Single(reloaded);
         Assert.Equal(report.Id, persisted.Id);
+        DecisionCandidate candidate = Assert.Single(await harness.DecisionRepository.ListCandidatesAsync(harness.Repository));
+        Assert.Contains(candidate.History, entry => entry.Event == "Discovered");
+        Assert.Contains(candidate.History, entry => entry.Event == "Promoted");
         Assert.True(File.Exists(Path.Combine(
-            repository.Path,
+            harness.Repository.Path,
             ".agents",
             "decisions",
             "certification",
@@ -91,48 +52,10 @@ public sealed class DecisionGenerationCertificationServiceTests
     [Fact]
     public async Task CertificationFailsWhenGeneratedDecisionHasNoInfluenceTrace()
     {
-        Repository repository = CreateRepository();
-        var store = new FileSystemArtifactStore();
-        var decisionRepository = new FileSystemDecisionRepository(store);
-        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
-        await decisionRepository.SaveCandidateAsync(repository, candidate);
-        var repositoryService = new StubRepositoryService(repository);
-        var projectionService = new DecisionArtifactProjectionService(decisionRepository, store);
-        var generationService = new DecisionGenerationService(
-            repositoryService,
-            decisionRepository,
-            projectionService,
-            new OptionGenerationService(),
-            new DecisionContextService(repositoryService, store, decisionRepository));
-        var resolutionService = new DecisionResolutionService(repositoryService, decisionRepository, projectionService);
-        DecisionProposal proposal = await generationService.GenerateProposalAsync(repository.Id, candidate.Id);
-        await generationService.MarkProposalReadyForResolutionAsync(repository.Id, proposal.Id, "Ready for human governance.");
-        Decision decision = await resolutionService.ResolveProposalAsync(
-            repository.Id,
-            proposal.Id,
-            new ResolveDecisionCommand("Accept generated option after human review.", "human-reviewer", "option-1"));
-        var burdenService = new HumanAuthoringBurdenService(repositoryService, decisionRepository);
-        var qualityService = new DecisionQualityAssessmentService(
-            repositoryService,
-            decisionRepository,
-            new DecisionQualitySignalService(repositoryService, decisionRepository, burdenService),
-            burdenService,
-            projectionService);
-        await qualityService.AssessAndSaveDecisionAsync(repository.Id, decision.Id.Value);
-        var executionProjectionService = new DecisionProjectionService(
-            repositoryService,
-            decisionRepository,
-            new HealthyGovernanceService(repository.Id),
-            store);
-        var certificationService = new DecisionGenerationCertificationService(
-            repositoryService,
-            decisionRepository,
-            executionProjectionService,
-            new DecisionInfluenceService(repositoryService, store),
-            burdenService);
+        CertificationHarness harness = await CreateGeneratedDecisionHarnessAsync(recordInfluence: false);
 
         DecisionGenerationCertificationReport report =
-            await certificationService.GetCurrentCertificationAsync(repository.Id);
+            await harness.CertificationService.GetCurrentCertificationAsync(harness.Repository.Id);
 
         Assert.False(report.Result.Certified);
         Assert.True(report.Result.GenerationCertified);
@@ -140,6 +63,29 @@ public sealed class DecisionGenerationCertificationServiceTests
         Assert.True(report.Result.QualityCertified);
         Assert.False(report.Result.ConsumptionCertified);
         Assert.Contains(report.Result.Failures, failure => failure.StartsWith("CON-002:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task CertificationFailsWhenExecutionProjectionIsAbsentEvenWithInfluenceTrace()
+    {
+        CertificationHarness harness = await CreateGeneratedDecisionHarnessAsync();
+        var certificationService = new DecisionGenerationCertificationService(
+            harness.RepositoryService,
+            harness.DecisionRepository,
+            new EmptyProjectionService(harness.Repository.Id),
+            harness.InfluenceService,
+            harness.BurdenService);
+
+        DecisionGenerationCertificationReport report =
+            await certificationService.GetCurrentCertificationAsync(harness.Repository.Id);
+
+        Assert.False(report.Result.Certified);
+        Assert.True(report.Result.GenerationCertified);
+        Assert.True(report.Result.GovernanceCertified);
+        Assert.True(report.Result.QualityCertified);
+        Assert.False(report.Result.ConsumptionCertified);
+        Assert.Contains(report.Result.Failures, failure => failure.StartsWith("CON-001:", StringComparison.Ordinal));
+        Assert.DoesNotContain(report.Result.Failures, failure => failure.StartsWith("CON-002:", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -431,18 +377,39 @@ public sealed class DecisionGenerationCertificationServiceTests
         string resolver = "human-reviewer")
     {
         Repository repository = CreateRepository();
+        await WriteAsync(
+            repository,
+            ".agents/plan.md",
+            """
+            # Plan
+
+            - Need to decide architectural execution projection strategy for generated decisions.
+            """);
+        await WriteAsync(
+            repository,
+            ".agents/milestones/m10-generation-certification.md",
+            "# M10\n\n- Certify generated decisions reach execution influence.");
         var store = new FileSystemArtifactStore();
         var decisionRepository = new FileSystemDecisionRepository(store);
-        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
-        await decisionRepository.SaveCandidateAsync(repository, candidate);
         var repositoryService = new StubRepositoryService(repository);
         var projectionService = new DecisionArtifactProjectionService(decisionRepository, store);
+        var contextService = new DecisionContextService(repositoryService, store, decisionRepository);
+        var discoveryService = new DecisionDiscoveryService(
+            repositoryService,
+            contextService,
+            decisionRepository,
+            projectionService);
+        DecisionCandidate discovered = Assert.Single((await discoveryService.DiscoverAsync(repository.Id)).Candidates);
+        DecisionCandidate candidate = await discoveryService.PromoteCandidateAsync(
+            repository.Id,
+            discovered.Id,
+            "Ready for proposal generation.");
         var generationService = new DecisionGenerationService(
             repositoryService,
             decisionRepository,
             projectionService,
             new OptionGenerationService(),
-            new DecisionContextService(repositoryService, store, decisionRepository));
+            contextService);
         var resolutionService = new DecisionResolutionService(repositoryService, decisionRepository, projectionService);
         DecisionProposal proposal = await generationService.GenerateProposalAsync(repository.Id, candidate.Id);
         if (mutateProposal is not null)
@@ -512,7 +479,20 @@ public sealed class DecisionGenerationCertificationServiceTests
             executionProjectionService,
             influenceService,
             burdenService);
-        return new CertificationHarness(repository, decisionRepository, certificationService);
+        return new CertificationHarness(
+            repository,
+            repositoryService,
+            decisionRepository,
+            certificationService,
+            burdenService,
+            influenceService);
+    }
+
+    private static async Task WriteAsync(Repository repository, string relativePath, string content)
+    {
+        string path = Path.Combine(repository.Path, relativePath.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        await File.WriteAllTextAsync(path, content);
     }
 
     private static async Task SaveMatchingPackageVersionAsync(
@@ -556,8 +536,34 @@ public sealed class DecisionGenerationCertificationServiceTests
 
     private sealed record CertificationHarness(
         Repository Repository,
+        IRepositoryService RepositoryService,
         IDecisionRepository DecisionRepository,
-        DecisionGenerationCertificationService CertificationService);
+        DecisionGenerationCertificationService CertificationService,
+        IHumanAuthoringBurdenService BurdenService,
+        IDecisionInfluenceService InfluenceService);
+
+    private sealed class EmptyProjectionService(Guid repositoryId) : IDecisionProjectionService
+    {
+        public Task<ExecutionDecisionProjection> BuildExecutionProjectionAsync(
+            Guid requestedRepositoryId,
+            string? executionRequest = null,
+            string? milestoneContent = null)
+        {
+            Assert.Equal(repositoryId, requestedRepositoryId);
+            var context = new ExecutionDecisionContext([], [], [], [], [], ["Projection was absent in certification fixture."]);
+            return Task.FromResult(new ExecutionDecisionProjection(
+                repositoryId,
+                DateTimeOffset.UtcNow,
+                [],
+                [],
+                [],
+                [],
+                [],
+                ["Projection was absent in certification fixture."],
+                context,
+                "empty-projection-fixture"));
+        }
+    }
 
     private static JsonSerializerOptions CreateJsonOptions()
     {

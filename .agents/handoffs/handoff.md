@@ -2,34 +2,23 @@
 
 ## New State This Slice
 
-- Continued Milestone 10 automated decision generation certification false-positive hardening.
-- Tightened `DecisionGenerationCertificationService` so core generation findings for options, tradeoffs, and recommendation presence evaluate the resolved generated decision source snapshots instead of accepting unrelated repository-level proposal evidence.
-- Added `GEN-006` recommendation derivation certification:
-  - preferred recommendations must select the top viable evaluated option
-  - preferred recommendations must carry recommendation evidence
-  - no-recommendation packages must include rationale, concerns, option evaluations, and evidence
-- Added backend negative fixtures for:
-  - order-based or hardcoded recommendation failure
-  - single-option resolved generated decision
-  - missing recommendation evidence
-  - missing recommendation data
-  - missing tradeoff coverage
-  - missing quality assessment after generated resolution
-  - full rewrite burden
-  - manual generation bypass
-  - system-owned/generated resolution authority
-- Updated `.agents/milestones/m10-generation-certification.md` to mark the covered M10 failure-condition tests complete.
-- Rotated prior handoff to `.agents/handoffs/handoff.0035.md`.
+- Continued Milestone 10 automated decision generation certification hardening.
+- Tightened `DecisionGenerationCertificationService` `GEN-001` so generation certification now requires an evidence-backed candidate with an actual `Discovered` lifecycle history event, instead of accepting manually seeded evidence-backed candidates.
+- Converted the generation-certification backend harness to exercise the real discovery path before promotion, generation, human resolution, quality assessment, execution projection, influence recording, and certification.
+- Added a positive certification fixture that now proves discovery through execution influence and persists/reloads the certification report.
+- Added an execution-projection-absent failure fixture that fails `CON-001` while keeping influence trace coverage intact, distinguishing missing projection consumption from missing influence traceability.
+- Updated `.agents/milestones/m10-generation-certification.md` to mark automatic discovery, execution-projection-absent failure coverage, and the discovery-through-influence pass fixture complete.
+- Rotated prior handoff to `.agents/handoffs/handoff.0036.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter DecisionGenerationCertificationServiceTests` passed: 12 tests.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 502 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter DecisionGenerationCertificationServiceTests` passed: 13 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 503 tests.
 
 ## Next Recommended Slice
 
-- Finish the remaining M10 certification gaps:
-  - add explicit pass fixture that exercises discovery through execution influence
-  - add execution-projection-absent failure coverage distinct from missing influence trace
-  - decide whether "recommendations ignored repeatedly" should be a certification failure or a quality/throughput warning, then implement the corresponding fixture
+- Continue remaining M10 scenario/report coverage:
+  - decide and implement the repeated ignored recommendations behavior as a quality warning/signal rather than a certification failure unless new evidence changes that decision
   - add scenario fixtures for architectural fork, workflow priority decision, contradiction with withheld recommendation, refinement after assumption changes, and end-to-end repository lifecycle
+  - add certification reports for repository, workflow, human authoring burden, and executive replacement-readiness views
+  - close the remaining history-preserved requirement if existing package/revision/history evidence is sufficient, or add an explicit fixture if it is not

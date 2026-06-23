@@ -2,21 +2,30 @@
 
 ## Newly Authorized
 
-- Treat the M10 false-positive hardening slice as correct, especially the `GEN-006` safeguard against order-based or hardcoded recommendations.
-- Continue M10 with an explicit positive pass fixture proving the full certification path:
+- Treat the M10 validation slice as strong and correct.
+- Preserve the `GEN-001` certification requirement that candidates must have a real `Discovered` lifecycle history event, so manually seeded candidates cannot prove automated generation.
+- Treat the full-chain pass fixture as the canonical M10 workflow proof:
   - discovery
-  - options
-  - tradeoffs
-  - recommendation
-  - human resolution
-  - execution projection
-  - influence trace
-  - certification pass
-- Add an execution-projection-absent failure fixture that is distinct from the missing influence trace failure.
-- Treat repeated ignored recommendations initially as a quality warning or quality signal, not an automatic generation-certification failure.
-- Use a high recommendation-divergence signal to surface recommendation concerns unless later evidence shows recommendations are consistently wrong enough to justify hard certification failure.
+  - promotion
+  - generation
+  - resolution
+  - quality
+  - projection
+  - influence
+  - certification
+- Keep execution projection absence and influence trace absence as distinct certification failures:
+  - `CON-001`: execution projection absent
+  - `CON-002`: influence trace absent
+- Treat repeated ignored recommendations as quality signals or warnings, not automatic certification failures, unless later evidence shows generation is structurally ineffective.
+- Continue M10 by finishing scenario and report coverage:
+  - repeated ignored recommendation signal
+  - architectural fork
+  - workflow priority
+  - withheld recommendation
+  - refinement
+  - end-to-end lifecycle
 
 ## Not Authorized
 
-- Do not make repeated ignored recommendations an automatic certification failure yet.
-- Do not close M10 until the explicit pass fixture and execution-projection-absent failure fixture are implemented.
+- Do not treat manually seeded candidate state as proof of automated discovery.
+- Do not automatically fail certification solely because recommendations are repeatedly ignored without stronger evidence of structural generation ineffectiveness.

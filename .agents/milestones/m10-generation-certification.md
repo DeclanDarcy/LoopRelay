@@ -40,7 +40,7 @@ certify that automated decision generation replaces human decision production wi
   - [x] execution influence
   - [x] workflow replacement alignment
 - [ ] Certification requirements:
-  - [ ] candidates discovered automatically
+  - [x] candidates discovered automatically
   - [x] multiple options generated
   - [x] tradeoffs generated
   - [x] recommendations generated or responsibly withheld
@@ -60,7 +60,7 @@ certify that automated decision generation replaces human decision production wi
   - [x] humans rewriting most generated packages
   - [x] generated decisions frequently classified as `FullRewrite` or `GenerationBypassed`
   - [ ] recommendations ignored repeatedly
-  - [ ] execution projection absent
+  - [x] execution projection absent
   - [x] influence not traceable
 - [ ] Add certification scenarios:
   - [ ] architectural fork
@@ -76,7 +76,7 @@ certify that automated decision generation replaces human decision production wi
 
 ## Tests
 
-- [ ] Certification passes for fixtures that exercise discovery through execution influence.
+- [x] Certification passes for fixtures that exercise discovery through execution influence.
 - [x] Certification fails when recommendation is hardcoded or order-based.
 - [x] Certification fails when options are missing.
 - [x] Certification fails when governance resolution is bypassed.

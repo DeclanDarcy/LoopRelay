@@ -70,9 +70,11 @@ public sealed class DecisionGenerationCertificationService(
             findings,
             "GEN-001",
             "Generation",
-            candidates.Any(candidate => candidate.Evidence.Count > 0 || candidate.Sources.Count > 0),
-            "Candidates are evidence-backed.",
-            $"Read {candidates.Count} candidate(s); at least one evidence-backed candidate is required.",
+            candidates.Any(candidate =>
+                IsAutomaticallyDiscovered(candidate) &&
+                (candidate.Evidence.Count > 0 || candidate.Sources.Count > 0)),
+            "Candidates are automatically discovered from evidence.",
+            $"Read {candidates.Count} candidate(s); at least one candidate must have a Discovered lifecycle event and evidence-backed sources.",
             candidates.Select(CandidateSource).ToArray(),
             [],
             candidates.Select(candidate => candidate.Id).ToArray(),
@@ -290,6 +292,14 @@ public sealed class DecisionGenerationCertificationService(
             string.Equals(value, "governance", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(value, "execution", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(value, "certification", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsAutomaticallyDiscovered(DecisionCandidate candidate)
+    {
+        return candidate.History.Any(entry =>
+            string.Equals(entry.Event, "Discovered", StringComparison.Ordinal) &&
+            string.Equals(entry.ToState, DecisionCandidateState.Discovered.ToString(), StringComparison.Ordinal) &&
+            entry.Sources.Count > 0);
     }
 
     private static bool RecommendationIsDerived(DecisionResolvedProposalSnapshot snapshot)
