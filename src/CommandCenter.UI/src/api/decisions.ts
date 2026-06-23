@@ -6,6 +6,7 @@ import type {
   DecisionCertificationReport,
   DecisionContextSnapshot,
   DecisionEvidenceInspection,
+  DecisionGenerationCertificationReport,
   DecisionGovernanceReport,
   DecisionInfluenceTrace,
   ExecutionDecisionProjection,
@@ -191,6 +192,25 @@ export function listDecisionCertificationReports(repositoryId: string) {
   return invokeCommand<DecisionCertificationReport[]>('list_decision_certification_reports', {
     repositoryId,
   })
+}
+
+export function getDecisionGenerationCertification(repositoryId: string) {
+  return invokeCommand<DecisionGenerationCertificationReport>('get_decision_generation_certification', {
+    repositoryId,
+  })
+}
+
+export function runDecisionGenerationCertification(repositoryId: string) {
+  return invokeCommand<DecisionGenerationCertificationReport>('run_decision_generation_certification', {
+    repositoryId,
+  })
+}
+
+export function listDecisionGenerationCertificationReports(repositoryId: string) {
+  return invokeCommand<DecisionGenerationCertificationReport[]>(
+    'list_decision_generation_certification_reports',
+    { repositoryId },
+  )
 }
 
 export function assessDecisionQuality(repositoryId: string, proposalId: string) {

@@ -21,6 +21,16 @@ certify that automated decision generation replaces human decision production wi
   - [x] current advisory report
   - [x] persisted certification run
   - [x] persisted report history
+- [x] Add Tauri generation-certification bridge commands:
+  - [x] current advisory report
+  - [x] persisted certification run
+  - [x] persisted report history
+- [x] Add focused UI generation-certification exposure:
+  - [x] decision API/types/hooks
+  - [x] advisory certification panel
+  - [x] persisted report history
+  - [x] human authoring burden evidence
+  - [x] quality evidence
 - [x] Evaluate certification categories:
   - [x] generation capability
   - [x] governance compatibility

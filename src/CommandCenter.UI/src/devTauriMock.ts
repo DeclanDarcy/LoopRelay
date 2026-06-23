@@ -13,6 +13,7 @@ import type {
   DecisionCertificationReport,
   DecisionContextSnapshot,
   DecisionEvidenceInspection,
+  DecisionGenerationCertificationReport,
   DecisionGovernanceReport,
   DecisionInfluenceTrace,
   DecisionOutcome,
@@ -78,6 +79,7 @@ type MockState = {
   decisionAssimilationRecommendations: Record<string, Record<string, DecisionAssimilationRecommendation>>
   decisionGovernanceReports: Record<string, DecisionGovernanceReport[]>
   decisionCertificationReports: Record<string, DecisionCertificationReport[]>
+  decisionGenerationCertificationReports: Record<string, DecisionGenerationCertificationReport[]>
   decisionQualityAssessments: Record<string, DecisionQualityAssessment[]>
   decisionQualityReports: Record<string, DecisionQualityReport[]>
   decisionQualityTrends: Record<string, DecisionQualityTrend[]>
@@ -1537,6 +1539,118 @@ function createDecisionCertificationReport(
   return report
 }
 
+function createDecisionGenerationCertificationReport(
+  state: MockState,
+  repositoryId: string,
+  persist: boolean,
+): DecisionGenerationCertificationReport {
+  const decisions = Object.values(state.decisions[repositoryId] ?? {})
+  const candidates = state.decisionCandidates[repositoryId] ?? []
+  const proposals = state.decisionProposalBrowserItems[repositoryId] ?? []
+  const qualityAssessments = state.decisionQualityAssessments[repositoryId] ?? []
+  const generatedResolvedDecisionCount = decisions.filter((decision) =>
+    Boolean(decision.resolution?.sourceProposalSnapshot),
+  ).length
+  const reviewOnlyCount = generatedResolvedDecisionCount
+  const generationCertified = candidates.length > 0 && proposals.length > 0
+  const governanceCertified = decisions.every((decision) =>
+    !decision.resolution || !/governance|certification|execution/i.test(decision.resolution.resolvedBy),
+  )
+  const qualityCertified = qualityAssessments.length > 0 || generatedResolvedDecisionCount === 0
+  const consumptionCertified = generatedResolvedDecisionCount === 0 || decisions.length > 0
+  const workflowReplacementCertified = generatedResolvedDecisionCount > 0
+    ? reviewOnlyCount >= generatedResolvedDecisionCount
+    : false
+  const findings = [
+    {
+      id: 'generation-capability',
+      category: 'GenerationCapability',
+      passed: generationCertified,
+      summary: 'Generated decision artifacts are available',
+      detail: generationCertified
+        ? 'Candidates and proposals are available for review.'
+        : 'Candidate and proposal evidence is not yet available.',
+      sources: [decisionSource('.agents/decisions/proposals/PROP-0001/proposal.json', 'Generated proposal content remains reviewable.')],
+      relatedDecisionIds: [],
+      relatedCandidateIds: candidates.map((candidate) => candidate.id),
+      relatedProposalIds: proposals.map((proposal) => proposal.proposalId),
+    },
+    {
+      id: 'workflow-replacement',
+      category: 'WorkflowReplacement',
+      passed: workflowReplacementCertified,
+      summary: 'Humans govern generated decisions',
+      detail: workflowReplacementCertified
+        ? 'Generated decisions reached resolution without full rewrite evidence.'
+        : 'No generated resolved decision is available to prove workflow replacement.',
+      sources: [decisionSource('.agents/decisions/records/DEC-mock/decision.json', 'Human resolution remains authoritative.')],
+      relatedDecisionIds: decisions.map((decision) => decision.id),
+      relatedCandidateIds: [],
+      relatedProposalIds: [],
+    },
+  ]
+  const failures = findings.filter((finding) => !finding.passed).map((finding) => finding.detail)
+  const timestamp = new Date().toISOString()
+  const report: DecisionGenerationCertificationReport = {
+    id: persist
+      ? `generation-certification.${Date.now().toString().padStart(21, '0')}`
+      : 'generation-certification.current',
+    repositoryId,
+    generatedAt: timestamp,
+    inputFingerprint: `mock-generation-certification-${repositoryId}-${decisions.length}-${candidates.length}-${proposals.length}`,
+    result: {
+      generationCertified,
+      governanceCertified,
+      throughputCertified: proposals.length > 0,
+      qualityCertified,
+      consumptionCertified,
+      workflowReplacementCertified,
+      findings,
+      failures,
+      certified: failures.length === 0 && generationCertified && governanceCertified && qualityCertified && consumptionCertified,
+    },
+    candidateCount: candidates.length,
+    generatedProposalCount: proposals.length,
+    generatedPackageCount: proposals.length,
+    generatedResolvedDecisionCount,
+    executionInfluenceTraceCount: generatedResolvedDecisionCount,
+    humanAuthoringBurden: {
+      repositoryId,
+      decisionCount: decisions.length,
+      reviewOnlyCount,
+      minorEditCount: 0,
+      majorRefinementCount: 0,
+      fullRewriteCount: 0,
+      generationBypassedCount: Math.max(0, decisions.length - generatedResolvedDecisionCount),
+      unknownCount: 0,
+      signals: decisions.map((decision) => ({
+        id: `burden-${decision.id}`,
+        repositoryId,
+        decisionId: decision.id,
+        burden: decision.resolution?.sourceProposalSnapshot ? 'ReviewOnly' : 'GenerationBypassed',
+        sourceKind: 'MockDecisionResolution',
+        summary: decision.resolution?.sourceProposalSnapshot
+          ? 'Mock decision was resolved from generated proposal content.'
+          : 'Mock decision bypassed generated proposal content.',
+        sources: [decisionSource(`.agents/decisions/records/${decision.id}/decision.json`, decision.title)],
+      })),
+    },
+    qualityAssessments,
+    diagnostics: persist
+      ? ['Mock generation certification report was persisted to generated report history.']
+      : ['Mock current generation certification is advisory and is not persisted.'],
+  }
+
+  if (persist) {
+    state.decisionGenerationCertificationReports[repositoryId] = [
+      report,
+      ...(state.decisionGenerationCertificationReports[repositoryId] ?? []),
+    ]
+  }
+
+  return report
+}
+
 function assessDecisionQualityMock(
   state: MockState,
   repositoryId: string,
@@ -2265,6 +2379,7 @@ function createInitialState(): MockState {
     decisionAssimilationRecommendations: {},
     decisionGovernanceReports: {},
     decisionCertificationReports: {},
+    decisionGenerationCertificationReports: {},
     decisionQualityAssessments: {},
     decisionQualityReports: {},
     decisionQualityTrends: {},
@@ -2287,6 +2402,7 @@ function createInitialState(): MockState {
     state.decisionAssimilationRecommendations[repository.id] = {}
     state.decisionGovernanceReports[repository.id] = []
     state.decisionCertificationReports[repository.id] = []
+    state.decisionGenerationCertificationReports[repository.id] = []
     state.decisionQualityAssessments[repository.id] = []
     state.decisionQualityReports[repository.id] = []
     state.decisionQualityTrends[repository.id] = []
@@ -3915,6 +4031,12 @@ export function installDevTauriMock() {
           return clone(createDecisionCertificationReport(state, getStringArg(args, 'repositoryId'), true))
         case 'list_decision_certification_reports':
           return clone(state.decisionCertificationReports[getStringArg(args, 'repositoryId')] ?? [])
+        case 'get_decision_generation_certification':
+          return clone(createDecisionGenerationCertificationReport(state, getStringArg(args, 'repositoryId'), false))
+        case 'run_decision_generation_certification':
+          return clone(createDecisionGenerationCertificationReport(state, getStringArg(args, 'repositoryId'), true))
+        case 'list_decision_generation_certification_reports':
+          return clone(state.decisionGenerationCertificationReports[getStringArg(args, 'repositoryId')] ?? [])
         case 'assess_decision_quality': {
           const repositoryId = getStringArg(args, 'repositoryId')
           const proposalId = getStringArg(args, 'proposalId')

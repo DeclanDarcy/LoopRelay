@@ -1014,6 +1014,51 @@ fn list_decision_certification_reports(repository_id: String) -> Result<Value, S
 }
 
 #[tauri::command]
+fn get_decision_generation_certification(repository_id: String) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/generation-certification/current"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision generation certification lookup failed")
+}
+
+#[tauri::command]
+fn run_decision_generation_certification(repository_id: String) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/decisions/generation-certification"
+        ))
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision generation certification run failed")
+}
+
+#[tauri::command]
+fn list_decision_generation_certification_reports(repository_id: String) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/generation-certification/reports"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "decision generation certification report listing failed")
+}
+
+#[tauri::command]
 fn assess_decision_quality(repository_id: String, proposal_id: String) -> Result<Value, String> {
     let client = reqwest::blocking::Client::new();
     let response = client
@@ -1944,6 +1989,9 @@ fn main() {
             get_decision_certification,
             run_decision_certification,
             list_decision_certification_reports,
+            get_decision_generation_certification,
+            run_decision_generation_certification,
+            list_decision_generation_certification_reports,
             assess_decision_quality,
             list_decision_quality_assessments,
             get_decision_quality_report,

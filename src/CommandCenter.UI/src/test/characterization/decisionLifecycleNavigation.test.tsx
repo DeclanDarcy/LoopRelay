@@ -17,11 +17,13 @@ const useDecisionEvidenceInspectionMock = vi.hoisted(() => vi.fn())
 const useDecisionSourceAttributionsMock = vi.hoisted(() => vi.fn())
 const useDecisionGovernanceMock = vi.hoisted(() => vi.fn())
 const useDecisionCertificationMock = vi.hoisted(() => vi.fn())
+const useDecisionGenerationCertificationMock = vi.hoisted(() => vi.fn())
 const useDecisionQualityMock = vi.hoisted(() => vi.fn())
 
 vi.mock('../../hooks', () => ({
   useDecisionCertification: useDecisionCertificationMock,
   useDecisionEvidenceInspection: useDecisionEvidenceInspectionMock,
+  useDecisionGenerationCertification: useDecisionGenerationCertificationMock,
   useDecisionGovernance: useDecisionGovernanceMock,
   useDecisionOptionComparison: useDecisionOptionComparisonMock,
   useDecisionProposalLineage: useDecisionProposalLineageMock,
@@ -43,6 +45,7 @@ afterEach(() => {
   useDecisionSourceAttributionsMock.mockReset()
   useDecisionGovernanceMock.mockReset()
   useDecisionCertificationMock.mockReset()
+  useDecisionGenerationCertificationMock.mockReset()
   useDecisionQualityMock.mockReset()
 })
 
@@ -69,6 +72,15 @@ describe('DecisionLifecycleTab navigation', () => {
       generateReport: vi.fn(),
     })
     useDecisionCertificationMock.mockReturnValue({
+      currentReport: null,
+      reports: [],
+      isLoading: false,
+      isRunning: false,
+      error: null,
+      refresh: vi.fn(),
+      runCertification: vi.fn(),
+    })
+    useDecisionGenerationCertificationMock.mockReturnValue({
       currentReport: null,
       reports: [],
       isLoading: false,

@@ -853,6 +853,58 @@ export type DecisionCertificationReport = {
   diagnostics: string[]
 }
 
+export type DecisionGenerationCertificationFinding = {
+  id: string
+  category: string
+  passed: boolean
+  summary: string
+  detail: string
+  sources: DecisionSourceReference[]
+  relatedDecisionIds: string[]
+  relatedCandidateIds: string[]
+  relatedProposalIds: string[]
+}
+
+export type DecisionGenerationCertificationResult = {
+  generationCertified: boolean
+  governanceCertified: boolean
+  throughputCertified: boolean
+  qualityCertified: boolean
+  consumptionCertified: boolean
+  workflowReplacementCertified: boolean
+  findings: DecisionGenerationCertificationFinding[]
+  failures: string[]
+  certified: boolean
+}
+
+export type HumanAuthoringBurdenReport = {
+  repositoryId: string
+  decisionCount: number
+  reviewOnlyCount: number
+  minorEditCount: number
+  majorRefinementCount: number
+  fullRewriteCount: number
+  generationBypassedCount: number
+  unknownCount: number
+  signals: HumanAuthoringBurdenSignal[]
+}
+
+export type DecisionGenerationCertificationReport = {
+  id: string
+  repositoryId: string
+  generatedAt: string
+  inputFingerprint: string
+  result: DecisionGenerationCertificationResult
+  candidateCount: number
+  generatedProposalCount: number
+  generatedPackageCount: number
+  generatedResolvedDecisionCount: number
+  executionInfluenceTraceCount: number
+  humanAuthoringBurden: HumanAuthoringBurdenReport
+  qualityAssessments: DecisionQualityAssessment[]
+  diagnostics: string[]
+}
+
 export type DecisionQualitySignal = {
   id: string
   repositoryId: string

@@ -9,6 +9,7 @@ import type {
 import {
   useDecisionCertification,
   useDecisionEvidenceInspection,
+  useDecisionGenerationCertification,
   useDecisionGovernance,
   useDecisionOptionComparison,
   useDecisionProposalLineage,
@@ -19,6 +20,7 @@ import {
 import { DecisionCandidateBrowser } from './DecisionCandidateBrowser'
 import { DecisionCertificationPanel } from './DecisionCertificationPanel'
 import { DecisionEvidenceSourcePanel } from './DecisionEvidenceSourcePanel'
+import { DecisionGenerationCertificationPanel } from './DecisionGenerationCertificationPanel'
 import { DecisionGovernancePanel } from './DecisionGovernancePanel'
 import { DecisionOptionComparison } from './DecisionOptionComparison'
 import { DecisionProposalBrowser } from './DecisionProposalBrowser'
@@ -95,6 +97,15 @@ export function DecisionLifecycleTab({
     refresh: refreshCertification,
     runCertification,
   } = useDecisionCertification(repositoryId)
+  const {
+    currentReport: generationCertificationReport,
+    reports: generationCertificationReports,
+    isLoading: isGenerationCertificationLoading,
+    isRunning: isGenerationCertificationRunning,
+    error: generationCertificationError,
+    refresh: refreshGenerationCertification,
+    runCertification: runGenerationCertification,
+  } = useDecisionGenerationCertification(repositoryId)
   const {
     assessments: qualityAssessments,
     currentReport: qualityReport,
@@ -270,6 +281,19 @@ export function DecisionLifecycleTab({
             onRunCertification={async () => {
               await runCertification()
               await refreshCertification()
+              onRefresh()
+            }}
+          />
+
+          <DecisionGenerationCertificationPanel
+            currentReport={generationCertificationReport}
+            reports={generationCertificationReports}
+            isLoading={isGenerationCertificationLoading}
+            isRunning={isGenerationCertificationRunning}
+            error={generationCertificationError}
+            onRunCertification={async () => {
+              await runGenerationCertification()
+              await refreshGenerationCertification()
               onRefresh()
             }}
           />

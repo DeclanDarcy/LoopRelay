@@ -3,26 +3,35 @@
 ## New State This Slice
 
 - Continued Milestone 10 automated decision generation certification.
-- Added backend API endpoints for M10 generation certification:
-  - `GET /api/repositories/{repositoryId}/decisions/generation-certification/current`
-  - `POST /api/repositories/{repositoryId}/decisions/generation-certification`
-  - `GET /api/repositories/{repositoryId}/decisions/generation-certification/reports`
-- Endpoint behavior follows the existing decision endpoint pattern:
-  - `200 OK` for successful current, run, and history reads
-  - `404 NotFound` for missing repositories
-  - `400 BadRequest` for invalid arguments
-  - `409 Conflict` for invalid repository/artifact state
-- Added backend endpoint coverage proving current report, persisted run, and persisted report history are reachable through HTTP.
-- Updated `.agents/milestones/m10-generation-certification.md` to mark backend generation-certification endpoints complete.
-- Rotated prior handoff to `.agents/handoffs/handoff.0033.md`.
+- Added Tauri bridge commands for the generation-certification backend endpoints:
+  - `get_decision_generation_certification`
+  - `run_decision_generation_certification`
+  - `list_decision_generation_certification_reports`
+- Added UI support for generation certification:
+  - `DecisionGenerationCertificationReport` TypeScript model and related finding/result/burden types
+  - `get/run/listDecisionGenerationCertification*` API helpers
+  - `useDecisionGenerationCertification` hook
+  - `DecisionGenerationCertificationPanel`
+  - Decisions workspace integration beside lifecycle certification
+  - dev Tauri mock command handling and persisted mock report history
+- Added characterization coverage for the generation certification panel and updated lifecycle navigation mocks.
+- Updated `.agents/milestones/m10-generation-certification.md` to mark Tauri/UI exposure complete.
+- Rotated prior handoff to `.agents/handoffs/handoff.0034.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter DecisionGenerationCertificationServiceTests` passed: 3 tests.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "DecisionGenerationCertificationServiceTests|DecisionCertificationServiceTests"` passed: 12 tests.
+- `cargo check --manifest-path src/CommandCenter.Shell/Cargo.toml` passed.
+- `npm run test --prefix src/CommandCenter.UI -- decisionGenerationCertificationPanel decisionLifecycleNavigation` passed: 2 tests.
+- `npm run lint --prefix src/CommandCenter.UI` passed.
+- `npm run test --prefix src/CommandCenter.UI` passed: 177 tests across 51 files.
 
 ## Next Recommended Slice
 
-- Add Tauri bridge commands for the three generation-certification endpoints.
-- Add UI decision API/types/hooks and a focused generation certification panel that clearly presents advisory certification state without implying lifecycle authority.
-- Then add the remaining M10 negative certification fixtures: missing options, missing quality evidence, full rewrite dominance, generation bypass dominance, and order-based recommendation failure detection.
+- Implement the remaining M10 negative certification fixtures:
+  - missing options
+  - missing quality evidence after resolved generated decisions
+  - full rewrite dominance
+  - generation bypass dominance
+  - governance resolution bypass
+  - order-based or hardcoded recommendation failure
+- Prioritize order-based recommendation detection because it directly guards the Tier 0 claim that recommendations are derived rather than `options[0]`.

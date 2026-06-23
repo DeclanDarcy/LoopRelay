@@ -1479,6 +1479,7 @@ button:focus-visible {
 .decision-evidence-source-panel,
 .decision-governance-panel,
 .decision-certification-panel,
+.decision-generation-certification-panel,
 .decision-quality-panel,
 .decision-viewer-summary,
 .decision-inspection-list {
@@ -1725,6 +1726,13 @@ button:focus-visible {
   gap: 8px;
 }
 
+.decision-generation-certification-grid {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
 .decision-governance-meta {
   min-width: 0;
   display: grid;
@@ -1733,6 +1741,7 @@ button:focus-visible {
 }
 
 .decision-lineage-summary span,
+.decision-generation-certification-grid span,
 .decision-governance-meta span,
 .decision-badge-row span {
   min-width: 0;
@@ -1750,6 +1759,16 @@ button:focus-visible {
   padding: 5px 8px;
   font-size: 0.74rem;
   text-transform: none;
+}
+
+.decision-generation-certification-grid span[data-status='passed'] {
+  border-color: var(--status-success-muted);
+  color: var(--fg-default);
+}
+
+.decision-generation-certification-grid span[data-status='failed'] {
+  border-color: var(--status-warning-muted);
+  color: var(--fg-default);
 }
 
 .decision-governance-findings,
