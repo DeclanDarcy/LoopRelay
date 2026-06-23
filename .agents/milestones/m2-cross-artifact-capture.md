@@ -11,7 +11,7 @@ Goal: use the event substrate to preserve reasoning evolution across decisions a
   - [x] Assumption invalidated.
   - [x] Constraint changed.
 - [x] Add explicit commands for recording hypothesis, alternative, contradiction, and direction events as event classifications.
-- [ ] Add reference helpers for decisions, proposals, candidates, governance findings, operational-context revisions, handoffs, execution outputs, and artifacts.
+- [x] Add reference helpers for decisions, proposals, candidates, governance findings, operational-context revisions, handoffs, execution outputs, and artifacts.
 - [x] Add event templates for common reasoning captures with required provenance fields.
 - [x] Add assisted-capture adapters that pre-populate references and provenance after successful decision operations, starting with supersession. Keep the decision operation authoritative.
 - [ ] Add inferred-capture adapters for objective domain transitions once idempotency is stable:

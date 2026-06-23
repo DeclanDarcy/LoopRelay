@@ -608,40 +608,33 @@ public sealed class DecisionReasoningCaptureService(
 
     private static ReasoningReference DecisionReference(Decision decision)
     {
-        return new ReasoningReference(
-            ReasoningReferenceKind.Decision,
+        return ReasoningReferenceFactory.Decision(
             decision.Id.Value,
-            DecisionPath(decision.Id),
-            Section: "Decision Record",
-            Excerpt: decision.Title,
-            Fingerprint: Fingerprint(decision));
+            decision.Title,
+            Fingerprint(decision));
     }
 
     private static ReasoningReference ProposalReference(DecisionResolvedProposalSnapshot proposal)
     {
-        return new ReasoningReference(
-            ReasoningReferenceKind.Proposal,
+        return ReasoningReferenceFactory.Proposal(
             proposal.ProposalId,
-            ProposalPath(proposal.ProposalId),
-            Section: "Resolved Proposal",
-            Excerpt: proposal.Title,
-            Fingerprint: proposal.ProposalFingerprint);
+            proposal.Title,
+            proposal.ProposalFingerprint,
+            "Resolved Proposal");
     }
 
     private static ReasoningReference CandidateReference(DecisionResolvedProposalSnapshot proposal)
     {
-        return new ReasoningReference(
-            ReasoningReferenceKind.Candidate,
+        return ReasoningReferenceFactory.Candidate(
             proposal.CandidateId,
-            $".agents/decisions/candidates/{proposal.CandidateId}.json",
-            Section: "Source Candidate",
-            Excerpt: proposal.Title,
-            Fingerprint: Fingerprint(new
+            proposal.Title,
+            Fingerprint(new
             {
                 proposal.CandidateId,
                 proposal.ProposalId,
                 proposal.ProposalFingerprint
-            }));
+            }),
+            "Source Candidate");
     }
 
     private static IReadOnlyList<ReasoningReference> GovernanceContradictionReferences(
@@ -650,35 +643,28 @@ public sealed class DecisionReasoningCaptureService(
     {
         List<ReasoningReference> references =
         [
-            new ReasoningReference(
-                ReasoningReferenceKind.GovernanceFinding,
+            ReasoningReferenceFactory.GovernanceFinding(
                 finding.Id,
-                GovernanceReportPath(report.Id),
-                Section: $"Finding: {finding.Title}",
-                Excerpt: finding.Detail,
-                Fingerprint: Fingerprint(finding))
+                report.Id,
+                finding.Title,
+                finding.Detail,
+                Fingerprint(finding))
         ];
 
         references.AddRange(finding.RelatedDecisionIds.Select(decisionId =>
-            new ReasoningReference(
-                ReasoningReferenceKind.Decision,
+            ReasoningReferenceFactory.Decision(
                 decisionId,
-                DecisionPath(new DecisionId(decisionId)),
-                Section: "Related Governance Decision")));
+                section: "Related Governance Decision")));
 
         references.AddRange(finding.RelatedCandidateIds.Select(candidateId =>
-            new ReasoningReference(
-                ReasoningReferenceKind.Candidate,
+            ReasoningReferenceFactory.Candidate(
                 candidateId,
-                $".agents/decisions/candidates/{candidateId}/candidate.json",
-                Section: "Related Governance Candidate")));
+                section: "Related Governance Candidate")));
 
         references.AddRange(finding.RelatedProposalIds.Select(proposalId =>
-            new ReasoningReference(
-                ReasoningReferenceKind.Proposal,
+            ReasoningReferenceFactory.Proposal(
                 proposalId,
-                ProposalPath(proposalId),
-                Section: "Related Governance Proposal")));
+                section: "Related Governance Proposal")));
 
         return references;
     }
@@ -689,42 +675,35 @@ public sealed class DecisionReasoningCaptureService(
     {
         List<ReasoningReference> references =
         [
-            new ReasoningReference(
-                ReasoningReferenceKind.OperationalContextRevision,
+            ReasoningReferenceFactory.OperationalContextProposal(
                 proposal.ProposalId,
-                OperationalContextProposalPath(proposal.ProposalId),
-                Section: $"Semantic change: {change.Type}",
-                Excerpt: change.Description,
-                Fingerprint: Fingerprint(new
+                $"Semantic change: {change.Type}",
+                change.Description,
+                Fingerprint(new
                 {
                     proposal.ProposalId,
                     proposal.Promotion.PromotedContentHash,
                     SemanticChange = change
                 })),
-            new ReasoningReference(
-                ReasoningReferenceKind.Artifact,
+            ReasoningReferenceFactory.Artifact(
                 ".agents/operational_context.md",
-                ".agents/operational_context.md",
-                Section: "Current Operational Context",
-                Fingerprint: proposal.Promotion.PromotedContentHash)
+                "Current Operational Context",
+                fingerprint: proposal.Promotion.PromotedContentHash)
         ];
 
         if (!string.IsNullOrWhiteSpace(proposal.Promotion.PromotedContentSourceRelativePath))
         {
-            references.Add(new ReasoningReference(
-                ReasoningReferenceKind.Artifact,
+            references.Add(ReasoningReferenceFactory.Artifact(
                 proposal.Promotion.PromotedContentSourceRelativePath,
-                proposal.Promotion.PromotedContentSourceRelativePath,
-                Section: "Promoted Proposal Content"));
+                "Promoted Proposal Content"));
         }
 
         if (!string.IsNullOrWhiteSpace(proposal.Promotion.ArchivedRelativePath))
         {
-            references.Add(new ReasoningReference(
-                ReasoningReferenceKind.OperationalContextRevision,
+            references.Add(ReasoningReferenceFactory.OperationalContextRevision(
                 proposal.Promotion.ArchivedRelativePath,
                 proposal.Promotion.ArchivedRelativePath,
-                Section: "Archived Previous Operational Context"));
+                "Archived Previous Operational Context"));
         }
 
         return references;
@@ -738,19 +717,15 @@ public sealed class DecisionReasoningCaptureService(
     {
         return
         [
-            new ReasoningReference(
-                ReasoningReferenceKind.Handoff,
+            ReasoningReferenceFactory.Handoff(
                 handoffPath,
-                handoffPath,
-                Section: "Current Handoff",
-                Excerpt: Excerpt(handoffContent),
-                Fingerprint: handoffFingerprint),
-            new ReasoningReference(
-                ReasoningReferenceKind.ExecutionOutput,
+                Excerpt(handoffContent),
+                handoffFingerprint,
+                "Current Handoff"),
+            ReasoningReferenceFactory.ExecutionOutput(
                 session.Id.ToString("D"),
-                Section: "Execution Session",
-                Excerpt: $"Milestone: {session.MilestonePath}",
-                Fingerprint: Fingerprint(new
+                $"Milestone: {session.MilestonePath}",
+                Fingerprint(new
                 {
                     session.Id,
                     session.MilestonePath,
@@ -759,7 +734,8 @@ public sealed class DecisionReasoningCaptureService(
                     session.AcceptedAt,
                     session.RejectedAt,
                     session.DecisionNote
-                }))
+                }),
+                "Execution Session")
         ];
     }
 
@@ -772,7 +748,7 @@ public sealed class DecisionReasoningCaptureService(
         return new ReasoningProvenance(
             "InferredProposalResolution",
             resolver,
-            ProposalPath(proposal.ProposalId),
+            ReasoningReferenceFactory.ProposalPath(proposal.ProposalId),
             "History: Resolved",
             rationale,
             transitionFingerprint);
@@ -808,7 +784,7 @@ public sealed class DecisionReasoningCaptureService(
         return new ReasoningProvenance(
             sourceKind,
             resolver,
-            DecisionPath(decision.Id),
+            ReasoningReferenceFactory.DecisionPath(decision.Id.Value),
             section,
             rationale,
             transitionFingerprint);
@@ -822,7 +798,7 @@ public sealed class DecisionReasoningCaptureService(
         return new ReasoningProvenance(
             "InferredGovernanceContradiction",
             "decision-governance-service",
-            GovernanceReportPath(report.Id),
+            ReasoningReferenceFactory.GovernanceReportPath(report.Id),
             $"Finding: {finding.Id}",
             finding.Detail,
             transitionFingerprint);
@@ -836,32 +812,12 @@ public sealed class DecisionReasoningCaptureService(
         return new ReasoningProvenance(
             "InferredOperationalContextPromotion",
             "operational-context-lifecycle-service",
-            OperationalContextProposalPath(proposal.ProposalId),
+            ReasoningReferenceFactory.OperationalContextProposalPath(proposal.ProposalId),
             $"Promotion semantic change: {change.Type}",
             string.IsNullOrWhiteSpace(proposal.Review.ReviewNote)
                 ? change.Description
                 : $"{change.Description} Review note: {proposal.Review.ReviewNote}",
             transitionFingerprint);
-    }
-
-    private static string DecisionPath(DecisionId decisionId)
-    {
-        return $".agents/decisions/records/{decisionId.Value}/decision.json";
-    }
-
-    private static string ProposalPath(string proposalId)
-    {
-        return $".agents/decisions/proposals/{proposalId}/proposal.json";
-    }
-
-    private static string GovernanceReportPath(string reportId)
-    {
-        return $".agents/decisions/governance/{reportId}.json";
-    }
-
-    private static string OperationalContextProposalPath(string proposalId)
-    {
-        return $".agents/operational_context/proposals/{proposalId}/metadata.json";
     }
 
     private static bool IsContradictionFinding(DecisionGovernanceFinding finding)

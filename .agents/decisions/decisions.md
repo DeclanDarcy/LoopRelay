@@ -2,9 +2,9 @@
 
 ## Newly Authorized
 
-- Treat Milestone 2 as architecturally complete: reasoning can capture history across domains, integrate with source-domain transitions, remain non-authoritative, and avoid premature hypothesis, alternative, contradiction, or direction materialization.
-- Treat remaining Milestone 2 checklist gaps as follow-on usability/reference-quality work rather than blockers for the milestone's core architectural objective.
-- Make reference helper APIs the next highest-value slice because later graph navigation, reconstruction, materialization review, long-horizon validation, and certification depend more on reference quality than raw event volume.
-- Implement reference helpers as small factories over the existing `ReasoningReference` shape: kind, id, path, and metadata.
-- Do not introduce domain-specific reasoning wrapper concepts such as `DecisionReasoningReference`, `GovernanceReasoningReference`, or `ExecutionReasoningReference` unless a concrete reconstruction need proves that the generic reference shape is insufficient.
-- Continue pushing source-domain specificity into references and provenance rather than expanding the core reasoning ontology.
+- Treat Milestone 2 as complete in a meaningful architectural sense, not merely checklist-complete.
+- Treat M0 Boundary Foundation, M1 Event Substrate, and M2 Cross-Artifact Capture as complete.
+- Proceed next with the Tauri bridge, UI capture flow, and event-family filters as the highest-value slice.
+- Keep the UI capture flow aligned to backend-approved templates before capture rather than allowing arbitrary family/type selection.
+- Present event-family filters as classification filters, such as "Contradiction Events", and avoid UI language that implies first-class derived entities such as "Contradictions".
+- Treat reference quality, graph quality, traceability, reconstruction fidelity, and long-horizon survivability as the next center of gravity for subsequent milestones.
