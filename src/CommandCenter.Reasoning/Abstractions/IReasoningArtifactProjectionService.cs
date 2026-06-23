@@ -10,5 +10,7 @@ public interface IReasoningArtifactProjectionService
 
     string RenderRelationship(ReasoningRelationship relationship);
 
+    string RenderReconstructionReport(ReasoningReconstructionReport report);
+
     string RenderCertificationReport(ReasoningCertificationReport report);
 }

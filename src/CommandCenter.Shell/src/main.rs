@@ -196,6 +196,7 @@ struct ArtifactInventory {
     historical_handoffs: Vec<Artifact>,
     current_decisions: Option<Artifact>,
     historical_decisions: Vec<Artifact>,
+    reasoning_artifacts: Vec<Artifact>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -1229,6 +1230,38 @@ fn reconstruct_reasoning(repository_id: String, query: Value) -> Result<Value, S
 }
 
 #[tauri::command]
+fn run_reasoning_reconstruction(repository_id: String, query: Value) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/reconstructions/reports"
+        ))
+        .json(&query)
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "reasoning reconstruction run failed")
+}
+
+#[tauri::command]
+fn list_reasoning_reconstructions(repository_id: String) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/reconstructions"
+    ))
+    .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "reasoning reconstruction report listing failed")
+}
+
+#[tauri::command]
 fn get_reasoning_materialization_review(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/materialization-review"
@@ -1730,6 +1763,8 @@ fn main() {
             trace_reasoning_forward,
             query_reasoning,
             reconstruct_reasoning,
+            run_reasoning_reconstruction,
+            list_reasoning_reconstructions,
             get_reasoning_materialization_review,
             run_reasoning_materialization_review,
             get_reasoning_certification,

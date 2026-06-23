@@ -129,7 +129,8 @@ public sealed record ReasoningQuery(
     ReasoningQueryCategory Category,
     string Question,
     ReasoningReference Target,
-    ReasoningTraceDirection Direction = ReasoningTraceDirection.Backward);
+    ReasoningTraceDirection Direction = ReasoningTraceDirection.Backward,
+    DateTimeOffset? HistoricalAt = null);
 
 public sealed record ReasoningQueryResult(
     Guid RepositoryId,
@@ -155,6 +156,13 @@ public sealed record ReasoningReconstructionEvidence(
     string Summary,
     ReasoningReference? Reference,
     ReasoningProvenance? Provenance);
+
+public sealed record ReasoningReconstructionReport(
+    string Id,
+    Guid RepositoryId,
+    DateTimeOffset GeneratedAt,
+    ReasoningReconstruction Reconstruction,
+    IReadOnlyList<string> Diagnostics);
 
 public sealed record ReasoningMaterializationReviewRequest(
     IReadOnlyList<ReasoningMaterializationScenario>? Scenarios = null);

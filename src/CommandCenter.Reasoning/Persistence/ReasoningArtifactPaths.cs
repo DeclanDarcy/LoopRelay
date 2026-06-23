@@ -46,6 +46,12 @@ public static partial class ReasoningArtifactPaths
     public static string CertificationReportMarkdown(string id) =>
         ArtifactPath.CombineRelative(ReportsRoot, $"{ValidateCertificationReportId(id)}.md");
 
+    public static string ReconstructionReportJson(string id) =>
+        ArtifactPath.CombineRelative(ReportsRoot, $"{ValidateReconstructionReportId(id)}.json");
+
+    public static string ReconstructionReportMarkdown(string id) =>
+        ArtifactPath.CombineRelative(ReportsRoot, $"{ValidateReconstructionReportId(id)}.md");
+
     public static string Resolve(Repository repository, string relativePath) => ArtifactPath.ResolveRepositoryPath(repository, relativePath);
 
     public static string ValidateEventId(string id) => ValidateId(id, "EVT");
@@ -59,6 +65,16 @@ public static partial class ReasoningArtifactPaths
         if (string.IsNullOrWhiteSpace(id) || !CertificationReportIdPattern().IsMatch(id))
         {
             throw new ArgumentException("Certification report id must match certification.YYYYMMDDHHMMSSFFFFFFF.", nameof(id));
+        }
+
+        return id;
+    }
+
+    public static string ValidateReconstructionReportId(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id) || !ReconstructionReportIdPattern().IsMatch(id))
+        {
+            throw new ArgumentException("Reconstruction report id must match reconstruction.YYYYMMDDHHMMSSFFFFFFF.", nameof(id));
         }
 
         return id;
@@ -84,4 +100,7 @@ public static partial class ReasoningArtifactPaths
 
     [GeneratedRegex("^certification\\.[0-9]{21}$")]
     private static partial Regex CertificationReportIdPattern();
+
+    [GeneratedRegex("^reconstruction\\.[0-9]{21}$")]
+    private static partial Regex ReconstructionReportIdPattern();
 }

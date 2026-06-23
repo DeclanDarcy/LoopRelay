@@ -307,6 +307,10 @@ public sealed class RepositoryProjectionService(
                     artifact.Family == ArtifactFamily.Decision &&
                     artifact.VersionKind == ArtifactVersionKind.Historical)
                 .OrderBy(artifact => artifact.RelativePath, StringComparer.OrdinalIgnoreCase)
+                .ToArray(),
+            ReasoningArtifacts = artifacts
+                .Where(artifact => artifact.Family == ArtifactFamily.Reasoning)
+                .OrderBy(artifact => artifact.RelativePath, StringComparer.OrdinalIgnoreCase)
                 .ToArray()
         };
     }

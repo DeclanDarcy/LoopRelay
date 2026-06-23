@@ -19,4 +19,6 @@ public sealed class ArtifactInventory
     public Artifact? CurrentDecisions { get; init; }
 
     public IReadOnlyList<Artifact> HistoricalDecisions { get; init; } = [];
+
+    public IReadOnlyList<Artifact> ReasoningArtifacts { get; init; } = [];
 }

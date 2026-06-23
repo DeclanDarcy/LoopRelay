@@ -10,6 +10,7 @@ import type {
   ReasoningQuery,
   ReasoningQueryResult,
   ReasoningReconstruction,
+  ReasoningReconstructionReport,
   ReasoningMaterializationReviewReport,
   ReasoningMaterializationReviewRequest,
   ReasoningRelationship,
@@ -108,6 +109,19 @@ export function queryReasoning(repositoryId: string, query: ReasoningQuery) {
 
 export function reconstructReasoning(repositoryId: string, query: ReasoningQuery) {
   return invokeCommand<ReasoningReconstruction>('reconstruct_reasoning', { repositoryId, query })
+}
+
+export function runReasoningReconstruction(repositoryId: string, query: ReasoningQuery) {
+  return invokeCommand<ReasoningReconstructionReport>('run_reasoning_reconstruction', {
+    repositoryId,
+    query,
+  })
+}
+
+export function listReasoningReconstructions(repositoryId: string) {
+  return invokeCommand<ReasoningReconstructionReport[]>('list_reasoning_reconstructions', {
+    repositoryId,
+  })
 }
 
 export function getReasoningMaterializationReview(repositoryId: string) {

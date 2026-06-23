@@ -6,7 +6,8 @@ public enum ArtifactType
     OperationalContext,
     Milestone,
     Handoff,
-    Decision
+    Decision,
+    Reasoning
 }
 
 public enum ArtifactFamily
@@ -15,7 +16,8 @@ public enum ArtifactFamily
     OperationalContext,
     Milestone,
     Handoff,
-    Decision
+    Decision,
+    Reasoning
 }
 
 public enum ArtifactVersionKind

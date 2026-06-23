@@ -16,6 +16,7 @@ public sealed class ArtifactService(IArtifactStore artifactStore) : IArtifactSer
         await AddDirectoryArtifactsAsync(artifacts, repository, "milestones", ArtifactType.Milestone, ArtifactFamily.Milestone);
         await AddDirectoryArtifactsAsync(artifacts, repository, "handoffs", ArtifactType.Handoff, ArtifactFamily.Handoff);
         await AddDirectoryArtifactsAsync(artifacts, repository, "decisions", ArtifactType.Decision, ArtifactFamily.Decision);
+        await AddReasoningArtifactsAsync(artifacts, repository);
 
         return artifacts;
     }
@@ -89,6 +90,37 @@ public sealed class ArtifactService(IArtifactStore artifactStore) : IArtifactSer
             .Select(file => CreateArtifact(repository, file, type, family)));
     }
 
+    private async Task AddReasoningArtifactsAsync(List<Artifact> artifacts, Repository repository)
+    {
+        string reasoningRoot = ArtifactPath.ResolveRepositoryPath(repository, ArtifactPath.CombineRelative(AgentsDirectory, "reasoning"));
+        await AddReasoningProjectionArtifactsAsync(artifacts, repository, ArtifactPath.CombineRelative(reasoningRoot, "events"), "event.md");
+        await AddReasoningProjectionArtifactsAsync(artifacts, repository, ArtifactPath.CombineRelative(reasoningRoot, "threads"), "thread.md");
+        await AddReasoningProjectionArtifactsAsync(artifacts, repository, ArtifactPath.CombineRelative(reasoningRoot, "relationships"), "relationship.md");
+
+        string reportsRoot = ArtifactPath.CombineRelative(reasoningRoot, "reports");
+        IReadOnlyList<string> reportFiles = await artifactStore.ListAsync(reportsRoot, "*.md");
+        artifacts.AddRange(reportFiles
+            .Where(file => IsReasoningReport(Path.GetFileName(file)))
+            .Select(file => CreateArtifact(repository, file, ArtifactType.Reasoning, ArtifactFamily.Reasoning)));
+    }
+
+    private async Task AddReasoningProjectionArtifactsAsync(
+        List<Artifact> artifacts,
+        Repository repository,
+        string directoryPath,
+        string projectionFileName)
+    {
+        IReadOnlyList<string> directories = await artifactStore.ListDirectoriesAsync(directoryPath);
+        foreach (string directory in directories)
+        {
+            string projectionPath = ArtifactPath.CombineRelative(directory, projectionFileName);
+            if (await artifactStore.ExistsAsync(projectionPath))
+            {
+                artifacts.Add(CreateArtifact(repository, projectionPath, ArtifactType.Reasoning, ArtifactFamily.Reasoning));
+            }
+        }
+    }
+
     private static Artifact CreateArtifact(Repository repository, string fullPath, ArtifactType type, ArtifactFamily family)
     {
         return new Artifact
@@ -108,6 +140,7 @@ public sealed class ArtifactService(IArtifactStore artifactStore) : IArtifactSer
             ArtifactFamily.Handoff => IsCurrentOrHistorical(fileName, "handoff"),
             ArtifactFamily.Decision => IsCurrentOrHistorical(fileName, "decisions"),
             ArtifactFamily.OperationalContext => IsHistorical(fileName, "operational_context"),
+            ArtifactFamily.Reasoning => IsReasoningReport(fileName),
             _ => true
         };
     }
@@ -165,5 +198,13 @@ public sealed class ArtifactService(IArtifactStore artifactStore) : IArtifactSer
     {
         return !string.Equals(fileName, $"{baseName}.md", StringComparison.OrdinalIgnoreCase) &&
             IsCurrentOrHistorical(fileName, baseName);
+    }
+
+    private static bool IsReasoningReport(string fileName)
+    {
+        const string suffix = ".md";
+        return fileName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) &&
+            (fileName.StartsWith("reconstruction.", StringComparison.OrdinalIgnoreCase) ||
+                fileName.StartsWith("certification.", StringComparison.OrdinalIgnoreCase));
     }
 }

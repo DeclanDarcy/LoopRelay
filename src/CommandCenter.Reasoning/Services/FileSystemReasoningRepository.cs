@@ -197,6 +197,56 @@ public sealed class FileSystemReasoningRepository(
         return relationship;
     }
 
+    public async Task<IReadOnlyList<ReasoningReconstructionReport>> ListReconstructionReportsAsync(Repository repository)
+    {
+        string root = ReasoningArtifactPaths.Resolve(repository, ReasoningArtifactPaths.ReportsRootPath());
+        IReadOnlyList<string> files = await artifactStore.ListAsync(root, "*.json");
+        var reports = new List<ReasoningReconstructionReport>();
+        foreach (string file in files)
+        {
+            string reportId = Path.GetFileNameWithoutExtension(file);
+            try
+            {
+                ReasoningArtifactPaths.ValidateReconstructionReportId(reportId);
+                ReasoningReconstructionReport? report = await ReadPayloadAsync<ReasoningReconstructionReport>(repository, file);
+                if (report is not null)
+                {
+                    reports.Add(report);
+                }
+            }
+            catch (ReasoningValidationException)
+            {
+            }
+            catch (ArgumentException)
+            {
+            }
+        }
+
+        return reports.OrderByDescending(report => report.GeneratedAt).ThenBy(report => report.Id, StringComparer.Ordinal).ToArray();
+    }
+
+    public async Task<ReasoningReconstructionReport> SaveReconstructionReportAsync(
+        Repository repository,
+        ReasoningReconstructionReport report)
+    {
+        ReasoningArtifactPaths.ValidateReconstructionReportId(report.Id);
+        if (report.RepositoryId != repository.Id)
+        {
+            throw new ReasoningValidationException("Reasoning reconstruction report belongs to a different repository.");
+        }
+
+        await WriteDocumentAsync(
+            repository,
+            ReasoningArtifactPaths.ReconstructionReportJson(report.Id),
+            report,
+            report.GeneratedAt,
+            null);
+        await artifactStore.WriteAsync(
+            ReasoningArtifactPaths.Resolve(repository, ReasoningArtifactPaths.ReconstructionReportMarkdown(report.Id)),
+            projectionService.RenderReconstructionReport(report));
+        return report;
+    }
+
     public async Task<IReadOnlyList<ReasoningCertificationReport>> ListCertificationReportsAsync(Repository repository)
     {
         string root = ReasoningArtifactPaths.Resolve(repository, ReasoningArtifactPaths.ReportsRootPath());

@@ -10,6 +10,8 @@ public sealed class ReasoningReconstructionService(
     IReasoningGraphService graphService)
     : IReasoningReconstructionService
 {
+    private const string ReportIdFormat = "yyyyMMddHHmmssfffffff";
+
     public async Task<ReasoningReconstruction> ReconstructAsync(Guid repositoryId, ReasoningQuery query)
     {
         ValidateQuery(query);
@@ -21,9 +23,19 @@ public sealed class ReasoningReconstructionService(
         IReadOnlyList<ReasoningRelationship> relationships = await reasoningRepository.ListRelationshipsAsync(repository);
         IReadOnlyList<ReasoningThread> threads = await reasoningRepository.ListThreadsAsync(repository);
         EvidenceContext context = BuildEvidence(trace, events, relationships, threads);
+        if (query.HistoricalAt is not null)
+        {
+            context = BuildHistoricalEvidence(query, context, events);
+        }
+
         string summary = BuildSummary(query, context);
         string details = BuildDetails(query, context);
         var diagnostics = trace.Diagnostics.ToList();
+        if (query.HistoricalAt is not null)
+        {
+            diagnostics.Add($"Historical reconstruction used events visible at or before {query.HistoricalAt:O}.");
+        }
+
         if (context.Evidence.Count == 0)
         {
             diagnostics.Add("No cited reasoning evidence was found for the requested trace.");
@@ -38,6 +50,25 @@ public sealed class ReasoningReconstructionService(
             trace,
             context.Evidence,
             diagnostics.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray());
+    }
+
+    public async Task<ReasoningReconstructionReport> RunReconstructionAsync(Guid repositoryId, ReasoningQuery query)
+    {
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        ReasoningReconstruction reconstruction = await ReconstructAsync(repositoryId, query);
+        var report = new ReasoningReconstructionReport(
+            CreateReportId(),
+            repositoryId,
+            DateTimeOffset.UtcNow,
+            reconstruction,
+            ["Persisted only because a reconstruction run was explicitly requested."]);
+        return await reasoningRepository.SaveReconstructionReportAsync(repository, report);
+    }
+
+    public async Task<IReadOnlyList<ReasoningReconstructionReport>> ListReportsAsync(Guid repositoryId)
+    {
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        return await reasoningRepository.ListReconstructionReportsAsync(repository);
     }
 
     private static EvidenceContext BuildEvidence(
@@ -113,6 +144,42 @@ public sealed class ReasoningReconstructionService(
         return new EvidenceContext(evidence);
     }
 
+    private static EvidenceContext BuildHistoricalEvidence(
+        ReasoningQuery query,
+        EvidenceContext traceContext,
+        IReadOnlyList<ReasoningEvent> events)
+    {
+        DateTimeOffset historicalAt = query.HistoricalAt!.Value;
+        ReasoningEventFamily? family = FamilyFor(query.Category);
+        IEnumerable<ReasoningEvent> timelineEvents = events
+            .Where(reasoningEvent => reasoningEvent.CreatedAt <= historicalAt)
+            .Where(reasoningEvent => family is null || reasoningEvent.Family == family)
+            .Where(reasoningEvent => IsVisibleAt(reasoningEvent, query.Category))
+            .OrderBy(reasoningEvent => reasoningEvent.CreatedAt)
+            .ThenBy(reasoningEvent => reasoningEvent.Id, StringComparer.Ordinal);
+
+        var evidence = new List<ReasoningReconstructionEvidence>();
+        foreach (ReasoningEvent reasoningEvent in timelineEvents)
+        {
+            evidence.Add(new ReasoningReconstructionEvidence(
+                "Event",
+                reasoningEvent.Id,
+                $"{reasoningEvent.Type}: {reasoningEvent.Title}",
+                reasoningEvent.Narrative.Summary,
+                new ReasoningReference(ReasoningReferenceKind.ReasoningEvent, reasoningEvent.Id),
+                reasoningEvent.Provenance));
+        }
+
+        evidence.AddRange(traceContext.RelationshipEvidence);
+        evidence.AddRange(traceContext.ReferenceEvidence);
+        evidence.AddRange(traceContext.ThreadEvidence);
+
+        return new EvidenceContext(evidence
+            .GroupBy(item => $"{item.Kind}:{item.Id}", StringComparer.Ordinal)
+            .Select(group => group.First())
+            .ToArray());
+    }
+
     private static string BuildSummary(ReasoningQuery query, EvidenceContext context)
     {
         string target = $"{query.Target.Kind} {query.Target.Id}";
@@ -136,6 +203,11 @@ public sealed class ReasoningReconstructionService(
             $"Scale diagnostics: {context.Evidence.Count} evidence item(s), {context.EventEvidence.Count} event(s), {context.RelationshipEvidence.Count} relationship edge(s), {context.ReferenceEvidence.Count} external reference(s), {context.ThreadEvidence.Count} thread(s).",
             $"Evidence summary: {context.EventEvidence.Count} event(s), {context.RelationshipEvidence.Count} relationship edge(s), {context.ReferenceEvidence.Count} external reference(s), {context.ThreadEvidence.Count} thread(s)."
         };
+        if (query.HistoricalAt is not null)
+        {
+            lines.Add($"Historical point: {query.HistoricalAt:O}");
+            lines.Add("Historical state is derived from event timelines and is not a persisted lifecycle state.");
+        }
 
         if (context.Evidence.Count == 0)
         {
@@ -185,6 +257,32 @@ public sealed class ReasoningReconstructionService(
         return "Low";
     }
 
+    private static ReasoningEventFamily? FamilyFor(ReasoningQueryCategory category)
+    {
+        return category switch
+        {
+            ReasoningQueryCategory.Hypothesis => ReasoningEventFamily.Hypothesis,
+            ReasoningQueryCategory.Alternative => ReasoningEventFamily.Alternative,
+            ReasoningQueryCategory.Contradiction => ReasoningEventFamily.Contradiction,
+            ReasoningQueryCategory.Direction => ReasoningEventFamily.Direction,
+            ReasoningQueryCategory.Assumption => ReasoningEventFamily.AssumptionEvolution,
+            ReasoningQueryCategory.Decision => ReasoningEventFamily.DecisionEvolution,
+            _ => null
+        };
+    }
+
+    private static bool IsVisibleAt(ReasoningEvent reasoningEvent, ReasoningQueryCategory category)
+    {
+        return category switch
+        {
+            ReasoningQueryCategory.Hypothesis => reasoningEvent.Type is not ReasoningEventType.HypothesisInvalidated and not ReasoningEventType.HypothesisRetired,
+            ReasoningQueryCategory.Contradiction => reasoningEvent.Type is not ReasoningEventType.ContradictionResolved,
+            ReasoningQueryCategory.Direction => reasoningEvent.Type is not ReasoningEventType.DirectionAbandoned,
+            ReasoningQueryCategory.Assumption => reasoningEvent.Type is not ReasoningEventType.AssumptionInvalidated and not ReasoningEventType.AssumptionReplaced,
+            _ => true
+        };
+    }
+
     private static void ValidateQuery(ReasoningQuery query)
     {
         if (string.IsNullOrWhiteSpace(query.Question))
@@ -203,6 +301,11 @@ public sealed class ReasoningReconstructionService(
         Repository? repository = (await repositoryService.GetAllAsync())
             .FirstOrDefault(repository => repository.Id == repositoryId);
         return repository ?? throw new KeyNotFoundException($"Repository was not found: {repositoryId}");
+    }
+
+    private static string CreateReportId()
+    {
+        return $"reconstruction.{DateTime.UtcNow.ToString(ReportIdFormat, System.Globalization.CultureInfo.InvariantCulture)}";
     }
 
     private sealed record EvidenceContext(IReadOnlyList<ReasoningReconstructionEvidence> Evidence)

@@ -42,6 +42,11 @@ export function getArtifactCategories(inventory: ArtifactInventory): ArtifactCat
       missingLabel: 'No historical decisions found.',
       artifacts: inventory.historicalDecisions,
     },
+    {
+      label: 'Reasoning',
+      missingLabel: 'No reasoning projections or reports found.',
+      artifacts: inventory.reasoningArtifacts ?? [],
+    },
   ]
 }
 

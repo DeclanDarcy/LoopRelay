@@ -1,4 +1,10 @@
-export type ArtifactType = 'Plan' | 'OperationalContext' | 'Milestone' | 'Handoff' | 'Decision'
+export type ArtifactType =
+  | 'Plan'
+  | 'OperationalContext'
+  | 'Milestone'
+  | 'Handoff'
+  | 'Decision'
+  | 'Reasoning'
 
 export type ArtifactFamily = ArtifactType
 
@@ -21,6 +27,7 @@ export type ArtifactInventory = {
   historicalHandoffs: Artifact[]
   currentDecisions: Artifact | null
   historicalDecisions: Artifact[]
+  reasoningArtifacts?: Artifact[]
 }
 
 export type ArtifactCategory = {

@@ -20,6 +20,12 @@ public sealed class ArtifactServiceTests
         await WriteAsync(repository, ".agents/decisions/decisions.md", "decisions");
         await WriteAsync(repository, ".agents/decisions/decisions.0001.md", "historical decisions");
         await WriteAsync(repository, ".agents/decisions/notes.md", "not a decision artifact");
+        await WriteAsync(repository, ".agents/reasoning/events/EVT-0001/event.md", "reasoning event");
+        await WriteAsync(repository, ".agents/reasoning/threads/THR-0001/thread.md", "reasoning thread");
+        await WriteAsync(repository, ".agents/reasoning/relationships/REL-0001/relationship.md", "reasoning relationship");
+        await WriteAsync(repository, ".agents/reasoning/reports/reconstruction.202606230000000000000.md", "reasoning reconstruction");
+        await WriteAsync(repository, ".agents/reasoning/reports/certification.202606230000000000000.md", "reasoning certification");
+        await WriteAsync(repository, ".agents/reasoning/reports/notes.md", "not a reasoning report");
         var service = new ArtifactService(new FileSystemArtifactStore());
 
         IReadOnlyList<Artifact> artifacts = await service.DiscoverAsync(repository);
@@ -31,10 +37,16 @@ public sealed class ArtifactServiceTests
         Assert.Contains(artifacts, artifact => artifact.RelativePath == ".agents/handoffs/handoff.0001.md" && artifact.VersionKind == ArtifactVersionKind.Historical);
         Assert.Contains(artifacts, artifact => artifact.RelativePath == ".agents/decisions/decisions.md" && artifact.VersionKind == ArtifactVersionKind.Current);
         Assert.Contains(artifacts, artifact => artifact.RelativePath == ".agents/decisions/decisions.0001.md" && artifact.VersionKind == ArtifactVersionKind.Historical);
+        Assert.Contains(artifacts, artifact => artifact.RelativePath == ".agents/reasoning/events/EVT-0001/event.md" && artifact.Type == ArtifactType.Reasoning && artifact.Family == ArtifactFamily.Reasoning);
+        Assert.Contains(artifacts, artifact => artifact.RelativePath == ".agents/reasoning/threads/THR-0001/thread.md" && artifact.Type == ArtifactType.Reasoning && artifact.Family == ArtifactFamily.Reasoning);
+        Assert.Contains(artifacts, artifact => artifact.RelativePath == ".agents/reasoning/relationships/REL-0001/relationship.md" && artifact.Type == ArtifactType.Reasoning && artifact.Family == ArtifactFamily.Reasoning);
+        Assert.Contains(artifacts, artifact => artifact.RelativePath == ".agents/reasoning/reports/reconstruction.202606230000000000000.md" && artifact.Type == ArtifactType.Reasoning && artifact.Family == ArtifactFamily.Reasoning);
+        Assert.Contains(artifacts, artifact => artifact.RelativePath == ".agents/reasoning/reports/certification.202606230000000000000.md" && artifact.Type == ArtifactType.Reasoning && artifact.Family == ArtifactFamily.Reasoning);
         Assert.DoesNotContain(artifacts, artifact => artifact.RelativePath == ".agents/handoffs/notes.md");
         Assert.DoesNotContain(artifacts, artifact => artifact.RelativePath == ".agents/handoffs/handoff.0000.md");
         Assert.DoesNotContain(artifacts, artifact => artifact.RelativePath == ".agents/handoffs/handoff.001.md");
         Assert.DoesNotContain(artifacts, artifact => artifact.RelativePath == ".agents/decisions/notes.md");
+        Assert.DoesNotContain(artifacts, artifact => artifact.RelativePath == ".agents/reasoning/reports/notes.md");
     }
 
     [Fact]

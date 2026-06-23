@@ -2,6 +2,7 @@ using CommandCenter.Core.Artifacts;
 using CommandCenter.Core.Repositories;
 using CommandCenter.Reasoning.Abstractions;
 using CommandCenter.Reasoning.Models;
+using CommandCenter.Reasoning.Persistence;
 using CommandCenter.Reasoning.Projections;
 using CommandCenter.Reasoning.Services;
 
@@ -85,6 +86,125 @@ public sealed class ReasoningReconstructionServiceTests
             secondResult.Reconstruction.Evidence.Select(evidence => $"{evidence.Kind}:{evidence.Id}").ToArray());
     }
 
+    [Fact]
+    public async Task HypothesisFailureQueryReconstructsContradictingEvidence()
+    {
+        var store = new MemoryArtifactStore();
+        Repository repository = CreateRepository();
+        IReasoningRepository reasoningRepository = CreateReasoningRepository(store);
+        IReasoningGraphService graphService = CreateGraphService(repository, reasoningRepository, store);
+        IReasoningReconstructionService reconstructionService = CreateReconstructionService(repository, reasoningRepository, graphService);
+        ReasoningEvent hypothesis = await reasoningRepository.CreateEventAsync(repository, EventCommand(
+            "Cache the derived graph",
+            ReasoningEventType.HypothesisRaised,
+            ReasoningEventFamily.Hypothesis));
+        ReasoningEvent contradiction = await reasoningRepository.CreateEventAsync(repository, EventCommand(
+            "Graph cache became authority",
+            ReasoningEventType.EvidenceAdded,
+            ReasoningEventFamily.Evidence));
+        await reasoningRepository.CreateRelationshipAsync(repository, new CreateReasoningRelationshipCommand(
+            ReasoningRelationshipType.Contradicts,
+            new ReasoningReference(ReasoningReferenceKind.ReasoningEvent, contradiction.Id),
+            new ReasoningReference(ReasoningReferenceKind.ReasoningEvent, hypothesis.Id),
+            new ReasoningNarrative("The evidence contradicted the hypothesis that graph persistence was harmless."),
+            Provenance()));
+
+        ReasoningReconstruction reconstruction = await reconstructionService.ReconstructAsync(
+            repository.Id,
+            new ReasoningQuery(
+                ReasoningQueryCategory.Hypothesis,
+                "What killed this hypothesis?",
+                new ReasoningReference(ReasoningReferenceKind.ReasoningEvent, hypothesis.Id)));
+
+        Assert.Contains(reconstruction.Evidence, evidence => evidence.Kind == "Event" && evidence.Id == contradiction.Id);
+        Assert.Contains(reconstruction.Evidence, evidence => evidence.Kind == "Relationship" && evidence.Title == "Contradicts");
+        Assert.Contains("Graph cache became authority", reconstruction.Narrative.Details, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task HistoricalQueriesReconstructPointInTimeDerivedStateFromEventTimelines()
+    {
+        var store = new MemoryArtifactStore();
+        Repository repository = CreateRepository();
+        IReasoningRepository reasoningRepository = CreateReasoningRepository(store);
+        IReasoningGraphService graphService = CreateGraphService(repository, reasoningRepository, store);
+        IReasoningReconstructionService reconstructionService = CreateReconstructionService(repository, reasoningRepository, graphService);
+        ReasoningEvent hypothesis = await reasoningRepository.CreateEventAsync(repository, EventCommand(
+            "Event substrate is enough",
+            ReasoningEventType.HypothesisRaised,
+            ReasoningEventFamily.Hypothesis));
+        ReasoningEvent alternative = await reasoningRepository.CreateEventAsync(repository, EventCommand(
+            "Use specialized alternative records",
+            ReasoningEventType.AlternativeIntroduced,
+            ReasoningEventFamily.Alternative));
+        ReasoningEvent contradiction = await reasoningRepository.CreateEventAsync(repository, EventCommand(
+            "Decision authority conflict",
+            ReasoningEventType.ContradictionIdentified,
+            ReasoningEventFamily.Contradiction));
+        ReasoningEvent direction = await reasoningRepository.CreateEventAsync(repository, EventCommand(
+            "Keep direction derived",
+            ReasoningEventType.DirectionObserved,
+            ReasoningEventFamily.Direction));
+        DateTimeOffset historicalAt = DateTimeOffset.UtcNow.AddSeconds(1);
+        await reasoningRepository.CreateEventAsync(repository, EventCommand(
+            "Persisted direction abandoned",
+            ReasoningEventType.DirectionAbandoned,
+            ReasoningEventFamily.Direction));
+
+        await AssertHistoricalEvidenceAsync(reconstructionService, repository, ReasoningQueryCategory.Hypothesis, hypothesis);
+        await AssertHistoricalEvidenceAsync(reconstructionService, repository, ReasoningQueryCategory.Alternative, alternative);
+        await AssertHistoricalEvidenceAsync(reconstructionService, repository, ReasoningQueryCategory.Contradiction, contradiction);
+        await AssertHistoricalEvidenceAsync(reconstructionService, repository, ReasoningQueryCategory.Direction, direction);
+
+        async Task AssertHistoricalEvidenceAsync(
+            IReasoningReconstructionService service,
+            Repository targetRepository,
+            ReasoningQueryCategory category,
+            ReasoningEvent expectedEvent)
+        {
+            ReasoningReconstruction reconstruction = await service.ReconstructAsync(
+                targetRepository.Id,
+                new ReasoningQuery(
+                    category,
+                    $"What {category.ToString().ToLowerInvariant()} events were visible?",
+                    new ReasoningReference(ReasoningReferenceKind.ReasoningEvent, expectedEvent.Id),
+                    HistoricalAt: historicalAt));
+
+            Assert.Contains(reconstruction.Evidence, evidence => evidence.Kind == "Event" && evidence.Id == expectedEvent.Id);
+            Assert.Contains("Historical state is derived from event timelines", reconstruction.Narrative.Details, StringComparison.Ordinal);
+            Assert.Contains(reconstruction.Diagnostics, diagnostic => diagnostic.Contains("Historical reconstruction used events visible", StringComparison.Ordinal));
+        }
+    }
+
+    [Fact]
+    public async Task ReconstructionReportsPersistOnlyWhenExplicitlyRun()
+    {
+        var store = new MemoryArtifactStore();
+        Repository repository = CreateRepository();
+        IReasoningRepository reasoningRepository = CreateReasoningRepository(store);
+        IReasoningGraphService graphService = CreateGraphService(repository, reasoningRepository, store);
+        IReasoningReconstructionService reconstructionService = CreateReconstructionService(repository, reasoningRepository, graphService);
+        ReasoningEvent reasoningEvent = await reasoningRepository.CreateEventAsync(repository, EventCommand(
+            "Direction shifted",
+            ReasoningEventType.DirectionShifted,
+            ReasoningEventFamily.Direction));
+        var query = new ReasoningQuery(
+            ReasoningQueryCategory.Direction,
+            "Why does the current strategy exist?",
+            new ReasoningReference(ReasoningReferenceKind.ReasoningEvent, reasoningEvent.Id));
+
+        _ = await reconstructionService.ReconstructAsync(repository.Id, query);
+        Assert.Empty(await reconstructionService.ListReportsAsync(repository.Id));
+
+        ReasoningReconstructionReport report = await reconstructionService.RunReconstructionAsync(repository.Id, query);
+        IReadOnlyList<ReasoningReconstructionReport> reports = await reconstructionService.ListReportsAsync(repository.Id);
+
+        Assert.Single(reports);
+        Assert.Equal(report.Id, reports.Single().Id);
+        Assert.True(await store.ExistsAsync(ReasoningArtifactPaths.Resolve(repository, ReasoningArtifactPaths.ReconstructionReportJson(report.Id))));
+        Assert.True(await store.ExistsAsync(ReasoningArtifactPaths.Resolve(repository, ReasoningArtifactPaths.ReconstructionReportMarkdown(report.Id))));
+    }
+
     private static IReasoningRepository CreateReasoningRepository(IArtifactStore store)
     {
         return new FileSystemReasoningRepository(store, new ReasoningArtifactProjectionService());
@@ -106,10 +226,13 @@ public sealed class ReasoningReconstructionServiceTests
         return new ReasoningReconstructionService(new StubRepositoryService(repository), reasoningRepository, graphService);
     }
 
-    private static CreateReasoningEventCommand EventCommand(string title, ReasoningEventType type)
+    private static CreateReasoningEventCommand EventCommand(
+        string title,
+        ReasoningEventType type,
+        ReasoningEventFamily family = ReasoningEventFamily.Alternative)
     {
         return new CreateReasoningEventCommand(
-            ReasoningEventFamily.Alternative,
+            family,
             type,
             title,
             new ReasoningNarrative($"{title}."),

@@ -246,6 +246,7 @@ export type ReasoningQuery = {
   question: string
   target: ReasoningReference
   direction: ReasoningTraceDirection
+  historicalAt?: string | null
 }
 
 export type ReasoningReconstructionEvidence = {
@@ -265,6 +266,14 @@ export type ReasoningReconstruction = {
   confidence: string
   trace: ReasoningTrace
   evidence: ReasoningReconstructionEvidence[]
+  diagnostics: string[]
+}
+
+export type ReasoningReconstructionReport = {
+  id: string
+  repositoryId: string
+  generatedAt: string
+  reconstruction: ReasoningReconstruction
   diagnostics: string[]
 }
 

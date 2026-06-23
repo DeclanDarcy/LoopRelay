@@ -110,6 +110,62 @@ public sealed class ReasoningArtifactProjectionService : IReasoningArtifactProje
         return builder.ToString();
     }
 
+    public string RenderReconstructionReport(ReasoningReconstructionReport report)
+    {
+        ReasoningReconstruction reconstruction = report.Reconstruction;
+        var builder = new StringBuilder();
+        builder.AppendLine($"# Reasoning Reconstruction {report.Id}");
+        builder.AppendLine();
+        builder.AppendLine($"- Report ID: {report.Id}");
+        builder.AppendLine($"- Generated At: {report.GeneratedAt:O}");
+        builder.AppendLine($"- Target: {reconstruction.Query.Target.Kind} {reconstruction.Query.Target.Id}");
+        builder.AppendLine($"- Scope: {reconstruction.Query.Category}");
+        builder.AppendLine($"- Question: {reconstruction.Query.Question}");
+        if (reconstruction.Query.HistoricalAt is not null)
+        {
+            builder.AppendLine($"- Historical At: {reconstruction.Query.HistoricalAt:O}");
+        }
+
+        builder.AppendLine($"- Confidence: {reconstruction.Confidence}");
+        builder.AppendLine();
+        builder.AppendLine("## Narrative");
+        builder.AppendLine();
+        builder.AppendLine(reconstruction.Narrative.Summary);
+        if (!string.IsNullOrWhiteSpace(reconstruction.Narrative.Details))
+        {
+            builder.AppendLine();
+            builder.AppendLine(reconstruction.Narrative.Details);
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("## Evidence Used");
+        builder.AppendLine();
+        if (reconstruction.Evidence.Count == 0)
+        {
+            builder.AppendLine("- None");
+        }
+        else
+        {
+            foreach (ReasoningReconstructionEvidence evidence in reconstruction.Evidence.OrderBy(item => item.Kind, StringComparer.Ordinal).ThenBy(item => item.Id, StringComparer.Ordinal))
+            {
+                builder.AppendLine($"- {evidence.Kind} {evidence.Id}: {evidence.Title} - {evidence.Summary}");
+            }
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("## Events Used");
+        AppendValues(builder, reconstruction.Evidence.Where(evidence => evidence.Kind == "Event").Select(evidence => evidence.Id).ToArray());
+        builder.AppendLine();
+        builder.AppendLine("## Relationships Used");
+        AppendValues(builder, reconstruction.Trace.Relationships.Select(relationship => relationship.Id).ToArray());
+        builder.AppendLine();
+        builder.AppendLine("## Diagnostics");
+        AppendValues(builder, reconstruction.Diagnostics.Concat(report.Diagnostics).Distinct(StringComparer.Ordinal).ToArray());
+        builder.AppendLine();
+        builder.AppendLine("- Markdown projection is generated from reconstruction report JSON.");
+        return builder.ToString();
+    }
+
     public string RenderCertificationReport(ReasoningCertificationReport report)
     {
         var builder = new StringBuilder();

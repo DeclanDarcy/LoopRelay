@@ -144,14 +144,33 @@ public sealed class ReasoningEndpointTests
         HttpResponseMessage reconstructionResponse = await client.PostAsJsonAsync(
             $"{root}/api/repositories/{repository.Id}/reasoning/reconstructions",
             query);
+        HttpResponseMessage emptyReportsResponse = await client.GetAsync(
+            $"{root}/api/repositories/{repository.Id}/reasoning/reconstructions");
+        HttpResponseMessage persistedReconstructionResponse = await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/reasoning/reconstructions/reports",
+            query);
+        HttpResponseMessage reportsResponse = await client.GetAsync(
+            $"{root}/api/repositories/{repository.Id}/reasoning/reconstructions");
 
         ReasoningQueryResult queryResult = (await queryResponse.Content.ReadFromJsonAsync<ReasoningQueryResult>(JsonOptions))!;
         ReasoningReconstruction reconstruction = (await reconstructionResponse.Content.ReadFromJsonAsync<ReasoningReconstruction>(JsonOptions))!;
+        ReasoningReconstructionReport[] emptyReports =
+            (await emptyReportsResponse.Content.ReadFromJsonAsync<ReasoningReconstructionReport[]>(JsonOptions))!;
+        ReasoningReconstructionReport persistedReconstruction =
+            (await persistedReconstructionResponse.Content.ReadFromJsonAsync<ReasoningReconstructionReport>(JsonOptions))!;
+        ReasoningReconstructionReport[] reports =
+            (await reportsResponse.Content.ReadFromJsonAsync<ReasoningReconstructionReport[]>(JsonOptions))!;
 
         Assert.Equal(HttpStatusCode.OK, queryResponse.StatusCode);
         Assert.Equal(HttpStatusCode.OK, reconstructionResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, emptyReportsResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, persistedReconstructionResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, reportsResponse.StatusCode);
         Assert.Contains(queryResult.Reconstruction.Evidence, evidence => evidence.Id == source.Id);
         Assert.Contains(source.Id, reconstruction.Narrative.Details, StringComparison.Ordinal);
+        Assert.Empty(emptyReports);
+        Assert.Equal("Persisted only because a reconstruction run was explicitly requested.", persistedReconstruction.Diagnostics.Single());
+        Assert.Equal(persistedReconstruction.Id, reports.Single().Id);
     }
 
     [Fact]
