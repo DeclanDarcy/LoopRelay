@@ -2,9 +2,14 @@
 
 ## Newly Authorized
 
-- Treat Milestone 1 as complete: event substrate, thread grouping, relationship persistence, services, endpoints, shell bridge commands, basic UI, and characterization coverage now satisfy the milestone intent.
-- Start Milestone 2 with assisted/inferred capture from authoritative decision lifecycle transitions, but prefer decision supersession before broader proposal-resolution capture.
-- For the first Milestone 2 slice, reasoning capture must observe an already-authoritative decision transition; it must not independently decide that the transition happened.
-- The first Milestone 2 capture implementation must preserve idempotency so re-running capture does not create duplicate reasoning events.
-- Keep the Reasoning UI read-only for explanation, navigation, and history; do not add decision authoring, status mutation, or workflow ownership through the Reasoning workspace.
-- Keep Tauri as a bridge only. Reasoning behavior and capture logic remain backend-owned.
+- Treat the first Milestone 2 supersession-capture slice as architecturally correct because reasoning capture occurs only after the authoritative decision transition succeeds.
+- Do not treat the intermittent Windows `execution-sessions.json` lock as a blocker for the supersession-capture slice when focused decision tests pass and the lock migrates between unrelated tests.
+- Track the Windows execution-session file-lock issue separately because it may reduce confidence in full-suite certification later.
+- Proceed next with proposal-resolution capture, but preserve the same boundary: proposal resolution must complete authoritatively first, and reasoning capture may only observe the completed transition.
+- Proposal-resolution reasoning capture must avoid reasoning-side authority concepts such as resolving, approving, or selecting proposals.
+- Proposal-resolution capture may emit explanatory reasoning such as `DecisionEvolution` or `EvidenceAdded` only after the source domain has resolved the proposal.
+- The next proposal-resolution slice must test that capture happens only after successful proposal resolution.
+- The next proposal-resolution slice must test that failed or stale proposal resolution emits no reasoning event.
+- The next proposal-resolution slice must test that re-running the same transition does not duplicate events.
+- The next proposal-resolution slice must test that reasoning does not mutate proposal or decision artifacts.
+- The next proposal-resolution slice must ensure the fingerprint includes source transition identity, not just narrative text.

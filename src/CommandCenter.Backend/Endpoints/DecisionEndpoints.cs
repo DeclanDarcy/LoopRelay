@@ -1,3 +1,4 @@
+using CommandCenter.Backend.Services;
 using CommandCenter.Decisions.Abstractions;
 using CommandCenter.Decisions.Models;
 using CommandCenter.Decisions.Primitives;
@@ -786,7 +787,8 @@ public static class DecisionEndpoints
             Guid repositoryId,
             string decisionId,
             SupersedeDecisionCommand? request,
-            IDecisionResolutionService resolutionService) =>
+            IDecisionResolutionService resolutionService,
+            IDecisionReasoningCaptureService reasoningCaptureService) =>
         {
             try
             {
@@ -795,7 +797,9 @@ public static class DecisionEndpoints
                     return Results.BadRequest(new { error = "Supersede command is required." });
                 }
 
-                return Results.Ok(await resolutionService.SupersedeDecisionAsync(repositoryId, decisionId, request));
+                Decision superseded = await resolutionService.SupersedeDecisionAsync(repositoryId, decisionId, request);
+                await reasoningCaptureService.CaptureDecisionSupersededAsync(repositoryId, superseded, request);
+                return Results.Ok(superseded);
             }
             catch (KeyNotFoundException exception)
             {

@@ -13,15 +13,15 @@ Goal: use the event substrate to preserve reasoning evolution across decisions a
 - [ ] Add explicit commands for recording hypothesis, alternative, contradiction, and direction events as event classifications.
 - [ ] Add reference helpers for decisions, proposals, candidates, governance findings, operational-context revisions, handoffs, execution outputs, and artifacts.
 - [ ] Add event templates for common reasoning captures with required provenance fields.
-- [ ] Add assisted-capture adapters that pre-populate references and provenance after successful decision operations, starting with supersession. Keep the decision operation authoritative.
+- [x] Add assisted-capture adapters that pre-populate references and provenance after successful decision operations, starting with supersession. Keep the decision operation authoritative.
 - [ ] Add inferred-capture adapters for objective domain transitions once idempotency is stable:
-  - [ ] Decision superseded.
+  - [x] Decision superseded.
   - [ ] Proposal resolved.
   - [ ] Decision archived.
   - [ ] Governance report generated with contradiction findings.
   - [ ] Operational-context proposal promoted.
   - [ ] Execution handoff accepted or rejected.
-- [ ] Ensure inferred capture is idempotent by fingerprinting the source transition and refusing duplicate events for the same source transition.
+- [x] Ensure inferred capture is idempotent by fingerprinting the source transition and refusing duplicate events for the same source transition.
 - [ ] Keep manual capture available for narrative details that cannot be inferred from source artifacts.
 - [ ] Add workspace projection summary counts by event family and recent thread activity.
 
@@ -33,9 +33,9 @@ Goal: use the event substrate to preserve reasoning evolution across decisions a
 
 ## Tests
 
-- [ ] Decision A superseded by Decision B can explain why through events and relationships.
-- [ ] Decision supersession can create an inferred event from the source transition without a second human action once the adapter is enabled.
-- [ ] Inferred capture does not duplicate events when the same source transition is processed twice.
+- [x] Decision A superseded by Decision B can explain why through events and relationships.
+- [x] Decision supersession can create an inferred event from the source transition without a second human action once the adapter is enabled.
+- [x] Inferred capture does not duplicate events when the same source transition is processed twice.
 - [ ] Alternative considered, rejected, and revisited is preserved as an event thread.
 - [ ] Contradiction discovered and resolved is preserved as an event thread.
 - [ ] Direction shift is recorded as an event and remains non-authoritative.

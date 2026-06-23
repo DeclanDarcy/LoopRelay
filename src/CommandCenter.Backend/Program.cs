@@ -15,6 +15,7 @@ using CommandCenter.Execution.Extensions;
 using CommandCenter.Continuity.Extensions;
 using CommandCenter.Decisions.Extensions;
 using CommandCenter.Reasoning.Extensions;
+using CommandCenter.Backend.Services;
 
 namespace CommandCenter.Backend;
 
@@ -34,6 +35,7 @@ public static class Program
         builder.Services.AddContinuity();
         builder.Services.AddDecisions();
         builder.Services.AddReasoning();
+        builder.Services.AddSingleton<IDecisionReasoningCaptureService, DecisionReasoningCaptureService>();
         // Generation lives in Middle (it depends on Execution), so it is wired here
         // rather than inside AddContinuity().
         builder.Services.AddSingleton<IOperationalContextGenerationService, OperationalContextGenerationService>();
