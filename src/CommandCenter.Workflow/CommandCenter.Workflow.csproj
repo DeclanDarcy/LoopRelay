@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -11,9 +11,6 @@
     <ProjectReference Include="..\CommandCenter.Continuity\CommandCenter.Continuity.csproj" />
     <ProjectReference Include="..\CommandCenter.Decisions\CommandCenter.Decisions.csproj" />
     <ProjectReference Include="..\CommandCenter.Execution\CommandCenter.Execution.csproj" />
-    <ProjectReference Include="..\CommandCenter.Workflow\CommandCenter.Workflow.csproj" />
-    <ProjectReference Include="..\CommandCenter.Middle\CommandCenter.Middle.csproj" />
-    <ProjectReference Include="..\CommandCenter.Reasoning\CommandCenter.Reasoning.csproj" />
   </ItemGroup>
 
 </Project>

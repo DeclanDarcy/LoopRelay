@@ -25,6 +25,7 @@
     <ProjectReference Include="..\..\src\CommandCenter.Continuity\CommandCenter.Continuity.csproj" />
     <ProjectReference Include="..\..\src\CommandCenter.Decisions\CommandCenter.Decisions.csproj" />
     <ProjectReference Include="..\..\src\CommandCenter.Execution\CommandCenter.Execution.csproj" />
+    <ProjectReference Include="..\..\src\CommandCenter.Workflow\CommandCenter.Workflow.csproj" />
     <ProjectReference Include="..\..\src\CommandCenter.Reasoning\CommandCenter.Reasoning.csproj" />
     <ProjectReference Include="..\..\src\CommandCenter.Middle\CommandCenter.Middle.csproj" />
     <ProjectReference Include="..\..\src\CommandCenter.Backend\CommandCenter.Backend.csproj" />

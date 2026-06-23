@@ -15,6 +15,7 @@ using CommandCenter.Execution.Extensions;
 using CommandCenter.Continuity.Extensions;
 using CommandCenter.Decisions.Extensions;
 using CommandCenter.Reasoning.Extensions;
+using CommandCenter.Workflow.Extensions;
 using CommandCenter.Backend.Services;
 
 namespace CommandCenter.Backend;
@@ -41,6 +42,7 @@ public static class Program
         builder.Services.AddSingleton<IOperationalContextGenerationService, OperationalContextGenerationService>();
         builder.Services.AddSingleton<IPlanningService, PlanningService>();
         builder.Services.AddExecution();
+        builder.Services.AddWorkflow();
         builder.Services.AddSingleton<IRepositoryProjectionService, RepositoryProjectionService>();
         builder.Services.AddCors(options =>
             options.AddDefaultPolicy(policy =>
@@ -71,6 +73,7 @@ public static class Program
         app.MapExecutionSessionsEndpoints();
         app.MapDecisionEndpoints();
         app.MapReasoningEndpoints();
+        app.MapWorkflowEndpoints();
 
         return app;
     }

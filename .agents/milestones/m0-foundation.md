@@ -4,35 +4,35 @@ Objective: create the workflow vocabulary and read-only projection substrate.
 
 Deliver:
 
-- [ ] `WorkflowStage`, `WorkflowGateType`, `WorkflowProgressState`, `WorkflowInstance`, and `WorkflowTimelineEntry`.
-- [ ] `IWorkflowProjectionService`.
-- [ ] explicit deterministic stage derivation from execution, decision, continuity, and git state.
-- [ ] `WorkflowProjectionDiagnostics` with projection inputs, chosen stage, chosen gate, reasoning, unknown states, and conflicts.
-- [ ] derived workflow timeline entries for execution started/completed, decision resolved, context promoted, commit executed, and push executed where evidence exists.
-- [ ] repository integration methods and endpoints for workflow, diagnostics, and timeline.
+- [x] `WorkflowStage`, `WorkflowGateType`, `WorkflowProgressState`, `WorkflowInstance`, and `WorkflowTimelineEntry`.
+- [x] `IWorkflowProjectionService`.
+- [x] explicit deterministic stage derivation from execution, decision, continuity, and git state.
+- [x] `WorkflowProjectionDiagnostics` with projection inputs, chosen stage, chosen gate, reasoning, unknown states, and conflicts.
+- [x] derived workflow timeline entries for execution started/completed, decision resolved, context promoted, commit executed, and push executed where evidence exists.
+- [x] repository integration methods and endpoints for workflow, diagnostics, and timeline.
 
 Rules:
 
-- [ ] No workflow state machine.
-- [ ] No persistence beyond optional transient projection output.
-- [ ] No recovery.
-- [ ] No automation.
-- [ ] No cross-domain mutation.
+- [x] No workflow state machine.
+- [x] No persistence beyond optional transient projection output.
+- [x] No recovery.
+- [x] No automation.
+- [x] No cross-domain mutation.
 
 Tests:
 
-- [ ] execution states map to workflow stages and gates.
-- [ ] decision states map to workflow stages and gates.
-- [ ] continuity states map to workflow stages and gates.
-- [ ] git states map to workflow stages and gates.
-- [ ] identical inputs produce identical projections.
-- [ ] diagnostics explain every projection.
-- [ ] workflow projection does not call mutating domain methods.
+- [x] execution states map to workflow stages and gates.
+- [x] decision states map to workflow stages and gates.
+- [x] continuity states map to workflow stages and gates.
+- [x] git states map to workflow stages and gates.
+- [x] identical inputs produce identical projections.
+- [x] diagnostics explain every projection.
+- [x] workflow projection does not call mutating domain methods.
 
 Exit criteria:
 
-- [ ] workflow contracts exist.
-- [ ] workflow projection exists.
-- [ ] projection diagnostics exist.
-- [ ] derived timeline exists.
-- [ ] authority preservation tests pass.
+- [x] workflow contracts exist.
+- [x] workflow projection exists.
+- [x] projection diagnostics exist.
+- [x] derived timeline exists.
+- [x] authority preservation tests pass.
