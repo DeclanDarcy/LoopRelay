@@ -16,18 +16,18 @@ make accepted resolved decisions direct execution with explicit influence tracea
 - [x] Keep compatibility with existing `ExecutionConstraint` and `ExecutionDirective` prompt rendering.
 - [x] Add `ExecutionDecisionPriority`.
 - [x] Add `ExecutionArchitectureRule`.
-- [ ] Add projection rules:
+- [x] Add projection rules:
   - [x] include accepted resolved decisions
   - [x] include active architectural direction
   - [x] include active constraints and priorities
   - [x] exclude open decisions, rejected decisions, deferred decisions, archived decisions, superseded decisions, unresolved proposals, and blocked decisions
   - [x] expose only the replacement decision when supersession exists
-- [ ] Strengthen conflict detection:
+- [x] Strengthen conflict detection:
   - [x] contradictory positive/negative directives
-  - [ ] mutually exclusive architecture rules
-  - [ ] superseded authority still projecting
+  - [x] mutually exclusive architecture rules
+  - [x] superseded authority still projecting
   - [x] execution request/milestone contradicting active decision
-- [ ] Persist projection diagnostics:
+- [x] Persist projection diagnostics:
   - [x] included decisions
   - [x] excluded decisions
   - [x] superseded decisions

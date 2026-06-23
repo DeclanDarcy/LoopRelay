@@ -2,18 +2,24 @@
 
 ## Newly Authorized
 
-- Treat the Milestone 9 execution influence UI slice as accepted and complete.
-- Preserve the historical influence model:
-  `Resolved Decision -> Projection Fingerprint -> Execution Session -> Persisted Influence Trace -> Execution Inspector`.
-- Continue Milestone 9 with projection correctness hardening before closing the milestone.
-- Implement the next slice as:
-  - mutually exclusive architecture-rule conflict detection
-  - superseded-authority-still-projecting diagnostics
-- Land projection correctness hardening before broader execution UI, analytics, or observability work.
+- Treat the Milestone 9 relationship-aware projection hardening as accepted.
+- Preserve execution projection authority order as:
+  `Resolved Decision -> Relationship Check -> Governance Check -> Projection`.
+- Treat replacement diagnostics for superseded decisions as required projection explainability.
+- Keep architecture-rule conflict detection narrow, explainable, and same-domain rather than broad fuzzy contradiction detection.
+- Treat Milestone 9 as functionally complete for:
+  - `ExecutionDecisionContext`
+  - accepted-resolved-only projection
+  - governance blocking
+  - projection diagnostics
+  - influence tracing
+  - influence UI
+  - supersession hardening
+  - architecture-rule conflict detection
+- Run the next slice as a Tier 0-style backend validation:
+  `generated recommendation -> human resolution -> execution projection -> prompt guidance -> human authoring burden visible`.
 
 ## Not Authorized
 
-- Do not recompute historical execution influence from current decisions.
-- Do not add adherence observations without concrete execution result evidence.
-- Do not expand the execution influence surface into execution analytics.
-- Do not add adherence scoring or recommendation metrics in the next slice.
+- Do not invent adherence observations before concrete execution-result evidence exists.
+- Do not broaden architecture conflict detection into fuzzy contradiction detection.

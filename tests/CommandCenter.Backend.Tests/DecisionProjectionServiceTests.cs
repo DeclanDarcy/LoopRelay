@@ -222,6 +222,80 @@ public sealed class DecisionProjectionServiceTests
     }
 
     [Fact]
+    public async Task ProjectionDetectsMutuallyExclusiveArchitectureRules()
+    {
+        Harness harness = CreateHarness();
+        await harness.DecisionRepository.SaveDecisionAsync(
+            harness.Repository,
+            CreateDecision(
+                harness.Repository.Id,
+                "DEC-0001",
+                DecisionState.Resolved,
+                DecisionOutcome.Accepted,
+                DecisionClassification.Architectural,
+                "Use React framework"));
+        await harness.DecisionRepository.SaveDecisionAsync(
+            harness.Repository,
+            CreateDecision(
+                harness.Repository.Id,
+                "DEC-0002",
+                DecisionState.Resolved,
+                DecisionOutcome.Accepted,
+                DecisionClassification.Architectural,
+                "Use Vue framework"));
+
+        ExecutionDecisionProjection projection = await harness.Service.BuildExecutionProjectionAsync(harness.Repository.Id);
+
+        ExecutionDecisionConflict conflict = Assert.Single(projection.Conflicts);
+        Assert.Equal("DEC-0001", conflict.DecisionId);
+        Assert.Contains("DEC-0002", conflict.ConflictingExcerpt, StringComparison.Ordinal);
+        Assert.Equal(2, projection.ArchitectureRules.Count);
+    }
+
+    [Fact]
+    public async Task ProjectionExcludesSupersededAuthorityWhenStateIsStale()
+    {
+        Harness harness = CreateHarness();
+        await harness.DecisionRepository.SaveDecisionAsync(
+            harness.Repository,
+            CreateDecision(
+                harness.Repository.Id,
+                "DEC-0001",
+                DecisionState.Resolved,
+                DecisionOutcome.Accepted,
+                DecisionClassification.Architectural,
+                "Use legacy repository layout"));
+        await harness.DecisionRepository.SaveDecisionAsync(
+            harness.Repository,
+            CreateDecision(
+                harness.Repository.Id,
+                "DEC-0002",
+                DecisionState.Resolved,
+                DecisionOutcome.Accepted,
+                DecisionClassification.Architectural,
+                "Use current repository layout",
+                relationships:
+                [
+                    new DecisionRelationship(
+                        new DecisionId("DEC-0002"),
+                        new DecisionId("DEC-0001"),
+                        DecisionRelationshipType.Supersedes,
+                        "Replacement authority.")
+                ]));
+
+        ExecutionDecisionProjection projection = await harness.Service.BuildExecutionProjectionAsync(harness.Repository.Id);
+
+        ExecutionConstraint constraint = Assert.Single(projection.Constraints);
+        Assert.Equal("DEC-0002", constraint.DecisionId);
+        Assert.Contains(projection.Diagnostics, diagnostic =>
+            diagnostic.Contains("DEC-0001", StringComparison.Ordinal) &&
+            diagnostic.Contains("state is Resolved", StringComparison.Ordinal));
+        Assert.Contains(projection.Context.Diagnostics, diagnostic =>
+            diagnostic.Contains("DEC-0001", StringComparison.Ordinal) &&
+            diagnostic.Contains("DEC-0002", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task ProjectionDetectsMilestoneConflictsWithGovernedDecisionStatements()
     {
         Harness harness = CreateHarness();

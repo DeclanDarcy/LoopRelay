@@ -100,6 +100,23 @@ public sealed class DecisionProjectionService(
             .Where(finding => finding.BlocksExecutionProjection)
             .SelectMany(finding => finding.RelatedDecisionIds)
             .ToHashSet(StringComparer.Ordinal);
+        Dictionary<string, string[]> supersededByDecisionIds = decisions
+            .SelectMany(decision => decision.Relationships
+                .Where(relationship => relationship.Type == DecisionRelationshipType.Supersedes)
+                .Select(relationship => new
+                {
+                    SupersededDecisionId = relationship.TargetDecisionId.Value,
+                    ReplacementDecisionId = decision.Id.Value
+                }))
+            .GroupBy(relationship => relationship.SupersededDecisionId, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .Select(relationship => relationship.ReplacementDecisionId)
+                    .Distinct(StringComparer.Ordinal)
+                    .Order(StringComparer.Ordinal)
+                    .ToArray(),
+                StringComparer.Ordinal);
         var constraints = new List<ExecutionConstraint>();
         var directives = new List<ExecutionDirective>();
         var priorities = new List<ExecutionDecisionPriority>();
@@ -112,6 +129,26 @@ public sealed class DecisionProjectionService(
 
         foreach (Decision decision in decisions.OrderBy(decision => decision.Id.Value, StringComparer.Ordinal))
         {
+            if (supersededByDecisionIds.TryGetValue(decision.Id.Value, out string[]? replacementDecisionIds))
+            {
+                string replacements = string.Join(", ", replacementDecisionIds);
+                string reason = decision.State == DecisionState.Superseded
+                    ? $"Decision is superseded by {replacements}."
+                    : $"Decision is superseded by {replacements} but state is {decision.State}.";
+                var supersededDecision = new DecisionProjectionDecisionDiagnostic(
+                    decision.Id.Value,
+                    decision.Title,
+                    decision.State,
+                    decision.Resolution?.Outcome,
+                    decision.Classification,
+                    reason,
+                    []);
+                excludedDecisions.Add(supersededDecision);
+                supersededDecisions.Add(supersededDecision);
+                diagnostics.Add($"Excluded {decision.Id.Value}: {reason}");
+                continue;
+            }
+
             if (!IsAcceptedResolvedDecision(decision))
             {
                 string reason = BuildExclusionReason(decision);
@@ -251,6 +288,7 @@ public sealed class DecisionProjectionService(
                  directive.Title,
                  directive.Statement,
                  directive.Sources))],
+            architectureRules,
             executionRequest,
             milestoneContent);
 
@@ -615,11 +653,13 @@ public sealed class DecisionProjectionService(
 
     private static ExecutionDecisionConflict[] DetectConflicts(
         IReadOnlyList<ProjectedStatement> statements,
+        IReadOnlyList<ExecutionArchitectureRule> architectureRules,
         string? executionRequest,
         string? milestoneContent)
     {
         var conflicts = new List<ExecutionDecisionConflict>();
         DetectProjectedStatementConflicts(statements, conflicts);
+        DetectMutuallyExclusiveArchitectureRules(architectureRules, conflicts);
         string combinedInput = string.Join(Environment.NewLine, new[] { executionRequest, milestoneContent }
             .Where(value => !string.IsNullOrWhiteSpace(value)));
         if (string.IsNullOrWhiteSpace(combinedInput))
@@ -693,6 +733,75 @@ public sealed class DecisionProjectionService(
         }
     }
 
+    private static void DetectMutuallyExclusiveArchitectureRules(
+        IReadOnlyList<ExecutionArchitectureRule> architectureRules,
+        List<ExecutionDecisionConflict> conflicts)
+    {
+        ArchitectureChoice[] choices = architectureRules
+            .Select(rule => new ArchitectureChoice(rule, ParseArchitectureChoice(rule.Statement)))
+            .Where(choice => choice.Parsed.HasChoice)
+            .ToArray();
+
+        for (int leftIndex = 0; leftIndex < choices.Length; leftIndex++)
+        {
+            for (int rightIndex = leftIndex + 1; rightIndex < choices.Length; rightIndex++)
+            {
+                ArchitectureChoice left = choices[leftIndex];
+                ArchitectureChoice right = choices[rightIndex];
+                if (left.Rule.ProjectionKind != right.Rule.ProjectionKind ||
+                    !string.Equals(left.Parsed.Domain, right.Parsed.Domain, StringComparison.Ordinal) ||
+                    string.Equals(left.Parsed.Subject, right.Parsed.Subject, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                conflicts.Add(new ExecutionDecisionConflict(
+                    $"ECONFLICT-{conflicts.Count + 1:0000}",
+                    left.Rule.DecisionId,
+                    left.Rule.Title,
+                    left.Rule.Statement,
+                    $"{right.Rule.DecisionId}: {right.Rule.Statement}",
+                    [.. left.Rule.Sources, .. right.Rule.Sources]));
+            }
+        }
+    }
+
+    private static (bool HasChoice, string Domain, string Subject) ParseArchitectureChoice(string statement)
+    {
+        (bool hasDirective, bool isPositive, string subject) = ParseDirective(statement);
+        if (!hasDirective || !isPositive)
+        {
+            return (false, string.Empty, string.Empty);
+        }
+
+        string[] domainTerms =
+        [
+            "framework",
+            "provider",
+            "runtime",
+            "library",
+            "package",
+            "dependency",
+            "sdk",
+            "api",
+            "layout",
+            "convention",
+            "schema"
+        ];
+        string domain = domainTerms.FirstOrDefault(term => subject.Contains(term, StringComparison.Ordinal)) ?? string.Empty;
+        if (domain.Length == 0)
+        {
+            return (false, string.Empty, string.Empty);
+        }
+
+        string normalizedSubject = subject
+            .Replace(domain, string.Empty, StringComparison.Ordinal)
+            .Trim();
+        return normalizedSubject.Length == 0
+            ? (false, string.Empty, string.Empty)
+            : (true, domain, normalizedSubject);
+    }
+
     private static (bool HasDirective, bool IsPositive, string Subject) ParseDirective(string statement)
     {
         string normalized = Normalize(statement);
@@ -732,4 +841,8 @@ public sealed class DecisionProjectionService(
         bool HasDirective,
         bool IsPositive,
         string Subject);
+
+    private sealed record ArchitectureChoice(
+        ExecutionArchitectureRule Rule,
+        (bool HasChoice, string Domain, string Subject) Parsed);
 }
