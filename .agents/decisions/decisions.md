@@ -2,14 +2,13 @@
 
 ## Newly Authorized
 
-- Treat the first Milestone 2 supersession-capture slice as architecturally correct because reasoning capture occurs only after the authoritative decision transition succeeds.
-- Do not treat the intermittent Windows `execution-sessions.json` lock as a blocker for the supersession-capture slice when focused decision tests pass and the lock migrates between unrelated tests.
-- Track the Windows execution-session file-lock issue separately because it may reduce confidence in full-suite certification later.
-- Proceed next with proposal-resolution capture, but preserve the same boundary: proposal resolution must complete authoritatively first, and reasoning capture may only observe the completed transition.
-- Proposal-resolution reasoning capture must avoid reasoning-side authority concepts such as resolving, approving, or selecting proposals.
-- Proposal-resolution capture may emit explanatory reasoning such as `DecisionEvolution` or `EvidenceAdded` only after the source domain has resolved the proposal.
-- The next proposal-resolution slice must test that capture happens only after successful proposal resolution.
-- The next proposal-resolution slice must test that failed or stale proposal resolution emits no reasoning event.
-- The next proposal-resolution slice must test that re-running the same transition does not duplicate events.
-- The next proposal-resolution slice must test that reasoning does not mutate proposal or decision artifacts.
-- The next proposal-resolution slice must ensure the fingerprint includes source transition identity, not just narrative text.
+- Treat proposal-resolution inferred capture as architecturally correct when modeled as `Evidence` / `EvidenceAdded` rather than a reasoning-owned proposal resolution authority.
+- Treat the `DerivesFrom` relationship from decision to proposal as the correct explanatory relationship for proposal-resolution capture.
+- Preserve the post-authoritative-transition boundary for proposal resolution: successful resolution may append reasoning; failed resolution must append no reasoning.
+- Anchor inferred-capture idempotency to source transition identity rather than reasoning narrative text.
+- Consider the supersession and proposal-resolution capture slices sufficient architectural proof for the core Milestone 2 inferred-capture pattern.
+- Proceed next with decision archival capture as the next inferred-capture slice.
+- Avoid adding event types such as `DecisionArchived`, `DecisionRetired`, or `DecisionClosed` if they would mirror the decision lifecycle inside reasoning.
+- Evaluate archival capture through the smallest explanatory vocabulary that fits, such as `DecisionEvolution`, `Evidence`, or `ConstraintEvolution`, depending on what rationale is preserved.
+- Treat taxonomy drift as the primary emerging risk for upcoming Milestone 2 slices.
+- Prefer a small reasoning vocabulary with rich provenance and authoritative references over adding one reasoning event type for every source-domain state transition.

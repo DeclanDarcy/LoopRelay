@@ -374,6 +374,71 @@ public sealed class DecisionGenerationServiceTests
     }
 
     [Fact]
+    public async Task ProposalResolutionReasoningCaptureIsIdempotentAndNonAuthoritative()
+    {
+        Repository repository = CreateRepository();
+        await WriteAsync(repository, ".agents/operational_context.md", "# Operational Context\n\nStable understanding.");
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var generationService = CreateGenerationService(repository, store, decisionRepository);
+        var resolutionService = CreateResolutionService(repository, store, decisionRepository);
+        var reasoningRepository = new FileSystemReasoningRepository(
+            store,
+            new ReasoningArtifactProjectionService());
+        var captureService = new DecisionReasoningCaptureService(
+            new StubRepositoryService(repository),
+            decisionRepository,
+            reasoningRepository);
+        DecisionProposal proposal = await generationService.GenerateProposalAsync(repository.Id, candidate.Id);
+        await generationService.MarkProposalReadyForResolutionAsync(repository.Id, proposal.Id, "Ready for human resolution.");
+        var command = new ResolveDecisionCommand(
+            "Accept the proposed persistence direction.",
+            "human-reviewer",
+            "option-1");
+        Decision decision = await resolutionService.ResolveProposalAsync(repository.Id, proposal.Id, command);
+        DecisionProposal? proposalAfterResolution = await decisionRepository.GetProposalAsync(repository, proposal.Id);
+        Decision? decisionAfterResolution = await decisionRepository.GetDecisionAsync(repository, decision.Id);
+
+        await captureService.CaptureProposalResolvedAsync(repository.Id, decision, command);
+        await captureService.CaptureProposalResolvedAsync(repository.Id, decision, command);
+
+        IReadOnlyList<ReasoningEvent> events = await reasoningRepository.ListEventsAsync(repository);
+        IReadOnlyList<ReasoningRelationship> relationships = await reasoningRepository.ListRelationshipsAsync(repository);
+        ReasoningEvent reasoningEvent = Assert.Single(events);
+        ReasoningRelationship relationship = Assert.Single(relationships);
+        DecisionProposal? proposalAfterCapture = await decisionRepository.GetProposalAsync(repository, proposal.Id);
+        Decision? decisionAfterCapture = await decisionRepository.GetDecisionAsync(repository, decision.Id);
+
+        Assert.Equal(ReasoningEventFamily.Evidence, reasoningEvent.Family);
+        Assert.Equal(ReasoningEventType.EvidenceAdded, reasoningEvent.Type);
+        Assert.Equal("InferredProposalResolution", reasoningEvent.Provenance.SourceKind);
+        Assert.Equal("human-reviewer", reasoningEvent.Provenance.CapturedBy);
+        Assert.NotNull(reasoningEvent.Provenance.Fingerprint);
+        Assert.Contains(reasoningEvent.References, reference =>
+            reference.Kind == ReasoningReferenceKind.Proposal &&
+            reference.Id == proposal.Id);
+        Assert.Contains(reasoningEvent.References, reference =>
+            reference.Kind == ReasoningReferenceKind.Decision &&
+            reference.Id == decision.Id.Value);
+        Assert.Contains(reasoningEvent.References, reference =>
+            reference.Kind == ReasoningReferenceKind.Candidate &&
+            reference.Id == candidate.Id);
+        Assert.Equal(ReasoningRelationshipType.DerivesFrom, relationship.Type);
+        Assert.Equal(decision.Id.Value, relationship.Source.Id);
+        Assert.Equal(proposal.Id, relationship.Target.Id);
+        Assert.Equal(proposalAfterResolution?.State, proposalAfterCapture?.State);
+        Assert.Equal(proposalAfterResolution?.History.Count, proposalAfterCapture?.History.Count);
+        Assert.Equal(decisionAfterResolution?.State, decisionAfterCapture?.State);
+        Assert.Equal(decisionAfterResolution?.Resolution?.Outcome, decisionAfterCapture?.Resolution?.Outcome);
+        Assert.Equal(decisionAfterResolution?.Resolution?.SelectedOptionId, decisionAfterCapture?.Resolution?.SelectedOptionId);
+        Assert.Equal(
+            decisionAfterResolution?.Resolution?.SourceProposalSnapshot?.ProposalFingerprint,
+            decisionAfterCapture?.Resolution?.SourceProposalSnapshot?.ProposalFingerprint);
+    }
+
+    [Fact]
     public async Task AssimilationRecommendationPersistsAdvisoryPackageWithoutMutatingOperationalContext()
     {
         Repository repository = CreateRepository();
@@ -1095,10 +1160,70 @@ public sealed class DecisionGenerationServiceTests
             new ResolveDecisionCommand("Resolve via endpoint.", "human-reviewer", "option-1"));
 
         Decision decision = (await resolveResponse.Content.ReadFromJsonAsync<Decision>(jsonOptions))!;
+        ReasoningEvent[] reasoningEvents = (await (await client.GetAsync(
+            $"{root}/api/repositories/{repository.Id}/reasoning/events"))
+            .Content.ReadFromJsonAsync<ReasoningEvent[]>(jsonOptions))!;
+        ReasoningRelationship[] reasoningRelationships = (await (await client.GetAsync(
+            $"{root}/api/repositories/{repository.Id}/reasoning/relationships"))
+            .Content.ReadFromJsonAsync<ReasoningRelationship[]>(jsonOptions))!;
+        ReasoningEvent reasoningEvent = Assert.Single(reasoningEvents);
+        ReasoningRelationship relationship = Assert.Single(reasoningRelationships);
+
         Assert.Equal(HttpStatusCode.OK, resolveResponse.StatusCode);
         Assert.Equal("DEC-0001", decision.Id.Value);
         Assert.Equal(DecisionState.Resolved, decision.State);
         Assert.Equal("option-1", decision.Resolution?.SelectedOptionId);
+        Assert.Equal(ReasoningEventFamily.Evidence, reasoningEvent.Family);
+        Assert.Equal(ReasoningEventType.EvidenceAdded, reasoningEvent.Type);
+        Assert.Equal("InferredProposalResolution", reasoningEvent.Provenance.SourceKind);
+        Assert.Contains(reasoningEvent.References, reference =>
+            reference.Kind == ReasoningReferenceKind.Proposal &&
+            reference.Id == proposal.Id);
+        Assert.Contains(reasoningEvent.References, reference =>
+            reference.Kind == ReasoningReferenceKind.Decision &&
+            reference.Id == decision.Id.Value);
+        Assert.Equal(ReasoningRelationshipType.DerivesFrom, relationship.Type);
+        Assert.Equal(decision.Id.Value, relationship.Source.Id);
+        Assert.Equal(proposal.Id, relationship.Target.Id);
+    }
+
+    [Fact]
+    public async Task ProposalResolveEndpointDoesNotCaptureReasoningWhenResolutionFails()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services => services.AddSingleton<IRepositoryService>(new StubRepositoryService(repository)));
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+        using var client = new HttpClient();
+        string root = app.Urls.Single();
+        JsonSerializerOptions jsonOptions = CreateJsonOptions();
+
+        DecisionProposal proposal = (await (await client.PostAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/candidates/{candidate.Id}/proposals",
+            null)).Content.ReadFromJsonAsync<DecisionProposal>(jsonOptions))!;
+
+        HttpResponseMessage resolveResponse = await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/proposals/{proposal.Id}/resolve",
+            new ResolveDecisionCommand("Resolve before ready state.", "human-reviewer", "option-1"),
+            jsonOptions);
+
+        ReasoningEvent[] reasoningEvents = (await (await client.GetAsync(
+            $"{root}/api/repositories/{repository.Id}/reasoning/events"))
+            .Content.ReadFromJsonAsync<ReasoningEvent[]>(jsonOptions))!;
+        ReasoningRelationship[] reasoningRelationships = (await (await client.GetAsync(
+            $"{root}/api/repositories/{repository.Id}/reasoning/relationships"))
+            .Content.ReadFromJsonAsync<ReasoningRelationship[]>(jsonOptions))!;
+
+        Assert.Equal(HttpStatusCode.Conflict, resolveResponse.StatusCode);
+        Assert.Empty(reasoningEvents);
+        Assert.Empty(reasoningRelationships);
     }
 
     [Fact]
@@ -1161,8 +1286,12 @@ public sealed class DecisionGenerationServiceTests
         Assert.Equal(HttpStatusCode.Conflict, archiveResolvedResponse.StatusCode);
         Assert.Equal(DecisionState.Superseded, superseded.State);
         Assert.Equal(DecisionState.Archived, archived.State);
-        ReasoningEvent reasoningEvent = Assert.Single(reasoningEvents);
-        ReasoningRelationship relationship = Assert.Single(reasoningRelationships);
+        Assert.Equal(3, reasoningEvents.Length);
+        Assert.Equal(3, reasoningRelationships.Length);
+        ReasoningEvent reasoningEvent = Assert.Single(reasoningEvents, reasoningEvent =>
+            reasoningEvent.Type == ReasoningEventType.DecisionSuperseded);
+        ReasoningRelationship relationship = Assert.Single(reasoningRelationships, relationship =>
+            relationship.Type == ReasoningRelationshipType.Supersedes);
         Assert.Equal(ReasoningEventType.DecisionSuperseded, reasoningEvent.Type);
         Assert.Equal(ReasoningEventFamily.DecisionEvolution, reasoningEvent.Family);
         Assert.Equal(ReasoningRelationshipType.Supersedes, relationship.Type);

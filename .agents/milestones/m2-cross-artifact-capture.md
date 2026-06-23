@@ -16,7 +16,7 @@ Goal: use the event substrate to preserve reasoning evolution across decisions a
 - [x] Add assisted-capture adapters that pre-populate references and provenance after successful decision operations, starting with supersession. Keep the decision operation authoritative.
 - [ ] Add inferred-capture adapters for objective domain transitions once idempotency is stable:
   - [x] Decision superseded.
-  - [ ] Proposal resolved.
+  - [x] Proposal resolved.
   - [ ] Decision archived.
   - [ ] Governance report generated with contradiction findings.
   - [ ] Operational-context proposal promoted.
@@ -39,7 +39,8 @@ Goal: use the event substrate to preserve reasoning evolution across decisions a
 - [ ] Alternative considered, rejected, and revisited is preserved as an event thread.
 - [ ] Contradiction discovered and resolved is preserved as an event thread.
 - [ ] Direction shift is recorded as an event and remains non-authoritative.
-- [ ] Existing decision, governance, operational-context, and execution state is not mutated by reasoning capture.
+- [x] Existing decision and proposal state is not mutated by reasoning capture for proposal-resolution capture.
+- [ ] Existing governance, operational-context, and execution state is not mutated by reasoning capture.
 
 ## Exit Criteria
 

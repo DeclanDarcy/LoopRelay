@@ -757,7 +757,8 @@ public static class DecisionEndpoints
             Guid repositoryId,
             string proposalId,
             ResolveDecisionCommand? request,
-            IDecisionResolutionService resolutionService) =>
+            IDecisionResolutionService resolutionService,
+            IDecisionReasoningCaptureService reasoningCaptureService) =>
         {
             try
             {
@@ -766,7 +767,9 @@ public static class DecisionEndpoints
                     return Results.BadRequest(new { error = "Resolution command is required." });
                 }
 
-                return Results.Ok(await resolutionService.ResolveProposalAsync(repositoryId, proposalId, request));
+                Decision decision = await resolutionService.ResolveProposalAsync(repositoryId, proposalId, request);
+                await reasoningCaptureService.CaptureProposalResolvedAsync(repositoryId, decision, request);
+                return Results.Ok(decision);
             }
             catch (KeyNotFoundException exception)
             {

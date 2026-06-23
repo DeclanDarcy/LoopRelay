@@ -20,6 +20,54 @@ public sealed class DecisionReasoningCaptureService(
 {
     private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
 
+    public async Task CaptureProposalResolvedAsync(
+        Guid repositoryId,
+        Decision decision,
+        ResolveDecisionCommand command)
+    {
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        DecisionResolution resolution = decision.Resolution
+            ?? throw new InvalidOperationException($"Decision {decision.Id.Value} does not contain resolution metadata.");
+        DecisionResolvedProposalSnapshot proposal = resolution.SourceProposalSnapshot
+            ?? throw new InvalidOperationException($"Decision {decision.Id.Value} does not contain source proposal metadata.");
+        string rationale = RequireText(command.Rationale, "Resolution rationale is required.");
+        string resolver = RequireText(command.Resolver, "Resolver metadata is required.");
+        string selectedOptionId = RequireText(command.SelectedOptionId, "Selected option id is required.");
+
+        string transitionFingerprint = Fingerprint(new
+        {
+            Transition = "ProposalResolved",
+            RepositoryId = repository.Id,
+            ProposalId = proposal.ProposalId,
+            CandidateId = proposal.CandidateId,
+            SourceProposalFingerprint = proposal.ProposalFingerprint,
+            SourceProposalState = proposal.ProposalState,
+            DecisionId = decision.Id.Value,
+            DecisionState = decision.State,
+            ResolutionOutcome = resolution.Outcome,
+            SelectedOptionId = selectedOptionId,
+            ResolvedAt = resolution.ResolvedAt
+        });
+
+        ReasoningEvent reasoningEvent = await GetOrCreateProposalResolvedEventAsync(
+            repository,
+            decision,
+            proposal,
+            resolution,
+            rationale,
+            resolver,
+            transitionFingerprint);
+
+        await CreateDecisionDerivesFromProposalRelationshipIfMissingAsync(
+            repository,
+            decision,
+            proposal,
+            rationale,
+            resolver,
+            transitionFingerprint,
+            reasoningEvent.Id);
+    }
+
     public async Task CaptureDecisionSupersededAsync(
         Guid repositoryId,
         Decision supersededDecision,
@@ -61,6 +109,82 @@ public sealed class DecisionReasoningCaptureService(
             resolver,
             transitionFingerprint,
             reasoningEvent.Id);
+    }
+
+    private async Task<ReasoningEvent> GetOrCreateProposalResolvedEventAsync(
+        Repository repository,
+        Decision decision,
+        DecisionResolvedProposalSnapshot proposal,
+        DecisionResolution resolution,
+        string rationale,
+        string resolver,
+        string transitionFingerprint)
+    {
+        IReadOnlyList<ReasoningEvent> existingEvents = await reasoningRepository.ListEventsAsync(repository);
+        ReasoningEvent? existing = existingEvents.FirstOrDefault(reasoningEvent =>
+            reasoningEvent.Type == ReasoningEventType.EvidenceAdded &&
+            string.Equals(reasoningEvent.Provenance.Fingerprint, transitionFingerprint, StringComparison.Ordinal));
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        return await reasoningRepository.CreateEventAsync(
+            repository,
+            new CreateReasoningEventCommand(
+                ReasoningEventFamily.Evidence,
+                ReasoningEventType.EvidenceAdded,
+                $"Proposal {proposal.ProposalId} informed decision {decision.Id.Value}",
+                new ReasoningNarrative(
+                    $"Decision {decision.Id.Value} was created from proposal {proposal.ProposalId}.",
+                    $"The authoritative proposal resolution already occurred with outcome {resolution.Outcome} and selected option {resolution.SelectedOptionId}. Rationale: {rationale}"),
+                [
+                    ProposalReference(proposal),
+                    CandidateReference(proposal),
+                    DecisionReference(decision)
+                ],
+                Provenance(proposal, rationale, resolver, transitionFingerprint),
+                [],
+                ["decision-evolution", "inferred-capture", "proposal-resolution"]));
+    }
+
+    private async Task CreateDecisionDerivesFromProposalRelationshipIfMissingAsync(
+        Repository repository,
+        Decision decision,
+        DecisionResolvedProposalSnapshot proposal,
+        string rationale,
+        string resolver,
+        string transitionFingerprint,
+        string reasoningEventId)
+    {
+        IReadOnlyList<ReasoningRelationship> existingRelationships = await reasoningRepository.ListRelationshipsAsync(repository);
+        if (existingRelationships.Any(relationship =>
+            relationship.Type == ReasoningRelationshipType.DerivesFrom &&
+            relationship.Source.Kind == ReasoningReferenceKind.Decision &&
+            relationship.Target.Kind == ReasoningReferenceKind.Proposal &&
+            string.Equals(relationship.Source.Id, decision.Id.Value, StringComparison.Ordinal) &&
+            string.Equals(relationship.Target.Id, proposal.ProposalId, StringComparison.Ordinal)))
+        {
+            return;
+        }
+
+        try
+        {
+            await reasoningRepository.CreateRelationshipAsync(
+                repository,
+                new CreateReasoningRelationshipCommand(
+                    ReasoningRelationshipType.DerivesFrom,
+                    DecisionReference(decision),
+                    ProposalReference(proposal),
+                    new ReasoningNarrative(
+                        $"Decision {decision.Id.Value} derives from proposal {proposal.ProposalId}.",
+                        $"Captured from reasoning event {reasoningEventId}. Rationale: {rationale}"),
+                    Provenance(proposal, rationale, resolver, transitionFingerprint)));
+        }
+        catch (ReasoningConflictException)
+        {
+            // Another capture path recorded the same explanatory relationship first.
+        }
     }
 
     private async Task<ReasoningEvent> GetOrCreateDecisionSupersededEventAsync(
@@ -155,6 +279,48 @@ public sealed class DecisionReasoningCaptureService(
             Fingerprint: Fingerprint(decision));
     }
 
+    private static ReasoningReference ProposalReference(DecisionResolvedProposalSnapshot proposal)
+    {
+        return new ReasoningReference(
+            ReasoningReferenceKind.Proposal,
+            proposal.ProposalId,
+            ProposalPath(proposal.ProposalId),
+            Section: "Resolved Proposal",
+            Excerpt: proposal.Title,
+            Fingerprint: proposal.ProposalFingerprint);
+    }
+
+    private static ReasoningReference CandidateReference(DecisionResolvedProposalSnapshot proposal)
+    {
+        return new ReasoningReference(
+            ReasoningReferenceKind.Candidate,
+            proposal.CandidateId,
+            $".agents/decisions/candidates/{proposal.CandidateId}.json",
+            Section: "Source Candidate",
+            Excerpt: proposal.Title,
+            Fingerprint: Fingerprint(new
+            {
+                proposal.CandidateId,
+                proposal.ProposalId,
+                proposal.ProposalFingerprint
+            }));
+    }
+
+    private static ReasoningProvenance Provenance(
+        DecisionResolvedProposalSnapshot proposal,
+        string rationale,
+        string resolver,
+        string transitionFingerprint)
+    {
+        return new ReasoningProvenance(
+            "InferredProposalResolution",
+            resolver,
+            ProposalPath(proposal.ProposalId),
+            "History: Resolved",
+            rationale,
+            transitionFingerprint);
+    }
+
     private static ReasoningProvenance Provenance(
         Decision supersededDecision,
         string rationale,
@@ -173,6 +339,11 @@ public sealed class DecisionReasoningCaptureService(
     private static string DecisionPath(DecisionId decisionId)
     {
         return $".agents/decisions/records/{decisionId.Value}/decision.json";
+    }
+
+    private static string ProposalPath(string proposalId)
+    {
+        return $".agents/decisions/proposals/{proposalId}/proposal.json";
     }
 
     private static string Fingerprint<T>(T value)
