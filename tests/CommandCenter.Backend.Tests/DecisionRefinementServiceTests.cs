@@ -1,18 +1,140 @@
 using System.Security.Cryptography;
+using System.Net;
+using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using CommandCenter.Backend;
+using CommandCenter.Backend.Services;
 using CommandCenter.Core.Artifacts;
 using CommandCenter.Core.Repositories;
 using CommandCenter.Decisions.Abstractions;
 using CommandCenter.Decisions.Models;
 using CommandCenter.Decisions.Primitives;
 using CommandCenter.Decisions.Services;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CommandCenter.Backend.Tests;
 
 public sealed class DecisionRefinementServiceTests
 {
+    [Fact]
+    public async Task RefinementAnalysisBuildsDirectivePlanWithoutMutatingProposal()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        DecisionGenerationService generationService = CreateGenerationService(repository, store, decisionRepository);
+        RefinementAnalysisService analysisService = CreateAnalysisService(repository, decisionRepository);
+        DecisionProposal proposal = await generationService.GenerateProposalAsync(repository.Id, candidate.Id);
+        await generationService.MarkProposalViewedAsync(repository.Id, proposal.Id, null);
+        DecisionProposal needsRefinement = await generationService.MarkProposalNeedsRefinementAsync(
+            repository.Id,
+            proposal.Id,
+            "Reviewer wants scoped regeneration.");
+        string proposalJsonBefore = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/proposal.json");
+
+        RefinementPlan plan = await analysisService.AnalyzeRefinementAsync(
+            repository.Id,
+            proposal.Id,
+            new DecisionRefinementAnalysisRequest(
+                "Must preserve package authority, explore another option, reevaluate risk, cost, and recommendation.",
+                "reviewer",
+                Fingerprint(needsRefinement)));
+
+        string proposalJsonAfter = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/proposal.json");
+        DecisionProposal? reloaded = await decisionRepository.GetProposalAsync(repository, proposal.Id);
+
+        Assert.Equal(repository.Id, plan.RepositoryId);
+        Assert.Equal(proposal.Id, plan.ProposalId);
+        Assert.Equal(Fingerprint(needsRefinement), plan.BaseProposalFingerprint);
+        Assert.Contains(plan.Directives, directive => directive.Type == RefinementDirectiveType.AddConstraint);
+        Assert.Contains(plan.Directives, directive => directive.Type == RefinementDirectiveType.ExploreAlternative);
+        Assert.Contains(plan.Directives, directive => directive.Type == RefinementDirectiveType.ReevaluateRisk);
+        Assert.Contains(plan.Directives, directive => directive.Type == RefinementDirectiveType.ReevaluateCost);
+        Assert.Contains(plan.Directives, directive => directive.Type == RefinementDirectiveType.ReevaluateRecommendation);
+        Assert.True(plan.RegenerateOptions);
+        Assert.True(plan.ReevaluateTradeoffs);
+        Assert.True(plan.ReevaluateRecommendation);
+        Assert.False(plan.FullRegeneration);
+        Assert.NotEmpty(plan.AppliedConstraints);
+        Assert.Contains(plan.Diagnostics, diagnostic => diagnostic.Contains("does not mutate", StringComparison.Ordinal));
+        Assert.Equal(proposalJsonBefore, proposalJsonAfter);
+        Assert.Equal(DecisionProposalState.NeedsRefinement, reloaded?.State);
+        Assert.Empty(await decisionRepository.ListProposalRevisionsAsync(repository, proposal.Id));
+    }
+
+    [Fact]
+    public async Task RefinementAnalysisRejectsStaleBaseProposalFingerprint()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        DecisionGenerationService generationService = CreateGenerationService(repository, store, decisionRepository);
+        RefinementAnalysisService analysisService = CreateAnalysisService(repository, decisionRepository);
+        DecisionProposal proposal = await generationService.GenerateProposalAsync(repository.Id, candidate.Id);
+        await generationService.MarkProposalViewedAsync(repository.Id, proposal.Id, null);
+        await generationService.MarkProposalNeedsRefinementAsync(repository.Id, proposal.Id, "Needs analysis.");
+
+        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            analysisService.AnalyzeRefinementAsync(
+                repository.Id,
+                proposal.Id,
+                new DecisionRefinementAnalysisRequest("Reevaluate the recommendation.", BaseProposalFingerprint: "stale")));
+
+        Assert.Equal("Refinement base proposal fingerprint is stale.", exception.Message);
+        Assert.Empty(await decisionRepository.ListProposalRevisionsAsync(repository, proposal.Id));
+    }
+
+    [Fact]
+    public async Task RefinementAnalysisEndpointReturnsPlanAndDoesNotPersistRevision()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        DecisionGenerationService generationService = CreateGenerationService(repository, store, decisionRepository);
+        DecisionProposal proposal = await generationService.GenerateProposalAsync(repository.Id, candidate.Id);
+        await generationService.MarkProposalViewedAsync(repository.Id, proposal.Id, null);
+        DecisionProposal needsRefinement = await generationService.MarkProposalNeedsRefinementAsync(
+            repository.Id,
+            proposal.Id,
+            "Analyze before mutation.");
+        string proposalJsonBefore = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/proposal.json");
+
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services => services.AddSingleton<IRepositoryService>(new StubRepositoryService(repository)));
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+        using var client = new HttpClient();
+        string root = app.Urls.Single();
+        JsonSerializerOptions jsonOptions = CreateJsonOptions();
+
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/decisions/proposals/{proposal.Id}/refinements/analyze",
+            new DecisionRefinementAnalysisRequest(
+                "Clarify the goal and increase priority before revisiting the recommendation.",
+                "reviewer",
+                Fingerprint(needsRefinement)),
+            jsonOptions);
+        RefinementPlan plan = (await response.Content.ReadFromJsonAsync<RefinementPlan>(jsonOptions))!;
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains(plan.Directives, directive => directive.Type == RefinementDirectiveType.ClarifyGoal);
+        Assert.Contains(plan.Directives, directive => directive.Type == RefinementDirectiveType.IncreasePriority);
+        Assert.True(plan.FullRegeneration);
+        Assert.True(plan.ReevaluateRecommendation);
+        Assert.Equal(proposalJsonBefore, await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/proposal.json"));
+        Assert.Empty(await decisionRepository.ListProposalRevisionsAsync(repository, proposal.Id));
+    }
+
     [Fact]
     public async Task RefinementRejectsStaleBaseProposalFingerprint()
     {
@@ -352,6 +474,13 @@ public sealed class DecisionRefinementServiceTests
         var repositoryService = new StubRepositoryService(repository);
         var projectionService = new DecisionArtifactProjectionService(decisionRepository, store);
         return new DecisionRefinementService(repositoryService, decisionRepository, projectionService);
+    }
+
+    private static RefinementAnalysisService CreateAnalysisService(
+        Repository repository,
+        FileSystemDecisionRepository decisionRepository)
+    {
+        return new RefinementAnalysisService(new StubRepositoryService(repository), decisionRepository);
     }
 
     private static DecisionCandidate CreateCandidate(

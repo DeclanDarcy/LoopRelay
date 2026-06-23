@@ -31,6 +31,7 @@ public static class DecisionEndpoints
         app.MapMarkDecisionProposalReadyForResolution();
         app.MapListDecisionReviewNotes();
         app.MapAddDecisionReviewNote();
+        app.MapAnalyzeDecisionProposalRefinement();
         app.MapRefineDecisionProposal();
         app.MapGetDecisionProposalLineage();
         app.MapListDecisionProposalRevisions();
@@ -664,6 +665,36 @@ public static class DecisionEndpoints
                 }
 
                 return Results.Ok(await refinementService.RefineProposalAsync(repositoryId, proposalId, request));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapAnalyzeDecisionProposalRefinement(this IEndpointRouteBuilder app) =>
+        app.MapPost("/api/repositories/{repositoryId:guid}/decisions/proposals/{proposalId}/refinements/analyze", async (
+            Guid repositoryId,
+            string proposalId,
+            DecisionRefinementAnalysisRequest? request,
+            IRefinementAnalysisService refinementAnalysisService) =>
+        {
+            try
+            {
+                if (request is null)
+                {
+                    return Results.BadRequest(new { error = "Refinement analysis request is required." });
+                }
+
+                return Results.Ok(await refinementAnalysisService.AnalyzeRefinementAsync(repositoryId, proposalId, request));
             }
             catch (KeyNotFoundException exception)
             {

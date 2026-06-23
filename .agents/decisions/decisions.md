@@ -2,17 +2,22 @@
 
 ## Newly Authorized
 
-- Close Milestone 6 as complete.
-- Confirm the Milestone 6 package layer satisfies governance objectives: immutable evidence, validation, comparison, authority provenance, stale protection, and UI participation in authority verification.
-- Treat content-based package/proposal validation as the correct authority check, because humans approve decision content rather than lifecycle metadata.
-- Preserve strict conflict behavior for explicit UI-submitted package authority.
-- Preserve compatibility for implicit or legacy resolution workflows so stale implicit package authority does not break existing resolution paths.
-- Begin Milestone 7 next.
-- Scope the first Milestone 7 slice narrowly to directive-analysis contracts and structured refinement extraction.
-- Model Milestone 7 refinement as human guidance converted into structured directives and refinement plans before any regeneration behavior.
+- Confirm the first Milestone 7 slice as correct and complete for directive analysis.
+- Preserve the refinement-analysis boundary as a first-class non-mutating workflow stage.
+- Keep refinement analysis advisory only: it may produce directives and a plan, but it must not mutate proposals, revisions, packages, or lifecycle authority.
+- Preserve proposal fingerprint validation at the analysis boundary.
+- Preserve compatibility with existing direct `DecisionRefinementRequest` workflows while directive-driven refinement becomes the preferred path.
+- Proceed next to scoped regeneration from `RefinementPlan`.
+- Regeneration must consume `RefinementPlan` as the interpreted input rather than rereading raw refinement text.
+- Analysis owns interpretation; regeneration owns execution.
+- Scoped regeneration must require matching proposal fingerprint, package fingerprint, and package version.
+- Stale package authority must return a conflict rather than silently regenerating.
+- Old package versions must remain immutable and preserved.
+- Regeneration must create a new package version rather than overwriting an existing package.
+- Persist comparison and diagnostics alongside regenerated package versions.
 
 ## Not Authorized
 
-- Do not begin Milestone 7 with direct artifact editing.
-- Do not mutate proposal or package authority during the first directive-analysis slice.
-- Do not add package mutation, version regeneration, or package comparison changes before directive extraction exists.
+- Do not collapse `RefinementPlan` directly into package mutation.
+- Do not edit or overwrite existing package versions during regeneration.
+- Do not let regeneration bypass directive analysis by independently interpreting raw human guidance.

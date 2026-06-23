@@ -6,26 +6,28 @@ let humans guide regeneration without becoming package authors.
 
 ## Work
 
-- [ ] Add structured `RefinementDirective` and `RefinementDirectiveType`:
-  - [ ] `AddConstraint`
-  - [ ] `RemoveConstraint`
-  - [ ] `IncreasePriority`
-  - [ ] `DecreasePriority`
-  - [ ] `ExploreAlternative`
-  - [ ] `ReevaluateRisk`
-  - [ ] `ReevaluateCost`
-  - [ ] `ReevaluateRecommendation`
-  - [ ] `ClarifyGoal`
-- [ ] Add `IRefinementAnalysisService`.
-- [ ] Add `RefinementPlan`:
-  - [ ] regenerate options
-  - [ ] reevaluate tradeoffs
-  - [ ] reevaluate recommendation
-  - [ ] full regeneration
-  - [ ] applied constraints
-  - [ ] diagnostics
+- [x] Add structured `RefinementDirective` and `RefinementDirectiveType`:
+  - [x] `AddConstraint`
+  - [x] `RemoveConstraint`
+  - [x] `IncreasePriority`
+  - [x] `DecreasePriority`
+  - [x] `ExploreAlternative`
+  - [x] `ReevaluateRisk`
+  - [x] `ReevaluateCost`
+  - [x] `ReevaluateRecommendation`
+  - [x] `ClarifyGoal`
+- [x] Add `IRefinementAnalysisService`.
+- [x] Add `RefinementPlan`:
+  - [x] regenerate options
+  - [x] reevaluate tradeoffs
+  - [x] reevaluate recommendation
+  - [x] full regeneration
+  - [x] applied constraints
+  - [x] diagnostics
 - [ ] Keep current direct `DecisionRefinementRequest` support for compatibility, but prefer directive-driven refinement in UI.
 - [ ] Add endpoints to analyze refinement before mutation and regenerate scoped package versions.
+  - [x] Analyze refinement before mutation.
+  - [ ] Regenerate scoped package versions.
 - [ ] Preserve every refinement as:
   - [ ] request
   - [ ] directives
