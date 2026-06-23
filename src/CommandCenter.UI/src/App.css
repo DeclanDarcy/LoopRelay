@@ -875,18 +875,23 @@ button:focus-visible {
 .reasoning-capture-panel,
 .reasoning-family-filter-bar,
 .reasoning-trace-panel,
-.reasoning-graph-panel {
+.reasoning-graph-panel,
+.reasoning-query-panel,
+.reasoning-reconstruction-panel {
   grid-column: 1 / -1;
 }
 
-.reasoning-capture-form {
+.reasoning-capture-form,
+.reasoning-query-form {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .reasoning-capture-form label:nth-of-type(3),
 .reasoning-capture-form label:nth-of-type(4),
 .reasoning-capture-form label:nth-of-type(7),
-.reasoning-capture-form .decision-form-actions {
+.reasoning-capture-form .decision-form-actions,
+.reasoning-query-form label:last-of-type,
+.reasoning-query-form .decision-form-actions {
   grid-column: 1 / -1;
 }
 
@@ -1007,7 +1012,9 @@ button:focus-visible {
 
 .reasoning-graph-filters,
 .reasoning-graph-layout,
-.reasoning-trace-grid {
+.reasoning-trace-grid,
+.reasoning-query-result,
+.reasoning-reconstruction-body {
   min-width: 0;
   display: grid;
   gap: 10px;

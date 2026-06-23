@@ -181,6 +181,15 @@ export type ReasoningRelationship = {
 
 export type ReasoningTraceDirection = 'Backward' | 'Forward'
 
+export type ReasoningQueryCategory =
+  | 'Decision'
+  | 'Hypothesis'
+  | 'Alternative'
+  | 'Contradiction'
+  | 'Direction'
+  | 'Thread'
+  | 'Assumption'
+
 export type ReasoningGraphNode = {
   id: string
   kind: ReasoningReferenceKind
@@ -214,6 +223,41 @@ export type ReasoningTrace = {
   target: ReasoningReference
   nodes: ReasoningGraphNode[]
   relationships: ReasoningGraphRelationship[]
+  diagnostics: string[]
+}
+
+export type ReasoningQuery = {
+  category: ReasoningQueryCategory
+  question: string
+  target: ReasoningReference
+  direction: ReasoningTraceDirection
+}
+
+export type ReasoningReconstructionEvidence = {
+  kind: string
+  id: string
+  title: string
+  summary: string
+  reference: ReasoningReference | null
+  provenance: ReasoningProvenance | null
+}
+
+export type ReasoningReconstruction = {
+  repositoryId: string
+  generatedAt: string
+  query: ReasoningQuery
+  narrative: ReasoningNarrative
+  confidence: string
+  trace: ReasoningTrace
+  evidence: ReasoningReconstructionEvidence[]
+  diagnostics: string[]
+}
+
+export type ReasoningQueryResult = {
+  repositoryId: string
+  generatedAt: string
+  query: ReasoningQuery
+  reconstruction: ReasoningReconstruction
   diagnostics: string[]
 }
 

@@ -6,6 +6,9 @@ import type {
   ManualReasoningCaptureTemplate,
   ReasoningEvent,
   ReasoningGraph,
+  ReasoningQuery,
+  ReasoningQueryResult,
+  ReasoningReconstruction,
   ReasoningRelationship,
   ReasoningThread,
   ReasoningTrace,
@@ -94,4 +97,12 @@ export function traceReasoningForward(
   id: string,
 ) {
   return invokeCommand<ReasoningTrace>('trace_reasoning_forward', { repositoryId, kind, id })
+}
+
+export function queryReasoning(repositoryId: string, query: ReasoningQuery) {
+  return invokeCommand<ReasoningQueryResult>('query_reasoning', { repositoryId, query })
+}
+
+export function reconstructReasoning(repositoryId: string, query: ReasoningQuery) {
+  return invokeCommand<ReasoningReconstruction>('reconstruct_reasoning', { repositoryId, query })
 }

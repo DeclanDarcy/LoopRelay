@@ -55,7 +55,9 @@ import {
   useReasoningEvents,
   useReasoningGraph,
   useReasoningManualCaptureTemplates,
+  useReasoningQuery,
   useReasoningRelationships,
+  useReasoningReconstruction,
   useReasoningThreads,
   useRepositories,
   useRepositoryWorkspace,
@@ -77,6 +79,7 @@ import type {
   ManualReasoningCaptureCommand,
   NavigationTarget,
   OperationalContextProposal,
+  ReasoningQuery,
   Repository,
   RepositoryWorkspaceProjection,
 } from './types'
@@ -261,6 +264,18 @@ function App() {
     refresh: refreshReasoningGraph,
     trace: traceReasoningGraph,
   } = useReasoningGraph(selectedRepository?.repository.id ?? null)
+  const {
+    data: reasoningQueryResult,
+    isRunning: isReasoningQueryRunning,
+    error: reasoningQueryError,
+    run: runReasoningQuery,
+  } = useReasoningQuery(selectedRepository?.repository.id ?? null)
+  const {
+    data: reasoningReconstruction,
+    isRunning: isReasoningReconstructionRunning,
+    error: reasoningReconstructionError,
+    run: runReasoningReconstruction,
+  } = useReasoningReconstruction(selectedRepository?.repository.id ?? null)
 
   const selectedArtifact = useMemo(() => {
     if (!workspace || !selectedArtifactPath) {
@@ -1458,6 +1473,11 @@ function App() {
     }
   }
 
+  const queryReasoningTrajectory = async (query: ReasoningQuery) => {
+    await runReasoningQuery(query)
+    await runReasoningReconstruction(query)
+  }
+
   const openContinuityWarnings = () => {
     openContinuitySection('continuity-warnings')
   }
@@ -1710,6 +1730,8 @@ function App() {
                 graph={reasoningGraph}
                 backwardTrace={reasoningBackwardTrace}
                 forwardTrace={reasoningForwardTrace}
+                queryResult={reasoningQueryResult}
+                reconstruction={reasoningReconstruction}
                 templates={reasoningManualCaptureTemplates}
                 hasSelectedRepository={Boolean(selectedRepository)}
                 isLoading={
@@ -1720,15 +1742,22 @@ function App() {
                   isReasoningGraphLoading
                 }
                 isTracingGraph={isReasoningGraphTracing}
+                isQuerying={isReasoningQueryRunning}
+                isReconstructing={isReasoningReconstructionRunning}
                 error={
                   reasoningEventsError ??
                   reasoningManualCaptureTemplatesError ??
                   reasoningThreadsError ??
                   reasoningRelationshipsError ??
-                  reasoningGraphError
+                  reasoningGraphError ??
+                  reasoningQueryError ??
+                  reasoningReconstructionError
                 }
+                queryError={reasoningQueryError}
+                reconstructionError={reasoningReconstructionError}
                 onRefresh={() => void refreshReasoning()}
                 onTraceGraphNode={(node) => void traceReasoningGraph(node.kind, node.referenceId)}
+                onRunQuery={queryReasoningTrajectory}
                 onCaptureManualReasoning={createManualReasoningCapture}
               />
 

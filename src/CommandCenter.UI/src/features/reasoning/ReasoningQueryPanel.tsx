@@ -1,0 +1,231 @@
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import type {
+  ReasoningGraph,
+  ReasoningQuery,
+  ReasoningQueryCategory,
+  ReasoningQueryResult,
+  ReasoningReferenceKind,
+  ReasoningTraceDirection,
+} from '../../types'
+
+type ReasoningQueryPanelProps = {
+  graph: ReasoningGraph | null
+  queryResult: ReasoningQueryResult | null
+  isRunning: boolean
+  error: string | null
+  onRunQuery: (query: ReasoningQuery) => Promise<unknown>
+}
+
+export function ReasoningQueryPanel({
+  graph,
+  queryResult,
+  isRunning,
+  error,
+  onRunQuery,
+}: ReasoningQueryPanelProps) {
+  const targetOptions = useMemo(
+    () =>
+      (graph?.nodes ?? []).map((node) => ({
+        value: `${node.kind}:${node.referenceId}`,
+        label: `${node.kind} ${node.referenceId} - ${node.label}`,
+        kind: node.kind,
+        id: node.referenceId,
+      })),
+    [graph],
+  )
+  const [category, setCategory] = useState<ReasoningQueryCategory>('Decision')
+  const [question, setQuestion] = useState('Why did this reasoning target change?')
+  const [direction, setDirection] = useState<ReasoningTraceDirection>('Backward')
+  const [targetValue, setTargetValue] = useState(targetOptions[0]?.value ?? '')
+  const [manualKind, setManualKind] = useState<ReasoningReferenceKind>('ReasoningEvent')
+  const [manualId, setManualId] = useState('')
+
+  useEffect(() => {
+    if (!targetValue && targetOptions.length > 0) {
+      setTargetValue(targetOptions[0].value)
+    } else if (!targetValue && targetOptions.length === 0) {
+      setTargetValue('manual')
+    }
+  }, [targetOptions, targetValue])
+
+  const selectedTarget = targetOptions.find((target) => target.value === targetValue) ?? null
+  const canSubmit =
+    question.trim().length > 0 &&
+    ((selectedTarget !== null && targetValue !== 'manual') ||
+      (targetValue === 'manual' && manualId.trim().length > 0))
+
+  const submitQuery = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!canSubmit) {
+      return
+    }
+
+    const target =
+      targetValue === 'manual'
+        ? {
+            kind: manualKind,
+            id: manualId.trim(),
+            relativePath: null,
+            section: null,
+            excerpt: null,
+          }
+        : {
+            kind: selectedTarget!.kind,
+            id: selectedTarget!.id,
+            relativePath: null,
+            section: null,
+            excerpt: null,
+          }
+
+    await onRunQuery({
+      category,
+      question: question.trim(),
+      target,
+      direction,
+    })
+  }
+
+  return (
+    <section className="reasoning-panel reasoning-query-panel" id="reasoning-query" aria-label="Reasoning query">
+      <div className="decision-panel-heading">
+        <h5>Query Reasoning</h5>
+        <span>Derived trace discovery</span>
+      </div>
+
+      <form className="decision-refinement-form reasoning-query-form" onSubmit={submitQuery}>
+        <label>
+          Category
+          <select
+            value={category}
+            onChange={(event) => setCategory(event.target.value as ReasoningQueryCategory)}
+            disabled={isRunning}
+          >
+            {queryCategories.map((item) => (
+              <option value={item} key={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Direction
+          <select
+            value={direction}
+            onChange={(event) => setDirection(event.target.value as ReasoningTraceDirection)}
+            disabled={isRunning}
+          >
+            <option value="Backward">Backward</option>
+            <option value="Forward">Forward</option>
+          </select>
+        </label>
+        <label>
+          Target
+          <select
+            value={targetValue || (targetOptions[0]?.value ?? 'manual')}
+            onChange={(event) => setTargetValue(event.target.value)}
+            disabled={isRunning}
+          >
+            {targetOptions.map((target) => (
+              <option value={target.value} key={target.value}>
+                {target.label}
+              </option>
+            ))}
+            <option value="manual">Manual target</option>
+          </select>
+        </label>
+        {targetValue === 'manual' || targetOptions.length === 0 ? (
+          <>
+            <label>
+              Target kind
+              <select
+                value={manualKind}
+                onChange={(event) => setManualKind(event.target.value as ReasoningReferenceKind)}
+                disabled={isRunning}
+              >
+                {referenceKinds.map((kind) => (
+                  <option value={kind} key={kind}>
+                    {kind}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Target id
+              <input
+                type="text"
+                value={manualId}
+                onChange={(event) => setManualId(event.target.value)}
+                disabled={isRunning}
+              />
+            </label>
+          </>
+        ) : null}
+        <label>
+          Question
+          <textarea
+            value={question}
+            onChange={(event) => setQuestion(event.target.value)}
+            disabled={isRunning}
+            rows={3}
+          />
+        </label>
+        <div className="decision-form-actions">
+          <button type="submit" className="primary-action" disabled={!canSubmit || isRunning}>
+            {isRunning ? 'Querying...' : 'Run Query'}
+          </button>
+        </div>
+      </form>
+
+      <div className="reasoning-derived-status" aria-label="Reasoning query authority">
+        <strong>Derived query</strong>
+        <span>Trace candidates only</span>
+      </div>
+
+      {error ? <p className="notice error">{error}</p> : null}
+
+      {queryResult ? (
+        <div className="reasoning-query-result" aria-label="Reasoning query result">
+          <div className="context-summary">
+            <span>{queryResult.reconstruction.trace.nodes.length} nodes</span>
+            <span>{queryResult.reconstruction.trace.relationships.length} relationships</span>
+            <span>{queryResult.reconstruction.evidence.length} evidence items</span>
+            <span>{queryResult.reconstruction.confidence} confidence</span>
+          </div>
+          <p>{queryResult.reconstruction.narrative.summary}</p>
+          {queryResult.diagnostics.length > 0 ? (
+            <div className="reasoning-diagnostics">
+              {queryResult.diagnostics.map((diagnostic) => (
+                <p key={diagnostic}>{diagnostic}</p>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
+const queryCategories: ReasoningQueryCategory[] = [
+  'Decision',
+  'Hypothesis',
+  'Alternative',
+  'Contradiction',
+  'Direction',
+  'Thread',
+  'Assumption',
+]
+
+const referenceKinds: ReasoningReferenceKind[] = [
+  'Decision',
+  'Proposal',
+  'ProposalRevision',
+  'Candidate',
+  'OperationalContextRevision',
+  'GovernanceFinding',
+  'ExecutionProjection',
+  'ExecutionOutput',
+  'Handoff',
+  'Artifact',
+  'ReasoningEvent',
+  'ReasoningThread',
+]

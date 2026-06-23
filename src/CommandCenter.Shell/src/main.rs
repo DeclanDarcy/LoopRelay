@@ -1193,6 +1193,42 @@ fn trace_reasoning_forward(
 }
 
 #[tauri::command]
+fn query_reasoning(repository_id: String, query: Value) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/queries"
+        ))
+        .json(&query)
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "reasoning query failed")
+}
+
+#[tauri::command]
+fn reconstruct_reasoning(repository_id: String, query: Value) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/reconstructions"
+        ))
+        .json(&query)
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "reasoning reconstruction failed")
+}
+
+#[tauri::command]
 fn get_continuity_diagnostics(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/continuity/diagnostics"
@@ -1612,6 +1648,8 @@ fn main() {
             get_reasoning_graph,
             trace_reasoning_backward,
             trace_reasoning_forward,
+            query_reasoning,
+            reconstruct_reasoning,
             get_continuity_diagnostics,
             generate_continuity_report,
             list_continuity_reports,

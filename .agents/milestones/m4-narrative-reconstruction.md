@@ -24,9 +24,9 @@ Goal: turn graph traversal into explanations.
 
 ## UI Work
 
-- [ ] Add `ReasoningQueryPanel` with predefined question categories and scoped target selection.
-- [ ] Add `ReasoningReconstructionPanel` showing narrative, confidence, evidence, graph path, and diagnostics.
-- [ ] Make source evidence visible without forcing users to inspect JSON files.
+- [x] Add `ReasoningQueryPanel` with predefined question categories and scoped target selection.
+- [x] Add `ReasoningReconstructionPanel` showing narrative, confidence, evidence, graph path, and diagnostics.
+- [x] Make source evidence visible without forcing users to inspect JSON files.
 
 ## Tests
 
@@ -36,7 +36,7 @@ Goal: turn graph traversal into explanations.
 - [x] "What alternatives were rejected?" reconstructs alternative history.
 - [x] M4 does not require persisted hypothesis, alternative, contradiction, or direction entities.
 - [x] Same query over unchanged repository state returns the same reasoning path.
-- [ ] UI exposes narrative and supporting evidence.
+- [x] UI exposes narrative and supporting evidence.
 
 ## Exit Criteria
 

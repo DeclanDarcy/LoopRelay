@@ -37,6 +37,10 @@ import type {
   ReasoningGraph,
   ReasoningGraphNode,
   ReasoningGraphRelationship,
+  ReasoningQuery,
+  ReasoningQueryResult,
+  ReasoningReconstruction,
+  ReasoningReconstructionEvidence,
   ReasoningRelationship,
   ReasoningTrace,
   ReasoningThread,
@@ -2014,6 +2018,129 @@ function createReasoningTrace(
   }
 }
 
+function createReasoningReconstruction(
+  state: MockState,
+  repositoryId: string,
+  query: ReasoningQuery,
+): ReasoningReconstruction {
+  const graph = createReasoningGraph(state, repositoryId)
+  const trace = createReasoningTrace(graph, query.direction, query.target.kind, query.target.id)
+  const eventsById = new Map((state.reasoningEvents[repositoryId] ?? []).map((event) => [event.id, event]))
+  const threadsById = new Map((state.reasoningThreads[repositoryId] ?? []).map((thread) => [thread.id, thread]))
+  const relationshipsById = new Map(
+    (state.reasoningRelationships[repositoryId] ?? []).map((relationship) => [relationship.id, relationship]),
+  )
+  const evidence: ReasoningReconstructionEvidence[] = [
+    ...trace.nodes.map((node) => {
+      const event = node.kind === 'ReasoningEvent' ? eventsById.get(node.referenceId) : null
+      if (event) {
+        return {
+          kind: 'Event',
+          id: event.id,
+          title: `${event.type}: ${event.title}`,
+          summary: event.narrative.summary,
+          reference: {
+            kind: 'ReasoningEvent' as const,
+            id: event.id,
+            relativePath: null,
+            section: null,
+            excerpt: null,
+          },
+          provenance: event.provenance,
+        }
+      }
+
+      const thread = node.kind === 'ReasoningThread' ? threadsById.get(node.referenceId) : null
+      if (thread) {
+        return {
+          kind: 'Thread',
+          id: thread.id,
+          title: `${thread.theme}: ${thread.title}`,
+          summary: thread.summary,
+          reference: {
+            kind: 'ReasoningThread' as const,
+            id: thread.id,
+            relativePath: null,
+            section: null,
+            excerpt: null,
+          },
+          provenance: null,
+        }
+      }
+
+      return {
+        kind: 'Reference',
+        id: node.referenceId,
+        title: `${node.kind}: ${node.label}`,
+        summary: node.reference?.excerpt ?? node.label,
+        reference: node.reference,
+        provenance: null,
+      }
+    }),
+    ...trace.relationships.map((graphRelationship) => {
+      const relationship = graphRelationship.relationshipId
+        ? relationshipsById.get(graphRelationship.relationshipId)
+        : null
+      return relationship
+        ? {
+            kind: 'Relationship',
+            id: relationship.id,
+            title: relationship.type,
+            summary: relationship.narrative.summary,
+            reference: relationship.target,
+            provenance: relationship.provenance,
+          }
+        : {
+            kind: 'GraphRelationship',
+            id: graphRelationship.id,
+            title: graphRelationship.type,
+            summary: graphRelationship.label,
+            reference: null,
+            provenance: null,
+          }
+    }),
+  ]
+  const relationshipEvidenceCount = evidence.filter((item) =>
+    item.kind === 'Relationship' || item.kind === 'GraphRelationship',
+  ).length
+  const eventEvidenceCount = evidence.filter((item) => item.kind === 'Event').length
+
+  return {
+    repositoryId,
+    generatedAt: new Date().toISOString(),
+    query,
+    narrative: {
+      summary: `The ${query.category.toLowerCase()} question about ${query.target.kind} ${query.target.id} is reconstructed from ${eventEvidenceCount} event(s) and ${relationshipEvidenceCount} relationship edge(s).`,
+      details: [
+        `Question: ${query.question}`,
+        `Target: ${query.target.kind} ${query.target.id}`,
+        `Trace direction: ${query.direction}`,
+        'Evidence:',
+        ...evidence.map((item) => `- ${item.kind} ${item.id}: ${item.title} - ${item.summary}`),
+      ].join('\n'),
+    },
+    confidence: eventEvidenceCount > 0 && relationshipEvidenceCount > 0 ? 'High' : evidence.length > 0 ? 'Medium' : 'Low',
+    trace,
+    evidence,
+    diagnostics: trace.diagnostics,
+  }
+}
+
+function createReasoningQueryResult(
+  state: MockState,
+  repositoryId: string,
+  query: ReasoningQuery,
+): ReasoningQueryResult {
+  const reconstruction = createReasoningReconstruction(state, repositoryId, query)
+  return {
+    repositoryId,
+    generatedAt: reconstruction.generatedAt,
+    query,
+    reconstruction,
+    diagnostics: reconstruction.diagnostics,
+  }
+}
+
 function createContextPreview(state: MockState, repositoryId: string, milestonePath: string): ExecutionContextPreview {
   const workspace = state.workspaces[repositoryId]
   const artifactsForContext = [
@@ -3152,6 +3279,14 @@ export function installDevTauriMock() {
               getStringArg(args, 'id'),
             ),
           )
+        }
+        case 'query_reasoning': {
+          const repositoryId = getStringArg(args, 'repositoryId')
+          return clone(createReasoningQueryResult(state, repositoryId, args?.query as ReasoningQuery))
+        }
+        case 'reconstruct_reasoning': {
+          const repositoryId = getStringArg(args, 'repositoryId')
+          return clone(createReasoningReconstruction(state, repositoryId, args?.query as ReasoningQuery))
         }
         case 'start_execution':
           return clone(

@@ -7,12 +7,17 @@ import type {
   ReasoningEventFamily,
   ReasoningGraph,
   ReasoningGraphNode,
+  ReasoningQuery,
+  ReasoningQueryResult,
+  ReasoningReconstruction,
   ReasoningRelationship,
   ReasoningThread,
   ReasoningTrace,
 } from '../../types'
 import { ReasoningEventFeed } from './ReasoningEventFeed'
 import { ReasoningGraphPanel } from './ReasoningGraphPanel'
+import { ReasoningQueryPanel } from './ReasoningQueryPanel'
+import { ReasoningReconstructionPanel } from './ReasoningReconstructionPanel'
 import { ReasoningThreadPanel } from './ReasoningThreadPanel'
 import { ReasoningTracePanel } from './ReasoningTracePanel'
 
@@ -23,13 +28,20 @@ type ReasoningTrajectoryTabProps = {
   graph: ReasoningGraph | null
   backwardTrace: ReasoningTrace | null
   forwardTrace: ReasoningTrace | null
+  queryResult: ReasoningQueryResult | null
+  reconstruction: ReasoningReconstruction | null
   templates?: ManualReasoningCaptureTemplate[]
   hasSelectedRepository: boolean
   isLoading: boolean
   isTracingGraph: boolean
+  isQuerying: boolean
+  isReconstructing: boolean
   error: string | null
+  queryError: string | null
+  reconstructionError: string | null
   onRefresh: () => void
   onTraceGraphNode: (node: ReasoningGraphNode) => void
+  onRunQuery: (query: ReasoningQuery) => Promise<unknown>
   onCaptureManualReasoning?: (command: ManualReasoningCaptureCommand) => Promise<void>
 }
 
@@ -40,13 +52,20 @@ export function ReasoningTrajectoryTab({
   graph,
   backwardTrace,
   forwardTrace,
+  queryResult,
+  reconstruction,
   templates = [],
   hasSelectedRepository,
   isLoading,
   isTracingGraph,
+  isQuerying,
+  isReconstructing,
   error,
+  queryError,
+  reconstructionError,
   onRefresh,
   onTraceGraphNode,
+  onRunQuery,
   onCaptureManualReasoning,
 }: ReasoningTrajectoryTabProps) {
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null)
@@ -312,6 +331,18 @@ export function ReasoningTrajectoryTab({
             isLoading={isLoading}
             isTracing={isTracingGraph}
             onTraceNode={onTraceGraphNode}
+          />
+          <ReasoningQueryPanel
+            graph={graph}
+            queryResult={queryResult}
+            isRunning={isQuerying || isReconstructing}
+            error={queryError}
+            onRunQuery={onRunQuery}
+          />
+          <ReasoningReconstructionPanel
+            reconstruction={reconstruction}
+            isRunning={isReconstructing}
+            error={reconstructionError}
           />
         </div>
       ) : (

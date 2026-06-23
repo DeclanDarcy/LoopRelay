@@ -5,6 +5,8 @@ import type {
   ManualReasoningCaptureTemplate,
   ReasoningEvent,
   ReasoningGraph,
+  ReasoningQueryResult,
+  ReasoningReconstruction,
   ReasoningRelationship,
   ReasoningTrace,
   ReasoningThread,
@@ -189,6 +191,62 @@ const templates: ManualReasoningCaptureTemplate[] = [
   },
 ]
 
+const reconstruction: ReasoningReconstruction = {
+  repositoryId: 'repo-alpha',
+  generatedAt: '2026-06-22T16:08:00.0000000Z',
+  query: {
+    category: 'Decision',
+    question: 'Why did this decision change?',
+    target: {
+      kind: 'ReasoningEvent',
+      id: 'EVT-0001',
+      relativePath: null,
+      section: null,
+      excerpt: null,
+    },
+    direction: 'Backward',
+  },
+  narrative: {
+    summary: 'The decision question is reconstructed from one event and one relationship.',
+    details: 'Question: Why did this decision change?\nEvidence:\n- Event EVT-0001',
+  },
+  confidence: 'High',
+  trace: backwardTrace,
+  evidence: [
+    {
+      kind: 'Event',
+      id: 'EVT-0001',
+      title: 'HypothesisRaised: Event substrate can stay narrow',
+      summary: 'Reasoning should begin as immutable events with provenance.',
+      reference: {
+        kind: 'ReasoningEvent',
+        id: 'EVT-0001',
+        relativePath: null,
+        section: null,
+        excerpt: null,
+      },
+      provenance: events[0].provenance,
+    },
+    {
+      kind: 'GraphRelationship',
+      id: 'ThreadMembership:EVT-0001:THR-0001',
+      title: 'BelongsTo',
+      summary: 'Event belongs to thread',
+      reference: null,
+      provenance: null,
+    },
+  ],
+  diagnostics: [],
+}
+
+const queryResult: ReasoningQueryResult = {
+  repositoryId: 'repo-alpha',
+  generatedAt: reconstruction.generatedAt,
+  query: reconstruction.query,
+  reconstruction,
+  diagnostics: [],
+}
+
 function renderTab(overrides: Partial<Parameters<typeof ReasoningTrajectoryTab>[0]> = {}) {
   const props = {
     events,
@@ -197,13 +255,20 @@ function renderTab(overrides: Partial<Parameters<typeof ReasoningTrajectoryTab>[
     graph,
     backwardTrace: null,
     forwardTrace: null,
+    queryResult: null,
+    reconstruction: null,
     templates,
     hasSelectedRepository: true,
     isLoading: false,
     isTracingGraph: false,
+    isQuerying: false,
+    isReconstructing: false,
     error: null,
+    queryError: null,
+    reconstructionError: null,
     onRefresh: vi.fn(),
     onTraceGraphNode: vi.fn(),
+    onRunQuery: vi.fn().mockResolvedValue(undefined),
     onCaptureManualReasoning: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   }
@@ -332,6 +397,46 @@ describe('reasoning trajectory tab', () => {
       },
       threadIds: [],
       tags: ['milestone-2', 'manual'],
+    })
+  })
+
+  it('runs derived queries and exposes reconstruction evidence', async () => {
+    const onRunQuery = vi.fn().mockResolvedValue(undefined)
+    renderTab({ queryResult, reconstruction, onRunQuery })
+
+    const queryRegion = screen.getByRole('region', { name: 'Reasoning query' })
+    expect(within(queryRegion).getByLabelText('Reasoning query authority')).toHaveTextContent(
+      'Derived query',
+    )
+    expect(within(queryRegion).getByLabelText('Reasoning query result')).toHaveTextContent(
+      '2 evidence items',
+    )
+
+    const reconstructionRegion = screen.getByRole('region', { name: 'Reasoning reconstruction' })
+    expect(
+      within(reconstructionRegion).getByLabelText('Reasoning reconstruction authority'),
+    ).toHaveTextContent('Non-authoritative')
+    expect(within(reconstructionRegion).getByLabelText('Reconstruction evidence')).toHaveTextContent(
+      'HypothesisRaised: Event substrate can stay narrow',
+    )
+
+    fireEvent.change(within(queryRegion).getByLabelText('Question'), {
+      target: { value: 'Why did the event substrate remain narrow?' },
+    })
+    fireEvent.click(within(queryRegion).getByRole('button', { name: 'Run Query' }))
+
+    await waitFor(() => expect(onRunQuery).toHaveBeenCalledTimes(1))
+    expect(onRunQuery).toHaveBeenCalledWith({
+      category: 'Decision',
+      question: 'Why did the event substrate remain narrow?',
+      target: {
+        kind: 'ReasoningEvent',
+        id: 'EVT-0001',
+        relativePath: null,
+        section: null,
+        excerpt: null,
+      },
+      direction: 'Backward',
     })
   })
 })

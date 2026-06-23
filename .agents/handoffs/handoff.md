@@ -2,38 +2,38 @@
 
 ## New State From This Slice
 
-- Started Milestone 4 narrative reconstruction queries with a backend-only foundation slice.
-- Added `ReasoningQueryCategory`, `ReasoningQuery`, `ReasoningQueryResult`, `ReasoningReconstruction`, and `ReasoningReconstructionEvidence`.
-- Added and registered:
-  - `IReasoningQueryService`
-  - `IReasoningReconstructionService`
-  - `ReasoningQueryService`
-  - `ReasoningReconstructionService`
-- Added reasoning endpoints:
-  - `POST /api/repositories/{repositoryId}/reasoning/queries`
-  - `POST /api/repositories/{repositoryId}/reasoning/reconstructions`
-- Reconstruction currently uses `ReasoningTrace` as input, gathers cited events, relationships, threads, external references, provenance, diagnostics, and returns a derived narrative plus confidence.
-- Reconstruction remains response-only and non-authoritative; no report persistence was added in this slice.
-- Updated `.agents/milestones/m4-narrative-reconstruction.md` to mark the completed backend query/reconstruction foundation and keep historical reconstruction, persisted reports, and UI work open.
-- Added backend tests for:
-  - decision supersession reconstruction
-  - unchanged query path/evidence reproducibility
-  - query and reconstruction endpoints
-  - no materialized hypothesis/alternative/contradiction/direction directories
-- Rotated previous handoff to `.agents/handoffs/handoff.0016.md`.
+- Continued Milestone 4 by wiring narrative reconstruction into the shell and UI.
+- Added Tauri bridge commands:
+  - `query_reasoning`
+  - `reconstruct_reasoning`
+- Added UI query/reconstruction models, API calls, and hooks:
+  - `ReasoningQuery`
+  - `ReasoningQueryResult`
+  - `ReasoningReconstruction`
+  - `ReasoningReconstructionEvidence`
+  - `useReasoningQuery`
+  - `useReasoningReconstruction`
+- Added `ReasoningQueryPanel` with category, direction, graph target/manual target, question input, candidate trace counts, evidence counts, diagnostics, and derived-query authority labeling.
+- Added `ReasoningReconstructionPanel` with narrative, confidence, trace counts, evidence list, provenance/reference display, diagnostics, and non-authoritative reconstruction labeling.
+- Wired `ReasoningTrajectoryTab` and `App` so one query run executes both backend query and reconstruction endpoints.
+- Updated the dev Tauri mock to synthesize query results and reconstructions from the mock reasoning graph, events, threads, and relationships.
+- Updated `.agents/milestones/m4-narrative-reconstruction.md` to mark UI query/reconstruction exposure complete.
+- Rotated previous handoff to `.agents/handoffs/handoff.0017.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter Reasoning` passes: 54 tests.
+- `npm run test --prefix src/CommandCenter.UI -- reasoningTrajectory` passes: 1 file, 7 tests.
+- `npm run lint --prefix src/CommandCenter.UI` passes.
+- `cargo build --manifest-path src/CommandCenter.Shell/Cargo.toml` passes.
 
 ## Current Gaps
 
-- Historical state reconstruction from event timelines is not implemented.
-- Persisted reconstruction report generation/listing is not implemented.
-- Category-specific narrative templates remain shallow; current reconstruction is generic trace-to-evidence narration.
-- UI query and reconstruction panels are not implemented.
-- Tauri bridge commands for query/reconstruction are not implemented.
+- Historical state reconstruction from event timelines is still not implemented.
+- Persisted reconstruction report generation/listing is still not implemented.
+- Category-specific narrative templates remain shallow.
+- Backend tests for "what killed this hypothesis?" remain open.
+- Full UI test/build matrix has not been rerun in this slice.
 
 ## Next Slice
 
-- Add Tauri bridge commands and UI API/types/hooks for query and reconstruction, then implement `ReasoningQueryPanel` and `ReasoningReconstructionPanel` against the new backend endpoints.
+- Implement historical state reconstruction from event timelines in the backend, starting with a focused service shape for point-in-time derived status over hypothesis, alternative, contradiction, and direction event families.
