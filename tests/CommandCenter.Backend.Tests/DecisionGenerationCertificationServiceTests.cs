@@ -36,6 +36,20 @@ public sealed class DecisionGenerationCertificationServiceTests
         Assert.Equal(1, report.ExecutionInfluenceTraceCount);
         Assert.Equal(1, report.HumanAuthoringBurden.ReviewOnlyCount);
         Assert.Single(report.QualityAssessments);
+        Assert.Equal(1, report.RepositoryReport.AutomaticallyDiscoveredCandidateCount);
+        Assert.Equal(1, report.RepositoryReport.GeneratedResolvedDecisionCount);
+        Assert.Equal(0, report.RepositoryReport.ManualBypassCount);
+        Assert.Equal(1, report.WorkflowReport.HumanResolvedGeneratedDecisionCount);
+        Assert.Equal(0, report.WorkflowReport.SystemResolvedGeneratedDecisionCount);
+        Assert.Equal(1, report.WorkflowReport.PreservedHistoryDecisionCount);
+        Assert.Equal(1, report.WorkflowReport.ExecutionInfluenceCoverageRate);
+        Assert.True(report.HumanAuthoringBurdenSummary.PrimaryAuthoringReplaced);
+        Assert.Equal(1, report.HumanAuthoringBurdenSummary.ReviewOnlyRate);
+        Assert.True(report.ExecutiveReport.ReplacementReady);
+        Assert.Contains("humans remain governance authorities", report.ExecutiveReport.Answer);
+        Assert.Contains(report.ExecutiveReport.Evidence, evidence =>
+            evidence.StartsWith("Execution influence coverage:", StringComparison.Ordinal));
+        Assert.Empty(report.ExecutiveReport.BlockingGaps);
         DecisionGenerationCertificationReport persisted = Assert.Single(reloaded);
         Assert.Equal(report.Id, persisted.Id);
         DecisionCandidate candidate = Assert.Single(await harness.DecisionRepository.ListCandidatesAsync(harness.Repository));
@@ -51,6 +65,24 @@ public sealed class DecisionGenerationCertificationServiceTests
             "decisions",
             "certification",
             $"{report.Id}.json")));
+    }
+
+    [Fact]
+    public async Task ExecutiveReportExplainsBlockingGapsWithoutOpaqueScore()
+    {
+        CertificationHarness harness = await CreateGeneratedDecisionHarnessAsync(recordInfluence: false);
+
+        DecisionGenerationCertificationReport report =
+            await harness.CertificationService.GetCurrentCertificationAsync(harness.Repository.Id);
+
+        Assert.False(report.Result.Certified);
+        Assert.False(report.ExecutiveReport.ReplacementReady);
+        Assert.Contains("has not yet replaced primary human decision production", report.ExecutiveReport.Answer);
+        Assert.Contains(report.ExecutiveReport.BlockingGaps, gap => gap.StartsWith("CON-002:", StringComparison.Ordinal));
+        Assert.Contains("Execution influence coverage: 0%.", report.ExecutiveReport.Evidence);
+        Assert.DoesNotContain(report.ExecutiveReport.Diagnostics, diagnostic =>
+            diagnostic.Contains("score", StringComparison.OrdinalIgnoreCase) &&
+            !diagnostic.Contains("avoids", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

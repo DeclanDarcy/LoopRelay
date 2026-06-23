@@ -889,6 +889,55 @@ export type HumanAuthoringBurdenReport = {
   signals: HumanAuthoringBurdenSignal[]
 }
 
+export type DecisionGenerationRepositoryReport = {
+  candidateCount: number
+  automaticallyDiscoveredCandidateCount: number
+  generatedProposalCount: number
+  generatedPackageCount: number
+  generatedResolvedDecisionCount: number
+  qualityAssessmentCount: number
+  executionInfluenceTraceCount: number
+  manualBypassCount: number
+  diagnostics: string[]
+}
+
+export type DecisionGenerationWorkflowReport = {
+  generatedResolvedDecisionCount: number
+  humanResolvedGeneratedDecisionCount: number
+  systemResolvedGeneratedDecisionCount: number
+  preservedHistoryDecisionCount: number
+  recommendationDivergenceCount: number
+  recommendationDivergenceRate: number
+  executionInfluenceCoveredDecisionCount: number
+  executionInfluenceCoverageRate: number
+  diagnostics: string[]
+}
+
+export type DecisionGenerationHumanAuthoringBurdenReport = {
+  decisionCount: number
+  reviewOnlyCount: number
+  reviewOnlyRate: number
+  minorEditCount: number
+  minorEditRate: number
+  majorRefinementCount: number
+  majorRefinementRate: number
+  fullRewriteCount: number
+  fullRewriteRate: number
+  generationBypassedCount: number
+  generationBypassedRate: number
+  primaryAuthoringReplaced: boolean
+  diagnostics: string[]
+}
+
+export type DecisionGenerationExecutiveReport = {
+  replacementReady: boolean
+  answer: string
+  summary: string
+  evidence: string[]
+  blockingGaps: string[]
+  diagnostics: string[]
+}
+
 export type DecisionGenerationCertificationReport = {
   id: string
   repositoryId: string
@@ -902,6 +951,10 @@ export type DecisionGenerationCertificationReport = {
   executionInfluenceTraceCount: number
   humanAuthoringBurden: HumanAuthoringBurdenReport
   qualityAssessments: DecisionQualityAssessment[]
+  repositoryReport: DecisionGenerationRepositoryReport
+  workflowReport: DecisionGenerationWorkflowReport
+  humanAuthoringBurdenSummary: DecisionGenerationHumanAuthoringBurdenReport
+  executiveReport: DecisionGenerationExecutiveReport
   diagnostics: string[]
 }
 

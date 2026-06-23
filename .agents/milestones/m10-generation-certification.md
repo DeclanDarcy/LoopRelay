@@ -39,7 +39,7 @@ certify that automated decision generation replaces human decision production wi
   - [x] decision quality
   - [x] execution influence
   - [x] workflow replacement alignment
-- [ ] Certification requirements:
+- [x] Certification requirements:
   - [x] candidates discovered automatically
   - [x] multiple options generated
   - [x] tradeoffs generated
@@ -52,7 +52,7 @@ certify that automated decision generation replaces human decision production wi
   - [x] human authoring burden assessments available
   - [x] execution consumes accepted resolved decisions
   - [x] influence is traceable
-- [ ] Certification failure conditions:
+- [x] Certification failure conditions:
   - [x] hardcoded recommendations
   - [x] single-option generation without justification
   - [x] missing evidence
@@ -62,17 +62,17 @@ certify that automated decision generation replaces human decision production wi
   - [x] recommendations ignored repeatedly as advisory quality signals, not automatic certification failures
   - [x] execution projection absent
   - [x] influence not traceable
-- [ ] Add certification scenarios:
+- [x] Add certification scenarios:
   - [x] architectural fork
   - [x] workflow priority decision
   - [x] contradiction with withheld recommendation
   - [x] refinement after human changes assumptions
   - [x] end-to-end repository lifecycle
-- [ ] Add certification reports:
-  - [ ] repository report
-  - [ ] workflow report
-  - [ ] human authoring burden report
-  - [ ] executive report that directly answers whether human decision production has been replaced by system generation and human governance
+- [x] Add certification reports:
+  - [x] repository report
+  - [x] workflow report
+  - [x] human authoring burden report
+  - [x] executive report that directly answers whether human decision production has been replaced by system generation and human governance
 
 ## Tests
 
@@ -88,4 +88,4 @@ certify that automated decision generation replaces human decision production wi
 
 ## Exit Criteria
 
-- [ ] Certification can answer with evidence whether the system primarily generates decisions, humans primarily review/refine/resolve, humans are no longer the primary authors, execution is directed by resolved decisions, and workflow burden is reduced.
+- [x] Certification can answer with evidence whether the system primarily generates decisions, humans primarily review/refine/resolve, humans are no longer the primary authors, execution is directed by resolved decisions, and workflow burden is reduced.

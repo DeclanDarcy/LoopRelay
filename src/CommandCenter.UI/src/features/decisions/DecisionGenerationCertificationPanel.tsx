@@ -100,6 +100,7 @@ export function DecisionGenerationCertificationPanel({
             </div>
           ) : null}
 
+          <ExecutiveReadinessSummary report={currentReport} />
           <HumanAuthoringBurdenSummary report={currentReport.humanAuthoringBurden} />
 
           <div className="decision-inspection-list" aria-label="Generation certification findings">
@@ -153,6 +154,43 @@ export function DecisionGenerationCertificationPanel({
         </EmptyState>
       )}
     </section>
+  )
+}
+
+function ExecutiveReadinessSummary({ report }: { report: DecisionGenerationCertificationReport }) {
+  return (
+    <div className="decision-inspection-list" aria-label="Executive replacement readiness report">
+      <h6>Replacement Readiness</h6>
+      <div className="decision-row-list">
+        <div className="decision-row">
+          <strong>{report.executiveReport.replacementReady ? 'Ready' : 'Not Ready'}</strong>
+          <span>{report.executiveReport.answer}</span>
+          <p>{report.executiveReport.summary}</p>
+        </div>
+      </div>
+      <div className="decision-generation-certification-grid">
+        <span>{report.repositoryReport.automaticallyDiscoveredCandidateCount} automatic candidates</span>
+        <span>{report.workflowReport.humanResolvedGeneratedDecisionCount} human resolutions</span>
+        <span>{formatRate(report.humanAuthoringBurdenSummary.reviewOnlyRate)} review only</span>
+        <span>{formatRate(report.humanAuthoringBurdenSummary.generationBypassedRate)} bypassed</span>
+        <span>{formatRate(report.workflowReport.executionInfluenceCoverageRate)} influence coverage</span>
+        <span>{formatRate(report.workflowReport.recommendationDivergenceRate)} recommendation divergence</span>
+      </div>
+      {report.executiveReport.evidence.length > 0 ? (
+        <div className="decision-warning-list" aria-label="Executive replacement readiness evidence">
+          {report.executiveReport.evidence.map((item) => (
+            <span key={item}>{item}</span>
+          ))}
+        </div>
+      ) : null}
+      {report.executiveReport.blockingGaps.length > 0 ? (
+        <div className="decision-warning-list" aria-label="Executive replacement readiness blocking gaps">
+          {report.executiveReport.blockingGaps.map((gap) => (
+            <span key={gap}>{gap}</span>
+          ))}
+        </div>
+      ) : null}
+    </div>
   )
 }
 
@@ -267,4 +305,8 @@ function SourceList({ sources, id }: { sources: DecisionSourceReference[]; id: s
 
 function formatDate(value: string) {
   return new Date(value).toLocaleString()
+}
+
+function formatRate(value: number) {
+  return `${Math.round(value * 100)}%`
 }

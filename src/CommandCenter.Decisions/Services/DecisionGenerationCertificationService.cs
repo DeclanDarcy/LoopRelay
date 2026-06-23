@@ -276,6 +276,21 @@ public sealed class DecisionGenerationCertificationService(
             .Select(finding => $"{finding.Id}: {finding.Summary}")
             .Order(StringComparer.Ordinal)
             .ToArray();
+        DecisionGenerationRepositoryReport repositoryReport = BuildRepositoryReport(
+            candidates,
+            proposals,
+            packageVersions,
+            generatedResolvedDecisions,
+            qualityAssessments,
+            burdenReport,
+            influenceTracesByDecision);
+        DecisionGenerationWorkflowReport workflowReport = BuildWorkflowReport(
+            generatedResolvedDecisions,
+            packageVersionsByProposal,
+            revisionsByProposal,
+            influenceTracesByDecision);
+        DecisionGenerationHumanAuthoringBurdenReport burdenSummary =
+            BuildHumanAuthoringBurdenReport(burdenReport);
         DecisionGenerationCertificationResult result = new(
             generationCertified,
             governanceCertified,
@@ -299,9 +314,137 @@ public sealed class DecisionGenerationCertificationService(
             influenceTracesByDecision.Sum(pair => pair.Value.Count),
             burdenReport,
             qualityAssessments.OrderBy(assessment => assessment.Id, StringComparer.Ordinal).ToArray(),
+            repositoryReport,
+            workflowReport,
+            burdenSummary,
+            BuildExecutiveReport(result, repositoryReport, workflowReport, burdenSummary),
             result.Certified
                 ? ["Automated decision generation certification passed without mutating decision authority."]
                 : ["Automated decision generation certification is advisory and does not mutate lifecycle authority."]);
+    }
+
+    private static DecisionGenerationRepositoryReport BuildRepositoryReport(
+        IReadOnlyList<DecisionCandidate> candidates,
+        IReadOnlyList<DecisionProposal> proposals,
+        IReadOnlyList<DecisionPackageVersion> packageVersions,
+        IReadOnlyList<Decision> generatedResolvedDecisions,
+        IReadOnlyList<DecisionQualityAssessment> qualityAssessments,
+        HumanAuthoringBurdenReport burdenReport,
+        IReadOnlyDictionary<string, IReadOnlyList<DecisionInfluenceTrace>> influenceTracesByDecision)
+    {
+        int automaticallyDiscoveredCandidates = candidates.Count(IsAutomaticallyDiscovered);
+        int manualBypassCount = burdenReport.GenerationBypassedCount;
+        return new DecisionGenerationRepositoryReport(
+            candidates.Count,
+            automaticallyDiscoveredCandidates,
+            proposals.Count,
+            packageVersions.Count,
+            generatedResolvedDecisions.Count,
+            qualityAssessments.Count,
+            influenceTracesByDecision.Sum(pair => pair.Value.Count),
+            manualBypassCount,
+            [
+                $"Repository evidence contains {automaticallyDiscoveredCandidates} automatically discovered candidate(s).",
+                $"Repository evidence contains {generatedResolvedDecisions.Count} generated resolved decision(s) and {manualBypassCount} generation bypass(es)."
+            ]);
+    }
+
+    private static DecisionGenerationWorkflowReport BuildWorkflowReport(
+        IReadOnlyList<Decision> generatedResolvedDecisions,
+        IReadOnlyDictionary<string, IReadOnlyList<DecisionPackageVersion>> packageVersionsByProposal,
+        IReadOnlyDictionary<string, IReadOnlyList<DecisionProposalRevision>> revisionsByProposal,
+        IReadOnlyDictionary<string, IReadOnlyList<DecisionInfluenceTrace>> influenceTracesByDecision)
+    {
+        int humanResolved = generatedResolvedDecisions.Count(decision =>
+            decision.Resolution is { } resolution &&
+            !IsSystemAuthority(resolution.ResolvedBy));
+        int systemResolved = generatedResolvedDecisions.Count - humanResolved;
+        int preservedHistory = generatedResolvedDecisions.Count(decision =>
+            PreservesGeneratedDecisionHistory(decision, packageVersionsByProposal, revisionsByProposal));
+        int recommendationDivergence = generatedResolvedDecisions.Count(decision =>
+            decision.Resolution?.RecommendationDiverged == true);
+        int influenceCovered = generatedResolvedDecisions.Count(decision =>
+            influenceTracesByDecision.TryGetValue(decision.Id.Value, out IReadOnlyList<DecisionInfluenceTrace>? traces) &&
+            traces.Any(trace => trace.Statements.Any(statement =>
+                string.Equals(statement.DecisionId, decision.Id.Value, StringComparison.Ordinal))));
+
+        return new DecisionGenerationWorkflowReport(
+            generatedResolvedDecisions.Count,
+            humanResolved,
+            systemResolved,
+            preservedHistory,
+            recommendationDivergence,
+            Rate(recommendationDivergence, generatedResolvedDecisions.Count),
+            influenceCovered,
+            Rate(influenceCovered, generatedResolvedDecisions.Count),
+            [
+                $"Human governance resolved {humanResolved} of {generatedResolvedDecisions.Count} generated decision(s).",
+                $"Execution influence covers {influenceCovered} of {generatedResolvedDecisions.Count} generated resolved decision(s)."
+            ]);
+    }
+
+    private static DecisionGenerationHumanAuthoringBurdenReport BuildHumanAuthoringBurdenReport(
+        HumanAuthoringBurdenReport burdenReport)
+    {
+        int reviewOrRefinementCount =
+            burdenReport.ReviewOnlyCount +
+            burdenReport.MinorEditCount +
+            burdenReport.MajorRefinementCount;
+        bool primaryAuthoringReplaced = burdenReport.DecisionCount > 0 &&
+            reviewOrRefinementCount > burdenReport.FullRewriteCount + burdenReport.GenerationBypassedCount;
+
+        return new DecisionGenerationHumanAuthoringBurdenReport(
+            burdenReport.DecisionCount,
+            burdenReport.ReviewOnlyCount,
+            Rate(burdenReport.ReviewOnlyCount, burdenReport.DecisionCount),
+            burdenReport.MinorEditCount,
+            Rate(burdenReport.MinorEditCount, burdenReport.DecisionCount),
+            burdenReport.MajorRefinementCount,
+            Rate(burdenReport.MajorRefinementCount, burdenReport.DecisionCount),
+            burdenReport.FullRewriteCount,
+            Rate(burdenReport.FullRewriteCount, burdenReport.DecisionCount),
+            burdenReport.GenerationBypassedCount,
+            Rate(burdenReport.GenerationBypassedCount, burdenReport.DecisionCount),
+            primaryAuthoringReplaced,
+            [
+                $"Review/refinement-oriented decisions: {reviewOrRefinementCount}.",
+                $"Human-authored or bypassed decisions: {burdenReport.FullRewriteCount + burdenReport.GenerationBypassedCount}."
+            ]);
+    }
+
+    private static DecisionGenerationExecutiveReport BuildExecutiveReport(
+        DecisionGenerationCertificationResult result,
+        DecisionGenerationRepositoryReport repositoryReport,
+        DecisionGenerationWorkflowReport workflowReport,
+        DecisionGenerationHumanAuthoringBurdenReport burdenSummary)
+    {
+        string[] evidence =
+        [
+            $"Generated decisions resolved: {repositoryReport.GeneratedResolvedDecisionCount}.",
+            $"ReviewOnly rate: {FormatRate(burdenSummary.ReviewOnlyRate)}.",
+            $"MinorEdit rate: {FormatRate(burdenSummary.MinorEditRate)}.",
+            $"MajorRefinement rate: {FormatRate(burdenSummary.MajorRefinementRate)}.",
+            $"FullRewrite rate: {FormatRate(burdenSummary.FullRewriteRate)}.",
+            $"GenerationBypassed rate: {FormatRate(burdenSummary.GenerationBypassedRate)}.",
+            $"Execution influence coverage: {FormatRate(workflowReport.ExecutionInfluenceCoverageRate)}.",
+            $"Recommendation divergence rate: {FormatRate(workflowReport.RecommendationDivergenceRate)}."
+        ];
+        string[] blockingGaps = result.Failures.Count == 0
+            ? []
+            : result.Failures.ToArray();
+        string answer = result.Certified
+            ? "System generation has replaced primary human decision production for the certified evidence set; humans remain governance authorities."
+            : "System generation has not yet replaced primary human decision production for the certified evidence set.";
+
+        return new DecisionGenerationExecutiveReport(
+            result.Certified,
+            answer,
+            result.Certified
+                ? "Certification evidence shows generated packages reaching human resolution and execution consumption without humans authoring most final decision content."
+                : "Certification remains blocked by evidence gaps in generation, governance, quality, burden, or execution consumption.",
+            evidence,
+            blockingGaps,
+            ["Executive readiness is evidence-driven and intentionally avoids an opaque numeric score."]);
     }
 
     private async Task<IReadOnlyDictionary<string, IReadOnlyList<DecisionPackageVersion>>> ListPackageVersionsAsync(
@@ -474,6 +617,16 @@ public sealed class DecisionGenerationCertificationService(
             relatedDecisionIds.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
             relatedCandidateIds.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
             relatedProposalIds.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()));
+    }
+
+    private static double Rate(int numerator, int denominator)
+    {
+        return denominator == 0 ? 0 : Math.Round((double)numerator / denominator, 4);
+    }
+
+    private static string FormatRate(double value)
+    {
+        return $"{Math.Round(value * 100)}%";
     }
 
     private static string FingerprintInputs(

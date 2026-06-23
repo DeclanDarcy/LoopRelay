@@ -13,4 +13,8 @@ public sealed record DecisionGenerationCertificationReport(
     int ExecutionInfluenceTraceCount,
     HumanAuthoringBurdenReport HumanAuthoringBurden,
     IReadOnlyList<DecisionQualityAssessment> QualityAssessments,
+    DecisionGenerationRepositoryReport RepositoryReport,
+    DecisionGenerationWorkflowReport WorkflowReport,
+    DecisionGenerationHumanAuthoringBurdenReport HumanAuthoringBurdenSummary,
+    DecisionGenerationExecutiveReport ExecutiveReport,
     IReadOnlyList<string> Diagnostics);

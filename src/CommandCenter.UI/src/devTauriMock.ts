@@ -1552,6 +1552,7 @@ function createDecisionGenerationCertificationReport(
     Boolean(decision.resolution?.sourceProposalSnapshot),
   ).length
   const reviewOnlyCount = generatedResolvedDecisionCount
+  const generationBypassedCount = Math.max(0, decisions.length - generatedResolvedDecisionCount)
   const generationCertified = candidates.length > 0 && proposals.length > 0
   const governanceCertified = decisions.every((decision) =>
     !decision.resolution || !/governance|certification|execution/i.test(decision.resolution.resolvedBy),
@@ -1621,7 +1622,7 @@ function createDecisionGenerationCertificationReport(
       minorEditCount: 0,
       majorRefinementCount: 0,
       fullRewriteCount: 0,
-      generationBypassedCount: Math.max(0, decisions.length - generatedResolvedDecisionCount),
+      generationBypassedCount,
       unknownCount: 0,
       signals: decisions.map((decision) => ({
         id: `burden-${decision.id}`,
@@ -1636,6 +1637,60 @@ function createDecisionGenerationCertificationReport(
       })),
     },
     qualityAssessments,
+    repositoryReport: {
+      candidateCount: candidates.length,
+      automaticallyDiscoveredCandidateCount: candidates.length,
+      generatedProposalCount: proposals.length,
+      generatedPackageCount: proposals.length,
+      generatedResolvedDecisionCount,
+      qualityAssessmentCount: qualityAssessments.length,
+      executionInfluenceTraceCount: generatedResolvedDecisionCount,
+      manualBypassCount: generationBypassedCount,
+      diagnostics: ['Mock repository report is derived from in-memory decision artifacts.'],
+    },
+    workflowReport: {
+      generatedResolvedDecisionCount,
+      humanResolvedGeneratedDecisionCount: generatedResolvedDecisionCount,
+      systemResolvedGeneratedDecisionCount: 0,
+      preservedHistoryDecisionCount: generatedResolvedDecisionCount,
+      recommendationDivergenceCount: 0,
+      recommendationDivergenceRate: 0,
+      executionInfluenceCoveredDecisionCount: generatedResolvedDecisionCount,
+      executionInfluenceCoverageRate: generatedResolvedDecisionCount > 0 ? 1 : 0,
+      diagnostics: ['Mock workflow report keeps generation and human governance separate.'],
+    },
+    humanAuthoringBurdenSummary: {
+      decisionCount: decisions.length,
+      reviewOnlyCount,
+      reviewOnlyRate: rate(reviewOnlyCount, decisions.length),
+      minorEditCount: 0,
+      minorEditRate: 0,
+      majorRefinementCount: 0,
+      majorRefinementRate: 0,
+      fullRewriteCount: 0,
+      fullRewriteRate: 0,
+      generationBypassedCount,
+      generationBypassedRate: rate(generationBypassedCount, decisions.length),
+      primaryAuthoringReplaced: reviewOnlyCount > generationBypassedCount,
+      diagnostics: ['Mock burden summary is derived from generated proposal resolution evidence.'],
+    },
+    executiveReport: {
+      replacementReady: failures.length === 0 && workflowReplacementCertified,
+      answer: workflowReplacementCertified
+        ? 'System generation has replaced primary human decision production for the certified evidence set; humans remain governance authorities.'
+        : 'System generation has not yet replaced primary human decision production for the certified evidence set.',
+      summary: workflowReplacementCertified
+        ? 'Generated decisions reached human resolution without rewrite evidence.'
+        : 'Generated resolved decision evidence is incomplete.',
+      evidence: [
+        `Generated decisions resolved: ${generatedResolvedDecisionCount}.`,
+        `ReviewOnly rate: ${Math.round(rate(reviewOnlyCount, decisions.length) * 100)}%.`,
+        `GenerationBypassed rate: ${Math.round(rate(generationBypassedCount, decisions.length) * 100)}%.`,
+        `Execution influence coverage: ${generatedResolvedDecisionCount > 0 ? 100 : 0}%.`,
+      ],
+      blockingGaps: failures,
+      diagnostics: ['Mock executive readiness avoids an opaque numeric score.'],
+    },
     diagnostics: persist
       ? ['Mock generation certification report was persisted to generated report history.']
       : ['Mock current generation certification is advisory and is not persisted.'],

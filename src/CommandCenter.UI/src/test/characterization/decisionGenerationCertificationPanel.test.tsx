@@ -25,7 +25,9 @@ describe('DecisionGenerationCertificationPanel', () => {
     expect(screen.getByText('Certified: No')).toBeInTheDocument()
     expect(screen.getByText('Generation: Passed')).toBeInTheDocument()
     expect(screen.getByText('Workflow Replacement: Failed')).toBeInTheDocument()
-    expect(screen.getByText('workflow-replacement failed because quality evidence is missing.')).toBeInTheDocument()
+    expect(screen.getAllByText('workflow-replacement failed because quality evidence is missing.')).toHaveLength(2)
+    expect(screen.getByText('System generation has not yet replaced primary human decision production for the certified evidence set.')).toBeInTheDocument()
+    expect(screen.getByText('Execution influence coverage: 0%.')).toBeInTheDocument()
     expect(screen.getByText('ReviewOnly')).toBeInTheDocument()
     expect(screen.getByText('.agents/decisions/proposals/PROP-0001/proposal.json')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /resolve|accept|reject|promote|approve/i })).not.toBeInTheDocument()
@@ -118,6 +120,60 @@ function createReport(
       ],
     },
     qualityAssessments: [],
+    repositoryReport: {
+      candidateCount: 1,
+      automaticallyDiscoveredCandidateCount: 1,
+      generatedProposalCount: 1,
+      generatedPackageCount: 1,
+      generatedResolvedDecisionCount: 1,
+      qualityAssessmentCount: 0,
+      executionInfluenceTraceCount: 0,
+      manualBypassCount: 0,
+      diagnostics: ['Repository evidence contains 1 automatically discovered candidate.'],
+    },
+    workflowReport: {
+      generatedResolvedDecisionCount: 1,
+      humanResolvedGeneratedDecisionCount: 1,
+      systemResolvedGeneratedDecisionCount: 0,
+      preservedHistoryDecisionCount: 1,
+      recommendationDivergenceCount: 0,
+      recommendationDivergenceRate: 0,
+      executionInfluenceCoveredDecisionCount: 0,
+      executionInfluenceCoverageRate: 0,
+      diagnostics: ['Execution influence coverage is incomplete.'],
+    },
+    humanAuthoringBurdenSummary: {
+      decisionCount: 1,
+      reviewOnlyCount: 1,
+      reviewOnlyRate: 1,
+      minorEditCount: 0,
+      minorEditRate: 0,
+      majorRefinementCount: 0,
+      majorRefinementRate: 0,
+      fullRewriteCount: 0,
+      fullRewriteRate: 0,
+      generationBypassedCount: 0,
+      generationBypassedRate: 0,
+      primaryAuthoringReplaced: true,
+      diagnostics: ['Human remained in review mode.'],
+    },
+    executiveReport: {
+      replacementReady: false,
+      answer: 'System generation has not yet replaced primary human decision production for the certified evidence set.',
+      summary: 'Certification remains blocked by quality and execution evidence gaps.',
+      evidence: [
+        'Generated decisions resolved: 1.',
+        'ReviewOnly rate: 100%.',
+        'MinorEdit rate: 0%.',
+        'MajorRefinement rate: 0%.',
+        'FullRewrite rate: 0%.',
+        'GenerationBypassed rate: 0%.',
+        'Execution influence coverage: 0%.',
+        'Recommendation divergence rate: 0%.',
+      ],
+      blockingGaps: ['workflow-replacement failed because quality evidence is missing.'],
+      diagnostics: ['Executive readiness is evidence-driven and intentionally avoids an opaque numeric score.'],
+    },
     diagnostics: ['Generation certification is advisory and does not mutate lifecycle authority.'],
   }
 }
