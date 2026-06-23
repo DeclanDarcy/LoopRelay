@@ -1,3 +1,5 @@
+using CommandCenter.Decisions.Primitives;
+
 namespace CommandCenter.Decisions.Models;
 
 public sealed record DecisionProposalRevisionComparison(
@@ -25,4 +27,5 @@ public sealed record DecisionProposalRevisionComparison(
     IReadOnlyList<DecisionOptionRevision> OptionRevisions,
     IReadOnlyList<DecisionTradeoffRevision> TradeoffRevisions,
     IReadOnlyList<DecisionPriorityAdjustment> PriorityAdjustments,
+    HumanAuthoringBurden HumanAuthoringBurden,
     IReadOnlyList<DecisionSourceReference> Sources);

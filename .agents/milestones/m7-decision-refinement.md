@@ -36,10 +36,10 @@ let humans guide regeneration without becoming package authors.
   - [x] new package version
   - [x] comparison
   - [x] diagnostics
-- [ ] Classify the refinement's human authoring burden:
-  - [ ] small directive-only adjustment is `MinorEdit`
-  - [ ] scoped regeneration is `MajorRefinement`
-  - [ ] replacement of generated content with human-authored content is `FullRewrite`
+- [x] Classify the refinement's human authoring burden:
+  - [x] small directive-only adjustment is `MinorEdit`
+  - [x] scoped regeneration is `MajorRefinement`
+  - [x] replacement of generated content with human-authored content is `FullRewrite`
 - [x] Ensure refinement never mutates prior package versions.
 - [ ] Add UI controls for structured directives and show old/new recommendation diff.
 

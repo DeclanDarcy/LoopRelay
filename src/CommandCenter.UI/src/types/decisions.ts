@@ -62,6 +62,14 @@ export type TradeoffSeverity = 'Info' | 'Low' | 'Medium' | 'High' | 'Blocking'
 
 export type RecommendationMode = 'PreferredOption' | 'PreferredPlusAlternative' | 'NoRecommendation'
 
+export type HumanAuthoringBurden =
+  | 'Unknown'
+  | 'ReviewOnly'
+  | 'MinorEdit'
+  | 'MajorRefinement'
+  | 'FullRewrite'
+  | 'GenerationBypassed'
+
 export type RecommendationEvidenceType =
   | 'Benefit'
   | 'Cost'
@@ -443,6 +451,7 @@ export type DecisionProposalRevision = {
   previousTradeoffs: DecisionTradeoff[] | null
   revisedTradeoffs: DecisionTradeoff[] | null
   revisedAssumptions: DecisionAssumption[] | null
+  humanAuthoringBurden: HumanAuthoringBurden
 }
 
 export type DecisionRevisionFieldComparison = {
@@ -472,6 +481,7 @@ export type DecisionProposalRevisionComparison = {
   retiredAssumptions: DecisionAssumption[]
   previousTradeoffs: DecisionTradeoff[]
   revisedTradeoffs: DecisionTradeoff[]
+  humanAuthoringBurden: HumanAuthoringBurden
   sources: DecisionSourceReference[]
 }
 

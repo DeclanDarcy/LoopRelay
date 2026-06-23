@@ -267,6 +267,7 @@ public sealed class DecisionPackageService(
             $"Regenerated package {packageVersion.Id} from {basePackageVersion.Id} using analyzed refinement plan.",
             $"Regeneration scopes: options={plan.RegenerateOptions}, tradeoffs={plan.ReevaluateTradeoffs}, recommendation={plan.ReevaluateRecommendation}, full={plan.FullRegeneration}.",
             $"Base package fingerprint {basePackageVersion.PackageFingerprint} was preserved; prior package versions remain immutable.",
+            "Human authoring burden classified as MajorRefinement because reviewer guidance produced a scoped regenerated package version.",
             .. plan.Diagnostics
         ];
         return new DecisionPackageRegenerationResult(
@@ -276,6 +277,7 @@ public sealed class DecisionPackageService(
             basePackageVersion,
             packageVersion,
             comparison,
+            HumanAuthoringBurden.MajorRefinement,
             diagnostics);
     }
 

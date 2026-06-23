@@ -1,3 +1,5 @@
+using CommandCenter.Decisions.Primitives;
+
 namespace CommandCenter.Decisions.Models;
 
 public sealed record DecisionPackageRegenerationResult(
@@ -7,4 +9,5 @@ public sealed record DecisionPackageRegenerationResult(
     DecisionPackageVersion BasePackageVersion,
     DecisionPackageVersion RegeneratedPackageVersion,
     DecisionPackageComparison Comparison,
+    HumanAuthoringBurden HumanAuthoringBurden,
     IReadOnlyList<string> Diagnostics);

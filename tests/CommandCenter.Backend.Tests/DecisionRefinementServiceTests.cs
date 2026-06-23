@@ -177,6 +177,7 @@ public sealed class DecisionRefinementServiceTests
 
         Assert.Equal("PKG-0001", result.BasePackageVersion.Id);
         Assert.Equal("PKG-0002", result.RegeneratedPackageVersion.Id);
+        Assert.Equal(HumanAuthoringBurden.MajorRefinement, result.HumanAuthoringBurden);
         Assert.Equal(2, versions.Count);
         Assert.Equal(basePackageJsonBefore, basePackageJsonAfter);
         Assert.Equal(DecisionProposalState.NeedsRefinement, reloaded?.State);
@@ -186,6 +187,7 @@ public sealed class DecisionRefinementServiceTests
         Assert.Contains(result.RegeneratedPackageVersion.Package.Options, option => option.Id == "option-4");
         Assert.Equal(Fingerprint(needsRefinement), result.RegeneratedPackageVersion.Package.Metadata.SourceProposalFingerprint);
         Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Contains("prior package versions remain immutable", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Contains("Human authoring burden classified as MajorRefinement", StringComparison.Ordinal));
         Assert.Contains("Recommendation changed: True", comparisonMarkdown);
         Assert.Contains("PKG-0001..PKG-0002", comparisonMarkdown);
     }
@@ -272,6 +274,7 @@ public sealed class DecisionRefinementServiceTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("PKG-0002", result.RegeneratedPackageVersion.Id);
+        Assert.Equal(HumanAuthoringBurden.MajorRefinement, result.HumanAuthoringBurden);
         Assert.True(result.Comparison.OptionsChanged);
         Assert.True(File.Exists(Path.Combine(
             repository.Path,
@@ -391,9 +394,11 @@ public sealed class DecisionRefinementServiceTests
         Assert.Contains(revision.RejectedChanges ?? [], change => change == "Do not resolve the proposal during refinement.");
         Assert.Contains(revision.Diagnostics ?? [], diagnostic => diagnostic.Contains("Retired 2 option", StringComparison.Ordinal));
         Assert.Equal("Narrower rationale after reviewer challenge.", revision.RevisedRecommendationRationale);
+        Assert.Equal(HumanAuthoringBurden.FullRewrite, revision.HumanAuthoringBurden);
 
         string markdown = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/revisions/REV-0001.md");
         Assert.Contains("Requested by: reviewer", markdown);
+        Assert.Contains("Human authoring burden: FullRewrite", markdown);
         Assert.Contains("## Retired Options", markdown);
         Assert.Contains("option-2", markdown);
         Assert.Contains("constraint-1: Refinement must preserve repository artifact authority.", markdown);
@@ -465,6 +470,7 @@ public sealed class DecisionRefinementServiceTests
         Assert.Equal(Fingerprint(refined), comparison.CurrentProposalFingerprint);
         Assert.Contains("Tradeoffs", comparison.ChangedFields);
         Assert.Contains("Context", comparison.ChangedFields);
+        Assert.Equal(HumanAuthoringBurden.FullRewrite, comparison.HumanAuthoringBurden);
         Assert.Contains(comparison.FieldComparisons, field =>
             field.Field == "Tradeoffs" &&
             field.ChangeType == "Changed" &&
@@ -530,6 +536,7 @@ public sealed class DecisionRefinementServiceTests
         Assert.Equal(needsRefinement.Context, refined.Context);
         Assert.Equal(Fingerprint(needsRefinement), revision.SourceProposalFingerprint);
         Assert.Contains("PriorityAdjustments", revision.ChangedFields);
+        Assert.Equal(HumanAuthoringBurden.MinorEdit, revision.HumanAuthoringBurden);
         DecisionPriorityAdjustment adjustment = Assert.Single(revision.PriorityAdjustments ?? []);
         Assert.Equal(DecisionCandidatePriority.High, adjustment.PreviousPriority);
         Assert.Equal(DecisionCandidatePriority.Blocking, adjustment.NewPriority);
@@ -540,10 +547,12 @@ public sealed class DecisionRefinementServiceTests
             field.Field == "PriorityAdjustments" &&
             field.ChangeType == "Metadata");
         Assert.Single(comparison.PriorityAdjustments);
+        Assert.Equal(HumanAuthoringBurden.MinorEdit, comparison.HumanAuthoringBurden);
 
         string revisionMarkdown = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/revisions/REV-0001.md");
         string comparisonMarkdown = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/revisions/REV-0001.comparison.md");
         Assert.Contains("## Priority Adjustments", revisionMarkdown);
+        Assert.Contains("Human authoring burden: MinorEdit", revisionMarkdown);
         Assert.Contains("High -> Blocking", revisionMarkdown);
         Assert.Contains("Current milestone cannot proceed until this decision is resolved.", comparisonMarkdown);
     }

@@ -906,6 +906,7 @@ public sealed class DecisionArtifactProjectionService(
             ("Repository", revision.RepositoryId.ToString()),
             ("Created", FormatTimestamp(revision.CreatedAt)),
             ("Source proposal fingerprint", revision.SourceProposalFingerprint),
+            ("Human authoring burden", revision.HumanAuthoringBurden.ToString()),
             ("Requested by", revision.RequestedBy ?? "Unspecified"));
         markdown.H2("Reason");
         markdown.Paragraph(revision.Reason);
@@ -1022,6 +1023,7 @@ public sealed class DecisionArtifactProjectionService(
             ("Repository", comparison.RepositoryId.ToString()),
             ("Source proposal fingerprint", comparison.SourceProposalFingerprint),
             ("Current proposal fingerprint", comparison.CurrentProposalFingerprint),
+            ("Human authoring burden", comparison.HumanAuthoringBurden.ToString()),
             ("Source matches current proposal", comparison.SourceMatchesCurrentProposal.ToString()));
         markdown.H2("Changed Fields");
         foreach (DecisionRevisionFieldComparison field in comparison.FieldComparisons

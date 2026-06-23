@@ -72,6 +72,7 @@ public sealed class DecisionRefinementService(
         DecisionAssumption[] retiredAssumptions = proposal.Assumptions
             .Where(previous => !assumptions.Any(current => string.Equals(current.Id, previous.Id, StringComparison.Ordinal)))
             .ToArray();
+        HumanAuthoringBurden humanAuthoringBurden = ClassifyHumanAuthoringBurden(changedFields);
 
         var revision = new DecisionProposalRevision(
             revisionId,
@@ -102,7 +103,8 @@ public sealed class DecisionRefinementService(
             options,
             proposal.Tradeoffs.ToArray(),
             tradeoffs,
-            assumptions);
+            assumptions,
+            humanAuthoringBurden);
 
         DecisionProposal updated = proposal with
         {
@@ -469,7 +471,24 @@ public sealed class DecisionRefinementService(
             revision.OptionRevisions ?? [],
             revision.TradeoffRevisions ?? [],
             revision.PriorityAdjustments ?? [],
+            revision.HumanAuthoringBurden,
             revision.Sources);
+    }
+
+    private static HumanAuthoringBurden ClassifyHumanAuthoringBurden(IReadOnlyList<string> changedFields)
+    {
+        string[] generatedContentFields =
+        [
+            "Context",
+            "Options",
+            "Tradeoffs",
+            "Recommendation",
+            "Assumptions"
+        ];
+
+        return changedFields.Any(field => generatedContentFields.Contains(field, StringComparer.Ordinal))
+            ? HumanAuthoringBurden.FullRewrite
+            : HumanAuthoringBurden.MinorEdit;
     }
 
     private static string ChangeType(string? previous, string? revised)

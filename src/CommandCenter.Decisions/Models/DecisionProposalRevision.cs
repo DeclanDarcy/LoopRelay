@@ -1,3 +1,5 @@
+using CommandCenter.Decisions.Primitives;
+
 namespace CommandCenter.Decisions.Models;
 
 public sealed record DecisionProposalRevision(
@@ -29,4 +31,5 @@ public sealed record DecisionProposalRevision(
     IReadOnlyList<DecisionOption>? RevisedOptions = null,
     IReadOnlyList<DecisionTradeoff>? PreviousTradeoffs = null,
     IReadOnlyList<DecisionTradeoff>? RevisedTradeoffs = null,
-    IReadOnlyList<DecisionAssumption>? RevisedAssumptions = null);
+    IReadOnlyList<DecisionAssumption>? RevisedAssumptions = null,
+    HumanAuthoringBurden HumanAuthoringBurden = HumanAuthoringBurden.Unknown);
