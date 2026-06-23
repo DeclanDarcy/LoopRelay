@@ -60,6 +60,18 @@ export type TradeoffImpact = 'Low' | 'Medium' | 'High' | 'Blocking'
 
 export type TradeoffSeverity = 'Info' | 'Low' | 'Medium' | 'High' | 'Blocking'
 
+export type RecommendationMode = 'PreferredOption' | 'PreferredPlusAlternative' | 'NoRecommendation'
+
+export type RecommendationEvidenceType =
+  | 'Benefit'
+  | 'Cost'
+  | 'Risk'
+  | 'Dependency'
+  | 'Consequence'
+  | 'Constraint'
+  | 'PriorDecision'
+  | 'RepositoryState'
+
 export type DecisionSourceReference = {
   sourceKind: string
   relativePath: string | null
@@ -183,10 +195,38 @@ export type DecisionTradeoffAnalysisDiagnostics = {
   diagnostics: string[]
 }
 
+export type RecommendationEvidence = {
+  type: RecommendationEvidenceType
+  optionId: string
+  summary: string
+  evidence: DecisionEvidence[]
+}
+
+export type OptionEvaluation = {
+  optionId: string
+  strengths: string[]
+  weaknesses: string[]
+  risks: string[]
+  constraints: string[]
+  summary: string
+  score: number
+  rank: number
+  scoreExplanation: string
+  evidence: RecommendationEvidence[]
+}
+
 export type DecisionRecommendation = {
   optionId: string
   rationale: string
   evidence: DecisionEvidence[]
+  summary?: string
+  supportingFactors?: string[]
+  concerns?: string[]
+  assumptions?: string[]
+  alternativeExplanations?: string[]
+  mode?: RecommendationMode
+  recommendationEvidence?: RecommendationEvidence[]
+  optionEvaluations?: OptionEvaluation[]
 }
 
 export type DecisionAssumption = {

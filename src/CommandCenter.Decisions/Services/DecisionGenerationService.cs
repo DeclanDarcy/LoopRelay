@@ -16,13 +16,17 @@ public sealed class DecisionGenerationService(
     IOptionGenerationService optionGenerationService,
     IDecisionContextProjectionService? contextProjectionService = null,
     ITradeoffAnalysisService? tradeoffAnalysisService = null,
-    IOptionComparisonService? optionComparisonService = null) : IDecisionGenerationService
+    IOptionComparisonService? optionComparisonService = null,
+    IRecommendationService? recommendationService = null) : IDecisionGenerationService
 {
     private readonly ITradeoffAnalysisService tradeoffAnalysisService =
         tradeoffAnalysisService ?? new TradeoffAnalysisService();
 
     private readonly IOptionComparisonService optionComparisonService =
         optionComparisonService ?? new OptionComparisonService();
+
+    private readonly IRecommendationService recommendationService =
+        recommendationService ?? new RecommendationService();
 
     public async Task<IReadOnlyList<DecisionProposal>> ListProposalsAsync(Guid repositoryId)
     {
@@ -87,10 +91,13 @@ public sealed class DecisionGenerationService(
         DecisionTradeoffAnalysisDiagnostics tradeoffDiagnostics = BuildTradeoffDiagnostics(analyzedOptions, contextFingerprint);
         DecisionTradeoff[] tradeoffs = BuildTradeoffs(analyzedOptions);
         DecisionAssumption[] assumptions = BuildAssumptions(candidate, options, evidence);
-        var recommendation = new DecisionRecommendation(
-            options[0].Id,
-            $"Advisory recommendation: resolve '{candidate.Title}' using the option most directly supported by the promoted candidate evidence.",
-            EvidenceForRecommendation(evidence, candidate));
+        DecisionRecommendation recommendation = this.recommendationService.GenerateRecommendation(
+            candidate,
+            generationContext,
+            options,
+            analyzedOptions,
+            tradeoffComparisons,
+            evidence);
 
         var proposal = new DecisionProposal(
             proposalId,

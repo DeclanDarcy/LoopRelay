@@ -6,52 +6,54 @@ derive a recommendation from context, options, tradeoffs, constraints, risks, an
 
 ## Work
 
-- [ ] Add `IRecommendationService`.
+- [x] Add `IRecommendationService`.
 - [ ] Add `OptionEvaluation` containing:
-  - [ ] strengths
-  - [ ] weaknesses
-  - [ ] risks
-  - [ ] constraints
-  - [ ] summary
-  - [ ] score/ranking metadata only if it remains explainable
+  - [x] strengths
+  - [x] weaknesses
+  - [x] risks
+  - [x] constraints
+  - [x] summary
+  - [x] score/ranking metadata only if it remains explainable
 - [ ] Add `DecisionRecommendation` fields if needed:
-  - [ ] summary
-  - [ ] rationale
-  - [ ] supporting factors
-  - [ ] concerns
-  - [ ] assumptions
-  - [ ] alternative explanation
-  - [ ] mode
+  - [x] summary
+  - [x] rationale
+  - [x] supporting factors
+  - [x] concerns
+  - [x] assumptions
+  - [x] alternative explanation
+  - [x] mode
 - [ ] Add `RecommendationEvidence` and evidence types:
-  - [ ] benefit
-  - [ ] cost
-  - [ ] risk
-  - [ ] dependency
-  - [ ] consequence
-  - [ ] constraint
-  - [ ] prior decision
-  - [ ] repository state
+  - [x] benefit
+  - [x] cost
+  - [x] risk
+  - [x] dependency
+  - [x] consequence
+  - [x] constraint
+  - [x] prior decision
+  - [x] repository state
 - [ ] Support recommendation modes:
-  - [ ] preferred option
-  - [ ] preferred plus alternative
-  - [ ] no recommendation
+  - [x] preferred option
+  - [x] preferred plus alternative
+  - [x] no recommendation
 - [ ] Allow no recommendation when evidence is insufficient, uncertainty is excessive, or contradiction remains unresolved.
-- [ ] Explain why the recommended option won and why each alternative lost.
-- [ ] Generate concerns and assumptions for every recommendation.
-- [ ] Refuse to recommend an option that violates hard constraints unless the recommendation mode is no recommendation or escalation.
-- [ ] Remove hardcoded `options[0]` recommendation behavior.
+  - [x] Excessive uncertainty and all-options-disqualified cases produce no recommendation.
+  - [ ] Evidence-insufficient and contradiction-specific no-recommendation heuristics remain.
+- [x] Explain why the recommended option won and why each alternative lost.
+- [x] Generate concerns and assumptions for every recommendation.
+- [x] Refuse to recommend an option that violates hard constraints unless the recommendation mode is no recommendation or escalation.
+- [x] Remove hardcoded `options[0]` recommendation behavior.
 
 ## Tests
 
-- [ ] Recommendations are derived from structured option evaluations.
-- [ ] Reordering options does not change the recommendation when evidence is unchanged.
-- [ ] Recommended option has supporting evidence.
-- [ ] Alternatives have explicit losing rationale.
-- [ ] Concerns and assumptions are present.
-- [ ] Excessive uncertainty produces no recommendation.
-- [ ] Constraint violation prevents recommendation or produces escalation/no-recommendation.
+- [x] Recommendations are derived from structured option evaluations.
+- [x] Reordering options does not change the recommendation when evidence is unchanged.
+- [x] Recommended option has supporting evidence.
+- [x] Alternatives have explicit losing rationale.
+- [x] Concerns and assumptions are present.
+- [x] Excessive uncertainty produces no recommendation.
+- [x] Constraint violation prevents recommendation or produces escalation/no-recommendation.
 
 ## Exit Criteria
 
-- [ ] The system can answer what it recommends, why, what evidence supports it, what assumptions matter, and why alternatives are weaker.
+- [x] The system can answer what it recommends, why, what evidence supports it, what assumptions matter, and why alternatives are weaker.
 - [ ] At this point the generated proposal contains enough system-authored content for a human to resolve without writing the decision manually.

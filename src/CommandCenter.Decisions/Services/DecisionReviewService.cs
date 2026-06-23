@@ -65,6 +65,7 @@ public sealed class DecisionReviewService(
     {
         Repository repository = await GetRepositoryAsync(repositoryId);
         DecisionProposal proposal = await GetProposalAsync(repository, proposalId);
+        string? recommendedOptionId = RecommendedOptionId(proposal.Recommendation);
         DecisionOptionComparisonItem[] options = proposal.Options
             .Select(option =>
             {
@@ -79,13 +80,13 @@ public sealed class DecisionReviewService(
                     option.Id,
                     option.Title,
                     option.Description,
-                    string.Equals(proposal.Recommendation?.OptionId, option.Id, StringComparison.Ordinal),
+                    string.Equals(recommendedOptionId, option.Id, StringComparison.Ordinal),
                     tradeoffs.Select(tradeoff => tradeoff.Benefit).ToArray(),
                     tradeoffs.Select(tradeoff => tradeoff.Cost).ToArray(),
                     evidence);
             })
             .ToArray();
-        return new DecisionOptionComparison(proposal.Id, proposal.Recommendation?.OptionId, options);
+        return new DecisionOptionComparison(proposal.Id, recommendedOptionId, options);
     }
 
     public async Task<DecisionEvidenceInspection> GetEvidenceInspectionAsync(Guid repositoryId, string proposalId)
@@ -287,6 +288,15 @@ public sealed class DecisionReviewService(
             proposal.Assumptions.Count,
             notes.Count,
             warnings);
+    }
+
+    private static string? RecommendedOptionId(DecisionRecommendation? recommendation)
+    {
+        return recommendation is null ||
+            recommendation.Mode == RecommendationMode.NoRecommendation ||
+            string.IsNullOrWhiteSpace(recommendation.OptionId)
+                ? null
+                : recommendation.OptionId;
     }
 
     private static DecisionEvidenceInspectionItem[] BuildEvidenceItems(DecisionProposal proposal)

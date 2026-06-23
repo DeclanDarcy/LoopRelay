@@ -71,6 +71,8 @@ public sealed class DecisionResolutionService(
         }
 
         bool recommendationDiverged = proposal.Recommendation is not null &&
+            proposal.Recommendation.Mode != RecommendationMode.NoRecommendation &&
+            !string.IsNullOrWhiteSpace(proposal.Recommendation.OptionId) &&
             !string.Equals(proposal.Recommendation.OptionId, selectedOptionId, StringComparison.Ordinal);
         var proposalSource = new DecisionSourceReference(
             "DecisionProposal",

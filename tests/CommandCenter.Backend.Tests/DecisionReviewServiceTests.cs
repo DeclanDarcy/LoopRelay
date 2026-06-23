@@ -252,7 +252,12 @@ public sealed class DecisionReviewServiceTests
         Assert.Equal(HttpStatusCode.BadRequest, badFilterResponse.StatusCode);
         Assert.Single(browser);
         Assert.Equal(DecisionReviewState.Viewed, browser[0].ReviewState);
-        Assert.Equal("option-1", comparison.RecommendedOptionId);
+        Assert.Equal(
+            string.IsNullOrWhiteSpace(proposal.Recommendation?.OptionId) ||
+                proposal.Recommendation.Mode == RecommendationMode.NoRecommendation
+                    ? null
+                    : proposal.Recommendation.OptionId,
+            comparison.RecommendedOptionId);
         Assert.Contains(evidence.Items, item => item.AppliesToKind == "Option");
         Assert.Contains(sources, source => source.SourceKind == "Plan" && source.RelativePath == ".agents/plan.md");
     }

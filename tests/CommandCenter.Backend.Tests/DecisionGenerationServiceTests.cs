@@ -148,7 +148,9 @@ public sealed class DecisionGenerationServiceTests
         Assert.Contains(proposal.Options, option => option.Type == second);
         Assert.Contains(proposal.Options, option => option.Type == third);
         Assert.All(proposal.Options, option => Assert.NotEmpty(option.Evidence));
-        Assert.Equal("option-1", proposal.Recommendation?.OptionId);
+        Assert.NotNull(proposal.Recommendation);
+        Assert.Contains(proposal.Options, option => option.Id == proposal.Recommendation.OptionId);
+        Assert.NotEmpty(proposal.Recommendation.OptionEvaluations);
     }
 
     [Fact]
@@ -298,6 +300,116 @@ public sealed class DecisionGenerationServiceTests
         });
         Assert.Contains(proposal.TradeoffComparisons, comparison =>
             comparison.UniqueRisks.Any(risk => risk.Contains("Unknown downstream impact", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    [Fact]
+    public async Task GenerateProposalDerivesRecommendationFromStructuredEvaluations()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        DecisionEvidence evidence = CandidateEvidence(candidate);
+        DecisionOption weak = TestOption("option-weak", "Defer persistence decision", DecisionOptionType.Delay, evidence);
+        DecisionOption strong = TestOption("option-strong", "Refactor persistence boundary", DecisionOptionType.Refactor, evidence);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var service = CreateGenerationService(
+            repository,
+            store,
+            decisionRepository,
+            new RejectedDiagnosticOptionGenerationService(OptionGenerationResult([weak, strong])));
+
+        DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
+
+        Assert.NotNull(proposal.Recommendation);
+        Assert.Equal("option-strong", proposal.Recommendation.OptionId);
+        Assert.Equal(RecommendationMode.PreferredPlusAlternative, proposal.Recommendation.Mode);
+        Assert.NotEmpty(proposal.Recommendation.SupportingFactors);
+        Assert.NotEmpty(proposal.Recommendation.Concerns);
+        Assert.NotEmpty(proposal.Recommendation.Assumptions);
+        Assert.Contains(proposal.Recommendation.AlternativeExplanations, explanation =>
+            explanation.Contains("option-weak", StringComparison.Ordinal));
+        Assert.Contains(proposal.Recommendation.RecommendationEvidence, item =>
+            item.Type == RecommendationEvidenceType.Benefit &&
+            item.OptionId == "option-strong");
+        OptionEvaluation strongEvaluation = Assert.Single(
+            proposal.Recommendation.OptionEvaluations,
+            evaluation => evaluation.OptionId == "option-strong");
+        Assert.Equal(1, strongEvaluation.Rank);
+        Assert.Contains("Score", strongEvaluation.ScoreExplanation, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RecommendationDoesNotDependOnGeneratedOptionOrdering()
+    {
+        DecisionProposal first = await GenerateWithOptionsAsync([
+            TestOption("option-weak", "Defer persistence decision", DecisionOptionType.Delay),
+            TestOption("option-strong", "Refactor persistence boundary", DecisionOptionType.Refactor)
+        ]);
+        DecisionProposal second = await GenerateWithOptionsAsync([
+            TestOption("option-strong", "Refactor persistence boundary", DecisionOptionType.Refactor),
+            TestOption("option-weak", "Defer persistence decision", DecisionOptionType.Delay)
+        ]);
+
+        Assert.Equal("option-strong", first.Recommendation?.OptionId);
+        Assert.Equal(first.Recommendation?.OptionId, second.Recommendation?.OptionId);
+        Assert.Equal(
+            first.Recommendation?.OptionEvaluations.Select(evaluation => evaluation.OptionId),
+            second.Recommendation?.OptionEvaluations.Select(evaluation => evaluation.OptionId));
+    }
+
+    [Fact]
+    public async Task ExcessiveUnknownRiskProducesNoRecommendation()
+    {
+        DecisionProposal proposal = await GenerateWithOptionsAsync([
+            TestOption("option-delay", "Defer persistence decision", DecisionOptionType.Delay),
+            TestOption("option-investigate", "Investigate persistence decision", DecisionOptionType.Investigate)
+        ]);
+
+        Assert.NotNull(proposal.Recommendation);
+        Assert.Equal(RecommendationMode.NoRecommendation, proposal.Recommendation.Mode);
+        Assert.Equal(string.Empty, proposal.Recommendation.OptionId);
+        Assert.Contains(proposal.Recommendation.Concerns, concern =>
+            concern.Contains("uncertainty", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task DisqualifyingConstraintsPreventConstraintViolatingRecommendation()
+    {
+        Repository repository = CreateRepository();
+        await WriteAsync(
+            repository,
+            ".agents/plan.md",
+            """
+            # Plan
+
+            - Constraint: preserve compatibility for persistence schema consumers; must not replace the persistence architecture.
+            """);
+        DecisionCandidate candidate = CreateCandidate(
+            repository.Id,
+            DecisionCandidateState.Promoted,
+            signalKind: "ConstraintConflict",
+            classification: DecisionClassification.Architectural);
+        DecisionEvidence evidence = CandidateEvidence(candidate);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var service = CreateGenerationService(
+            repository,
+            store,
+            decisionRepository,
+            new RejectedDiagnosticOptionGenerationService(OptionGenerationResult([
+                TestOption("option-replace-a", "Replace persistence architecture", DecisionOptionType.Replace, evidence),
+                TestOption("option-replace-b", "Replace persistence storage", DecisionOptionType.Replace, evidence)
+            ])));
+
+        DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
+
+        Assert.NotNull(proposal.Recommendation);
+        Assert.Equal(RecommendationMode.NoRecommendation, proposal.Recommendation.Mode);
+        Assert.Equal(string.Empty, proposal.Recommendation.OptionId);
+        Assert.All(proposal.Recommendation.OptionEvaluations, evaluation =>
+            Assert.NotEmpty(evaluation.Constraints));
     }
 
     [Fact]
@@ -720,6 +832,7 @@ public sealed class DecisionGenerationServiceTests
         DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
         await service.MarkProposalReadyForResolutionAsync(repository.Id, proposal.Id, "Ready for human resolution.");
         string operationalContextBefore = await ReadAsync(repository, ".agents/operational_context.md");
+        string selectedOptionId = proposal.Recommendation?.OptionId ?? "option-1";
 
         Decision decision = await resolutionService.ResolveProposalAsync(
             repository.Id,
@@ -727,12 +840,12 @@ public sealed class DecisionGenerationServiceTests
             new ResolveDecisionCommand(
                 "Accept the proposed persistence direction.",
                 "human-reviewer",
-                "option-1"));
+                selectedOptionId));
 
         Assert.Equal("DEC-0001", decision.Id.Value);
         Assert.Equal(DecisionState.Resolved, decision.State);
         Assert.Equal(DecisionOutcome.Accepted, decision.Resolution?.Outcome);
-        Assert.Equal("option-1", decision.Resolution?.SelectedOptionId);
+        Assert.Equal(selectedOptionId, decision.Resolution?.SelectedOptionId);
         Assert.Equal("human-reviewer", decision.Resolution?.ResolvedBy);
         Assert.False(decision.Resolution?.RecommendationDiverged);
         Assert.NotNull(decision.Resolution?.SourceProposalSnapshot);
@@ -749,7 +862,7 @@ public sealed class DecisionGenerationServiceTests
         string index = await ReadAsync(repository, ".agents/decisions/decisions.md");
         string operationalContextAfter = await ReadAsync(repository, ".agents/operational_context.md");
         Assert.Equal(DecisionProposalState.Resolved, resolvedProposal?.State);
-        Assert.Contains("- Selected option: option-1", decisionMarkdown);
+        Assert.Contains($"- Selected option: {selectedOptionId}", decisionMarkdown);
         Assert.Contains("- Resolved by: human-reviewer", decisionMarkdown);
         Assert.Contains("- Recommendation diverged: False", decisionMarkdown);
         Assert.Contains("- Source proposal: PROP-0001", decisionMarkdown);
@@ -1912,6 +2025,77 @@ public sealed class DecisionGenerationServiceTests
             null);
 
         Assert.Equal(HttpStatusCode.Conflict, generateResponse.StatusCode);
+    }
+
+    private static async Task<DecisionProposal> GenerateWithOptionsAsync(IReadOnlyList<DecisionOption> options)
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        DecisionEvidence evidence = CandidateEvidence(candidate);
+        DecisionOption[] generatedOptions = options
+            .Select(option => option with
+            {
+                Evidence = option.Evidence.Count == 0
+                    ? [evidence]
+                    : option.Evidence
+            })
+            .ToArray();
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var service = CreateGenerationService(
+            repository,
+            store,
+            decisionRepository,
+            new RejectedDiagnosticOptionGenerationService(OptionGenerationResult(generatedOptions)));
+
+        return await service.GenerateProposalAsync(repository.Id, candidate.Id);
+    }
+
+    private static DecisionOption TestOption(
+        string id,
+        string title,
+        DecisionOptionType type,
+        DecisionEvidence? evidence = null)
+    {
+        return new DecisionOption(
+            id,
+            title,
+            $"Generated test option for {title}.",
+            evidence is null ? [] : [evidence])
+        {
+            Type = type,
+            Assumptions = ["Generated test assumption."],
+            Dependencies = ["Generated test dependency."]
+        };
+    }
+
+    private static DecisionEvidence CandidateEvidence(DecisionCandidate candidate)
+    {
+        return new DecisionEvidence(
+            "Plan requires a persistence decision.",
+            [new DecisionSourceReference(
+                "Plan",
+                ".agents/plan.md",
+                Section: "Plan",
+                ItemId: "plan",
+                CandidateId: candidate.Id,
+                Excerpt: candidate.Summary)]);
+    }
+
+    private static DecisionOptionGenerationResult OptionGenerationResult(IReadOnlyList<DecisionOption> options)
+    {
+        return new DecisionOptionGenerationResult(
+            options,
+            [],
+            new DecisionGenerationDiagnostics(
+                options.Count,
+                options.Count,
+                0,
+                0,
+                0,
+                [],
+                ["Generated by recommendation test."]));
     }
 
     private static DecisionGenerationService CreateGenerationService(

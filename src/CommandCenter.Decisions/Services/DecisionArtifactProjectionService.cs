@@ -407,8 +407,74 @@ public sealed class DecisionArtifactProjectionService(
         }
         else
         {
-            markdown.Fields(("Option", proposal.Recommendation.OptionId));
+            markdown.Fields(
+                ("Mode", proposal.Recommendation.Mode.ToString()),
+                ("Option", string.IsNullOrWhiteSpace(proposal.Recommendation.OptionId)
+                    ? "None"
+                    : proposal.Recommendation.OptionId),
+                ("Summary", string.IsNullOrWhiteSpace(proposal.Recommendation.Summary)
+                    ? "None."
+                    : proposal.Recommendation.Summary));
             markdown.Paragraph(proposal.Recommendation.Rationale);
+            markdown.H3("Supporting Factors");
+            foreach (string factor in proposal.Recommendation.SupportingFactors.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(factor);
+            }
+
+            markdown.EmptyListIf(proposal.Recommendation.SupportingFactors.Count == 0);
+            markdown.H3("Concerns");
+            foreach (string concern in proposal.Recommendation.Concerns.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(concern);
+            }
+
+            markdown.EmptyListIf(proposal.Recommendation.Concerns.Count == 0);
+            markdown.H3("Assumptions");
+            foreach (string assumption in proposal.Recommendation.Assumptions.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(assumption);
+            }
+
+            markdown.EmptyListIf(proposal.Recommendation.Assumptions.Count == 0);
+            markdown.H3("Alternative Explanations");
+            foreach (string explanation in proposal.Recommendation.AlternativeExplanations.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(explanation);
+            }
+
+            markdown.EmptyListIf(proposal.Recommendation.AlternativeExplanations.Count == 0);
+            markdown.H3("Option Evaluations");
+            foreach (OptionEvaluation evaluation in proposal.Recommendation.OptionEvaluations
+                .OrderBy(evaluation => evaluation.Rank)
+                .ThenBy(evaluation => evaluation.OptionId, StringComparer.Ordinal))
+            {
+                markdown.H4($"{evaluation.Rank}. {evaluation.OptionId}");
+                markdown.Fields(
+                    ("Score", evaluation.Score.ToString()),
+                    ("Summary", evaluation.Summary),
+                    ("Score explanation", evaluation.ScoreExplanation));
+                markdown.H4("Constraints");
+                foreach (string constraint in evaluation.Constraints.Order(StringComparer.Ordinal))
+                {
+                    markdown.Bullet(constraint);
+                }
+
+                markdown.EmptyListIf(evaluation.Constraints.Count == 0);
+            }
+
+            markdown.EmptyListIf(proposal.Recommendation.OptionEvaluations.Count == 0);
+            markdown.H3("Recommendation Evidence");
+            foreach (RecommendationEvidence item in proposal.Recommendation.RecommendationEvidence
+                .OrderBy(item => item.Type.ToString(), StringComparer.Ordinal)
+                .ThenBy(item => item.OptionId, StringComparer.Ordinal)
+                .ThenBy(item => item.Summary, StringComparer.Ordinal))
+            {
+                markdown.Bullet($"{item.Type} | {item.OptionId}: {item.Summary}");
+                markdown.NestedEvidenceList(item.Evidence);
+            }
+
+            markdown.EmptyListIf(proposal.Recommendation.RecommendationEvidence.Count == 0);
             markdown.H3("Evidence");
             markdown.EvidenceList(proposal.Recommendation.Evidence);
         }
