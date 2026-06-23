@@ -12,13 +12,13 @@ Goal: implement durable events, threads, relationships, references, provenance, 
 - [x] Implement `ReasoningArtifactPaths` with safe relative paths and ID validation.
 - [x] Implement `IReasoningRepository` and `FileSystemReasoningRepository`.
 - [x] Implement `IReasoningArtifactProjectionService` and markdown projections for events, threads, and relationships.
-- [ ] Implement `IReasoningEventService`, `IReasoningThreadService`, and `IReasoningRelationshipService`.
+- [x] Implement `IReasoningEventService`, `IReasoningThreadService`, and `IReasoningRelationshipService`.
 - [x] Enforce event immutability.
 - [x] Enforce event provenance.
 - [x] Validate supported reference kinds.
 - [x] Validate relationship source and target references.
 - [x] Add `AddReasoning()` service registration.
-- [ ] Map event, thread, and relationship endpoints.
+- [x] Map event, thread, and relationship endpoints.
 
 ## UI Work
 
@@ -39,7 +39,7 @@ Goal: implement durable events, threads, relationships, references, provenance, 
 - [x] Thread persistence and event grouping round trip.
 - [x] Relationship persistence and validation round trip.
 - [x] Markdown projections are deterministic.
-- [ ] Endpoints return expected status codes.
+- [x] Endpoints return expected status codes.
 - [x] Creating hypothesis, alternative, contradiction, or direction family events does not create corresponding entity directories.
 - [ ] Event-family sequences produce derived display status only; they do not authorize lifecycle mutations.
 - [ ] UI characterization covers event feed, empty states, provenance display, and thread selection.

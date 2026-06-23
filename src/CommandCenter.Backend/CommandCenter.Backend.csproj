@@ -12,6 +12,7 @@
     <ProjectReference Include="..\CommandCenter.Decisions\CommandCenter.Decisions.csproj" />
     <ProjectReference Include="..\CommandCenter.Execution\CommandCenter.Execution.csproj" />
     <ProjectReference Include="..\CommandCenter.Middle\CommandCenter.Middle.csproj" />
+    <ProjectReference Include="..\CommandCenter.Reasoning\CommandCenter.Reasoning.csproj" />
   </ItemGroup>
 
 </Project>

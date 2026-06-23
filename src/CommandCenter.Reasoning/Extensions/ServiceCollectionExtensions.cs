@@ -11,6 +11,9 @@ public static class ServiceCollectionExtensions
     {
         services.AddSingleton<IReasoningArtifactProjectionService, ReasoningArtifactProjectionService>();
         services.AddSingleton<IReasoningRepository, FileSystemReasoningRepository>();
+        services.AddSingleton<IReasoningEventService, ReasoningEventService>();
+        services.AddSingleton<IReasoningThreadService, ReasoningThreadService>();
+        services.AddSingleton<IReasoningRelationshipService, ReasoningRelationshipService>();
         return services;
     }
 }

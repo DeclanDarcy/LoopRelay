@@ -14,6 +14,7 @@ using CommandCenter.Continuity.Abstractions;
 using CommandCenter.Execution.Extensions;
 using CommandCenter.Continuity.Extensions;
 using CommandCenter.Decisions.Extensions;
+using CommandCenter.Reasoning.Extensions;
 
 namespace CommandCenter.Backend;
 
@@ -32,6 +33,7 @@ public static class Program
         builder.Services.AddSingleton<IArtifactRotationService, ArtifactRotationService>();
         builder.Services.AddContinuity();
         builder.Services.AddDecisions();
+        builder.Services.AddReasoning();
         // Generation lives in Middle (it depends on Execution), so it is wired here
         // rather than inside AddContinuity().
         builder.Services.AddSingleton<IOperationalContextGenerationService, OperationalContextGenerationService>();
@@ -66,6 +68,7 @@ public static class Program
         app.MapGitEndpoints();
         app.MapExecutionSessionsEndpoints();
         app.MapDecisionEndpoints();
+        app.MapReasoningEndpoints();
 
         return app;
     }

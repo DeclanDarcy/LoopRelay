@@ -175,7 +175,7 @@ public sealed class FileSystemReasoningRepository(
             relationship.Target.Kind == command.Target.Kind &&
             string.Equals(relationship.Target.Id, command.Target.Id, StringComparison.Ordinal)))
         {
-            throw new ReasoningValidationException("Reasoning relationship already exists.");
+            throw new ReasoningConflictException("Reasoning relationship already exists.");
         }
 
         string id = await AllocateIdAsync(repository, ReasoningArtifactPaths.RelationshipsRootPath(), "REL");

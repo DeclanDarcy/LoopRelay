@@ -2,31 +2,30 @@
 
 ## New State From This Slice
 
-- Began Milestone 1: Reasoning Event Substrate.
-- Added `src/CommandCenter.Reasoning` and registered it in `CommandCenter.slnx`.
-- Added backend reasoning primitives and models for events, threads, relationships, references, provenance, IDs, families, types, themes, and relationship types.
-- Added `ReasoningArtifactDocument<T>`, deterministic `ReasoningJson.Options`, and `ReasoningArtifactPaths`.
-- Added `IReasoningRepository`, `IReasoningArtifactProjectionService`, `FileSystemReasoningRepository`, `ReasoningArtifactProjectionService`, `ReasoningValidationException`, and `AddReasoning()`.
-- Implemented repository-scoped sequence ID allocation by scanning existing artifact directories.
-- Implemented JSON persistence plus deterministic Markdown projections for event, thread, and relationship artifacts.
-- Enforced schema version checks, repository ownership checks, path/id validation, event provenance, event append-only creation, reasoning-reference validation, duplicate relationship rejection, and required reasoning endpoint existence for reasoning-event/thread relationships.
-- Added `tests/CommandCenter.Backend.Tests/ReasoningRepositoryTests.cs` and test project reference to `CommandCenter.Reasoning`.
-- Updated `.agents/milestones/m1-event-substrate.md` to mark completed backend substrate and test items.
-- Rotated previous handoff to `.agents/handoffs/handoff.0001.md`.
+- Continued Milestone 1 backend API work.
+- Added `IReasoningEventService`, `IReasoningThreadService`, and `IReasoningRelationshipService`.
+- Added service implementations that resolve repository IDs through `IRepositoryService` and delegate durable operations to `IReasoningRepository`.
+- Registered reasoning services through `AddReasoning()` and wired `AddReasoning()` into backend startup.
+- Added backend project reference to `CommandCenter.Reasoning`.
+- Added repository-scoped reasoning endpoints for event list/get/create, thread list/get/create/append-event, and relationship list/create.
+- Added `AppendReasoningThreadEventRequest`.
+- Added `ReasoningConflictException` and mapped unresolved required reasoning references / duplicate relationships to HTTP `409` at the service/API boundary while preserving repository validation behavior.
+- Added `ReasoningEndpointTests` covering success paths plus `404`, `400`, and `409` endpoint status codes.
+- Updated `.agents/milestones/m1-event-substrate.md` to mark service contracts, endpoint mapping, and endpoint status-code coverage complete.
+- Rotated previous handoff to `.agents/handoffs/handoff.0002.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes: 365 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passes: 367 tests.
 - `dotnet build CommandCenter.slnx` passes with 0 warnings and 0 errors.
 
 ## Current Gaps
 
-- `IReasoningEventService`, `IReasoningThreadService`, and `IReasoningRelationshipService` are not yet separated from repository orchestration.
-- Backend reasoning endpoints are not mapped yet.
-- Backend service registration is available but not yet called from `CommandCenter.Backend/Program.cs`.
-- UI and Tauri reasoning work has not started.
-- Endpoint status-code tests and UI characterization tests remain pending.
+- Milestone 1 UI work has not started.
+- Tauri bridge commands for reasoning are still future plan work.
+- Derived display status for event-family sequences remains unimplemented.
+- UI characterization tests for event feed, empty states, provenance display, and thread selection remain pending.
 
 ## Next Slice
 
-- Add service-layer contracts/implementations for events, threads, and relationships, wire `AddReasoning()` into backend startup, add `ReasoningEndpoints.cs`, and cover endpoint status codes for list/get/create/append operations.
+- Start the Milestone 1 UI surface: add reasoning DTO/API/hook plumbing, add the Reasoning tab shell entry and navigation target, then implement a minimal event feed/thread panel against the new backend endpoints with characterization tests.
