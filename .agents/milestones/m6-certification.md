@@ -4,59 +4,59 @@ Objective: prove lifecycle correctness without adding new lifecycle behavior.
 
 Add certification models:
 
-- [ ] `DecisionSessionCertificationResult`
-- [ ] `DecisionSessionCertificationFinding`
-- [ ] `DecisionSessionCertificationReport`
-- [ ] `DecisionSessionGovernanceReport`
-- [ ] `DecisionSessionHealthReport`
-- [ ] `DecisionSessionLifecycleEndToEndFixture`
+- [x] `DecisionSessionCertificationResult`
+- [x] `DecisionSessionCertificationFinding`
+- [x] `DecisionSessionCertificationReport`
+- [x] `DecisionSessionGovernanceReport`
+- [x] `DecisionSessionHealthReport`
+- [x] `DecisionSessionLifecycleEndToEndFixture`
 
 Add certification service:
 
-- [ ] `IDecisionSessionCertificationService`
-- [ ] `DecisionSessionCertificationService`
+- [x] `IDecisionSessionCertificationService`
+- [x] `DecisionSessionCertificationService`
 
 Certification categories:
 
-- [ ] Authority
-- [ ] Single active session
-- [ ] Analysis determinism
-- [ ] TTL and cache risk
-- [ ] Policy determinism
-- [ ] Transfer eligibility
-- [ ] Continuity artifact
-- [ ] Transfer
-- [ ] Recovery
-- [ ] Continuity
-- [ ] Workflow integration
-- [ ] Diagnostics
-- [ ] Health
+- [x] Authority
+- [x] Single active session
+- [x] Analysis determinism
+- [x] TTL and cache risk
+- [x] Policy determinism
+- [x] Transfer eligibility
+- [x] Continuity artifact
+- [x] Transfer
+- [x] Recovery
+- [x] Continuity
+- [x] Workflow integration
+- [x] Diagnostics
+- [x] Health
 
 Certification rules:
 
-- [ ] Fail if more than one active session exists.
+- [x] Fail if more than one active session exists.
 - [ ] Fail if analysis is non-deterministic for identical inputs.
-- [ ] Fail if TTL or cache miss risk is missing from analysis.
+- [x] Fail if TTL or cache miss risk is missing from analysis.
 - [ ] Fail if policy is non-deterministic for identical inputs.
-- [ ] Fail if transfer executes while eligibility is blocked or deferred.
-- [ ] Fail if transfer lacks a valid continuity artifact.
-- [ ] Fail if transfer lacks source session retirement, replacement session activation, or continuity evidence.
+- [x] Fail if transfer executes while eligibility is blocked or deferred.
+- [x] Fail if transfer lacks a valid continuity artifact.
+- [x] Fail if transfer lacks source session retirement, replacement session activation, or continuity evidence.
 - [ ] Fail if recovery cannot rebuild missing analysis, policy, or eligibility snapshots.
 - [ ] Fail if workflow can mutate lifecycle state.
-- [ ] Fail if lifecycle state lacks diagnostics.
-- [ ] Fail if health reports healthy while evidence contradicts it.
-- [ ] Certification may inspect, validate, report, and fail.
-- [ ] Certification must not repair, transfer, retire, create sessions, or change policy.
+- [x] Fail if lifecycle state lacks diagnostics.
+- [x] Fail if health reports healthy while evidence contradicts it.
+- [x] Certification may inspect, validate, report, and fail.
+- [x] Certification must not repair, transfer, retire, create sessions, or change policy.
 
 Backend endpoints:
 
-- [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/certification`
-- [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/certification/report`
-- [ ] `POST /api/repositories/{repositoryId:guid}/decision-sessions/certification`
+- [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/certification`
+- [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/certification/report`
+- [x] `POST /api/repositories/{repositoryId:guid}/decision-sessions/certification`
 
 Persistence:
 
-- [ ] Certification reports under `.agents/decision-sessions/certification/`.
+- [x] Certification reports under `.agents/decision-sessions/certification/`.
 - [ ] Optional markdown reports under `.agents/decision-sessions/reports/`.
 
 End-to-end fixture:
@@ -76,12 +76,12 @@ End-to-end fixture:
 Tests:
 
 - [ ] Authority boundary: workflow cannot transfer.
-- [ ] Single-active-session certification fails on duplicates.
+- [x] Single-active-session certification fails on duplicates.
 - [ ] Analysis determinism passes for identical inputs.
-- [ ] TTL and cache risk appear in certification evidence.
+- [x] TTL and cache risk appear in certification evidence.
 - [ ] Policy determinism passes for identical inputs.
-- [ ] Eligibility prevents unsafe transfer.
-- [ ] Transfer preserves continuity through a valid continuity artifact.
+- [x] Eligibility prevents unsafe transfer.
+- [x] Transfer preserves continuity through a valid continuity artifact.
 - [ ] Recovery reconstructs active session and derived snapshots.
 - [ ] Diagnostics exist for continue, transfer, eligibility blocked, recovery, and failure states.
 - [ ] Workflow consumes lifecycle correctly.
@@ -89,8 +89,8 @@ Tests:
 
 Exit criteria:
 
-- [ ] Certification service exists.
-- [ ] Certification reports are persisted.
+- [x] Certification service exists.
+- [x] Certification reports are persisted.
 - [ ] End-to-end lifecycle fixture passes.
 - [ ] The system can prove governance continuity survives long horizons, transfer preserves continuity, recovery reconstructs truth, workflow remains a consumer, and at most one active governance session exists.
 

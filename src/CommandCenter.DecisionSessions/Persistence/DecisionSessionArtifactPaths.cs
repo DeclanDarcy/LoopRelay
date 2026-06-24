@@ -31,6 +31,10 @@ public static class DecisionSessionArtifactPaths
 
     public static string RecoveryJson(string recoveryId) => ArtifactPath.CombineRelative(".agents", "decision-sessions", "recovery", recoveryId);
 
+    public static string CertificationDirectory() => ArtifactPath.CombineRelative(".agents", "decision-sessions", "certification");
+
+    public static string CertificationJson(string reportId) => ArtifactPath.CombineRelative(".agents", "decision-sessions", "certification", reportId);
+
     public static string Resolve(Repository repository, string relativePath)
     {
         return ArtifactPath.ResolveRepositoryPath(repository, relativePath);

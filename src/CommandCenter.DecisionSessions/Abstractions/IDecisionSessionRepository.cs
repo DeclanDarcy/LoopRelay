@@ -49,4 +49,8 @@ public interface IDecisionSessionRepository
     Task<IReadOnlyList<DecisionSessionRecoveryResult>> ListRecoveryResultsAsync(Repository repository);
 
     Task WriteRecoveryResultAsync(Repository repository, DecisionSessionRecoveryResult result);
+
+    Task<IReadOnlyList<DecisionSessionCertificationReport>> ListCertificationReportsAsync(Repository repository);
+
+    Task WriteCertificationReportAsync(Repository repository, DecisionSessionCertificationReport report);
 }

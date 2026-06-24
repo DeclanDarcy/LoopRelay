@@ -520,6 +520,60 @@ public sealed class FileSystemDecisionSessionRepository(IArtifactStore artifactS
         await artifactStore.WriteAsync(path, JsonSerializer.Serialize(document, DecisionSessionJson.Options));
     }
 
+    public async Task<IReadOnlyList<DecisionSessionCertificationReport>> ListCertificationReportsAsync(Repository repository)
+    {
+        string root = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.CertificationDirectory());
+        IReadOnlyList<string> files = (await artifactStore.ListAsync(root, "*.json"))
+            .Where(file => Path.GetFileName(file).StartsWith("certification.", StringComparison.Ordinal))
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var reports = new List<DecisionSessionCertificationReport>();
+        foreach (string file in files)
+        {
+            string? json = await artifactStore.ReadAsync(file);
+            if (json is null)
+            {
+                continue;
+            }
+
+            DecisionSessionArtifactDocument<DecisionSessionCertificationReport>? document =
+                JsonSerializer.Deserialize<DecisionSessionArtifactDocument<DecisionSessionCertificationReport>>(
+                    json,
+                    DecisionSessionJson.Options);
+            if (document is null)
+            {
+                throw new DecisionSessionValidationException("Decision session certification report could not be deserialized.");
+            }
+
+            ValidateDocument(repository, document, "Decision session certification report");
+            ValidateCertificationReport(repository, document.Payload);
+            if (!string.Equals(Path.GetFileName(file), document.Payload.ReportId, StringComparison.Ordinal))
+            {
+                throw new DecisionSessionValidationException("Decision session certification report id does not match its path.");
+            }
+
+            reports.Add(document.Payload);
+        }
+
+        return reports
+            .OrderBy(report => report.GeneratedAt)
+            .ThenBy(report => report.ReportId, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    public async Task WriteCertificationReportAsync(Repository repository, DecisionSessionCertificationReport report)
+    {
+        ValidateCertificationReport(repository, report);
+        var document = new DecisionSessionArtifactDocument<DecisionSessionCertificationReport>(
+            DecisionSessionArtifactPaths.SchemaVersion,
+            repository.Id,
+            report.GeneratedAt,
+            DateTimeOffset.UtcNow,
+            report);
+        string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.CertificationJson(report.ReportId));
+        await artifactStore.WriteAsync(path, JsonSerializer.Serialize(document, DecisionSessionJson.Options));
+    }
+
     internal async Task<DecisionSessionValidationResult> ValidateAsync(Repository repository)
     {
         string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.RegistryJson());
@@ -693,6 +747,35 @@ public sealed class FileSystemDecisionSessionRepository(IArtifactStore artifactS
             !recoveryId.EndsWith(".json", StringComparison.Ordinal))
         {
             throw new ArgumentException("Decision session recovery id is invalid.", nameof(recoveryId));
+        }
+    }
+
+    private static void ValidateCertificationReport(Repository repository, DecisionSessionCertificationReport report)
+    {
+        ValidateCertificationReportId(report.ReportId);
+        if (report.RepositoryId != repository.Id ||
+            report.Result.RepositoryId != repository.Id ||
+            report.Governance.RepositoryId != repository.Id ||
+            report.Health.RepositoryId != repository.Id)
+        {
+            throw new DecisionSessionValidationException("Decision session certification report belongs to a different repository.");
+        }
+
+        if (!string.Equals(report.ReportId, report.Result.Id, StringComparison.Ordinal))
+        {
+            throw new DecisionSessionValidationException("Decision session certification report id does not match its result id.");
+        }
+    }
+
+    private static void ValidateCertificationReportId(string reportId)
+    {
+        if (string.IsNullOrWhiteSpace(reportId) ||
+            reportId.Contains(Path.DirectorySeparatorChar) ||
+            reportId.Contains(Path.AltDirectorySeparatorChar) ||
+            !reportId.StartsWith("certification.", StringComparison.Ordinal) ||
+            !reportId.EndsWith(".json", StringComparison.Ordinal))
+        {
+            throw new ArgumentException("Decision session certification report id is invalid.", nameof(reportId));
         }
     }
 

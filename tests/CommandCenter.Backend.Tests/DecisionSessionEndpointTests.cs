@@ -110,6 +110,17 @@ public sealed class DecisionSessionEndpointTests
         WorkflowGovernanceSummary? workflowSummary = await client.GetFromJsonAsync<WorkflowGovernanceSummary>(
             $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/workflow/summary",
             DecisionSessionTestHarness.CreateJsonOptions());
+        DecisionSessionCertificationReport? currentCertification = await client.GetFromJsonAsync<DecisionSessionCertificationReport>(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/certification/report",
+            DecisionSessionTestHarness.CreateJsonOptions());
+        HttpResponseMessage runCertificationResponse = await client.PostAsync(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/certification",
+            null);
+        DecisionSessionCertificationReport? persistedCertification = await runCertificationResponse.Content.ReadFromJsonAsync<DecisionSessionCertificationReport>(
+            DecisionSessionTestHarness.CreateJsonOptions());
+        DecisionSessionCertificationReport? latestCertification = await client.GetFromJsonAsync<DecisionSessionCertificationReport>(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/certification",
+            DecisionSessionTestHarness.CreateJsonOptions());
 
         Assert.NotNull(sessions);
         Assert.Single(sessions);
@@ -182,6 +193,14 @@ public sealed class DecisionSessionEndpointTests
         Assert.Equal(harness.Repository.Id, workflowInfluence.RepositoryId);
         Assert.NotNull(workflowSummary);
         Assert.Equal(created.Id.ToString(), workflowSummary.DecisionSessionId);
+        Assert.NotNull(currentCertification);
+        Assert.Equal(harness.Repository.Id, currentCertification.RepositoryId);
+        Assert.Contains(currentCertification.Result.Findings, finding => finding.Id == "registry-single-active-session");
+        Assert.True(runCertificationResponse.IsSuccessStatusCode);
+        Assert.NotNull(persistedCertification);
+        Assert.Equal(harness.Repository.Id, persistedCertification.RepositoryId);
+        Assert.NotNull(latestCertification);
+        Assert.Equal(persistedCertification.ReportId, latestCertification.ReportId);
     }
 
     [Fact]

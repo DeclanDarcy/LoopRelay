@@ -185,6 +185,21 @@ public static class DecisionSessionEndpoints
             IWorkflowDecisionSessionService workflowDecisionSessionService) =>
             await HandleAsync(() => workflowDecisionSessionService.GetSummaryAsync(repositoryId)));
 
+        group.MapGet("/certification", async (
+            Guid repositoryId,
+            IDecisionSessionCertificationService certificationService) =>
+            await HandleAsync(() => certificationService.GetLatestReportAsync(repositoryId)));
+
+        group.MapGet("/certification/report", async (
+            Guid repositoryId,
+            IDecisionSessionCertificationService certificationService) =>
+            await HandleAsync(() => certificationService.GetCurrentReportAsync(repositoryId)));
+
+        group.MapPost("/certification", async (
+            Guid repositoryId,
+            IDecisionSessionCertificationService certificationService) =>
+            await HandleAsync(() => certificationService.RunCertificationAsync(repositoryId)));
+
         return app;
     }
 

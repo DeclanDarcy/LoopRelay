@@ -29,6 +29,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IDecisionSessionContinuityIntegrationService, DecisionSessionContinuityIntegrationService>();
         services.AddSingleton<IDecisionSessionTransferService, DecisionSessionTransferService>();
         services.AddSingleton<IDecisionSessionObservabilityService, DecisionSessionObservabilityService>();
+        services.AddSingleton<IDecisionSessionCertificationService, DecisionSessionCertificationService>();
         services.AddHostedService<DecisionSessionRecoveryHostedService>();
         return services;
     }
