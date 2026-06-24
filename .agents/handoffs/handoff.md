@@ -2,33 +2,26 @@
 
 ## New State This Slice
 
-- Milestone 1 workflow visibility progressed beyond the projection-backed rails:
-  - Added `src/CommandCenter.UI/src/features/workflow/WorkflowPanels.tsx`.
-  - Added `WorkflowOverviewPanel`, `WorkflowHistoryPanel`, `WorkflowGatePanel`, `WorkflowContinuationPanel`, `WorkflowRecoveryPanel`, `WorkflowHealthPanel`, and `WorkflowCertificationPanel`.
-  - Added `WorkflowOperationsPanel`, which consumes the existing workflow hooks and remains presentation-only.
-- `WorkspaceTab` now accepts a `workflowOperations` slot and renders it directly below the authoritative workflow rail.
-- `App.tsx` mounts `WorkflowOperationsPanel` for the selected repository using the existing `workflowProjection` and selected repository id.
-- Workflow panels now surface:
-  - current stage, progress, required action, open gates, timeline count, and next stages
-  - recovery rebuilt/evidence-match state, diagnostics, recovered artifacts, and discarded artifacts
-  - decomposed health dimensions with reason, evidence, diagnostics, assessment diagnostics, conflicts, and evidence-path counts
-  - certification pass/fail counts, findings, finding evidence, finding diagnostics, top-level failures, and top-level diagnostics
-  - open gate reasons, required actions, satisfying commands, and gate reasoning
-  - recent timeline entries from projected workflow history
-  - continuation outcome, advance eligibility, human wait state, required action, stop reason, and reasoning
-- Added responsive CSS for workflow panels in `src/CommandCenter.UI/src/App.css`.
-- Added `src/CommandCenter.UI/src/test/characterization/workflowPanels.test.tsx`.
-- Updated `.agents/milestones/m1-workflow-engine.md` to mark workflow panels, workflow visibility, workflow panel characterization tests, history evidence visibility, and gate explanation visibility complete.
+- Continued Milestone 1 by integrating authoritative workflow projection facts into the selected repository/dashboard summary.
+- `SelectedRepositorySummary` now accepts `workflow: WorkflowInstance | null` and renders:
+  - workflow stage
+  - blocking workflow gate
+  - required human action
+  - workflow timeline event count
+- `App.tsx` passes the existing `workflowProjection` from `useWorkflowProjection` into `SelectedRepositorySummary`; no dashboard-specific workflow model was added.
+- Added a characterization test proving the selected repository summary renders workflow stage, gate, required action, and timeline count from `WorkflowInstance`.
+- Added `.agents/milestones/m1-workflow-consumption-pattern.md` documenting workflow ownership and consumption boundaries for repository, execution, governance, decision, operational-context, health, and certification surfaces.
+- Updated `.agents/milestones/m1-workflow-engine.md` to mark dashboard summary integration and documented workflow consumption pattern complete while leaving future governance and operational-context UI linkage open.
+- Rotated the previous handoff to `.agents/handoffs/handoff.0004.md`.
 
 ## Verification
 
 - `npm run build` passed in `src/CommandCenter.UI`.
-- `npm run test -- --run src/test/characterization/workflowPanels.test.tsx src/test/characterization/executionWorkflowRail.test.tsx src/test/characterization/workflowAuthority.test.ts` passed with 6 tests.
+- `npm run test -- --run src/test/characterization/selectedRepositorySummary.test.tsx src/test/characterization/workflowPanels.test.tsx src/test/characterization/executionWorkflowRail.test.tsx src/test/characterization/workflowAuthority.test.ts` passed with 11 tests.
 
 ## Still Open In Milestone 1
 
-- Integrate workflow into dashboard summary without duplicating the domain model.
-- Document/complete the later-workspace consumption pattern for governance and operational context.
 - Add backend endpoint tests for any workflow route not already covered.
 - Add shell command tests where feasible.
-- Close the remaining exit criteria around avoiding parallel timelines and documenting the workflow consumption pattern for later milestones.
+- Decide whether remaining Milestone 1 governance and operational-context workflow-linkage bullets should be implemented now or treated as Milestone 2 and Milestone 7 entry criteria.
+- Close the remaining exit criteria around proving no other workspace creates a parallel lifecycle timeline and confirming parallel client-side workflow derivation removal.

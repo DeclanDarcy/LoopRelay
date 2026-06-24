@@ -2,16 +2,10 @@
 
 ## Newly Authorized
 
-- The workflow panel slice is accepted as a valid Milestone 1 continuation, assuming panels continue consuming existing workflow hooks/projections rather than introducing new workflow aggregation authority.
-- Workflow panels should follow the direct authority path: workflow service to endpoint to hook to panel.
-- Any intermediate workflow UI model is acceptable only if it is purely presentational and does not become a new workflow authority.
-- Workflow surfaces belong in the repository workspace experience because workflow is the operational backbone, not a disconnected subsystem.
-- Health decomposition remains a boundary to defend: health must render dimensions, findings, evidence, and diagnostics, with any summary label derived from those facts.
-- Certification remains observational. It may report, summarize, validate, and explain, but it must not repair, mutate, recover, or advance lifecycle state.
-- The next Milestone 1 slice should focus on repository/dashboard workflow summary integration using existing workflow projections, without creating a dashboard-specific workflow lifecycle.
-- The next Milestone 1 slice should add concise workflow consumption-pattern documentation before moving into Milestone 2.
-- Consumption-pattern documentation should establish that workflow owns operational stage, gates, progression, continuation, recovery, health, and certification.
-- Governance should own decision-session lifecycle, transfer, recovery, and continuity artifacts, while consuming workflow for operational status, blocking gates, and required human action.
-- Execution should own execution-session lifecycle, while consuming workflow for operational placement and progression context.
-- Continuity should own operational-context lifecycle, while consuming workflow where workflow exposes review and promotion requirements.
-- If repository/dashboard workflow summary integration and consumption-pattern documentation complete cleanly, Milestone 1 can be treated as effectively ready to transition into Milestone 2.
+- Treat Milestone 1 as functionally complete, pending remaining workflow endpoint-test coverage before formal closure.
+- Do not implement governance workflow linkage inside Milestone 1; defer it to Milestone 2 where the governance workspace, decision-session lifecycle, transfer readiness, transfer recovery, and governance summaries are owned.
+- Do not implement operational-context workflow linkage inside Milestone 1; defer it to Milestone 7 where assimilation, evolution, compression, contradiction analysis, and continuity diagnostics are owned.
+- Accept repository summary workflow integration as aligned with the roadmap because it consumes workflow-owned stage, gate, required-action, and timeline facts without creating a repository-specific workflow model.
+- Treat the workflow consumption-pattern artifact as an accepted Milestone 1 output and use it to constrain Milestone 2 and Milestone 7 integration.
+- The next slice should focus on backend workflow endpoint coverage for diagnostics, timeline, history, recovery, health, reports, certification, and related visible UI-driving routes.
+- Once the remaining workflow endpoint tests are added and pass, Milestone 1 can be considered complete and ready to transition into Milestone 2.

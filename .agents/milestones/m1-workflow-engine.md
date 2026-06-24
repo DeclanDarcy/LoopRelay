@@ -66,12 +66,13 @@ Replace client-side workflow derivation with the authoritative workflow projecti
    - [x] `WorkflowRecoveryPanel`
    - [x] `WorkflowHealthPanel`
    - [x] `WorkflowCertificationPanel`
-- [ ] Integrate workflow into repository workspace, execution workspace, and dashboard summary without duplicating the domain model.
+- [x] Integrate workflow into repository workspace, execution workspace, and dashboard summary without duplicating the domain model.
 - [ ] Establish a shared workflow consumption pattern for later milestones:
    - [x] repository workspace shows workflow as primary operational status
    - [ ] decision-session workspace links governance state back to workflow gates and required actions
    - [x] execution workspace shows execution as a workflow stage, not a separate workflow model
    - [ ] operational-context workspace shows review and promotion state through workflow gates where applicable
+   - [x] consumption-pattern artifact documents ownership boundaries for later workspaces
 
 ### Tests
 
@@ -88,4 +89,4 @@ Replace client-side workflow derivation with the authoritative workflow projecti
 - [x] Workflow gates explain why progress is blocked, who owns the unblock action, and which command satisfies it.
 - [ ] No other workspace creates a parallel lifecycle timeline for operational product state.
 - [ ] Parallel client-side workflow derivation is removed.
-- [ ] Later workspaces have a documented consumption pattern for workflow projection instead of bypassing the operational backbone.
+- [x] Later workspaces have a documented consumption pattern for workflow projection instead of bypassing the operational backbone.

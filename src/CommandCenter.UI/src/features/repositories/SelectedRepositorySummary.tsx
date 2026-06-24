@@ -10,11 +10,13 @@ import type {
   RepositoryDashboardProjection,
   RepositoryExecutionState,
   RepositoryWorkspaceProjection,
+  WorkflowInstance,
 } from '../../types'
 
 type SelectedRepositorySummaryProps = {
   repository: RepositoryDashboardProjection
   workspace: RepositoryWorkspaceProjection | null
+  workflow: WorkflowInstance | null
   executionDisplay: ExecutionSessionSummary | null
   currentExecutionState: RepositoryExecutionState
   onOpenExecution?: () => void
@@ -26,6 +28,7 @@ type SelectedRepositorySummaryProps = {
 export function SelectedRepositorySummary({
   repository,
   workspace,
+  workflow,
   executionDisplay,
   currentExecutionState,
   onOpenExecution,
@@ -188,6 +191,17 @@ export function SelectedRepositorySummary({
         </span>
         <span>Handoff: {workspace?.hasCurrentHandoff ? 'Present' : 'Missing'}</span>
         <span>Decisions: {workspace?.hasCurrentDecisions ? 'Present' : 'Missing'}</span>
+        <span>Workflow stage: {workflow?.currentStage ?? 'Not loaded'}</span>
+        <span>Workflow gate: {workflow?.blockingGate ?? 'Not loaded'}</span>
+        <span>
+          Required action:{' '}
+          {workflow?.requiredHumanAction && workflow.requiredHumanAction.trim().length > 0
+            ? workflow.requiredHumanAction
+            : workflow
+              ? 'None'
+              : 'Not loaded'}
+        </span>
+        <span>Timeline events: {workflow ? workflow.timeline.length : 'Not loaded'}</span>
       </div>
     </>
   )

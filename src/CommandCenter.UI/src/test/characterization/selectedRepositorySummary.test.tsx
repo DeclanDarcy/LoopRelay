@@ -6,6 +6,7 @@ import type {
   RepositoryDashboardProjection,
   RepositoryExecutionState,
   RepositoryWorkspaceProjection,
+  WorkflowInstance,
 } from '../../types'
 
 afterEach(() => {
@@ -208,9 +209,40 @@ function workspaceProjection(
   }
 }
 
+function workflowProjection(overrides: Partial<WorkflowInstance> = {}): WorkflowInstance {
+  return {
+    currentStage: 'Decision',
+    progressState: 'WaitingForHuman',
+    blockingGate: 'DecisionResolution',
+    requiredHumanAction: 'Resolve the generated decision.',
+    timeline: [
+      {
+        eventType: 'ExecutionCompleted',
+        stage: 'Handoff',
+        occurredAt: '2026-06-21T16:20:00.000Z',
+        summary: 'Execution completed and produced a handoff.',
+        sourceDomain: 'Execution',
+        sourceArtifact: '.agents/handoffs/handoff.md',
+        fingerprint: 'handoff-fingerprint',
+      },
+      {
+        eventType: 'DecisionGenerated',
+        stage: 'Decision',
+        occurredAt: '2026-06-21T16:25:00.000Z',
+        summary: 'Decision proposal generated from workflow evidence.',
+        sourceDomain: 'Decisions',
+        sourceArtifact: '.agents/decisions/decisions.md',
+        fingerprint: 'decision-fingerprint',
+      },
+    ],
+    ...overrides,
+  } as WorkflowInstance
+}
+
 function renderSummary({
   repository = repositoryDashboard(),
   workspace = null,
+  workflow = null,
   executionDisplay = null,
   currentExecutionState = 'Ready',
   onOpenExecution,
@@ -220,6 +252,7 @@ function renderSummary({
 }: {
   repository?: RepositoryDashboardProjection
   workspace?: RepositoryWorkspaceProjection | null
+  workflow?: WorkflowInstance | null
   executionDisplay?: ExecutionSessionSummary | null
   currentExecutionState?: RepositoryExecutionState
   onOpenExecution?: () => void
@@ -231,6 +264,7 @@ function renderSummary({
     <SelectedRepositorySummary
       repository={repository}
       workspace={workspace}
+      workflow={workflow}
       executionDisplay={executionDisplay}
       currentExecutionState={currentExecutionState}
       onOpenExecution={onOpenExecution}
@@ -256,6 +290,7 @@ describe('selected repository summary rendering characterization', () => {
     expect(screen.getByText('Operational context: Missing')).toBeInTheDocument()
     expect(screen.getByText('Handoff: Missing')).toBeInTheDocument()
     expect(screen.getByText('Decisions: Missing')).toBeInTheDocument()
+    expect(screen.getByText('Workflow stage: Not loaded')).toBeInTheDocument()
   })
 
   it('uses workspace facts over dashboard facts when workspace is present', () => {
@@ -274,6 +309,20 @@ describe('selected repository summary rendering characterization', () => {
     expect(screen.getByText('Operational context: Present')).toBeInTheDocument()
     expect(screen.getByText('Handoff: Missing')).toBeInTheDocument()
     expect(screen.getByText('Decisions: Present')).toBeInTheDocument()
+  })
+
+  it('renders dashboard workflow summary from the authoritative workflow projection', () => {
+    renderSummary({
+      workspace: workspaceProjection(),
+      workflow: workflowProjection(),
+    })
+
+    expect(screen.getByText('Workflow stage: Decision')).toBeInTheDocument()
+    expect(screen.getByText('Workflow gate: DecisionResolution')).toBeInTheDocument()
+    expect(screen.getByText(/Required action:/)).toHaveTextContent(
+      'Required action: Resolve the generated decision.',
+    )
+    expect(screen.getByText('Timeline events: 2')).toBeInTheDocument()
   })
 
   it('renders execution display details and existing not-recorded fallbacks', () => {

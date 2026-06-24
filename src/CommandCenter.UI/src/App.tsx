@@ -1642,6 +1642,7 @@ function App() {
                   <SelectedRepositorySummary
                     repository={selectedRepository}
                     workspace={workspace}
+                    workflow={workflowProjection}
                     executionDisplay={executionDisplay}
                     currentExecutionState={currentExecutionState}
                     onOpenExecution={() => openExecutionSection('execution-context')}
