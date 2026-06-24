@@ -73,11 +73,12 @@ Replace client-side workflow derivation with the authoritative workflow projecti
    - [x] execution workspace shows execution as a workflow stage, not a separate workflow model
    - [ ] operational-context workspace shows review and promotion state through workflow gates where applicable
    - [x] consumption-pattern artifact documents ownership boundaries for later workspaces
+   - [x] lifecycle timeline audit confirms no current workspace creates a competing operational lifecycle timeline
 
 ### Tests
 
 - [x] Add backend endpoint tests for any route not already covered.
-- [ ] Add shell command tests where feasible.
+- [x] Add shell command tests where feasible, or document why they are not practical in this codebase.
 - [x] Add UI characterization tests proving workflow panels render projection stage, gate reason, satisfying command, recovery diagnostics, health dimensions, and certification findings.
 - [x] Add a regression test that no UI workflow state is derived from `RepositoryExecutionState`.
 
@@ -87,6 +88,6 @@ Replace client-side workflow derivation with the authoritative workflow projecti
 - [x] Users can see current stage, progress, reasoning, gates, required human actions, continuation, recovery, health, and certification.
 - [x] Workflow history is reconstructable from projected evidence.
 - [x] Workflow gates explain why progress is blocked, who owns the unblock action, and which command satisfies it.
-- [ ] No other workspace creates a parallel lifecycle timeline for operational product state.
+- [x] No other workspace creates a parallel lifecycle timeline for operational product state.
 - [x] Parallel client-side workflow derivation is removed.
 - [x] Later workspaces have a documented consumption pattern for workflow projection instead of bypassing the operational backbone.

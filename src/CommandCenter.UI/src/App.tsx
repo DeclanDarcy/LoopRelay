@@ -1574,7 +1574,7 @@ function App() {
       header={
         <Header
           selectedRepository={selectedRepository}
-          currentExecutionState={currentExecutionState}
+          workflow={workflowProjection}
           isWorkspaceLoading={isWorkspaceLoading}
           isAddingRepository={isAdding}
           onRefreshRepositories={loadRepositories}

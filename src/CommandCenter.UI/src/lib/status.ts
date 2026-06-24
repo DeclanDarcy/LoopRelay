@@ -2,6 +2,7 @@ import type { ContinuityDiagnostics } from '../types/continuity'
 import type { ExecutionReadiness, ExecutionSessionState, RepositoryExecutionState } from '../types/execution'
 import type { OperationalContextProposalStatus, OperationalContextReviewState } from '../types/operationalContext'
 import type { RepositoryAvailability } from '../types/repositories'
+import type { WorkflowInstance, WorkflowProgressState } from '../types/workflow'
 
 export type StatusTone = 'neutral' | 'success' | 'warning' | 'danger' | 'info' | 'done'
 
@@ -71,4 +72,23 @@ export function continuityWarningStatus(diagnostics: Pick<ContinuityDiagnostics,
   }
 
   return status(`${diagnostics.continuityWarnings.length} warning${diagnostics.continuityWarnings.length === 1 ? '' : 's'}`, 'warning')
+}
+
+const workflowProgressTone: Record<WorkflowProgressState, StatusTone> = {
+  Ready: 'success',
+  Active: 'warning',
+  AwaitingGate: 'warning',
+  Blocked: 'danger',
+  Completed: 'done',
+  Failed: 'danger',
+  Recovering: 'info',
+  WaitingForHuman: 'warning',
+}
+
+export function workflowProjectionStatus(workflow: Pick<WorkflowInstance, 'currentStage' | 'progressState'> | null) {
+  if (!workflow) {
+    return status('Workflow not loaded', 'neutral')
+  }
+
+  return status(`${workflow.currentStage} / ${workflow.progressState}`, workflowProgressTone[workflow.progressState])
 }

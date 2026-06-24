@@ -1,10 +1,10 @@
 import { Button, StatusBadge } from '../design'
-import { repositoryExecutionStatus } from '../../lib/status'
-import type { RepositoryDashboardProjection, RepositoryExecutionState } from '../../types'
+import { workflowProjectionStatus } from '../../lib/status'
+import type { RepositoryDashboardProjection, WorkflowInstance } from '../../types'
 
 type HeaderProps = {
   selectedRepository: RepositoryDashboardProjection | null
-  currentExecutionState: RepositoryExecutionState
+  workflow: WorkflowInstance | null
   isWorkspaceLoading: boolean
   isAddingRepository: boolean
   onRefreshRepositories: () => void
@@ -14,7 +14,7 @@ type HeaderProps = {
 
 export function Header({
   selectedRepository,
-  currentExecutionState,
+  workflow,
   isWorkspaceLoading,
   isAddingRepository,
   onRefreshRepositories,
@@ -34,7 +34,7 @@ export function Header({
       </div>
       <div className="header-status">
         {selectedRepository ? (
-          <StatusBadge status={repositoryExecutionStatus[currentExecutionState]} />
+          <StatusBadge status={workflowProjectionStatus(workflow)} />
         ) : null}
         <span
           className="notification-slot notification-slot-disabled"
