@@ -1,6 +1,7 @@
 export * from './artifacts'
 export * from './continuity'
 export * from './decisions'
+export * from './decisionSessions'
 export * from './execution'
 export * from './executionEvents'
 export * from './git'

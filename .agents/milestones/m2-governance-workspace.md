@@ -6,36 +6,36 @@ Make the governance lifecycle visible and actionable while preserving `CommandCe
 
 ### Backend and Shell
 
-- [ ] Reuse existing decision-session read routes in `DecisionSessionEndpoints.cs`.
-- [ ] Add a narrow transfer execution endpoint:
-   - [ ] `POST /api/repositories/{repositoryId}/decision-sessions/transfers`
-   - [ ] Calls `IDecisionSessionTransferService.ExecuteAsync(repositoryId)`.
-   - [ ] Returns `DecisionSessionTransferResult`.
-   - [ ] Does not execute transfer unless policy and eligibility services allow it.
-- [ ] Add a narrow persisted recovery endpoint:
-   - [ ] `POST /api/repositories/{repositoryId}/decision-sessions/recovery`
-   - [ ] Calls `IDecisionSessionRecoveryService.RecoverAsync(repositoryId)`.
-   - [ ] Returns `DecisionSessionRecoveryResult`.
-- [ ] Keep `GET /decision-sessions/recovery` as assessment-only and `POST /decision-sessions/recovery` as the persisted recovery trigger.
-- [ ] Add Tauri commands for:
-   - [ ] session list and active session
-   - [ ] diagnostics
-   - [ ] metrics, statistics, economics, coherence
-   - [ ] lifecycle policy and policy diagnostics
-   - [ ] transfer eligibility and eligibility diagnostics
-   - [ ] lifecycle projection, history, influence, health
-   - [ ] continuity artifacts and artifact lookup
-   - [ ] transfers, transfer history, transfer diagnostics, transfer execution
-   - [ ] recovery, recovery history, recovery diagnostics, persisted recovery
-   - [ ] workflow summary, workflow health, workflow influence
-   - [ ] certification get/report/run
+- [x] Reuse existing decision-session read routes in `DecisionSessionEndpoints.cs`.
+- [x] Add a narrow transfer execution endpoint:
+   - [x] `POST /api/repositories/{repositoryId}/decision-sessions/transfers`
+   - [x] Calls `IDecisionSessionTransferService.ExecuteAsync(repositoryId)`.
+   - [x] Returns `DecisionSessionTransferResult`.
+   - [x] Does not execute transfer unless policy and eligibility services allow it.
+- [x] Add a narrow persisted recovery endpoint:
+   - [x] `POST /api/repositories/{repositoryId}/decision-sessions/recovery`
+   - [x] Calls `IDecisionSessionRecoveryService.RecoverAsync(repositoryId)`.
+   - [x] Returns `DecisionSessionRecoveryResult`.
+- [x] Keep `GET /decision-sessions/recovery` as assessment-only and `POST /decision-sessions/recovery` as the persisted recovery trigger.
+- [x] Add Tauri commands for:
+   - [x] session list and active session
+   - [x] diagnostics
+   - [x] metrics, statistics, economics, coherence
+   - [x] lifecycle policy and policy diagnostics
+   - [x] transfer eligibility and eligibility diagnostics
+   - [x] lifecycle projection, history, influence, health
+   - [x] continuity artifacts and artifact lookup
+   - [x] transfers, transfer history, transfer diagnostics, transfer execution
+   - [x] recovery, recovery history, recovery diagnostics, persisted recovery
+   - [x] workflow summary, workflow health, workflow influence
+   - [x] certification get/report/run
 
 ### UI
 
-- [ ] Add `src/CommandCenter.UI/src/types/decisionSessions.ts` matching `CommandCenter.DecisionSessions.Models` plus workflow governance projection models.
-- [ ] Update `src/CommandCenter.UI/src/types/repositories.ts` to include `decisionSessionSummary` on dashboard and workspace projections.
-- [ ] Add `src/CommandCenter.UI/src/api/decisionSessions.ts` and export it.
-- [ ] Add hooks for lifecycle projection, policy, eligibility, analysis, transfers, recovery, continuity artifacts, health, and certification.
+- [x] Add `src/CommandCenter.UI/src/types/decisionSessions.ts` matching `CommandCenter.DecisionSessions.Models` plus workflow governance projection models.
+- [x] Update `src/CommandCenter.UI/src/types/repositories.ts` to include `decisionSessionSummary` on dashboard and workspace projections.
+- [x] Add `src/CommandCenter.UI/src/api/decisionSessions.ts` and export it.
+- [x] Add hooks for lifecycle projection, policy, eligibility, analysis, transfers, recovery, continuity artifacts, health, and certification.
 - [ ] Add repository-level governance summary rendering using `RepositoryDecisionSessionSummary`:
    - [ ] active session id
    - [ ] lifecycle state
@@ -64,7 +64,7 @@ Make the governance lifecycle visible and actionable while preserving `CommandCe
 
 ### Tests
 
-- [ ] Backend endpoint tests for transfer execution and persisted recovery.
+- [x] Backend endpoint tests for transfer execution and persisted recovery.
 - [ ] Repository projection tests proving `decisionSessionSummary` serializes and TypeScript types include it.
 - [ ] UI tests for repository governance summary, lifecycle explanation, transfer eligibility, recovery, health, and certification.
 

@@ -392,13 +392,17 @@ fn remove_repository(repository_id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn get_repository_workspace(repository_id: String) -> Result<RepositoryWorkspaceProjection, String> {
-    reqwest::blocking::get(format!("{BACKEND_URL}/api/repositories/{repository_id}/workspace"))
-        .map_err(|error| error.to_string())?
-        .error_for_status()
-        .map_err(|error| error.to_string())?
-        .json()
-        .map_err(|error| error.to_string())
+fn get_repository_workspace(
+    repository_id: String,
+) -> Result<RepositoryWorkspaceProjection, String> {
+    reqwest::blocking::get(format!(
+        "{BACKEND_URL}/api/repositories/{repository_id}/workspace"
+    ))
+    .map_err(|error| error.to_string())?
+    .error_for_status()
+    .map_err(|error| error.to_string())?
+    .json()
+    .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -407,7 +411,9 @@ fn refresh_repository_workspace(
 ) -> Result<RepositoryWorkspaceProjection, String> {
     let client = reqwest::blocking::Client::new();
     client
-        .post(format!("{BACKEND_URL}/api/repositories/{repository_id}/refresh"))
+        .post(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/refresh"
+        ))
         .send()
         .map_err(|error| error.to_string())?
         .error_for_status()
@@ -461,12 +467,17 @@ fn rotate_current_handoff(repository_id: String) -> Result<RepositoryWorkspacePr
 }
 
 #[tauri::command]
-fn rotate_current_decisions(repository_id: String) -> Result<RepositoryWorkspaceProjection, String> {
+fn rotate_current_decisions(
+    repository_id: String,
+) -> Result<RepositoryWorkspaceProjection, String> {
     rotate_artifact(repository_id, "rotate-current-decisions")
 }
 
 #[tauri::command]
-fn preview_execution_context(repository_id: String, milestone_path: String) -> Result<Value, String> {
+fn preview_execution_context(
+    repository_id: String,
+    milestone_path: String,
+) -> Result<Value, String> {
     let client = reqwest::blocking::Client::new();
     client
         .get(format!(
@@ -847,7 +858,10 @@ fn get_decision_assimilation_recommendation(
         return response.json().map_err(|error| error.to_string());
     }
 
-    response_error(response, "decision assimilation recommendation lookup failed")
+    response_error(
+        response,
+        "decision assimilation recommendation lookup failed",
+    )
 }
 
 #[tauri::command]
@@ -869,7 +883,10 @@ fn propose_decision_operational_context_assimilation(
         return response.json().map_err(|error| error.to_string());
     }
 
-    response_error(response, "decision assimilation recommendation creation failed")
+    response_error(
+        response,
+        "decision assimilation recommendation creation failed",
+    )
 }
 
 #[tauri::command]
@@ -1055,7 +1072,10 @@ fn list_decision_generation_certification_reports(repository_id: String) -> Resu
         return response.json().map_err(|error| error.to_string());
     }
 
-    response_error(response, "decision generation certification report listing failed")
+    response_error(
+        response,
+        "decision generation certification report listing failed",
+    )
 }
 
 #[tauri::command]
@@ -1422,7 +1442,13 @@ fn trace_reasoning_backward(
     kind: String,
     id: String,
 ) -> Result<Value, String> {
-    trace_reasoning(repository_id, kind, id, "backward", "reasoning backward trace failed")
+    trace_reasoning(
+        repository_id,
+        kind,
+        id,
+        "backward",
+        "reasoning backward trace failed",
+    )
 }
 
 #[tauri::command]
@@ -1431,7 +1457,13 @@ fn trace_reasoning_forward(
     kind: String,
     id: String,
 ) -> Result<Value, String> {
-    trace_reasoning(repository_id, kind, id, "forward", "reasoning forward trace failed")
+    trace_reasoning(
+        repository_id,
+        kind,
+        id,
+        "forward",
+        "reasoning forward trace failed",
+    )
 }
 
 #[tauri::command]
@@ -1844,6 +1876,283 @@ fn run_workflow_certification(repository_id: String) -> Result<Value, String> {
 }
 
 #[tauri::command]
+fn list_decision_sessions(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/decision-sessions"),
+        "decision-session list lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_active_decision_session(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/decision-sessions/active"),
+        "active decision-session lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_decision_session_diagnostics(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/decision-sessions/diagnostics"),
+        "decision-session diagnostics lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_decision_session_metrics(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/decision-sessions/analysis/metrics"),
+        "decision-session metrics lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_decision_session_statistics(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/decision-sessions/analysis/statistics"),
+        "decision-session statistics lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_decision_session_economics(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/decision-sessions/analysis/economics"),
+        "decision-session economics lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_decision_session_coherence(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/decision-sessions/analysis/coherence"),
+        "decision-session coherence lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_decision_session_analysis_diagnostics(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/decision-sessions/analysis/diagnostics"),
+        "decision-session analysis diagnostics lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_decision_session_lifecycle_policy(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/decision-sessions/lifecycle/policy"),
+        "decision-session lifecycle policy lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_decision_session_lifecycle_policy_diagnostics(
+    repository_id: String,
+) -> Result<Value, String> {
+    backend_get_value(
+        &format!(
+            "/api/repositories/{repository_id}/decision-sessions/lifecycle/policy/diagnostics"
+        ),
+        "decision-session lifecycle policy diagnostics lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_decision_session_transfer_eligibility(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/decision-sessions/lifecycle/eligibility"),
+        "decision-session transfer eligibility lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_decision_session_transfer_eligibility_diagnostics(
+    repository_id: String,
+) -> Result<Value, String> {
+    backend_get_value(
+        &format!(
+            "/api/repositories/{repository_id}/decision-sessions/lifecycle/eligibility/diagnostics"
+        ),
+        "decision-session transfer eligibility diagnostics lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_decision_session_lifecycle_projection(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/decision-sessions/lifecycle/projection"),
+        "decision-session lifecycle projection lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_decision_session_lifecycle_history(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/decision-sessions/lifecycle/history"),
+        "decision-session lifecycle history lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_decision_session_lifecycle_influence(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/decision-sessions/lifecycle/influence"),
+        "decision-session lifecycle influence lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_decision_session_lifecycle_health(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/decision-sessions/lifecycle/health"),
+        "decision-session lifecycle health lookup failed",
+    )
+}
+
+#[tauri::command]
+fn list_decision_session_continuity_artifacts(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/decision-sessions/continuity-artifacts"),
+        "decision-session continuity artifact list lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_decision_session_continuity_artifact(
+    repository_id: String,
+    artifact_id: String,
+) -> Result<Value, String> {
+    backend_get_value(
+        &format!(
+            "/api/repositories/{repository_id}/decision-sessions/continuity-artifacts/{artifact_id}"
+        ),
+        "decision-session continuity artifact lookup failed",
+    )
+}
+
+#[tauri::command]
+fn list_decision_session_transfers(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/decision-sessions/transfers"),
+        "decision-session transfer list lookup failed",
+    )
+}
+
+#[tauri::command]
+fn list_decision_session_transfer_history(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/decision-sessions/transfers/history"),
+        "decision-session transfer history lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_decision_session_transfer_diagnostics(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/decision-sessions/transfers/diagnostics"),
+        "decision-session transfer diagnostics lookup failed",
+    )
+}
+
+#[tauri::command]
+fn execute_decision_session_transfer(repository_id: String) -> Result<Value, String> {
+    backend_post_value(
+        &format!("/api/repositories/{repository_id}/decision-sessions/transfers"),
+        "decision-session transfer execution failed",
+    )
+}
+
+#[tauri::command]
+fn get_decision_session_recovery(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/decision-sessions/recovery"),
+        "decision-session recovery lookup failed",
+    )
+}
+
+#[tauri::command]
+fn list_decision_session_recovery_history(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/decision-sessions/recovery/history"),
+        "decision-session recovery history lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_decision_session_recovery_diagnostics(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/decision-sessions/recovery/diagnostics"),
+        "decision-session recovery diagnostics lookup failed",
+    )
+}
+
+#[tauri::command]
+fn recover_decision_session(repository_id: String) -> Result<Value, String> {
+    backend_post_value(
+        &format!("/api/repositories/{repository_id}/decision-sessions/recovery"),
+        "decision-session persisted recovery failed",
+    )
+}
+
+#[tauri::command]
+fn get_decision_session_workflow(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/decision-sessions/workflow"),
+        "decision-session workflow projection lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_decision_session_workflow_summary(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/decision-sessions/workflow/summary"),
+        "decision-session workflow summary lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_decision_session_workflow_health(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/decision-sessions/workflow/health"),
+        "decision-session workflow health lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_decision_session_workflow_influence(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/decision-sessions/workflow/influence"),
+        "decision-session workflow influence lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_decision_session_certification(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/decision-sessions/certification"),
+        "decision-session certification lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_decision_session_certification_report(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/decision-sessions/certification/report"),
+        "decision-session certification report lookup failed",
+    )
+}
+
+#[tauri::command]
+fn run_decision_session_certification(repository_id: String) -> Result<Value, String> {
+    backend_post_value(
+        &format!("/api/repositories/{repository_id}/decision-sessions/certification"),
+        "decision-session certification failed",
+    )
+}
+
+#[tauri::command]
 fn start_execution(
     repository_id: String,
     milestone_path: String,
@@ -1956,10 +2265,9 @@ fn push_execution(session_id: String) -> Result<ExecutionSessionSummary, String>
 
 #[tauri::command]
 fn get_execution_session(session_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
-        "{BACKEND_URL}/api/execution-sessions/{session_id}"
-    ))
-    .map_err(|error| error.to_string())?;
+    let response =
+        reqwest::blocking::get(format!("{BACKEND_URL}/api/execution-sessions/{session_id}"))
+            .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
         return response.json().map_err(|error| error.to_string());
@@ -2297,6 +2605,39 @@ fn main() {
             get_workflow_readiness_report,
             get_workflow_certification,
             run_workflow_certification,
+            list_decision_sessions,
+            get_active_decision_session,
+            get_decision_session_diagnostics,
+            get_decision_session_metrics,
+            get_decision_session_statistics,
+            get_decision_session_economics,
+            get_decision_session_coherence,
+            get_decision_session_analysis_diagnostics,
+            get_decision_session_lifecycle_policy,
+            get_decision_session_lifecycle_policy_diagnostics,
+            get_decision_session_transfer_eligibility,
+            get_decision_session_transfer_eligibility_diagnostics,
+            get_decision_session_lifecycle_projection,
+            get_decision_session_lifecycle_history,
+            get_decision_session_lifecycle_influence,
+            get_decision_session_lifecycle_health,
+            list_decision_session_continuity_artifacts,
+            get_decision_session_continuity_artifact,
+            list_decision_session_transfers,
+            list_decision_session_transfer_history,
+            get_decision_session_transfer_diagnostics,
+            execute_decision_session_transfer,
+            get_decision_session_recovery,
+            list_decision_session_recovery_history,
+            get_decision_session_recovery_diagnostics,
+            recover_decision_session,
+            get_decision_session_workflow,
+            get_decision_session_workflow_summary,
+            get_decision_session_workflow_health,
+            get_decision_session_workflow_influence,
+            get_decision_session_certification,
+            get_decision_session_certification_report,
+            run_decision_session_certification,
             start_execution,
             get_active_execution,
             get_git_status,

@@ -2,20 +2,12 @@
 
 ## Newly Authorized
 
-- Accept Milestone 1 as complete.
-- Treat the global header workflow-projection change as closing the remaining workflow authority gap.
-- Preserve the current authority boundary:
-  - workflow projection is the canonical operational lifecycle timeline
-  - execution, git, decision, reasoning, and continuity statuses are scoped domain evidence
-  - repository, dashboard, header, and workspace surfaces consume lifecycle state but do not own it
-- Treat shell command test infeasibility documentation as acceptable for Milestone 1 because backend endpoint coverage plus TypeScript client/UI coverage protect the meaningful workflow path.
-- Enter Milestone 2 next.
-- Start Milestone 2 with decision-session transfer execution and persisted recovery integration.
-- Milestone 2 implementation order should be:
-  - add decision-session transfer execution endpoint
-  - add persisted recovery endpoint
-  - add shell commands
-  - add TypeScript client and hooks
-  - add Governance UI controls
-  - test endpoint behavior, action availability, and UI refresh
-- Milestone 2 must consume workflow gates and required actions for operational linkage while keeping `CommandCenter.DecisionSessions` as the governance lifecycle authority.
+- Accept the Milestone 2 foundation slice as established.
+- Proceed next with governance summary and workspace surfaces while preserving `CommandCenter.DecisionSessions` as the governance lifecycle authority.
+- Sequence the next Milestone 2 UI work in three phases:
+  - Phase 1: repository governance summary with active session, lifecycle state, transfer eligibility, transfer pressure, coherence, and health summary.
+  - Phase 2: focused Governance Workspace foundation with lifecycle, eligibility, transfer, and recovery panels only.
+  - Phase 3: workflow linkage inside those panels by rendering workflow gate and required human action beside governance facts.
+- Do not introduce a separate Governance Workflow; present Governance Lifecycle plus Workflow Gate plus Required Human Action side by side.
+- Do not add certification, continuity artifacts, economics, influence, or deep diagnostics to the first Governance Workspace slice unless the workspace foundation is already stable.
+- Avoid frontend governance aggregation models that recompute lifecycle meaning; feed authority-owned decision-session projections directly into focused panels.

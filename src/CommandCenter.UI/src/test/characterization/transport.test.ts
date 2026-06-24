@@ -1,11 +1,21 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  executeDecisionSessionTransfer,
+  getDecisionSessionLifecycleProjection,
   getWorkflowProjection,
   listContinuityReports,
   refreshRepositoryWorkspace,
+  recoverDecisionSession,
   subscribeToExecutionEvents,
 } from '../../api'
-import type { ExecutionEvent, RepositoryWorkspaceProjection, WorkflowInstance } from '../../types'
+import type {
+  DecisionSessionLifecycleProjection,
+  DecisionSessionRecoveryResult,
+  DecisionSessionTransferResult,
+  ExecutionEvent,
+  RepositoryWorkspaceProjection,
+  WorkflowInstance,
+} from '../../types'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -250,6 +260,63 @@ describe('transport boundary characterization', () => {
 
     await expect(getWorkflowProjection('repo-alpha')).resolves.toBe(workflow)
     expect(invoke).toHaveBeenCalledWith('get_workflow_projection', {
+      repositoryId: 'repo-alpha',
+    }, undefined)
+  })
+
+  it('preserves decision-session governance command request and response handling', async () => {
+    const lifecycleProjection = {
+      repositoryId: 'repo-alpha',
+      activeSession: null,
+      sessions: [],
+      metrics: null,
+      size: null,
+      economics: null,
+      coherence: null,
+      policy: null,
+      transferEligibility: null,
+      currentContinuityArtifact: null,
+      continuityArtifacts: [],
+      recentTransfers: [],
+      recentTransferEvents: [],
+      transferEvents: [],
+      recentRecoveryResults: [],
+      diagnostics: {
+        repositoryId: 'repo-alpha',
+        isValid: true,
+        sessionCount: 0,
+        activeSessionCount: 0,
+        errors: [],
+        warnings: [],
+        generatedAt: '2026-06-24T00:00:00Z',
+      },
+      generatedAt: '2026-06-24T00:00:00Z',
+    } satisfies DecisionSessionLifecycleProjection
+    const transfer = { succeeded: false } as DecisionSessionTransferResult
+    const recovery = { recoveryId: 'recovery.1' } as DecisionSessionRecoveryResult
+    const invoke = vi.fn()
+      .mockResolvedValueOnce(lifecycleProjection)
+      .mockResolvedValueOnce(transfer)
+      .mockResolvedValueOnce(recovery)
+
+    window.__TAURI_INTERNALS__ = {
+      invoke,
+      transformCallback: vi.fn(),
+      unregisterCallback: vi.fn(),
+      callbacks: {},
+      convertFileSrc: vi.fn(),
+    }
+
+    await expect(getDecisionSessionLifecycleProjection('repo-alpha')).resolves.toBe(lifecycleProjection)
+    await expect(executeDecisionSessionTransfer('repo-alpha')).resolves.toBe(transfer)
+    await expect(recoverDecisionSession('repo-alpha')).resolves.toBe(recovery)
+    expect(invoke).toHaveBeenNthCalledWith(1, 'get_decision_session_lifecycle_projection', {
+      repositoryId: 'repo-alpha',
+    }, undefined)
+    expect(invoke).toHaveBeenNthCalledWith(2, 'execute_decision_session_transfer', {
+      repositoryId: 'repo-alpha',
+    }, undefined)
+    expect(invoke).toHaveBeenNthCalledWith(3, 'recover_decision_session', {
       repositoryId: 'repo-alpha',
     }, undefined)
   })

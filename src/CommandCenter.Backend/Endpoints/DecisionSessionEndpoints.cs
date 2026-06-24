@@ -140,6 +140,11 @@ public static class DecisionSessionEndpoints
             IDecisionSessionTransferService transferService) =>
             await HandleAsync(() => transferService.ListAsync(repositoryId)));
 
+        group.MapPost("/transfers", async (
+            Guid repositoryId,
+            IDecisionSessionTransferService transferService) =>
+            await HandleAsync(() => transferService.ExecuteAsync(repositoryId)));
+
         group.MapGet("/transfers/history", async (
             Guid repositoryId,
             IDecisionSessionTransferService transferService) =>
@@ -154,6 +159,11 @@ public static class DecisionSessionEndpoints
             Guid repositoryId,
             IDecisionSessionRecoveryService recoveryService) =>
             await HandleAsync(() => recoveryService.GetRecoveryAsync(repositoryId)));
+
+        group.MapPost("/recovery", async (
+            Guid repositoryId,
+            IDecisionSessionRecoveryService recoveryService) =>
+            await HandleAsync(() => recoveryService.RecoverAsync(repositoryId)));
 
         group.MapGet("/recovery/history", async (
             Guid repositoryId,
