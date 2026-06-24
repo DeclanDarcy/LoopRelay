@@ -3033,6 +3033,8 @@ public sealed class WorkflowProjectionServiceTests
         Assert.Contains(current.Findings, finding => finding.Category == "Recovery");
         Assert.Contains(current.Findings, finding => finding.Id == "authority-continuation-halts-at-gates" && finding.Passed);
         Assert.Contains(current.Findings, finding => finding.Id == "recovery-domain-evidence-wins" && finding.Passed);
+        Assert.Contains(current.Findings, finding => finding.Id == "history-authority-reconstructable" && finding.Passed);
+        Assert.Contains(current.Findings, finding => finding.Id == "workflow-diagnostics-explain-state" && finding.Passed);
         Assert.True(persisted.Certified);
         Assert.Single(reportFiles);
     }
@@ -3492,6 +3494,81 @@ public sealed class WorkflowProjectionServiceTests
         Assert.False(finding.Passed);
         Assert.Contains(finding.Diagnostics, diagnostic => diagnostic.Contains("DecisionResolution", StringComparison.Ordinal));
         Assert.Contains(result.Failures, failure => failure.Contains("authority-continuation-halts-at-gates", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task WorkflowCertificationFailsUnreconstructableStateWithoutDiagnostics()
+    {
+        TestFixture fixture = TestFixture.Create();
+        WorkflowInstance baseProjection = await fixture.CreateService().ProjectAsync(fixture.Repository.Id);
+        WorkflowInstance unreconstructable = baseProjection with
+        {
+            CurrentStage = WorkflowStage.Unknown,
+            ProgressState = WorkflowProgressState.Failed,
+            BlockingGate = WorkflowGateType.None,
+            RequiredHumanAction = string.Empty,
+            NextPossibleStages = [],
+            ValidTransitions = [],
+            BlockedTransitions = [],
+            Timeline = [],
+            OpenGates = [],
+            SatisfiedGates = [],
+            GateHistory = [],
+            GateDiagnostics = new WorkflowGateDiagnostics(
+                fixture.Repository.Id,
+                WorkflowGateType.None,
+                [],
+                [],
+                [],
+                [],
+                [],
+                []),
+            Diagnostics = new WorkflowProjectionDiagnostics(
+                fixture.Repository.Id,
+                [],
+                WorkflowStage.Unknown,
+                WorkflowGateType.None,
+                [],
+                [],
+                [],
+                new WorkflowStateMachineDiagnostics(
+                    fixture.Repository.Id,
+                    WorkflowStage.Unknown,
+                    WorkflowProgressState.Failed,
+                    WorkflowGateType.None,
+                    [],
+                    [],
+                    [],
+                    [],
+                    []),
+                [],
+                [],
+                []),
+            ExecutionDiagnostics = new WorkflowExecutionDiagnostics(fixture.Repository.Id, [], [], [], [])
+        };
+        var workflowRepository = new FileSystemWorkflowRepository(new MemoryArtifactStore());
+        var service = new WorkflowCertificationService(
+            new RepositoryServiceStub(fixture.Repository),
+            new ProjectionServiceStub(unreconstructable),
+            workflowRepository,
+            new HealthServiceStub(fixture.Repository.Id, unreconstructable));
+
+        WorkflowCertificationResult result = await service.GetCurrentCertificationAsync(fixture.Repository.Id);
+
+        Assert.False(result.Certified);
+        WorkflowCertificationFinding history = Assert.Single(
+            result.Findings,
+            candidate => candidate.Id == "history-authority-reconstructable");
+        WorkflowCertificationFinding diagnostics = Assert.Single(
+            result.Findings,
+            candidate => candidate.Id == "workflow-diagnostics-explain-state");
+        Assert.False(history.Passed);
+        Assert.False(diagnostics.Passed);
+        Assert.Contains(history.Diagnostics, diagnostic => diagnostic.Contains("Unknown", StringComparison.Ordinal));
+        Assert.Contains(diagnostics.Diagnostics, diagnostic => diagnostic.Contains("Failed workflow state", StringComparison.Ordinal));
+        Assert.Contains(diagnostics.Diagnostics, diagnostic => diagnostic.Contains("Unreconstructable workflow state", StringComparison.Ordinal));
+        Assert.Contains(result.Failures, failure => failure.Contains("history-authority-reconstructable", StringComparison.Ordinal));
+        Assert.Contains(result.Failures, failure => failure.Contains("workflow-diagnostics-explain-state", StringComparison.Ordinal));
     }
 
     private static void ArrangeAuthorityGateScenario(TestFixture fixture, string scenario)
@@ -4085,6 +4162,48 @@ public sealed class WorkflowProjectionServiceTests
 
         public Task<IReadOnlyList<WorkflowPreparationEvent>> GetPreparationHistoryAsync(Guid repositoryId) =>
             Task.FromResult<IReadOnlyList<WorkflowPreparationEvent>>([]);
+    }
+
+    private sealed class ProjectionServiceStub(WorkflowInstance projection) : IWorkflowProjectionService
+    {
+        public Task<WorkflowInstance> ProjectAsync(Guid repositoryId) => Task.FromResult(projection);
+
+        public Task<WorkflowProjectionDiagnostics> GetDiagnosticsAsync(Guid repositoryId) =>
+            Task.FromResult(projection.Diagnostics);
+
+        public Task<IReadOnlyList<WorkflowTimelineEntry>> GetTimelineAsync(Guid repositoryId) =>
+            Task.FromResult(projection.Timeline);
+    }
+
+    private sealed class HealthServiceStub(Guid repositoryId, WorkflowInstance projection) : IWorkflowHealthService
+    {
+        public Task<WorkflowInfluenceTrace> TraceInfluenceAsync(Guid repositoryId) =>
+            Task.FromResult(CreateTrace());
+
+        public Task<WorkflowHealthAssessment> AssessHealthAsync(Guid repositoryId) =>
+            Task.FromResult(new WorkflowHealthAssessment(
+                repositoryId,
+                DateTimeOffset.Parse("2026-06-23T12:50:00Z"),
+                "Failed",
+                [],
+                CreateTrace(),
+                ["Synthetic health assessment for malformed certification projection."]));
+
+        private WorkflowInfluenceTrace CreateTrace() =>
+            new(
+                repositoryId,
+                DateTimeOffset.Parse("2026-06-23T12:50:00Z"),
+                projection.CurrentStage,
+                projection.ProgressState,
+                projection.BlockingGate,
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                "synthetic-health-fingerprint");
     }
 
     private sealed class ArtifactStoreStub(TestFixture fixture) : IArtifactStore

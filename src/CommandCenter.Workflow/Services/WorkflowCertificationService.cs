@@ -124,6 +124,8 @@ public sealed class WorkflowCertificationService(
         findings.Add(CertifyGateCatalogUsesDomainCommands(projection));
         findings.Add(CertifyDomainEvidenceWinsDuringRecovery(projection, domainTimeline, latestTimeline, timelineLoadError));
         findings.Add(CertifyDerivedHistoryEvidenceIsRecoverable(historyLoadErrors));
+        findings.Add(CertifyWorkflowHistoryIsReconstructable(projection, continuationHistory, preparationHistory, historyLoadErrors));
+        findings.Add(CertifyWorkflowDiagnosticsExplainState(projection, latestTimeline, timelineLoadError, continuationHistory, preparationHistory));
         findings.Add(CertifyContinuationHistoryIsIdempotent(continuationHistory));
         findings.Add(CertifyPreparationHistoryIsIdempotent(preparationHistory));
         findings.Add(CertifyPreparationDuplicateDomainEvidence(preparationHistory));
@@ -486,6 +488,177 @@ public sealed class WorkflowCertificationService(
                 ? []
                 : historyLoadErrors.Select(error => $"Recovery is required for derived workflow history evidence: {error}").ToArray());
     }
+
+    private static WorkflowCertificationFinding CertifyWorkflowHistoryIsReconstructable(
+        WorkflowInstance projection,
+        IReadOnlyList<WorkflowContinuationEvent> continuationHistory,
+        IReadOnlyList<WorkflowPreparationEvent> preparationHistory,
+        IReadOnlyList<string> historyLoadErrors)
+    {
+        var diagnostics = new List<string>();
+
+        if (projection.CurrentStage is WorkflowStage.Unknown)
+        {
+            diagnostics.Add("Current workflow stage is Unknown and cannot be reconstructed from authoritative domain evidence.");
+        }
+
+        if (projection.CurrentStage is not WorkflowStage.WorkSelection &&
+            projection.Timeline.Count == 0 &&
+            continuationHistory.Count == 0 &&
+            preparationHistory.Count == 0)
+        {
+            diagnostics.Add($"Workflow state {projection.CurrentStage}/{projection.ProgressState} has no timeline, continuation, or preparation evidence explaining how it got here.");
+        }
+
+        if (projection.BlockingGate is not WorkflowGateType.None &&
+            !projection.OpenGates.Any(gate => gate.Type == projection.BlockingGate && gate.Status is WorkflowGateStatus.Open))
+        {
+            diagnostics.Add($"Blocking gate {projection.BlockingGate} has no matching open gate in reconstructed gate history.");
+        }
+
+        diagnostics.AddRange(projection.GateDiagnostics.Conflicts.Select(conflict =>
+            $"Gate history conflict prevents reconstruction: {conflict}"));
+
+        if (projection.BlockingGate is not WorkflowGateType.None and not WorkflowGateType.WorkSelection)
+        {
+            diagnostics.AddRange(projection.GateDiagnostics.MissingEvidence.Select(missing =>
+                $"Authority history is missing source evidence for {projection.BlockingGate}: {missing}"));
+        }
+
+        bool passed = diagnostics.Count == 0;
+
+        return new WorkflowCertificationFinding(
+            "history-authority-reconstructable",
+            "History",
+            passed,
+            passed
+                ? "Workflow authority and event history are reconstructable from domain-derived evidence."
+                : "Workflow authority history cannot be fully reconstructed.",
+            "Certification requires the current stage, blocking gate, gate history, continuation history, and preparation history to explain the current workflow position without workflow-owned truth.",
+            [
+                $"timeline-entries:{projection.Timeline.Count}",
+                $"gate-history:{projection.GateHistory.Count}",
+                $"open-gates:{projection.OpenGates.Count}",
+                $"satisfied-gates:{projection.SatisfiedGates.Count}",
+                $"continuation-history:{continuationHistory.Count}",
+                $"preparation-history:{preparationHistory.Count}",
+                $"history-load-errors:{historyLoadErrors.Count}",
+                $"current:{projection.CurrentStage}:{projection.ProgressState}:{projection.BlockingGate}"
+            ],
+            diagnostics);
+    }
+
+    private static WorkflowCertificationFinding CertifyWorkflowDiagnosticsExplainState(
+        WorkflowInstance projection,
+        WorkflowTimeline? latestTimeline,
+        string? timelineLoadError,
+        IReadOnlyList<WorkflowContinuationEvent> continuationHistory,
+        IReadOnlyList<WorkflowPreparationEvent> preparationHistory)
+    {
+        var diagnostics = new List<string>();
+        IReadOnlyList<string> explanation = BuildDiagnosticExplanation(projection);
+        bool requiresBlockedExplanation = projection.ProgressState is WorkflowProgressState.AwaitingGate
+            or WorkflowProgressState.Blocked
+            or WorkflowProgressState.WaitingForHuman;
+        bool requiresFailedExplanation = projection.ProgressState is WorkflowProgressState.Failed ||
+            projection.CurrentStage is WorkflowStage.Failed;
+        bool requiresProgressedExplanation = projection.ValidTransitions.Count > 0 ||
+            continuationHistory.Any(entry => string.Equals(entry.Decision, "Advance", StringComparison.OrdinalIgnoreCase));
+        bool requiresRecoveredExplanation = latestTimeline is null ||
+            timelineLoadError is not null ||
+            latestTimeline.Fingerprint != WorkflowTimelineFactory.Create(projection, DateTimeOffset.UtcNow).Fingerprint;
+        bool requiresUnreconstructableExplanation = projection.CurrentStage is WorkflowStage.Unknown ||
+            projection.Diagnostics.UnknownStates.Count > 0 ||
+            projection.Diagnostics.Conflicts.Count > 0 ||
+            projection.GateDiagnostics.Conflicts.Count > 0;
+
+        if (requiresBlockedExplanation &&
+            projection.BlockedTransitions.Count == 0 &&
+            projection.OpenGates.Count == 0 &&
+            string.IsNullOrWhiteSpace(projection.RequiredHumanAction) &&
+            !explanation.Any())
+        {
+            diagnostics.Add($"Blocked workflow state {projection.CurrentStage}/{projection.ProgressState}/{projection.BlockingGate} lacks gate, transition, or human-action diagnostics.");
+        }
+
+        if (requiresFailedExplanation &&
+            projection.ExecutionDiagnostics.Reasoning.Count == 0 &&
+            projection.ExecutionDiagnostics.Conflicts.Count == 0 &&
+            !explanation.Any())
+        {
+            diagnostics.Add("Failed workflow state lacks execution or projection diagnostics.");
+        }
+
+        if (requiresProgressedExplanation &&
+            projection.ValidTransitions.Count == 0 &&
+            !continuationHistory.Any(entry =>
+                string.Equals(entry.Decision, "Advance", StringComparison.OrdinalIgnoreCase) &&
+                (entry.Diagnostics.Count > 0 || !string.IsNullOrWhiteSpace(entry.Reason))))
+        {
+            diagnostics.Add("Progressed workflow state lacks valid-transition or continuation diagnostics.");
+        }
+
+        if (requiresRecoveredExplanation && timelineLoadError is null && latestTimeline is not null &&
+            projection.Diagnostics.Reasoning.Count == 0 &&
+            projection.Diagnostics.Conflicts.Count == 0)
+        {
+            diagnostics.Add("Recovered workflow state lacks projection diagnostics explaining the recovered domain state.");
+        }
+
+        if (requiresUnreconstructableExplanation &&
+            projection.Diagnostics.Reasoning.Count == 0 &&
+            projection.Diagnostics.UnknownStates.Count == 0 &&
+            projection.Diagnostics.Conflicts.Count == 0 &&
+            projection.GateDiagnostics.Conflicts.Count == 0 &&
+            projection.GateDiagnostics.MissingEvidence.Count == 0)
+        {
+            diagnostics.Add("Unreconstructable workflow state lacks explicit unknown-state, conflict, or missing-evidence diagnostics.");
+        }
+
+        if (preparationHistory.Any(entry =>
+            (entry.Command is not WorkflowPreparationCommand.None ||
+                !string.Equals(entry.CommandName, "none", StringComparison.OrdinalIgnoreCase)) &&
+            string.IsNullOrWhiteSpace(entry.Reason) &&
+            entry.Diagnostics.Count == 0))
+        {
+            diagnostics.Add("Preparation decision history contains command decisions without reason or diagnostics.");
+        }
+
+        bool passed = diagnostics.Count == 0;
+
+        return new WorkflowCertificationFinding(
+            "workflow-diagnostics-explain-state",
+            "Workflow",
+            passed,
+            passed
+                ? "Workflow diagnostics explain blocked, recovered, progressed, failed, and unreconstructable states when present."
+                : "Workflow diagnostics do not fully explain the current state.",
+            "Every workflow state that blocks, recovers, progresses, fails, or cannot be reconstructed must carry enough projection, gate, continuation, preparation, or execution diagnostics to explain why.",
+            [
+                $"reasoning:{projection.Diagnostics.Reasoning.Count}",
+                $"unknown-states:{projection.Diagnostics.UnknownStates.Count}",
+                $"conflicts:{projection.Diagnostics.Conflicts.Count + projection.GateDiagnostics.Conflicts.Count}",
+                $"blocked-transitions:{projection.BlockedTransitions.Count}",
+                $"valid-transitions:{projection.ValidTransitions.Count}",
+                $"open-gates:{projection.OpenGates.Count}",
+                $"continuation-history:{continuationHistory.Count}",
+                $"preparation-history:{preparationHistory.Count}",
+                $"timeline-load-error:{timelineLoadError ?? "none"}"
+            ],
+            diagnostics);
+    }
+
+    private static IReadOnlyList<string> BuildDiagnosticExplanation(WorkflowInstance projection) =>
+        projection.Diagnostics.Reasoning
+            .Concat(projection.Diagnostics.UnknownStates)
+            .Concat(projection.Diagnostics.Conflicts)
+            .Concat(projection.GateDiagnostics.Reasoning)
+            .Concat(projection.GateDiagnostics.MissingEvidence)
+            .Concat(projection.GateDiagnostics.Conflicts)
+            .Concat(projection.ExecutionDiagnostics.Reasoning)
+            .Concat(projection.ExecutionDiagnostics.Conflicts)
+            .Concat(projection.BlockedTransitions.Select(transition => transition.Reason))
+            .ToArray();
 
     private static WorkflowCertificationFinding CertifyContinuationHistoryIsIdempotent(
         IReadOnlyList<WorkflowContinuationEvent> continuationHistory)

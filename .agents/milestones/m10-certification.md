@@ -16,8 +16,8 @@ Deliver:
 - [x] continuation certification.
 - [x] preparation certification.
 - [ ] end-to-end workflow fixture.
-- [ ] workflow history certification.
-- [ ] workflow diagnostics certification.
+- [x] workflow history certification.
+- [x] workflow diagnostics certification.
 - [ ] workflow health certification.
 
 Certification finding categories:
@@ -61,16 +61,16 @@ Certification failure conditions:
 - [x] workflow preparation satisfied a gate.
 - [x] workflow preparation moved the workflow stage.
 - [x] workflow preparation created duplicate review artifacts for the same fingerprint.
-- [ ] workflow state cannot be reconstructed from domain evidence.
+- [x] workflow state cannot be reconstructed from domain evidence.
 - [ ] continuation duplicated progression after restart.
 - [x] preparation duplicated artifacts or preparation events after restart.
-- [ ] blocked, recovered, or progressed states lack diagnostics.
-- [ ] preparation decisions lack diagnostics.
-- [ ] authority history cannot be reconstructed.
+- [x] blocked, recovered, or progressed states lack diagnostics.
+- [x] preparation decisions lack diagnostics.
+- [x] authority history cannot be reconstructed.
 
 Tests:
 
-- [ ] failures generate findings.
+- [x] failures generate findings.
 - [ ] passing scenarios generate readiness evidence.
 - [x] authority certification detects forbidden mutation.
 - [ ] recovery certification detects lost state, corruption, and duplicate progression.

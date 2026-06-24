@@ -2,38 +2,36 @@
 
 ## New State
 
-- Continued Milestone 10 preparation certification.
-- `WorkflowCertificationService` now adds dedicated preparation findings for:
-  - allowed existing domain preparation commands only.
-  - preparation not satisfying authority gates.
-  - preparation not moving workflow stage.
-  - created artifacts being reviewable only.
-  - duplicate preparation creation for the same input fingerprint.
-  - duplicate domain evidence being reported without new artifact creation.
-- Preparation idempotency certification now fails when the same input fingerprint, stage, and command create artifacts more than once, even if the artifact IDs differ.
-- Added certification tests for forged bad preparation history:
-  - unknown or workflow-owned preparation command.
-  - preparation satisfying a decision gate.
-  - preparation advancing workflow stage.
-  - duplicate artifact creation for the same preparation fingerprint.
-  - non-reviewable artifact creation.
-- Updated `m10-certification.md` to mark preparation certification and related failure conditions complete.
+- Continued Milestone 10 history and diagnostics certification.
+- `WorkflowCertificationService` now emits two additional findings:
+  - `history-authority-reconstructable` verifies the current stage, blocking gate, gate history, continuation history, and preparation history explain the workflow position without workflow-owned truth.
+  - `workflow-diagnostics-explain-state` verifies blocked, recovered, progressed, failed, unreconstructable, and preparation-decision states carry explanatory diagnostics when present.
+- Certification now fails when:
+  - current workflow stage is `Unknown`.
+  - non-work-selection state has no timeline, continuation, or preparation evidence explaining how it got there.
+  - a blocking gate has no matching open gate in reconstructed gate history.
+  - authority gate history has conflicts or missing source evidence.
+  - failed/unreconstructable/progressed/recovered/preparation states lack reasons or diagnostics.
+- Added certification coverage for:
+  - normal decision-gate state passing history and diagnostics findings.
+  - synthetic unreconstructable state failing with explicit history and diagnostics findings.
+- Updated `m10-certification.md` to mark workflow history certification, workflow diagnostics certification, unreconstructable-state failure, diagnostics failure cases, preparation diagnostics, authority history reconstruction, and generic failure findings complete.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "FullyQualifiedName~WorkflowProjectionServiceTests"` passed: 114 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "FullyQualifiedName~WorkflowProjectionServiceTests"` passed: 115 tests.
 - `dotnet build CommandCenter.slnx` passed with 0 warnings and 0 errors.
 
 ## Relevant Decisions
 
-- Preparation certification remains evidence-based: absent derived preparation history is not a failure, but persisted evidence showing gate satisfaction, stage movement, parallel commands, or duplicate created artifacts is a hard certification failure.
-- The certification layer did not add new preparation behavior; it detects invalid or forged preparation evidence.
-- Existing allowed reviewable preparation remains recognized for decision proposals and commit preparation, provided the authority gate remains waiting for human action.
+- History certification is projection-derived and evidence-based; it does not introduce new persisted authority or recovery behavior.
+- A fresh work-selection state may remain valid without timeline evidence, but later workflow stages must have timeline, continuation, preparation, gate, or domain-derived evidence explaining how they were reached.
+- Diagnostics certification checks for explanations only where the state requires them; it avoids forcing every healthy projection to manufacture diagnostics.
+- The unreconstructable-state test uses a synthetic projection stub so production services remain read-only and unchanged.
 
 ## Next Slice
 
-- Continue Milestone 10 with workflow history and diagnostics certification:
-  - certify authority history can be reconstructed.
-  - certify blocked, recovered, and progressed states include diagnostics.
-  - certify workflow state reconstruction failure produces explicit findings.
-  - begin the end-to-end fixture only after history and diagnostics findings are stable.
+- Continue Milestone 10 with workflow health certification and report artifacts:
+  - certify health dimensions and influence trace are present in certification evidence.
+  - add repository/progression/human-governance/readiness reports or the minimal report service surface needed for exit criteria.
+  - then begin the end-to-end fixture once history, diagnostics, and health findings are stable.
