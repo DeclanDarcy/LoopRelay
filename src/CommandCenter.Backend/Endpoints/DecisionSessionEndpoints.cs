@@ -36,6 +36,21 @@ public static class DecisionSessionEndpoints
             IDecisionSessionRecoveryService recoveryService) =>
             await HandleAsync(() => recoveryService.GetDiagnosticsAsync(repositoryId)));
 
+        group.MapGet("/analysis/metrics", async (
+            Guid repositoryId,
+            IDecisionSessionMetricsService metricsService) =>
+            await HandleAsync(async () => (await metricsService.GetMetricsAsync(repositoryId)).Metrics));
+
+        group.MapGet("/analysis/statistics", async (
+            Guid repositoryId,
+            IDecisionSessionMetricsService metricsService) =>
+            await HandleAsync(async () => (await metricsService.GetMetricsAsync(repositoryId)).Statistics));
+
+        group.MapGet("/analysis/diagnostics", async (
+            Guid repositoryId,
+            IDecisionSessionMetricsService metricsService) =>
+            await HandleAsync(async () => (await metricsService.GetMetricsAsync(repositoryId)).Diagnostics));
+
         return app;
     }
 

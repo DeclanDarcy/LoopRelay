@@ -14,69 +14,69 @@ Do not start lifecycle policy until all three checkpoints are complete and the a
 
 Add models:
 
-- [ ] `DecisionSessionMetrics`
-- [ ] `DecisionSessionStatistics`
-- [ ] `DecisionSessionActivity`
-- [ ] `DecisionSessionGrowth`
-- [ ] `DecisionSessionMetricsDiagnostics`
-- [ ] `DecisionSessionMetricsSnapshot`
-- [ ] `DecisionSessionCacheMetrics`
+- [x] `DecisionSessionMetrics`
+- [x] `DecisionSessionStatistics`
+- [x] `DecisionSessionActivity`
+- [x] `DecisionSessionGrowth`
+- [x] `DecisionSessionMetricsDiagnostics`
+- [x] `DecisionSessionMetricsSnapshot`
+- [x] `DecisionSessionCacheMetrics`
 
 Metrics fields:
 
-- [ ] `long EstimatedTokenCount`
-- [ ] `long ContextByteSize`
-- [ ] `long ReasoningEventCount`
-- [ ] `long ReasoningThreadCount`
-- [ ] `long ReasoningRelationshipCount`
-- [ ] `long DecisionCount`
-- [ ] `long DecisionCandidateCount`
-- [ ] `long DecisionProposalCount`
-- [ ] `long OperationalContextRevisionCount`
-- [ ] `DateTimeOffset LastActivityAt`
-- [ ] `DateTimeOffset MeasuredAt`
+- [x] `long EstimatedTokenCount`
+- [x] `long ContextByteSize`
+- [x] `long ReasoningEventCount`
+- [x] `long ReasoningThreadCount`
+- [x] `long ReasoningRelationshipCount`
+- [x] `long DecisionCount`
+- [x] `long DecisionCandidateCount`
+- [x] `long DecisionProposalCount`
+- [x] `long OperationalContextRevisionCount`
+- [x] `DateTimeOffset LastActivityAt`
+- [x] `DateTimeOffset MeasuredAt`
 
 Statistics and cache fields:
 
-- [ ] `TimeSpan SessionAge`
-- [ ] `TimeSpan SessionElapsedDuration`
-- [ ] `TimeSpan IdleDuration`
-- [ ] `decimal GrowthRate`
-- [ ] `decimal ActivityRate`
-- [ ] `TimeSpan EstimatedCacheTtl`
-- [ ] `decimal EstimatedCacheMissRisk`
-- [ ] `DateTimeOffset? EstimatedCacheExpiresAt`
+- [x] `TimeSpan SessionAge`
+- [x] `TimeSpan SessionElapsedDuration`
+- [x] `TimeSpan IdleDuration`
+- [x] `decimal GrowthRate`
+- [x] `decimal ActivityRate`
+- [x] `TimeSpan EstimatedCacheTtl`
+- [x] `decimal EstimatedCacheMissRisk`
+- [x] `DateTimeOffset? EstimatedCacheExpiresAt`
 
 Add services:
 
-- [ ] `ITokenEstimator`
-- [ ] `IDecisionSessionMetricsService`
-- [ ] `DecisionSessionMetricsService`
+- [x] `ITokenEstimator`
+- [x] `IDecisionSessionMetricsService`
+- [x] `DecisionSessionMetricsService`
 - [ ] `DecisionSessionEvidenceReader`
 
 Evidence sources:
 
-- [ ] `IDecisionRepository.ListDecisionsAsync`
-- [ ] `IDecisionRepository.ListCandidatesAsync`
-- [ ] `IDecisionRepository.ListProposalsAsync`
-- [ ] `IReasoningRepository.ListEventsAsync`
-- [ ] `IReasoningRepository.ListThreadsAsync`
-- [ ] `IReasoningRepository.ListRelationshipsAsync`
-- [ ] `IOperationalContextProposalStore.ListAsync`
+- [x] `IDecisionRepository.ListDecisionsAsync`
+- [x] `IDecisionRepository.ListCandidatesAsync`
+- [x] `IDecisionRepository.ListProposalsAsync`
+- [x] `IReasoningRepository.ListEventsAsync`
+- [x] `IReasoningRepository.ListThreadsAsync`
+- [x] `IReasoningRepository.ListRelationshipsAsync`
+- [x] `IOperationalContextProposalStore.ListAsync`
 - [ ] `IArtifactService` and `IArtifactStore` for current and historical operational context content.
 
 Token and TTL estimation:
 
-- [ ] Token estimation must be deterministic and provider-independent.
-- [ ] Estimate tokens by text length using a stable character-to-token ratio, for example `(characterCount + 3) / 4`.
-- [ ] Estimate cache TTL and cache miss risk from session elapsed duration, idle duration, and configurable assumptions.
+- [x] Token estimation must be deterministic and provider-independent.
+- [x] Estimate tokens by text length using a stable character-to-token ratio, for example `(characterCount + 3) / 4`.
+- [x] Estimate cache TTL and cache miss risk from session elapsed duration, idle duration, and configurable assumptions.
 - [ ] Include diagnostics describing each source, byte count, character count, TTL assumption, cache risk, and confidence.
 
 Stage 2A checkpoint tests:
 
-- [ ] Metrics generated from decisions, reasoning, and operational context evidence.
+- [x] Metrics generated from decisions, reasoning, and operational context evidence.
 - [ ] Same inputs produce same metrics and statistics.
-- [ ] Token estimator is deterministic.
+- [x] Token estimator is deterministic.
 - [ ] TTL and cache miss risk increase with elapsed and idle duration.
 - [ ] Activity increases when reasoning, decision, or context evidence increases.
 - [ ] Growth reflects larger continuity evidence.
@@ -214,11 +214,11 @@ Analysis snapshots are derived, recoverable, and disposable. If a snapshot is mi
 
 ### Backend Endpoints
 
-- [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/analysis/metrics`
-- [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/analysis/statistics`
+- [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/analysis/metrics`
+- [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/analysis/statistics`
 - [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/analysis/economics`
 - [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/analysis/coherence`
-- [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/analysis/diagnostics`
+- [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/analysis/diagnostics`
 
 Optional compatibility aliases may be added for direct `metrics`, `economics`, and `coherence` paths if useful to match existing endpoint naming style.
 

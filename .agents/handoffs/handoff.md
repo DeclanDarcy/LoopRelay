@@ -2,35 +2,36 @@
 
 ## Slice Summary
 
-- Continued Milestone 1 hardening for the Decision Session Lifecycle epic.
-- Added focused coverage to `tests/CommandCenter.Backend.Tests/DecisionSessionFoundationTests.cs` for:
-  - `DecisionSessionState` JSON string enum round-trip.
-  - aggregate ownership and timestamp initialization.
-  - zero-active and one-active registry behavior.
-  - `Active -> TransferPending -> Transferred` lifecycle behavior with a replacement active session.
-  - invalid registry transitions for created, active, transfer-pending, and retired sessions.
-  - repository write rejection for wrong repository ownership.
-  - invalid timestamp diagnostics.
-  - unsupported schema-version diagnostics and repository read rejection.
-- No production code changes were needed in this slice; existing registry, repository, and recovery behavior matched the Stage 1 hardening expectations.
-- Rotated the previous active handoff to `.agents/handoffs/handoff.0001.md` and created this new active handoff.
+- Split the monolithic DecisionSession foundation test file into focused suites:
+  - `DecisionSessionFoundationTests.cs` for primitives/models.
+  - `DecisionSessionRegistryTests.cs` for registry transitions and active-session invariants.
+  - `DecisionSessionRepositoryTests.cs` for persistence/schema validation.
+  - `DecisionSessionEndpointTests.cs` for backend route behavior.
+  - `DecisionSessionTestHarness.cs` for shared test setup.
+- Started Milestone 2A by adding read-only metrics analysis:
+  - `DecisionSessionMetrics`, `DecisionSessionStatistics`, `DecisionSessionActivity`, `DecisionSessionGrowth`, `DecisionSessionCacheMetrics`, diagnostics, and snapshot models.
+  - `ITokenEstimator` plus deterministic `(characterCount + 3) / 4` implementation.
+  - `IDecisionSessionMetricsService` plus service implementation reading decisions, candidates, proposals, reasoning events/threads/relationships, and operational context proposals.
+  - DI registration for metrics services.
+  - Read-only backend routes for `/analysis/metrics`, `/analysis/statistics`, and `/analysis/diagnostics`.
+- Updated Milestone 2 checklist only for completed Stage 2A items; snapshot persistence/rebuild and broader determinism diagnostics remain open.
 
 ## Validation
 
-- `dotnet test .\tests\CommandCenter.Backend.Tests\CommandCenter.Backend.Tests.csproj --filter DecisionSessionFoundationTests` passed: 16 tests.
-- `dotnet test .\CommandCenter.slnx` passed: 646 tests.
+- `dotnet test .\tests\CommandCenter.Backend.Tests\CommandCenter.Backend.Tests.csproj --filter DecisionSession` passed: 21 tests.
+- `dotnet test .\CommandCenter.slnx` passed: 651 tests.
 
 ## Current State
 
-- Working tree contains unstaged DecisionSession implementation from the prior slice plus this slice's added test coverage.
-- `.agents/decisions/decisions.md` was not rotated because no new user response authorized new decisions during this slice.
-- Milestone 1 is effectively hardened at the current checklist level; the remaining useful cleanup is organizational rather than behavioral.
+- `.agents/handoffs/handoff.md` was rotated to `.agents/handoffs/handoff.0002.md`; this file is the new active handoff.
+- `.agents/decisions/decisions.md` was not rotated because no user response authorized new decisions during this slice.
+- Stage 2A is partially implemented. Metrics are computed live from authoritative evidence but are not yet persisted as rebuildable snapshots under `.agents/decision-sessions/analysis/metrics/`.
 
 ## Next Slice Recommendation
 
-- Split `DecisionSessionFoundationTests.cs` into dedicated files before starting Stage 2:
-  - `DecisionSessionFoundationTests.cs` for primitives/models.
-  - `DecisionSessionRegistryTests.cs` for state transitions and invariants.
-  - `DecisionSessionRepositoryTests.cs` for persistence/schema validation.
-  - `DecisionSessionEndpointTests.cs` for backend route behavior.
-- Then start Milestone 2A with metrics/statistics/TTL/cache-miss-risk snapshots and diagnostics.
+- Complete Stage 2A before moving to economics:
+  - Add `DecisionSessionEvidenceReader` to separate evidence loading/sizing from metrics math.
+  - Persist metrics snapshots under `.agents/decision-sessions/analysis/metrics/`.
+  - Rebuild missing/invalid metrics snapshots from authoritative evidence.
+  - Add determinism tests for identical evidence inputs and tests showing TTL/cache miss risk increase with elapsed/idle duration.
+  - Expand diagnostics to explicitly include TTL assumption, cache risk contribution, confidence, and missing evidence.

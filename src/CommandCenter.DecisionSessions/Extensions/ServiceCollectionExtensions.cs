@@ -11,6 +11,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IDecisionSessionRepository, FileSystemDecisionSessionRepository>();
         services.AddSingleton<IDecisionSessionRegistry, DecisionSessionRegistry>();
         services.AddSingleton<IDecisionSessionRecoveryService, DecisionSessionRecoveryService>();
+        services.AddSingleton<ITokenEstimator, DeterministicTokenEstimator>();
+        services.AddSingleton<IDecisionSessionMetricsService, DecisionSessionMetricsService>();
         return services;
     }
 }
