@@ -2,25 +2,23 @@
 
 ## New State
 
-- Continued Milestone 9 one-step continuation progression coverage.
-- Added backend tests proving persisted coordinator stages can advance when
-  domain evidence has reached the next canonical stage:
-  - `Handoff -> Decision` after accepted handoff with decision candidate
-    evidence.
-  - `Decision -> OperationalContext` after resolved decision with pending
-    operational-context proposal evidence.
-  - `OperationalContext -> Commit` after promoted context with awaiting-commit
-    git evidence.
-- Added a compact operational-context proposal fixture helper in
-  `WorkflowProjectionServiceTests`.
-- Updated `.agents/milestones/m9-continuation.md` to mark these progression
-  rules complete.
+- Continued Milestone 9 Git-side continuation progression coverage.
+- Added backend tests proving persisted coordinator stages advance when
+  domain-owned git evidence has reached the next canonical stage:
+  - `Commit -> Push` after commit evidence exists.
+  - `Push -> Completed` after push evidence exists.
+  - `Push -> Completed` when accepted execution produced no changes.
+- Added backend coverage proving a second continuation run after completion
+  stops at the `WorkSelection` gate instead of auto-selecting new work.
+- Updated `.agents/milestones/m9-continuation.md` to mark the covered
+  continuation rules, work-selection halt, eligible advancement, and open-gate
+  progression blocking complete.
 - Rotated previous `.agents/handoffs/handoff.md` to
-  `.agents/handoffs/handoff.0012.md`.
+  `.agents/handoffs/handoff.0013.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter WorkflowProjectionServiceTests` passed: 54 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter WorkflowProjectionServiceTests` passed: 58 tests.
 - `dotnet build CommandCenter.slnx` passed with 0 warnings and 0 errors.
 
 ## Notes
@@ -29,12 +27,12 @@
 - No preparation service was added.
 - No hosted continuation service was added.
 - No domain commands are invoked.
-- Remaining progression coverage is still needed for `Commit -> Push`,
-  `Push -> Completed`, legitimate push skip or no-change completion, and opening
-  the post-completion work-selection gate.
+- Legitimate push-skip completion remains unimplemented unless or until
+  domain-owned push-skip evidence exists.
 
 ## Next Slice
 
-- Extend persisted one-step progression coverage across the remaining git-side
-  transitions: commit evidence to push, push or legitimate skip/no-change
-  evidence to completed, and completed workflow halting at work selection.
+- Start the recovery/idempotency portion of Milestone 9: verify restart
+  reevaluation does not duplicate continuation events or timeline progression,
+  especially after persisted `Completed`, persisted/domain divergence, and
+  no-change completion reconstruction.

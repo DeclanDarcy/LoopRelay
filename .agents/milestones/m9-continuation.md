@@ -8,7 +8,7 @@ Deliver:
 - [ ] `IWorkflowPreparationService`.
 - [x] `WorkflowContinuationEvaluation`.
 - [ ] `WorkflowPreparationEvaluation`.
-- [ ] continuation rules for execution complete, handoff accepted, decision resolved, context promoted/rejected/not required, commit executed, push executed, no changes, and completed workflow.
+- [x] continuation rules for execution complete, handoff accepted, decision resolved, context promoted/rejected/not required, commit executed, push executed, no changes, and completed workflow.
 - [ ] preparation rules for decision discovery/generation, operational-context proposal generation/linkage, and commit preparation.
 - [ ] gate halting for work selection, execution acceptance, decision resolution, operational context review, operational context promotion, commit approval, and push approval.
 - [x] `WorkflowContinuationDiagnostics`.
@@ -46,6 +46,9 @@ Slice progress:
 - Added persisted one-step progression coverage for accepted handoff to
   decision, resolved decision to operational context, and completed operational
   context to commit.
+- Added persisted one-step progression coverage for committed evidence to push,
+  pushed evidence to completed, no-change completion, and work-selection gate
+  halting after completed progression.
 - Continuation evaluation consumes the aggregate workflow projection, latest
   persisted workflow timeline evidence, and state-machine, gate, and completion
   evidence.
@@ -60,9 +63,10 @@ Progression rules:
 - [x] handoff accepted and no open execution acceptance gate projects to decision.
 - [x] decision resolved and no decision governance block projects to operational context.
 - [x] context promoted, rejected, or not required projects to commit.
-- [ ] commit executed projects to push.
-- [ ] push executed, legitimate push skip, or no repository changes projects to completed.
-- [ ] after push completed or legitimate completion condition exists, persist completion evidence and open work selection gate.
+- [x] commit executed projects to push.
+- [x] push executed or no repository changes projects to completed.
+- [ ] legitimate push skip projects to completed if domain evidence supports it.
+- [x] after push completed or legitimate completion condition exists, persist completion evidence and open work selection gate.
 
 Preparation rules:
 
@@ -75,7 +79,7 @@ Preparation rules:
 Gate halting:
 
 - [x] Any open authority gate produces `WaitingForHuman` and stops continuation.
-- [ ] Work selection gate must never be auto-satisfied.
+- [x] Work selection gate must never be auto-satisfied.
 - [x] Commit and push gates must never be crossed by continuation.
 - [x] Decision resolution and context promotion must never be crossed by continuation.
 - [ ] Preparation may not run when it would create artifacts on the far side of an unsatisfied gate.
@@ -91,11 +95,11 @@ Idempotency rules:
 
 Tests:
 
-- [ ] eligible workflow advances mechanically.
+- [x] eligible workflow advances mechanically.
 - [ ] ineligible workflow does not advance.
 - [ ] eligible preparation creates reviewable artifacts only through existing domain commands.
 - [ ] ineligible preparation does not create artifacts.
-- [ ] every open gate stops progression.
+- [x] every open gate stops progression.
 - [ ] open gates block preparation when the requested artifact would bypass authority.
 - [ ] restart does not duplicate progression.
 - [ ] restart does not duplicate preparation.
