@@ -1717,6 +1717,121 @@ public sealed class WorkflowProjectionServiceTests
     }
 
     [Fact]
+    public async Task RecoveryRebuildsCompletedWorkflowFromDomainEvidenceWithoutPersistedStage()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingPush;
+        fixture.Session = PushedSession();
+        var workflowRepository = new FileSystemWorkflowRepository(new MemoryArtifactStore());
+
+        WorkflowRecoveryResult recovered = await fixture.CreateRecoveryService(workflowRepository).RecoverCurrentWorkflowAsync(fixture.Repository.Id);
+
+        Assert.True(recovered.Diagnostics.Rebuilt);
+        Assert.Equal(WorkflowStage.Completed, recovered.Timeline.CurrentStage);
+        Assert.Equal(WorkflowGateType.WorkSelection, recovered.Timeline.BlockingGate);
+        Assert.Contains(recovered.Timeline.Entries, entry => entry.EventType == WorkflowTimelineEventType.PushExecuted);
+    }
+
+    [Fact]
+    public async Task RecoveryLetsDomainProjectionWinOverStalePersistedTimeline()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingPush;
+        fixture.Session = PushedSession();
+        var store = new MemoryArtifactStore();
+        var workflowRepository = new FileSystemWorkflowRepository(store);
+        await workflowRepository.SaveTimelineAsync(
+            fixture.Repository,
+            CreateTimeline(
+                fixture.Repository.Id,
+                DateTimeOffset.Parse("2026-06-23T12:05:00Z"),
+                WorkflowStage.Commit,
+                WorkflowProgressState.AwaitingGate,
+                WorkflowGateType.CommitApproval,
+                WorkflowStage.OperationalContext,
+                [WorkflowBlockingCondition.PendingCommitApproval]));
+
+        WorkflowRecoveryResult recovered = await fixture.CreateRecoveryService(workflowRepository).RecoverCurrentWorkflowAsync(fixture.Repository.Id);
+        WorkflowTimeline? latest = await workflowRepository.GetLatestTimelineAsync(fixture.Repository);
+
+        Assert.True(recovered.Diagnostics.Rebuilt);
+        Assert.False(recovered.Diagnostics.PersistedEvidenceMatchedDomain);
+        Assert.Equal(WorkflowStage.Completed, recovered.Timeline.CurrentStage);
+        Assert.Equal(WorkflowGateType.WorkSelection, recovered.Timeline.BlockingGate);
+        Assert.Contains(recovered.Diagnostics.DiscardedArtifacts, artifact => !string.IsNullOrWhiteSpace(artifact));
+        Assert.NotNull(latest);
+        Assert.Equal(recovered.Timeline.Fingerprint, latest.Fingerprint);
+    }
+
+    [Fact]
+    public async Task ContinuationAfterRestartDoesNotDuplicateCompletedStopEvent()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingPush;
+        fixture.Session = PushedSession();
+        var store = new MemoryArtifactStore();
+        var workflowRepository = new FileSystemWorkflowRepository(store);
+        var firstService = new WorkflowContinuationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            new WorkflowStateMachineService(),
+            workflowRepository);
+        await workflowRepository.SaveTimelineAsync(
+            fixture.Repository,
+            CreateTimeline(
+                fixture.Repository.Id,
+                DateTimeOffset.Parse("2026-06-23T12:11:00Z"),
+                WorkflowStage.Push,
+                WorkflowProgressState.Ready,
+                WorkflowGateType.None,
+                WorkflowStage.Commit,
+                []));
+        await firstService.RunContinuationAsync(fixture.Repository.Id);
+        WorkflowContinuationEvent completedStop = await firstService.RunContinuationAsync(fixture.Repository.Id);
+        await fixture.CreateRecoveryService(workflowRepository).RecoverCurrentWorkflowAsync(fixture.Repository.Id);
+        var restartedService = new WorkflowContinuationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            new WorkflowStateMachineService(),
+            workflowRepository);
+
+        WorkflowContinuationEvent restartedStop = await restartedService.RunContinuationAsync(fixture.Repository.Id);
+        IReadOnlyList<WorkflowContinuationEvent> history = await workflowRepository.ListContinuationEventsAsync(fixture.Repository);
+
+        Assert.Equal(completedStop.EventId, restartedStop.EventId);
+        Assert.Equal(2, history.Count);
+        Assert.Equal("Stop", restartedStop.Decision);
+        Assert.Equal(WorkflowStage.Completed, restartedStop.FromStage);
+        Assert.Equal(WorkflowGateType.WorkSelection, restartedStop.BlockingGate);
+    }
+
+    [Fact]
+    public async Task RecoveryRebuildsNoChangeCompletionAndContinuationStopsAtWorkSelection()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+        var store = new MemoryArtifactStore();
+        var workflowRepository = new FileSystemWorkflowRepository(store);
+
+        WorkflowRecoveryResult recovered = await fixture.CreateRecoveryService(workflowRepository).RecoverCurrentWorkflowAsync(fixture.Repository.Id);
+        var continuationService = new WorkflowContinuationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            new WorkflowStateMachineService(),
+            workflowRepository);
+        WorkflowContinuationEvent continuationEvent = await continuationService.RunContinuationAsync(fixture.Repository.Id);
+
+        Assert.Equal(WorkflowStage.Completed, recovered.Timeline.CurrentStage);
+        Assert.Equal(WorkflowGateType.WorkSelection, recovered.Timeline.BlockingGate);
+        Assert.Equal("Stop", continuationEvent.Decision);
+        Assert.Equal(WorkflowStage.Completed, continuationEvent.FromStage);
+        Assert.Equal(WorkflowGateType.WorkSelection, continuationEvent.BlockingGate);
+        Assert.True(continuationEvent.IsWaitingForHuman);
+        Assert.Contains(continuationEvent.Diagnostics, diagnostic => diagnostic.Contains("no changes", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task StartupRecoveryRestoresWorkflowEvidenceWithoutDomainMutation()
     {
         TestFixture fixture = TestFixture.Create();

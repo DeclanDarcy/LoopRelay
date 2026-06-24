@@ -2,30 +2,38 @@
 
 ## Newly Authorized
 
-- Stop further progression implementation for now; the canonical workflow path
-  is considered sufficiently covered for this phase:
-  - `Execution -> Handoff -> Decision -> OperationalContext -> Commit -> Push -> Completed -> WorkSelection`
-  - no-change completion to `Completed -> WorkSelection`
-- Proceed next with Milestone 9 recovery and idempotency hardening before any
-  preparation work.
-- Focus the next slice on:
-  - completed recovery from domain evidence without relying on persisted
-    workflow stage.
-  - timeline/domain divergence where domain projection wins over stale or
-    conflicting workflow timelines.
-  - continuation idempotency across restart with no duplicate event, timeline,
-    or progression for identical fingerprints.
-  - no-change completion reconstruction after recovery.
-  - work-selection gate recovery after completed workflow restart.
-- Preserve the current authority boundary:
-  - workflow advances workflow only.
-  - workflow does not advance domains.
-  - workflow records derived evidence only.
-  - domains remain the source of truth.
+- Complete the next Milestone 9 slice as preparation evaluation only.
+- The first preparation slice may establish:
+  - `IWorkflowPreparationService`
+  - `WorkflowPreparationEvaluation`
+  - `WorkflowPreparationDiagnostics`
+  - `WorkflowPreparationEvent`
+  - preparation persistence
+  - preparation fingerprints
+- Preparation must follow the continuation sequencing pattern:
+  - evaluate
+  - persist
+  - recover
+  - certify
+  - then act
+- Preparation should consume workflow projection, gate state, and
+  state-machine evaluation rather than independently interpreting domain
+  authority.
+- Add gate-refusal coverage proving every open authority gate causes
+  preparation to be refused.
+- Preparation evaluation may answer:
+  - whether preparation would be allowed
+  - why it would or would not be allowed
+  - what gate prevents it
+  - what command would eventually be used
+  - what fingerprint identifies the request
 
 ## Explicitly Deferred
 
-- Do not start preparation services yet.
-- Do not add hosted continuation yet.
-- Do not introduce domain command invocation from workflow yet.
-- Do not add workflow-owned authority satisfaction.
+- Do not call Decisions commands yet.
+- Do not call Continuity commands yet.
+- Do not call Execution commands yet.
+- Do not create decision proposals yet.
+- Do not create operational-context proposals yet.
+- Do not create commit preparations yet.
+- Do not wire actual domain command invocation before another review.

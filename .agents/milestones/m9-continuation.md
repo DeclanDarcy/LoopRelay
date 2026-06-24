@@ -15,7 +15,7 @@ Deliver:
 - [ ] `WorkflowPreparationDiagnostics`.
 - [x] `WorkflowContinuationEvent`.
 - [ ] `WorkflowPreparationEvent`.
-- [ ] recovery integration that reevaluates continuation after restart without duplicate progression.
+- [x] recovery integration that reevaluates continuation after restart without duplicate progression.
 - [ ] `WorkflowContinuationHostedService`.
 - [ ] `WorkflowInfluenceTrace`.
 - [ ] `WorkflowHealthAssessment`.
@@ -49,6 +49,9 @@ Slice progress:
 - Added persisted one-step progression coverage for committed evidence to push,
   pushed evidence to completed, no-change completion, and work-selection gate
   halting after completed progression.
+- Added recovery/idempotency coverage for completed restart reconstruction,
+  domain-over-stale-timeline recovery, no-change completion recovery, and
+  restart continuation re-evaluation without duplicate completed stop events.
 - Continuation evaluation consumes the aggregate workflow projection, latest
   persisted workflow timeline evidence, and state-machine, gate, and completion
   evidence.
@@ -90,7 +93,8 @@ Idempotency rules:
 - [ ] preparation events carry fingerprints.
 - [ ] before invoking an allowed preparation command, preparation checks whether equivalent domain evidence already exists.
 - [x] identical endpoint-triggered continuation reevaluation does not duplicate continuation events.
-- [ ] restart reevaluation must not duplicate proposals, commit preparations, timeline entries, or continuation events.
+- [x] restart reevaluation must not duplicate continuation events or timeline progression.
+- [ ] restart reevaluation must not duplicate proposals, commit preparations, or preparation events.
 - [ ] restart reevaluation must not duplicate preparation events or reviewable artifacts.
 
 Tests:
@@ -101,7 +105,7 @@ Tests:
 - [ ] ineligible preparation does not create artifacts.
 - [x] every open gate stops progression.
 - [ ] open gates block preparation when the requested artifact would bypass authority.
-- [ ] restart does not duplicate progression.
+- [x] restart does not duplicate progression.
 - [ ] restart does not duplicate preparation.
 - [x] identical workflow state produces identical continuation outcome.
 - [x] identical continuation run input does not duplicate continuation history.
