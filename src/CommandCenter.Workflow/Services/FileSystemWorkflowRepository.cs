@@ -143,7 +143,16 @@ public sealed class FileSystemWorkflowRepository(IArtifactStore artifactStore) :
                 continue;
             }
 
-            WorkflowContinuationEvent? continuationEvent = await LoadContinuationEventAsync(repository, eventId);
+            WorkflowContinuationEvent? continuationEvent;
+            try
+            {
+                continuationEvent = await LoadContinuationEventAsync(repository, eventId);
+            }
+            catch (Exception exception) when (IsRecoverableLoadException(exception))
+            {
+                continue;
+            }
+
             if (continuationEvent is not null)
             {
                 events.Add(continuationEvent);
@@ -226,7 +235,16 @@ public sealed class FileSystemWorkflowRepository(IArtifactStore artifactStore) :
                 continue;
             }
 
-            WorkflowPreparationEvent? preparationEvent = await LoadPreparationEventAsync(repository, eventId);
+            WorkflowPreparationEvent? preparationEvent;
+            try
+            {
+                preparationEvent = await LoadPreparationEventAsync(repository, eventId);
+            }
+            catch (Exception exception) when (IsRecoverableLoadException(exception))
+            {
+                continue;
+            }
+
             if (preparationEvent is not null)
             {
                 events.Add(preparationEvent);
@@ -236,6 +254,25 @@ public sealed class FileSystemWorkflowRepository(IArtifactStore artifactStore) :
         return events
             .OrderBy(preparationEvent => preparationEvent.OccurredAt)
             .ToArray();
+    }
+
+    public async Task<IReadOnlyList<string>> ListHistoryLoadErrorsAsync(Repository repository)
+    {
+        var errors = new List<string>();
+        await AddHistoryLoadErrorsAsync(
+            repository,
+            WorkflowArtifactPaths.ContinuationRoot,
+            "continuation.",
+            eventId => LoadContinuationEventAsync(repository, eventId),
+            errors);
+        await AddHistoryLoadErrorsAsync(
+            repository,
+            WorkflowArtifactPaths.PreparationRoot,
+            "preparation.",
+            eventId => LoadPreparationEventAsync(repository, eventId),
+            errors);
+
+        return errors.Order(StringComparer.Ordinal).ToArray();
     }
 
     public async Task SaveReportAsync(Repository repository, string reportId, string jsonContent, string markdownContent)
@@ -277,6 +314,39 @@ public sealed class FileSystemWorkflowRepository(IArtifactStore artifactStore) :
 
         return document.Payload;
     }
+
+    private async Task AddHistoryLoadErrorsAsync<T>(
+        Repository repository,
+        string root,
+        string prefix,
+        Func<string, Task<T?>> load,
+        List<string> errors)
+    {
+        string resolvedRoot = WorkflowArtifactPaths.Resolve(repository, root);
+        IReadOnlyList<string> files = await artifactStore.ListAsync(resolvedRoot, "*.json");
+        foreach (string file in files
+            .Where(file => Path.GetFileName(file).StartsWith(prefix, StringComparison.Ordinal))
+            .OrderBy(file => file, StringComparer.Ordinal))
+        {
+            string? eventId = Path.GetFileNameWithoutExtension(file);
+            if (string.IsNullOrWhiteSpace(eventId))
+            {
+                continue;
+            }
+
+            try
+            {
+                await load(eventId);
+            }
+            catch (Exception exception) when (IsRecoverableLoadException(exception))
+            {
+                errors.Add($"{eventId}: {exception.Message}");
+            }
+        }
+    }
+
+    private static bool IsRecoverableLoadException(Exception exception) =>
+        exception is JsonException or InvalidOperationException or ArgumentException;
 
     private static string RenderTimelineMarkdown(WorkflowTimeline timeline)
     {

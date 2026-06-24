@@ -60,6 +60,8 @@ public sealed class WorkflowCertificationService(
             await workflowRepository.ListContinuationEventsAsync(repository);
         IReadOnlyList<WorkflowPreparationEvent> preparationHistory =
             await workflowRepository.ListPreparationEventsAsync(repository);
+        IReadOnlyList<string> historyLoadErrors =
+            await workflowRepository.ListHistoryLoadErrorsAsync(repository);
         WorkflowHealthAssessment health = await healthService.AssessHealthAsync(repository.Id);
         WorkflowTimeline domainTimeline = WorkflowTimelineFactory.Create(projection, DateTimeOffset.UtcNow);
         WorkflowTimeline? latestTimeline = null;
@@ -81,6 +83,9 @@ public sealed class WorkflowCertificationService(
         findings.Add(CertifyPreparationDoesNotSatisfyAuthorityGates(preparationHistory));
         findings.Add(CertifyGateCatalogUsesDomainCommands(projection));
         findings.Add(CertifyDomainEvidenceWinsDuringRecovery(projection, domainTimeline, latestTimeline, timelineLoadError));
+        findings.Add(CertifyDerivedHistoryEvidenceIsRecoverable(historyLoadErrors));
+        findings.Add(CertifyContinuationHistoryIsIdempotent(continuationHistory));
+        findings.Add(CertifyPreparationHistoryIsIdempotent(preparationHistory));
 
         string inputFingerprint = WorkflowFingerprint.FromNormalizedEvidence(string.Join(
             '\n',
@@ -92,6 +97,7 @@ public sealed class WorkflowCertificationService(
             string.Join("|", projection.Diagnostics.ProjectionInputs.Order(StringComparer.Ordinal)),
             latestTimeline?.Fingerprint ?? "latest-timeline:none",
             timelineLoadError ?? "latest-timeline-load-error:none",
+            string.Join("|", historyLoadErrors.Order(StringComparer.Ordinal)),
             string.Join("|", continuationHistory.Select(entry => entry.InputFingerprint.Value).Order(StringComparer.Ordinal)),
             string.Join("|", preparationHistory.Select(entry => entry.InputFingerprint.Value).Order(StringComparer.Ordinal)),
             health.InfluenceTrace.Fingerprint)).Value;
@@ -117,6 +123,7 @@ public sealed class WorkflowCertificationService(
             [
                 $"Workflow certification observed {continuationHistory.Count} continuation events.",
                 $"Workflow certification observed {preparationHistory.Count} preparation events.",
+                $"Workflow certification observed {historyLoadErrors.Count} derived history load errors.",
                 $"Workflow health was {health.OverallStatus}."
             ]);
     }
@@ -298,6 +305,89 @@ public sealed class WorkflowCertificationService(
             detail,
             evidence,
             diagnostics);
+    }
+
+    private static WorkflowCertificationFinding CertifyDerivedHistoryEvidenceIsRecoverable(
+        IReadOnlyList<string> historyLoadErrors)
+    {
+        bool passed = true;
+        return new WorkflowCertificationFinding(
+            "recovery-derived-history-evidence",
+            "Recovery",
+            passed,
+            historyLoadErrors.Count == 0
+                ? "Derived workflow history evidence is readable or absent."
+                : "Corrupted derived workflow history evidence was detected without replacing domain state.",
+            "Continuation and preparation history are derived audit evidence. Corrupted history files require recovery diagnostics, but domain projection, gate state, and duplicate detection remain authoritative.",
+            historyLoadErrors.Count == 0
+                ? ["workflow-history:load-errors:none"]
+                : historyLoadErrors.Select(error => $"workflow-history:load-error:{error}").ToArray(),
+            historyLoadErrors.Count == 0
+                ? []
+                : historyLoadErrors.Select(error => $"Recovery is required for derived workflow history evidence: {error}").ToArray());
+    }
+
+    private static WorkflowCertificationFinding CertifyContinuationHistoryIsIdempotent(
+        IReadOnlyList<WorkflowContinuationEvent> continuationHistory)
+    {
+        IReadOnlyList<IGrouping<string, WorkflowContinuationEvent>> duplicates = continuationHistory
+            .Where(entry => string.Equals(entry.Decision, "Advance", StringComparison.OrdinalIgnoreCase))
+            .GroupBy(entry => string.Join(
+                "|",
+                entry.InputFingerprint.Value,
+                entry.FromStage,
+                entry.ToStage?.ToString() ?? "None",
+                entry.Decision,
+                entry.Reason))
+            .Where(group => group.Count() > 1)
+            .ToArray();
+
+        return new WorkflowCertificationFinding(
+            "recovery-continuation-idempotency",
+            "Recovery",
+            duplicates.Count == 0,
+            duplicates.Count == 0
+                ? "Continuation history contains no duplicate mechanical progression for the same fingerprint."
+                : "Continuation history contains duplicate mechanical progression for the same fingerprint.",
+            "Restart and recovery must not record the same mechanical advance more than once for identical continuation inputs.",
+            continuationHistory.Select(entry =>
+                $"continuation:{entry.EventId}:{entry.FromStage}->{entry.ToStage?.ToString() ?? "None"}:{entry.Decision}:{entry.InputFingerprint}").ToArray(),
+            duplicates.Select(group => $"Duplicate continuation progression fingerprint '{group.Key}' appears {group.Count()} times.").ToArray());
+    }
+
+    private static WorkflowCertificationFinding CertifyPreparationHistoryIsIdempotent(
+        IReadOnlyList<WorkflowPreparationEvent> preparationHistory)
+    {
+        IReadOnlyList<IGrouping<string, WorkflowPreparationEvent>> duplicateEvents = preparationHistory
+            .Where(entry => entry.CreatedArtifactIds.Count > 0)
+            .GroupBy(entry => string.Join(
+                "|",
+                entry.InputFingerprint.Value,
+                entry.Stage,
+                entry.Command,
+                string.Join(",", entry.CreatedArtifactIds.Order(StringComparer.Ordinal))))
+            .Where(group => group.Count() > 1)
+            .ToArray();
+        IReadOnlyList<IGrouping<string, string>> duplicateArtifacts = preparationHistory
+            .SelectMany(entry => entry.CreatedArtifactIds.Select(artifactId => $"{entry.CommandName}|{artifactId}"))
+            .GroupBy(value => value, StringComparer.Ordinal)
+            .Where(group => group.Count() > 1)
+            .ToArray();
+        bool passed = duplicateEvents.Count == 0 && duplicateArtifacts.Count == 0;
+
+        return new WorkflowCertificationFinding(
+            "recovery-preparation-idempotency",
+            "Recovery",
+            passed,
+            passed
+                ? "Preparation history contains no duplicate reviewable artifact creation."
+                : "Preparation history contains duplicate reviewable artifact creation.",
+            "Restart and recovery must not create duplicate preparation events or duplicate review artifacts for identical preparation inputs.",
+            preparationHistory.Select(entry =>
+                $"preparation:{entry.EventId}:{entry.CommandName}:{entry.Decision}:{entry.InputFingerprint}:created={string.Join(",", entry.CreatedArtifactIds)}").ToArray(),
+            duplicateEvents.Select(group => $"Duplicate preparation event fingerprint '{group.Key}' appears {group.Count()} times.")
+                .Concat(duplicateArtifacts.Select(group => $"Duplicate prepared artifact '{group.Key}' appears {group.Count()} times."))
+                .ToArray());
     }
 
     private static string RenderMarkdown(WorkflowCertificationResult result)

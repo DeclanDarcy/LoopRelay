@@ -25,5 +25,7 @@ public interface IWorkflowRepository
 
     Task<IReadOnlyList<WorkflowPreparationEvent>> ListPreparationEventsAsync(Repository repository);
 
+    Task<IReadOnlyList<string>> ListHistoryLoadErrorsAsync(Repository repository);
+
     Task SaveReportAsync(Repository repository, string reportId, string jsonContent, string markdownContent);
 }

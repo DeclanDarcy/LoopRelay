@@ -3,25 +3,30 @@
 ## New State
 
 - Continued Milestone 10 recovery certification.
-- Added explicit corrupted timeline certification coverage.
-- `WorkflowCertificationService` now reports malformed persisted timeline evidence as corrupted/recovery-required while keeping the domain-derived projection authoritative.
-- `WorkflowHealthService` now tolerates malformed persisted timeline JSON by treating recovery health as degraded instead of throwing; the influence trace records that the bad timeline did not influence stage selection.
-- Added `WorkflowCertificationReportsCorruptedTimelineRecoveryWithDomainProjectionWinning`.
-- Updated `m10-certification.md` to mark corrupted timeline evidence detection complete.
+- Workflow repository now skips corrupted continuation/preparation history JSON while exposing derived-history load diagnostics through `ListHistoryLoadErrorsAsync`.
+- `WorkflowHealthService` now marks corrupted continuation/preparation history as degraded derived evidence instead of failing projection or duplicate detection.
+- `WorkflowCertificationService` now reports:
+  - recoverable derived continuation/preparation history corruption.
+  - continuation idempotency for duplicate mechanical progression.
+  - preparation idempotency for duplicate reviewable artifact creation.
+- Added tests for corrupted continuation history preserving completed-terminal stop behavior without duplicate progression.
+- Added tests for corrupted preparation history relying on domain duplicate evidence without invoking artifact creation.
+- Updated `m10-certification.md` to mark corrupted history idempotency and restart duplicate progression certification complete.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "FullyQualifiedName~WorkflowProjectionServiceTests"` passed: 104 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "FullyQualifiedName~WorkflowProjectionServiceTests"` passed: 108 tests.
 - `dotnet build CommandCenter.slnx` passed with 0 warnings and 0 errors.
 
 ## Relevant Decisions
 
-- Certification and health remain observers. Corrupted workflow evidence is diagnosed as recovery-required; certification does not repair it.
-- Domain-derived projection remains authoritative over persisted workflow timeline evidence, including stale, missing, and malformed timeline artifacts.
+- Continuation/preparation history remains derived audit evidence. Corrupt entries are diagnosed and ignored for service execution.
+- Duplicate prevention remains anchored in authoritative domain evidence and current coordinator timeline, not in trusting corrupted history artifacts.
+- Certification should prove idempotency from valid readable history plus recoverability diagnostics for unreadable derived history.
 
 ## Next Slice
 
-- Continue Milestone 10 recovery certification with idempotency scenarios:
-  - corrupted continuation history does not duplicate continuation events or progression after recovery/restart.
-  - corrupted preparation history does not duplicate preparation events or review artifacts.
-  - completed workflow restart remains `Completed` with a `WorkSelection` gate and does not progress again.
+- Continue Milestone 10 by moving from recovery certification into continuation certification:
+  - certify continuation halts at every authority gate.
+  - add failure findings for any continuation event that advances while waiting for human authority.
+  - cover endpoint-triggered and hosted continuation behavior.

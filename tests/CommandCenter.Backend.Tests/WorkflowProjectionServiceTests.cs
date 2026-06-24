@@ -2331,6 +2331,25 @@ public sealed class WorkflowProjectionServiceTests
     }
 
     [Fact]
+    public async Task WorkflowRepositorySkipsCorruptedContinuationHistoryAndReportsLoadError()
+    {
+        TestFixture fixture = TestFixture.Create();
+        var store = new MemoryArtifactStore();
+        var repository = new FileSystemWorkflowRepository(store);
+        string eventId = WorkflowArtifactPaths.ContinuationEventId(DateTimeOffset.Parse("2026-06-23T11:05:00Z"));
+        await store.WriteAsync(
+            WorkflowArtifactPaths.Resolve(fixture.Repository, WorkflowArtifactPaths.ContinuationJson(eventId)),
+            "{ not valid json");
+
+        IReadOnlyList<WorkflowContinuationEvent> listed = await repository.ListContinuationEventsAsync(fixture.Repository);
+        IReadOnlyList<string> errors = await repository.ListHistoryLoadErrorsAsync(fixture.Repository);
+
+        Assert.Empty(listed);
+        string error = Assert.Single(errors);
+        Assert.Contains(eventId, error, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task WorkflowRepositorySavesLoadsAndListsPreparationEvents()
     {
         TestFixture fixture = TestFixture.Create();
@@ -2365,6 +2384,25 @@ public sealed class WorkflowProjectionServiceTests
         WorkflowPreparationEvent persisted = Assert.Single(listed);
         Assert.Equal(preparationEvent.EventId, persisted.EventId);
         Assert.True(await store.ExistsAsync(WorkflowArtifactPaths.Resolve(fixture.Repository, WorkflowArtifactPaths.PreparationMarkdown(preparationEvent.EventId))));
+    }
+
+    [Fact]
+    public async Task WorkflowRepositorySkipsCorruptedPreparationHistoryAndReportsLoadError()
+    {
+        TestFixture fixture = TestFixture.Create();
+        var store = new MemoryArtifactStore();
+        var repository = new FileSystemWorkflowRepository(store);
+        string eventId = WorkflowArtifactPaths.PreparationEventId(DateTimeOffset.Parse("2026-06-23T11:06:00Z"));
+        await store.WriteAsync(
+            WorkflowArtifactPaths.Resolve(fixture.Repository, WorkflowArtifactPaths.PreparationJson(eventId)),
+            "{ not valid json");
+
+        IReadOnlyList<WorkflowPreparationEvent> listed = await repository.ListPreparationEventsAsync(fixture.Repository);
+        IReadOnlyList<string> errors = await repository.ListHistoryLoadErrorsAsync(fixture.Repository);
+
+        Assert.Empty(listed);
+        string error = Assert.Single(errors);
+        Assert.Contains(eventId, error, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -3082,6 +3120,105 @@ public sealed class WorkflowProjectionServiceTests
         Assert.Contains(finding.Evidence, evidence => evidence.Contains("timeline-load-error:", StringComparison.Ordinal));
         Assert.Contains(finding.Diagnostics, diagnostic => diagnostic.Contains("recovery is required", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(finding.Diagnostics, diagnostic => diagnostic.Contains("must not override domain evidence", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task WorkflowCertificationReportsCorruptedContinuationHistoryWithoutDuplicateProgression()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingPush;
+        fixture.Session = PushedSession();
+        var store = new MemoryArtifactStore();
+        var workflowRepository = new FileSystemWorkflowRepository(store);
+        await workflowRepository.SaveTimelineAsync(
+            fixture.Repository,
+            CreateTimeline(
+                fixture.Repository.Id,
+                DateTimeOffset.Parse("2026-06-23T12:15:00Z"),
+                WorkflowStage.Completed,
+                WorkflowProgressState.Completed,
+                WorkflowGateType.WorkSelection,
+                WorkflowStage.Push,
+                [WorkflowBlockingCondition.MissingWorkSelection]));
+        string corruptEventId = WorkflowArtifactPaths.ContinuationEventId(DateTimeOffset.Parse("2026-06-23T12:16:00Z"));
+        await store.WriteAsync(
+            WorkflowArtifactPaths.Resolve(fixture.Repository, WorkflowArtifactPaths.ContinuationJson(corruptEventId)),
+            "{ not valid json");
+        var continuation = new WorkflowContinuationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            new WorkflowStateMachineService(),
+            workflowRepository);
+        WorkflowCertificationService certification = fixture.CreateCertificationService(workflowRepository);
+
+        WorkflowContinuationEvent eventAfterCorruption = await continuation.RunContinuationAsync(fixture.Repository.Id);
+        WorkflowCertificationResult result = await certification.GetCurrentCertificationAsync(fixture.Repository.Id);
+        IReadOnlyList<WorkflowContinuationEvent> history = await workflowRepository.ListContinuationEventsAsync(fixture.Repository);
+
+        Assert.Equal("Stop", eventAfterCorruption.Decision);
+        Assert.Null(eventAfterCorruption.ToStage);
+        Assert.Equal(WorkflowStage.Completed, eventAfterCorruption.FromStage);
+        Assert.DoesNotContain(history, entry => entry.Decision == "Advance");
+        Assert.True(result.Certified);
+        WorkflowCertificationFinding derivedHistory = Assert.Single(
+            result.Findings,
+            candidate => candidate.Id == "recovery-derived-history-evidence");
+        WorkflowCertificationFinding continuationIdempotency = Assert.Single(
+            result.Findings,
+            candidate => candidate.Id == "recovery-continuation-idempotency");
+        Assert.True(derivedHistory.Passed);
+        Assert.True(continuationIdempotency.Passed);
+        Assert.Contains(derivedHistory.Diagnostics, diagnostic => diagnostic.Contains(corruptEventId, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task WorkflowCertificationReportsCorruptedPreparationHistoryWithoutDuplicateArtifacts()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+        fixture.Candidates.Add(CreateCandidate(fixture.Repository.Id, "cand-0001"));
+        var discoveryService = new DecisionDiscoveryServiceStub([CreateCandidate(fixture.Repository.Id, "cand-0002")]);
+        var store = new MemoryArtifactStore();
+        var workflowRepository = new FileSystemWorkflowRepository(store);
+        await workflowRepository.SaveTimelineAsync(
+            fixture.Repository,
+            CreateTimeline(
+                fixture.Repository.Id,
+                DateTimeOffset.Parse("2026-06-23T12:20:00Z"),
+                WorkflowStage.Decision,
+                WorkflowProgressState.Ready,
+                WorkflowGateType.None,
+                WorkflowStage.Handoff,
+                []));
+        string corruptEventId = WorkflowArtifactPaths.PreparationEventId(DateTimeOffset.Parse("2026-06-23T12:21:00Z"));
+        await store.WriteAsync(
+            WorkflowArtifactPaths.Resolve(fixture.Repository, WorkflowArtifactPaths.PreparationJson(corruptEventId)),
+            "{ not valid json");
+        var preparation = new WorkflowPreparationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            workflowRepository,
+            discoveryService);
+        WorkflowCertificationService certification = fixture.CreateCertificationService(workflowRepository);
+
+        WorkflowPreparationEvent eventAfterCorruption = await preparation.RunPreparationAsync(fixture.Repository.Id);
+        WorkflowCertificationResult result = await certification.GetCurrentCertificationAsync(fixture.Repository.Id);
+
+        Assert.Equal(0, discoveryService.CallCount);
+        Assert.Equal("Duplicate", eventAfterCorruption.Decision);
+        Assert.Empty(eventAfterCorruption.CreatedArtifactIds);
+        Assert.Contains("decision-candidate:cand-0001", eventAfterCorruption.DuplicateEvidence);
+        Assert.True(result.Certified);
+        WorkflowCertificationFinding derivedHistory = Assert.Single(
+            result.Findings,
+            candidate => candidate.Id == "recovery-derived-history-evidence");
+        WorkflowCertificationFinding preparationIdempotency = Assert.Single(
+            result.Findings,
+            candidate => candidate.Id == "recovery-preparation-idempotency");
+        Assert.True(derivedHistory.Passed);
+        Assert.True(preparationIdempotency.Passed);
+        Assert.Contains(derivedHistory.Diagnostics, diagnostic => diagnostic.Contains(corruptEventId, StringComparison.Ordinal));
     }
 
     [Fact]

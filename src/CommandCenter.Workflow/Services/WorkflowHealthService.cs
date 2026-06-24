@@ -17,12 +17,13 @@ public sealed class WorkflowHealthService(
         (WorkflowTimeline? latestTimeline, string? timelineLoadError) = await TryGetLatestTimelineAsync(repository);
         IReadOnlyList<WorkflowContinuationEvent> continuationHistory = await workflowRepository.ListContinuationEventsAsync(repository);
         IReadOnlyList<WorkflowPreparationEvent> preparationHistory = await workflowRepository.ListPreparationEventsAsync(repository);
+        IReadOnlyList<string> historyLoadErrors = await workflowRepository.ListHistoryLoadErrorsAsync(repository);
         DateTimeOffset generatedAt = DateTimeOffset.UtcNow;
 
-        IReadOnlyList<string> evidencePaths = BuildEvidencePaths(projection, latestTimeline, timelineLoadError, continuationHistory, preparationHistory);
+        IReadOnlyList<string> evidencePaths = BuildEvidencePaths(projection, latestTimeline, timelineLoadError, continuationHistory, preparationHistory, historyLoadErrors);
         IReadOnlyList<string> stageInfluences = BuildStageInfluences(projection, latestTimeline, timelineLoadError);
-        IReadOnlyList<string> progressionInfluences = BuildProgressionInfluences(projection, continuationHistory);
-        IReadOnlyList<string> preparationInfluences = BuildPreparationInfluences(preparationHistory);
+        IReadOnlyList<string> progressionInfluences = BuildProgressionInfluences(projection, continuationHistory, historyLoadErrors);
+        IReadOnlyList<string> preparationInfluences = BuildPreparationInfluences(preparationHistory, historyLoadErrors);
         IReadOnlyList<string> gateInfluences = BuildGateInfluences(projection);
         IReadOnlyList<string> blockingInfluences = BuildBlockingInfluences(projection);
         IReadOnlyList<string> conflicts = projection.Diagnostics.Conflicts
@@ -70,13 +71,14 @@ public sealed class WorkflowHealthService(
         (WorkflowTimeline? latestTimeline, string? timelineLoadError) = await TryGetLatestTimelineAsync(repository);
         IReadOnlyList<WorkflowContinuationEvent> continuationHistory = await workflowRepository.ListContinuationEventsAsync(repository);
         IReadOnlyList<WorkflowPreparationEvent> preparationHistory = await workflowRepository.ListPreparationEventsAsync(repository);
+        IReadOnlyList<string> historyLoadErrors = await workflowRepository.ListHistoryLoadErrorsAsync(repository);
         WorkflowInfluenceTrace trace = await TraceInfluenceAsync(repositoryId);
 
         WorkflowHealthDimension projectionHealth = AssessProjectionHealth(projection);
         WorkflowHealthDimension recoveryHealth = AssessRecoveryHealth(projection, latestTimeline, timelineLoadError);
         WorkflowHealthDimension gateHealth = AssessGateHealth(projection);
-        WorkflowHealthDimension continuationHealth = AssessContinuationHealth(projection, continuationHistory);
-        WorkflowHealthDimension preparationHealth = AssessPreparationHealth(projection, preparationHistory);
+        WorkflowHealthDimension continuationHealth = AssessContinuationHealth(projection, continuationHistory, historyLoadErrors);
+        WorkflowHealthDimension preparationHealth = AssessPreparationHealth(projection, preparationHistory, historyLoadErrors);
         IReadOnlyList<WorkflowHealthDimension> dimensions =
         [
             projectionHealth,
@@ -124,7 +126,8 @@ public sealed class WorkflowHealthService(
         WorkflowTimeline? latestTimeline,
         string? timelineLoadError,
         IReadOnlyList<WorkflowContinuationEvent> continuationHistory,
-        IReadOnlyList<WorkflowPreparationEvent> preparationHistory)
+        IReadOnlyList<WorkflowPreparationEvent> preparationHistory,
+        IReadOnlyList<string> historyLoadErrors)
     {
         List<string> paths = [.. projection.Diagnostics.ProjectionInputs];
         paths.Add(latestTimeline is null
@@ -136,6 +139,7 @@ public sealed class WorkflowHealthService(
         paths.AddRange(projection.GateHistory.Select(gate => $"gate:{gate.Type}:{gate.Status}:{gate.SourceDomain}:{gate.SourceArtifact}"));
         paths.AddRange(continuationHistory.Select(entry => $"continuation:{entry.EventId}:{entry.Decision}:{entry.InputFingerprint}"));
         paths.AddRange(preparationHistory.Select(entry => $"preparation:{entry.EventId}:{entry.CommandName}:{entry.InputFingerprint}"));
+        paths.AddRange(historyLoadErrors.Select(error => $"workflow-history:load-error:{error}"));
         return paths.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
     }
 
@@ -167,7 +171,8 @@ public sealed class WorkflowHealthService(
 
     private static IReadOnlyList<string> BuildProgressionInfluences(
         WorkflowInstance projection,
-        IReadOnlyList<WorkflowContinuationEvent> continuationHistory)
+        IReadOnlyList<WorkflowContinuationEvent> continuationHistory,
+        IReadOnlyList<string> historyLoadErrors)
     {
         List<string> influences =
         [
@@ -181,15 +186,24 @@ public sealed class WorkflowHealthService(
         influences.Add(latest is null
             ? "No persisted continuation event influenced progression."
             : $"Latest continuation event {latest.EventId} {latest.Decision}: {latest.Reason}");
+        influences.AddRange(historyLoadErrors
+            .Where(error => error.StartsWith("continuation.", StringComparison.Ordinal))
+            .Select(error => $"Persisted continuation evidence could not be loaded and did not influence progression: {error}"));
         return influences.Distinct(StringComparer.Ordinal).ToArray();
     }
 
-    private static IReadOnlyList<string> BuildPreparationInfluences(IReadOnlyList<WorkflowPreparationEvent> preparationHistory)
+    private static IReadOnlyList<string> BuildPreparationInfluences(
+        IReadOnlyList<WorkflowPreparationEvent> preparationHistory,
+        IReadOnlyList<string> historyLoadErrors)
     {
         WorkflowPreparationEvent? latest = preparationHistory.OrderByDescending(entry => entry.OccurredAt).FirstOrDefault();
+        IReadOnlyList<string> preparationErrors = historyLoadErrors
+            .Where(error => error.StartsWith("preparation.", StringComparison.Ordinal))
+            .Select(error => $"Persisted preparation evidence could not be loaded and did not influence duplicate detection: {error}")
+            .ToArray();
         if (latest is null)
         {
-            return ["No persisted preparation event influenced reviewable artifact preparation."];
+            return ["No persisted preparation event influenced reviewable artifact preparation.", .. preparationErrors];
         }
 
         List<string> influences =
@@ -198,6 +212,7 @@ public sealed class WorkflowHealthService(
         ];
         influences.AddRange(latest.CreatedArtifactIds.Select(artifactId => $"Created reviewable artifact evidence: {artifactId}."));
         influences.AddRange(latest.DuplicateEvidence.Select(duplicate => $"Duplicate domain evidence: {duplicate}."));
+        influences.AddRange(preparationErrors);
         return influences.Distinct(StringComparer.Ordinal).ToArray();
     }
 
@@ -327,8 +342,22 @@ public sealed class WorkflowHealthService(
 
     private static WorkflowHealthDimension AssessContinuationHealth(
         WorkflowInstance projection,
-        IReadOnlyList<WorkflowContinuationEvent> continuationHistory)
+        IReadOnlyList<WorkflowContinuationEvent> continuationHistory,
+        IReadOnlyList<string> historyLoadErrors)
     {
+        IReadOnlyList<string> continuationErrors = historyLoadErrors
+            .Where(error => error.StartsWith("continuation.", StringComparison.Ordinal))
+            .ToArray();
+        if (continuationErrors.Count > 0)
+        {
+            return new WorkflowHealthDimension(
+                "Continuation",
+                "Degraded",
+                "Persisted continuation history contains corrupted derived evidence; projection remains recoverable from domain evidence.",
+                continuationErrors.Select(error => $"continuation-history:load-error:{error}").ToArray(),
+                continuationErrors);
+        }
+
         WorkflowContinuationEvent? latest = continuationHistory.OrderByDescending(entry => entry.OccurredAt).FirstOrDefault();
         if (latest?.Diagnostics.Any(diagnostic => diagnostic.Contains("conflict", StringComparison.OrdinalIgnoreCase)) is true)
         {
@@ -362,8 +391,22 @@ public sealed class WorkflowHealthService(
 
     private static WorkflowHealthDimension AssessPreparationHealth(
         WorkflowInstance projection,
-        IReadOnlyList<WorkflowPreparationEvent> preparationHistory)
+        IReadOnlyList<WorkflowPreparationEvent> preparationHistory,
+        IReadOnlyList<string> historyLoadErrors)
     {
+        IReadOnlyList<string> preparationErrors = historyLoadErrors
+            .Where(error => error.StartsWith("preparation.", StringComparison.Ordinal))
+            .ToArray();
+        if (preparationErrors.Count > 0)
+        {
+            return new WorkflowHealthDimension(
+                "Preparation",
+                "Degraded",
+                "Persisted preparation history contains corrupted derived evidence; duplicate detection remains based on domain evidence.",
+                preparationErrors.Select(error => $"preparation-history:load-error:{error}").ToArray(),
+                preparationErrors);
+        }
+
         WorkflowPreparationEvent? latest = preparationHistory.OrderByDescending(entry => entry.OccurredAt).FirstOrDefault();
         if (latest?.Diagnostics.Any(diagnostic => diagnostic.Contains("conflict", StringComparison.OrdinalIgnoreCase)) is true)
         {

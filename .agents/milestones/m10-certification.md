@@ -77,8 +77,9 @@ Tests:
   - [x] missing timeline evidence is treated as derived/rebuildable evidence.
   - [x] stale persisted timeline evidence is detected and domain projection wins.
   - [x] corrupted timeline evidence is detected without losing domain state.
-  - [ ] corrupted continuation/preparation history does not duplicate events or artifacts.
-  - [ ] restart duplicate progression is certified.
+  - [x] corrupted continuation/preparation history does not duplicate events or artifacts.
+  - [x] restart duplicate progression is certified.
+  - [x] derived continuation/preparation history corruption is diagnosed as recoverable derived evidence.
 - [ ] continuation certification detects missed gate halting.
 - [ ] preparation certification detects duplicate artifacts, parallel commands, and gate bypass attempts.
 - [ ] end-to-end fixture validates progression, gates, recovery, diagnostics, history, and certification.
