@@ -125,12 +125,3 @@ export type ExecutionContextPreview = {
   repositorySnapshot: ExecutionRepositorySnapshot | null
   diagnostics: ExecutionContextDiagnostics
 }
-
-export type ExecutionWorkflowStepState = 'complete' | 'current' | 'pending' | 'blocked'
-
-export type ExecutionWorkflowStep = {
-  key: string
-  label: string
-  detail: string
-  state: ExecutionWorkflowStepState
-}

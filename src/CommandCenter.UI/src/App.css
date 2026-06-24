@@ -697,6 +697,13 @@ button:focus-visible {
   font-weight: 700;
 }
 
+.execution-workflow-step .workflow-step-meta,
+.workspace-workflow-step .workflow-step-meta {
+  color: var(--fg-muted);
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
 .execution-workflow-step-current,
 .workspace-workflow-step-current {
   border-color: var(--status-warning-emphasis);

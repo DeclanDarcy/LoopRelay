@@ -1,10 +1,12 @@
 import type { ReactNode } from 'react'
-import type { ExecutionWorkflowStep } from '../../types'
+import type { WorkflowInstance } from '../../types'
 import { WorkflowRail } from './WorkflowRail'
 
 type WorkspaceTabProps = {
   summary: ReactNode
-  workflowSteps: ExecutionWorkflowStep[]
+  workflow: WorkflowInstance | null
+  isWorkflowLoading?: boolean
+  workflowError?: string | null
   executionContext: ReactNode
   liveActivity: ReactNode
   milestones: ReactNode
@@ -15,7 +17,9 @@ type WorkspaceTabProps = {
 
 export function WorkspaceTab({
   summary,
-  workflowSteps,
+  workflow,
+  isWorkflowLoading = false,
+  workflowError = null,
   executionContext,
   liveActivity,
   milestones,
@@ -31,7 +35,7 @@ export function WorkspaceTab({
     >
       <div className="workspace-tab-main">
         {summary}
-        <WorkflowRail steps={workflowSteps} />
+        <WorkflowRail workflow={workflow} isLoading={isWorkflowLoading} error={workflowError} />
         {executionContext}
         {liveActivity}
         {milestones}

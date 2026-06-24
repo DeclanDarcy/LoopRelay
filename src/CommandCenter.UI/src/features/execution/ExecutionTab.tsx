@@ -7,8 +7,8 @@ import type {
   DecisionInfluenceTrace,
   ExecutionEvent,
   ExecutionSessionSummary,
-  ExecutionWorkflowStep,
   RepositoryExecutionState,
+  WorkflowInstance,
 } from '../../types'
 import { ExecutionContextArtifactDiagnosticsList } from './ExecutionContextArtifactDiagnosticsList'
 import { ExecutionContextMissingOptionalList } from './ExecutionContextMissingOptionalList'
@@ -27,7 +27,9 @@ type ExecutionTabProps = {
   decisionInfluenceError?: string | null
   executionEvents: ExecutionEvent[]
   executionHistory: ExecutionSessionSummary[]
-  workflowSteps: ExecutionWorkflowStep[]
+  workflow: WorkflowInstance | null
+  isWorkflowLoading?: boolean
+  workflowError?: string | null
   currentExecutionState: RepositoryExecutionState
   selectedMilestonePath: string | null
   contextPanel: ReactNode
@@ -48,7 +50,9 @@ export function ExecutionTab({
   decisionInfluenceError = null,
   executionEvents,
   executionHistory,
-  workflowSteps,
+  workflow,
+  isWorkflowLoading = false,
+  workflowError = null,
   currentExecutionState,
   selectedMilestonePath,
   contextPanel,
@@ -76,7 +80,7 @@ export function ExecutionTab({
         actions={<StatusBadge status={repositoryExecutionStatus[currentExecutionState]} />}
       />
 
-      <ExecutionWorkflowRail steps={workflowSteps} />
+      <ExecutionWorkflowRail workflow={workflow} isLoading={isWorkflowLoading} error={workflowError} />
 
       <div className="execution-tab-grid">
         <div className="execution-tab-main">

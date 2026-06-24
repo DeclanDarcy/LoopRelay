@@ -64,6 +64,7 @@ import {
   useReasoningThreads,
   useRepositories,
   useRepositoryWorkspace,
+  useWorkflowProjection,
 } from './hooks'
 import {
   countDirtyPaths,
@@ -71,7 +72,6 @@ import {
   getArtifactCategories,
   getAvailableArtifactPaths,
   buildNavigationTargets,
-  getExecutionWorkflowSteps,
 } from './lib'
 import { executionReadinessStatus } from './lib/status'
 import { useShellState } from './state/shellState'
@@ -162,6 +162,12 @@ function App() {
     load: loadWorkspaceProjection,
     refresh: refreshWorkspaceProjection,
   } = useRepositoryWorkspace(selectedRepository?.repository.id ?? null)
+  const {
+    data: workflowProjection,
+    isLoading: isWorkflowLoading,
+    error: workflowError,
+    refresh: refreshWorkflowProjection,
+  } = useWorkflowProjection(selectedRepository?.repository.id ?? null)
   const executionSummary =
     workspace?.executionSummary ??
     selectedRepository?.executionSummary ??
@@ -444,11 +450,6 @@ function App() {
     currentExecutionState === 'AwaitingPush' &&
     Boolean(executionDisplay?.commitSha) &&
     !isPushing
-  const executionWorkflowSteps = getExecutionWorkflowSteps(
-    currentExecutionState,
-    executionContextMatchesSelection,
-    Boolean(executionDisplay),
-  )
   const executionContextSizeStatus = !executionContext
     ? 'Not available'
     : executionContext.diagnostics.hardLimitExceeded
@@ -593,8 +594,9 @@ function App() {
     if (nextWorkspace && nextWorkspace.repository.id === repositoryId) {
       setExecutionContext(null)
       reconcileSelectedArtifact(repositoryId, nextWorkspace)
+      await refreshWorkflowProjection()
     }
-  }, [loadWorkspaceProjection, reconcileSelectedArtifact, setExecutionContext])
+  }, [loadWorkspaceProjection, reconcileSelectedArtifact, refreshWorkflowProjection, setExecutionContext])
 
   const loadCommitPreparation = useCallback(async (sessionId: string) => {
     setIsCommitPreparationLoading(true)
@@ -696,6 +698,7 @@ function App() {
         setExecutionContext(null)
         reconcileSelectedArtifact(selectedRepository.repository.id, nextWorkspace)
         await refreshGitStatus()
+        await refreshWorkflowProjection()
       }
     } catch (pushError) {
       setError(formatError(pushError))
@@ -765,6 +768,7 @@ function App() {
         reconcileSelectedArtifact(selectedRepository.repository.id, nextWorkspace)
         setMessage('Workspace refreshed.')
         await loadRepositories()
+        await refreshWorkflowProjection()
       }
     } catch (refreshError) {
       setError(formatError(refreshError))
@@ -790,6 +794,7 @@ function App() {
       reconcileSelectedArtifact(selectedRepository.repository.id, nextWorkspace)
       setMessage('Operational-context proposal generated.')
       await loadRepositories()
+      await refreshWorkflowProjection()
     } catch (proposalError) {
       setError(formatError(proposalError))
     } finally {
@@ -858,6 +863,7 @@ function App() {
       setWorkspace(nextWorkspace)
       setMessage('Operational-context proposal edits saved.')
       await loadRepositories()
+      await refreshWorkflowProjection()
     } catch (proposalError) {
       setError(formatError(proposalError))
     } finally {
@@ -884,6 +890,7 @@ function App() {
       setWorkspace(nextWorkspace)
       setMessage('Operational-context proposal accepted for later promotion.')
       await loadRepositories()
+      await refreshWorkflowProjection()
     } catch (proposalError) {
       setError(formatError(proposalError))
     } finally {
@@ -910,6 +917,7 @@ function App() {
       setWorkspace(nextWorkspace)
       setMessage('Operational-context proposal rejected.')
       await loadRepositories()
+      await refreshWorkflowProjection()
     } catch (proposalError) {
       setError(formatError(proposalError))
     } finally {
@@ -943,6 +951,7 @@ function App() {
       }
       setMessage('Operational-context proposal promoted.')
       await loadRepositories()
+      await refreshWorkflowProjection()
     } catch (proposalError) {
       setError(formatError(proposalError))
     } finally {
@@ -1023,6 +1032,7 @@ function App() {
       reconcileSelectedArtifact(selectedRepository.repository.id, nextWorkspace)
       setMessage('Artifact rotated.')
       await loadRepositories()
+      await refreshWorkflowProjection()
     } catch (rotateError) {
       setError(formatError(rotateError))
     } finally {
@@ -1270,6 +1280,12 @@ function App() {
     setExecutionContext,
     workspaceError,
   ])
+
+  useEffect(() => {
+    if (workflowError) {
+      setError(workflowError)
+    }
+  }, [workflowError])
 
   useEffect(() => {
     if (artifactError) {
@@ -1610,7 +1626,9 @@ function App() {
             <div className="details-body" data-active-tab={activePrimaryTab}>
               <WorkspaceTab
                 hidden={activePrimaryTab !== 'workspace'}
-                workflowSteps={executionWorkflowSteps}
+                workflow={workflowProjection}
+                isWorkflowLoading={isWorkflowLoading}
+                workflowError={workflowError}
                 summary={
                   <SelectedRepositorySummary
                     repository={selectedRepository}
@@ -1811,7 +1829,9 @@ function App() {
                 decisionInfluenceError={decisionInfluenceError}
                 executionEvents={selectedExecutionEvents}
                 executionHistory={selectedExecutionHistory}
-                workflowSteps={executionWorkflowSteps}
+                workflow={workflowProjection}
+                isWorkflowLoading={isWorkflowLoading}
+                workflowError={workflowError}
                 currentExecutionState={currentExecutionState}
                 selectedMilestonePath={selectedMilestonePath}
                 contextPanel={activePrimaryTab === 'execution' ? renderExecutionContextPanel() : null}

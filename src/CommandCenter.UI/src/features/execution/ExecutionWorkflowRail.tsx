@@ -1,21 +1,16 @@
-import type { ExecutionWorkflowStep } from '../../types'
+import type { WorkflowInstance } from '../../types'
+import { WorkflowRail } from '../workspace/WorkflowRail'
 
 type ExecutionWorkflowRailProps = {
-  steps: ExecutionWorkflowStep[]
+  workflow: WorkflowInstance | null
+  isLoading?: boolean
+  error?: string | null
 }
 
-export function ExecutionWorkflowRail({ steps }: ExecutionWorkflowRailProps) {
-  return (
-    <div className="execution-workflow-rail" aria-label="Execution lifecycle">
-      {steps.map((step) => (
-        <div
-          className={`execution-workflow-step execution-workflow-step-${step.state}`}
-          key={step.key}
-        >
-          <span>{step.label}</span>
-          <small>{step.detail}</small>
-        </div>
-      ))}
-    </div>
-  )
+export function ExecutionWorkflowRail({
+  workflow,
+  isLoading = false,
+  error = null,
+}: ExecutionWorkflowRailProps) {
+  return <WorkflowRail workflow={workflow} isLoading={isLoading} error={error} variant="execution" />
 }

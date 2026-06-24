@@ -44,16 +44,16 @@ Replace client-side workflow derivation with the authoritative workflow projecti
 - [x] Export workflow types from `src/CommandCenter.UI/src/types/index.ts`.
 - [x] Add `src/CommandCenter.UI/src/api/workflow.ts` and export it from `src/CommandCenter.UI/src/api/index.ts`.
 - [x] Add workflow hooks such as `useWorkflowProjection`, `useWorkflowHistory`, `useWorkflowGates`, `useWorkflowContinuation`, `useWorkflowRecovery`, `useWorkflowHealth`, and `useWorkflowCertification`.
-- [ ] Replace `getExecutionWorkflowSteps` usage with workflow projection data.
-- [ ] Retire `src/CommandCenter.UI/src/lib/executionWorkflow.ts` after all consumers use authoritative workflow data.
+- [x] Replace `getExecutionWorkflowSteps` usage with workflow projection data.
+- [x] Retire `src/CommandCenter.UI/src/lib/executionWorkflow.ts` after all consumers use authoritative workflow data.
 - [ ] Replace or adapt `WorkspaceRail` and `ExecutionWorkflowRail` to render:
-   - [ ] current stage
-   - [ ] progress state
-   - [ ] stage reasoning
-   - [ ] blocking gate
-   - [ ] required human action
-   - [ ] current transition
-   - [ ] satisfying commands
+   - [x] current stage
+   - [x] progress state
+   - [x] stage reasoning
+   - [x] blocking gate
+   - [x] required human action
+   - [x] current transition
+   - [x] satisfying commands
    - [ ] continuation state
    - [ ] recovery state
    - [ ] health dimensions
@@ -68,9 +68,9 @@ Replace client-side workflow derivation with the authoritative workflow projecti
    - [ ] `WorkflowCertificationPanel`
 - [ ] Integrate workflow into repository workspace, execution workspace, and dashboard summary without duplicating the domain model.
 - [ ] Establish a shared workflow consumption pattern for later milestones:
-   - [ ] repository workspace shows workflow as primary operational status
+   - [x] repository workspace shows workflow as primary operational status
    - [ ] decision-session workspace links governance state back to workflow gates and required actions
-   - [ ] execution workspace shows execution as a workflow stage, not a separate workflow model
+   - [x] execution workspace shows execution as a workflow stage, not a separate workflow model
    - [ ] operational-context workspace shows review and promotion state through workflow gates where applicable
 
 ### Tests
@@ -78,11 +78,11 @@ Replace client-side workflow derivation with the authoritative workflow projecti
 - [ ] Add backend endpoint tests for any route not already covered.
 - [ ] Add shell command tests where feasible.
 - [ ] Add UI characterization tests proving workflow panels render projection stage, gate reason, satisfying command, recovery diagnostics, health dimensions, and certification findings.
-- [ ] Add a regression test that no UI workflow state is derived from `RepositoryExecutionState`.
+- [x] Add a regression test that no UI workflow state is derived from `RepositoryExecutionState`.
 
 ### Exit Criteria
 
-- [ ] Workflow projection is the sole UI workflow source.
+- [x] Workflow projection is the sole UI workflow source.
 - [ ] Users can see current stage, progress, reasoning, gates, required human actions, continuation, recovery, health, and certification.
 - [ ] Workflow history is reconstructable from projected evidence.
 - [ ] Workflow gates explain why progress is blocked, who owns the unblock action, and which command satisfies it.
