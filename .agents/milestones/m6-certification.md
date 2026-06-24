@@ -35,13 +35,13 @@ Certification categories:
 Certification rules:
 
 - [x] Fail if more than one active session exists.
-- [ ] Fail if analysis is non-deterministic for identical inputs.
+- [x] Fail if analysis is non-deterministic for identical inputs.
 - [x] Fail if TTL or cache miss risk is missing from analysis.
-- [ ] Fail if policy is non-deterministic for identical inputs.
+- [x] Fail if policy is non-deterministic for identical inputs.
 - [x] Fail if transfer executes while eligibility is blocked or deferred.
 - [x] Fail if transfer lacks a valid continuity artifact.
 - [x] Fail if transfer lacks source session retirement, replacement session activation, or continuity evidence.
-- [ ] Fail if recovery cannot rebuild missing analysis, policy, or eligibility snapshots.
+- [x] Fail if recovery cannot rebuild missing analysis, policy, or eligibility snapshots.
 - [ ] Fail if workflow can mutate lifecycle state.
 - [x] Fail if lifecycle state lacks diagnostics.
 - [x] Fail if health reports healthy while evidence contradicts it.
@@ -77,12 +77,12 @@ Tests:
 
 - [ ] Authority boundary: workflow cannot transfer.
 - [x] Single-active-session certification fails on duplicates.
-- [ ] Analysis determinism passes for identical inputs.
+- [x] Analysis determinism passes for identical inputs.
 - [x] TTL and cache risk appear in certification evidence.
-- [ ] Policy determinism passes for identical inputs.
+- [x] Policy determinism passes for identical inputs.
 - [x] Eligibility prevents unsafe transfer.
 - [x] Transfer preserves continuity through a valid continuity artifact.
-- [ ] Recovery reconstructs active session and derived snapshots.
+- [x] Recovery reconstructs active session and derived snapshots.
 - [ ] Diagnostics exist for continue, transfer, eligibility blocked, recovery, and failure states.
 - [ ] Workflow consumes lifecycle correctly.
 - [ ] End-to-end lifecycle passes.

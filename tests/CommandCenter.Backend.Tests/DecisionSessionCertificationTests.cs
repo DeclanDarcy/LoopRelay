@@ -21,7 +21,9 @@ public sealed class DecisionSessionCertificationTests
         DecisionSessionCertificationReport report = await service.RunCertificationAsync(harness.Repository.Id);
         DecisionSessionCertificationReport? latest = await service.GetLatestReportAsync(harness.Repository.Id);
 
-        Assert.True(report.Result.Certified);
+        Assert.True(
+            report.Result.Certified,
+            string.Join(Environment.NewLine, report.Result.Findings.Where(finding => !finding.Passed).Select(finding => $"{finding.Id}: {string.Join("; ", finding.Diagnostics)}")));
         Assert.Equal(0, report.Result.FailedFindingCount);
         Assert.All(report.Result.Findings, finding => Assert.True(finding.Passed, finding.Id));
         Assert.NotNull(latest);
@@ -126,6 +128,78 @@ public sealed class DecisionSessionCertificationTests
         Assert.Contains(finding.Diagnostics, diagnostic => diagnostic.Contains("contradictory", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public async Task CertificationFailsWhenAnalysisContradictsDeterministicInputs()
+    {
+        DecisionSessionTestHarness harness = DecisionSessionTestHarness.Create();
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        DecisionSessionProjection active = CreateSessionProjection(harness.Repository.Id, DecisionSessionState.Active, now.AddHours(-2));
+        DecisionSessionLifecycleProjection projection = CreateProjection(
+            harness.Repository.Id,
+            active,
+            now,
+            mutateEconomics: economics => economics with
+            {
+                Economics = economics.Economics with { EstimatedReuseValue = economics.Economics.EstimatedReuseValue + 0.1m }
+            });
+        DecisionSessionLifecycleHistory history = CreateHistory(harness.Repository.Id, active.Id, now, includeRecovery: true);
+        DecisionSessionHealthAssessment health = CreateHealth(harness.Repository.Id, DecisionSessionHealthStatus.Warning, now);
+        var service = CreateService(harness, projection, history, health, now);
+
+        DecisionSessionCertificationReport report = await service.GetCurrentReportAsync(harness.Repository.Id);
+
+        DecisionSessionCertificationFinding finding = Assert.Single(report.Result.Findings, finding => finding.Id == "analysis-determinism-evidence-present");
+        Assert.False(finding.Passed);
+        Assert.Contains(finding.Diagnostics, diagnostic => diagnostic.Contains("Economics reuse value", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task CertificationFailsWhenPolicyContradictsDeterministicScores()
+    {
+        DecisionSessionTestHarness harness = DecisionSessionTestHarness.Create();
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        DecisionSessionProjection active = CreateSessionProjection(harness.Repository.Id, DecisionSessionState.Active, now.AddHours(-2));
+        DecisionSessionLifecycleProjection projection = CreateProjection(
+            harness.Repository.Id,
+            active,
+            now,
+            mutatePolicy: policy => policy with
+            {
+                Evaluation = policy.Evaluation with { Decision = DecisionSessionLifecycleDecision.Continue }
+            });
+        DecisionSessionLifecycleHistory history = CreateHistory(harness.Repository.Id, active.Id, now, includeRecovery: true);
+        DecisionSessionHealthAssessment health = CreateHealth(harness.Repository.Id, DecisionSessionHealthStatus.Warning, now);
+        var service = CreateService(harness, projection, history, health, now);
+
+        DecisionSessionCertificationReport report = await service.GetCurrentReportAsync(harness.Repository.Id);
+
+        DecisionSessionCertificationFinding finding = Assert.Single(report.Result.Findings, finding => finding.Id == "policy-determinism-evidence-present");
+        Assert.False(finding.Passed);
+        Assert.Contains(finding.Diagnostics, diagnostic => diagnostic.Contains("Policy decision", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task CertificationFailsMissingDerivedSnapshotsWithoutRecoveryFindings()
+    {
+        DecisionSessionTestHarness harness = DecisionSessionTestHarness.Create();
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        DecisionSessionProjection active = CreateSessionProjection(harness.Repository.Id, DecisionSessionState.Active, now.AddHours(-2));
+        DecisionSessionLifecycleProjection projection = CreateProjection(
+            harness.Repository.Id,
+            active,
+            now,
+            omitMetrics: true);
+        DecisionSessionLifecycleHistory history = CreateHistory(harness.Repository.Id, active.Id, now, includeRecovery: true);
+        DecisionSessionHealthAssessment health = CreateHealth(harness.Repository.Id, DecisionSessionHealthStatus.Warning, now);
+        var service = CreateService(harness, projection, history, health, now);
+
+        DecisionSessionCertificationReport report = await service.GetCurrentReportAsync(harness.Repository.Id);
+
+        DecisionSessionCertificationFinding finding = Assert.Single(report.Result.Findings, finding => finding.Id == "recovery-rebuilds-derived-evidence");
+        Assert.False(finding.Passed);
+        Assert.Contains(finding.Diagnostics, diagnostic => diagnostic.Contains("lack recovery findings", StringComparison.OrdinalIgnoreCase));
+    }
+
     private static DecisionSessionCertificationService CreateService(
         DecisionSessionTestHarness harness,
         DecisionSessionLifecycleProjection projection,
@@ -149,12 +223,17 @@ public sealed class DecisionSessionCertificationTests
         IReadOnlyList<DecisionSessionProjection>? sessions = null,
         IReadOnlyList<DecisionSessionContinuityArtifactProjection>? artifacts = null,
         DecisionSessionTransferEligibilityStatus eligibilityStatus = DecisionSessionTransferEligibilityStatus.Eligible,
-        DecisionSessionTransferEventProjection? transfer = null)
+        DecisionSessionTransferEventProjection? transfer = null,
+        Func<DecisionSessionEconomicsSnapshot, DecisionSessionEconomicsSnapshot>? mutateEconomics = null,
+        Func<DecisionSessionLifecycleSnapshot, DecisionSessionLifecycleSnapshot>? mutatePolicy = null,
+        bool omitMetrics = false)
     {
         DecisionSessionMetricsSnapshot metrics = CreateMetricsSnapshot(repositoryId, now);
-        DecisionSessionEconomicsSnapshot economics = CreateEconomicsSnapshot(repositoryId, metrics, now);
+        DecisionSessionEconomicsSnapshot economics = mutateEconomics?.Invoke(CreateEconomicsSnapshot(repositoryId, metrics, now)) ??
+            CreateEconomicsSnapshot(repositoryId, metrics, now);
         DecisionSessionCoherenceSnapshot coherence = CreateCoherenceSnapshot(repositoryId, metrics, economics, now);
-        DecisionSessionLifecycleSnapshot policy = CreatePolicySnapshot(repositoryId, active, metrics, economics, coherence, now);
+        DecisionSessionLifecycleSnapshot policy = mutatePolicy?.Invoke(CreatePolicySnapshot(repositoryId, active, metrics, economics, coherence, now)) ??
+            CreatePolicySnapshot(repositoryId, active, metrics, economics, coherence, now);
         DecisionSessionTransferEligibilitySnapshot eligibility = CreateEligibilitySnapshot(repositoryId, active.Id, policy.Evaluation, eligibilityStatus, now);
         IReadOnlyList<DecisionSessionContinuityArtifactProjection> artifactList = artifacts ??
             (transfer?.ContinuityArtifactId is null ? [] : [CreateArtifact(active.Id, transfer.ContinuityArtifactId, now)]);
@@ -163,8 +242,8 @@ public sealed class DecisionSessionCertificationTests
             repositoryId,
             active,
             sessions ?? [active],
-            metrics,
-            new DecisionSessionSizeProjection(
+            omitMetrics ? null : metrics,
+            omitMetrics ? null : new DecisionSessionSizeProjection(
                 metrics.Metrics.EstimatedTokenCount,
                 metrics.Metrics.ContextByteSize,
                 metrics.Metrics.ReasoningEventCount,
@@ -220,7 +299,12 @@ public sealed class DecisionSessionCertificationTests
             activity,
             growth,
             cache,
-            new DecisionSessionMetricsDiagnostics(repositoryId, now, [], [], []),
+            new DecisionSessionMetricsDiagnostics(
+                repositoryId,
+                now,
+                [new DecisionSessionMetricsSourceDiagnostic("test", 1, 400, 400, [])],
+                [],
+                []),
             now);
     }
 
@@ -253,7 +337,7 @@ public sealed class DecisionSessionCertificationTests
         DecisionSessionEconomicsSnapshot economics,
         DateTimeOffset now)
     {
-        var coherence = new DecisionSessionCoherence(0.3m, 0.8m, 0.5m, 0.5m, 0.8m);
+        var coherence = new DecisionSessionCoherence(0.410m, 0.8m, 0.5m, 0.5m, 0.8m);
         return new DecisionSessionCoherenceSnapshot(
             repositoryId,
             coherence,

@@ -2,55 +2,35 @@
 
 ## Slice Summary
 
-- Started Milestone 6 Certification.
-- Added decision-session certification models:
-  - `DecisionSessionCertificationFinding`
-  - `DecisionSessionCertificationResult`
-  - `DecisionSessionCertificationReport`
-  - `DecisionSessionGovernanceReport`
-  - `DecisionSessionHealthReport`
-  - `DecisionSessionLifecycleEndToEndFixture`
-- Added `IDecisionSessionCertificationService` and `DecisionSessionCertificationService`.
-- Certification is observational: it reads repository lookup, decision-session repository evidence, and observability projections; it does not take registry, policy, eligibility, or transfer mutator dependencies.
-- Added persisted certification reports under `.agents/decision-sessions/certification/`.
-- Added backend endpoints:
-  - `GET /api/repositories/{repositoryId}/decision-sessions/certification`
-  - `GET /api/repositories/{repositoryId}/decision-sessions/certification/report`
-  - `POST /api/repositories/{repositoryId}/decision-sessions/certification`
-- Added first certification rule coverage for:
-  - Authority boundary.
-  - Single-active-session invariant.
-  - Analysis snapshot presence.
-  - TTL and cache miss risk evidence.
-  - Policy evidence.
-  - Eligibility preventing unsafe transfer.
-  - Continuity artifact validity.
-  - Transfer lifecycle invariants.
-  - Recovery diagnostics presence.
-  - Continuity lineage.
-  - Workflow read-only boundary as a project-boundary certification finding.
-  - Lifecycle diagnostics.
-  - Health contradiction detection.
-- Updated `.agents/milestones/m6-certification.md` for the completed first certification surface.
+- Continued Milestone 6B Determinism and Recovery Certification.
+- Strengthened `DecisionSessionCertificationService` so certification now fails when:
+  - Metrics snapshots contradict source diagnostic byte/token evidence.
+  - Economics snapshot outputs contradict recorded deterministic assessments.
+  - Coherence snapshot outputs contradict recorded deterministic assessments and coherence formula.
+  - Lifecycle policy outputs contradict recorded deterministic score diagnostics.
+  - Missing derived snapshots have recovery history but no recovery findings proving rebuild, skipped rebuild, or rebuild failure.
+- Added focused certification tests for:
+  - Analysis determinism failure on contradictory economics evidence.
+  - Policy determinism failure on contradictory decision evidence.
+  - Recovery certification failure when missing derived snapshots lack recovery findings.
+- Updated the Milestone 6 checklist for completed determinism and derived-snapshot recovery proof items.
 
 ## Validation
 
-- `dotnet test .\tests\CommandCenter.Backend.Tests\CommandCenter.Backend.Tests.csproj --filter "DecisionSessionCertificationTests" --no-restore` passed: 5 tests.
-- `dotnet test .\tests\CommandCenter.Backend.Tests\CommandCenter.Backend.Tests.csproj --filter "DecisionSessionCertificationTests|DecisionSessionEndpointTests" --no-restore` passed: 7 tests.
-- `dotnet test .\tests\CommandCenter.Backend.Tests\CommandCenter.Backend.Tests.csproj --filter "DecisionSession" --no-restore` passed: 86 tests.
-- First `dotnet test .\CommandCenter.slnx --no-restore` run had an unrelated transient file-lock failure in `DecisionGenerationServiceTests.DecisionSupersedeAndArchiveEndpointsReturnMutatedDecisionAndConflicts` on temp `execution-sessions.json`.
-- Rerun of `dotnet test .\CommandCenter.slnx --no-restore` passed: 716 tests.
+- `dotnet test .\tests\CommandCenter.Backend.Tests\CommandCenter.Backend.Tests.csproj --filter "DecisionSessionCertificationTests" --no-restore` passed: 8 tests.
+- `dotnet test .\tests\CommandCenter.Backend.Tests\CommandCenter.Backend.Tests.csproj --filter "DecisionSession" --no-restore` passed: 89 tests.
+- `dotnet test .\CommandCenter.slnx --no-restore` passed: 719 tests.
 
 ## Current State
 
-- `.agents/handoffs/handoff.md` from the previous slice was rotated to `.agents/handoffs/handoff.0018.md`.
-- `.agents/decisions/decisions.md` was not rotated because no user response authorized new decisions during this slice.
+- Previous handoff rotated to `.agents/handoffs/handoff.0019.md`.
+- `.agents/decisions/decisions.md` was not rotated because there was no user response authorizing new decisions during this slice.
 - No git staging, commit, or push was performed.
 
 ## Remaining Milestone 6 Work
 
-- Add true deterministic recomputation checks for metrics, economics, coherence, and lifecycle policy from identical evidence.
-- Deepen recovery certification so missing analysis, policy, and eligibility snapshots are rebuilt or explicitly fail certification.
-- Add a real end-to-end decision-session lifecycle fixture that creates, activates, analyzes, evaluates, checks eligibility, creates a continuity artifact, transfers when eligible, recovers, projects observability/workflow consumption, and certifies.
-- Add optional markdown certification reports under `.agents/decision-sessions/reports/` if still desired.
-- Add stronger workflow and repository consumer certification using public backend/workflow surfaces without introducing reverse dependencies into `CommandCenter.DecisionSessions`.
+- Prove workflow cannot mutate lifecycle state using public workflow/backend surfaces.
+- Complete diagnostics coverage for continue, transfer, eligibility blocked, recovery, and failure states.
+- Build the real end-to-end decision-session lifecycle fixture:
+  create, activate, analyze, evaluate policy, check eligibility, create artifact, transfer if eligible, recover, project observability/workflow consumption, certify.
+- Optional markdown certification reports under `.agents/decision-sessions/reports/` remain undecided.

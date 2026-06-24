@@ -161,15 +161,27 @@ public sealed class DecisionSessionCertificationService(
         {
             diagnostics.Add("Metrics snapshot is missing.");
         }
+        else
+        {
+            diagnostics.AddRange(ValidateMetricsDeterminism(projection.Metrics));
+        }
 
         if (projection.Economics is null)
         {
             diagnostics.Add("Economics snapshot is missing.");
         }
+        else
+        {
+            diagnostics.AddRange(ValidateEconomicsDeterminism(projection.Economics));
+        }
 
         if (projection.Coherence is null)
         {
             diagnostics.Add("Coherence snapshot is missing.");
+        }
+        else
+        {
+            diagnostics.AddRange(ValidateCoherenceDeterminism(projection.Coherence));
         }
 
         bool passed = diagnostics.Count == 0;
@@ -178,9 +190,9 @@ public sealed class DecisionSessionCertificationService(
             "Analysis determinism",
             passed,
             passed
-                ? "Metrics, economics, and coherence snapshots are present for deterministic comparison."
-                : "Analysis snapshots are incomplete.",
-            "Certification requires rebuildable analysis evidence before deeper deterministic comparison can prove identical inputs produce identical outputs.",
+                ? "Metrics, economics, and coherence snapshots match their deterministic diagnostic inputs."
+                : "Analysis snapshots are incomplete or contradict their deterministic diagnostic inputs.",
+            "Certification requires rebuildable analysis evidence and validates that identical recorded inputs produce the recorded metrics, economics, and coherence outputs.",
             FilterNull([
                 projection.Metrics is null ? null : $"metrics:{projection.Metrics.GeneratedAt:O}:{projection.Metrics.Metrics.EstimatedTokenCount}",
                 projection.Economics is null ? null : $"economics:{projection.Economics.GeneratedAt:O}:{projection.Economics.Economics.EstimatedReuseValue}:{projection.Economics.Economics.EstimatedTransferValue}",
@@ -242,6 +254,8 @@ public sealed class DecisionSessionCertificationService(
             {
                 diagnostics.Add("Lifecycle policy scores must be non-negative.");
             }
+
+            diagnostics.AddRange(ValidatePolicyDeterminism(projection.Policy));
         }
 
         bool passed = diagnostics.Count == 0;
@@ -250,8 +264,8 @@ public sealed class DecisionSessionCertificationService(
             "Policy determinism",
             passed,
             passed
-                ? "Lifecycle policy evidence is present and explainable."
-                : "Lifecycle policy evidence is incomplete.",
+                ? "Lifecycle policy evidence is present, explainable, and matches deterministic score diagnostics."
+                : "Lifecycle policy evidence is incomplete or contradicts deterministic score diagnostics.",
             "Certification requires deterministic, explainable policy output before transfer eligibility or execution evidence can be trusted.",
             projection.Policy is null
                 ? []
@@ -412,6 +426,10 @@ public sealed class DecisionSessionCertificationService(
         if (missingDerivedSnapshots && !recoveryObserved)
         {
             diagnostics.Add("Missing derived snapshots have no recovery history evidence.");
+        }
+        else if (missingDerivedSnapshots && !HasDerivedSnapshotRecoveryEvidence(projection.RecentRecoveryResults))
+        {
+            diagnostics.Add("Missing derived snapshots lack recovery findings proving rebuild, skipped rebuild, or rebuild failure.");
         }
 
         bool passed = diagnostics.Count == 0;
@@ -591,5 +609,130 @@ public sealed class DecisionSessionCertificationService(
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .Select(value => value!)
             .ToArray();
+    }
+
+    private static IReadOnlyList<string> ValidateMetricsDeterminism(DecisionSessionMetricsSnapshot snapshot)
+    {
+        var diagnostics = new List<string>();
+        if (snapshot.Diagnostics.Sources.Count == 0)
+        {
+            diagnostics.Add("Metrics source diagnostics are missing.");
+            return diagnostics;
+        }
+
+        long byteCount = snapshot.Diagnostics.Sources.Sum(source => source.ByteCount);
+        long characterCount = snapshot.Diagnostics.Sources.Sum(source => source.CharacterCount);
+        long estimatedTokens = characterCount == 0 ? 0 : (characterCount + 3L) / 4L;
+        if (snapshot.Metrics.ContextByteSize != byteCount)
+        {
+            diagnostics.Add($"Metrics context bytes {snapshot.Metrics.ContextByteSize} do not match source bytes {byteCount}.");
+        }
+
+        if (snapshot.Metrics.EstimatedTokenCount != estimatedTokens)
+        {
+            diagnostics.Add($"Metrics estimated tokens {snapshot.Metrics.EstimatedTokenCount} do not match deterministic token estimate {estimatedTokens}.");
+        }
+
+        if (snapshot.Growth.EvidenceByteSize != snapshot.Metrics.ContextByteSize)
+        {
+            diagnostics.Add("Metrics growth byte size does not match context byte size.");
+        }
+
+        if (snapshot.Activity.ActivityRate != snapshot.Statistics.ActivityRate ||
+            snapshot.Growth.GrowthRate != snapshot.Statistics.GrowthRate)
+        {
+            diagnostics.Add("Metrics activity or growth rates do not match statistics.");
+        }
+
+        return diagnostics;
+    }
+
+    private static IReadOnlyList<string> ValidateEconomicsDeterminism(DecisionSessionEconomicsSnapshot snapshot)
+    {
+        var economics = snapshot.Economics;
+        var diagnostic = snapshot.Diagnostics;
+        var diagnostics = new List<string>();
+        AddMismatch(diagnostics, "Economics reuse value", economics.EstimatedReuseValue, diagnostic.ReuseValue.Value);
+        AddMismatch(diagnostics, "Economics transfer value", economics.EstimatedTransferValue, diagnostic.TransferValue.Value);
+        AddMismatch(diagnostics, "Economics continuity benefit", economics.EstimatedContinuityBenefit, diagnostic.ContinuityBenefit.Value);
+        AddMismatch(diagnostics, "Economics cache benefit", economics.EstimatedCacheBenefit, diagnostic.CacheBenefit.Value);
+        AddMismatch(diagnostics, "Economics cache miss risk", economics.EstimatedCacheMissRisk, diagnostic.CacheRisk.Value);
+        return diagnostics;
+    }
+
+    private static IReadOnlyList<string> ValidateCoherenceDeterminism(DecisionSessionCoherenceSnapshot snapshot)
+    {
+        var coherence = snapshot.Coherence;
+        var diagnostic = snapshot.Diagnostics;
+        var diagnostics = new List<string>();
+        AddMismatch(diagnostics, "Coherence fragmentation score", coherence.FragmentationScore, diagnostic.Fragmentation.Score);
+        AddMismatch(diagnostics, "Coherence density score", coherence.DensityScore, diagnostic.Density.Score);
+        AddMismatch(diagnostics, "Coherence continuity score", coherence.ContinuityScore, diagnostic.ContinuityQuality.Score);
+        AddMismatch(diagnostics, "Coherence transfer pressure", coherence.TransferPressure, diagnostic.TransferPressure.Score);
+
+        decimal expectedCoherence = Clamp(Round(
+            (diagnostic.Density.Score * 0.35m) +
+            (diagnostic.ContinuityQuality.Score * 0.35m) +
+            ((1m - diagnostic.Fragmentation.Score) * 0.30m)));
+        AddMismatch(diagnostics, "Coherence score", coherence.CoherenceScore, expectedCoherence);
+        return diagnostics;
+    }
+
+    private static IReadOnlyList<string> ValidatePolicyDeterminism(DecisionSessionLifecycleSnapshot snapshot)
+    {
+        var diagnostics = new List<string>();
+        AddMismatch(diagnostics, "Policy reuse score", snapshot.Evaluation.ReuseScore, snapshot.Diagnostics.ReuseScore.Score);
+        AddMismatch(diagnostics, "Policy transfer score", snapshot.Evaluation.TransferScore, snapshot.Diagnostics.TransferScore.Score);
+
+        DecisionSessionLifecycleDecision expectedDecision = snapshot.Diagnostics.TransferScore.Score > snapshot.Diagnostics.ReuseScore.Score
+            ? DecisionSessionLifecycleDecision.Transfer
+            : DecisionSessionLifecycleDecision.Continue;
+        if (snapshot.Evaluation.Decision != expectedDecision)
+        {
+            diagnostics.Add($"Policy decision {snapshot.Evaluation.Decision} does not match deterministic score decision {expectedDecision}.");
+        }
+
+        return diagnostics;
+    }
+
+    private static bool HasDerivedSnapshotRecoveryEvidence(IReadOnlyList<DecisionSessionRecoveryResult> recoveries)
+    {
+        string[] requiredPrefixes =
+        [
+            "MetricsSnapshot",
+            "EconomicsSnapshot",
+            "CoherenceSnapshot",
+            "LifecyclePolicySnapshot",
+            "TransferEligibilitySnapshot"
+        ];
+        return requiredPrefixes.All(prefix => recoveries.Any(recovery =>
+            recovery.Findings.Any(finding =>
+                finding.Code.StartsWith(prefix, StringComparison.Ordinal) &&
+                (finding.Code.EndsWith("Rebuilt", StringComparison.Ordinal) ||
+                    finding.Code.EndsWith("NotRebuilt", StringComparison.Ordinal) ||
+                    finding.Code.EndsWith("RebuildFailed", StringComparison.Ordinal)))));
+    }
+
+    private static void AddMismatch(List<string> diagnostics, string label, decimal actual, decimal expected)
+    {
+        if (actual != expected)
+        {
+            diagnostics.Add($"{label} {actual} does not match deterministic value {expected}.");
+        }
+    }
+
+    private static decimal Clamp(decimal value)
+    {
+        if (value < 0m)
+        {
+            return 0m;
+        }
+
+        return value > 1m ? 1m : value;
+    }
+
+    private static decimal Round(decimal value)
+    {
+        return decimal.Round(value, 4, MidpointRounding.AwayFromZero);
     }
 }
