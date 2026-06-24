@@ -2889,6 +2889,88 @@ public sealed class WorkflowProjectionServiceTests
         yield return [WorkflowGateType.PushApproval, "push-approval"];
     }
 
+    [Fact]
+    public async Task InfluenceTraceExplainsStageGateContinuationAndPreparationEvidence()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+        fixture.Decisions.Add(CreateDecision(fixture.Repository.Id, "DEC-0001", DecisionState.Open));
+        var workflowRepository = new FileSystemWorkflowRepository(new MemoryArtifactStore());
+        await workflowRepository.SaveContinuationEventAsync(
+            fixture.Repository,
+            new WorkflowContinuationEvent(
+                fixture.Repository.Id,
+                WorkflowArtifactPaths.ContinuationEventId(DateTimeOffset.Parse("2026-06-23T12:00:00Z")),
+                DateTimeOffset.Parse("2026-06-23T12:00:00Z"),
+                "endpoint",
+                WorkflowStage.Handoff,
+                WorkflowStage.Decision,
+                WorkflowProgressState.Ready,
+                WorkflowGateType.None,
+                "Advance",
+                "Advanced to decision.",
+                new WorkflowContinuationFingerprint("continuation-fingerprint"),
+                false,
+                false,
+                "Resolve outstanding decisions.",
+                ["Continuation diagnostic."]));
+        await workflowRepository.SavePreparationEventAsync(
+            fixture.Repository,
+            new WorkflowPreparationEvent(
+                fixture.Repository.Id,
+                WorkflowArtifactPaths.PreparationEventId(DateTimeOffset.Parse("2026-06-23T12:01:00Z")),
+                DateTimeOffset.Parse("2026-06-23T12:01:00Z"),
+                "endpoint",
+                WorkflowStage.Decision,
+                WorkflowProgressState.AwaitingGate,
+                WorkflowGateType.DecisionResolution,
+                WorkflowPreparationCommand.DiscoverDecisionCandidates,
+                "decisions_discover_candidates",
+                "Refused",
+                "DecisionResolution is awaiting human action.",
+                new WorkflowPreparationFingerprint("preparation-fingerprint"),
+                true,
+                false,
+                [],
+                [],
+                ["Preparation diagnostic."]));
+        var service = fixture.CreateHealthService(workflowRepository);
+
+        WorkflowInfluenceTrace trace = await service.TraceInfluenceAsync(fixture.Repository.Id);
+
+        Assert.Equal(WorkflowStage.Decision, trace.CurrentStage);
+        Assert.Equal(WorkflowGateType.DecisionResolution, trace.BlockingGate);
+        Assert.Contains(trace.StageInfluences, influence => influence.Contains("Decision workflow status", StringComparison.Ordinal));
+        Assert.Contains(trace.ProgressionInfluences, influence => influence.Contains("Latest continuation event", StringComparison.Ordinal));
+        Assert.Contains(trace.PreparationInfluences, influence => influence.Contains("decisions_discover_candidates", StringComparison.Ordinal));
+        Assert.Contains(trace.GateInfluences, influence => influence.Contains("Open gate DecisionResolution", StringComparison.Ordinal));
+        Assert.Contains(trace.BlockingInfluences, influence => influence.Contains("UnresolvedDecision", StringComparison.Ordinal));
+        Assert.Contains(trace.EvidencePaths, path => path.Contains("decision:DEC-0001", StringComparison.Ordinal));
+        Assert.False(string.IsNullOrWhiteSpace(trace.Fingerprint));
+    }
+
+    [Fact]
+    public async Task HealthAssessmentIsDecomposedAndIncludesInfluenceTrace()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+        fixture.Decisions.Add(CreateDecision(fixture.Repository.Id, "DEC-0001", DecisionState.Open));
+        var service = fixture.CreateHealthService(new FileSystemWorkflowRepository(new MemoryArtifactStore()));
+
+        WorkflowHealthAssessment assessment = await service.AssessHealthAsync(fixture.Repository.Id);
+
+        Assert.Equal(fixture.Repository.Id, assessment.RepositoryId);
+        Assert.Equal("Blocked", assessment.OverallStatus);
+        Assert.Contains(assessment.Dimensions, dimension => dimension.Name == "Projection" && dimension.Status == "Healthy");
+        Assert.Contains(assessment.Dimensions, dimension => dimension.Name == "Recovery" && dimension.Status == "Healthy");
+        Assert.Contains(assessment.Dimensions, dimension => dimension.Name == "Gates" && dimension.Status == "Blocked");
+        Assert.Contains(assessment.Dimensions, dimension => dimension.Name == "Continuation");
+        Assert.Contains(assessment.Dimensions, dimension => dimension.Name == "Preparation");
+        Assert.Equal(WorkflowStage.Decision, assessment.InfluenceTrace.CurrentStage);
+    }
+
     private static void ArrangeAuthorityGateScenario(TestFixture fixture, string scenario)
     {
         switch (scenario)
@@ -3256,6 +3338,9 @@ public sealed class WorkflowProjectionServiceTests
         public WorkflowRecoveryService CreateRecoveryService(IWorkflowRepository workflowRepository) =>
             new(new RepositoryServiceStub(Repository), CreateService(), workflowRepository);
 
+        public WorkflowHealthService CreateHealthService(IWorkflowRepository workflowRepository) =>
+            new(new RepositoryServiceStub(Repository), CreateService(), workflowRepository);
+
         public void ReplaceServices(IServiceCollection services)
         {
             services.RemoveAll<IRepositoryService>();
@@ -3274,6 +3359,7 @@ public sealed class WorkflowProjectionServiceTests
             services.RemoveAll<IWorkflowGateCatalogService>();
             services.RemoveAll<IWorkflowContinuationService>();
             services.RemoveAll<IWorkflowPreparationService>();
+            services.RemoveAll<IWorkflowHealthService>();
             services.RemoveAll<IWorkflowRepository>();
             services.RemoveAll<IWorkflowRecoveryService>();
             services.RemoveAll<IHostedService>();
@@ -3295,6 +3381,7 @@ public sealed class WorkflowProjectionServiceTests
             services.AddSingleton<IWorkflowGateCatalogService, WorkflowGateCatalogService>();
             services.AddSingleton<IWorkflowContinuationService, WorkflowContinuationService>();
             services.AddSingleton<IWorkflowPreparationService, WorkflowPreparationService>();
+            services.AddSingleton<IWorkflowHealthService, WorkflowHealthService>();
             services.AddSingleton<IWorkflowRecoveryService, WorkflowRecoveryService>();
         }
     }

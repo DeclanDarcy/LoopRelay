@@ -27,6 +27,7 @@ public static class WorkflowEndpoints
         app.MapGetWorkflowPreparationEvaluation();
         app.MapPostWorkflowPreparationRun();
         app.MapGetWorkflowPreparationHistory();
+        app.MapGetWorkflowHealth();
         return app;
     }
 
@@ -421,6 +422,25 @@ public static class WorkflowEndpoints
             try
             {
                 return Results.Ok(await workflowPreparationService.GetPreparationHistoryAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGetWorkflowHealth(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/workflow/health", async (
+            Guid repositoryId,
+            IWorkflowHealthService workflowHealthService) =>
+        {
+            try
+            {
+                return Results.Ok(await workflowHealthService.AssessHealthAsync(repositoryId));
             }
             catch (KeyNotFoundException exception)
             {

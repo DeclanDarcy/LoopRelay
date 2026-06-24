@@ -17,8 +17,8 @@ Deliver:
 - [x] `WorkflowPreparationEvent`.
 - [x] recovery integration that reevaluates continuation after restart without duplicate progression.
 - [x] `WorkflowContinuationHostedService`.
-- [ ] `WorkflowInfluenceTrace`.
-- [ ] `WorkflowHealthAssessment`.
+- [x] `WorkflowInfluenceTrace`.
+- [x] `WorkflowHealthAssessment`.
 
 Slice progress:
 
@@ -111,12 +111,21 @@ Slice progress:
   hosted path already created.
 - Hosted continuation handles repository-local failures without preventing
   unrelated repositories from being evaluated in the same cycle.
+- Added read-only `IWorkflowHealthService` with influence tracing and
+  decomposed health assessment.
+- `WorkflowInfluenceTrace` explains stage, progression, preparation, gate, and
+  blocking influences from projection inputs, workflow timelines, continuation
+  history, preparation history, gate history, and conflicts.
+- `WorkflowHealthAssessment` reports named dimensions for projection, recovery,
+  gates, continuation, and preparation without a score or readiness percentage.
+- Added `GET /api/repositories/{repositoryId}/workflow/health`.
 - Continuation evaluation consumes the aggregate workflow projection, latest
   persisted workflow timeline evidence, and state-machine, gate, and completion
   evidence.
 - Continuation evaluation reports current stage, optional mechanical target stage, open gate, required human action, stop reason, deterministic fingerprint, and diagnostics.
 - Open authority gates halt evaluation with `WaitingForHuman`; no domain commands are invoked.
-- Influence tracing and health assessment remain deferred.
+- Influence tracing and health assessment are implemented as read-only derived
+  evidence. They do not mutate workflow or domain state.
 
 Progression rules:
 
@@ -186,4 +195,4 @@ Exit criteria:
 - [x] preparation history exists.
 - [x] hosted runner exists.
 - [ ] recovery integration works.
-- [ ] health assessment exists.
+- [x] health assessment exists.
