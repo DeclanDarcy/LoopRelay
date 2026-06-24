@@ -207,16 +207,16 @@ Recovery responsibilities:
 - [x] Reconstruct active session from registry, transfer events, continuity artifacts, and continuity evidence.
 - [x] Reconstruct transfer history from transfer events, continuity artifacts, and session records.
 - [x] Assess interrupted `TransferPending` sessions.
-- [ ] Rebuild missing metrics, economics, coherence, policy, and eligibility snapshots.
+- [x] Rebuild missing metrics, economics, coherence, policy, and eligibility snapshots.
 - [x] Persist recovery events, findings, and diagnostics.
 
 Recovery philosophy:
 
-- [ ] Decisions, Reasoning, and Continuity evidence outrank derived snapshots.
-- [ ] Continuity artifacts outrank transfer diagnostics.
-- [ ] Continuity evidence outranks stale session-state hints when they conflict.
-- [ ] Do not silently choose one active session when duplicate active sessions exist.
-- [ ] Repository recovery failures must be isolated to that repository.
+- [x] Decisions, Reasoning, and Continuity evidence outrank derived snapshots.
+- [x] Continuity artifacts outrank transfer diagnostics.
+- [x] Continuity evidence outranks stale session-state hints when they conflict.
+- [x] Do not silently choose one active session when duplicate active sessions exist.
+- [x] Repository recovery failures must be isolated to that repository.
 
 Hosted startup behavior:
 
@@ -266,7 +266,7 @@ Do not add a manual transfer endpoint.
 - [x] Active session recovers after restart.
 - [x] Completed transfer recovers replacement as active.
 - [x] `TransferPending` after restart emits diagnostics.
-- [ ] Missing analysis, policy, and eligibility snapshots are rebuilt.
+- [x] Missing analysis, policy, and eligibility snapshots are rebuilt.
 - [x] Duplicate active sessions produce a recovery finding.
 - [x] Hosted recovery isolates repository failures.
 
@@ -276,7 +276,7 @@ Do not add a manual transfer endpoint.
 - [x] Eligibility can block or defer transfer without changing policy.
 - [x] Transfer creates a first-class continuity artifact.
 - [x] Transfer preserves continuity and never creates parallel active sessions.
-- [ ] Recovery survives restart, missing snapshots, duplicate-active corruption, and interrupted transfer states with diagnostics.
+- [x] Recovery survives restart, missing snapshots, duplicate-active corruption, and interrupted transfer states with diagnostics.
 
 
 

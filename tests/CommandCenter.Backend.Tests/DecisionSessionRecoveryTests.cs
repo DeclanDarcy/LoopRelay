@@ -1,7 +1,13 @@
 using CommandCenter.Core.Repositories;
+using CommandCenter.Continuity.Services;
+using CommandCenter.Core.Artifacts;
 using CommandCenter.DecisionSessions.Abstractions;
 using CommandCenter.DecisionSessions.Models;
+using CommandCenter.DecisionSessions.Persistence;
+using CommandCenter.Decisions.Services;
 using CommandCenter.DecisionSessions.Services;
+using CommandCenter.Reasoning.Projections;
+using CommandCenter.Reasoning.Services;
 
 namespace CommandCenter.Backend.Tests;
 
@@ -91,6 +97,42 @@ public sealed class DecisionSessionRecoveryTests
     }
 
     [Fact]
+    public async Task RecoveryRebuildsMissingAndCorruptDerivedSnapshots()
+    {
+        DecisionSessionTestHarness harness = DecisionSessionTestHarness.Create();
+        DecisionSession created = await harness.Registry.CreateSessionAsync(harness.Repository.Id, "test");
+        await harness.Registry.ActivateSessionAsync(harness.Repository.Id, created.Id);
+        await harness.Store.WriteAsync(
+            DecisionSessionArtifactPaths.Resolve(harness.Repository, DecisionSessionArtifactPaths.MetricsSnapshotJson()),
+            "{ not valid json");
+        await harness.Store.WriteAsync(
+            DecisionSessionArtifactPaths.Resolve(harness.Repository, DecisionSessionArtifactPaths.EconomicsSnapshotJson()),
+            "{ not valid json");
+        await harness.Store.WriteAsync(
+            DecisionSessionArtifactPaths.Resolve(harness.Repository, DecisionSessionArtifactPaths.CoherenceSnapshotJson()),
+            "{ not valid json");
+        await harness.Store.WriteAsync(
+            DecisionSessionArtifactPaths.Resolve(harness.Repository, DecisionSessionArtifactPaths.LifecyclePolicySnapshotJson()),
+            "{ not valid json");
+
+        DecisionSessionRecoveryService recovery = CreateRecoveryWithAnalysisStack(harness);
+
+        DecisionSessionRecoveryResult result = await recovery.RecoverAsync(harness.Repository.Id);
+
+        Assert.True(result.Succeeded);
+        Assert.Contains(result.Findings, finding => finding.Code == "MetricsSnapshotRebuilt");
+        Assert.Contains(result.Findings, finding => finding.Code == "EconomicsSnapshotRebuilt");
+        Assert.Contains(result.Findings, finding => finding.Code == "CoherenceSnapshotRebuilt");
+        Assert.Contains(result.Findings, finding => finding.Code == "LifecyclePolicySnapshotRebuilt");
+        Assert.Contains(result.Findings, finding => finding.Code == "TransferEligibilitySnapshotRebuilt");
+        Assert.NotNull(await harness.RepositoryStore.ReadMetricsSnapshotAsync(harness.Repository));
+        Assert.NotNull(await harness.RepositoryStore.ReadEconomicsSnapshotAsync(harness.Repository));
+        Assert.NotNull(await harness.RepositoryStore.ReadCoherenceSnapshotAsync(harness.Repository));
+        Assert.NotNull(await harness.RepositoryStore.ReadLifecyclePolicySnapshotAsync(harness.Repository));
+        Assert.NotNull(await harness.RepositoryStore.ReadTransferEligibilitySnapshotAsync(harness.Repository));
+    }
+
+    [Fact]
     public async Task HostedRecoveryContinuesAfterRepositoryFailure()
     {
         Repository first = new() { Id = Guid.NewGuid(), Name = "first", Path = "first" };
@@ -143,6 +185,54 @@ public sealed class DecisionSessionRecoveryTests
             succeeded,
             [started, completed],
             []);
+    }
+
+    private static DecisionSessionRecoveryService CreateRecoveryWithAnalysisStack(DecisionSessionTestHarness harness)
+    {
+        var decisionRepository = new InMemoryDecisionRepository();
+        var reasoningRepository = new FileSystemReasoningRepository(harness.Store, new ReasoningArtifactProjectionService());
+        var contextStore = new FileSystemOperationalContextProposalStore(harness.Store);
+        var artifactService = new ArtifactService(harness.Store);
+        var evidenceReader = new DecisionSessionEvidenceReader(decisionRepository, reasoningRepository, contextStore, artifactService);
+        var metricsService = new DecisionSessionMetricsService(
+            harness.RepositoryService,
+            harness.Registry,
+            harness.RepositoryStore,
+            evidenceReader,
+            new DeterministicTokenEstimator(),
+            TimeProvider.System);
+        var economicsService = new DecisionSessionEconomicsService(
+            harness.RepositoryService,
+            harness.RepositoryStore,
+            metricsService,
+            new DecisionSessionEconomicsOptions(),
+            TimeProvider.System);
+        var graphService = new ReasoningGraphService(harness.RepositoryService, reasoningRepository, harness.Store);
+        var coherenceService = new DecisionSessionCoherenceService(
+            harness.RepositoryService,
+            harness.RepositoryStore,
+            metricsService,
+            economicsService,
+            graphService,
+            new DecisionSessionCoherenceOptions(),
+            TimeProvider.System);
+        var lifecyclePolicy = new DecisionSessionLifecyclePolicy(
+            harness.RepositoryService,
+            harness.RepositoryStore,
+            metricsService,
+            economicsService,
+            coherenceService,
+            new DecisionSessionLifecyclePolicyOptions(),
+            TimeProvider.System);
+        return new DecisionSessionRecoveryService(
+            harness.RepositoryService,
+            harness.RepositoryStore,
+            TimeProvider.System,
+            metricsService,
+            economicsService,
+            coherenceService,
+            lifecyclePolicy,
+            evidenceReader);
     }
 
     private sealed class ThrowingOnceRecoveryService(Guid repositoryIdToThrow) : IDecisionSessionRecoveryService
