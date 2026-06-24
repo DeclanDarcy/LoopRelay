@@ -2,43 +2,39 @@
 
 ## New State
 
-- Continued Milestone 9 with persisted one-step continuation progression.
-- Added `WorkflowTimelineFactory` so recovery and continuation construct
-  workflow timelines through the same fingerprinting path.
-- `WorkflowContinuationService` now reads the latest persisted workflow
-  timeline as the coordinator stage when one exists.
-- Continuation compares that coordinator stage with the current domain-derived
-  projection and advances one canonical transition only when:
-  - the coordinator stage has no open gate,
-  - the state machine exposes exactly one valid outgoing transition,
-  - the domain projection has reached or passed that transition target,
-  - the coordinator stage is not active, failed, blocked, or terminal.
-- Endpoint-triggered continuation still persists a continuation event first.
-- When the event is an actual mechanical advance, continuation also persists a
-  workflow timeline snapshot for the advanced stage.
-- A repeated run after `Execution -> Handoff` now stops at
-  `ExecutionAcceptance` instead of duplicating the progression.
-- Updated `.agents/milestones/m9-continuation.md` with this slice progress.
+- Continued Milestone 9 one-step continuation progression coverage.
+- Added backend tests proving persisted coordinator stages can advance when
+  domain evidence has reached the next canonical stage:
+  - `Handoff -> Decision` after accepted handoff with decision candidate
+    evidence.
+  - `Decision -> OperationalContext` after resolved decision with pending
+    operational-context proposal evidence.
+  - `OperationalContext -> Commit` after promoted context with awaiting-commit
+    git evidence.
+- Added a compact operational-context proposal fixture helper in
+  `WorkflowProjectionServiceTests`.
+- Updated `.agents/milestones/m9-continuation.md` to mark these progression
+  rules complete.
 - Rotated previous `.agents/handoffs/handoff.md` to
-  `.agents/handoffs/handoff.0011.md`.
+  `.agents/handoffs/handoff.0012.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter WorkflowProjectionServiceTests` passed: 51 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter WorkflowProjectionServiceTests` passed: 54 tests.
 - `dotnet build CommandCenter.slnx` passed with 0 warnings and 0 errors.
 
 ## Notes
 
+- No workflow production code changed in this slice.
 - No preparation service was added.
 - No hosted continuation service was added.
 - No domain commands are invoked.
-- Continuation progression is currently proven for `Execution -> Handoff`.
-- Remaining continuation transitions still need explicit tests and any required
-  fixture support.
+- Remaining progression coverage is still needed for `Commit -> Push`,
+  `Push -> Completed`, legitimate push skip or no-change completion, and opening
+  the post-completion work-selection gate.
 
 ## Next Slice
 
-- Extend the persisted one-step progression tests across the remaining M9
-  transition rules: accepted handoff to decision, resolved decision to
-  operational context, completed context to commit, committed changes to push,
-  pushed or legitimate skip/no-change completion to completed.
+- Extend persisted one-step progression coverage across the remaining git-side
+  transitions: commit evidence to push, push or legitimate skip/no-change
+  evidence to completed, and completed workflow halting at work selection.

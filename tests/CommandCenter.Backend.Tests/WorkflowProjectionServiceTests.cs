@@ -946,6 +946,131 @@ public sealed class WorkflowProjectionServiceTests
     }
 
     [Fact]
+    public async Task ContinuationRunAdvancesAcceptedHandoffToDecisionWhenDomainEvidenceIsAhead()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+        fixture.Candidates.Add(CreateCandidate(fixture.Repository.Id, "cand-0001"));
+        var store = new MemoryArtifactStore();
+        var workflowRepository = new FileSystemWorkflowRepository(store);
+        var service = new WorkflowContinuationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            new WorkflowStateMachineService(),
+            workflowRepository);
+        await workflowRepository.SaveTimelineAsync(
+            fixture.Repository,
+            CreateTimeline(
+                fixture.Repository.Id,
+                DateTimeOffset.Parse("2026-06-23T10:20:00Z"),
+                WorkflowStage.Handoff,
+                WorkflowProgressState.Ready,
+                WorkflowGateType.None,
+                WorkflowStage.Execution,
+                []));
+
+        WorkflowContinuationEvent continuationEvent = await service.RunContinuationAsync(fixture.Repository.Id);
+        WorkflowTimeline? latest = await workflowRepository.GetLatestTimelineAsync(fixture.Repository);
+
+        Assert.Equal("Advance", continuationEvent.Decision);
+        Assert.Equal(WorkflowStage.Handoff, continuationEvent.FromStage);
+        Assert.Equal(WorkflowStage.Decision, continuationEvent.ToStage);
+        Assert.NotNull(latest);
+        Assert.Equal(WorkflowStage.Decision, latest.CurrentStage);
+        Assert.Equal(WorkflowStage.Handoff, latest.PreviousStage);
+        Assert.Equal(WorkflowGateType.DecisionResolution, latest.BlockingGate);
+    }
+
+    [Fact]
+    public async Task ContinuationRunAdvancesResolvedDecisionToOperationalContextWhenDomainEvidenceIsAhead()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+        fixture.Decisions.Add(CreateResolvedDecision(fixture.Repository.Id, "DEC-0001"));
+        fixture.Proposals.Add(CreateOperationalContextProposal(
+            fixture.Repository.Id,
+            "ctx-0001",
+            OperationalContextProposalStatus.Pending,
+            OperationalContextReviewState.PendingReview,
+            null,
+            null));
+        var store = new MemoryArtifactStore();
+        var workflowRepository = new FileSystemWorkflowRepository(store);
+        var service = new WorkflowContinuationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            new WorkflowStateMachineService(),
+            workflowRepository);
+        await workflowRepository.SaveTimelineAsync(
+            fixture.Repository,
+            CreateTimeline(
+                fixture.Repository.Id,
+                DateTimeOffset.Parse("2026-06-23T10:40:00Z"),
+                WorkflowStage.Decision,
+                WorkflowProgressState.Ready,
+                WorkflowGateType.None,
+                WorkflowStage.Handoff,
+                []));
+
+        WorkflowContinuationEvent continuationEvent = await service.RunContinuationAsync(fixture.Repository.Id);
+        WorkflowTimeline? latest = await workflowRepository.GetLatestTimelineAsync(fixture.Repository);
+
+        Assert.Equal("Advance", continuationEvent.Decision);
+        Assert.Equal(WorkflowStage.Decision, continuationEvent.FromStage);
+        Assert.Equal(WorkflowStage.OperationalContext, continuationEvent.ToStage);
+        Assert.NotNull(latest);
+        Assert.Equal(WorkflowStage.OperationalContext, latest.CurrentStage);
+        Assert.Equal(WorkflowStage.Decision, latest.PreviousStage);
+        Assert.Equal(WorkflowGateType.OperationalContextReview, latest.BlockingGate);
+    }
+
+    [Fact]
+    public async Task ContinuationRunAdvancesCompletedOperationalContextToCommitWhenDomainEvidenceIsAhead()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingCommit;
+        fixture.Session = CompletedAcceptedSession(RepositoryExecutionState.AwaitingCommit);
+        fixture.Decisions.Add(CreateResolvedDecision(fixture.Repository.Id, "DEC-0001"));
+        fixture.Proposals.Add(CreateOperationalContextProposal(
+            fixture.Repository.Id,
+            "ctx-0001",
+            OperationalContextProposalStatus.Promoted,
+            OperationalContextReviewState.Accepted,
+            DateTimeOffset.Parse("2026-06-23T11:10:00Z"),
+            DateTimeOffset.Parse("2026-06-23T11:20:00Z")));
+        var store = new MemoryArtifactStore();
+        var workflowRepository = new FileSystemWorkflowRepository(store);
+        var service = new WorkflowContinuationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            new WorkflowStateMachineService(),
+            workflowRepository);
+        await workflowRepository.SaveTimelineAsync(
+            fixture.Repository,
+            CreateTimeline(
+                fixture.Repository.Id,
+                DateTimeOffset.Parse("2026-06-23T11:25:00Z"),
+                WorkflowStage.OperationalContext,
+                WorkflowProgressState.Ready,
+                WorkflowGateType.None,
+                WorkflowStage.Decision,
+                []));
+
+        WorkflowContinuationEvent continuationEvent = await service.RunContinuationAsync(fixture.Repository.Id);
+        WorkflowTimeline? latest = await workflowRepository.GetLatestTimelineAsync(fixture.Repository);
+
+        Assert.Equal("Advance", continuationEvent.Decision);
+        Assert.Equal(WorkflowStage.OperationalContext, continuationEvent.FromStage);
+        Assert.Equal(WorkflowStage.Commit, continuationEvent.ToStage);
+        Assert.NotNull(latest);
+        Assert.Equal(WorkflowStage.Commit, latest.CurrentStage);
+        Assert.Equal(WorkflowStage.OperationalContext, latest.PreviousStage);
+        Assert.Equal(WorkflowGateType.CommitApproval, latest.BlockingGate);
+    }
+
+    [Fact]
     public async Task GateCatalogMapsEveryAuthorityGateToExistingCommandName()
     {
         TestFixture fixture = TestFixture.Create();
@@ -1578,6 +1703,32 @@ public sealed class WorkflowProjectionServiceTests
                     "Workflow test.",
                     [])
             ]);
+
+    private static OperationalContextProposal CreateOperationalContextProposal(
+        Guid repositoryId,
+        string proposalId,
+        OperationalContextProposalStatus status,
+        OperationalContextReviewState reviewState,
+        DateTimeOffset? reviewedAt,
+        DateTimeOffset? promotedAt) =>
+        new()
+        {
+            ProposalId = proposalId,
+            RepositoryId = repositoryId,
+            GeneratedAt = DateTimeOffset.Parse("2026-06-23T11:00:00Z"),
+            Status = status,
+            Review = new OperationalContextReview
+            {
+                ProposalId = proposalId,
+                ReviewState = reviewState,
+                ReviewedAt = reviewedAt
+            },
+            Promotion = new OperationalContextPromotion
+            {
+                ProposalId = proposalId,
+                PromotedAt = promotedAt
+            }
+        };
 
     private static DecisionAssimilationRecommendation CreateAssimilationRecommendation(
         Guid repositoryId,

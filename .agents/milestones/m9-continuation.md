@@ -43,6 +43,9 @@ Slice progress:
   stage and the coordinator stage has no open gate.
 - A repeated run after a progression stops at the newly exposed authority gate
   instead of duplicating the same timeline progression.
+- Added persisted one-step progression coverage for accepted handoff to
+  decision, resolved decision to operational context, and completed operational
+  context to commit.
 - Continuation evaluation consumes the aggregate workflow projection, latest
   persisted workflow timeline evidence, and state-machine, gate, and completion
   evidence.
@@ -54,9 +57,9 @@ Slice progress:
 Progression rules:
 
 - [x] execution complete and no open source-stage gate projects to handoff.
-- [ ] handoff accepted and no open execution acceptance gate projects to decision.
-- [ ] decision resolved and no decision governance block projects to operational context.
-- [ ] context promoted, rejected, or not required projects to commit.
+- [x] handoff accepted and no open execution acceptance gate projects to decision.
+- [x] decision resolved and no decision governance block projects to operational context.
+- [x] context promoted, rejected, or not required projects to commit.
 - [ ] commit executed projects to push.
 - [ ] push executed, legitimate push skip, or no repository changes projects to completed.
 - [ ] after push completed or legitimate completion condition exists, persist completion evidence and open work selection gate.
