@@ -15,7 +15,7 @@ Deliver:
 - [x] recovery certification.
 - [x] continuation certification.
 - [x] preparation certification.
-- [ ] end-to-end workflow fixture.
+- [x] end-to-end workflow fixture.
 - [x] workflow history certification.
 - [x] workflow diagnostics certification.
 - [x] workflow health certification.
@@ -38,31 +38,31 @@ Workflow
 
 Required scenarios:
 
-- [ ] happy path from execution through completed workflow.
-- [ ] unresolved decision halts at decision resolution gate.
-- [ ] context not reviewed halts at operational context review gate.
-- [ ] context accepted but not promoted halts at operational context promotion gate.
-- [ ] commit approval required halts at commit approval gate.
-- [ ] push approval required halts at push approval gate.
-- [ ] application restart recovers workflow without duplicate progression.
-- [ ] preparation creates reviewable artifacts idempotently through existing domain commands.
-- [ ] execution failure is diagnosable and recoverable.
-- [ ] missing work selection halts at work selection gate.
+- [x] happy path from execution through completed workflow.
+- [x] unresolved decision halts at decision resolution gate.
+- [x] context not reviewed halts at operational context review gate.
+- [x] context accepted but not promoted halts at operational context promotion gate.
+- [x] commit approval required halts at commit approval gate.
+- [x] push approval required halts at push approval gate.
+- [x] application restart recovers workflow without duplicate progression.
+- [x] preparation creates reviewable artifacts idempotently through existing domain commands.
+- [x] execution failure is diagnosable and recoverable.
+- [x] missing work selection halts at work selection gate.
 
 Certification failure conditions:
 
-- [ ] workflow selected work.
-- [ ] workflow resolved a decision.
-- [ ] workflow accepted, edited, rejected, or promoted context.
-- [ ] workflow approved or executed commit.
-- [ ] workflow approved or executed push.
+- [x] workflow selected work.
+- [x] workflow resolved a decision.
+- [x] workflow accepted, edited, rejected, or promoted context.
+- [x] workflow approved or executed commit.
+- [x] workflow approved or executed push.
 - [x] workflow crossed an open gate.
 - [x] workflow created or used a parallel domain command.
 - [x] workflow preparation satisfied a gate.
 - [x] workflow preparation moved the workflow stage.
 - [x] workflow preparation created duplicate review artifacts for the same fingerprint.
 - [x] workflow state cannot be reconstructed from domain evidence.
-- [ ] continuation duplicated progression after restart.
+- [x] continuation duplicated progression after restart.
 - [x] preparation duplicated artifacts or preparation events after restart.
 - [x] blocked, recovered, or progressed states lack diagnostics.
 - [x] preparation decisions lack diagnostics.
@@ -73,7 +73,7 @@ Tests:
 - [x] failures generate findings.
 - [x] passing scenarios generate readiness evidence.
 - [x] authority certification detects forbidden mutation.
-- [ ] recovery certification detects lost state, corruption, and duplicate progression.
+- [x] recovery certification detects lost state, corruption, and duplicate progression.
   - [x] missing timeline evidence is treated as derived/rebuildable evidence.
   - [x] stale persisted timeline evidence is detected and domain projection wins.
   - [x] corrupted timeline evidence is detected without losing domain state.
@@ -82,17 +82,17 @@ Tests:
   - [x] derived continuation/preparation history corruption is diagnosed as recoverable derived evidence.
 - [x] continuation certification detects missed gate halting.
 - [x] preparation certification detects duplicate artifacts, parallel commands, and gate bypass attempts.
-- [ ] end-to-end fixture validates progression, gates, recovery, diagnostics, history, and certification.
+- [x] end-to-end fixture validates progression, gates, recovery, diagnostics, history, and certification.
 
 Exit criteria:
 
 - [x] certification service exists.
 - [x] repository, progression, human-governance, and readiness reports exist.
 - [x] authority certification passes.
-- [ ] recovery certification passes.
+- [x] recovery certification passes.
   - [x] initial domain-truth recovery certification passes.
-  - [ ] full corruption and idempotency recovery matrix passes.
+  - [x] full corruption and idempotency recovery matrix passes.
 - [x] continuation certification passes.
 - [x] preparation certification passes.
-- [ ] end-to-end fixture passes.
+- [x] end-to-end fixture passes.
 - [x] diagnostics and health certification pass.

@@ -3173,6 +3173,212 @@ public sealed class WorkflowProjectionServiceTests
     }
 
     [Fact]
+    public async Task EndToEndWorkflowFixtureValidatesProgressionGatesRecoveryReportsAndCertification()
+    {
+        TestFixture fixture = TestFixture.Create();
+        var store = new MemoryArtifactStore();
+        var workflowRepository = new FileSystemWorkflowRepository(store);
+        var continuation = new WorkflowContinuationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            new WorkflowStateMachineService(),
+            workflowRepository);
+        var preparation = new WorkflowPreparationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            workflowRepository,
+            null,
+            null,
+            new ExecutionSessionServiceStub(fixture));
+
+        WorkflowInstance workSelection = await fixture.CreateService().ProjectAsync(fixture.Repository.Id);
+        Assert.Equal(WorkflowStage.WorkSelection, workSelection.CurrentStage);
+        WorkflowContinuationEvent workSelectionStop = await continuation.RunContinuationAsync(fixture.Repository.Id, "hosted");
+        AssertAuthorityStop(workSelectionStop, WorkflowStage.WorkSelection, WorkflowGateType.WorkSelection);
+
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingAcceptance;
+        fixture.Session = CompletedAcceptedSession(RepositoryExecutionState.AwaitingAcceptance);
+        await workflowRepository.SaveTimelineAsync(
+            fixture.Repository,
+            CreateTimeline(
+                fixture.Repository.Id,
+                DateTimeOffset.UtcNow,
+                WorkflowStage.Execution,
+                WorkflowProgressState.Ready,
+                WorkflowGateType.None,
+                WorkflowStage.WorkSelection,
+                []));
+        WorkflowContinuationEvent executionAdvance = await continuation.RunContinuationAsync(fixture.Repository.Id);
+        WorkflowContinuationEvent handoffStop = await continuation.RunContinuationAsync(fixture.Repository.Id);
+        AssertMechanicalAdvance(executionAdvance, WorkflowStage.Execution, WorkflowStage.Handoff);
+        AssertAuthorityStop(handoffStop, WorkflowStage.Handoff, WorkflowGateType.ExecutionAcceptance);
+
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+        fixture.Decisions.Add(CreateDecision(fixture.Repository.Id, "DEC-0001", DecisionState.Open));
+        await workflowRepository.SaveTimelineAsync(
+            fixture.Repository,
+            CreateTimeline(
+                fixture.Repository.Id,
+                DateTimeOffset.UtcNow,
+                WorkflowStage.Handoff,
+                WorkflowProgressState.Ready,
+                WorkflowGateType.None,
+                WorkflowStage.Execution,
+                []));
+        WorkflowContinuationEvent handoffAdvance = await continuation.RunContinuationAsync(fixture.Repository.Id);
+        WorkflowContinuationEvent decisionStop = await continuation.RunContinuationAsync(fixture.Repository.Id);
+        AssertMechanicalAdvance(handoffAdvance, WorkflowStage.Handoff, WorkflowStage.Decision);
+        AssertAuthorityStop(decisionStop, WorkflowStage.Decision, WorkflowGateType.DecisionResolution);
+
+        fixture.Decisions.Clear();
+        fixture.Decisions.Add(CreateResolvedDecision(fixture.Repository.Id, "DEC-0001"));
+        fixture.Proposals.Add(CreateOperationalContextProposal(
+            fixture.Repository.Id,
+            "ctx-0001",
+            OperationalContextProposalStatus.Pending,
+            OperationalContextReviewState.PendingReview,
+            null,
+            null));
+        await workflowRepository.SaveTimelineAsync(
+            fixture.Repository,
+            CreateTimeline(
+                fixture.Repository.Id,
+                DateTimeOffset.UtcNow,
+                WorkflowStage.Decision,
+                WorkflowProgressState.Ready,
+                WorkflowGateType.None,
+                WorkflowStage.Handoff,
+                []));
+        WorkflowContinuationEvent decisionAdvance = await continuation.RunContinuationAsync(fixture.Repository.Id);
+        WorkflowContinuationEvent contextReviewStop = await continuation.RunContinuationAsync(fixture.Repository.Id);
+        AssertMechanicalAdvance(decisionAdvance, WorkflowStage.Decision, WorkflowStage.OperationalContext);
+        AssertAuthorityStop(contextReviewStop, WorkflowStage.OperationalContext, WorkflowGateType.OperationalContextReview);
+
+        fixture.Proposals.Clear();
+        fixture.Proposals.Add(CreateOperationalContextProposal(
+            fixture.Repository.Id,
+            "ctx-0001",
+            OperationalContextProposalStatus.Accepted,
+            OperationalContextReviewState.Accepted,
+            DateTimeOffset.Parse("2026-06-23T11:10:00Z"),
+            null));
+        await fixture.CreateRecoveryService(workflowRepository).RecoverCurrentWorkflowAsync(fixture.Repository.Id);
+        WorkflowContinuationEvent contextPromotionStop = await continuation.RunContinuationAsync(fixture.Repository.Id);
+        AssertAuthorityStop(contextPromotionStop, WorkflowStage.OperationalContext, WorkflowGateType.OperationalContextPromotion);
+
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingCommit;
+        fixture.Session = CompletedAcceptedSession(RepositoryExecutionState.AwaitingCommit);
+        fixture.Proposals.Clear();
+        fixture.Proposals.Add(CreateOperationalContextProposal(
+            fixture.Repository.Id,
+            "ctx-0001",
+            OperationalContextProposalStatus.Promoted,
+            OperationalContextReviewState.Accepted,
+            DateTimeOffset.Parse("2026-06-23T11:10:00Z"),
+            DateTimeOffset.Parse("2026-06-23T11:20:00Z")));
+        await workflowRepository.SaveTimelineAsync(
+            fixture.Repository,
+            CreateTimeline(
+                fixture.Repository.Id,
+                DateTimeOffset.UtcNow,
+                WorkflowStage.OperationalContext,
+                WorkflowProgressState.Ready,
+                WorkflowGateType.None,
+                WorkflowStage.Decision,
+                []));
+        WorkflowContinuationEvent contextAdvance = await continuation.RunContinuationAsync(fixture.Repository.Id);
+        WorkflowContinuationEvent commitStop = await continuation.RunContinuationAsync(fixture.Repository.Id);
+        WorkflowPreparationEvent commitPreparation = await preparation.RunPreparationAsync(fixture.Repository.Id);
+        WorkflowPreparationEvent duplicateCommitPreparation = await preparation.RunPreparationAsync(fixture.Repository.Id);
+        AssertMechanicalAdvance(contextAdvance, WorkflowStage.OperationalContext, WorkflowStage.Commit);
+        AssertAuthorityStop(commitStop, WorkflowStage.Commit, WorkflowGateType.CommitApproval);
+        Assert.Equal("Created", commitPreparation.Decision);
+        Assert.Contains("commit-preparation:snapshot-prepared", commitPreparation.CreatedArtifactIds);
+        Assert.Equal("Duplicate", duplicateCommitPreparation.Decision);
+        Assert.Empty(duplicateCommitPreparation.CreatedArtifactIds);
+        Assert.Equal(1, fixture.PrepareCommitCallCount);
+        Assert.Equal(0, fixture.CommitCallCount);
+        Assert.Equal(0, fixture.PushCallCount);
+
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingPush;
+        fixture.Session = AwaitingPushCommittedSession();
+        await workflowRepository.SaveTimelineAsync(
+            fixture.Repository,
+            CreateTimeline(
+                fixture.Repository.Id,
+                DateTimeOffset.UtcNow,
+                WorkflowStage.Commit,
+                WorkflowProgressState.Ready,
+                WorkflowGateType.None,
+                WorkflowStage.OperationalContext,
+                []));
+        WorkflowContinuationEvent commitAdvance = await continuation.RunContinuationAsync(fixture.Repository.Id);
+        WorkflowContinuationEvent pushStop = await continuation.RunContinuationAsync(fixture.Repository.Id);
+        AssertMechanicalAdvance(commitAdvance, WorkflowStage.Commit, WorkflowStage.Push);
+        AssertAuthorityStop(pushStop, WorkflowStage.Push, WorkflowGateType.PushApproval);
+
+        fixture.Session = PushedSession();
+        await workflowRepository.SaveTimelineAsync(
+            fixture.Repository,
+            CreateTimeline(
+                fixture.Repository.Id,
+                DateTimeOffset.UtcNow,
+                WorkflowStage.Push,
+                WorkflowProgressState.Ready,
+                WorkflowGateType.None,
+                WorkflowStage.Commit,
+                []));
+        WorkflowContinuationEvent pushAdvance = await continuation.RunContinuationAsync(fixture.Repository.Id);
+        WorkflowContinuationEvent completedStop = await continuation.RunContinuationAsync(fixture.Repository.Id);
+        AssertMechanicalAdvance(pushAdvance, WorkflowStage.Push, WorkflowStage.Completed);
+        AssertAuthorityStop(completedStop, WorkflowStage.Completed, WorkflowGateType.WorkSelection);
+
+        WorkflowRecoveryResult recovered = await fixture.CreateRecoveryService(workflowRepository).RecoverCurrentWorkflowAsync(fixture.Repository.Id);
+        WorkflowContinuationEvent restartedCompletedStop = await new WorkflowContinuationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            new WorkflowStateMachineService(),
+            workflowRepository).RunContinuationAsync(fixture.Repository.Id);
+        IReadOnlyList<WorkflowContinuationEvent> continuationHistory =
+            await workflowRepository.ListContinuationEventsAsync(fixture.Repository);
+        IReadOnlyList<WorkflowPreparationEvent> preparationHistory =
+            await workflowRepository.ListPreparationEventsAsync(fixture.Repository);
+        WorkflowHealthAssessment health = await fixture.CreateHealthService(workflowRepository).AssessHealthAsync(fixture.Repository.Id);
+        WorkflowReportService reportService = fixture.CreateReportService(workflowRepository);
+        RepositoryWorkflowReport repositoryReport = await reportService.GetRepositoryReportAsync(fixture.Repository.Id);
+        WorkflowProgressionReport progressionReport = await reportService.GetProgressionReportAsync(fixture.Repository.Id);
+        HumanGovernanceReport governanceReport = await reportService.GetHumanGovernanceReportAsync(fixture.Repository.Id);
+        WorkflowReadinessReport readinessReport = await reportService.GetReadinessReportAsync(fixture.Repository.Id);
+        WorkflowCertificationResult certification = await fixture.CreateCertificationService(workflowRepository)
+            .RunCertificationAsync(fixture.Repository.Id);
+        IReadOnlyList<string> reportFiles = await store.ListAsync(
+            WorkflowArtifactPaths.Resolve(fixture.Repository, WorkflowArtifactPaths.ReportsRoot),
+            "*.json");
+
+        Assert.Equal(completedStop.EventId, restartedCompletedStop.EventId);
+        Assert.Equal(WorkflowStage.Completed, recovered.Timeline.CurrentStage);
+        Assert.Equal(WorkflowGateType.WorkSelection, recovered.Timeline.BlockingGate);
+        Assert.Equal("Blocked", health.OverallStatus);
+        Assert.Equal(2, preparationHistory.Count);
+        Assert.DoesNotContain(continuationHistory, entry =>
+            entry.IsWaitingForHuman &&
+            (entry.ToStage is not null || string.Equals(entry.Decision, "Advance", StringComparison.OrdinalIgnoreCase)));
+        Assert.Equal(0, fixture.CommitCallCount);
+        Assert.Equal(0, fixture.PushCallCount);
+        Assert.Equal(WorkflowStage.Completed, repositoryReport.CurrentStage);
+        Assert.Equal(WorkflowGateType.WorkSelection, governanceReport.BlockingGate);
+        Assert.Contains(progressionReport.ContinuationEvidence, evidence => evidence.Contains("Advance", StringComparison.Ordinal));
+        Assert.True(readinessReport.Ready);
+        Assert.True(certification.Certified);
+        Assert.Contains(certification.Findings, finding => finding.Id == "authority-continuation-halts-at-gates" && finding.Passed);
+        Assert.Contains(certification.Findings, finding => finding.Id == "recovery-continuation-idempotency" && finding.Passed);
+        Assert.Contains(certification.Findings, finding => finding.Id == "recovery-preparation-idempotency" && finding.Passed);
+        Assert.Contains(certification.Findings, finding => finding.Id == "workflow-health-evidence-present" && finding.Passed);
+        Assert.Single(reportFiles);
+    }
+
+    [Fact]
     public async Task WorkflowCertificationReportsStaleTimelineRecoveryWithDomainProjectionWinning()
     {
         TestFixture fixture = TestFixture.Create();
@@ -3702,6 +3908,30 @@ public sealed class WorkflowProjectionServiceTests
         Assert.Contains(diagnostics.Diagnostics, diagnostic => diagnostic.Contains("Unreconstructable workflow state", StringComparison.Ordinal));
         Assert.Contains(result.Failures, failure => failure.Contains("history-authority-reconstructable", StringComparison.Ordinal));
         Assert.Contains(result.Failures, failure => failure.Contains("workflow-diagnostics-explain-state", StringComparison.Ordinal));
+    }
+
+    private static void AssertMechanicalAdvance(
+        WorkflowContinuationEvent continuationEvent,
+        WorkflowStage fromStage,
+        WorkflowStage toStage)
+    {
+        Assert.Equal("Advance", continuationEvent.Decision);
+        Assert.False(continuationEvent.IsWaitingForHuman);
+        Assert.Equal(WorkflowGateType.None, continuationEvent.BlockingGate);
+        Assert.Equal(fromStage, continuationEvent.FromStage);
+        Assert.Equal(toStage, continuationEvent.ToStage);
+    }
+
+    private static void AssertAuthorityStop(
+        WorkflowContinuationEvent continuationEvent,
+        WorkflowStage stage,
+        WorkflowGateType gate)
+    {
+        Assert.Equal("Stop", continuationEvent.Decision);
+        Assert.True(continuationEvent.IsWaitingForHuman);
+        Assert.Null(continuationEvent.ToStage);
+        Assert.Equal(stage, continuationEvent.FromStage);
+        Assert.Equal(gate, continuationEvent.BlockingGate);
     }
 
     private static void ArrangeAuthorityGateScenario(TestFixture fixture, string scenario)
