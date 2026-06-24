@@ -12,4 +12,8 @@ public sealed record WorkflowInstance(
     IReadOnlyList<WorkflowTransitionResult> ValidTransitions,
     IReadOnlyList<WorkflowTransitionResult> BlockedTransitions,
     IReadOnlyList<WorkflowTimelineEntry> Timeline,
+    IReadOnlyList<WorkflowGate> OpenGates,
+    IReadOnlyList<WorkflowGate> SatisfiedGates,
+    IReadOnlyList<WorkflowGate> GateHistory,
+    WorkflowGateDiagnostics GateDiagnostics,
     WorkflowProjectionDiagnostics Diagnostics);

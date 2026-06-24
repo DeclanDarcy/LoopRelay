@@ -12,6 +12,8 @@ public static class WorkflowEndpoints
         app.MapGetWorkflowTimeline();
         app.MapGetWorkflowHistory();
         app.MapGetWorkflowTransitions();
+        app.MapGetWorkflowGates();
+        app.MapGetWorkflowGateHistory();
         app.MapGetWorkflowRecovery();
         app.MapPostWorkflowRecover();
         return app;
@@ -113,6 +115,44 @@ public static class WorkflowEndpoints
             {
                 var projection = await workflowProjectionService.ProjectAsync(repositoryId);
                 return Results.Ok(projection.Diagnostics.StateMachine);
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGetWorkflowGates(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/workflow/gates", async (
+            Guid repositoryId,
+            IWorkflowGateCatalogService workflowGateCatalogService) =>
+        {
+            try
+            {
+                return Results.Ok(await workflowGateCatalogService.GetGatesAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGetWorkflowGateHistory(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/workflow/gates/history", async (
+            Guid repositoryId,
+            IWorkflowGateCatalogService workflowGateCatalogService) =>
+        {
+            try
+            {
+                return Results.Ok(await workflowGateCatalogService.GetGateHistoryAsync(repositoryId));
             }
             catch (KeyNotFoundException exception)
             {

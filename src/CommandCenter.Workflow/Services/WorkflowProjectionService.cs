@@ -48,7 +48,7 @@ public sealed class WorkflowProjectionService(
             choice.UnknownStates,
             choice.Conflicts);
 
-        return new WorkflowInstance(
+        var preliminary = new WorkflowInstance(
             repository.Id,
             choice.Stage,
             choice.ProgressState,
@@ -58,7 +58,21 @@ public sealed class WorkflowProjectionService(
             stateMachine.ValidTransitions,
             stateMachine.BlockedTransitions,
             timeline,
+            [],
+            [],
+            [],
+            new WorkflowGateDiagnostics(repository.Id, choice.Gate, [], [], [], [], [], []),
             diagnostics);
+
+        WorkflowGateCatalogProjection gates = WorkflowGateCatalogService.BuildProjection(preliminary);
+
+        return preliminary with
+        {
+            OpenGates = gates.OpenGates,
+            SatisfiedGates = gates.SatisfiedGates,
+            GateHistory = gates.GateHistory,
+            GateDiagnostics = gates.Diagnostics
+        };
     }
 
     public async Task<WorkflowProjectionDiagnostics> GetDiagnosticsAsync(Guid repositoryId) =>
@@ -235,6 +249,17 @@ public sealed class WorkflowProjectionService(
                 session.SessionId.ToString()));
         }
 
+        if (session?.AcceptedAt is DateTimeOffset acceptedAt)
+        {
+            entries.Add(CreateTimelineEntry(
+                WorkflowTimelineEventType.ExecutionHandoffAccepted,
+                WorkflowStage.Handoff,
+                acceptedAt,
+                "Execution handoff accepted.",
+                "execution",
+                session.SessionId.ToString()));
+        }
+
         entries.AddRange(evidence.Decisions
             .Where(decision => decision.State is DecisionState.Resolved && decision.Resolution is not null)
             .Select(decision => CreateTimelineEntry(
@@ -244,6 +269,17 @@ public sealed class WorkflowProjectionService(
                 $"Decision {decision.Id.Value} resolved.",
                 "decisions",
                 decision.Id.Value)));
+
+        entries.AddRange(evidence.Proposals
+            .Where(proposal => proposal.Review.ReviewedAt is not null &&
+                proposal.Status is OperationalContextProposalStatus.Accepted or OperationalContextProposalStatus.Edited or OperationalContextProposalStatus.Rejected or OperationalContextProposalStatus.Promoted)
+            .Select(proposal => CreateTimelineEntry(
+                WorkflowTimelineEventType.OperationalContextReviewed,
+                WorkflowStage.OperationalContext,
+                proposal.Review.ReviewedAt!.Value,
+                $"Operational-context proposal {proposal.ProposalId} reviewed.",
+                "continuity",
+                proposal.ProposalId)));
 
         entries.AddRange(evidence.Proposals
             .Where(proposal => proposal.Status is OperationalContextProposalStatus.Promoted && proposal.Promotion.PromotedAt is not null)

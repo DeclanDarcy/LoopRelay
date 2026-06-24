@@ -102,6 +102,11 @@ public sealed class WorkflowProjectionServiceTests
         Assert.Equal(WorkflowStage.Handoff, projection.CurrentStage);
         Assert.Equal(WorkflowGateType.ExecutionAcceptance, projection.BlockingGate);
         Assert.Equal(WorkflowProgressState.AwaitingGate, projection.ProgressState);
+        WorkflowGate openGate = Assert.Single(projection.OpenGates);
+        Assert.Equal(WorkflowGateType.ExecutionAcceptance, openGate.Type);
+        Assert.Equal(WorkflowGateStatus.Open, openGate.Status);
+        Assert.Contains("accept_execution_handoff", openGate.SatisfyingCommands);
+        Assert.Contains("reject_execution_handoff", openGate.SatisfyingCommands);
         Assert.Equal([WorkflowStage.Decision], projection.NextPossibleStages);
         Assert.Contains(projection.BlockedTransitions, transition => transition.BlockingCondition == WorkflowBlockingCondition.PendingHandoffAcceptance);
         Assert.Contains(projection.Timeline, entry => entry.EventType == WorkflowTimelineEventType.ExecutionCompleted);
@@ -142,6 +147,11 @@ public sealed class WorkflowProjectionServiceTests
 
         Assert.Equal(WorkflowStage.OperationalContext, projection.CurrentStage);
         Assert.Equal(WorkflowGateType.OperationalContextReview, projection.BlockingGate);
+        WorkflowGate openGate = Assert.Single(projection.OpenGates);
+        Assert.Equal(WorkflowGateType.OperationalContextReview, openGate.Type);
+        Assert.Contains("accept_operational_context_proposal", openGate.SatisfyingCommands);
+        Assert.Contains("edit_operational_context_proposal", openGate.SatisfyingCommands);
+        Assert.Contains("reject_operational_context_proposal", openGate.SatisfyingCommands);
         Assert.Contains(projection.BlockedTransitions, transition => transition.BlockingCondition == WorkflowBlockingCondition.PendingContextReview);
     }
 
@@ -177,6 +187,9 @@ public sealed class WorkflowProjectionServiceTests
 
         Assert.Equal(WorkflowStage.Commit, projection.CurrentStage);
         Assert.Equal(WorkflowGateType.CommitApproval, projection.BlockingGate);
+        WorkflowGate openGate = Assert.Single(projection.OpenGates);
+        Assert.Equal(WorkflowGateType.CommitApproval, openGate.Type);
+        Assert.Equal("commit_execution", openGate.SatisfyingCommand);
         Assert.Contains(projection.BlockedTransitions, transition => transition.BlockingCondition == WorkflowBlockingCondition.PendingCommitApproval);
     }
 
@@ -237,6 +250,61 @@ public sealed class WorkflowProjectionServiceTests
         Assert.Equal(first.Timeline, second.Timeline);
         Assert.Contains(first.Timeline, entry => entry.EventType == WorkflowTimelineEventType.CommitExecuted);
         Assert.Contains(first.Timeline, entry => entry.EventType == WorkflowTimelineEventType.PushExecuted);
+        Assert.Contains(first.SatisfiedGates, gate => gate.Type == WorkflowGateType.ExecutionAcceptance);
+        Assert.Contains(first.SatisfiedGates, gate => gate.Type == WorkflowGateType.CommitApproval);
+        Assert.Contains(first.SatisfiedGates, gate => gate.Type == WorkflowGateType.PushApproval);
+    }
+
+    [Fact]
+    public async Task GateCatalogMapsEveryAuthorityGateToExistingCommandName()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingPush;
+        fixture.Session = PushedSession();
+
+        WorkflowInstance projection = await fixture.CreateService().ProjectAsync(fixture.Repository.Id);
+
+        Assert.Contains(projection.GateDiagnostics.GateCommandMap, entry => entry == "WorkSelection:explicit_human_work_selection");
+        Assert.Contains(projection.GateDiagnostics.GateCommandMap, entry => entry == "ExecutionAcceptance:accept_execution_handoff|reject_execution_handoff");
+        Assert.Contains(projection.GateDiagnostics.GateCommandMap, entry => entry == "DecisionResolution:resolve_decision_proposal");
+        Assert.Contains(projection.GateDiagnostics.GateCommandMap, entry => entry == "OperationalContextReview:accept_operational_context_proposal|edit_operational_context_proposal|reject_operational_context_proposal");
+        Assert.Contains(projection.GateDiagnostics.GateCommandMap, entry => entry == "OperationalContextPromotion:promote_operational_context_proposal");
+        Assert.Contains(projection.GateDiagnostics.GateCommandMap, entry => entry == "CommitApproval:commit_execution");
+        Assert.Contains(projection.GateDiagnostics.GateCommandMap, entry => entry == "PushApproval:push_execution");
+    }
+
+    [Fact]
+    public async Task GateCatalogSatisfiedGatesComeFromDomainEvidence()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+        fixture.Decisions.Add(CreateResolvedDecision(fixture.Repository.Id, "DEC-0001"));
+        fixture.Proposals.Add(new OperationalContextProposal
+        {
+            ProposalId = "ctx-0001",
+            RepositoryId = fixture.Repository.Id,
+            GeneratedAt = DateTimeOffset.Parse("2026-06-23T11:00:00Z"),
+            Status = OperationalContextProposalStatus.Promoted,
+            Review = new OperationalContextReview
+            {
+                ProposalId = "ctx-0001",
+                ReviewedAt = DateTimeOffset.Parse("2026-06-23T11:10:00Z")
+            },
+            Promotion = new OperationalContextPromotion
+            {
+                ProposalId = "ctx-0001",
+                PromotedAt = DateTimeOffset.Parse("2026-06-23T11:20:00Z")
+            }
+        });
+
+        WorkflowInstance projection = await fixture.CreateService().ProjectAsync(fixture.Repository.Id);
+
+        Assert.Contains(projection.SatisfiedGates, gate => gate is { Type: WorkflowGateType.ExecutionAcceptance, SourceDomain: "execution" });
+        Assert.Contains(projection.SatisfiedGates, gate => gate is { Type: WorkflowGateType.DecisionResolution, SourceDomain: "decisions" });
+        Assert.Contains(projection.SatisfiedGates, gate => gate is { Type: WorkflowGateType.OperationalContextReview, SourceDomain: "continuity" });
+        Assert.Contains(projection.SatisfiedGates, gate => gate is { Type: WorkflowGateType.OperationalContextPromotion, SourceDomain: "continuity" });
+        Assert.All(projection.SatisfiedGates, gate => Assert.Equal(WorkflowGateStatus.Satisfied, gate.Status));
     }
 
     [Fact]
@@ -279,6 +347,30 @@ public sealed class WorkflowProjectionServiceTests
         Assert.NotNull(diagnostics);
         Assert.Equal(WorkflowStage.Commit, diagnostics.CurrentStage);
         Assert.Contains(diagnostics.BlockedTransitions, transition => transition.BlockingCondition == WorkflowBlockingCondition.PendingCommitApproval);
+    }
+
+    [Fact]
+    public async Task WorkflowGatesEndpointReturnsGateCatalogProjection()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingPush;
+        fixture.Session = AwaitingPushCommittedSession();
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services => fixture.ReplaceServices(services));
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+
+        using var client = new HttpClient();
+        HttpResponseMessage response = await client.GetAsync(app.Urls.Single() + $"/api/repositories/{fixture.Repository.Id}/workflow/gates");
+        WorkflowGateCatalogProjection? gates = await response.Content.ReadFromJsonAsync<WorkflowGateCatalogProjection>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(gates);
+        WorkflowGate openGate = Assert.Single(gates.OpenGates);
+        Assert.Equal(WorkflowGateType.PushApproval, openGate.Type);
+        Assert.Equal("push_execution", openGate.SatisfyingCommand);
+        Assert.Contains(gates.Diagnostics.Reasoning, reason => reason.Contains("Open gate PushApproval", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -455,6 +547,19 @@ public sealed class WorkflowProjectionServiceTests
             [],
             []);
 
+    private static Decision CreateResolvedDecision(Guid repositoryId, string id) =>
+        CreateDecision(repositoryId, id, DecisionState.Resolved) with
+        {
+            Resolution = new DecisionResolution(
+                DecisionOutcome.Accepted,
+                "option-1",
+                "Resolved for workflow test.",
+                "human",
+                false,
+                DateTimeOffset.Parse("2026-06-23T10:30:00Z"),
+                [])
+        };
+
     private static WorkflowTimeline CreateTimeline(Guid repositoryId, DateTimeOffset generatedAt, WorkflowStage currentStage)
     {
         WorkflowTimelineEntry entry = new(
@@ -539,6 +644,7 @@ public sealed class WorkflowProjectionServiceTests
             services.RemoveAll<IGitService>();
             services.RemoveAll<IWorkflowStateMachineService>();
             services.RemoveAll<IWorkflowProjectionService>();
+            services.RemoveAll<IWorkflowGateCatalogService>();
             services.RemoveAll<IWorkflowRepository>();
             services.RemoveAll<IWorkflowRecoveryService>();
             services.RemoveAll<IHostedService>();
@@ -552,6 +658,7 @@ public sealed class WorkflowProjectionServiceTests
             services.AddSingleton<IWorkflowRepository, FileSystemWorkflowRepository>();
             services.AddSingleton<IWorkflowStateMachineService, WorkflowStateMachineService>();
             services.AddSingleton<IWorkflowProjectionService, WorkflowProjectionService>();
+            services.AddSingleton<IWorkflowGateCatalogService, WorkflowGateCatalogService>();
             services.AddSingleton<IWorkflowRecoveryService, WorkflowRecoveryService>();
         }
     }
