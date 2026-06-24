@@ -672,6 +672,14 @@ fn list_decision_candidates(repository_id: String) -> Result<Value, String> {
 }
 
 #[tauri::command]
+fn get_decision_lifecycle_eligibility(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/decisions/lifecycle/eligibility"),
+        "decision lifecycle eligibility lookup failed",
+    )
+}
+
+#[tauri::command]
 fn discover_decisions(repository_id: String) -> Result<Value, String> {
     backend_post_value(
         &format!("/api/repositories/{repository_id}/decisions/discover"),
@@ -2751,6 +2759,7 @@ fn main() {
             get_decision_context,
             build_decision_context,
             list_decision_candidates,
+            get_decision_lifecycle_eligibility,
             discover_decisions,
             promote_decision_candidate,
             dismiss_decision_candidate,

@@ -8,6 +8,7 @@ import {
   expireDecisionCandidate,
   expireDecisionProposal,
   generateDecisionProposal,
+  getDecisionLifecycleEligibility,
   getDecisionSessionLifecycleProjection,
   getWorkflowProjection,
   listContinuityReports,
@@ -27,6 +28,7 @@ import type {
   DecisionSessionTransferResult,
   DecisionCandidate,
   DecisionDiscoveryResult,
+  DecisionLifecycleEligibilityProjection,
   DecisionProposal,
   DecisionReviewStatus,
   ExecutionEvent,
@@ -344,8 +346,16 @@ describe('transport boundary characterization', () => {
     const proposal = { id: 'PROP-0001' } as DecisionProposal
     const review = { proposalId: 'PROP-0001', state: 'Viewed' } as DecisionReviewStatus
     const decision = { id: 'DEC-0001' }
+    const eligibility = {
+      repositoryId: 'repo-alpha',
+      candidates: [],
+      proposals: [],
+      decisions: [],
+      diagnostics: [],
+    } satisfies DecisionLifecycleEligibilityProjection
     const invoke = vi.fn()
       .mockResolvedValueOnce(discovery)
+      .mockResolvedValueOnce(eligibility)
       .mockResolvedValueOnce(candidate)
       .mockResolvedValueOnce(candidate)
       .mockResolvedValueOnce(candidate)
@@ -368,6 +378,7 @@ describe('transport boundary characterization', () => {
     }
 
     await discoverDecisions('repo-alpha')
+    await getDecisionLifecycleEligibility('repo-alpha')
     await promoteDecisionCandidate('repo-alpha', 'CAND-0001', { reason: 'ready' })
     await dismissDecisionCandidate('repo-alpha', 'CAND-0001')
     await expireDecisionCandidate('repo-alpha', 'CAND-0001', { reason: 'stale' })
@@ -394,57 +405,60 @@ describe('transport boundary characterization', () => {
     expect(invoke).toHaveBeenNthCalledWith(1, 'discover_decisions', {
       repositoryId: 'repo-alpha',
     }, undefined)
-    expect(invoke).toHaveBeenNthCalledWith(2, 'promote_decision_candidate', {
+    expect(invoke).toHaveBeenNthCalledWith(2, 'get_decision_lifecycle_eligibility', {
+      repositoryId: 'repo-alpha',
+    }, undefined)
+    expect(invoke).toHaveBeenNthCalledWith(3, 'promote_decision_candidate', {
       repositoryId: 'repo-alpha',
       candidateId: 'CAND-0001',
       reason: 'ready',
     }, undefined)
-    expect(invoke).toHaveBeenNthCalledWith(3, 'dismiss_decision_candidate', {
+    expect(invoke).toHaveBeenNthCalledWith(4, 'dismiss_decision_candidate', {
       repositoryId: 'repo-alpha',
       candidateId: 'CAND-0001',
       reason: null,
     }, undefined)
-    expect(invoke).toHaveBeenNthCalledWith(4, 'expire_decision_candidate', {
+    expect(invoke).toHaveBeenNthCalledWith(5, 'expire_decision_candidate', {
       repositoryId: 'repo-alpha',
       candidateId: 'CAND-0001',
       reason: 'stale',
     }, undefined)
-    expect(invoke).toHaveBeenNthCalledWith(5, 'mark_decision_candidate_duplicate', {
+    expect(invoke).toHaveBeenNthCalledWith(6, 'mark_decision_candidate_duplicate', {
       repositoryId: 'repo-alpha',
       candidateId: 'CAND-0001',
       duplicateOfCandidateId: 'CAND-0000',
       reason: 'same source',
     }, undefined)
-    expect(invoke).toHaveBeenNthCalledWith(6, 'generate_decision_proposal', {
+    expect(invoke).toHaveBeenNthCalledWith(7, 'generate_decision_proposal', {
       repositoryId: 'repo-alpha',
       candidateId: 'CAND-0001',
     }, undefined)
-    expect(invoke).toHaveBeenNthCalledWith(7, 'mark_decision_proposal_viewed', {
+    expect(invoke).toHaveBeenNthCalledWith(8, 'mark_decision_proposal_viewed', {
       repositoryId: 'repo-alpha',
       proposalId: 'PROP-0001',
       reason: null,
     }, undefined)
-    expect(invoke).toHaveBeenNthCalledWith(8, 'mark_decision_proposal_needs_refinement', {
+    expect(invoke).toHaveBeenNthCalledWith(9, 'mark_decision_proposal_needs_refinement', {
       repositoryId: 'repo-alpha',
       proposalId: 'PROP-0001',
       reason: 'needs more evidence',
     }, undefined)
-    expect(invoke).toHaveBeenNthCalledWith(9, 'mark_decision_proposal_ready_for_resolution', {
+    expect(invoke).toHaveBeenNthCalledWith(10, 'mark_decision_proposal_ready_for_resolution', {
       repositoryId: 'repo-alpha',
       proposalId: 'PROP-0001',
       reason: null,
     }, undefined)
-    expect(invoke).toHaveBeenNthCalledWith(10, 'expire_decision_proposal', {
+    expect(invoke).toHaveBeenNthCalledWith(11, 'expire_decision_proposal', {
       repositoryId: 'repo-alpha',
       proposalId: 'PROP-0001',
       reason: null,
     }, undefined)
-    expect(invoke).toHaveBeenNthCalledWith(11, 'discard_decision_proposal', {
+    expect(invoke).toHaveBeenNthCalledWith(12, 'discard_decision_proposal', {
       repositoryId: 'repo-alpha',
       proposalId: 'PROP-0001',
       reason: 'wrong scope',
     }, undefined)
-    expect(invoke).toHaveBeenNthCalledWith(12, 'supersede_decision', {
+    expect(invoke).toHaveBeenNthCalledWith(13, 'supersede_decision', {
       repositoryId: 'repo-alpha',
       decisionId: 'DEC-0001',
       request: {
@@ -453,7 +467,7 @@ describe('transport boundary characterization', () => {
         resolver: 'Reviewer',
       },
     }, undefined)
-    expect(invoke).toHaveBeenNthCalledWith(13, 'archive_decision', {
+    expect(invoke).toHaveBeenNthCalledWith(14, 'archive_decision', {
       repositoryId: 'repo-alpha',
       decisionId: 'DEC-0001',
       request: {

@@ -14,6 +14,7 @@ public static class DecisionEndpoints
         app.MapCreateDecisionContextSnapshot();
         app.MapListDecisionContextSnapshots();
         app.MapListDecisionCandidates();
+        app.MapGetDecisionLifecycleEligibility();
         app.MapDiscoverDecisions();
         app.MapPromoteDecisionCandidate();
         app.MapDismissDecisionCandidate();
@@ -146,6 +147,29 @@ public static class DecisionEndpoints
             try
             {
                 return Results.Ok(await discoveryService.ListCandidatesAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGetDecisionLifecycleEligibility(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/decisions/lifecycle/eligibility", async (
+            Guid repositoryId,
+            IDecisionLifecycleEligibilityService eligibilityService) =>
+        {
+            try
+            {
+                return Results.Ok(await eligibilityService.GetEligibilityAsync(repositoryId));
             }
             catch (KeyNotFoundException exception)
             {

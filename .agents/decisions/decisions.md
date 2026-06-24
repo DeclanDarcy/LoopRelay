@@ -2,48 +2,31 @@
 
 ## Newly Authorized
 
-- Accept the first Milestone 3 slice as architecturally sound and on track.
-- Treat Milestone 3 Phase 1 reachability as complete:
-  - shell commands
-  - typed API
-  - hook mutations
-  - lifecycle controls
-  - proposal diagnostics
-- Preserve the sequencing used by Milestones 1 and 2:
-  - establish end-to-end reachability first
-  - then replace temporary UI behavior with backend-owned semantics
-- Treat backend lifecycle eligibility as the highest-priority remaining Milestone 3 architectural task.
-- Implement lifecycle eligibility before adding more decision lifecycle UI behavior.
-- Keep lifecycle ownership in this direction:
+- Accept the Milestone 3 lifecycle eligibility slice as architecturally sound.
+- Treat backend decision lifecycle legality as established end to end.
+- Treat Milestone 3 Phase 2 backend eligibility as complete.
+- Continue preserving this authority chain:
   - `DecisionLifecycleRules`
+  - eligibility service
   - eligibility projection
-  - UI rendering
-- Make the eligibility projection richer than a simple allow/deny list, including:
-  - current state
-  - allowed actions
-  - blocked actions
-  - required inputs
-  - allowed next states
-  - blocked next states
-  - diagnostics
-- Include command name, display name, reason, and governing rule where applicable in eligibility action details.
-- Replace current temporary action controls with declarative UI behavior after eligibility exists:
-  - render allowed actions
-  - disable blocked actions
-  - display backend reasons
-- Treat supersede and archive as transport-ready but product-incomplete until they include:
-  - target selection
-  - rationale capture
-  - lifecycle transition
-  - governance refresh
-  - execution influence refresh
-- Defer supersede/archive polish until after eligibility.
-- Sequence remaining Milestone 3 work as:
-  1. eligibility projection
-  2. UI action availability
-  3. supersede dialog
-  4. archive dialog
-  5. refresh behavior
-  6. governance refresh
-  7. execution influence refresh
-- Do not add backend verification for the completed reachability slice beyond existing checks; add backend verification when the eligibility endpoint is introduced.
+  - endpoint
+  - shell
+  - TypeScript
+  - React
+- Keep the repository-level eligibility endpoint as the preferred contract to avoid per-item request amplification and inconsistent UI snapshots.
+- Frontend must stop deciding lifecycle legality and should only render backend-owned facts for:
+  - whether an action can run
+  - whether a transition is valid
+  - why an action is disabled or blocked
+- The next Milestone 3 slice is authorized as a UI migration:
+  - replace always-visible lifecycle buttons with eligibility-driven allowed actions
+  - replace UI-assumed disabled states with backend blocked reasons
+  - render backend diagnostics and governing rule names directly
+- Apply the same eligibility-driven rendering principle to proposal review controls.
+- Postpone supersede/archive completion until after the UI consumes lifecycle eligibility.
+- Treat remaining Milestone 3 progression as:
+  1. UI consumes eligibility
+  2. supersede/archive completion
+  3. refresh propagation
+  4. end-to-end lifecycle characterization
+  5. milestone exit audit

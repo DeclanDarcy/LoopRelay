@@ -11,25 +11,25 @@ Discovery -> Candidate -> Proposal -> Review -> Refinement -> Resolution -> Supe
 ### Backend and Shell
 
 - [x] Inventory all decision lifecycle routes already mapped in `DecisionEndpoints.cs`.
-- [ ] Add or expose any missing request/response models in TypeScript for:
+- [x] Add or expose any missing request/response models in TypeScript for:
    - [x] `DecisionDiscoveryResult`
    - [x] `DecisionProposalTransitionRequest`
    - [x] `CreateDecisionProposalCommand` or existing generation request type
    - [x] `SupersedeDecisionCommand`
    - [x] `ArchiveDecisionCommand`
    - [x] proposal generation diagnostics
-- [ ] Add a backend read-only lifecycle eligibility projection over `DecisionLifecycleRules`:
-   - [ ] current state
-   - [ ] allowed next states
-   - [ ] allowed actions
-   - [ ] blocked actions
-   - [ ] blocking reasons
-   - [ ] required request fields
-   - [ ] action command name
-- [ ] Prefer a single route returning candidate, proposal, and decision eligibility for a repository:
-   - [ ] `GET /api/repositories/{repositoryId}/decisions/lifecycle/eligibility`
+- [x] Add a backend read-only lifecycle eligibility projection over `DecisionLifecycleRules`:
+   - [x] current state
+   - [x] allowed next states
+   - [x] allowed actions
+   - [x] blocked actions
+   - [x] blocking reasons
+   - [x] required request fields
+   - [x] action command name
+- [x] Prefer a single route returning candidate, proposal, and decision eligibility for a repository:
+   - [x] `GET /api/repositories/{repositoryId}/decisions/lifecycle/eligibility`
 - [ ] If a single route becomes too large, split by entity while keeping the rule evaluation in one backend service.
-- [ ] Add shell commands for Core MVP lifecycle operations:
+- [x] Add shell commands for Core MVP lifecycle operations:
    - [x] `discover_decisions`
    - [x] `promote_decision_candidate`
    - [x] `dismiss_decision_candidate`
@@ -43,7 +43,7 @@ Discovery -> Candidate -> Proposal -> Review -> Refinement -> Resolution -> Supe
    - [x] `mark_decision_proposal_ready_for_resolution`
    - [x] `supersede_decision`
    - [x] `archive_decision`
-   - [ ] `get_decision_lifecycle_eligibility`
+   - [x] `get_decision_lifecycle_eligibility`
 - [x] Shell commands must call backend endpoints and return backend domain responses directly.
 
 ### UI
@@ -76,8 +76,9 @@ Discovery -> Candidate -> Proposal -> Review -> Refinement -> Resolution -> Supe
 
 ### Tests
 
-- [ ] Backend tests for lifecycle eligibility projection.
-- [ ] Endpoint tests for shell-reachable lifecycle routes.
+- [x] Backend tests for lifecycle eligibility projection.
+- [x] Endpoint test for decision lifecycle eligibility route.
+- [ ] Endpoint tests for remaining shell-reachable lifecycle routes.
 - [ ] UI tests for candidate actions, proposal generation, proposal review transitions, supersede, archive, and refresh behavior.
 - [ ] End-to-end test path:
   - [ ] discover candidate

@@ -117,6 +117,41 @@ export type DecisionProposalTransitionRequest = {
   reason?: string | null
 }
 
+export type DecisionLifecycleActionEligibility = {
+  commandName: string
+  displayName: string
+  targetState: string
+  isAllowed: boolean
+  requiredInputs: string[]
+  reason: string | null
+  governingRule: string
+}
+
+export type DecisionLifecycleBlockedState = {
+  state: string
+  reason: string
+  governingRule: string
+}
+
+export type DecisionLifecycleEntityEligibility = {
+  entityKind: string
+  entityId: string
+  currentState: string
+  allowedActions: DecisionLifecycleActionEligibility[]
+  blockedActions: DecisionLifecycleActionEligibility[]
+  allowedNextStates: string[]
+  blockedNextStates: DecisionLifecycleBlockedState[]
+  diagnostics: string[]
+}
+
+export type DecisionLifecycleEligibilityProjection = {
+  repositoryId: string
+  candidates: DecisionLifecycleEntityEligibility[]
+  proposals: DecisionLifecycleEntityEligibility[]
+  decisions: DecisionLifecycleEntityEligibility[]
+  diagnostics: string[]
+}
+
 export type SupersedeDecisionCommand = {
   replacementDecisionId?: string | null
   rationale?: string | null

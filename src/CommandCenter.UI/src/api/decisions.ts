@@ -12,6 +12,7 @@ import type {
   DecisionGenerationCertificationReport,
   DecisionGovernanceReport,
   DecisionInfluenceTrace,
+  DecisionLifecycleEligibilityProjection,
   ExecutionDecisionProjection,
   DecisionOptionComparison,
   DecisionProposal,
@@ -45,6 +46,13 @@ export function buildDecisionContext(repositoryId: string) {
 
 export function listDecisionCandidates(repositoryId: string) {
   return invokeCommand<DecisionCandidate[]>('list_decision_candidates', { repositoryId })
+}
+
+export function getDecisionLifecycleEligibility(repositoryId: string) {
+  return invokeCommand<DecisionLifecycleEligibilityProjection>(
+    'get_decision_lifecycle_eligibility',
+    { repositoryId },
+  )
 }
 
 export function discoverDecisions(repositoryId: string) {
