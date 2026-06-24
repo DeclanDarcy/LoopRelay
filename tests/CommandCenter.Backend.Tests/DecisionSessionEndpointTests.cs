@@ -55,6 +55,15 @@ public sealed class DecisionSessionEndpointTests
         DecisionSessionLifecycleEvaluation? lifecyclePolicy = await client.GetFromJsonAsync<DecisionSessionLifecycleEvaluation>(
             $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/lifecycle/policy",
             DecisionSessionTestHarness.CreateJsonOptions());
+        DecisionSessionLifecycleDiagnostics? lifecyclePolicyDiagnostics = await client.GetFromJsonAsync<DecisionSessionLifecycleDiagnostics>(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/lifecycle/policy/diagnostics",
+            DecisionSessionTestHarness.CreateJsonOptions());
+        DecisionSessionTransferEligibility? transferEligibility = await client.GetFromJsonAsync<DecisionSessionTransferEligibility>(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/lifecycle/eligibility",
+            DecisionSessionTestHarness.CreateJsonOptions());
+        DecisionSessionTransferEligibilityDiagnostics? transferEligibilityDiagnostics = await client.GetFromJsonAsync<DecisionSessionTransferEligibilityDiagnostics>(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/lifecycle/eligibility/diagnostics",
+            DecisionSessionTestHarness.CreateJsonOptions());
 
         Assert.NotNull(sessions);
         Assert.Single(sessions);
@@ -76,6 +85,18 @@ public sealed class DecisionSessionEndpointTests
         Assert.NotNull(lifecyclePolicy);
         Assert.True(lifecyclePolicy.ReuseScore >= 0m);
         Assert.True(lifecyclePolicy.TransferScore >= 0m);
+        Assert.NotNull(lifecyclePolicyDiagnostics);
+        Assert.Equal(harness.Repository.Id, lifecyclePolicyDiagnostics.RepositoryId);
+        Assert.NotNull(transferEligibility);
+        Assert.Contains(transferEligibility.Status, new[]
+        {
+            DecisionSessionTransferEligibilityStatus.NotApplicable,
+            DecisionSessionTransferEligibilityStatus.Eligible,
+            DecisionSessionTransferEligibilityStatus.Blocked,
+            DecisionSessionTransferEligibilityStatus.Deferred
+        });
+        Assert.NotNull(transferEligibilityDiagnostics);
+        Assert.Equal(harness.Repository.Id, transferEligibilityDiagnostics.RepositoryId);
     }
 
     [Fact]

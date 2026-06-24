@@ -1,3 +1,5 @@
+using CommandCenter.DecisionSessions.Primitives;
+
 namespace CommandCenter.DecisionSessions.Models;
 
 public sealed record DecisionSessionEvidenceSource(
@@ -300,4 +302,43 @@ public sealed record DecisionSessionLifecycleSnapshot(
     Guid RepositoryId,
     DecisionSessionLifecycleEvaluation Evaluation,
     DecisionSessionLifecycleDiagnostics Diagnostics,
+    DateTimeOffset GeneratedAt);
+
+public enum DecisionSessionTransferEligibilityStatus
+{
+    NotApplicable,
+    Eligible,
+    Blocked,
+    Deferred
+}
+
+public sealed record DecisionSessionTransferEligibilityFinding(
+    string Code,
+    string Severity,
+    string Message);
+
+public sealed record DecisionSessionTransferEligibility(
+    DecisionSessionTransferEligibilityStatus Status,
+    DecisionSessionLifecycleEvaluation PolicyEvaluation,
+    DecisionSessionId? SourceSessionId,
+    IReadOnlyList<DecisionSessionTransferEligibilityFinding> Findings,
+    DateTimeOffset CheckedAt);
+
+public sealed record DecisionSessionTransferEligibilityInputs(
+    DecisionSessionLifecycleEvaluation PolicyEvaluation,
+    DecisionSessionDiagnostics RegistryDiagnostics,
+    DecisionSession? ActiveSession,
+    DecisionSessionEvidence? Evidence);
+
+public sealed record DecisionSessionTransferEligibilityDiagnostics(
+    Guid RepositoryId,
+    DateTimeOffset GeneratedAt,
+    DecisionSessionTransferEligibilityInputs Inputs,
+    IReadOnlyList<string> Assumptions,
+    IReadOnlyList<string> Warnings);
+
+public sealed record DecisionSessionTransferEligibilitySnapshot(
+    Guid RepositoryId,
+    DecisionSessionTransferEligibility Eligibility,
+    DecisionSessionTransferEligibilityDiagnostics Diagnostics,
     DateTimeOffset GeneratedAt);

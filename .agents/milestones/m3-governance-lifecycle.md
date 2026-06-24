@@ -54,41 +54,41 @@ Transfer eligibility is the operational gate between policy and transfer executi
 
 Add models:
 
-- [ ] `DecisionSessionTransferEligibility`
-- [ ] `DecisionSessionTransferEligibilityStatus`: `NotApplicable`, `Eligible`, `Blocked`, `Deferred`
-- [ ] `DecisionSessionTransferEligibilityFinding`
-- [ ] `DecisionSessionTransferEligibilityDiagnostics`
+- [x] `DecisionSessionTransferEligibility`
+- [x] `DecisionSessionTransferEligibilityStatus`: `NotApplicable`, `Eligible`, `Blocked`, `Deferred`
+- [x] `DecisionSessionTransferEligibilityFinding`
+- [x] `DecisionSessionTransferEligibilityDiagnostics`
 
 Add service:
 
-- [ ] `IDecisionSessionTransferEligibilityService`
-- [ ] `DecisionSessionTransferEligibilityService`
+- [x] `IDecisionSessionTransferEligibilityService`
+- [x] `DecisionSessionTransferEligibilityService`
 
 Eligibility inputs:
 
-- [ ] Active session.
-- [ ] Lifecycle policy evaluation.
-- [ ] Registry validation.
-- [ ] Repository availability.
-- [ ] Transfer-pending state.
-- [ ] Continuity evidence availability.
-- [ ] Operational context availability.
-- [ ] Ability to create a continuity artifact.
-- [ ] Recovery findings.
+- [x] Active session.
+- [x] Lifecycle policy evaluation.
+- [x] Registry validation.
+- [x] Repository availability.
+- [x] Transfer-pending state.
+- [x] Continuity evidence availability.
+- [x] Operational context availability.
+- [x] Ability to create a continuity artifact.
+- [x] Recovery findings.
 
 Eligibility rules:
 
-- [ ] If policy decision is `Continue`, eligibility is `NotApplicable`.
-- [ ] If no active session exists, eligibility is `Blocked`.
-- [ ] If registry has duplicate active sessions, eligibility is `Blocked`.
-- [ ] If source session is already `TransferPending`, eligibility is `Deferred` unless recovery can prove the prior transfer failed safely.
-- [ ] If operational context evidence is unavailable, eligibility is `Blocked`.
-- [ ] If continuity artifact generation cannot produce a valid artifact, eligibility is `Blocked`.
-- [ ] If repository state is unavailable or locked, eligibility is `Deferred` or `Blocked` with diagnostics.
-- [ ] If unresolved recovery findings threaten continuity, eligibility is `Blocked`.
-- [ ] If all preconditions pass and policy decision is `Transfer`, eligibility is `Eligible`.
+- [x] If policy decision is `Continue`, eligibility is `NotApplicable`.
+- [x] If no active session exists, eligibility is `Blocked`.
+- [x] If registry has duplicate active sessions, eligibility is `Blocked`.
+- [x] If source session is already `TransferPending`, eligibility is `Deferred` unless recovery can prove the prior transfer failed safely.
+- [x] If operational context evidence is unavailable, eligibility is `Blocked`.
+- [x] If continuity artifact generation cannot produce a valid artifact, eligibility is `Blocked`.
+- [x] If repository state is unavailable or locked, eligibility is `Deferred` or `Blocked` with diagnostics.
+- [x] If unresolved recovery findings threaten continuity, eligibility is `Blocked`.
+- [x] If all preconditions pass and policy decision is `Transfer`, eligibility is `Eligible`.
 
-Persist eligibility checks under `.agents/decision-sessions/lifecycle/eligibility/`.
+[x] Persist eligibility checks under `.agents/decision-sessions/lifecycle/eligibility/`.
 
 ### Continuity Artifact
 
@@ -228,9 +228,9 @@ Hosted startup behavior:
 ### Backend Endpoints
 
 - [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/lifecycle/policy`
-- [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/lifecycle/policy/diagnostics`
-- [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/lifecycle/eligibility`
-- [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/lifecycle/eligibility/diagnostics`
+- [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/lifecycle/policy/diagnostics`
+- [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/lifecycle/eligibility`
+- [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/lifecycle/eligibility/diagnostics`
 - [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/continuity-artifacts`
 - [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/continuity-artifacts/{artifactId}`
 - [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/transfers`
@@ -249,12 +249,12 @@ Do not add a manual transfer endpoint.
 - [x] Transfer score greater than reuse score decides `Transfer`.
 - [x] Equal scores decide `Continue`.
 - [x] Higher cache miss risk raises transfer score.
-- [ ] Eligibility is `NotApplicable` when policy is `Continue`.
-- [ ] Eligibility is `Blocked` when no active session exists.
-- [ ] Eligibility is `Blocked` for duplicate active sessions.
-- [ ] Eligibility is `Blocked` when continuity artifact generation fails.
-- [ ] Eligibility is `Blocked` when operational context evidence is unavailable.
-- [ ] Eligibility is `Deferred` or `Blocked` when repository state is unavailable or locked.
+- [x] Eligibility is `NotApplicable` when policy is `Continue`.
+- [x] Eligibility is `Blocked` when no active session exists.
+- [x] Eligibility is `Blocked` for duplicate active sessions.
+- [x] Eligibility is `Blocked` when continuity artifact generation fails.
+- [x] Eligibility is `Blocked` when operational context evidence is unavailable.
+- [x] Eligibility is `Deferred` or `Blocked` when repository state is unavailable or locked.
 - [ ] Transfer decision plus eligible status results in transfer execution.
 - [ ] Transfer decision plus blocked eligibility does not mutate registry state.
 - [ ] Continuity artifact is created before source retirement.

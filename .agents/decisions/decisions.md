@@ -2,13 +2,14 @@
 
 ## Newly Authorized
 
-- Accept the Milestone 3A lifecycle policy implementation as architecturally aligned.
-- Treat Milestone 3A policy as complete.
-- Treat Milestone 3B transfer eligibility as ready to begin in a future slice.
-- Transfer eligibility must be modeled as operational feasibility, not as an alternative policy engine.
-- Eligibility should answer whether a policy-directed transfer can safely happen right now.
-- Eligibility must not answer whether transfer is a good idea, whether transfer score is too low, or whether reuse should win; those remain policy responsibilities.
-- Keep the roadmap's four transfer eligibility statuses: `NotApplicable`, `Eligible`, `Blocked`, and `Deferred`.
-- Avoid adding more eligibility statuses unless implementation reality reveals a genuine need.
-- Add a policy/eligibility separation test before transfer execution exists: when policy says `Transfer` and eligibility is `Blocked`, policy must remain `Transfer`.
-- Eligibility may prevent execution, but it must never rewrite policy.
+- Accept the Milestone 3B transfer eligibility implementation as the correct result.
+- Treat Milestone 3B eligibility as complete.
+- Treat Milestone 3C continuity artifact as ready to begin in a future slice.
+- Preserve the lifecycle boundary: policy answers whether the session should transfer; eligibility answers whether policy-directed transfer can safely happen now.
+- Keep the lifecycle chain as analysis, then policy, then eligibility.
+- Continuity artifacts must be treated as canonical governance-continuity transfer payloads.
+- Continuity artifacts must not represent operational context ownership.
+- Decision Sessions should produce and validate continuity artifacts.
+- Continuity infrastructure may later consume continuity artifacts.
+- Continuity artifacts should include artifact id, repository id, source session id, optional target session id, created timestamp, policy evaluation, metrics, economics, coherence, cache, decision references, reasoning references, operational context references, continuity fingerprint, and diagnostics.
+- Continuity artifact tests should cover repository mismatch rejection, source session mismatch rejection, fingerprint validation, required references, deterministic artifact id format, schema version rejection, and read endpoint artifact projection.

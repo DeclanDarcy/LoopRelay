@@ -84,6 +84,21 @@ public static class DecisionSessionEndpoints
             IDecisionSessionLifecyclePolicy lifecyclePolicy) =>
             await HandleAsync(async () => (await lifecyclePolicy.EvaluateAsync(repositoryId)).Evaluation));
 
+        group.MapGet("/lifecycle/policy/diagnostics", async (
+            Guid repositoryId,
+            IDecisionSessionLifecyclePolicy lifecyclePolicy) =>
+            await HandleAsync(async () => (await lifecyclePolicy.EvaluateAsync(repositoryId)).Diagnostics));
+
+        group.MapGet("/lifecycle/eligibility", async (
+            Guid repositoryId,
+            IDecisionSessionTransferEligibilityService eligibilityService) =>
+            await HandleAsync(async () => (await eligibilityService.CheckAsync(repositoryId)).Eligibility));
+
+        group.MapGet("/lifecycle/eligibility/diagnostics", async (
+            Guid repositoryId,
+            IDecisionSessionTransferEligibilityService eligibilityService) =>
+            await HandleAsync(async () => (await eligibilityService.CheckAsync(repositoryId)).Diagnostics));
+
         return app;
     }
 

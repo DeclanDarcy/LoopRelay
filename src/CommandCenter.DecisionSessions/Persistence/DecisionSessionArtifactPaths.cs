@@ -17,6 +17,8 @@ public static class DecisionSessionArtifactPaths
 
     public static string LifecyclePolicySnapshotJson() => ArtifactPath.CombineRelative(".agents", "decision-sessions", "lifecycle", "policy", "snapshot.json");
 
+    public static string TransferEligibilitySnapshotJson() => ArtifactPath.CombineRelative(".agents", "decision-sessions", "lifecycle", "eligibility", "snapshot.json");
+
     public static string Resolve(Repository repository, string relativePath)
     {
         return ArtifactPath.ResolveRepositoryPath(repository, relativePath);

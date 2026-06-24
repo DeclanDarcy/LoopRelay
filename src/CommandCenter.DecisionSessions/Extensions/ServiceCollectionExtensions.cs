@@ -23,6 +23,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IDecisionSessionCoherenceService, DecisionSessionCoherenceService>();
         services.AddSingleton(new DecisionSessionLifecyclePolicyOptions());
         services.AddSingleton<IDecisionSessionLifecyclePolicy, DecisionSessionLifecyclePolicy>();
+        services.AddSingleton<IDecisionSessionTransferEligibilityService, DecisionSessionTransferEligibilityService>();
         return services;
     }
 }

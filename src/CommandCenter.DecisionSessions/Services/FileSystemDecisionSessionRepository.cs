@@ -278,6 +278,62 @@ public sealed class FileSystemDecisionSessionRepository(IArtifactStore artifactS
         await artifactStore.WriteAsync(path, JsonSerializer.Serialize(document, DecisionSessionJson.Options));
     }
 
+    public async Task<DecisionSessionTransferEligibilitySnapshot?> ReadTransferEligibilitySnapshotAsync(Repository repository)
+    {
+        string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.TransferEligibilitySnapshotJson());
+        string? json = await artifactStore.ReadAsync(path);
+        if (json is null)
+        {
+            return null;
+        }
+
+        DecisionSessionArtifactDocument<DecisionSessionTransferEligibilitySnapshot>? document =
+            JsonSerializer.Deserialize<DecisionSessionArtifactDocument<DecisionSessionTransferEligibilitySnapshot>>(
+                json,
+                DecisionSessionJson.Options);
+        if (document is null)
+        {
+            throw new DecisionSessionValidationException("Decision session transfer eligibility snapshot could not be deserialized.");
+        }
+
+        ValidateDocument(repository, document, "Decision session transfer eligibility snapshot");
+        if (document.Payload.RepositoryId != repository.Id || document.Payload.Diagnostics.RepositoryId != repository.Id)
+        {
+            throw new DecisionSessionValidationException("Decision session transfer eligibility snapshot belongs to a different repository.");
+        }
+
+        return document.Payload;
+    }
+
+    public async Task WriteTransferEligibilitySnapshotAsync(Repository repository, DecisionSessionTransferEligibilitySnapshot snapshot)
+    {
+        if (snapshot.RepositoryId != repository.Id || snapshot.Diagnostics.RepositoryId != repository.Id)
+        {
+            throw new DecisionSessionValidationException("Decision session transfer eligibility snapshot belongs to a different repository.");
+        }
+
+        if (snapshot.Diagnostics.Inputs.ActiveSession is not null &&
+            snapshot.Diagnostics.Inputs.ActiveSession.RepositoryId != repository.Id)
+        {
+            throw new DecisionSessionValidationException("Decision session transfer eligibility snapshot belongs to a different repository.");
+        }
+
+        if (snapshot.Diagnostics.Inputs.Evidence is not null &&
+            snapshot.Diagnostics.Inputs.Evidence.RepositoryId != repository.Id)
+        {
+            throw new DecisionSessionValidationException("Decision session transfer eligibility snapshot belongs to a different repository.");
+        }
+
+        var document = new DecisionSessionArtifactDocument<DecisionSessionTransferEligibilitySnapshot>(
+            DecisionSessionArtifactPaths.SchemaVersion,
+            repository.Id,
+            snapshot.GeneratedAt,
+            DateTimeOffset.UtcNow,
+            snapshot);
+        string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.TransferEligibilitySnapshotJson());
+        await artifactStore.WriteAsync(path, JsonSerializer.Serialize(document, DecisionSessionJson.Options));
+    }
+
     internal async Task<DecisionSessionValidationResult> ValidateAsync(Repository repository)
     {
         string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.RegistryJson());
