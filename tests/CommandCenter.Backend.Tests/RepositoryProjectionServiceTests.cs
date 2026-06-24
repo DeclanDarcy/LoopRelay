@@ -1,3 +1,4 @@
+using System.Text.Json;
 using CommandCenter.Core.Artifacts;
 using CommandCenter.Core.Configuration;
 using CommandCenter.Continuity;
@@ -372,6 +373,24 @@ public sealed class RepositoryProjectionServiceTests
     }
 
     [Fact]
+    public async Task DashboardAndWorkspaceSerializeDecisionSessionSummary()
+    {
+        string repositoryPath = CreateGitRepositoryDirectory();
+        RepositoryService repositoryService = CreateRepositoryService();
+        Repository repository = await repositoryService.RegisterAsync(repositoryPath);
+        var observability = new StaticDecisionSessionObservabilityService();
+        RepositoryProjectionService projectionService = CreateProjectionService(
+            repositoryService,
+            decisionSessionObservabilityService: observability);
+
+        RepositoryDashboardProjection dashboardProjection = Assert.Single(await projectionService.GetDashboardAsync());
+        RepositoryWorkspaceProjection workspace = await projectionService.GetWorkspaceAsync(repository.Id);
+
+        AssertSerializedDecisionSessionSummary(JsonSerializer.Serialize(dashboardProjection, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        AssertSerializedDecisionSessionSummary(JsonSerializer.Serialize(workspace, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+    }
+
+    [Fact]
     public async Task DecisionSessionSummaryRemainsEmptyWhenObservabilityIsAbsent()
     {
         string repositoryPath = CreateGitRepositoryDirectory();
@@ -650,6 +669,25 @@ public sealed class RepositoryProjectionServiceTests
         string directory = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         return directory;
+    }
+
+    private static void AssertSerializedDecisionSessionSummary(string json)
+    {
+        using JsonDocument document = JsonDocument.Parse(json);
+        JsonElement summary = document.RootElement.GetProperty("decisionSessionSummary");
+        Assert.Equal("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", summary.GetProperty("decisionSessionId").GetString());
+        Assert.Equal("Active", summary.GetProperty("state").GetString());
+        Assert.Equal("Transfer", summary.GetProperty("lifecycleDecision").GetString());
+        Assert.Equal("Eligible", summary.GetProperty("transferEligibilityStatus").GetString());
+        Assert.Equal(250_000, summary.GetProperty("estimatedTokenCount").GetInt64());
+        Assert.Equal("00:12:00", summary.GetProperty("estimatedCacheTtl").GetString());
+        Assert.Equal(0.42m, summary.GetProperty("cacheMissRisk").GetDecimal());
+        Assert.Equal(0.67m, summary.GetProperty("coherenceScore").GetDecimal());
+        Assert.Equal(0.81m, summary.GetProperty("transferPressure").GetDecimal());
+        Assert.Equal("Lifecycle", summary.GetProperty("healthDimensions")[0].GetProperty("name").GetString());
+        Assert.Equal("transfer-1", summary.GetProperty("recentTransferLineage")[0].GetProperty("transferId").GetString());
+        Assert.Equal("registry warning", summary.GetProperty("diagnostics")[0].GetString());
+        Assert.Equal("2026-06-24T10:00:00+00:00", summary.GetProperty("generatedAt").GetString());
     }
 
     private sealed class ReadyExecutionSessionService : IExecutionSessionService

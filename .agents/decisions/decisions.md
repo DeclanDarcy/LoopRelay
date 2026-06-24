@@ -2,19 +2,25 @@
 
 ## Newly Authorized
 
-- Accept the reported Milestone 2 governance workspace progression as architecturally sound.
-- Treat Milestone 2 as functionally complete, pending final verification and exit audit.
-- Preserve the established authority split:
-  - `CommandCenter.DecisionSessions` owns governance lifecycle.
-  - Workflow owns operational timeline, gates, and required human action.
-  - React owns presentation only.
-- Keep Governance as a first-class workspace for visibility, not authority.
-- Keep UI product language as `Governance` while preserving `DecisionSession` code-facing contracts where they mirror backend authority.
-- Keep workflow context adjacent to governance facts as Workflow Gate plus Required Human Action, not as a separate Governance Workflow.
-- Keep transfer recommendation distinct from transfer executability.
-- Complete Milestone 2 closure with:
-  - `RepositoryDecisionSessionSummary` serialization/projection coverage
-  - explicit exit audit of authority, mutation, projection, and workflow boundaries
-  - backend tests, UI tests, and build
-- Do not add more Milestone 2 integration scope unless the serialization coverage or exit audit finds a gap.
-- After Milestone 2 closure passes, transition to Milestone 3 focused on decision lifecycle reachability.
+- Accept Milestone 2 as complete.
+- Treat the added `RepositoryDecisionSessionSummary` serialization coverage as the final structural closure item for Milestone 2.
+- Preserve the established Milestone 2 authority split:
+  - `CommandCenter.DecisionSessions` owns lifecycle, transfer, recovery, and eligibility.
+  - Workflow owns operational progression, gates, required actions, health, and certification.
+  - React owns presentation, user interaction, and command invocation.
+- Preserve transfer recommendation and transfer executability as separate concepts.
+- Begin Milestone 3 after committing and pushing the accepted Milestone 2 work.
+- Sequence Milestone 3 with reachability first:
+  - backend endpoint
+  - shell command
+  - TypeScript API
+  - hook
+- Then wire decision lifecycle UI actions including discovery, promote, dismiss, expire, duplicate, and proposal generation.
+- Avoid client-side enablement heuristics for decision lifecycle actions.
+- Add backend-owned decision lifecycle eligibility before richer UI action availability:
+  - current state
+  - allowed actions
+  - blocked actions
+  - blocking reasons
+  - required inputs
+- Keep React declarative for lifecycle actions by rendering backend-allowed actions, disabling backend-blocked actions, and displaying backend reasons.

@@ -65,14 +65,14 @@ Make the governance lifecycle visible and actionable while preserving `CommandCe
 ### Tests
 
 - [x] Backend endpoint tests for transfer execution and persisted recovery.
-- [ ] Repository projection tests proving `decisionSessionSummary` serializes and TypeScript types include it.
+- [x] Repository projection tests proving `decisionSessionSummary` serializes and TypeScript types include it.
 - [x] UI tests for repository governance summary, lifecycle explanation, transfer eligibility, recovery, health, and certification.
 
 ### Exit Criteria
 
-- [ ] Decision-session functionality is available through one frontend client.
-- [ ] Repository summaries surface governance without detailed duplication.
-- [ ] A dedicated Governance Workspace presents lifecycle, analysis, transfer, continuity artifact, recovery, health, certification, and history.
-- [ ] Transfer trigger and persisted recovery trigger are reachable through approved UI actions.
-- [ ] Workflow reflects governance state without owning it.
-- [ ] No duplicate governance state or authority path is introduced.
+- [x] Decision-session functionality is available through one frontend client.
+- [x] Repository summaries surface governance without detailed duplication.
+- [x] A dedicated Governance Workspace presents lifecycle, analysis, transfer, continuity artifact, recovery, health, certification, and history.
+- [x] Transfer trigger and persisted recovery trigger are reachable through approved UI actions.
+- [x] Workflow reflects governance state without owning it.
+- [x] No duplicate governance state or authority path is introduced.
