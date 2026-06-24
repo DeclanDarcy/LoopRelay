@@ -18,6 +18,8 @@ public static class WorkflowEndpoints
         app.MapPostWorkflowRecover();
         app.MapGetWorkflowExecution();
         app.MapGetWorkflowHandoff();
+        app.MapGetWorkflowDecisions();
+        app.MapGetWorkflowOperationalContext();
         return app;
     }
 
@@ -231,6 +233,48 @@ public static class WorkflowEndpoints
             try
             {
                 return Results.Ok(await workflowHandoffService.ProjectHandoffAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGetWorkflowDecisions(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/workflow/decisions", async (
+            Guid repositoryId,
+            IWorkflowDecisionService workflowDecisionService) =>
+        {
+            try
+            {
+                return Results.Ok(await workflowDecisionService.ProjectDecisionAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGetWorkflowOperationalContext(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/workflow/operational-context", async (
+            Guid repositoryId,
+            IWorkflowExecutionService workflowExecutionService,
+            IWorkflowDecisionService workflowDecisionService,
+            IWorkflowOperationalContextService workflowOperationalContextService) =>
+        {
+            try
+            {
+                WorkflowExecutionProjection execution = await workflowExecutionService.ProjectExecutionAsync(repositoryId);
+                WorkflowDecisionProjection decision = await workflowDecisionService.ProjectDecisionAsync(repositoryId);
+                return Results.Ok(await workflowOperationalContextService.ProjectOperationalContextAsync(repositoryId, decision, execution));
             }
             catch (KeyNotFoundException exception)
             {

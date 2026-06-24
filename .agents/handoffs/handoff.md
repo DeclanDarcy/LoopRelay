@@ -2,45 +2,52 @@
 
 ## New State
 
-- Completed Milestone 5 handoff workflow integration.
-- Added read-only handoff workflow boundary:
-  `IWorkflowHandoffService` and `WorkflowHandoffService`.
-- Added handoff workflow models:
-  `WorkflowHandoffStatus`, `WorkflowHandoffProjection`,
-  `WorkflowHandoffValidation`, and `WorkflowHandoffDiagnostics`.
-- Extended `WorkflowInstance` with current handoff projection, handoff status,
-  validation, and diagnostics.
-- Added handoff timeline events:
-  `HandoffCreated`, `HandoffValidated`, and `HandoffInvalid`.
+- Completed Milestone 7 operational-context workflow integration.
+- Added read-only operational-context workflow boundary:
+  `IWorkflowOperationalContextService` and `WorkflowOperationalContextService`.
+- Added operational-context workflow models:
+  `WorkflowOperationalContextStatus`, `WorkflowOperationalContextProjection`,
+  and `WorkflowOperationalContextDiagnostics`.
+- Extended `WorkflowInstance` with current operational-context projection,
+  context status, review eligibility, promotion eligibility, commit eligibility,
+  and context diagnostics.
 - Added derived endpoint:
-  `GET /api/repositories/{repositoryId}/workflow/handoff`.
-- Updated workflow projection to include handoff evidence in projection inputs,
-  blocking reasoning, diagnostics, timeline reconstruction, and recovery-derived
-  timelines.
-- Marked `.agents/milestones/m5-handoff.md` complete.
+  `GET /api/repositories/{repositoryId}/workflow/operational-context`.
+- Updated workflow projection to consume operational-context workflow evidence
+  instead of reading Continuity proposals directly.
+- Context review and promotion gates now come only from Continuity-owned proposal
+  status, review state, and promotion state.
+- Added context timeline events for proposed, reviewed, accepted, edited,
+  rejected, promoted, and archived context evidence.
+- Added decision-to-context linkage when a matching decision assimilation
+  recommendation and proposal evidence are present.
+- Marked `.agents/milestones/m7-operational-context.md` complete.
 - Rotated previous `.agents/handoffs/handoff.md` to
-  `.agents/handoffs/handoff.0005.md`.
+  `.agents/handoffs/handoff.0007.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter WorkflowProjectionServiceTests` passed: 29 tests.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 541 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter WorkflowProjectionServiceTests` passed: 40 tests.
+- First full backend test run hit a transient Windows file-lock in
+  `ExecutionSessionServiceTests.AppStartupRunsExecutionRecovery`.
+- Rerun of `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 552 tests.
 - `dotnet build CommandCenter.slnx` passed with 0 warnings and 0 errors.
 
 ## Notes
 
-- Handoff integration is read-only. Workflow validates and projects handoff
-  evidence but does not accept, reject, repair, rotate, or select handoffs.
-- Execution session summary remains the source for the authoritative handoff
-  path. Workflow reports conflicts if that path diverges from
-  `.agents/handoffs/handoff.md`.
-- Invalid handoff evidence blocks at the handoff stage with the existing
-  execution-acceptance gate; rejected handoffs block at work selection until a
-  new execution cycle is selected.
+- Workflow still never accepts, edits, rejects, promotes, or mutates operational
+  context. It reports Continuity-owned state only.
+- Accepted and edited proposals open only the promotion gate. Pending proposals
+  open the review gate. Rejected and promoted proposals close context gates and
+  make commit eligible.
+- No context required is now an explicit commit-eligible projection outcome with
+  diagnostics explaining that no Continuity proposal exists.
+- Decision-to-context linkage is conservative: source decision id is reported
+  only when decision assimilation evidence matches proposal fingerprints or
+  proposal text evidence.
 
 ## Next Slice
 
-- Start Milestone 6 decision workflow integration by adding decision-specific
-  projection, diagnostics, and endpoint coverage for open, under-review,
-  resolved, and governance-blocked decision states while keeping decision
-  resolution authority in the Decisions domain.
+- Start Milestone 8 git workflow integration by adding a read-only git workflow
+  projection service and endpoint, with commit and push gates driven only by
+  existing git/execution authority.

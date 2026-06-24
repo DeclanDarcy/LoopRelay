@@ -218,7 +218,194 @@ public sealed class WorkflowProjectionServiceTests
         Assert.Equal(WorkflowStage.Decision, projection.CurrentStage);
         Assert.Equal(WorkflowGateType.DecisionResolution, projection.BlockingGate);
         Assert.Equal(WorkflowProgressState.AwaitingGate, projection.ProgressState);
+        Assert.Equal(WorkflowDecisionStatus.AwaitingResolution, projection.DecisionStatus);
+        Assert.False(projection.IsDecisionResolutionEligible);
         Assert.Contains(projection.BlockedTransitions, transition => transition.BlockingCondition == WorkflowBlockingCondition.UnresolvedDecision);
+    }
+
+    [Fact]
+    public async Task ResolvedDecisionClosesDecisionGateAndAllowsOperationalContext()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+        fixture.Decisions.Add(CreateResolvedDecision(fixture.Repository.Id, "DEC-0001"));
+        fixture.Proposals.Add(new OperationalContextProposal
+        {
+            ProposalId = "ctx-0001",
+            RepositoryId = fixture.Repository.Id,
+            GeneratedAt = DateTimeOffset.Parse("2026-06-23T11:00:00Z"),
+            Status = OperationalContextProposalStatus.Pending
+        });
+
+        WorkflowInstance projection = await fixture.CreateService().ProjectAsync(fixture.Repository.Id);
+
+        Assert.Equal(WorkflowStage.OperationalContext, projection.CurrentStage);
+        Assert.Equal(WorkflowDecisionStatus.Resolved, projection.DecisionStatus);
+        Assert.True(projection.IsDecisionResolutionEligible);
+        Assert.Contains(projection.SatisfiedGates, gate => gate.Type == WorkflowGateType.DecisionResolution);
+        Assert.Contains(projection.Timeline, entry => entry.EventType == WorkflowTimelineEventType.DecisionResolved);
+    }
+
+    [Fact]
+    public async Task DecisionServiceProjectsDiscoveredGeneratedAndArchivedStates()
+    {
+        TestFixture discoveredFixture = TestFixture.Create();
+        discoveredFixture.Candidates.Add(CreateCandidate(discoveredFixture.Repository.Id, "cand-0001"));
+
+        WorkflowDecisionProjection discovered =
+            await discoveredFixture.CreateDecisionService().ProjectDecisionAsync(discoveredFixture.Repository.Id);
+
+        Assert.Equal(WorkflowDecisionStatus.Discovered, discovered.Status);
+        Assert.Equal("cand-0001", discovered.CandidateId);
+        Assert.False(discovered.IsResolutionEligible);
+
+        TestFixture generatedFixture = TestFixture.Create();
+        generatedFixture.DecisionProposals.Add(CreateProposal(generatedFixture.Repository.Id, "proposal-0001", "cand-0001"));
+
+        WorkflowDecisionProjection generated =
+            await generatedFixture.CreateDecisionService().ProjectDecisionAsync(generatedFixture.Repository.Id);
+
+        Assert.Equal(WorkflowDecisionStatus.Generated, generated.Status);
+        Assert.Equal("proposal-0001", generated.ProposalId);
+        Assert.False(generated.IsResolutionEligible);
+
+        TestFixture archivedFixture = TestFixture.Create();
+        archivedFixture.Decisions.Add(CreateDecision(archivedFixture.Repository.Id, "DEC-0001", DecisionState.Archived));
+
+        WorkflowDecisionProjection archived =
+            await archivedFixture.CreateDecisionService().ProjectDecisionAsync(archivedFixture.Repository.Id);
+
+        Assert.Equal(WorkflowDecisionStatus.Archived, archived.Status);
+        Assert.True(archived.IsResolutionEligible);
+    }
+
+    [Fact]
+    public async Task SupersededDecisionFollowsResolvedReplacementAuthority()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+        Decision superseded = CreateResolvedDecision(fixture.Repository.Id, "DEC-0001") with
+        {
+            State = DecisionState.Superseded
+        };
+        Decision replacement = CreateResolvedDecision(fixture.Repository.Id, "DEC-0002") with
+        {
+            Relationships =
+            [
+                new DecisionRelationship(
+                    new DecisionId("DEC-0002"),
+                    new DecisionId("DEC-0001"),
+                    DecisionRelationshipType.Supersedes,
+                    "Replacement authority.")
+            ]
+        };
+        fixture.Decisions.Add(superseded);
+        fixture.Decisions.Add(replacement);
+
+        WorkflowDecisionProjection decision = await fixture.CreateDecisionService().ProjectDecisionAsync(fixture.Repository.Id);
+        WorkflowInstance projection = await fixture.CreateService().ProjectAsync(fixture.Repository.Id);
+
+        Assert.Equal(WorkflowDecisionStatus.Resolved, decision.Status);
+        Assert.True(decision.IsResolutionEligible);
+        Assert.Contains(decision.Diagnostics.SupersessionSignals, signal => signal.Contains("DEC-0002", StringComparison.Ordinal));
+        Assert.NotEqual(WorkflowStage.Decision, projection.CurrentStage);
+    }
+
+    [Fact]
+    public async Task GovernanceBlockedDecisionBlocksWorkflowFromDecisionDomainEvidence()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+        fixture.Decisions.Add(CreateResolvedDecision(fixture.Repository.Id, "DEC-0001"));
+        fixture.GovernanceReports.Add(new DecisionGovernanceReport(
+            "gov-0001",
+            fixture.Repository.Id,
+            DateTimeOffset.Parse("2026-06-23T10:45:00Z"),
+            "input",
+            DecisionHealthAssessment.Blocked,
+            new DecisionGovernanceSummary(1, 1, 0, 1, 0, 1, 1),
+            [
+                new DecisionGovernanceFinding(
+                    "finding-1",
+                    DecisionGovernanceCategory.AuthorityBoundary,
+                    DecisionGovernanceSeverity.Blocking,
+                    true,
+                    "Blocked by decisions domain",
+                    "Decision governance marked this as blocking.",
+                    [],
+                    ["DEC-0001"],
+                    [],
+                    [])
+            ],
+            []));
+
+        WorkflowInstance projection = await fixture.CreateService().ProjectAsync(fixture.Repository.Id);
+
+        Assert.Equal(WorkflowStage.Decision, projection.CurrentStage);
+        Assert.Equal(WorkflowProgressState.Blocked, projection.ProgressState);
+        Assert.Equal(WorkflowGateType.DecisionResolution, projection.BlockingGate);
+        Assert.True(projection.IsDecisionGovernanceBlocked);
+        Assert.Contains(projection.DecisionDiagnostics.GovernanceSignals, signal => signal.Contains("Blocked", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task DecisionQualityAndCertificationSignalsSurfaceAsDiagnostics()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+        fixture.Decisions.Add(CreateResolvedDecision(fixture.Repository.Id, "DEC-0001"));
+        fixture.QualityAssessments.Add(new DecisionQualityAssessment(
+            "quality-0001",
+            fixture.Repository.Id,
+            "DEC-0001",
+            DateTimeOffset.Parse("2026-06-23T10:50:00Z"),
+            DecisionQualityRating.Mixed,
+            61,
+            [
+                new DecisionQualitySignal(
+                    "quality-signal-1",
+                    fixture.Repository.Id,
+                    "DEC-0001",
+                    "Recommendation Stability",
+                    QualitySignalDirection.Negative,
+                    QualitySignalSeverity.Medium,
+                    "Recommendation changed late.",
+                    "The selected option changed after review.",
+                    [])
+            ],
+            [
+                new HumanAuthoringBurdenSignal(
+                    "burden-1",
+                    fixture.Repository.Id,
+                    "DEC-0001",
+                    HumanAuthoringBurden.MajorRefinement,
+                    "proposal",
+                    "Human review required substantial rewrite.",
+                    [])
+            ],
+            []));
+        fixture.CertificationReports.Add(new DecisionCertificationReport(
+            "cert-0001",
+            fixture.Repository.Id,
+            DateTimeOffset.Parse("2026-06-23T10:55:00Z"),
+            "input",
+            new DecisionLifecycleCertificationResult(DecisionLifecycleCertificationResultKind.Failed, 2, 1),
+            DecisionHealthAssessment.AdvisoryFindings,
+            [],
+            [],
+            []));
+
+        WorkflowDecisionProjection decision = await fixture.CreateDecisionService().ProjectDecisionAsync(fixture.Repository.Id);
+
+        Assert.Equal("MajorRefinement", decision.HumanAuthoringBurden);
+        Assert.Equal("Mixed:61", decision.QualityStatus);
+        Assert.Equal("Failed", decision.CertificationStatus);
+        Assert.Contains(decision.Diagnostics.QualitySignals, signal => signal.Contains("Recommendation Stability", StringComparison.Ordinal));
+        Assert.Contains(decision.Diagnostics.CertificationSignals, signal => signal.Contains("failed=1", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -239,6 +426,9 @@ public sealed class WorkflowProjectionServiceTests
 
         Assert.Equal(WorkflowStage.OperationalContext, projection.CurrentStage);
         Assert.Equal(WorkflowGateType.OperationalContextReview, projection.BlockingGate);
+        Assert.Equal(WorkflowOperationalContextStatus.UnderReview, projection.OperationalContextStatus);
+        Assert.False(projection.IsOperationalContextReviewEligible);
+        Assert.False(projection.IsOperationalContextCommitEligible);
         WorkflowGate openGate = Assert.Single(projection.OpenGates);
         Assert.Equal(WorkflowGateType.OperationalContextReview, openGate.Type);
         Assert.Contains("accept_operational_context_proposal", openGate.SatisfyingCommands);
@@ -265,7 +455,144 @@ public sealed class WorkflowProjectionServiceTests
 
         Assert.Equal(WorkflowStage.OperationalContext, projection.CurrentStage);
         Assert.Equal(WorkflowGateType.OperationalContextPromotion, projection.BlockingGate);
+        Assert.Equal(WorkflowOperationalContextStatus.ReadyForPromotion, projection.OperationalContextStatus);
+        Assert.True(projection.IsOperationalContextReviewEligible);
+        Assert.False(projection.IsOperationalContextPromotionEligible);
+        Assert.False(projection.IsOperationalContextCommitEligible);
         Assert.Contains(projection.BlockedTransitions, transition => transition.BlockingCondition == WorkflowBlockingCondition.PendingContextPromotion);
+    }
+
+    [Fact]
+    public async Task OperationalContextServiceProjectsEditedRejectedPromotedAndNoContextRequired()
+    {
+        TestFixture editedFixture = TestFixture.Create();
+        editedFixture.ExecutionState = RepositoryExecutionState.Accepted;
+        editedFixture.Session = CompletedAcceptedSession();
+        editedFixture.Proposals.Add(new OperationalContextProposal
+        {
+            ProposalId = "ctx-edited",
+            RepositoryId = editedFixture.Repository.Id,
+            GeneratedAt = DateTimeOffset.Parse("2026-06-23T11:00:00Z"),
+            Status = OperationalContextProposalStatus.Edited,
+            Review = new OperationalContextReview
+            {
+                ProposalId = "ctx-edited",
+                ReviewState = OperationalContextReviewState.Edited,
+                ReviewedAt = DateTimeOffset.Parse("2026-06-23T11:10:00Z")
+            }
+        });
+
+        WorkflowInstance editedProjection = await editedFixture.CreateService().ProjectAsync(editedFixture.Repository.Id);
+
+        Assert.Equal(WorkflowOperationalContextStatus.Edited, editedProjection.OperationalContextStatus);
+        Assert.Equal(WorkflowGateType.OperationalContextPromotion, editedProjection.BlockingGate);
+        Assert.Contains(editedProjection.Timeline, entry => entry.EventType == WorkflowTimelineEventType.OperationalContextEdited);
+
+        TestFixture rejectedFixture = TestFixture.Create();
+        rejectedFixture.ExecutionState = RepositoryExecutionState.Accepted;
+        rejectedFixture.Session = CompletedAcceptedSession();
+        rejectedFixture.Proposals.Add(new OperationalContextProposal
+        {
+            ProposalId = "ctx-rejected",
+            RepositoryId = rejectedFixture.Repository.Id,
+            GeneratedAt = DateTimeOffset.Parse("2026-06-23T11:00:00Z"),
+            Status = OperationalContextProposalStatus.Rejected,
+            Review = new OperationalContextReview
+            {
+                ProposalId = "ctx-rejected",
+                ReviewState = OperationalContextReviewState.Rejected,
+                ReviewedAt = DateTimeOffset.Parse("2026-06-23T11:10:00Z")
+            }
+        });
+
+        WorkflowInstance rejectedProjection = await rejectedFixture.CreateService().ProjectAsync(rejectedFixture.Repository.Id);
+
+        Assert.Equal(WorkflowOperationalContextStatus.Rejected, rejectedProjection.OperationalContextStatus);
+        Assert.True(rejectedProjection.IsOperationalContextCommitEligible);
+        Assert.Equal(WorkflowStage.WorkSelection, rejectedProjection.CurrentStage);
+        Assert.Contains(rejectedProjection.SatisfiedGates, gate => gate.Type == WorkflowGateType.OperationalContextReview);
+        Assert.Contains(rejectedProjection.Timeline, entry => entry.EventType == WorkflowTimelineEventType.OperationalContextRejected);
+
+        TestFixture promotedFixture = TestFixture.Create();
+        promotedFixture.ExecutionState = RepositoryExecutionState.Accepted;
+        promotedFixture.Session = CompletedAcceptedSession();
+        promotedFixture.Proposals.Add(new OperationalContextProposal
+        {
+            ProposalId = "ctx-promoted",
+            RepositoryId = promotedFixture.Repository.Id,
+            GeneratedAt = DateTimeOffset.Parse("2026-06-23T11:00:00Z"),
+            Status = OperationalContextProposalStatus.Promoted,
+            Review = new OperationalContextReview
+            {
+                ProposalId = "ctx-promoted",
+                ReviewState = OperationalContextReviewState.Accepted,
+                ReviewedAt = DateTimeOffset.Parse("2026-06-23T11:10:00Z")
+            },
+            Promotion = new OperationalContextPromotion
+            {
+                ProposalId = "ctx-promoted",
+                PromotedAt = DateTimeOffset.Parse("2026-06-23T11:20:00Z")
+            }
+        });
+
+        WorkflowInstance promotedProjection = await promotedFixture.CreateService().ProjectAsync(promotedFixture.Repository.Id);
+
+        Assert.Equal(WorkflowOperationalContextStatus.Promoted, promotedProjection.OperationalContextStatus);
+        Assert.True(promotedProjection.IsOperationalContextCommitEligible);
+        Assert.Contains(promotedProjection.SatisfiedGates, gate => gate.Type == WorkflowGateType.OperationalContextPromotion);
+        Assert.Contains(promotedProjection.Timeline, entry => entry.EventType == WorkflowTimelineEventType.OperationalContextPromoted);
+
+        TestFixture noContextFixture = TestFixture.Create();
+        noContextFixture.ExecutionState = RepositoryExecutionState.Accepted;
+        noContextFixture.Session = CompletedAcceptedSession();
+
+        WorkflowOperationalContextProjection noContext =
+            await noContextFixture.CreateOperationalContextService().ProjectOperationalContextAsync(
+                noContextFixture.Repository.Id,
+                await noContextFixture.CreateDecisionService().ProjectDecisionAsync(noContextFixture.Repository.Id),
+                await noContextFixture.CreateExecutionService().ProjectExecutionAsync(noContextFixture.Repository.Id));
+
+        Assert.Equal(WorkflowOperationalContextStatus.NoContextRequired, noContext.Status);
+        Assert.True(noContext.IsCommitEligible);
+        Assert.Contains(noContext.Diagnostics.Reasoning, reason => reason.Contains("no context update is required", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task OperationalContextProjectionLinksResolvedDecisionWhenAssimilationEvidenceMatchesProposal()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+        Decision decision = CreateResolvedDecision(fixture.Repository.Id, "DEC-0001");
+        fixture.Decisions.Add(decision);
+        fixture.AssimilationRecommendations.Add(CreateAssimilationRecommendation(fixture.Repository.Id, decision, "decision-fingerprint"));
+        fixture.Proposals.Add(new OperationalContextProposal
+        {
+            ProposalId = "ctx-0001",
+            RepositoryId = fixture.Repository.Id,
+            GeneratedAt = DateTimeOffset.Parse("2026-06-23T11:00:00Z"),
+            Status = OperationalContextProposalStatus.Pending,
+            InputFingerprints =
+            [
+                new OperationalContextInputFingerprint
+                {
+                    Name = "decision assimilation DEC-0001",
+                    RelativePath = ".agents/decisions/assimilation/DEC-0001/recommendation.md",
+                    Present = true,
+                    Hash = "decision-fingerprint"
+                }
+            ]
+        });
+
+        WorkflowOperationalContextProjection context =
+            await fixture.CreateOperationalContextService().ProjectOperationalContextAsync(
+                fixture.Repository.Id,
+                await fixture.CreateDecisionService().ProjectDecisionAsync(fixture.Repository.Id),
+                await fixture.CreateExecutionService().ProjectExecutionAsync(fixture.Repository.Id));
+
+        Assert.Equal("DEC-0001", context.SourceDecisionId);
+        Assert.Equal(fixture.Session.SessionId.ToString(), context.SourceExecutionId);
+        Assert.Contains(context.Diagnostics.LinkageSignals, signal => signal.Contains("DEC-0001", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -554,6 +881,65 @@ public sealed class WorkflowProjectionServiceTests
     }
 
     [Fact]
+    public async Task WorkflowDecisionEndpointReturnsDecisionProjection()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+        fixture.Decisions.Add(CreateDecision(fixture.Repository.Id, "DEC-0001", DecisionState.UnderReview));
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services => fixture.ReplaceServices(services));
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+
+        using var client = new HttpClient();
+        HttpResponseMessage response = await client.GetAsync(app.Urls.Single() + $"/api/repositories/{fixture.Repository.Id}/workflow/decisions");
+        WorkflowDecisionProjection? decision = await response.Content.ReadFromJsonAsync<WorkflowDecisionProjection>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(decision);
+        Assert.Equal("DEC-0001", decision.DecisionId);
+        Assert.Equal(WorkflowDecisionStatus.UnderReview, decision.Status);
+    }
+
+    [Fact]
+    public async Task WorkflowOperationalContextEndpointReturnsContextProjection()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+        fixture.Proposals.Add(new OperationalContextProposal
+        {
+            ProposalId = "ctx-0001",
+            RepositoryId = fixture.Repository.Id,
+            GeneratedAt = DateTimeOffset.Parse("2026-06-23T11:00:00Z"),
+            Status = OperationalContextProposalStatus.Accepted,
+            Review = new OperationalContextReview
+            {
+                ProposalId = "ctx-0001",
+                ReviewState = OperationalContextReviewState.Accepted,
+                ReviewedAt = DateTimeOffset.Parse("2026-06-23T11:10:00Z")
+            }
+        });
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services => fixture.ReplaceServices(services));
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+
+        using var client = new HttpClient();
+        HttpResponseMessage response = await client.GetAsync(app.Urls.Single() + $"/api/repositories/{fixture.Repository.Id}/workflow/operational-context");
+        WorkflowOperationalContextProjection? context = await response.Content.ReadFromJsonAsync<WorkflowOperationalContextProjection>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(context);
+        Assert.Equal("ctx-0001", context.ProposalId);
+        Assert.Equal(WorkflowOperationalContextStatus.ReadyForPromotion, context.Status);
+        Assert.False(context.IsCommitEligible);
+    }
+
+    [Fact]
     public async Task WorkflowTransitionsEndpointReturnsStateMachineDiagnostics()
     {
         TestFixture fixture = TestFixture.Create();
@@ -646,6 +1032,24 @@ public sealed class WorkflowProjectionServiceTests
     }
 
     [Fact]
+    public async Task RecoveryRebuildsDecisionWorkflowState()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+        fixture.Decisions.Add(CreateDecision(fixture.Repository.Id, "DEC-0001", DecisionState.UnderReview));
+        var store = new MemoryArtifactStore();
+        var workflowRepository = new FileSystemWorkflowRepository(store);
+        var recovery = fixture.CreateRecoveryService(workflowRepository);
+
+        WorkflowRecoveryResult result = await recovery.RecoverCurrentWorkflowAsync(fixture.Repository.Id);
+
+        Assert.True(result.Diagnostics.Rebuilt);
+        Assert.Equal(WorkflowStage.Decision, result.Timeline.CurrentStage);
+        Assert.Contains(result.Timeline.Entries, entry => entry.EventType == WorkflowTimelineEventType.DecisionReviewed);
+    }
+
+    [Fact]
     public async Task RecoveryRebuildsCorruptWorkflowArtifactsFromDomainProjection()
     {
         TestFixture fixture = TestFixture.Create();
@@ -697,6 +1101,39 @@ public sealed class WorkflowProjectionServiceTests
         Assert.Equal(before.CurrentStage, after.CurrentStage);
         Assert.Equal(before.BlockingGate, after.BlockingGate);
         Assert.Equal(before.ValidTransitions, after.ValidTransitions);
+    }
+
+    [Fact]
+    public async Task RecoveryRebuildsOperationalContextTimelineEvidence()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+        fixture.Proposals.Add(new OperationalContextProposal
+        {
+            ProposalId = "ctx-0001",
+            RepositoryId = fixture.Repository.Id,
+            GeneratedAt = DateTimeOffset.Parse("2026-06-23T11:00:00Z"),
+            Status = OperationalContextProposalStatus.Promoted,
+            Review = new OperationalContextReview
+            {
+                ProposalId = "ctx-0001",
+                ReviewState = OperationalContextReviewState.Accepted,
+                ReviewedAt = DateTimeOffset.Parse("2026-06-23T11:10:00Z")
+            },
+            Promotion = new OperationalContextPromotion
+            {
+                ProposalId = "ctx-0001",
+                PromotedAt = DateTimeOffset.Parse("2026-06-23T11:20:00Z")
+            }
+        });
+        var workflowRepository = new FileSystemWorkflowRepository(new MemoryArtifactStore());
+
+        WorkflowRecoveryResult recovered = await fixture.CreateRecoveryService(workflowRepository).RecoverCurrentWorkflowAsync(fixture.Repository.Id);
+
+        Assert.Contains(recovered.Timeline.Entries, entry => entry.EventType == WorkflowTimelineEventType.OperationalContextAccepted);
+        Assert.Contains(recovered.Timeline.Entries, entry => entry.EventType == WorkflowTimelineEventType.OperationalContextPromoted);
+        Assert.Contains(recovered.Diagnostics.Diagnostics, diagnostic => diagnostic.Contains("rebuilt timeline", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -789,6 +1226,88 @@ public sealed class WorkflowProjectionServiceTests
                 [])
         };
 
+    private static DecisionCandidate CreateCandidate(Guid repositoryId, string id) =>
+        new(
+            id,
+            repositoryId,
+            DecisionCandidateState.Discovered,
+            DecisionCandidatePriority.Medium,
+            DecisionClassification.Operational,
+            "Workflow decision",
+            "Candidate summary",
+            "fingerprint",
+            [],
+            [],
+            [],
+            [],
+            [
+                new DecisionHistoryEntry(
+                    DateTimeOffset.Parse("2026-06-23T10:05:00Z"),
+                    "Discovered",
+                    null,
+                    DecisionCandidateState.Discovered.ToString(),
+                    "Workflow test.",
+                    [])
+            ]);
+
+    private static DecisionProposal CreateProposal(Guid repositoryId, string id, string candidateId) =>
+        new(
+            id,
+            repositoryId,
+            candidateId,
+            DecisionProposalState.Generated,
+            "Workflow decision",
+            "Context",
+            [],
+            [],
+            null,
+            [],
+            [],
+            [
+                new DecisionHistoryEntry(
+                    DateTimeOffset.Parse("2026-06-23T10:10:00Z"),
+                    "Generated",
+                    null,
+                    DecisionProposalState.Generated.ToString(),
+                    "Workflow test.",
+                    [])
+            ]);
+
+    private static DecisionAssimilationRecommendation CreateAssimilationRecommendation(
+        Guid repositoryId,
+        Decision decision,
+        string decisionFingerprint)
+    {
+        var validation = new DecisionContextValidationResult(true, [], []);
+        var diagnostics = new DecisionContextDiagnostics([], []);
+        var context = new DecisionContext(repositoryId, "context-fingerprint", [], diagnostics, validation);
+        var snapshot = new DecisionContextSnapshot(
+            "context-snapshot-1",
+            repositoryId,
+            DateTimeOffset.Parse("2026-06-23T10:35:00Z"),
+            "context-fingerprint",
+            context,
+            diagnostics,
+            validation);
+
+        return new DecisionAssimilationRecommendation(
+            decision.Id.Value,
+            repositoryId,
+            DateTimeOffset.Parse("2026-06-23T10:40:00Z"),
+            decisionFingerprint,
+            snapshot.SnapshotId,
+            snapshot.Fingerprint,
+            decision,
+            snapshot,
+            "Record the resolved workflow decision.",
+            "Resolved decision should be available to future work.",
+            "human",
+            null,
+            [],
+            [],
+            []);
+    }
+
     private static WorkflowTimeline CreateTimeline(Guid repositoryId, DateTimeOffset generatedAt, WorkflowStage currentStage)
     {
         WorkflowTimelineEntry entry = new(
@@ -842,6 +1361,20 @@ public sealed class WorkflowProjectionServiceTests
 
         public List<Decision> Decisions { get; } = [];
 
+        public List<DecisionCandidate> Candidates { get; } = [];
+
+        public List<DecisionProposal> DecisionProposals { get; } = [];
+
+        public List<DecisionPackageVersion> PackageVersions { get; } = [];
+
+        public List<DecisionGovernanceReport> GovernanceReports { get; } = [];
+
+        public List<DecisionQualityAssessment> QualityAssessments { get; } = [];
+
+        public List<DecisionCertificationReport> CertificationReports { get; } = [];
+
+        public List<DecisionAssimilationRecommendation> AssimilationRecommendations { get; } = [];
+
         public List<OperationalContextProposal> Proposals { get; } = [];
 
         public RepositoryGitStatus GitStatus { get; set; } = new()
@@ -857,20 +1390,29 @@ public sealed class WorkflowProjectionServiceTests
             new(
                 new RepositoryServiceStub(Repository),
                 new WorkflowExecutionService(new ExecutionSessionServiceStub(this)),
-                new WorkflowHandoffService(
-                    new RepositoryServiceStub(Repository),
-                    new ExecutionSessionServiceStub(this),
-                    new ArtifactStoreStub(this)),
-                new DecisionRepositoryStub(this),
+            new WorkflowHandoffService(
+                new RepositoryServiceStub(Repository),
+                new ExecutionSessionServiceStub(this),
+                new ArtifactStoreStub(this)),
+            new WorkflowDecisionService(new RepositoryServiceStub(Repository), new DecisionRepositoryStub(this)),
+            new WorkflowOperationalContextService(
+                new RepositoryServiceStub(Repository),
                 new OperationalContextProposalStoreStub(this),
-                new GitServiceStub(this),
-                new WorkflowStateMachineService());
+                new DecisionRepositoryStub(this)),
+            new GitServiceStub(this),
+            new WorkflowStateMachineService());
 
         public WorkflowExecutionService CreateExecutionService() =>
             new(new ExecutionSessionServiceStub(this));
 
         public WorkflowHandoffService CreateHandoffService() =>
             new(new RepositoryServiceStub(Repository), new ExecutionSessionServiceStub(this), new ArtifactStoreStub(this));
+
+        public WorkflowDecisionService CreateDecisionService() =>
+            new(new RepositoryServiceStub(Repository), new DecisionRepositoryStub(this));
+
+        public WorkflowOperationalContextService CreateOperationalContextService() =>
+            new(new RepositoryServiceStub(Repository), new OperationalContextProposalStoreStub(this), new DecisionRepositoryStub(this));
 
         public WorkflowRecoveryService CreateRecoveryService(IWorkflowRepository workflowRepository) =>
             new(new RepositoryServiceStub(Repository), CreateService(), workflowRepository);
@@ -886,6 +1428,8 @@ public sealed class WorkflowProjectionServiceTests
             services.RemoveAll<IWorkflowStateMachineService>();
             services.RemoveAll<IWorkflowExecutionService>();
             services.RemoveAll<IWorkflowHandoffService>();
+            services.RemoveAll<IWorkflowDecisionService>();
+            services.RemoveAll<IWorkflowOperationalContextService>();
             services.RemoveAll<IWorkflowProjectionService>();
             services.RemoveAll<IWorkflowGateCatalogService>();
             services.RemoveAll<IWorkflowRepository>();
@@ -901,6 +1445,8 @@ public sealed class WorkflowProjectionServiceTests
             services.AddSingleton<IWorkflowRepository, FileSystemWorkflowRepository>();
             services.AddSingleton<IWorkflowExecutionService, WorkflowExecutionService>();
             services.AddSingleton<IWorkflowHandoffService, WorkflowHandoffService>();
+            services.AddSingleton<IWorkflowDecisionService, WorkflowDecisionService>();
+            services.AddSingleton<IWorkflowOperationalContextService, WorkflowOperationalContextService>();
             services.AddSingleton<IWorkflowStateMachineService, WorkflowStateMachineService>();
             services.AddSingleton<IWorkflowProjectionService, WorkflowProjectionService>();
             services.AddSingleton<IWorkflowGateCatalogService, WorkflowGateCatalogService>();
@@ -978,16 +1524,16 @@ public sealed class WorkflowProjectionServiceTests
         public Task<IReadOnlyList<Decision>> ListDecisionsAsync(Repository repository) => Task.FromResult<IReadOnlyList<Decision>>(fixture.Decisions);
         public Task<Decision?> GetDecisionAsync(Repository repository, DecisionId decisionId) => Task.FromResult(fixture.Decisions.FirstOrDefault(decision => decision.Id == decisionId));
         public Task<Decision> SaveDecisionAsync(Repository repository, Decision decision) => throw new NotSupportedException("Mutating decision methods are not used by workflow projection.");
-        public Task<IReadOnlyList<DecisionCandidate>> ListCandidatesAsync(Repository repository) => Task.FromResult<IReadOnlyList<DecisionCandidate>>([]);
-        public Task<DecisionCandidate?> GetCandidateAsync(Repository repository, string candidateId) => Task.FromResult<DecisionCandidate?>(null);
+        public Task<IReadOnlyList<DecisionCandidate>> ListCandidatesAsync(Repository repository) => Task.FromResult<IReadOnlyList<DecisionCandidate>>(fixture.Candidates);
+        public Task<DecisionCandidate?> GetCandidateAsync(Repository repository, string candidateId) => Task.FromResult(fixture.Candidates.FirstOrDefault(candidate => candidate.Id == candidateId));
         public Task<DecisionCandidate> SaveCandidateAsync(Repository repository, DecisionCandidate candidate) => throw new NotSupportedException("Mutating decision methods are not used by workflow projection.");
-        public Task<IReadOnlyList<DecisionProposal>> ListProposalsAsync(Repository repository) => Task.FromResult<IReadOnlyList<DecisionProposal>>([]);
-        public Task<DecisionProposal?> GetProposalAsync(Repository repository, string proposalId) => Task.FromResult<DecisionProposal?>(null);
+        public Task<IReadOnlyList<DecisionProposal>> ListProposalsAsync(Repository repository) => Task.FromResult<IReadOnlyList<DecisionProposal>>(fixture.DecisionProposals);
+        public Task<DecisionProposal?> GetProposalAsync(Repository repository, string proposalId) => Task.FromResult(fixture.DecisionProposals.FirstOrDefault(proposal => proposal.Id == proposalId));
         public Task<DecisionProposal> SaveProposalAsync(Repository repository, DecisionProposal proposal) => throw new NotSupportedException("Mutating decision methods are not used by workflow projection.");
         public Task<IReadOnlyList<DecisionProposalRevision>> ListProposalRevisionsAsync(Repository repository, string proposalId) => Task.FromResult<IReadOnlyList<DecisionProposalRevision>>([]);
         public Task<DecisionProposalRevision> SaveProposalRevisionAsync(Repository repository, DecisionProposalRevision revision) => throw new NotSupportedException("Mutating decision methods are not used by workflow projection.");
-        public Task<IReadOnlyList<DecisionPackageVersion>> ListPackageVersionsAsync(Repository repository, string proposalId) => Task.FromResult<IReadOnlyList<DecisionPackageVersion>>([]);
-        public Task<DecisionPackageVersion?> GetPackageVersionAsync(Repository repository, string proposalId, string packageId) => Task.FromResult<DecisionPackageVersion?>(null);
+        public Task<IReadOnlyList<DecisionPackageVersion>> ListPackageVersionsAsync(Repository repository, string proposalId) => Task.FromResult<IReadOnlyList<DecisionPackageVersion>>(fixture.PackageVersions.Where(package => package.ProposalId == proposalId).ToArray());
+        public Task<DecisionPackageVersion?> GetPackageVersionAsync(Repository repository, string proposalId, string packageId) => Task.FromResult(fixture.PackageVersions.FirstOrDefault(package => package.ProposalId == proposalId && package.Id == packageId));
         public Task<DecisionPackageVersion> SavePackageVersionAsync(Repository repository, DecisionPackageVersion packageVersion) => throw new NotSupportedException("Mutating decision methods are not used by workflow projection.");
         public Task<IReadOnlyList<DecisionRefinementArtifact>> ListRefinementArtifactsAsync(Repository repository, string proposalId) => Task.FromResult<IReadOnlyList<DecisionRefinementArtifact>>([]);
         public Task<DecisionRefinementArtifact> SaveRefinementArtifactAsync(Repository repository, DecisionRefinementArtifact refinementArtifact) => throw new NotSupportedException("Mutating decision methods are not used by workflow projection.");
@@ -995,15 +1541,15 @@ public sealed class WorkflowProjectionServiceTests
         public Task<DecisionReviewStatus> SaveReviewStatusAsync(Repository repository, DecisionReviewStatus reviewStatus) => throw new NotSupportedException("Mutating decision methods are not used by workflow projection.");
         public Task<IReadOnlyList<DecisionReviewNote>> ListReviewNotesAsync(Repository repository, string proposalId) => Task.FromResult<IReadOnlyList<DecisionReviewNote>>([]);
         public Task<DecisionReviewNote> SaveReviewNoteAsync(Repository repository, DecisionReviewNote note) => throw new NotSupportedException("Mutating decision methods are not used by workflow projection.");
-        public Task<DecisionAssimilationRecommendation?> GetAssimilationRecommendationAsync(Repository repository, DecisionId decisionId) => Task.FromResult<DecisionAssimilationRecommendation?>(null);
+        public Task<DecisionAssimilationRecommendation?> GetAssimilationRecommendationAsync(Repository repository, DecisionId decisionId) => Task.FromResult(fixture.AssimilationRecommendations.FirstOrDefault(recommendation => recommendation.DecisionId == decisionId.Value));
         public Task<DecisionAssimilationRecommendation> SaveAssimilationRecommendationAsync(Repository repository, DecisionAssimilationRecommendation recommendation) => throw new NotSupportedException("Mutating decision methods are not used by workflow projection.");
-        public Task<IReadOnlyList<DecisionGovernanceReport>> ListGovernanceReportsAsync(Repository repository) => Task.FromResult<IReadOnlyList<DecisionGovernanceReport>>([]);
+        public Task<IReadOnlyList<DecisionGovernanceReport>> ListGovernanceReportsAsync(Repository repository) => Task.FromResult<IReadOnlyList<DecisionGovernanceReport>>(fixture.GovernanceReports);
         public Task<DecisionGovernanceReport> SaveGovernanceReportAsync(Repository repository, DecisionGovernanceReport report) => throw new NotSupportedException("Mutating decision methods are not used by workflow projection.");
-        public Task<IReadOnlyList<DecisionCertificationReport>> ListCertificationReportsAsync(Repository repository) => Task.FromResult<IReadOnlyList<DecisionCertificationReport>>([]);
+        public Task<IReadOnlyList<DecisionCertificationReport>> ListCertificationReportsAsync(Repository repository) => Task.FromResult<IReadOnlyList<DecisionCertificationReport>>(fixture.CertificationReports);
         public Task<DecisionCertificationReport> SaveCertificationReportAsync(Repository repository, DecisionCertificationReport report) => throw new NotSupportedException("Mutating decision methods are not used by workflow projection.");
         public Task<IReadOnlyList<DecisionGenerationCertificationReport>> ListGenerationCertificationReportsAsync(Repository repository) => Task.FromResult<IReadOnlyList<DecisionGenerationCertificationReport>>([]);
         public Task<DecisionGenerationCertificationReport> SaveGenerationCertificationReportAsync(Repository repository, DecisionGenerationCertificationReport report) => throw new NotSupportedException("Mutating decision methods are not used by workflow projection.");
-        public Task<IReadOnlyList<DecisionQualityAssessment>> ListQualityAssessmentsAsync(Repository repository) => Task.FromResult<IReadOnlyList<DecisionQualityAssessment>>([]);
+        public Task<IReadOnlyList<DecisionQualityAssessment>> ListQualityAssessmentsAsync(Repository repository) => Task.FromResult<IReadOnlyList<DecisionQualityAssessment>>(fixture.QualityAssessments);
         public Task<DecisionQualityAssessment> SaveQualityAssessmentAsync(Repository repository, DecisionQualityAssessment assessment) => throw new NotSupportedException("Mutating decision methods are not used by workflow projection.");
         public Task<IReadOnlyList<DecisionQualityReport>> ListQualityReportsAsync(Repository repository) => Task.FromResult<IReadOnlyList<DecisionQualityReport>>([]);
         public Task<DecisionQualityReport> SaveQualityReportAsync(Repository repository, DecisionQualityReport report) => throw new NotSupportedException("Mutating decision methods are not used by workflow projection.");

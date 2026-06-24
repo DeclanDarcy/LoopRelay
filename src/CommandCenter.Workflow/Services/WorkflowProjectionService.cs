@@ -1,10 +1,4 @@
-using CommandCenter.Continuity.Abstractions;
-using CommandCenter.Continuity.Models;
-using CommandCenter.Continuity.Primitives;
 using CommandCenter.Core.Repositories;
-using CommandCenter.Decisions.Abstractions;
-using CommandCenter.Decisions.Models;
-using CommandCenter.Decisions.Primitives;
 using CommandCenter.Execution.Abstractions;
 using CommandCenter.Execution.Models;
 using CommandCenter.Workflow.Abstractions;
@@ -17,8 +11,8 @@ public sealed class WorkflowProjectionService(
     IRepositoryService repositoryService,
     IWorkflowExecutionService workflowExecutionService,
     IWorkflowHandoffService workflowHandoffService,
-    IDecisionRepository decisionRepository,
-    IOperationalContextProposalStore operationalContextProposalStore,
+    IWorkflowDecisionService workflowDecisionService,
+    IWorkflowOperationalContextService workflowOperationalContextService,
     IGitService gitService,
     IWorkflowStateMachineService stateMachineService) : IWorkflowProjectionService
 {
@@ -63,6 +57,17 @@ public sealed class WorkflowProjectionService(
             evidence.Handoff.Status,
             evidence.Handoff.Validation,
             evidence.Handoff.Diagnostics,
+            evidence.Decision,
+            evidence.Decision.Status,
+            evidence.Decision.IsResolutionEligible,
+            evidence.Decision.IsGovernanceBlocked,
+            evidence.Decision.Diagnostics,
+            evidence.OperationalContext,
+            evidence.OperationalContext.Status,
+            evidence.OperationalContext.IsReviewEligible,
+            evidence.OperationalContext.IsPromotionEligible,
+            evidence.OperationalContext.IsCommitEligible,
+            evidence.OperationalContext.Diagnostics,
             stateMachine.CandidateStages,
             stateMachine.ValidTransitions,
             stateMachine.BlockedTransitions,
@@ -101,11 +106,11 @@ public sealed class WorkflowProjectionService(
     {
         WorkflowExecutionProjection execution = await workflowExecutionService.ProjectExecutionAsync(repository.Id);
         WorkflowHandoffProjection handoff = await workflowHandoffService.ProjectHandoffAsync(repository.Id);
-        IReadOnlyList<Decision> decisions = await decisionRepository.ListDecisionsAsync(repository);
-        IReadOnlyList<OperationalContextProposal> proposals = await operationalContextProposalStore.ListAsync(repository);
+        WorkflowDecisionProjection decision = await workflowDecisionService.ProjectDecisionAsync(repository.Id);
+        WorkflowOperationalContextProjection operationalContext = await workflowOperationalContextService.ProjectOperationalContextAsync(repository.Id, decision, execution);
         RepositoryGitStatus gitStatus = await gitService.GetStatusAsync(repository);
 
-        return new ProjectionEvidence(repository, execution, handoff, decisions, proposals, gitStatus);
+        return new ProjectionEvidence(repository, execution, handoff, decision, operationalContext, gitStatus);
     }
 
     private static ProjectionChoice ChooseProjection(ProjectionEvidence evidence)
@@ -119,6 +124,8 @@ public sealed class WorkflowProjectionService(
 
         conflicts.AddRange(execution.Diagnostics.Conflicts);
         conflicts.AddRange(evidence.Handoff.Diagnostics.Conflicts);
+        conflicts.AddRange(evidence.Decision.Diagnostics.Conflicts);
+        conflicts.AddRange(evidence.OperationalContext.Diagnostics.Conflicts);
 
         if (executionStatus is WorkflowExecutionStatus.Failed)
         {
@@ -162,27 +169,28 @@ public sealed class WorkflowProjectionService(
             return Choice(WorkflowStage.Commit, WorkflowProgressState.AwaitingGate, WorkflowGateType.CommitApproval, "Review and execute commit through the existing git commit command.", reasoning, unknownStates, conflicts);
         }
 
-        OperationalContextProposal? currentContextProposal = evidence.Proposals
-            .Where(proposal => proposal.Status is OperationalContextProposalStatus.Pending or OperationalContextProposalStatus.Edited or OperationalContextProposalStatus.Accepted)
-            .OrderByDescending(proposal => proposal.GeneratedAt)
-            .FirstOrDefault();
-
-        if (currentContextProposal is not null)
+        if (!evidence.Decision.IsResolutionEligible)
         {
-            if (currentContextProposal.Status is OperationalContextProposalStatus.Pending or OperationalContextProposalStatus.Edited)
+            if (evidence.Decision.IsGovernanceBlocked)
             {
-                reasoning.Add($"Operational-context proposal {currentContextProposal.ProposalId} is awaiting review.");
+                reasoning.Add("Decision governance evidence reports a blocked status.");
+                return Choice(WorkflowStage.Decision, WorkflowProgressState.Blocked, WorkflowGateType.DecisionResolution, "Resolve decision governance blockers through the existing decisions workflow.", reasoning, unknownStates, conflicts);
+            }
+
+            reasoning.Add($"Decision workflow status is {evidence.Decision.Status}.");
+            return Choice(WorkflowStage.Decision, WorkflowProgressState.AwaitingGate, WorkflowGateType.DecisionResolution, "Resolve outstanding decisions through the existing decisions workflow.", reasoning, unknownStates, conflicts);
+        }
+
+        if (!evidence.OperationalContext.IsCommitEligible)
+        {
+            if (!evidence.OperationalContext.IsReviewEligible)
+            {
+                reasoning.Add($"Operational-context workflow status is {evidence.OperationalContext.Status}.");
                 return Choice(WorkflowStage.OperationalContext, WorkflowProgressState.AwaitingGate, WorkflowGateType.OperationalContextReview, "Review the operational-context proposal through the existing continuity command.", reasoning, unknownStates, conflicts);
             }
 
-            reasoning.Add($"Operational-context proposal {currentContextProposal.ProposalId} is accepted and awaiting promotion.");
+            reasoning.Add($"Operational-context workflow status is {evidence.OperationalContext.Status}.");
             return Choice(WorkflowStage.OperationalContext, WorkflowProgressState.AwaitingGate, WorkflowGateType.OperationalContextPromotion, "Promote the accepted operational-context proposal through the existing continuity command.", reasoning, unknownStates, conflicts);
-        }
-
-        if (evidence.Decisions.Any(decision => decision.State is DecisionState.Open or DecisionState.UnderReview))
-        {
-            reasoning.Add("At least one decision is open or under review.");
-            return Choice(WorkflowStage.Decision, WorkflowProgressState.AwaitingGate, WorkflowGateType.DecisionResolution, "Resolve outstanding decisions through the existing decisions workflow.", reasoning, unknownStates, conflicts);
         }
 
         if (executionStatus is WorkflowExecutionStatus.AwaitingAcceptance)
@@ -230,8 +238,8 @@ public sealed class WorkflowProjectionService(
             $"repository:{evidence.Repository.Id}",
             $"execution:{evidence.Execution.ExecutionId?.ToString() ?? "none"}:{evidence.Execution.Status}:handoff={evidence.Execution.HasHandoff}:changes={evidence.Execution.HasChanges}",
             $"handoff:{evidence.Handoff.ExecutionId?.ToString() ?? "none"}:{evidence.Handoff.Status}:path={evidence.Handoff.HandoffPath ?? "none"}:valid={evidence.Handoff.Validation.IsValid}",
-            $"decisions:{evidence.Decisions.Count}:{string.Join(",", evidence.Decisions.OrderBy(decision => decision.Id.Value).Select(decision => $"{decision.Id.Value}:{decision.State}"))}",
-            $"operational-context-proposals:{evidence.Proposals.Count}:{string.Join(",", evidence.Proposals.OrderBy(proposal => proposal.ProposalId).Select(proposal => $"{proposal.ProposalId}:{proposal.Status}"))}",
+            $"decision:{evidence.Decision.DecisionId ?? "none"}:{evidence.Decision.Status}:eligible={evidence.Decision.IsResolutionEligible}:governanceBlocked={evidence.Decision.IsGovernanceBlocked}",
+            $"operational-context:{evidence.OperationalContext.ProposalId ?? "none"}:{evidence.OperationalContext.Status}:reviewEligible={evidence.OperationalContext.IsReviewEligible}:promotionEligible={evidence.OperationalContext.IsPromotionEligible}:commitEligible={evidence.OperationalContext.IsCommitEligible}",
             $"git:{evidence.GitStatus.Branch}:ahead={evidence.GitStatus.AheadCount}:behind={evidence.GitStatus.BehindCount}:clean={evidence.GitStatus.DirtyState.IsClean}"
         ];
 
@@ -346,36 +354,89 @@ public sealed class WorkflowProjectionService(
                 execution.ExecutionId?.ToString() ?? evidence.Repository.Id.ToString()));
         }
 
-        entries.AddRange(evidence.Decisions
-            .Where(decision => decision.State is DecisionState.Resolved && decision.Resolution is not null)
-            .Select(decision => CreateTimelineEntry(
+        WorkflowDecisionProjection decision = evidence.Decision;
+        if (decision.CreatedAt is DateTimeOffset decisionCreatedAt && decision.DecisionId is not null)
+        {
+            WorkflowTimelineEventType eventType = decision.Status switch
+            {
+                WorkflowDecisionStatus.Discovered => WorkflowTimelineEventType.DecisionDiscovered,
+                WorkflowDecisionStatus.Generated => WorkflowTimelineEventType.DecisionGenerated,
+                WorkflowDecisionStatus.UnderReview => WorkflowTimelineEventType.DecisionReviewed,
+                WorkflowDecisionStatus.AwaitingResolution => WorkflowTimelineEventType.DecisionRefined,
+                WorkflowDecisionStatus.Archived => WorkflowTimelineEventType.DecisionArchived,
+                WorkflowDecisionStatus.Superseded => WorkflowTimelineEventType.DecisionSuperseded,
+                _ => WorkflowTimelineEventType.DecisionGenerated
+            };
+
+            if (decision.Status is not WorkflowDecisionStatus.Missing and not WorkflowDecisionStatus.Resolved)
+            {
+                entries.Add(CreateTimelineEntry(
+                    eventType,
+                    WorkflowStage.Decision,
+                    decisionCreatedAt,
+                    $"Decision {decision.DecisionId} projected as {decision.Status}.",
+                    "decisions",
+                    decision.DecisionId));
+            }
+        }
+
+        if (decision.ResolvedAt is DateTimeOffset decisionResolvedAt && decision.DecisionId is not null)
+        {
+            entries.Add(CreateTimelineEntry(
                 WorkflowTimelineEventType.DecisionResolved,
                 WorkflowStage.Decision,
-                decision.Resolution!.ResolvedAt,
-                $"Decision {decision.Id.Value} resolved.",
+                decisionResolvedAt,
+                $"Decision {decision.DecisionId} resolved.",
                 "decisions",
-                decision.Id.Value)));
+                decision.DecisionId));
+        }
 
-        entries.AddRange(evidence.Proposals
-            .Where(proposal => proposal.Review.ReviewedAt is not null &&
-                proposal.Status is OperationalContextProposalStatus.Accepted or OperationalContextProposalStatus.Edited or OperationalContextProposalStatus.Rejected or OperationalContextProposalStatus.Promoted)
-            .Select(proposal => CreateTimelineEntry(
-                WorkflowTimelineEventType.OperationalContextReviewed,
+        WorkflowOperationalContextProjection operationalContext = evidence.OperationalContext;
+        if (operationalContext.CreatedAt is DateTimeOffset contextCreatedAt &&
+            operationalContext.ProposalId is not null &&
+            operationalContext.Status is not WorkflowOperationalContextStatus.NoContextRequired)
+        {
+            entries.Add(CreateTimelineEntry(
+                WorkflowTimelineEventType.OperationalContextProposed,
                 WorkflowStage.OperationalContext,
-                proposal.Review.ReviewedAt!.Value,
-                $"Operational-context proposal {proposal.ProposalId} reviewed.",
+                contextCreatedAt,
+                $"Operational-context proposal {operationalContext.ProposalId} projected as {operationalContext.Status}.",
                 "continuity",
-                proposal.ProposalId)));
+                operationalContext.ProposalId));
+        }
 
-        entries.AddRange(evidence.Proposals
-            .Where(proposal => proposal.Status is OperationalContextProposalStatus.Promoted && proposal.Promotion.PromotedAt is not null)
-            .Select(proposal => CreateTimelineEntry(
+        if (operationalContext.ReviewedAt is DateTimeOffset contextReviewedAt &&
+            operationalContext.ProposalId is not null)
+        {
+            WorkflowTimelineEventType eventType = operationalContext.Status switch
+            {
+                WorkflowOperationalContextStatus.Edited => WorkflowTimelineEventType.OperationalContextEdited,
+                WorkflowOperationalContextStatus.Rejected => WorkflowTimelineEventType.OperationalContextRejected,
+                WorkflowOperationalContextStatus.Archived => WorkflowTimelineEventType.OperationalContextArchived,
+                WorkflowOperationalContextStatus.Promoted or WorkflowOperationalContextStatus.ReadyForPromotion => WorkflowTimelineEventType.OperationalContextAccepted,
+                _ => WorkflowTimelineEventType.OperationalContextReviewed
+            };
+
+            entries.Add(CreateTimelineEntry(
+                eventType,
+                WorkflowStage.OperationalContext,
+                contextReviewedAt,
+                $"Operational-context proposal {operationalContext.ProposalId} reviewed as {operationalContext.Status}.",
+                "continuity",
+                operationalContext.ProposalId));
+        }
+
+        if (operationalContext.PromotedAt is DateTimeOffset contextPromotedAt &&
+            operationalContext.ProposalId is not null)
+        {
+            entries.Add(CreateTimelineEntry(
                 WorkflowTimelineEventType.OperationalContextPromoted,
                 WorkflowStage.OperationalContext,
-                proposal.Promotion.PromotedAt!.Value,
-                $"Operational-context proposal {proposal.ProposalId} promoted.",
+                contextPromotedAt,
+                $"Operational-context proposal {operationalContext.ProposalId} promoted.",
                 "continuity",
-                proposal.ProposalId)));
+                operationalContext.ProposalId));
+        }
 
         if (execution.CommittedAt is DateTimeOffset committedAt)
         {
@@ -426,8 +487,8 @@ public sealed class WorkflowProjectionService(
         Repository Repository,
         WorkflowExecutionProjection Execution,
         WorkflowHandoffProjection Handoff,
-        IReadOnlyList<Decision> Decisions,
-        IReadOnlyList<OperationalContextProposal> Proposals,
+        WorkflowDecisionProjection Decision,
+        WorkflowOperationalContextProjection OperationalContext,
         RepositoryGitStatus GitStatus);
 
     private sealed record ProjectionChoice(
