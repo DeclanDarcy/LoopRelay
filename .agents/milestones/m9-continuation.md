@@ -75,8 +75,13 @@ Slice progress:
   `Duplicate` outcomes; duplicate evidence is included in evaluation
   diagnostics and persisted preparation events.
 - Preparation currently refuses at every open authority gate and reports the
-  future command name only when a stage would be eligible; actual Decisions,
-  Continuity, and Execution command invocation remains deferred.
+  future command name only when a stage would be eligible; Decisions discovery
+  is now invoked for eligible Decision-stage preparation, while Continuity and
+  Execution command invocation remains deferred.
+- Decision-stage preparation can now call the existing Decisions discovery
+  command to create reviewable decision candidates, records created candidate
+  artifact identifiers in preparation events, and leaves workflow stage
+  progression and decision resolution untouched.
 - Continuation evaluation consumes the aggregate workflow projection, latest
   persisted workflow timeline evidence, and state-machine, gate, and completion
   evidence.
@@ -98,7 +103,8 @@ Progression rules:
 
 Preparation rules:
 
-- [ ] accepted handoff may trigger decision discovery and reviewable proposal generation through existing Decisions commands, but this does not resolve the decision gate and does not itself move the stage beyond decision.
+- [x] accepted handoff may trigger decision discovery through the existing Decisions command, but this does not resolve the decision gate and does not itself move the stage beyond decision.
+- [ ] promoted decision candidates may trigger reviewable proposal generation through existing Decisions commands, but this does not resolve the decision gate and does not itself move the stage beyond decision.
 - [ ] resolved decision may trigger operational-context proposal generation or linkage through existing Continuity commands, but this does not review or promote context and does not itself move the stage beyond operational context.
 - [ ] context complete may trigger commit preparation through the existing Execution command, but this does not approve or execute commit and does not itself move the stage beyond commit.
 - [x] preparation must record command name, source stage, input fingerprint, created artifact identifiers, skipped reason, and diagnostics.
@@ -126,7 +132,7 @@ Tests:
 
 - [x] eligible workflow advances mechanically.
 - [ ] ineligible workflow does not advance.
-- [ ] eligible preparation creates reviewable artifacts only through existing domain commands.
+- [x] eligible preparation creates reviewable artifacts only through existing domain commands.
 - [x] ineligible preparation does not create artifacts.
 - [x] every open gate stops progression.
 - [x] open gates block preparation when the requested artifact would bypass authority.

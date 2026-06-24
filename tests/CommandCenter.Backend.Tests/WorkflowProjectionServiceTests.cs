@@ -1000,6 +1000,125 @@ public sealed class WorkflowProjectionServiceTests
     }
 
     [Fact]
+    public async Task PreparationRunDoesNotInvokeDecisionDiscoveryWhenGateIsOpen()
+    {
+        TestFixture fixture = TestFixture.Create();
+        ArrangeAuthorityGateScenario(fixture, "decision-resolution");
+        var discoveryService = new DecisionDiscoveryServiceStub([]);
+        var service = new WorkflowPreparationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            new FileSystemWorkflowRepository(new MemoryArtifactStore()),
+            discoveryService);
+
+        WorkflowPreparationEvent preparationEvent = await service.RunPreparationAsync(fixture.Repository.Id);
+
+        Assert.Equal("Refused", preparationEvent.Decision);
+        Assert.Equal(WorkflowGateType.DecisionResolution, preparationEvent.BlockingGate);
+        Assert.Equal(0, discoveryService.CallCount);
+        Assert.Empty(preparationEvent.CreatedArtifactIds);
+    }
+
+    [Fact]
+    public async Task PreparationRunDoesNotInvokeDecisionDiscoveryWhenDuplicateEvidenceExists()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+        fixture.Candidates.Add(CreateCandidate(fixture.Repository.Id, "cand-0001"));
+        var discoveryService = new DecisionDiscoveryServiceStub([]);
+        var service = new WorkflowPreparationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            new FileSystemWorkflowRepository(new MemoryArtifactStore()),
+            discoveryService);
+
+        WorkflowPreparationEvent preparationEvent = await service.RunPreparationAsync(fixture.Repository.Id);
+
+        Assert.Equal("Duplicate", preparationEvent.Decision);
+        Assert.Equal(0, discoveryService.CallCount);
+        Assert.Empty(preparationEvent.CreatedArtifactIds);
+        Assert.Contains("decision-candidate:cand-0001", preparationEvent.DuplicateEvidence);
+    }
+
+    [Fact]
+    public async Task PreparationRunInvokesDecisionDiscoveryAndPersistsCreatedArtifacts()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+        DecisionCandidate candidate = CreateCandidate(fixture.Repository.Id, "cand-0001");
+        var discoveryService = new DecisionDiscoveryServiceStub([candidate], discovered =>
+        {
+            fixture.Candidates.AddRange(discovered);
+        });
+        var workflowRepository = new FileSystemWorkflowRepository(new MemoryArtifactStore());
+        await workflowRepository.SaveTimelineAsync(
+            fixture.Repository,
+            CreateTimeline(
+                fixture.Repository.Id,
+                DateTimeOffset.Parse("2026-06-23T10:45:00Z"),
+                WorkflowStage.Decision,
+                WorkflowProgressState.Ready,
+                WorkflowGateType.None,
+                WorkflowStage.Handoff,
+                []));
+        var service = new WorkflowPreparationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            workflowRepository,
+            discoveryService);
+
+        WorkflowPreparationEvent preparationEvent = await service.RunPreparationAsync(fixture.Repository.Id);
+        IReadOnlyList<WorkflowPreparationEvent> history = await workflowRepository.ListPreparationEventsAsync(fixture.Repository);
+        WorkflowInstance projection = await fixture.CreateService().ProjectAsync(fixture.Repository.Id);
+
+        Assert.Equal(1, discoveryService.CallCount);
+        Assert.Equal("Created", preparationEvent.Decision);
+        Assert.Contains("decision-candidate:cand-0001", preparationEvent.CreatedArtifactIds);
+        Assert.Single(history);
+        Assert.Equal(WorkflowStage.Decision, projection.CurrentStage);
+        Assert.Equal(WorkflowGateType.DecisionResolution, projection.BlockingGate);
+    }
+
+    [Fact]
+    public async Task PreparationRunRepeatDoesNotCreateDuplicateDecisionArtifacts()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+        DecisionCandidate candidate = CreateCandidate(fixture.Repository.Id, "cand-0001");
+        var discoveryService = new DecisionDiscoveryServiceStub([candidate], discovered =>
+        {
+            fixture.Candidates.AddRange(discovered);
+        });
+        var workflowRepository = new FileSystemWorkflowRepository(new MemoryArtifactStore());
+        await workflowRepository.SaveTimelineAsync(
+            fixture.Repository,
+            CreateTimeline(
+                fixture.Repository.Id,
+                DateTimeOffset.Parse("2026-06-23T10:45:00Z"),
+                WorkflowStage.Decision,
+                WorkflowProgressState.Ready,
+                WorkflowGateType.None,
+                WorkflowStage.Handoff,
+                []));
+        var service = new WorkflowPreparationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            workflowRepository,
+            discoveryService);
+
+        WorkflowPreparationEvent first = await service.RunPreparationAsync(fixture.Repository.Id);
+        WorkflowPreparationEvent second = await service.RunPreparationAsync(fixture.Repository.Id);
+
+        Assert.Equal(1, discoveryService.CallCount);
+        Assert.Equal("Created", first.Decision);
+        Assert.Equal("Duplicate", second.Decision);
+        Assert.Contains("decision-candidate:cand-0001", second.DuplicateEvidence);
+    }
+
+    [Fact]
     public async Task PreparationEvaluationSkipsOperationalContextArtifactsWhenEquivalentDomainEvidenceExists()
     {
         TestFixture fixture = TestFixture.Create();
@@ -2657,6 +2776,47 @@ public sealed class WorkflowProjectionServiceTests
         public Task<DecisionQualityReport> SaveQualityReportAsync(Repository repository, DecisionQualityReport report) => throw new NotSupportedException("Mutating decision methods are not used by workflow projection.");
         public Task<IReadOnlyList<DecisionQualityTrend>> ListQualityTrendsAsync(Repository repository) => Task.FromResult<IReadOnlyList<DecisionQualityTrend>>([]);
         public Task<DecisionQualityTrend> SaveQualityTrendAsync(Repository repository, DecisionQualityTrend trend) => throw new NotSupportedException("Mutating decision methods are not used by workflow projection.");
+    }
+
+    private sealed class DecisionDiscoveryServiceStub(
+        IReadOnlyList<DecisionCandidate> candidates,
+        Action<IReadOnlyList<DecisionCandidate>>? onDiscover = null) : IDecisionDiscoveryService
+    {
+        public int CallCount { get; private set; }
+
+        public Task<IReadOnlyList<DecisionCandidate>> ListCandidatesAsync(Guid repositoryId) =>
+            Task.FromResult(candidates);
+
+        public Task<DecisionDiscoveryResult> DiscoverAsync(Guid repositoryId)
+        {
+            CallCount++;
+            onDiscover?.Invoke(candidates);
+            return Task.FromResult(new DecisionDiscoveryResult(
+                candidates,
+                new DecisionDiscoveryDiagnostics(
+                    "fingerprint",
+                    1,
+                    candidates.Count,
+                    candidates.Count,
+                    0,
+                    [])));
+        }
+
+        public Task<DecisionCandidate> PromoteCandidateAsync(Guid repositoryId, string candidateId, string? reason) =>
+            throw new NotSupportedException("Workflow preparation must not promote decision candidates.");
+
+        public Task<DecisionCandidate> DismissCandidateAsync(Guid repositoryId, string candidateId, string? reason) =>
+            throw new NotSupportedException("Workflow preparation must not dismiss decision candidates.");
+
+        public Task<DecisionCandidate> ExpireCandidateAsync(Guid repositoryId, string candidateId, string? reason) =>
+            throw new NotSupportedException("Workflow preparation must not expire decision candidates.");
+
+        public Task<DecisionCandidate> MarkCandidateDuplicateAsync(
+            Guid repositoryId,
+            string candidateId,
+            string duplicateOfCandidateId,
+            string? reason) =>
+            throw new NotSupportedException("Workflow preparation must not mark decision candidates duplicate.");
     }
 
     private sealed class OperationalContextProposalStoreStub(TestFixture fixture) : IOperationalContextProposalStore

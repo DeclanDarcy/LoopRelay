@@ -2,33 +2,30 @@
 
 ## New State
 
-- Continued Milestone 9 preparation work by adding read-only duplicate-domain-evidence detection before any workflow-owned preparation command invocation.
-- Extended preparation evaluation, diagnostics, event persistence, fingerprints, and markdown projection with:
-  - `HasDuplicateDomainEvidence`
-  - `DuplicateEvidence`
-  - explicit `Allowed`, `Refused`, `Skipped`, and `Duplicate` outcomes.
-- Duplicate detection now covers:
-  - decision candidate, proposal, and package evidence.
-  - operational-context proposal, decision/execution linkage, and assimilation evidence.
-  - commit-preparation snapshot and prepared commit evidence.
-- Preparation still does not invoke Decisions, Continuity, Execution, or Git commands.
-- Preparation still does not create candidates, proposals, packages, operational-context proposals, commit preparations, commits, or pushes.
-- Updated `.agents/milestones/m9-continuation.md` to mark equivalent-artifact skip and pre-invocation duplicate checks complete.
-- Rotated previous `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0016.md`.
+- Continued Milestone 9 by implementing the first authorized preparation invocation path:
+  - eligible Decision-stage preparation now calls the existing Decisions discovery command through `IDecisionDiscoveryService.DiscoverAsync`.
+  - created review artifacts are recorded as `decision-candidate:<id>` in `WorkflowPreparationEvent.CreatedArtifactIds`.
+  - successful invocation records preparation event decision `Created`.
+- Preserved authority boundaries:
+  - open workflow gates still refuse preparation.
+  - duplicate decision candidate/proposal/package evidence still prevents command invocation.
+  - preparation does not promote candidates, generate proposals from promoted candidates, resolve decisions, or advance workflow stage.
+- Adjusted preparation idempotency so an existing preparation event is matched by fingerprint, stage, command, and duplicate state; this supports successful events whose stored decision differs from the pre-run evaluation outcome.
+- Adjusted preparation gate resolution to use the active coordinator stage from the latest workflow timeline when it differs from the domain-derived projection, preventing downstream projected gates from blocking current-stage preparation.
+- Updated `.agents/milestones/m9-continuation.md` to mark Decisions discovery preparation and eligible-domain-command artifact creation complete, while keeping proposal generation, Continuity preparation, commit preparation, hosted continuation, influence tracing, and health assessment deferred.
+- Rotated previous `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0017.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter WorkflowProjectionServiceTests` passed: 77 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter WorkflowProjectionServiceTests` passed: 81 tests.
 - `dotnet build CommandCenter.slnx` passed with 0 warnings and 0 errors.
 
 ## Notes
 
-- Duplicate outcome is diagnostic only. `CanPrepare` remains false when duplicate evidence exists.
-- Operational-context review and promotion gates remain plain authority refusals; existing pending or accepted context proposals are not reclassified as duplicate preparation.
-- Persisted preparation events now include duplicate evidence separately from created artifact IDs, which remain empty in this slice.
+- The implemented Decisions path creates reviewable candidates only. Proposal generation remains deferred because the existing generation command requires a promoted candidate, and promotion remains a human/decision-domain action.
+- A repeated preparation run after candidate creation is blocked by duplicate evidence and does not invoke discovery again.
 
 ## Next Slice
 
-- Implement the first allowed preparation invocation path behind the existing refusal and duplicate matrix, starting with the lowest-risk domain command.
-- Recommended order: Decisions review-artifact preparation first, then Continuity proposal/linkage preparation, then Execution commit preparation.
-- Stop for review again before enabling background hosted continuation/preparation.
+- Implement the next Decisions preparation step only after an explicit decision-domain authorization path exists for promoted candidates; otherwise move to Continuity proposal/linkage preparation as the next lowest-risk remaining preparation path.
+- Keep hosted continuation/preparation disabled until all endpoint-triggered preparation paths are covered and idempotency is proven.

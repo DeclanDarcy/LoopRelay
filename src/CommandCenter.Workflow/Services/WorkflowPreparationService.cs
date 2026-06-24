@@ -1,3 +1,5 @@
+using CommandCenter.Decisions.Abstractions;
+using CommandCenter.Decisions.Models;
 using CommandCenter.Core.Repositories;
 using CommandCenter.Workflow.Abstractions;
 using CommandCenter.Workflow.Models;
@@ -9,7 +11,8 @@ namespace CommandCenter.Workflow.Services;
 public sealed class WorkflowPreparationService(
     IRepositoryService repositoryService,
     IWorkflowProjectionService projectionService,
-    IWorkflowRepository workflowRepository) : IWorkflowPreparationService
+    IWorkflowRepository workflowRepository,
+    IDecisionDiscoveryService? decisionDiscoveryService = null) : IWorkflowPreparationService
 {
     public async Task<WorkflowPreparationEvaluation> EvaluatePreparationAsync(Guid repositoryId)
     {
@@ -20,7 +23,7 @@ public sealed class WorkflowPreparationService(
         WorkflowProgressState progressState = latestTimeline?.ProgressState ?? projection.ProgressState;
         WorkflowGateType blockingGate = ResolveBlockingGate(projection, latestTimeline);
         WorkflowPreparationCommand command = ResolveCommand(stage);
-        bool hasOpenGate = blockingGate is not WorkflowGateType.None || projection.OpenGates.Count > 0;
+        bool hasOpenGate = blockingGate is not WorkflowGateType.None;
         bool isRunnableState = progressState is not WorkflowProgressState.Active
             and not WorkflowProgressState.Blocked
             and not WorkflowProgressState.Failed
@@ -108,8 +111,6 @@ public sealed class WorkflowPreparationService(
             preparationEvent.InputFingerprint == evaluation.Fingerprint &&
             preparationEvent.Stage == evaluation.Stage &&
             preparationEvent.Command == evaluation.Command &&
-            preparationEvent.Decision == evaluation.Outcome &&
-            preparationEvent.Reason == evaluation.Reason &&
             preparationEvent.HasDuplicateDomainEvidence == evaluation.HasDuplicateDomainEvidence);
 
         if (existing is not null)
@@ -117,6 +118,13 @@ public sealed class WorkflowPreparationService(
             return existing;
         }
 
+        IReadOnlyList<string> createdArtifactIds = evaluation.CanPrepare
+            ? await RunAllowedPreparationCommandAsync(evaluation)
+            : [];
+        string outcome = createdArtifactIds.Count > 0 ? "Created" : evaluation.Outcome;
+        string reason = createdArtifactIds.Count > 0
+            ? $"{evaluation.CommandName} created reviewable artifacts: {string.Join(", ", createdArtifactIds)}."
+            : evaluation.Reason;
         DateTimeOffset occurredAt = DateTimeOffset.UtcNow;
         var preparationEvent = new WorkflowPreparationEvent(
             repositoryId,
@@ -128,15 +136,16 @@ public sealed class WorkflowPreparationService(
             evaluation.BlockingGate,
             evaluation.Command,
             evaluation.CommandName,
-            evaluation.Outcome,
-            evaluation.Reason,
+            outcome,
+            reason,
             evaluation.Fingerprint,
             evaluation.IsWaitingForHuman,
             evaluation.HasDuplicateDomainEvidence,
-            [],
+            createdArtifactIds,
             evaluation.DuplicateEvidence,
             evaluation.Diagnostics.Reasoning
                 .Concat(evaluation.Diagnostics.RefusalReasons)
+                .Concat(createdArtifactIds.Select(artifactId => $"Created artifact: {artifactId}."))
                 .Concat(evaluation.Diagnostics.DuplicateEvidence)
                 .Concat(evaluation.Diagnostics.Conflicts)
                 .ToArray());
@@ -156,8 +165,37 @@ public sealed class WorkflowPreparationService(
         return repository ?? throw new KeyNotFoundException($"Repository '{repositoryId}' was not found.");
     }
 
+    private async Task<IReadOnlyList<string>> RunAllowedPreparationCommandAsync(WorkflowPreparationEvaluation evaluation)
+    {
+        return evaluation.Command switch
+        {
+            WorkflowPreparationCommand.GenerateDecisionReviewArtifacts => await RunDecisionReviewArtifactPreparationAsync(evaluation.RepositoryId),
+            _ => []
+        };
+    }
+
+    private async Task<IReadOnlyList<string>> RunDecisionReviewArtifactPreparationAsync(Guid repositoryId)
+    {
+        if (decisionDiscoveryService is null)
+        {
+            return [];
+        }
+
+        DecisionDiscoveryResult result = await decisionDiscoveryService.DiscoverAsync(repositoryId);
+        return result.Candidates
+            .Select(candidate => $"decision-candidate:{candidate.Id}")
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+    }
+
     private static WorkflowGateType ResolveBlockingGate(WorkflowInstance projection, WorkflowTimeline? latestTimeline)
     {
+        if (latestTimeline is not null &&
+            latestTimeline.CurrentStage != projection.CurrentStage)
+        {
+            return latestTimeline.BlockingGate;
+        }
+
         if (projection.BlockingGate is not WorkflowGateType.None)
         {
             return projection.BlockingGate;
@@ -315,7 +353,7 @@ public sealed class WorkflowPreparationService(
 
         if (canPrepare)
         {
-            return $"Preparation may request {CommandName(command)} for workflow stage {stage}; domain invocation is deferred.";
+            return $"Preparation may request {CommandName(command)} for workflow stage {stage}.";
         }
 
         return "Preparation refused by workflow evaluation.";
@@ -358,7 +396,7 @@ public sealed class WorkflowPreparationService(
 
         if (canPrepare)
         {
-            reasoning.Add("Preparation evaluation is ready, but this milestone slice does not invoke domain commands.");
+            reasoning.Add("Preparation evaluation is ready for an allowed domain command.");
         }
 
         return reasoning;
