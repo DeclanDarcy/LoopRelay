@@ -849,6 +849,127 @@ public sealed class WorkflowProjectionServiceTests
         Assert.Equal(continuationEvent.InputFingerprint, persisted.InputFingerprint);
     }
 
+    [Theory]
+    [MemberData(nameof(AuthorityGatePreparationCases))]
+    public async Task PreparationEvaluationRefusesEveryOpenAuthorityGate(
+        WorkflowGateType expectedGate,
+        string scenario)
+    {
+        TestFixture fixture = TestFixture.Create();
+        ArrangeAuthorityGateScenario(fixture, scenario);
+
+        WorkflowPreparationEvaluation evaluation =
+            await fixture.CreatePreparationService().EvaluatePreparationAsync(fixture.Repository.Id);
+
+        Assert.False(evaluation.CanPrepare);
+        Assert.True(evaluation.IsWaitingForHuman);
+        Assert.Equal(expectedGate, evaluation.BlockingGate);
+        Assert.Equal("Refused", evaluation.Outcome);
+        Assert.Contains(expectedGate.ToString(), evaluation.Reason, StringComparison.Ordinal);
+        Assert.Contains(evaluation.Diagnostics.RefusalReasons, reason => reason.Contains(expectedGate.ToString(), StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PreparationEvaluationIsDeterministicForIdenticalWorkflowState()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingCommit;
+        fixture.Session = CompletedAcceptedSession(RepositoryExecutionState.AwaitingCommit);
+
+        WorkflowPreparationEvaluation first =
+            await fixture.CreatePreparationService().EvaluatePreparationAsync(fixture.Repository.Id);
+        WorkflowPreparationEvaluation second =
+            await fixture.CreatePreparationService().EvaluatePreparationAsync(fixture.Repository.Id);
+
+        Assert.Equal(first.Fingerprint, second.Fingerprint);
+        Assert.Equal(first.CanPrepare, second.CanPrepare);
+        Assert.Equal(first.Stage, second.Stage);
+        Assert.Equal(first.Command, second.Command);
+        Assert.Equal(first.Reason, second.Reason);
+    }
+
+    [Fact]
+    public async Task PreparationRunDoesNotDuplicateIdenticalFingerprint()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingPush;
+        fixture.Session = AwaitingPushCommittedSession();
+        var store = new MemoryArtifactStore();
+        var workflowRepository = new FileSystemWorkflowRepository(store);
+        var service = new WorkflowPreparationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            workflowRepository);
+
+        WorkflowPreparationEvent first = await service.RunPreparationAsync(fixture.Repository.Id);
+        WorkflowPreparationEvent second = await service.RunPreparationAsync(fixture.Repository.Id);
+        IReadOnlyList<WorkflowPreparationEvent> history = await workflowRepository.ListPreparationEventsAsync(fixture.Repository);
+
+        Assert.Equal(first.EventId, second.EventId);
+        Assert.Equal(first.InputFingerprint, second.InputFingerprint);
+        Assert.Single(history);
+        Assert.Equal(WorkflowGateType.PushApproval, first.BlockingGate);
+        Assert.Empty(first.CreatedArtifactIds);
+    }
+
+    [Fact]
+    public async Task PreparationAfterRestartDoesNotDuplicateIdenticalFingerprint()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingCommit;
+        fixture.Session = CompletedAcceptedSession(RepositoryExecutionState.AwaitingCommit);
+        var workflowRepository = new FileSystemWorkflowRepository(new MemoryArtifactStore());
+        var firstService = new WorkflowPreparationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            workflowRepository);
+        WorkflowPreparationEvent first = await firstService.RunPreparationAsync(fixture.Repository.Id);
+        var restartedService = new WorkflowPreparationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            workflowRepository);
+
+        WorkflowPreparationEvent restarted = await restartedService.RunPreparationAsync(fixture.Repository.Id);
+        IReadOnlyList<WorkflowPreparationEvent> history = await workflowRepository.ListPreparationEventsAsync(fixture.Repository);
+
+        Assert.Equal(first.EventId, restarted.EventId);
+        Assert.Equal(first.InputFingerprint, restarted.InputFingerprint);
+        Assert.Single(history);
+        Assert.Empty(restarted.CreatedArtifactIds);
+    }
+
+    [Fact]
+    public async Task WorkflowPreparationEndpointsReturnEvaluationRunAndHistory()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingCommit;
+        fixture.Session = CompletedAcceptedSession(RepositoryExecutionState.AwaitingCommit);
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services => fixture.ReplaceServices(services));
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+
+        using var client = new HttpClient();
+        HttpResponseMessage evaluationResponse = await client.GetAsync(app.Urls.Single() + $"/api/repositories/{fixture.Repository.Id}/workflow/preparation/evaluation");
+        WorkflowPreparationEvaluation? evaluation = await evaluationResponse.Content.ReadFromJsonAsync<WorkflowPreparationEvaluation>(JsonOptions);
+        HttpResponseMessage runResponse = await client.PostAsync(app.Urls.Single() + $"/api/repositories/{fixture.Repository.Id}/workflow/preparation/run", null);
+        WorkflowPreparationEvent? preparationEvent = await runResponse.Content.ReadFromJsonAsync<WorkflowPreparationEvent>(JsonOptions);
+        HttpResponseMessage historyResponse = await client.GetAsync(app.Urls.Single() + $"/api/repositories/{fixture.Repository.Id}/workflow/preparation/history");
+        WorkflowPreparationEvent[]? history = await historyResponse.Content.ReadFromJsonAsync<WorkflowPreparationEvent[]>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, evaluationResponse.StatusCode);
+        Assert.NotNull(evaluation);
+        Assert.False(evaluation.CanPrepare);
+        Assert.Equal(WorkflowGateType.CommitApproval, evaluation.BlockingGate);
+        Assert.Equal(HttpStatusCode.OK, runResponse.StatusCode);
+        Assert.NotNull(preparationEvent);
+        Assert.Equal(evaluation.Fingerprint, preparationEvent.InputFingerprint);
+        Assert.Equal(HttpStatusCode.OK, historyResponse.StatusCode);
+        WorkflowPreparationEvent persisted = Assert.Single(history ?? []);
+        Assert.Equal(preparationEvent.EventId, persisted.EventId);
+    }
+
     [Fact]
     public async Task ContinuationRunDoesNotDuplicateIdenticalFingerprint()
     {
@@ -1593,6 +1714,41 @@ public sealed class WorkflowProjectionServiceTests
     }
 
     [Fact]
+    public async Task WorkflowRepositorySavesLoadsAndListsPreparationEvents()
+    {
+        TestFixture fixture = TestFixture.Create();
+        var store = new MemoryArtifactStore();
+        var repository = new FileSystemWorkflowRepository(store);
+        var preparationEvent = new WorkflowPreparationEvent(
+            fixture.Repository.Id,
+            "preparation.20260623T110000.0000000Z",
+            DateTimeOffset.Parse("2026-06-23T11:00:00Z"),
+            "endpoint",
+            WorkflowStage.Commit,
+            WorkflowProgressState.AwaitingGate,
+            WorkflowGateType.CommitApproval,
+            WorkflowPreparationCommand.PrepareExecutionCommit,
+            "execution_prepare_commit",
+            "Refused",
+            "Preparation refused because CommitApproval is awaiting human action.",
+            new WorkflowPreparationFingerprint("fingerprint"),
+            true,
+            [],
+            ["diagnostic"]);
+
+        await repository.SavePreparationEventAsync(fixture.Repository, preparationEvent);
+
+        WorkflowPreparationEvent? loaded = await repository.LoadPreparationEventAsync(fixture.Repository, preparationEvent.EventId);
+        IReadOnlyList<WorkflowPreparationEvent> listed = await repository.ListPreparationEventsAsync(fixture.Repository);
+
+        Assert.NotNull(loaded);
+        Assert.Equal(preparationEvent.InputFingerprint, loaded.InputFingerprint);
+        WorkflowPreparationEvent persisted = Assert.Single(listed);
+        Assert.Equal(preparationEvent.EventId, persisted.EventId);
+        Assert.True(await store.ExistsAsync(WorkflowArtifactPaths.Resolve(fixture.Repository, WorkflowArtifactPaths.PreparationMarkdown(preparationEvent.EventId))));
+    }
+
+    [Fact]
     public async Task RecoveryRebuildsMissingWorkflowArtifactsFromDomainProjection()
     {
         TestFixture fixture = TestFixture.Create();
@@ -1895,6 +2051,69 @@ public sealed class WorkflowProjectionServiceTests
         PushedCommitSha = "abc123"
     };
 
+    public static IEnumerable<object[]> AuthorityGatePreparationCases()
+    {
+        yield return [WorkflowGateType.WorkSelection, "work-selection"];
+        yield return [WorkflowGateType.ExecutionAcceptance, "execution-acceptance"];
+        yield return [WorkflowGateType.DecisionResolution, "decision-resolution"];
+        yield return [WorkflowGateType.OperationalContextReview, "operational-context-review"];
+        yield return [WorkflowGateType.OperationalContextPromotion, "operational-context-promotion"];
+        yield return [WorkflowGateType.CommitApproval, "commit-approval"];
+        yield return [WorkflowGateType.PushApproval, "push-approval"];
+    }
+
+    private static void ArrangeAuthorityGateScenario(TestFixture fixture, string scenario)
+    {
+        switch (scenario)
+        {
+            case "work-selection":
+                return;
+            case "execution-acceptance":
+                fixture.ExecutionState = RepositoryExecutionState.AwaitingAcceptance;
+                fixture.Session = CompletedAcceptedSession(RepositoryExecutionState.AwaitingAcceptance);
+                return;
+            case "decision-resolution":
+                fixture.ExecutionState = RepositoryExecutionState.Accepted;
+                fixture.Session = CompletedAcceptedSession();
+                fixture.Decisions.Add(CreateDecision(fixture.Repository.Id, "DEC-0001", DecisionState.Open));
+                return;
+            case "operational-context-review":
+                fixture.ExecutionState = RepositoryExecutionState.Accepted;
+                fixture.Session = CompletedAcceptedSession();
+                fixture.Decisions.Add(CreateResolvedDecision(fixture.Repository.Id, "DEC-0001"));
+                fixture.Proposals.Add(CreateOperationalContextProposal(
+                    fixture.Repository.Id,
+                    "ctx-0001",
+                    OperationalContextProposalStatus.Pending,
+                    OperationalContextReviewState.PendingReview,
+                    null,
+                    null));
+                return;
+            case "operational-context-promotion":
+                fixture.ExecutionState = RepositoryExecutionState.Accepted;
+                fixture.Session = CompletedAcceptedSession();
+                fixture.Decisions.Add(CreateResolvedDecision(fixture.Repository.Id, "DEC-0001"));
+                fixture.Proposals.Add(CreateOperationalContextProposal(
+                    fixture.Repository.Id,
+                    "ctx-0001",
+                    OperationalContextProposalStatus.Accepted,
+                    OperationalContextReviewState.Accepted,
+                    DateTimeOffset.Parse("2026-06-23T11:10:00Z"),
+                    null));
+                return;
+            case "commit-approval":
+                fixture.ExecutionState = RepositoryExecutionState.AwaitingCommit;
+                fixture.Session = CompletedAcceptedSession(RepositoryExecutionState.AwaitingCommit);
+                return;
+            case "push-approval":
+                fixture.ExecutionState = RepositoryExecutionState.AwaitingPush;
+                fixture.Session = AwaitingPushCommittedSession();
+                return;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(scenario), scenario, "Unknown authority gate scenario.");
+        }
+    }
+
     private static Decision CreateDecision(Guid repositoryId, string id, DecisionState state) =>
         new(
             new DecisionId(id),
@@ -2165,6 +2384,12 @@ public sealed class WorkflowProjectionServiceTests
                 new WorkflowStateMachineService(),
                 new FileSystemWorkflowRepository(new MemoryArtifactStore()));
 
+        public WorkflowPreparationService CreatePreparationService() =>
+            new(
+                new RepositoryServiceStub(Repository),
+                CreateService(),
+                new FileSystemWorkflowRepository(new MemoryArtifactStore()));
+
         public WorkflowRecoveryService CreateRecoveryService(IWorkflowRepository workflowRepository) =>
             new(new RepositoryServiceStub(Repository), CreateService(), workflowRepository);
 
@@ -2185,6 +2410,7 @@ public sealed class WorkflowProjectionServiceTests
             services.RemoveAll<IWorkflowProjectionService>();
             services.RemoveAll<IWorkflowGateCatalogService>();
             services.RemoveAll<IWorkflowContinuationService>();
+            services.RemoveAll<IWorkflowPreparationService>();
             services.RemoveAll<IWorkflowRepository>();
             services.RemoveAll<IWorkflowRecoveryService>();
             services.RemoveAll<IHostedService>();
@@ -2205,6 +2431,7 @@ public sealed class WorkflowProjectionServiceTests
             services.AddSingleton<IWorkflowProjectionService, WorkflowProjectionService>();
             services.AddSingleton<IWorkflowGateCatalogService, WorkflowGateCatalogService>();
             services.AddSingleton<IWorkflowContinuationService, WorkflowContinuationService>();
+            services.AddSingleton<IWorkflowPreparationService, WorkflowPreparationService>();
             services.AddSingleton<IWorkflowRecoveryService, WorkflowRecoveryService>();
         }
     }

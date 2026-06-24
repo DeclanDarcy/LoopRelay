@@ -5,16 +5,16 @@ Objective: automate mechanical progression between non-authority stages, introdu
 Deliver:
 
 - [x] `IWorkflowContinuationService`.
-- [ ] `IWorkflowPreparationService`.
+- [x] `IWorkflowPreparationService`.
 - [x] `WorkflowContinuationEvaluation`.
-- [ ] `WorkflowPreparationEvaluation`.
+- [x] `WorkflowPreparationEvaluation`.
 - [x] continuation rules for execution complete, handoff accepted, decision resolved, context promoted/rejected/not required, commit executed, push executed, no changes, and completed workflow.
 - [ ] preparation rules for decision discovery/generation, operational-context proposal generation/linkage, and commit preparation.
-- [ ] gate halting for work selection, execution acceptance, decision resolution, operational context review, operational context promotion, commit approval, and push approval.
+- [x] gate halting for work selection, execution acceptance, decision resolution, operational context review, operational context promotion, commit approval, and push approval.
 - [x] `WorkflowContinuationDiagnostics`.
-- [ ] `WorkflowPreparationDiagnostics`.
+- [x] `WorkflowPreparationDiagnostics`.
 - [x] `WorkflowContinuationEvent`.
-- [ ] `WorkflowPreparationEvent`.
+- [x] `WorkflowPreparationEvent`.
 - [x] recovery integration that reevaluates continuation after restart without duplicate progression.
 - [ ] `WorkflowContinuationHostedService`.
 - [ ] `WorkflowInfluenceTrace`.
@@ -52,6 +52,22 @@ Slice progress:
 - Added recovery/idempotency coverage for completed restart reconstruction,
   domain-over-stale-timeline recovery, no-change completion recovery, and
   restart continuation re-evaluation without duplicate completed stop events.
+- Added preparation evaluation and event persistence without invoking domain
+  commands.
+- Added preparation endpoints:
+  `GET /api/repositories/{repositoryId}/workflow/preparation/evaluation`,
+  `POST /api/repositories/{repositoryId}/workflow/preparation/run`, and
+  `GET /api/repositories/{repositoryId}/workflow/preparation/history`.
+- Added preparation event JSON and markdown evidence under
+  `.agents/workflow/preparation`.
+- Preparation events capture trigger, input fingerprint, stage, blocking gate,
+  candidate command, decision, reason, created artifact identifiers, and
+  diagnostics.
+- Re-running preparation with an identical evaluation fingerprint returns the
+  existing event instead of duplicating history.
+- Preparation currently refuses at every open authority gate and reports the
+  future command name only when a stage would be eligible; actual Decisions,
+  Continuity, and Execution command invocation remains deferred.
 - Continuation evaluation consumes the aggregate workflow projection, latest
   persisted workflow timeline evidence, and state-machine, gate, and completion
   evidence.
@@ -76,7 +92,7 @@ Preparation rules:
 - [ ] accepted handoff may trigger decision discovery and reviewable proposal generation through existing Decisions commands, but this does not resolve the decision gate and does not itself move the stage beyond decision.
 - [ ] resolved decision may trigger operational-context proposal generation or linkage through existing Continuity commands, but this does not review or promote context and does not itself move the stage beyond operational context.
 - [ ] context complete may trigger commit preparation through the existing Execution command, but this does not approve or execute commit and does not itself move the stage beyond commit.
-- [ ] preparation must record command name, source stage, input fingerprint, created artifact identifiers, skipped reason, and diagnostics.
+- [x] preparation must record command name, source stage, input fingerprint, created artifact identifiers, skipped reason, and diagnostics.
 - [ ] preparation must skip when equivalent reviewable artifacts already exist for the same fingerprint.
 
 Gate halting:
@@ -85,45 +101,45 @@ Gate halting:
 - [x] Work selection gate must never be auto-satisfied.
 - [x] Commit and push gates must never be crossed by continuation.
 - [x] Decision resolution and context promotion must never be crossed by continuation.
-- [ ] Preparation may not run when it would create artifacts on the far side of an unsatisfied gate.
+- [x] Preparation may not run when it would create artifacts on the far side of an unsatisfied gate.
 
 Idempotency rules:
 
 - [x] continuation events carry fingerprints.
-- [ ] preparation events carry fingerprints.
+- [x] preparation events carry fingerprints.
 - [ ] before invoking an allowed preparation command, preparation checks whether equivalent domain evidence already exists.
 - [x] identical endpoint-triggered continuation reevaluation does not duplicate continuation events.
 - [x] restart reevaluation must not duplicate continuation events or timeline progression.
 - [ ] restart reevaluation must not duplicate proposals, commit preparations, or preparation events.
-- [ ] restart reevaluation must not duplicate preparation events or reviewable artifacts.
+- [x] restart reevaluation must not duplicate preparation events or reviewable artifacts.
 
 Tests:
 
 - [x] eligible workflow advances mechanically.
 - [ ] ineligible workflow does not advance.
 - [ ] eligible preparation creates reviewable artifacts only through existing domain commands.
-- [ ] ineligible preparation does not create artifacts.
+- [x] ineligible preparation does not create artifacts.
 - [x] every open gate stops progression.
-- [ ] open gates block preparation when the requested artifact would bypass authority.
+- [x] open gates block preparation when the requested artifact would bypass authority.
 - [x] restart does not duplicate progression.
-- [ ] restart does not duplicate preparation.
+- [x] restart does not duplicate preparation.
 - [x] identical workflow state produces identical continuation outcome.
 - [x] identical continuation run input does not duplicate continuation history.
-- [ ] identical preparation inputs produce identical preparation outcome.
+- [x] identical preparation inputs produce identical preparation outcome.
 - [x] continuation never selects work, resolves decisions, promotes context, commits, pushes, or accepts handoffs.
-- [ ] preparation never creates parallel commands, satisfies gates, moves workflow stage, or performs authority actions.
+- [x] preparation never creates parallel commands, satisfies gates, moves workflow stage, or performs authority actions.
 - [x] every continuation decision explains why it advanced or stopped.
-- [ ] every preparation decision explains why it created, skipped, or refused an artifact.
+- [x] every preparation decision explains why it created, skipped, or refused an artifact.
 
 Exit criteria:
 
 - [x] continuation service exists.
-- [ ] preparation service exists.
+- [x] preparation service exists.
 - [ ] continuation rules exist.
 - [ ] preparation rules exist.
-- [ ] gate halting works.
+- [x] gate halting works.
 - [x] continuation history exists.
-- [ ] preparation history exists.
+- [x] preparation history exists.
 - [ ] hosted runner exists.
 - [ ] recovery integration works.
 - [ ] health assessment exists.

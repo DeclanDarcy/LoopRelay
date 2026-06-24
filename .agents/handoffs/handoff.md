@@ -2,40 +2,52 @@
 
 ## New State
 
-- Continued Milestone 9 recovery/idempotency hardening.
-- Added backend tests proving recovery and restart behavior for completed
-  workflows:
-  - recovery rebuilds `Completed` from pushed domain evidence without relying
-    on a persisted workflow stage.
-  - recovery lets the current domain projection win over a stale persisted
-    workflow timeline.
-  - no-change completion is reconstructed after recovery and continuation
-    stops at the `WorkSelection` gate.
-  - restarted continuation re-evaluation returns the existing completed stop
-    event instead of duplicating continuation history.
-- Updated `.agents/milestones/m9-continuation.md` to mark continuation
-  recovery/idempotency coverage complete for timeline progression and
-  continuation events.
+- Continued Milestone 9 preparation evaluation work.
+- Added preparation model/service surface:
+  - `IWorkflowPreparationService`
+  - `WorkflowPreparationEvaluation`
+  - `WorkflowPreparationDiagnostics`
+  - `WorkflowPreparationEvent`
+  - `WorkflowPreparationCommand`
+  - `WorkflowPreparationFingerprint`
+- Added `WorkflowPreparationService` as evaluation-first and evidence-only:
+  - consumes aggregate workflow projection and latest timeline evidence.
+  - refuses preparation at any open authority gate.
+  - reports candidate future command names without invoking domain commands.
+  - persists preparation events with deterministic fingerprints.
+  - deduplicates identical preparation runs, including after service restart.
+- Added preparation persistence under `.agents/workflow/preparation` with paired
+  JSON and Markdown artifacts.
+- Added backend endpoints:
+  - `GET /api/repositories/{repositoryId}/workflow/preparation/evaluation`
+  - `POST /api/repositories/{repositoryId}/workflow/preparation/run`
+  - `GET /api/repositories/{repositoryId}/workflow/preparation/history`
+- Updated Milestone 9 checklist for completed preparation evaluation,
+  gate-refusal, preparation history, and preparation idempotency coverage.
 - Rotated previous `.agents/handoffs/handoff.md` to
-  `.agents/handoffs/handoff.0014.md`.
+  `.agents/handoffs/handoff.0015.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter WorkflowProjectionServiceTests` passed: 62 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter WorkflowProjectionServiceTests` passed: 74 tests.
 - `dotnet build CommandCenter.slnx` passed with 0 warnings and 0 errors.
 
 ## Notes
 
-- No workflow production code changed in this slice.
-- No preparation service was added.
-- No hosted continuation service was added.
-- No domain commands are invoked.
-- Preparation idempotency remains unimplemented and is still separate from
-  continuation idempotency.
+- No Decisions, Continuity, or Execution domain command invocation was added.
+- Preparation does not create decision proposals, operational-context proposals,
+  or commit preparations yet.
+- Preparation does not move workflow stage, satisfy gates, accept handoffs,
+  resolve decisions, promote context, commit, or push.
+- Created artifact IDs are currently empty because this slice only records
+  evaluation/refusal evidence.
 
 ## Next Slice
 
-- Start the preparation portion of Milestone 9 by adding
-  `IWorkflowPreparationService`, `WorkflowPreparationEvaluation`, diagnostics,
-  events, persistence, and tests for refusing preparation across open authority
-  gates before any domain command invocation is wired in.
+- Add preparation duplicate-domain-evidence detection before any command
+  invocation:
+  - existing decision candidates/proposals for the same fingerprint.
+  - existing operational-context proposals/linkage for the same fingerprint.
+  - existing commit-preparation evidence for the same fingerprint.
+- Keep command invocation deferred until the duplicate detection and refusal
+  matrix are reviewed.

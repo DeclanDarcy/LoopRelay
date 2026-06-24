@@ -24,6 +24,9 @@ public static class WorkflowEndpoints
         app.MapGetWorkflowContinuationEvaluation();
         app.MapPostWorkflowContinuationRun();
         app.MapGetWorkflowContinuationHistory();
+        app.MapGetWorkflowPreparationEvaluation();
+        app.MapPostWorkflowPreparationRun();
+        app.MapGetWorkflowPreparationHistory();
         return app;
     }
 
@@ -361,6 +364,63 @@ public static class WorkflowEndpoints
             try
             {
                 return Results.Ok(await workflowContinuationService.GetContinuationHistoryAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGetWorkflowPreparationEvaluation(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/workflow/preparation/evaluation", async (
+            Guid repositoryId,
+            IWorkflowPreparationService workflowPreparationService) =>
+        {
+            try
+            {
+                return Results.Ok(await workflowPreparationService.EvaluatePreparationAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+
+    private static void MapPostWorkflowPreparationRun(this IEndpointRouteBuilder app) =>
+        app.MapPost("/api/repositories/{repositoryId:guid}/workflow/preparation/run", async (
+            Guid repositoryId,
+            IWorkflowPreparationService workflowPreparationService) =>
+        {
+            try
+            {
+                return Results.Ok(await workflowPreparationService.RunPreparationAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGetWorkflowPreparationHistory(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/workflow/preparation/history", async (
+            Guid repositoryId,
+            IWorkflowPreparationService workflowPreparationService) =>
+        {
+            try
+            {
+                return Results.Ok(await workflowPreparationService.GetPreparationHistoryAsync(repositoryId));
             }
             catch (KeyNotFoundException exception)
             {

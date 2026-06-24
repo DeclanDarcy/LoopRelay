@@ -9,6 +9,7 @@ public static class WorkflowArtifactPaths
     public const string WorkflowRoot = ".agents/workflow";
     public const string TimelinesRoot = ".agents/workflow/timelines";
     public const string ContinuationRoot = ".agents/workflow/continuation";
+    public const string PreparationRoot = ".agents/workflow/preparation";
     public const string ReportsRoot = ".agents/workflow/reports";
 
     public static string TimelineJson(string timelineId) =>
@@ -22,6 +23,12 @@ public static class WorkflowArtifactPaths
 
     public static string ContinuationMarkdown(string eventId) =>
         ArtifactPath.CombineRelative(ContinuationRoot, $"{ValidateContinuationEventId(eventId)}.md");
+
+    public static string PreparationJson(string eventId) =>
+        ArtifactPath.CombineRelative(PreparationRoot, $"{ValidatePreparationEventId(eventId)}.json");
+
+    public static string PreparationMarkdown(string eventId) =>
+        ArtifactPath.CombineRelative(PreparationRoot, $"{ValidatePreparationEventId(eventId)}.md");
 
     public static string ReportJson(string reportId) =>
         ArtifactPath.CombineRelative(ReportsRoot, $"{ValidateReportId(reportId)}.json");
@@ -37,6 +44,9 @@ public static class WorkflowArtifactPaths
 
     public static string ContinuationEventId(DateTimeOffset occurredAt) =>
         $"continuation.{occurredAt.UtcDateTime:yyyyMMddTHHmmss.fffffffZ}";
+
+    public static string PreparationEventId(DateTimeOffset occurredAt) =>
+        $"preparation.{occurredAt.UtcDateTime:yyyyMMddTHHmmss.fffffffZ}";
 
     public static string ValidateTimelineId(string timelineId)
     {
@@ -68,6 +78,18 @@ public static class WorkflowArtifactPaths
             eventId.Any(character => !(char.IsLetterOrDigit(character) || character is '.' or '-' or '_')))
         {
             throw new ArgumentException("Invalid workflow continuation event id.", nameof(eventId));
+        }
+
+        return eventId;
+    }
+
+    public static string ValidatePreparationEventId(string eventId)
+    {
+        if (string.IsNullOrWhiteSpace(eventId) ||
+            !eventId.StartsWith("preparation.", StringComparison.Ordinal) ||
+            eventId.Any(character => !(char.IsLetterOrDigit(character) || character is '.' or '-' or '_')))
+        {
+            throw new ArgumentException("Invalid workflow preparation event id.", nameof(eventId));
         }
 
         return eventId;

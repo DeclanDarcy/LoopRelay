@@ -155,6 +155,89 @@ public sealed class FileSystemWorkflowRepository(IArtifactStore artifactStore) :
             .ToArray();
     }
 
+    public async Task<WorkflowPreparationEvent> SavePreparationEventAsync(
+        Repository repository,
+        WorkflowPreparationEvent preparationEvent)
+    {
+        if (preparationEvent.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException("Workflow preparation event belongs to a different repository.");
+        }
+
+        WorkflowArtifactPaths.ValidatePreparationEventId(preparationEvent.EventId);
+        var document = new WorkflowArtifactDocument<WorkflowPreparationEvent>(
+            WorkflowArtifactPaths.SchemaVersion,
+            repository.Id,
+            preparationEvent.OccurredAt,
+            preparationEvent);
+
+        await artifactStore.WriteAsync(
+            WorkflowArtifactPaths.Resolve(repository, WorkflowArtifactPaths.PreparationJson(preparationEvent.EventId)),
+            JsonSerializer.Serialize(document, WorkflowJson.Options));
+        await artifactStore.WriteAsync(
+            WorkflowArtifactPaths.Resolve(repository, WorkflowArtifactPaths.PreparationMarkdown(preparationEvent.EventId)),
+            RenderPreparationMarkdown(preparationEvent));
+        return preparationEvent;
+    }
+
+    public async Task<WorkflowPreparationEvent?> LoadPreparationEventAsync(Repository repository, string eventId)
+    {
+        WorkflowArtifactPaths.ValidatePreparationEventId(eventId);
+        string? json = await artifactStore.ReadAsync(
+            WorkflowArtifactPaths.Resolve(repository, WorkflowArtifactPaths.PreparationJson(eventId)));
+        if (json is null)
+        {
+            return null;
+        }
+
+        WorkflowArtifactDocument<WorkflowPreparationEvent>? document =
+            JsonSerializer.Deserialize<WorkflowArtifactDocument<WorkflowPreparationEvent>>(json, WorkflowJson.Options);
+        if (document is null)
+        {
+            return null;
+        }
+
+        if (!string.Equals(document.SchemaVersion, WorkflowArtifactPaths.SchemaVersion, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"Unsupported workflow artifact schema version '{document.SchemaVersion}'.");
+        }
+
+        if (document.RepositoryId != repository.Id || document.Payload.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException("Workflow artifact belongs to a different repository.");
+        }
+
+        return document.Payload;
+    }
+
+    public async Task<IReadOnlyList<WorkflowPreparationEvent>> ListPreparationEventsAsync(Repository repository)
+    {
+        string root = WorkflowArtifactPaths.Resolve(repository, WorkflowArtifactPaths.PreparationRoot);
+        IReadOnlyList<string> files = await artifactStore.ListAsync(root, "*.json");
+        var events = new List<WorkflowPreparationEvent>();
+
+        foreach (string file in files
+            .Where(file => Path.GetFileName(file).StartsWith("preparation.", StringComparison.Ordinal))
+            .OrderBy(file => file, StringComparer.Ordinal))
+        {
+            string? eventId = Path.GetFileNameWithoutExtension(file);
+            if (string.IsNullOrWhiteSpace(eventId))
+            {
+                continue;
+            }
+
+            WorkflowPreparationEvent? preparationEvent = await LoadPreparationEventAsync(repository, eventId);
+            if (preparationEvent is not null)
+            {
+                events.Add(preparationEvent);
+            }
+        }
+
+        return events
+            .OrderBy(preparationEvent => preparationEvent.OccurredAt)
+            .ToArray();
+    }
+
     public async Task SaveReportAsync(Repository repository, string reportId, string jsonContent, string markdownContent)
     {
         WorkflowArtifactPaths.ValidateReportId(reportId);
@@ -258,6 +341,57 @@ public sealed class FileSystemWorkflowRepository(IArtifactStore artifactStore) :
         }
 
         foreach (string diagnostic in continuationEvent.Diagnostics)
+        {
+            builder.AppendLine($"- {diagnostic}");
+        }
+
+        return builder.ToString();
+    }
+
+    private static string RenderPreparationMarkdown(WorkflowPreparationEvent preparationEvent)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("# Workflow Preparation Event");
+        builder.AppendLine();
+        builder.AppendLine($"Repository: {preparationEvent.RepositoryId}");
+        builder.AppendLine($"Event Id: {preparationEvent.EventId}");
+        builder.AppendLine($"Occurred At: {preparationEvent.OccurredAt:O}");
+        builder.AppendLine($"Trigger: {preparationEvent.Trigger}");
+        builder.AppendLine($"Input Fingerprint: {preparationEvent.InputFingerprint}");
+        builder.AppendLine($"Stage: {preparationEvent.Stage}");
+        builder.AppendLine($"Progress State: {preparationEvent.ProgressState}");
+        builder.AppendLine($"Blocking Gate: {preparationEvent.BlockingGate}");
+        builder.AppendLine($"Command: {preparationEvent.Command}");
+        builder.AppendLine($"Command Name: {preparationEvent.CommandName}");
+        builder.AppendLine($"Decision: {preparationEvent.Decision}");
+        builder.AppendLine($"Reason: {preparationEvent.Reason}");
+        builder.AppendLine($"Waiting For Human: {preparationEvent.IsWaitingForHuman}");
+        builder.AppendLine();
+        builder.AppendLine("## Created Artifacts");
+        if (preparationEvent.CreatedArtifactIds.Count == 0)
+        {
+            builder.AppendLine();
+            builder.AppendLine("- None");
+        }
+        else
+        {
+            foreach (string artifactId in preparationEvent.CreatedArtifactIds)
+            {
+                builder.AppendLine($"- {artifactId}");
+            }
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("## Diagnostics");
+
+        if (preparationEvent.Diagnostics.Count == 0)
+        {
+            builder.AppendLine();
+            builder.AppendLine("- None");
+            return builder.ToString();
+        }
+
+        foreach (string diagnostic in preparationEvent.Diagnostics)
         {
             builder.AppendLine($"- {diagnostic}");
         }

@@ -19,5 +19,11 @@ public interface IWorkflowRepository
 
     Task<IReadOnlyList<WorkflowContinuationEvent>> ListContinuationEventsAsync(Repository repository);
 
+    Task<WorkflowPreparationEvent> SavePreparationEventAsync(Repository repository, WorkflowPreparationEvent preparationEvent);
+
+    Task<WorkflowPreparationEvent?> LoadPreparationEventAsync(Repository repository, string eventId);
+
+    Task<IReadOnlyList<WorkflowPreparationEvent>> ListPreparationEventsAsync(Repository repository);
+
     Task SaveReportAsync(Repository repository, string reportId, string jsonContent, string markdownContent);
 }
