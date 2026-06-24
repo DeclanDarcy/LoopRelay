@@ -4,6 +4,9 @@ using CommandCenter.Continuity;
 using CommandCenter.Continuity.Models;
 using CommandCenter.Continuity.Primitives;
 using CommandCenter.Continuity.Services;
+using CommandCenter.DecisionSessions.Abstractions;
+using CommandCenter.DecisionSessions.Models;
+using CommandCenter.DecisionSessions.Primitives;
 using CommandCenter.Decisions.Abstractions;
 using CommandCenter.Decisions.Models;
 using CommandCenter.Decisions.Primitives;
@@ -329,6 +332,63 @@ public sealed class RepositoryProjectionServiceTests
     }
 
     [Fact]
+    public async Task DashboardAndWorkspaceExposeDecisionSessionSummaryWhenAvailable()
+    {
+        string repositoryPath = CreateGitRepositoryDirectory();
+        RepositoryService repositoryService = CreateRepositoryService();
+        Repository repository = await repositoryService.RegisterAsync(repositoryPath);
+        var observability = new StaticDecisionSessionObservabilityService();
+        RepositoryProjectionService projectionService = CreateProjectionService(
+            repositoryService,
+            decisionSessionObservabilityService: observability);
+
+        IReadOnlyList<RepositoryDashboardProjection> dashboard = await projectionService.GetDashboardAsync();
+        RepositoryWorkspaceProjection workspace = await projectionService.GetWorkspaceAsync(repository.Id);
+
+        RepositoryDecisionSessionSummary dashboardSummary = Assert.Single(dashboard).DecisionSessionSummary;
+        Assert.Equal(observability.SessionId.ToString(), dashboardSummary.DecisionSessionId);
+        Assert.Equal("Active", dashboardSummary.State);
+        Assert.Equal("Transfer", dashboardSummary.LifecycleDecision);
+        Assert.Equal("Eligible", dashboardSummary.TransferEligibilityStatus);
+        Assert.Equal(250_000, dashboardSummary.EstimatedTokenCount);
+        Assert.Equal(TimeSpan.FromMinutes(12), dashboardSummary.EstimatedCacheTtl);
+        Assert.Equal(0.42m, dashboardSummary.CacheMissRisk);
+        Assert.Equal(0.67m, dashboardSummary.CoherenceScore);
+        Assert.Equal(0.81m, dashboardSummary.TransferPressure);
+        RepositoryDecisionSessionHealthDimension health = Assert.Single(dashboardSummary.HealthDimensions);
+        Assert.Equal("Lifecycle", health.Name);
+        Assert.Equal("Warning", health.Status);
+        Assert.Contains("Transfer pressure is elevated.", health.Findings);
+        RepositoryDecisionSessionTransferSummary transfer = Assert.Single(dashboardSummary.RecentTransferLineage);
+        Assert.Equal("transfer-1", transfer.TransferId);
+        Assert.Equal(observability.SessionId.ToString(), transfer.SourceSessionId);
+        Assert.Equal("artifact-1", transfer.ContinuityArtifactId);
+        Assert.Contains("registry warning", dashboardSummary.Diagnostics);
+        Assert.NotNull(dashboardSummary.GeneratedAt);
+
+        Assert.Equal(dashboardSummary.DecisionSessionId, workspace.DecisionSessionSummary.DecisionSessionId);
+        Assert.Equal(dashboardSummary.TransferPressure, workspace.DecisionSessionSummary.TransferPressure);
+        Assert.Equal(dashboardSummary.HealthDimensions.Count, workspace.DecisionSessionSummary.HealthDimensions.Count);
+    }
+
+    [Fact]
+    public async Task DecisionSessionSummaryRemainsEmptyWhenObservabilityIsAbsent()
+    {
+        string repositoryPath = CreateGitRepositoryDirectory();
+        RepositoryService repositoryService = CreateRepositoryService();
+        Repository repository = await repositoryService.RegisterAsync(repositoryPath);
+        RepositoryProjectionService projectionService = CreateProjectionService(repositoryService);
+
+        IReadOnlyList<RepositoryDashboardProjection> dashboard = await projectionService.GetDashboardAsync();
+        RepositoryWorkspaceProjection workspace = await projectionService.GetWorkspaceAsync(repository.Id);
+
+        Assert.Null(Assert.Single(dashboard).DecisionSessionSummary.DecisionSessionId);
+        Assert.Null(workspace.DecisionSessionSummary.DecisionSessionId);
+        Assert.Empty(workspace.DecisionSessionSummary.HealthDimensions);
+        Assert.Empty(workspace.DecisionSessionSummary.RecentTransferLineage);
+    }
+
+    [Fact]
     public async Task WorkspaceProjectionIncludesLatestProposalReviewStateAndWarnings()
     {
         string repositoryPath = CreateGitRepositoryDirectory();
@@ -505,9 +565,22 @@ public sealed class RepositoryProjectionServiceTests
 
     private static RepositoryProjectionService CreateProjectionService(
         IRepositoryService repositoryService,
+        IDecisionSessionObservabilityService decisionSessionObservabilityService)
+    {
+        return CreateProjectionService(
+            repositoryService,
+            new ReadyExecutionSessionService(),
+            null,
+            null,
+            decisionSessionObservabilityService);
+    }
+
+    private static RepositoryProjectionService CreateProjectionService(
+        IRepositoryService repositoryService,
         IExecutionSessionService executionSessionService,
         IDecisionArtifactProjectionService? decisionArtifactProjectionService = null,
-        IReasoningRepository? reasoningRepository = null)
+        IReasoningRepository? reasoningRepository = null,
+        IDecisionSessionObservabilityService? decisionSessionObservabilityService = null)
     {
         return new RepositoryProjectionService(
             repositoryService,
@@ -518,7 +591,8 @@ public sealed class RepositoryProjectionServiceTests
             new MarkdownOperationalContextParser(),
             new FileSystemArtifactStore(),
             decisionArtifactProjectionService,
-            reasoningRepository);
+            reasoningRepository,
+            decisionSessionObservabilityService);
     }
 
     private static IReasoningRepository CreateReasoningRepository()
@@ -710,6 +784,154 @@ public sealed class RepositoryProjectionServiceTests
         public Task<ExecutionSessionSummary> PushAsync(Guid sessionId, PushRequest request)
         {
             throw new NotSupportedException();
+        }
+    }
+
+    private sealed class StaticDecisionSessionObservabilityService : IDecisionSessionObservabilityService
+    {
+        private readonly DateTimeOffset generatedAt = DateTimeOffset.Parse("2026-06-24T10:00:00Z");
+
+        public DecisionSessionId SessionId { get; } = new(Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"));
+
+        public Task<DecisionSessionLifecycleProjection> GetProjectionAsync(Guid requestedRepositoryId)
+        {
+            DecisionSessionProjection activeSession = new(
+                SessionId,
+                requestedRepositoryId,
+                DecisionSessionState.Active,
+                generatedAt.AddHours(-2),
+                generatedAt.AddHours(-2),
+                null,
+                "test");
+            DecisionSessionMetrics metrics = new(
+                250_000,
+                1_000_000,
+                12,
+                3,
+                4,
+                5,
+                0,
+                0,
+                1,
+                generatedAt.AddMinutes(-10),
+                generatedAt);
+            DecisionSessionStatistics statistics = new(
+                TimeSpan.FromHours(2),
+                TimeSpan.FromHours(2),
+                TimeSpan.FromMinutes(10),
+                1m,
+                1m);
+            DecisionSessionCacheMetrics cache = new(
+                TimeSpan.FromMinutes(12),
+                0.42m,
+                generatedAt.AddMinutes(12));
+            DecisionSessionMetricsSnapshot metricsSnapshot = new(
+                requestedRepositoryId,
+                metrics,
+                statistics,
+                new DecisionSessionActivity(1, generatedAt.AddMinutes(-10), TimeSpan.FromMinutes(10), 1m),
+                new DecisionSessionGrowth(1_000_000, 250_000, TimeSpan.FromHours(2), 1m),
+                cache,
+                new DecisionSessionMetricsDiagnostics(requestedRepositoryId, generatedAt, [], [], []),
+                generatedAt);
+            DecisionSessionCoherenceSnapshot coherenceSnapshot = new(
+                requestedRepositoryId,
+                new DecisionSessionCoherence(0.67m, 0.22m, 0.55m, 0.70m, 0.81m),
+                null!,
+                generatedAt);
+            DecisionSessionLifecycleEvaluation evaluation = new(
+                DecisionSessionLifecycleDecision.Transfer,
+                0.40m,
+                0.90m,
+                "Transfer pressure exceeds reuse value.",
+                ["high transfer pressure"],
+                generatedAt);
+            DecisionSessionLifecycleSnapshot policySnapshot = new(
+                requestedRepositoryId,
+                evaluation,
+                null!,
+                generatedAt);
+            DecisionSessionTransferEligibilitySnapshot eligibilitySnapshot = new(
+                requestedRepositoryId,
+                new DecisionSessionTransferEligibility(
+                    DecisionSessionTransferEligibilityStatus.Eligible,
+                    evaluation,
+                    SessionId,
+                    [],
+                    generatedAt),
+                null!,
+                generatedAt);
+            DecisionSessionTransferEventProjection transfer = new(
+                "transfer-1",
+                SessionId,
+                new DecisionSessionId(Guid.Parse("ffffffff-1111-2222-3333-444444444444")),
+                generatedAt.AddMinutes(-5),
+                generatedAt.AddMinutes(-4),
+                true,
+                "routine transfer",
+                250_000,
+                DecisionSessionLifecycleDecision.Transfer,
+                0.40m,
+                0.90m,
+                DecisionSessionTransferEligibilityStatus.Eligible,
+                "artifact-1",
+                [],
+                []);
+
+            DecisionSessionLifecycleProjection projection = new(
+                requestedRepositoryId,
+                activeSession,
+                [activeSession],
+                metricsSnapshot,
+                new DecisionSessionSizeProjection(
+                    250_000,
+                    1_000_000,
+                    12,
+                    5,
+                    TimeSpan.FromHours(2),
+                    TimeSpan.FromMinutes(10),
+                    0.42m,
+                    generatedAt),
+                null,
+                coherenceSnapshot,
+                policySnapshot,
+                eligibilitySnapshot,
+                null,
+                [],
+                [],
+                [],
+                [transfer],
+                [],
+                new DecisionSessionDiagnostics(
+                    requestedRepositoryId,
+                    true,
+                    1,
+                    1,
+                    [],
+                    ["registry warning"],
+                    generatedAt),
+                generatedAt);
+
+            return Task.FromResult(projection);
+        }
+
+        public Task<DecisionSessionLifecycleHistory> GetHistoryAsync(Guid requestedRepositoryId)
+        {
+            return Task.FromResult(new DecisionSessionLifecycleHistory(requestedRepositoryId, [], generatedAt));
+        }
+
+        public Task<DecisionSessionInfluenceTrace> GetInfluenceTraceAsync(Guid requestedRepositoryId)
+        {
+            return Task.FromResult(new DecisionSessionInfluenceTrace(requestedRepositoryId, SessionId, DecisionSessionLifecycleDecision.Transfer, DecisionSessionTransferEligibilityStatus.Eligible, [], [], generatedAt));
+        }
+
+        public Task<DecisionSessionHealthAssessment> GetHealthAsync(Guid requestedRepositoryId)
+        {
+            return Task.FromResult(new DecisionSessionHealthAssessment(
+                requestedRepositoryId,
+                [new DecisionSessionHealthDimension("Lifecycle", DecisionSessionHealthStatus.Warning, ["Transfer pressure is elevated."], ["coherence:0.67"])],
+                new DecisionSessionInfluenceTrace(requestedRepositoryId, SessionId, DecisionSessionLifecycleDecision.Transfer, DecisionSessionTransferEligibilityStatus.Eligible, [], [], generatedAt),
+                generatedAt));
         }
     }
 }

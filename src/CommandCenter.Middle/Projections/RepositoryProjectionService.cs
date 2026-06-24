@@ -8,6 +8,8 @@ using System.Collections.Concurrent;
 using CommandCenter.Continuity.Abstractions;
 using CommandCenter.Continuity.Models;
 using CommandCenter.Continuity.Primitives;
+using CommandCenter.DecisionSessions.Abstractions;
+using CommandCenter.DecisionSessions.Models;
 using CommandCenter.Decisions.Abstractions;
 using CommandCenter.Execution.Abstractions;
 using CommandCenter.Reasoning.Abstractions;
@@ -24,7 +26,8 @@ public sealed class RepositoryProjectionService(
     IOperationalContextParser operationalContextParser,
     IArtifactStore artifactStore,
     IDecisionArtifactProjectionService? decisionArtifactProjectionService = null,
-    IReasoningRepository? reasoningRepository = null) : IRepositoryProjectionService
+    IReasoningRepository? reasoningRepository = null,
+    IDecisionSessionObservabilityService? decisionSessionObservabilityService = null) : IRepositoryProjectionService
 {
     private readonly ConcurrentDictionary<Guid, ArtifactInventory> inventoryCache = new();
 
@@ -38,6 +41,7 @@ public sealed class RepositoryProjectionService(
             ArtifactInventory inventory = await GetOrBuildInventoryAsync(repository);
             OperationalContextProjection operationalContext = await BuildOperationalContextProjectionAsync(repository, inventory);
             RepositoryReasoningSummary reasoningSummary = await BuildReasoningSummaryAsync(repository);
+            RepositoryDecisionSessionSummary decisionSessionSummary = await BuildDecisionSessionSummaryAsync(repository);
             projections.Add(new RepositoryDashboardProjection
             {
                 Repository = repository,
@@ -59,7 +63,8 @@ public sealed class RepositoryProjectionService(
                     ActiveRiskCount = operationalContext.ActiveRisks.Count,
                     PendingProposalExists = operationalContext.PendingProposalSummary.PendingProposalExists
                 },
-                ReasoningSummary = reasoningSummary
+                ReasoningSummary = reasoningSummary,
+                DecisionSessionSummary = decisionSessionSummary
             });
         }
 
@@ -92,6 +97,7 @@ public sealed class RepositoryProjectionService(
     {
         OperationalContextProjection operationalContext = await BuildOperationalContextProjectionAsync(repository, inventory);
         RepositoryReasoningSummary reasoningSummary = await BuildReasoningSummaryAsync(repository);
+        RepositoryDecisionSessionSummary decisionSessionSummary = await BuildDecisionSessionSummaryAsync(repository);
         return new RepositoryWorkspaceProjection
         {
             Repository = repository,
@@ -108,7 +114,57 @@ public sealed class RepositoryProjectionService(
             HasCurrentDecisions = inventory.CurrentDecisions is not null,
             OperationalContextProposalSummary = operationalContext.PendingProposalSummary,
             OperationalContext = operationalContext,
-            ReasoningSummary = reasoningSummary
+            ReasoningSummary = reasoningSummary,
+            DecisionSessionSummary = decisionSessionSummary
+        };
+    }
+
+    private async Task<RepositoryDecisionSessionSummary> BuildDecisionSessionSummaryAsync(Repository repository)
+    {
+        if (decisionSessionObservabilityService is null)
+        {
+            return new RepositoryDecisionSessionSummary();
+        }
+
+        DecisionSessionLifecycleProjection projection = await decisionSessionObservabilityService.GetProjectionAsync(repository.Id);
+        DecisionSessionHealthAssessment health = await decisionSessionObservabilityService.GetHealthAsync(repository.Id);
+
+        return new RepositoryDecisionSessionSummary
+        {
+            DecisionSessionId = projection.ActiveSession?.Id.ToString(),
+            State = projection.ActiveSession?.State.ToString(),
+            LifecycleDecision = projection.Policy?.Evaluation.Decision.ToString(),
+            TransferEligibilityStatus = projection.TransferEligibility?.Eligibility.Status.ToString(),
+            EstimatedTokenCount = projection.Size?.EstimatedTokenCount ?? projection.Metrics?.Metrics.EstimatedTokenCount,
+            EstimatedCacheTtl = projection.Metrics?.Cache.EstimatedCacheTtl,
+            CacheMissRisk = projection.Size?.CacheMissRisk ?? projection.Metrics?.Cache.EstimatedCacheMissRisk,
+            CoherenceScore = projection.Coherence?.Coherence.CoherenceScore,
+            TransferPressure = projection.Coherence?.Coherence.TransferPressure,
+            HealthDimensions = health.Dimensions
+                .Select(dimension => new RepositoryDecisionSessionHealthDimension
+                {
+                    Name = dimension.Name,
+                    Status = dimension.Status.ToString(),
+                    Findings = dimension.Findings
+                })
+                .ToArray(),
+            RecentTransferLineage = projection.TransferEvents
+                .Select(transfer => new RepositoryDecisionSessionTransferSummary
+                {
+                    TransferId = transfer.TransferId,
+                    SourceSessionId = transfer.SourceSessionId.ToString(),
+                    TargetSessionId = transfer.TargetSessionId?.ToString(),
+                    ContinuityArtifactId = transfer.ContinuityArtifactId,
+                    StartedAt = transfer.StartedAt,
+                    CompletedAt = transfer.CompletedAt,
+                    Succeeded = transfer.Succeeded
+                })
+                .ToArray(),
+            Diagnostics = projection.Diagnostics.Errors
+                .Concat(projection.Diagnostics.Warnings)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray(),
+            GeneratedAt = projection.GeneratedAt
         };
     }
 

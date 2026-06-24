@@ -43,9 +43,9 @@ Workflow projection fields:
 
 Repository summary integration:
 
-- [ ] Add `RepositoryDecisionSessionSummary` in `src/CommandCenter.Middle/Projections`.
-- [ ] Extend `RepositoryDashboardProjection` and `RepositoryWorkspaceProjection`.
-- [ ] Extend `RepositoryProjectionService` through an optional decision-session observability dependency, matching the existing optional reasoning dependency pattern.
+- [x] Add `RepositoryDecisionSessionSummary` in `src/CommandCenter.Middle/Projections`.
+- [x] Extend `RepositoryDashboardProjection` and `RepositoryWorkspaceProjection`.
+- [x] Extend `RepositoryProjectionService` through an optional decision-session observability dependency, matching the existing optional reasoning dependency pattern.
 
 Backend endpoints:
 
@@ -71,7 +71,7 @@ Tests:
 - [ ] Transfer lineage is projected.
 - [ ] Lifecycle health appears in workflow health.
 - [ ] Influence trace appears in workflow influence projection.
-- [ ] Repository summary includes decision-session state, TTL, cache risk, and health.
+- [x] Repository summary includes decision-session state, TTL, cache risk, and health.
 - [ ] Workflow cannot call mutating lifecycle APIs.
 - [ ] Deleted workflow projection is rebuilt.
 

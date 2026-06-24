@@ -2,44 +2,28 @@
 
 ## Slice Summary
 
-- Started Milestone 5A workflow consumption of decision-session lifecycle state.
-- Added `CommandCenter.Workflow` reference to `CommandCenter.DecisionSessions`.
-- Added workflow-native decision-session consumption models:
-  - `WorkflowDecisionSessionProjection`
-  - `WorkflowGovernanceSummary`
-  - `WorkflowTransferProjection`
-  - `WorkflowContinuityArtifactProjection`
-  - `WorkflowGovernanceHealthProjection`
-  - `WorkflowGovernanceInfluenceProjection`
-  - `WorkflowGovernanceInfluenceSignal`
-  - `WorkflowGovernanceReadiness`
-  - `DecisionSessionWorkflowDiagnostics`
-- Added `IWorkflowDecisionSessionService` and `WorkflowDecisionSessionService`.
-- The workflow service consumes only `IDecisionSessionObservabilityService`.
-- Integrated decision-session governance consumption into:
-  - `WorkflowProjectionService` through `WorkflowInstance.DecisionSession`
-  - `WorkflowHealthService` through `WorkflowHealthAssessment.GovernanceHealth` and `WorkflowInfluenceTrace.GovernanceInfluence`
-  - `WorkflowReportService` diagnostics/highlights
-  - `WorkflowCertificationService` read-only consumption certification
-- Added read-only decision-session workflow endpoints:
-  - `GET /api/repositories/{repositoryId:guid}/decision-sessions/workflow`
-  - `GET /api/repositories/{repositoryId:guid}/decision-sessions/workflow/health`
-  - `GET /api/repositories/{repositoryId:guid}/decision-sessions/workflow/influence`
-  - `GET /api/repositories/{repositoryId:guid}/decision-sessions/workflow/summary`
-- Updated Milestone 5 checklist for completed workflow models, service, integration, projection fields, endpoints, and authority-rule items.
+- Continued Milestone 5B repository consumption of decision-session lifecycle state.
+- Added `CommandCenter.Middle` reference to `CommandCenter.DecisionSessions`.
+- Added `RepositoryDecisionSessionSummary` with health dimensions and recent transfer lineage in `src/CommandCenter.Middle/Projections`.
+- Extended `RepositoryDashboardProjection` and `RepositoryWorkspaceProjection` with `DecisionSessionSummary`.
+- Extended `RepositoryProjectionService` with optional `IDecisionSessionObservabilityService` consumption, matching the existing optional reasoning dependency pattern.
+- Repository summaries now surface active session id/state, lifecycle decision, eligibility status, estimated token count, cache TTL, cache miss risk, coherence score, transfer pressure, health dimensions, recent transfer lineage, diagnostics, and generation time.
+- Added repository projection tests for populated decision-session summaries and empty summaries when observability is absent.
+- Updated the Milestone 5 checklist for completed repository summary integration and test coverage.
 
 ## Validation
 
-- `dotnet test .\tests\CommandCenter.Backend.Tests\CommandCenter.Backend.Tests.csproj --filter "DecisionSession|WorkflowProjection" --no-restore` passed: 193 tests.
-- `dotnet test .\CommandCenter.slnx --no-restore` passed: 705 tests.
+- `dotnet test .\tests\CommandCenter.Backend.Tests\CommandCenter.Backend.Tests.csproj --filter "RepositoryProjectionServiceTests" --no-restore` passed: 17 tests.
+- `dotnet test .\tests\CommandCenter.Backend.Tests\CommandCenter.Backend.Tests.csproj --filter "DecisionSession|RepositoryProjection" --no-restore` passed: 92 tests.
+- `dotnet test .\CommandCenter.slnx --no-restore` passed: 707 tests.
 
 ## Current State
 
-- `.agents/handoffs/handoff.md` was rotated to `.agents/handoffs/handoff.0015.md`; this file is the new active handoff.
+- `.agents/handoffs/handoff.md` was rotated to `.agents/handoffs/handoff.0016.md`; this file is the new active handoff.
 - `.agents/decisions/decisions.md` was not rotated because no user response authorized new decisions during this slice.
-- Milestone 5A is implemented for workflow consumption. Repository summary consumption remains unstarted.
+- Milestone 5B repository summary consumption is implemented.
 - No git staging, commit, or push was performed.
 
 ## Next Slice Recommendation
 
-- Continue Milestone 5B by adding `RepositoryDecisionSessionSummary` to `CommandCenter.Middle` projections and wiring `RepositoryProjectionService` through the existing optional dependency pattern.
+- Continue Milestone 5 test hardening by adding explicit workflow lifecycle visibility tests for continue/transfer decisions, eligibility, continuity artifact lineage, transfer lineage, health, influence, mutating API boundaries, and deleted projection rebuild behavior.

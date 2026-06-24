@@ -32,4 +32,6 @@ public sealed class RepositoryDashboardProjection
     public RepositoryContinuitySummary ContinuitySummary { get; init; } = new();
 
     public RepositoryReasoningSummary ReasoningSummary { get; init; } = new();
+
+    public RepositoryDecisionSessionSummary DecisionSessionSummary { get; init; } = new();
 }

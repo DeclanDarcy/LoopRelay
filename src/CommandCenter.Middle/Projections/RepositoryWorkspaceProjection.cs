@@ -40,4 +40,6 @@ public sealed class RepositoryWorkspaceProjection
     public OperationalContextProjection OperationalContext { get; init; } = new();
 
     public RepositoryReasoningSummary ReasoningSummary { get; init; } = new();
+
+    public RepositoryDecisionSessionSummary DecisionSessionSummary { get; init; } = new();
 }
