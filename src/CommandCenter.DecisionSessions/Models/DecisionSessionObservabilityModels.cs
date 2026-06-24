@@ -48,3 +48,20 @@ public sealed record DecisionSessionLifecycleHistory(
     Guid RepositoryId,
     IReadOnlyList<DecisionSessionLifecycleHistoryEvent> Events,
     DateTimeOffset GeneratedAt);
+
+public sealed record DecisionSessionInfluenceSignal(
+    string Category,
+    string Name,
+    decimal? Score,
+    string Value,
+    string Description,
+    IReadOnlyList<string> ContributingFactors);
+
+public sealed record DecisionSessionInfluenceTrace(
+    Guid RepositoryId,
+    DecisionSessionId? ActiveSessionId,
+    DecisionSessionLifecycleDecision? PolicyDecision,
+    DecisionSessionTransferEligibilityStatus? TransferEligibilityStatus,
+    IReadOnlyList<DecisionSessionInfluenceSignal> Signals,
+    IReadOnlyList<string> Diagnostics,
+    DateTimeOffset GeneratedAt);

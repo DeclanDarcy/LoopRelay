@@ -99,6 +99,21 @@ public static class DecisionSessionEndpoints
             IDecisionSessionTransferEligibilityService eligibilityService) =>
             await HandleAsync(async () => (await eligibilityService.CheckAsync(repositoryId)).Diagnostics));
 
+        group.MapGet("/lifecycle/projection", async (
+            Guid repositoryId,
+            IDecisionSessionObservabilityService observabilityService) =>
+            await HandleAsync(() => observabilityService.GetProjectionAsync(repositoryId)));
+
+        group.MapGet("/lifecycle/history", async (
+            Guid repositoryId,
+            IDecisionSessionObservabilityService observabilityService) =>
+            await HandleAsync(() => observabilityService.GetHistoryAsync(repositoryId)));
+
+        group.MapGet("/lifecycle/influence", async (
+            Guid repositoryId,
+            IDecisionSessionObservabilityService observabilityService) =>
+            await HandleAsync(() => observabilityService.GetInfluenceTraceAsync(repositoryId)));
+
         group.MapGet("/continuity-artifacts", async (
             Guid repositoryId,
             IDecisionSessionContinuityArtifactService artifactService) =>

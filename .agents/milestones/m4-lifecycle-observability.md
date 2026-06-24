@@ -6,7 +6,7 @@ Add models:
 
 - [x] `DecisionSessionLifecycleProjection`
 - [x] `DecisionSessionLifecycleHistory`
-- [ ] `DecisionSessionInfluenceTrace`
+- [x] `DecisionSessionInfluenceTrace`
 - [ ] `DecisionSessionTransferEventProjection`
 - [ ] `DecisionSessionContinuityArtifactProjection`
 - [ ] `DecisionSessionSizeProjection`
@@ -47,16 +47,16 @@ History events:
 
 Influence trace categories:
 
-- [ ] Metrics
-- [ ] Cache TTL
-- [ ] Cache miss risk
-- [ ] Economics
-- [ ] Coherence
-- [ ] Policy
-- [ ] Eligibility
-- [ ] Continuity artifact
-- [ ] Transfer
-- [ ] Recovery
+- [x] Metrics
+- [x] Cache TTL
+- [x] Cache miss risk
+- [x] Economics
+- [x] Coherence
+- [x] Policy
+- [x] Eligibility
+- [x] Continuity artifact
+- [x] Transfer
+- [x] Recovery
 
 Health dimensions:
 
@@ -72,9 +72,9 @@ Health must remain decomposed. Do not hide state in a single opaque score.
 
 Backend endpoints:
 
-- [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/lifecycle/projection`
-- [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/lifecycle/history`
-- [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/lifecycle/influence`
+- [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/lifecycle/projection`
+- [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/lifecycle/history`
+- [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/lifecycle/influence`
 - [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/lifecycle/health`
 
 Persistence:
@@ -86,7 +86,7 @@ Tests:
 
 - [x] Projection composes session, analysis, policy, eligibility, continuity artifact, transfer, and recovery.
 - [x] History reconstructs creation, activation, policy, eligibility, continuity artifact creation, transfer, retirement, and recovery.
-- [ ] Influence trace contains economics, coherence, TTL, cache risk, and eligibility signals.
+- [x] Influence trace contains economics, coherence, TTL, cache risk, and eligibility signals.
 - [ ] Transfer event projection includes source, target, reason, token size, reuse score, transfer score, and eligibility status.
 - [ ] Continuity artifact projection includes canonical artifact id, fingerprint, source session, target session, and evidence references.
 - [ ] Size projection exposes token, context, reasoning, and measured-at values.

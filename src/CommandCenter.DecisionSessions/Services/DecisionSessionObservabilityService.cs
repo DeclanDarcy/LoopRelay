@@ -232,6 +232,151 @@ public sealed class DecisionSessionObservabilityService(
             timeProvider.GetUtcNow());
     }
 
+    public async Task<DecisionSessionInfluenceTrace> GetInfluenceTraceAsync(Guid repositoryId)
+    {
+        DecisionSessionLifecycleProjection projection = await GetProjectionAsync(repositoryId);
+        var signals = new List<DecisionSessionInfluenceSignal>();
+
+        if (projection.Metrics is not null)
+        {
+            AddSignal(
+                signals,
+                "Metrics",
+                "Evidence size",
+                null,
+                $"{projection.Metrics.Metrics.EstimatedTokenCount} tokens, {projection.Metrics.Metrics.ContextByteSize} bytes",
+                "Current decision-session evidence size used by lifecycle analysis.",
+                projection.Metrics.Diagnostics.Warnings);
+            AddSignal(
+                signals,
+                "Cache TTL",
+                "Estimated cache TTL",
+                null,
+                projection.Metrics.Cache.EstimatedCacheTtl.ToString(),
+                "Estimated remaining cache lifetime for reusable session context.",
+                projection.Metrics.Diagnostics.Assumptions);
+            AddSignal(
+                signals,
+                "Cache miss risk",
+                "Estimated cache miss risk",
+                projection.Metrics.Cache.EstimatedCacheMissRisk,
+                projection.Metrics.Cache.EstimatedCacheExpiresAt is null
+                    ? "No cache expiry estimate"
+                    : $"Expires at {projection.Metrics.Cache.EstimatedCacheExpiresAt.Value:O}",
+                "Estimated risk that cached decision-session context will no longer be reusable.",
+                projection.Metrics.Diagnostics.Warnings);
+        }
+
+        if (projection.Economics is not null)
+        {
+            AddSignal(
+                signals,
+                "Economics",
+                "Reuse value",
+                projection.Economics.Economics.EstimatedReuseValue,
+                $"cache benefit {projection.Economics.Economics.EstimatedCacheBenefit}, continuity benefit {projection.Economics.Economics.EstimatedContinuityBenefit}",
+                "Estimated value of continuing the active decision session.",
+                projection.Economics.Diagnostics.Assumptions);
+            AddSignal(
+                signals,
+                "Economics",
+                "Transfer value",
+                projection.Economics.Economics.EstimatedTransferValue,
+                $"context cost {projection.Economics.Economics.EstimatedContextCost}, reasoning cost {projection.Economics.Economics.EstimatedReasoningCost}",
+                "Estimated value of transferring continuity to a replacement decision session.",
+                projection.Economics.Diagnostics.Warnings);
+        }
+
+        if (projection.Coherence is not null)
+        {
+            AddSignal(
+                signals,
+                "Coherence",
+                "Coherence score",
+                projection.Coherence.Coherence.CoherenceScore,
+                $"fragmentation {projection.Coherence.Coherence.FragmentationScore}, density {projection.Coherence.Coherence.DensityScore}",
+                "Current reasoning and governance coherence used by lifecycle policy.",
+                projection.Coherence.Diagnostics.Assumptions);
+            AddSignal(
+                signals,
+                "Coherence",
+                "Transfer pressure",
+                projection.Coherence.Coherence.TransferPressure,
+                $"continuity {projection.Coherence.Coherence.ContinuityScore}",
+                "Coherence-derived pressure toward continuity transfer.",
+                projection.Coherence.Diagnostics.Warnings);
+        }
+
+        if (projection.Policy is not null)
+        {
+            AddSignal(
+                signals,
+                "Policy",
+                "Lifecycle decision",
+                projection.Policy.Evaluation.TransferScore,
+                $"{projection.Policy.Evaluation.Decision}: reuse {projection.Policy.Evaluation.ReuseScore}, transfer {projection.Policy.Evaluation.TransferScore}",
+                projection.Policy.Evaluation.Reason,
+                projection.Policy.Evaluation.ContributingFactors);
+        }
+
+        if (projection.TransferEligibility is not null)
+        {
+            AddSignal(
+                signals,
+                "Eligibility",
+                "Transfer eligibility",
+                null,
+                projection.TransferEligibility.Eligibility.Status.ToString(),
+                "Operational readiness for executing a policy-directed transfer.",
+                projection.TransferEligibility.Eligibility.Findings.Select(finding => $"{finding.Severity}: {finding.Message}"));
+        }
+
+        if (projection.CurrentContinuityArtifact is not null)
+        {
+            AddSignal(
+                signals,
+                "Continuity artifact",
+                "Current artifact",
+                null,
+                projection.CurrentContinuityArtifact.ArtifactId,
+                "Continuity artifact currently associated with pending or recent transfer evidence.",
+                projection.CurrentContinuityArtifact.Diagnostics);
+        }
+
+        foreach (DecisionSessionTransfer transfer in projection.RecentTransfers.Take(3))
+        {
+            AddSignal(
+                signals,
+                "Transfer",
+                transfer.TransferId,
+                null,
+                transfer.Succeeded ? "Succeeded" : "Incomplete",
+                $"Transfer from {transfer.SourceSessionId} to {transfer.TargetSessionId?.ToString() ?? "none"}.",
+                transfer.Diagnostics);
+        }
+
+        foreach (DecisionSessionRecoveryResult recovery in projection.RecentRecoveryResults.Take(3))
+        {
+            AddSignal(
+                signals,
+                "Recovery",
+                recovery.RecoveryId,
+                null,
+                recovery.Succeeded ? "Succeeded" : "Failed",
+                "Recent lifecycle recovery evidence.",
+                recovery.Findings.Select(finding => $"{finding.Severity}: {finding.Message}"));
+        }
+
+        return new DecisionSessionInfluenceTrace(
+            repositoryId,
+            projection.ActiveSession?.Id,
+            projection.Policy?.Evaluation.Decision,
+            projection.TransferEligibility?.Eligibility.Status,
+            signals,
+            projection.Diagnostics.Errors.Concat(projection.Diagnostics.Warnings).ToArray(),
+            timeProvider.GetUtcNow());
+    }
+
     private static void AddAnalysisEvents(
         List<DecisionSessionLifecycleHistoryEvent> events,
         DecisionSessionMetricsSnapshot? metrics,
@@ -303,6 +448,27 @@ public sealed class DecisionSessionObservabilityService(
                 transferEvent.Message,
                 transferEvent.Diagnostics));
         }
+    }
+
+    private static void AddSignal(
+        List<DecisionSessionInfluenceSignal> signals,
+        string category,
+        string name,
+        decimal? score,
+        string value,
+        string description,
+        IEnumerable<string> contributingFactors)
+    {
+        signals.Add(new DecisionSessionInfluenceSignal(
+            category,
+            name,
+            score,
+            value,
+            description,
+            contributingFactors
+                .Where(factor => !string.IsNullOrWhiteSpace(factor))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray()));
     }
 
     private static DecisionSessionContinuityArtifact? ResolveCurrentArtifact(

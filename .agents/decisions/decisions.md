@@ -2,19 +2,25 @@
 
 ## Newly Authorized
 
-- Treat Milestone 4A projection/history models and service as complete.
-- Begin the next slice with Milestone 4 projection/history backend endpoints before influence work.
-- Implement the endpoint work in this order:
-  1. Projection endpoints.
-  2. History endpoints.
-  3. Influence trace.
-  4. Health.
-- Projection and history endpoints must remain simple read-only composition from existing lifecycle evidence.
-- Do not add projection/history persistence, background generation, or observability-owned artifacts for the endpoint slice.
-- Preserve the authority direction: lifecycle core feeds observability; observability must not feed lifecycle core.
-- Preserve history as a projection reconstructed from durable evidence, not as a second source of truth.
-- Corrupt derived snapshots should surface as diagnostics and must not block registry visibility.
-- Influence traces are explainability only: they explain decisions and must not create decisions.
-- Influence traces must not become policy inputs or transfer inputs.
-- Influence traces should reuse existing decision evidence and policy contributing factors rather than inventing a parallel explanation model.
-- Include existing contributing factors such as reuse score, transfer score, transfer pressure, cache risk, continuity benefit, and coherence score when implementing influence traces.
+- Continue Milestone 4 from the current observability state.
+- Preserve the authority direction: lifecycle core feeds observability; observability must not feed lifecycle behavior.
+- Treat influence traces as explanation of existing authority, not an alternative interpretation or decision engine.
+- Influence traces should continue reusing existing metrics, economics, coherence, policy, eligibility, transfer, and recovery evidence.
+- Endpoint layering is accepted as:
+  - `/analysis/*` exposes facts.
+  - `/lifecycle/policy` exposes the lifecycle decision.
+  - `/lifecycle/eligibility` exposes the execution gate.
+  - `/lifecycle/projection` exposes lifecycle state.
+  - `/lifecycle/history` exposes lifecycle reconstruction.
+  - `/lifecycle/influence` exposes lifecycle explanation.
+- Before health, add richer projection models for transfer events, continuity artifacts, and size.
+- Transfer event projection should expose source session, target session, started/completed timestamps, result, reason, policy decision, eligibility status, and artifact id, derived entirely from transfer evidence and related lifecycle evidence.
+- Continuity artifact projection should expose artifact id, fingerprint, source session, target session, decision references, reasoning references, operational context references, and created timestamp without making the artifact an authority source.
+- Size projection should expose estimated token count, context byte size, reasoning event count, decision count, session age, idle duration, cache risk, and measured timestamp from metrics snapshots.
+- Health should be decomposed into independent dimensions for registry, analysis, policy, eligibility, continuity artifact, transfer, and recovery.
+- Do not add a composite health score.
+- Health must remain entirely evidence-driven.
+- Transfer health should derive from interrupted transfers, transfer-pending duration, transfer diagnostics, and failed transfer events.
+- Analysis health should derive from missing snapshots, rebuild failures, and corrupt snapshots rather than score-based heuristics.
+- Milestone 4 projection, history, and influence are accepted as complete.
+- Milestone 4 health is ready as the next major work area after projection models.

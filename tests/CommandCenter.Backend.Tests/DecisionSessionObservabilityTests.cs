@@ -72,6 +72,41 @@ public sealed class DecisionSessionObservabilityTests
     }
 
     [Fact]
+    public async Task InfluenceTraceContainsLifecycleDecisionSignals()
+    {
+        DecisionSessionTestHarness harness = DecisionSessionTestHarness.Create();
+        DateTimeOffset now = DateTimeOffset.UtcNow.AddMinutes(-10);
+        DecisionSession active = await CreateActiveSessionAsync(harness, now.AddHours(-1));
+        DecisionSessionFixtures fixtures = CreateFixtures(harness.Repository.Id, active, now);
+        await WriteSnapshotsAsync(harness, fixtures);
+        await harness.RepositoryStore.WriteContinuityArtifactAsync(harness.Repository, fixtures.Artifact);
+        await harness.RepositoryStore.WriteTransferAsync(harness.Repository, fixtures.Transfer);
+        await harness.RepositoryStore.WriteRecoveryResultAsync(harness.Repository, fixtures.Recovery);
+        var service = new DecisionSessionObservabilityService(
+            harness.RepositoryService,
+            harness.RepositoryStore,
+            new FixedTimeProvider(now.AddMinutes(5)));
+
+        DecisionSessionInfluenceTrace trace = await service.GetInfluenceTraceAsync(harness.Repository.Id);
+
+        Assert.Equal(harness.Repository.Id, trace.RepositoryId);
+        Assert.Equal(active.Id, trace.ActiveSessionId);
+        Assert.Equal(DecisionSessionLifecycleDecision.Transfer, trace.PolicyDecision);
+        Assert.Equal(DecisionSessionTransferEligibilityStatus.Eligible, trace.TransferEligibilityStatus);
+        Assert.Contains(trace.Signals, signal => signal.Category == "Metrics");
+        Assert.Contains(trace.Signals, signal => signal.Category == "Cache TTL");
+        Assert.Contains(trace.Signals, signal => signal.Category == "Cache miss risk");
+        Assert.Contains(trace.Signals, signal => signal.Category == "Economics" && signal.Name == "Reuse value");
+        Assert.Contains(trace.Signals, signal => signal.Category == "Economics" && signal.Name == "Transfer value");
+        Assert.Contains(trace.Signals, signal => signal.Category == "Coherence" && signal.Name == "Coherence score");
+        Assert.Contains(trace.Signals, signal => signal.Category == "Policy" && signal.ContributingFactors.Contains("transfer pressure"));
+        Assert.Contains(trace.Signals, signal => signal.Category == "Eligibility" && signal.Value == DecisionSessionTransferEligibilityStatus.Eligible.ToString());
+        Assert.Contains(trace.Signals, signal => signal.Category == "Continuity artifact" && signal.Value == fixtures.Artifact.ArtifactId);
+        Assert.Contains(trace.Signals, signal => signal.Category == "Transfer" && signal.Name == fixtures.Transfer.TransferId);
+        Assert.Contains(trace.Signals, signal => signal.Category == "Recovery" && signal.Name == fixtures.Recovery.RecoveryId);
+    }
+
+    [Fact]
     public async Task ProjectionReportsCorruptDerivedSnapshotAsDiagnostics()
     {
         DecisionSessionTestHarness harness = DecisionSessionTestHarness.Create();

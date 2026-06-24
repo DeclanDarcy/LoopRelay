@@ -64,6 +64,15 @@ public sealed class DecisionSessionEndpointTests
         DecisionSessionTransferEligibilityDiagnostics? transferEligibilityDiagnostics = await client.GetFromJsonAsync<DecisionSessionTransferEligibilityDiagnostics>(
             $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/lifecycle/eligibility/diagnostics",
             DecisionSessionTestHarness.CreateJsonOptions());
+        DecisionSessionLifecycleProjection? lifecycleProjection = await client.GetFromJsonAsync<DecisionSessionLifecycleProjection>(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/lifecycle/projection",
+            DecisionSessionTestHarness.CreateJsonOptions());
+        DecisionSessionLifecycleHistory? lifecycleHistory = await client.GetFromJsonAsync<DecisionSessionLifecycleHistory>(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/lifecycle/history",
+            DecisionSessionTestHarness.CreateJsonOptions());
+        DecisionSessionInfluenceTrace? influenceTrace = await client.GetFromJsonAsync<DecisionSessionInfluenceTrace>(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/lifecycle/influence",
+            DecisionSessionTestHarness.CreateJsonOptions());
         DecisionSessionContinuityArtifact[]? continuityArtifacts = await client.GetFromJsonAsync<DecisionSessionContinuityArtifact[]>(
             $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/continuity-artifacts",
             DecisionSessionTestHarness.CreateJsonOptions());
@@ -118,6 +127,16 @@ public sealed class DecisionSessionEndpointTests
         });
         Assert.NotNull(transferEligibilityDiagnostics);
         Assert.Equal(harness.Repository.Id, transferEligibilityDiagnostics.RepositoryId);
+        Assert.NotNull(lifecycleProjection);
+        Assert.Equal(harness.Repository.Id, lifecycleProjection.RepositoryId);
+        Assert.NotNull(lifecycleProjection.ActiveSession);
+        Assert.Equal(created.Id, lifecycleProjection.ActiveSession.Id);
+        Assert.NotNull(lifecycleHistory);
+        Assert.Equal(harness.Repository.Id, lifecycleHistory.RepositoryId);
+        Assert.Contains(lifecycleHistory.Events, entry => entry.SessionId == created.Id && entry.EventType == DecisionSessionLifecycleHistoryEventType.Activated);
+        Assert.NotNull(influenceTrace);
+        Assert.Equal(harness.Repository.Id, influenceTrace.RepositoryId);
+        Assert.Equal(created.Id, influenceTrace.ActiveSessionId);
         Assert.NotNull(continuityArtifacts);
         Assert.Empty(continuityArtifacts);
         Assert.NotNull(transfers);
