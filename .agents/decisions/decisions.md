@@ -2,25 +2,35 @@
 
 ## Newly Authorized
 
-- Accept the Milestone 3 resolved-decision supersede/archive slice as architecturally sound.
-- Treat resolved-decision lifecycle reachability as functionally integrated for the MVP surface.
-- Preserve the resolved-decision authority chain:
-  - `DecisionLifecycleRules`
-  - lifecycle eligibility projection
-  - React rendering of backend facts
-  - backend command invocation
-  - projection refresh
-- Continue using `lifecycleEligibility.decisions` as the action source for the MVP resolved-decision surface instead of introducing a frontend-specific resolved-decision model.
-- Keep broad post-mutation refresh for supersede/archive across decision lifecycle, governance, quality, and execution context preview.
-- If refresh scope is optimized later, keep that optimization behind hook boundaries rather than distributing refresh policy across components.
-- Proceed next with proposal generation UX completion before adding the end-to-end decision lifecycle characterization.
-- The next proposal generation slice should surface backend-owned outputs without recomputation:
-  - generated proposal identifier
-  - generation mode
-  - accepted option count
-  - rejected option count
-  - deduplicated option count
-  - validation diagnostics
-- Proposal generation should navigate directly to the generated proposal when appropriate.
-- Proposal generation should refresh candidates, proposals, and lifecycle eligibility.
-- After proposal generation UX is complete, add a single high-value end-to-end characterization path covering discovery through archive.
+- Accept the Milestone 3 proposal generation slice as architecturally consistent with the roadmap.
+- Treat proposal generation UX as the last major architectural gap in proposal generation.
+- Preserve proposal generation as backend-driven end to end:
+  - backend-owned generation eligibility
+  - authoritative generation command response
+  - React rendering of returned backend facts
+  - centralized decision projection refresh
+- Continue exposing `generate_decision_proposal` through lifecycle eligibility rather than allowing React to infer generation availability.
+- Continue rendering proposal generation result details from the returned `DecisionProposal` instead of proposal-browser summaries.
+- Keep `refreshDecisions()` as the central post-mutation refresh boundary for decision context, candidates, proposals, and lifecycle eligibility.
+- Proceed next with candidate duplicate-status rendering before proposal review transparency.
+- Candidate duplicate rendering should use backend facts rather than deriving duplicate status in React.
+- After duplicate rendering, prioritize proposal review transparency:
+  - last transition
+  - current review state
+  - allowed transitions
+  - blocked transitions
+  - unavailable reasons
+- Perform a proposal review-state placement audit to ensure there is one obvious place for current state, next actions, and unavailable-action reasons.
+- Avoid independently rendering review state in multiple competing panels.
+- Treat remaining Milestone 3 work as final polishing around established architecture:
+  - duplicate candidate rendering
+  - proposal review transparency
+  - end-to-end lifecycle characterization
+  - milestone exit audit
+- Maintain the established authority pattern into later transparency milestones:
+  - authoritative domain service
+  - authoritative projection
+  - transport
+  - typed client
+  - hooks
+  - presentation

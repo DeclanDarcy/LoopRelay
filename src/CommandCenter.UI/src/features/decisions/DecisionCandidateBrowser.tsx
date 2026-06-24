@@ -75,6 +75,7 @@ export function DecisionCandidateBrowser({
   const dismissAction = getAction(selectedEligibility, 'dismiss_decision_candidate')
   const expireAction = getAction(selectedEligibility, 'expire_decision_candidate')
   const duplicateAction = getAction(selectedEligibility, 'mark_decision_candidate_duplicate')
+  const generateAction = getAction(selectedEligibility, 'generate_decision_proposal')
 
   useEffect(() => {
     if (!selectedCandidateId || filteredCandidates.some((candidate) => candidate.id === selectedCandidateId)) {
@@ -211,7 +212,8 @@ export function DecisionCandidateBrowser({
                       type="button"
                       className="secondary-action"
                       onClick={() => void onGenerateProposal?.(selectedCandidate.id)}
-                      disabled={isLoading || !onGenerateProposal}
+                      disabled={isLoading || !onGenerateProposal || !generateAction?.isAllowed}
+                      title={actionTitle(generateAction)}
                     >
                       Generate Decision Proposal
                     </button>

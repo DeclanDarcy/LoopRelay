@@ -36,7 +36,11 @@ public sealed class DecisionLifecycleEligibilityServiceTests
             action.CommandName == "promote_decision_candidate" &&
             action.TargetState == "Promoted" &&
             action.RequiredInputs.Contains("reason"));
-        Assert.Empty(candidate.BlockedActions);
+        Assert.Contains(candidate.BlockedActions, action =>
+            action.CommandName == "generate_decision_proposal" &&
+            action.TargetState == "Generated" &&
+            action.Reason == "Only promoted candidates can generate decision proposals." &&
+            action.GoverningRule == "DecisionGenerationService.GenerateProposalAsync");
         Assert.Empty(candidate.BlockedNextStates);
 
         DecisionLifecycleEntityEligibility proposal = Assert.Single(eligibility.Proposals);
@@ -51,6 +55,35 @@ public sealed class DecisionLifecycleEligibilityServiceTests
         Assert.Contains(decision.BlockedActions, action =>
             action.CommandName == "supersede_decision" &&
             action.Reason == "A resolved replacement decision is required before this decision can be superseded.");
+    }
+
+    [Fact]
+    public async Task EligibilityAllowsProposalGenerationOnlyForPromotedCandidateWithoutActiveProposal()
+    {
+        Repository repository = CreateRepository();
+        var decisionRepository = new FileSystemDecisionRepository(new FileSystemArtifactStore());
+        await decisionRepository.SaveCandidateAsync(repository, CreateCandidate(repository.Id, DecisionCandidateState.Promoted));
+        var service = new DecisionLifecycleEligibilityService(
+            new StubRepositoryService(repository),
+            decisionRepository);
+
+        DecisionLifecycleEligibilityProjection eligibility = await service.GetEligibilityAsync(repository.Id);
+
+        DecisionLifecycleEntityEligibility candidate = Assert.Single(eligibility.Candidates);
+        Assert.Contains(candidate.AllowedActions, action =>
+            action.CommandName == "generate_decision_proposal" &&
+            action.TargetState == "Generated" &&
+            action.RequiredInputs.Count == 0 &&
+            action.GoverningRule == "DecisionGenerationService.GenerateProposalAsync");
+
+        await decisionRepository.SaveProposalAsync(repository, CreateProposal(repository.Id, DecisionProposalState.Generated));
+
+        DecisionLifecycleEligibilityProjection blockedEligibility = await service.GetEligibilityAsync(repository.Id);
+
+        DecisionLifecycleEntityEligibility blockedCandidate = Assert.Single(blockedEligibility.Candidates);
+        Assert.Contains(blockedCandidate.BlockedActions, action =>
+            action.CommandName == "generate_decision_proposal" &&
+            action.Reason == "An active proposal already exists for this candidate.");
     }
 
     [Fact]

@@ -90,6 +90,51 @@ describe('DecisionCandidateBrowser', () => {
     expect(screen.getByRole('button', { name: 'Promote Candidate' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Dismiss' })).toBeEnabled()
   })
+
+  it('gates proposal generation through backend lifecycle eligibility', () => {
+    const onGenerateProposal = vi.fn()
+
+    render(
+      <DecisionCandidateBrowser
+        candidates={createCandidates()}
+        isLoading={false}
+        eligibility={[
+          createEligibility('CAND-0001', 'Promoted', [
+            createAction('generate_decision_proposal', 'Generate proposal', 'Generated', true, null),
+          ], []),
+        ]}
+        onGenerateProposal={onGenerateProposal}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Generate Decision Proposal' }))
+
+    expect(onGenerateProposal).toHaveBeenCalledWith('CAND-0001')
+  })
+
+  it('shows blocked generation reasons from candidate lifecycle eligibility', () => {
+    render(
+      <DecisionCandidateBrowser
+        candidates={createCandidates()}
+        isLoading={false}
+        eligibility={[
+          createEligibility('CAND-0001', 'Promoted', [], [
+            createAction(
+              'generate_decision_proposal',
+              'Generate proposal',
+              'Generated',
+              false,
+              'An active proposal already exists for this candidate.',
+            ),
+          ]),
+        ]}
+        onGenerateProposal={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText('An active proposal already exists for this candidate.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Generate Decision Proposal' })).toBeDisabled()
+  })
 })
 
 function createCandidates(): DecisionCandidate[] {

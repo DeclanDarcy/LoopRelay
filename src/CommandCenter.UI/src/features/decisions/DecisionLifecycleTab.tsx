@@ -6,6 +6,7 @@ import type {
   DecisionLifecycleActionEligibility,
   DecisionLifecycleEligibilityProjection,
   DecisionLifecycleEntityEligibility,
+  DecisionProposal,
   DecisionProposalBrowserItem,
   DecisionProposalState,
 } from '../../types'
@@ -52,7 +53,7 @@ type DecisionLifecycleTabProps = {
   onDismissCandidate?: (candidateId: string) => Promise<void> | void
   onExpireCandidate?: (candidateId: string) => Promise<void> | void
   onMarkCandidateDuplicate?: (candidateId: string, duplicateOfCandidateId: string) => Promise<void> | void
-  onGenerateProposal?: (candidateId: string) => Promise<string | null> | string | null
+  onGenerateProposal?: (candidateId: string) => Promise<DecisionProposal | null> | DecisionProposal | null
   onExpireProposal?: (proposalId: string) => Promise<void> | void
   onDiscardProposal?: (proposalId: string) => Promise<void> | void
   onSupersedeDecision?: (
@@ -96,6 +97,7 @@ export function DecisionLifecycleTab({
   const [replacementDecisionId, setReplacementDecisionId] = useState<string>('')
   const [decisionRationale, setDecisionRationale] = useState<string>('')
   const [decisionResolver, setDecisionResolver] = useState<string>('')
+  const [lastGeneratedProposal, setLastGeneratedProposal] = useState<DecisionProposal | null>(null)
   const {
     data: proposalReviewWorkspace,
     isLoading: isProposalReviewLoading,
@@ -259,12 +261,15 @@ export function DecisionLifecycleTab({
             onExpire={onExpireCandidate}
             onMarkDuplicate={onMarkCandidateDuplicate}
             onGenerateProposal={async (candidateId) => {
-              const proposalId = await onGenerateProposal?.(candidateId)
-              if (proposalId) {
-                setSelectedProposalId(proposalId)
+              const proposal = await onGenerateProposal?.(candidateId)
+              setLastGeneratedProposal(proposal ?? null)
+              if (proposal?.id) {
+                setSelectedProposalId(proposal.id)
               }
             }}
           />
+
+          <DecisionProposalGenerationResult proposal={lastGeneratedProposal} />
 
           <DecisionProposalBrowser
             proposals={proposals}
@@ -650,6 +655,56 @@ export function DecisionLifecycleTab({
         <EmptyState className="empty-state">Select or add a repository.</EmptyState>
       )}
     </Panel>
+  )
+}
+
+function DecisionProposalGenerationResult({ proposal }: { proposal: DecisionProposal | null }) {
+  if (!proposal) {
+    return (
+      <section className="decision-lifecycle-panel" aria-label="Proposal generation result">
+        <div className="decision-panel-heading">
+          <h5>Generation Result</h5>
+          <span>No proposal generated</span>
+        </div>
+        <EmptyState className="empty-state">Generate a promoted candidate to inspect proposal output.</EmptyState>
+      </section>
+    )
+  }
+
+  const diagnostics = proposal.generationDiagnostics
+  const recommendationMode = proposal.recommendation?.mode ?? 'NoRecommendation'
+
+  return (
+    <section className="decision-lifecycle-panel" aria-label="Proposal generation result">
+      <div className="decision-panel-heading">
+        <h5>Generation Result</h5>
+        <span>{proposal.id}</span>
+      </div>
+      <div className="decision-diagnostics-grid" aria-label="Generated proposal summary">
+        <span>Generated proposal {proposal.id}</span>
+        <span>Generation mode {recommendationMode}</span>
+        <span>Candidate {proposal.candidateId}</span>
+        <span>{diagnostics?.acceptedOptionCount ?? 0} accepted options</span>
+        <span>{diagnostics?.rejectedOptionCount ?? 0} rejected options</span>
+        <span>{diagnostics?.deduplicatedOptionCount ?? 0} deduplicated options</span>
+      </div>
+      {diagnostics?.optionValidationResults.length ? (
+        <div className="decision-warning-list" aria-label="Generation validation diagnostics">
+          {diagnostics.optionValidationResults.map((result) => (
+            <span key={result.optionId}>
+              {result.optionId}: {result.isValid ? 'valid' : result.issues.map((issue) => issue.message).join('; ')}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {diagnostics?.diagnostics.length ? (
+        <div className="decision-warning-list" aria-label="Generation command diagnostics">
+          {diagnostics.diagnostics.map((diagnostic) => (
+            <span key={diagnostic}>{diagnostic}</span>
+          ))}
+        </div>
+      ) : null}
+    </section>
   )
 }
 

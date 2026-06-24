@@ -1855,7 +1855,7 @@ function App() {
                 onGenerateProposal={async (candidateId) => {
                   const proposal = await generateDecisionProposal(candidateId)
                   await refreshDecisions()
-                  return proposal?.id ?? null
+                  return proposal
                 }}
                 onExpireProposal={async (proposalId) => {
                   await expireDecisionProposal(proposalId)

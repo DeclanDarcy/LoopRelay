@@ -850,6 +850,19 @@ function createDecisionLifecycleEligibility(
             candidate.state === 'Discovered',
             'DecisionLifecycleRules.ValidateCandidateTransition',
           ),
+          createLifecycleAction(
+            'generate_decision_proposal',
+            'Generate proposal',
+            'Generated',
+            candidate.state === 'Promoted' &&
+              !(state.decisionProposalBrowserItems[repositoryId] ?? []).some(
+                (proposal) =>
+                  proposal.candidateId === candidate.id &&
+                  proposal.state !== 'Expired' &&
+                  proposal.state !== 'Discarded',
+              ),
+            'DecisionGenerationService.GenerateProposalAsync',
+          ),
         ],
       ),
     ),

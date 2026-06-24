@@ -6,6 +6,7 @@ import type {
   DecisionContextSnapshot,
   DecisionLifecycleEligibilityProjection,
   DecisionLifecycleEntityEligibility,
+  DecisionProposal,
   DecisionProposalBrowserItem,
   DecisionReviewWorkspace,
 } from '../../types'
@@ -252,6 +253,117 @@ describe('DecisionLifecycleTab navigation', () => {
     expect(screen.getByText('Generated proposals must be viewed before refinement.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Mark Viewed' })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Needs Refinement' })).toBeDisabled()
+  })
+
+  it('renders generated proposal output and selects the generated proposal', async () => {
+    const generatedProposal = createGeneratedProposal()
+    const onGenerateProposal = vi.fn().mockResolvedValue(generatedProposal)
+    useDecisionProposalReviewMock.mockImplementation((repositoryId: string | null, proposalId: string | null) => ({
+      data: repositoryId && proposalId ? createWorkspace(repositoryId, proposalId) : null,
+      isLoading: false,
+      isMutating: false,
+      refresh: vi.fn(),
+      markViewed: vi.fn(),
+      markNeedsRefinement: vi.fn(),
+      markReadyForResolution: vi.fn(),
+    }))
+    useDecisionProposalLineageMock.mockImplementation((repositoryId: string | null, proposalId: string | null) => ({
+      data: repositoryId && proposalId ? createLineage(repositoryId, proposalId) : null,
+      isLoading: false,
+      refresh: vi.fn(),
+    }))
+    useDecisionOptionComparisonMock.mockReturnValue({ data: null, isLoading: false, refresh: vi.fn() })
+    useDecisionEvidenceInspectionMock.mockReturnValue({ data: null, isLoading: false, refresh: vi.fn() })
+    useDecisionSourceAttributionsMock.mockReturnValue({ data: [], isLoading: false, refresh: vi.fn() })
+    useDecisionGovernanceMock.mockReturnValue({
+      currentReport: null,
+      reports: [],
+      isLoading: false,
+      isGenerating: false,
+      error: null,
+      refresh: vi.fn(),
+      generateReport: vi.fn(),
+    })
+    useDecisionCertificationMock.mockReturnValue({
+      currentReport: null,
+      reports: [],
+      isLoading: false,
+      isRunning: false,
+      error: null,
+      refresh: vi.fn(),
+      runCertification: vi.fn(),
+    })
+    useDecisionGenerationCertificationMock.mockReturnValue({
+      currentReport: null,
+      reports: [],
+      isLoading: false,
+      isRunning: false,
+      error: null,
+      refresh: vi.fn(),
+      runCertification: vi.fn(),
+    })
+    useDecisionQualityMock.mockReturnValue({
+      assessments: [],
+      currentReport: null,
+      reports: [],
+      currentTrend: null,
+      trends: [],
+      isLoading: false,
+      isAssessing: false,
+      isGeneratingReport: false,
+      isGeneratingTrend: false,
+      error: null,
+      refresh: vi.fn(),
+      assessProposal: vi.fn(),
+      generateReport: vi.fn(),
+      generateTrend: vi.fn(),
+    })
+    useDecisionProposalRefinementMock.mockReturnValue({
+      refine: vi.fn(),
+      isSubmitting: false,
+      error: null,
+    })
+    useDecisionResolutionMock.mockReturnValue({
+      decision: null,
+      assimilationRecommendation: null,
+      isSubmitting: false,
+      isAssimilationLoading: false,
+      error: null,
+      resolve: vi.fn(),
+      loadAssimilationRecommendation: vi.fn(),
+      proposeAssimilationRecommendation: vi.fn(),
+      reset: vi.fn(),
+    })
+
+    render(
+      <DecisionLifecycleTab
+        context={createContext()}
+        candidates={[createCandidate()]}
+        proposals={createProposals()}
+        selectedProposalStates={[]}
+        hasSelectedRepository
+        isLoading={false}
+        repositoryId="repo-alpha"
+        lifecycleEligibility={createLifecycleEligibilityWithGeneration()}
+        onSelectedProposalStatesChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onGenerateProposal={onGenerateProposal}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Generate Decision Proposal' }))
+
+    await waitFor(() => {
+      expect(onGenerateProposal).toHaveBeenCalledWith('CAND-0001')
+      expect(screen.getByLabelText('Generated proposal summary')).toHaveTextContent('Generated proposal PROP-0099')
+      expect(screen.getByLabelText('Generated proposal summary')).toHaveTextContent('Generation mode PreferredOption')
+      expect(screen.getByLabelText('Generated proposal summary')).toHaveTextContent('2 accepted options')
+      expect(screen.getByLabelText('Generated proposal summary')).toHaveTextContent('1 rejected options')
+      expect(screen.getByLabelText('Generated proposal summary')).toHaveTextContent('1 deduplicated options')
+      expect(screen.getByLabelText('Generation validation diagnostics')).toHaveTextContent('OPT-B: Option lacks evidence.')
+      expect(screen.getByLabelText('Generation command diagnostics')).toHaveTextContent('Generated from promoted candidate evidence.')
+      expect(useDecisionProposalReviewMock).toHaveBeenLastCalledWith('repo-alpha', 'PROP-0099')
+    })
   })
 
   it('renders decision supersede and archive eligibility and submits required fields', async () => {
@@ -541,6 +653,64 @@ function createLifecycleEligibility(): DecisionLifecycleEligibilityProjection {
     ],
     decisions: [],
     diagnostics: [],
+  }
+}
+
+function createLifecycleEligibilityWithGeneration(): DecisionLifecycleEligibilityProjection {
+  return {
+    ...createLifecycleEligibility(),
+    candidates: [
+      {
+        entityKind: 'Candidate',
+        entityId: 'CAND-0001',
+        currentState: 'Promoted',
+        allowedActions: [
+          createAction('generate_decision_proposal', 'Generate proposal', 'Generated', true, null),
+        ],
+        blockedActions: [],
+        allowedNextStates: ['Generated'],
+        blockedNextStates: [],
+        diagnostics: [],
+      },
+    ],
+  }
+}
+
+function createGeneratedProposal(): DecisionProposal {
+  return {
+    id: 'PROP-0099',
+    repositoryId: 'repo-alpha',
+    candidateId: 'CAND-0001',
+    state: 'Generated',
+    title: 'Generated proposal from candidate evidence',
+    context: 'Generated context.',
+    options: [],
+    tradeoffs: [],
+    recommendation: {
+      optionId: 'OPT-A',
+      rationale: 'Generated recommendation.',
+      evidence: [],
+      mode: 'PreferredOption',
+    },
+    assumptions: [],
+    evidence: [],
+    history: [],
+    generationDiagnostics: {
+      generatedOptionCount: 4,
+      acceptedOptionCount: 2,
+      rejectedOptionCount: 1,
+      deduplicatedOptionCount: 1,
+      fallbackOptionCount: 0,
+      optionValidationResults: [
+        { optionId: 'OPT-A', isValid: true, issues: [] },
+        {
+          optionId: 'OPT-B',
+          isValid: false,
+          issues: [{ type: 'MissingEvidence', message: 'Option lacks evidence.' }],
+        },
+      ],
+      diagnostics: ['Generated from promoted candidate evidence.'],
+    },
   }
 }
 

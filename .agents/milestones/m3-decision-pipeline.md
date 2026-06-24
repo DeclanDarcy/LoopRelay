@@ -64,7 +64,7 @@ Discovery -> Candidate -> Proposal -> Review -> Refinement -> Resolution -> Supe
    - [x] expire
    - [x] mark duplicate
    - [x] generate proposal
-- [ ] Proposal generation flow must refresh candidates, refresh proposals, navigate to the generated proposal where appropriate, and display generation diagnostics, generated proposal id, generation mode, accepted option count, rejected option count, deduplicated option count, and validation diagnostics.
+- [x] Proposal generation flow must refresh candidates, refresh proposals, navigate to the generated proposal where appropriate, and display generation diagnostics, generated proposal id, generation mode, accepted option count, rejected option count, deduplicated option count, and validation diagnostics.
 - [ ] Update proposal viewer/review panels to render review state, allowed transitions, unavailable reasons, last transition, and transition controls.
    - [x] Proposal action controls consume backend lifecycle eligibility for allowed/blocked transitions.
    - [x] Proposal action controls render backend blocked reasons and governing rules.
@@ -82,6 +82,7 @@ Discovery -> Candidate -> Proposal -> Review -> Refinement -> Resolution -> Supe
 - [x] Endpoint test for decision lifecycle eligibility route.
 - [ ] Endpoint tests for remaining shell-reachable lifecycle routes.
 - [ ] UI tests for candidate actions, proposal generation, proposal review transitions, supersede, archive, and refresh behavior.
+  - [x] Proposal generation result rendering, backend-owned generate action eligibility, and generated proposal selection.
   - [x] Supersede/archive action reachability, required fields, blocked eligibility rendering, and execution projection refresh callback.
 - [ ] End-to-end test path:
   - [ ] discover candidate

@@ -2,46 +2,44 @@
 
 ## New State This Slice
 
-- Continued Milestone 3: Decision Pipeline Completion, focusing on resolved-decision supersede/archive reachability.
-- Added a resolved decision lifecycle action panel to `DecisionLifecycleTab`.
-- The panel consumes backend-owned `lifecycleEligibility.decisions` and renders:
-  - decision ids and current states
-  - allowed actions
-  - allowed next states
-  - blocked reasons
-  - governing lifecycle rules
-- Added supersede target selection from resolved replacement decisions.
-- Added required rationale and resolver capture for supersede/archive commands.
-- Wired `App.tsx` to call existing typed `supersedeDecision` and `archiveDecision` API functions.
-- Supersede/archive now refresh:
-  - centralized decision lifecycle state through `refreshDecisions()`
-  - decision governance panel data
-  - decision quality panel data
-  - execution context preview through the existing execution projection refresh callback
-- Added compact form styles for resolved-decision lifecycle inputs.
-- Added characterization coverage for:
-  - supersede/archive eligibility rendering
-  - archived-decision blocked reason rendering
-  - required supersede/archive command fields
-  - execution projection refresh callback after both actions
-- Updated `.agents/milestones/m3-decision-pipeline.md` to mark the resolved-decision supersede/archive UI item complete.
-- Rotated previous handoff to `.agents/handoffs/handoff.0013.md`.
+- Continued Milestone 3: Decision Pipeline Completion, focusing on proposal generation UX completion.
+- Extended `DecisionLifecycleEligibilityService` so candidate eligibility now includes `generate_decision_proposal`.
+- Proposal generation eligibility now mirrors `DecisionGenerationService.GenerateProposalAsync` guards:
+  - only promoted candidates can generate proposals
+  - candidates with an active non-expired/non-discarded proposal are blocked
+- Updated the dev Tauri mock lifecycle projection to expose the same `generate_decision_proposal` action shape.
+- Updated `DecisionCandidateBrowser` so "Generate Decision Proposal" is enabled or blocked from backend-owned lifecycle eligibility instead of local UI availability.
+- Updated `DecisionLifecycleTab` so generation returns and stores the authoritative `DecisionProposal`, then renders a generation result panel showing:
+  - generated proposal id
+  - generation mode
+  - candidate id
+  - accepted option count
+  - rejected option count
+  - deduplicated option count
+  - validation diagnostics
+  - generation command diagnostics
+- Generated proposal selection now uses the returned proposal id, causing the proposal review hooks to load the generated proposal workspace.
+- `App.tsx` now returns the generated proposal object from the generation handler while preserving `refreshDecisions()`, which refreshes decision context, candidates, proposals, and lifecycle eligibility.
+- Added backend coverage for candidate proposal-generation eligibility.
+- Added UI characterization coverage for:
+  - backend-owned generate action eligibility
+  - blocked generation reasons
+  - generated proposal result rendering
+  - generated proposal selection/navigation
+- Updated `.agents/milestones/m3-decision-pipeline.md` to mark the proposal generation flow complete.
+- Rotated previous handoff to `.agents/handoffs/handoff.0014.md`.
 
 ## Verification
 
-- `npm test -- --run src/test/characterization/decisionLifecycleNavigation.test.tsx src/test/characterization/decisionCandidateBrowser.test.tsx` passed with 7 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter DecisionLifecycleEligibilityServiceTests` passed with 3 tests.
+- `npm test -- --run src/test/characterization/decisionLifecycleNavigation.test.tsx src/test/characterization/decisionCandidateBrowser.test.tsx` passed with 10 tests.
 - `npm run build` passed.
-- `npm test` passed with 190 tests across 54 files.
+- `npm test` passed with 193 tests across 54 files.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed with 735 tests.
 
 ## Remaining Milestone 3 Work
 
 - Complete candidate duplicate-status rendering.
-- Finish proposal generation UX details:
-  - generated proposal id
-  - generation mode
-  - accepted/rejected/deduplicated option counts
-  - validation diagnostics
-  - navigation behavior characterization
 - Finish proposal review transparency beyond controls:
   - last transition rendering
   - review-state placement audit
@@ -51,4 +49,4 @@
   - proposal revision list
   - revision comparison
   - context snapshot listing
-- Add broader end-to-end lifecycle characterization after remaining proposal-generation and review-transparency details are complete.
+- Add broader end-to-end lifecycle characterization after remaining review-transparency details are complete.

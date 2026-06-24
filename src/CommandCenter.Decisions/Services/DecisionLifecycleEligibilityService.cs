@@ -18,7 +18,7 @@ public sealed class DecisionLifecycleEligibilityService(
 
         return new DecisionLifecycleEligibilityProjection(
             repository.Id,
-            candidates.Select(ProjectCandidate).ToArray(),
+            candidates.Select(candidate => ProjectCandidate(candidate, proposals)).ToArray(),
             proposals.Select(ProjectProposal).ToArray(),
             decisions.Select(decision => ProjectDecision(decision, decisions)).ToArray(),
             []);
@@ -31,14 +31,20 @@ public sealed class DecisionLifecycleEligibilityService(
         return repository ?? throw new KeyNotFoundException($"Repository was not found: {repositoryId}");
     }
 
-    private static DecisionLifecycleEntityEligibility ProjectCandidate(DecisionCandidate candidate)
+    private static DecisionLifecycleEntityEligibility ProjectCandidate(
+        DecisionCandidate candidate,
+        IReadOnlyList<DecisionProposal> proposals)
     {
+        bool hasActiveProposal = proposals.Any(proposal =>
+            proposal.CandidateId == candidate.Id &&
+            proposal.State is not DecisionProposalState.Expired and not DecisionProposalState.Discarded);
         DecisionLifecycleActionEligibility[] actions =
         [
             CandidateAction(candidate.State, DecisionCandidateState.Promoted, "promote_decision_candidate", "Promote", ["reason"]),
             CandidateAction(candidate.State, DecisionCandidateState.Dismissed, "dismiss_decision_candidate", "Dismiss", ["reason"]),
             CandidateAction(candidate.State, DecisionCandidateState.Expired, "expire_decision_candidate", "Expire", ["reason"]),
-            CandidateAction(candidate.State, DecisionCandidateState.Duplicate, "mark_decision_candidate_duplicate", "Mark duplicate", ["duplicateOfCandidateId", "reason"])
+            CandidateAction(candidate.State, DecisionCandidateState.Duplicate, "mark_decision_candidate_duplicate", "Mark duplicate", ["duplicateOfCandidateId", "reason"]),
+            GenerateProposalAction(candidate.State, hasActiveProposal)
         ];
 
         return Entity(
@@ -152,6 +158,27 @@ public sealed class DecisionLifecycleEligibilityService(
     {
         DecisionTransitionResult result = DecisionLifecycleRules.ValidateCandidateTransition(from, to);
         return Action(commandName, displayName, to.ToString(), result, requiredInputs, "DecisionLifecycleRules.ValidateCandidateTransition");
+    }
+
+    private static DecisionLifecycleActionEligibility GenerateProposalAction(
+        DecisionCandidateState candidateState,
+        bool hasActiveProposal)
+    {
+        DecisionTransitionResult result = candidateState == DecisionCandidateState.Promoted
+            ? DecisionTransitionResult.Valid
+            : DecisionTransitionResult.Invalid("Only promoted candidates can generate decision proposals.");
+        if (result.IsValid && hasActiveProposal)
+        {
+            result = DecisionTransitionResult.Invalid("An active proposal already exists for this candidate.");
+        }
+
+        return Action(
+            "generate_decision_proposal",
+            "Generate proposal",
+            DecisionProposalState.Generated.ToString(),
+            result,
+            [],
+            "DecisionGenerationService.GenerateProposalAsync");
     }
 
     private static DecisionLifecycleActionEligibility ProposalAction(
