@@ -2,28 +2,32 @@
 
 ## Slice Summary
 
-- Continued Milestone 5B repository consumption of decision-session lifecycle state.
-- Added `CommandCenter.Middle` reference to `CommandCenter.DecisionSessions`.
-- Added `RepositoryDecisionSessionSummary` with health dimensions and recent transfer lineage in `src/CommandCenter.Middle/Projections`.
-- Extended `RepositoryDashboardProjection` and `RepositoryWorkspaceProjection` with `DecisionSessionSummary`.
-- Extended `RepositoryProjectionService` with optional `IDecisionSessionObservabilityService` consumption, matching the existing optional reasoning dependency pattern.
-- Repository summaries now surface active session id/state, lifecycle decision, eligibility status, estimated token count, cache TTL, cache miss risk, coherence score, transfer pressure, health dimensions, recent transfer lineage, diagnostics, and generation time.
-- Added repository projection tests for populated decision-session summaries and empty summaries when observability is absent.
-- Updated the Milestone 5 checklist for completed repository summary integration and test coverage.
+- Continued Milestone 5 hardening after workflow and repository consumption were functionally complete.
+- Added `WorkflowDecisionSessionServiceTests` covering:
+  - Continue lifecycle state in workflow projection.
+  - Transfer recommendation and eligibility visibility.
+  - Continuity artifact lineage.
+  - Transfer lineage.
+  - Workflow health projection.
+  - Workflow influence projection.
+  - Constructor-level authority guard that `WorkflowDecisionSessionService` depends only on `IDecisionSessionObservabilityService`.
+- Hardened `DeletingWorkflowArtifactsDoesNotChangeDomainProjection` so deleted workflow timeline artifacts are rebuilt through recovery and persisted again.
+- Marked the remaining Milestone 5 workflow hardening tests and exit criteria complete.
 
 ## Validation
 
-- `dotnet test .\tests\CommandCenter.Backend.Tests\CommandCenter.Backend.Tests.csproj --filter "RepositoryProjectionServiceTests" --no-restore` passed: 17 tests.
-- `dotnet test .\tests\CommandCenter.Backend.Tests\CommandCenter.Backend.Tests.csproj --filter "DecisionSession|RepositoryProjection" --no-restore` passed: 92 tests.
-- `dotnet test .\CommandCenter.slnx --no-restore` passed: 707 tests.
+- `dotnet test .\tests\CommandCenter.Backend.Tests\CommandCenter.Backend.Tests.csproj --filter "WorkflowDecisionSessionServiceTests" --no-restore` passed: 4 tests.
+- `dotnet test .\tests\CommandCenter.Backend.Tests\CommandCenter.Backend.Tests.csproj --filter "WorkflowDecisionSessionServiceTests|DeletingWorkflowArtifactsDoesNotChangeDomainProjection" --no-restore` passed: 5 tests.
+- `dotnet test .\tests\CommandCenter.Backend.Tests\CommandCenter.Backend.Tests.csproj --filter "DecisionSession|WorkflowProjection|WorkflowDecisionSession" --no-restore` passed: 199 tests.
+- `dotnet test .\CommandCenter.slnx --no-restore` passed: 711 tests.
 
 ## Current State
 
-- `.agents/handoffs/handoff.md` was rotated to `.agents/handoffs/handoff.0016.md`; this file is the new active handoff.
+- `.agents/handoffs/handoff.md` was rotated to `.agents/handoffs/handoff.0017.md`; this file is the new active handoff.
 - `.agents/decisions/decisions.md` was not rotated because no user response authorized new decisions during this slice.
-- Milestone 5B repository summary consumption is implemented.
+- Milestone 5 is now checklist-complete.
 - No git staging, commit, or push was performed.
 
 ## Next Slice Recommendation
 
-- Continue Milestone 5 test hardening by adding explicit workflow lifecycle visibility tests for continue/transfer decisions, eligibility, continuity artifact lineage, transfer lineage, health, influence, mutating API boundaries, and deleted projection rebuild behavior.
+- Start Milestone 6 certification. Focus first on the decision-session certification service and report model, proving active-session invariant, authority boundaries, analysis determinism, lifecycle policy determinism, eligibility behavior, transfer correctness, recovery correctness, and consumer read-only boundaries.

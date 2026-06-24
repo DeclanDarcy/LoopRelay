@@ -2490,10 +2490,18 @@ public sealed class WorkflowProjectionServiceTests
         await store.DeleteAsync(WorkflowArtifactPaths.Resolve(fixture.Repository, WorkflowArtifactPaths.TimelineJson(timelineId)));
         await store.DeleteAsync(WorkflowArtifactPaths.Resolve(fixture.Repository, WorkflowArtifactPaths.TimelineMarkdown(timelineId)));
         WorkflowInstance after = await fixture.CreateService().ProjectAsync(fixture.Repository.Id);
+        WorkflowRecoveryResult rebuilt = await recovery.RecoverCurrentWorkflowAsync(fixture.Repository.Id);
+        WorkflowTimeline? latest = await workflowRepository.GetLatestTimelineAsync(fixture.Repository);
 
         Assert.Equal(before.CurrentStage, after.CurrentStage);
         Assert.Equal(before.BlockingGate, after.BlockingGate);
         Assert.Equal(before.ValidTransitions, after.ValidTransitions);
+        Assert.True(rebuilt.Diagnostics.Rebuilt);
+        Assert.False(rebuilt.Diagnostics.PersistedEvidenceMatchedDomain);
+        Assert.NotNull(latest);
+        Assert.Equal(after.CurrentStage, latest.CurrentStage);
+        Assert.Equal(after.BlockingGate, latest.BlockingGate);
+        Assert.Contains(rebuilt.Diagnostics.Diagnostics, diagnostic => diagnostic.Contains("No persisted workflow timeline exists", StringComparison.Ordinal));
     }
 
     [Fact]

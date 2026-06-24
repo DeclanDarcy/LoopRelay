@@ -64,21 +64,21 @@ Authority rules:
 
 Tests:
 
-- [ ] Lifecycle state appears in workflow projection.
-- [ ] Continue and transfer decisions are visible.
-- [ ] Eligibility status is visible.
-- [ ] Continuity artifact lineage is projected.
-- [ ] Transfer lineage is projected.
-- [ ] Lifecycle health appears in workflow health.
-- [ ] Influence trace appears in workflow influence projection.
+- [x] Lifecycle state appears in workflow projection.
+- [x] Continue and transfer decisions are visible.
+- [x] Eligibility status is visible.
+- [x] Continuity artifact lineage is projected.
+- [x] Transfer lineage is projected.
+- [x] Lifecycle health appears in workflow health.
+- [x] Influence trace appears in workflow influence projection.
 - [x] Repository summary includes decision-session state, TTL, cache risk, and health.
-- [ ] Workflow cannot call mutating lifecycle APIs.
-- [ ] Deleted workflow projection is rebuilt.
+- [x] Workflow cannot call mutating lifecycle APIs.
+- [x] Deleted workflow projection is rebuilt.
 
 Exit criteria:
 
-- [ ] Workflow can answer active governance session, current lifecycle recommendation, transfer eligibility, health, recent transfer lineage, continuity artifact lineage, and increasing transfer pressure.
-- [ ] The decision-session lifecycle remains authoritative.
+- [x] Workflow can answer active governance session, current lifecycle recommendation, transfer eligibility, health, recent transfer lineage, continuity artifact lineage, and increasing transfer pressure.
+- [x] The decision-session lifecycle remains authoritative.
 
 
 
