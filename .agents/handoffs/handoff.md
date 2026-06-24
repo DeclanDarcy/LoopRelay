@@ -2,40 +2,44 @@
 
 ## New State
 
-- Completed Milestone 3 workflow gate catalog.
-- Added first-class gate catalog types:
-  `WorkflowGateStatus`, `WorkflowGate`, `WorkflowGateEvidence`, `WorkflowGateDiagnostics`,
-  `WorkflowGateCatalogProjection`, and `WorkflowGateHistoryProjection`.
-- Added `IWorkflowGateCatalogService` and `WorkflowGateCatalogService`.
-- Added deterministic gate-to-command mapping:
-  `WorkSelection -> explicit_human_work_selection`,
-  `ExecutionAcceptance -> accept_execution_handoff | reject_execution_handoff`,
-  `DecisionResolution -> resolve_decision_proposal`,
-  `OperationalContextReview -> accept_operational_context_proposal | edit_operational_context_proposal | reject_operational_context_proposal`,
-  `OperationalContextPromotion -> promote_operational_context_proposal`,
-  `CommitApproval -> commit_execution`,
-  `PushApproval -> push_execution`.
-- Extended workflow projections with open gates, satisfied gates, gate history, and gate diagnostics.
-- Added derived gate endpoints:
-  `GET /api/repositories/{repositoryId}/workflow/gates`
-  and `GET /api/repositories/{repositoryId}/workflow/gates/history`.
-- Added timeline evidence events for satisfied gates:
-  `ExecutionHandoffAccepted` and `OperationalContextReviewed`.
-- Marked `.agents/milestones/m3-gate-catalog.md` complete.
-- Rotated previous `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0003.md`.
+- Completed Milestone 4 execution workflow integration.
+- Added explicit execution workflow boundary:
+  `IWorkflowExecutionService` and `WorkflowExecutionService`.
+- Added execution workflow models:
+  `WorkflowExecutionStatus`, `WorkflowExecutionProjection`,
+  `WorkflowExecutionFailure`, and `WorkflowExecutionDiagnostics`.
+- Extended `WorkflowInstance` with current execution projection, execution status,
+  execution eligibility, execution failure, and execution diagnostics.
+- Added execution timeline events:
+  `ExecutionFailed`, `ExecutionCancelled`, and `ExecutionHandoffRejected`.
+- Added derived endpoint:
+  `GET /api/repositories/{repositoryId}/workflow/execution`.
+- Updated workflow projection to consume execution through `IWorkflowExecutionService`
+  while preserving timeline derivation for execution start, completion, failure,
+  cancellation, handoff acceptance/rejection, commit, and push evidence.
+- Marked `.agents/milestones/m4-execution.md` complete.
+- Rotated previous `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0004.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter WorkflowProjectionServiceTests` passed: 22 tests.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 534 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter WorkflowProjectionServiceTests` passed: 27 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 539 tests.
 - `dotnet build CommandCenter.slnx` passed with 0 warnings and 0 errors.
 
 ## Notes
 
-- Gate catalog is read-only. It derives open and satisfied gates from workflow projection and timeline evidence; it does not call or wrap domain commands.
-- Gate history is currently a derived API projection with Markdown content, not persisted gate truth. If gate artifacts are later persisted, they must stay reconstructable evidence and never become mutable workflow state.
-- `resolve_decision_proposal` is used as the current concrete command name because that is the command exposed by the Tauri bridge and UI.
+- Workflow execution integration is read-only. The service consumes repository execution
+  state and session summaries; execution launch, cancellation, acceptance, rejection,
+  commit, and push remain owned by Execution/Git domain services.
+- `HasChanges` is intentionally derived from commit-preparation, commit, push, and
+  awaiting-commit/awaiting-push evidence. The current session summary does not expose
+  a reliable generated-change flag before commit preparation, so workflow does not
+  invent one.
+- Recovery remains projection-based: rebuilt workflow timelines now include the
+  execution projection evidence and new execution timeline events.
 
 ## Next Slice
 
-- Start Milestone 4 execution workflow integration by adding execution-specific workflow projection/service boundaries and endpoints, then prove execution running/completed/failed/awaiting-acceptance evidence feeds workflow without introducing execution authority.
+- Start Milestone 5 handoff workflow integration by adding handoff-specific projection,
+  validation, diagnostics, and endpoint coverage around current/rotated handoff evidence,
+  while keeping handoff acceptance/rejection authority in Execution.

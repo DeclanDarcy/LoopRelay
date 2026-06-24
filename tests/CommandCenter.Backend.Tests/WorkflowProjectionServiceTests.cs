@@ -114,6 +114,98 @@ public sealed class WorkflowProjectionServiceTests
     }
 
     [Fact]
+    public async Task WorkflowExecutionServiceProjectsRunningExecutionWithoutMutators()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Executing;
+        fixture.Session = new ExecutionSessionSummary
+        {
+            SessionId = Guid.NewGuid(),
+            State = ExecutionSessionState.Executing,
+            RepositoryState = RepositoryExecutionState.Executing,
+            StartedAt = DateTimeOffset.Parse("2026-06-23T10:00:00Z"),
+            ProviderName = "codex"
+        };
+
+        WorkflowExecutionProjection execution = await fixture.CreateExecutionService().ProjectExecutionAsync(fixture.Repository.Id);
+        WorkflowInstance projection = await fixture.CreateService().ProjectAsync(fixture.Repository.Id);
+
+        Assert.Equal(WorkflowExecutionStatus.Running, execution.Status);
+        Assert.False(execution.HasHandoff);
+        Assert.False(execution.HasChanges);
+        Assert.False(execution.IsExecutionEligible);
+        Assert.Equal(WorkflowStage.Execution, projection.CurrentStage);
+        Assert.Equal(WorkflowProgressState.Active, projection.ProgressState);
+        Assert.Contains(projection.Timeline, entry => entry.EventType == WorkflowTimelineEventType.ExecutionStarted);
+    }
+
+    [Fact]
+    public async Task WorkflowExecutionServiceProjectsCompletedExecutionEvidence()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+
+        WorkflowExecutionProjection execution = await fixture.CreateExecutionService().ProjectExecutionAsync(fixture.Repository.Id);
+        WorkflowInstance projection = await fixture.CreateService().ProjectAsync(fixture.Repository.Id);
+
+        Assert.Equal(WorkflowExecutionStatus.Completed, execution.Status);
+        Assert.True(execution.HasHandoff);
+        Assert.False(execution.HasChanges);
+        Assert.Equal(fixture.Session.SessionId, projection.CurrentExecution.ExecutionId);
+        Assert.Equal(WorkflowExecutionStatus.Completed, projection.ExecutionStatus);
+        Assert.Contains(projection.Timeline, entry => entry.EventType == WorkflowTimelineEventType.ExecutionHandoffAccepted);
+    }
+
+    [Fact]
+    public async Task FailedExecutionBlocksWorkflowWithExecutionFailureDiagnostics()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Failed;
+        fixture.Session = new ExecutionSessionSummary
+        {
+            SessionId = Guid.NewGuid(),
+            State = ExecutionSessionState.Failed,
+            RepositoryState = RepositoryExecutionState.Failed,
+            StartedAt = DateTimeOffset.Parse("2026-06-23T10:00:00Z"),
+            LastActivityAt = DateTimeOffset.Parse("2026-06-23T10:03:00Z"),
+            FailureReason = "Provider exited with code 1."
+        };
+
+        WorkflowInstance projection = await fixture.CreateService().ProjectAsync(fixture.Repository.Id);
+
+        Assert.Equal(WorkflowStage.Failed, projection.CurrentStage);
+        Assert.Equal(WorkflowProgressState.Failed, projection.ProgressState);
+        Assert.Equal(WorkflowExecutionStatus.Failed, projection.ExecutionStatus);
+        Assert.NotNull(projection.ExecutionFailure);
+        Assert.Equal("Provider exited with code 1.", projection.ExecutionFailure.Reason);
+        Assert.Contains(projection.Timeline, entry => entry.EventType == WorkflowTimelineEventType.ExecutionFailed);
+    }
+
+    [Fact]
+    public async Task CancelledExecutionBlocksWorkflowAtWorkSelection()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Cancelled;
+        fixture.Session = new ExecutionSessionSummary
+        {
+            SessionId = Guid.NewGuid(),
+            State = ExecutionSessionState.Cancelled,
+            RepositoryState = RepositoryExecutionState.Cancelled,
+            StartedAt = DateTimeOffset.Parse("2026-06-23T10:00:00Z"),
+            FailureReason = "Cancelled by user."
+        };
+
+        WorkflowInstance projection = await fixture.CreateService().ProjectAsync(fixture.Repository.Id);
+
+        Assert.Equal(WorkflowStage.Blocked, projection.CurrentStage);
+        Assert.Equal(WorkflowProgressState.Blocked, projection.ProgressState);
+        Assert.Equal(WorkflowGateType.WorkSelection, projection.BlockingGate);
+        Assert.Equal(WorkflowExecutionStatus.Cancelled, projection.ExecutionStatus);
+        Assert.Contains(projection.Timeline, entry => entry.EventType == WorkflowTimelineEventType.ExecutionCancelled);
+    }
+
+    [Fact]
     public async Task OpenDecisionMapsToDecisionResolutionGate()
     {
         TestFixture fixture = TestFixture.Create();
@@ -328,6 +420,36 @@ public sealed class WorkflowProjectionServiceTests
     }
 
     [Fact]
+    public async Task WorkflowExecutionEndpointReturnsExecutionProjection()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingAcceptance;
+        fixture.Session = new ExecutionSessionSummary
+        {
+            SessionId = Guid.NewGuid(),
+            State = ExecutionSessionState.Completed,
+            RepositoryState = RepositoryExecutionState.AwaitingAcceptance,
+            StartedAt = DateTimeOffset.Parse("2026-06-23T10:00:00Z"),
+            CompletedAt = DateTimeOffset.Parse("2026-06-23T10:10:00Z"),
+            HandoffPath = ".agents/handoffs/handoff.md"
+        };
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services => fixture.ReplaceServices(services));
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+
+        using var client = new HttpClient();
+        HttpResponseMessage response = await client.GetAsync(app.Urls.Single() + $"/api/repositories/{fixture.Repository.Id}/workflow/execution");
+        WorkflowExecutionProjection? execution = await response.Content.ReadFromJsonAsync<WorkflowExecutionProjection>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(execution);
+        Assert.Equal(WorkflowExecutionStatus.AwaitingAcceptance, execution.Status);
+        Assert.True(execution.HasHandoff);
+    }
+
+    [Fact]
     public async Task WorkflowTransitionsEndpointReturnsStateMachineDiagnostics()
     {
         TestFixture fixture = TestFixture.Create();
@@ -500,7 +622,8 @@ public sealed class WorkflowProjectionServiceTests
         RepositoryState = repositoryState,
         StartedAt = DateTimeOffset.Parse("2026-06-23T10:00:00Z"),
         CompletedAt = DateTimeOffset.Parse("2026-06-23T10:10:00Z"),
-        AcceptedAt = DateTimeOffset.Parse("2026-06-23T10:15:00Z")
+        AcceptedAt = DateTimeOffset.Parse("2026-06-23T10:15:00Z"),
+        HandoffPath = ".agents/handoffs/handoff.md"
     };
 
     private static ExecutionSessionSummary AwaitingPushCommittedSession() => new()
@@ -511,6 +634,7 @@ public sealed class WorkflowProjectionServiceTests
         StartedAt = DateTimeOffset.Parse("2026-06-23T10:00:00Z"),
         CompletedAt = DateTimeOffset.Parse("2026-06-23T10:10:00Z"),
         AcceptedAt = DateTimeOffset.Parse("2026-06-23T10:15:00Z"),
+        HandoffPath = ".agents/handoffs/handoff.md",
         CommittedAt = DateTimeOffset.Parse("2026-06-23T12:00:00Z"),
         CommitSha = "abc123"
     };
@@ -528,6 +652,7 @@ public sealed class WorkflowProjectionServiceTests
         StartedAt = DateTimeOffset.Parse("2026-06-23T10:00:00Z"),
         CompletedAt = DateTimeOffset.Parse("2026-06-23T10:10:00Z"),
         AcceptedAt = DateTimeOffset.Parse("2026-06-23T10:15:00Z"),
+        HandoffPath = ".agents/handoffs/handoff.md",
         CommittedAt = DateTimeOffset.Parse("2026-06-23T12:00:00Z"),
         CommitSha = "abc123",
         PushedAt = DateTimeOffset.Parse("2026-06-23T12:10:00Z"),
@@ -625,11 +750,14 @@ public sealed class WorkflowProjectionServiceTests
         public WorkflowProjectionService CreateService() =>
             new(
                 new RepositoryServiceStub(Repository),
-                new ExecutionSessionServiceStub(this),
+                new WorkflowExecutionService(new ExecutionSessionServiceStub(this)),
                 new DecisionRepositoryStub(this),
                 new OperationalContextProposalStoreStub(this),
                 new GitServiceStub(this),
                 new WorkflowStateMachineService());
+
+        public WorkflowExecutionService CreateExecutionService() =>
+            new(new ExecutionSessionServiceStub(this));
 
         public WorkflowRecoveryService CreateRecoveryService(IWorkflowRepository workflowRepository) =>
             new(new RepositoryServiceStub(Repository), CreateService(), workflowRepository);
@@ -643,6 +771,7 @@ public sealed class WorkflowProjectionServiceTests
             services.RemoveAll<IOperationalContextProposalStore>();
             services.RemoveAll<IGitService>();
             services.RemoveAll<IWorkflowStateMachineService>();
+            services.RemoveAll<IWorkflowExecutionService>();
             services.RemoveAll<IWorkflowProjectionService>();
             services.RemoveAll<IWorkflowGateCatalogService>();
             services.RemoveAll<IWorkflowRepository>();
@@ -656,6 +785,7 @@ public sealed class WorkflowProjectionServiceTests
             services.AddSingleton<IOperationalContextProposalStore>(new OperationalContextProposalStoreStub(this));
             services.AddSingleton<IGitService>(new GitServiceStub(this));
             services.AddSingleton<IWorkflowRepository, FileSystemWorkflowRepository>();
+            services.AddSingleton<IWorkflowExecutionService, WorkflowExecutionService>();
             services.AddSingleton<IWorkflowStateMachineService, WorkflowStateMachineService>();
             services.AddSingleton<IWorkflowProjectionService, WorkflowProjectionService>();
             services.AddSingleton<IWorkflowGateCatalogService, WorkflowGateCatalogService>();

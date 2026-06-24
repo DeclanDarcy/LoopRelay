@@ -16,6 +16,7 @@ public static class WorkflowEndpoints
         app.MapGetWorkflowGateHistory();
         app.MapGetWorkflowRecovery();
         app.MapPostWorkflowRecover();
+        app.MapGetWorkflowExecution();
         return app;
     }
 
@@ -191,6 +192,25 @@ public static class WorkflowEndpoints
             try
             {
                 return Results.Ok(await workflowRecoveryService.RecoverCurrentWorkflowAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGetWorkflowExecution(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/workflow/execution", async (
+            Guid repositoryId,
+            IWorkflowExecutionService workflowExecutionService) =>
+        {
+            try
+            {
+                return Results.Ok(await workflowExecutionService.ProjectExecutionAsync(repositoryId));
             }
             catch (KeyNotFoundException exception)
             {

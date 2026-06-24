@@ -7,7 +7,6 @@ using CommandCenter.Decisions.Models;
 using CommandCenter.Decisions.Primitives;
 using CommandCenter.Execution.Abstractions;
 using CommandCenter.Execution.Models;
-using CommandCenter.Execution.Primitives;
 using CommandCenter.Workflow.Abstractions;
 using CommandCenter.Workflow.Models;
 using CommandCenter.Workflow.Primitives;
@@ -16,7 +15,7 @@ namespace CommandCenter.Workflow.Services;
 
 public sealed class WorkflowProjectionService(
     IRepositoryService repositoryService,
-    IExecutionSessionService executionSessionService,
+    IWorkflowExecutionService workflowExecutionService,
     IDecisionRepository decisionRepository,
     IOperationalContextProposalStore operationalContextProposalStore,
     IGitService gitService,
@@ -54,6 +53,11 @@ public sealed class WorkflowProjectionService(
             choice.ProgressState,
             choice.Gate,
             choice.RequiredHumanAction,
+            evidence.Execution,
+            evidence.Execution.Status,
+            evidence.Execution.IsExecutionEligible,
+            evidence.Execution.Failure,
+            evidence.Execution.Diagnostics,
             stateMachine.CandidateStages,
             stateMachine.ValidTransitions,
             stateMachine.BlockedTransitions,
@@ -90,13 +94,12 @@ public sealed class WorkflowProjectionService(
 
     private async Task<ProjectionEvidence> LoadEvidenceAsync(Repository repository)
     {
-        RepositoryExecutionState executionState = await executionSessionService.GetRepositoryStateAsync(repository.Id);
-        ExecutionSessionSummary? session = await executionSessionService.GetRepositorySessionSummaryAsync(repository.Id);
+        WorkflowExecutionProjection execution = await workflowExecutionService.ProjectExecutionAsync(repository.Id);
         IReadOnlyList<Decision> decisions = await decisionRepository.ListDecisionsAsync(repository);
         IReadOnlyList<OperationalContextProposal> proposals = await operationalContextProposalStore.ListAsync(repository);
         RepositoryGitStatus gitStatus = await gitService.GetStatusAsync(repository);
 
-        return new ProjectionEvidence(repository, executionState, session, decisions, proposals, gitStatus);
+        return new ProjectionEvidence(repository, execution, decisions, proposals, gitStatus);
     }
 
     private static ProjectionChoice ChooseProjection(ProjectionEvidence evidence)
@@ -105,41 +108,36 @@ public sealed class WorkflowProjectionService(
         List<string> unknownStates = [];
         List<string> conflicts = [];
 
-        ExecutionSessionSummary? session = evidence.Session;
-        RepositoryExecutionState executionState = evidence.ExecutionState;
+        WorkflowExecutionProjection execution = evidence.Execution;
+        WorkflowExecutionStatus executionStatus = execution.Status;
 
-        if (session is not null && session.RepositoryState != executionState)
-        {
-            conflicts.Add($"Execution repository state is {executionState}, but latest session summary reports {session.RepositoryState}.");
-        }
+        conflicts.AddRange(execution.Diagnostics.Conflicts);
 
-        if (executionState is RepositoryExecutionState.Failed ||
-            session?.State is ExecutionSessionState.Failed)
+        if (executionStatus is WorkflowExecutionStatus.Failed)
         {
-            reasoning.Add("Execution evidence reports a failed state.");
+            reasoning.Add("Execution projection reports a failed state.");
             return Choice(WorkflowStage.Failed, WorkflowProgressState.Failed, WorkflowGateType.None, "Review the failed execution session.", reasoning, unknownStates, conflicts);
         }
 
-        if (executionState is RepositoryExecutionState.Cancelled ||
-            session?.State is ExecutionSessionState.Cancelled)
+        if (executionStatus is WorkflowExecutionStatus.Cancelled)
         {
-            reasoning.Add("Execution evidence reports a cancelled state.");
+            reasoning.Add("Execution projection reports a cancelled state.");
             return Choice(WorkflowStage.Blocked, WorkflowProgressState.Blocked, WorkflowGateType.WorkSelection, "Select the next work item to execute.", reasoning, unknownStates, conflicts);
         }
 
-        if (session?.PushedAt is not null)
+        if (execution.PushedAt is not null)
         {
             reasoning.Add("Latest execution session has push evidence.");
             return Choice(WorkflowStage.Completed, WorkflowProgressState.Completed, WorkflowGateType.WorkSelection, "Select the next work item.", reasoning, unknownStates, conflicts);
         }
 
-        if (session?.CommittedAt is not null || executionState is RepositoryExecutionState.AwaitingPush)
+        if (execution.CommittedAt is not null)
         {
             reasoning.Add("Commit evidence exists and push evidence is absent.");
             return Choice(WorkflowStage.Push, WorkflowProgressState.AwaitingGate, WorkflowGateType.PushApproval, "Review and execute push through the existing git push command.", reasoning, unknownStates, conflicts);
         }
 
-        if (executionState is RepositoryExecutionState.AwaitingCommit)
+        if (execution.HasChanges)
         {
             reasoning.Add("Execution has been accepted and is awaiting commit.");
             return Choice(WorkflowStage.Commit, WorkflowProgressState.AwaitingGate, WorkflowGateType.CommitApproval, "Review and execute commit through the existing git commit command.", reasoning, unknownStates, conflicts);
@@ -168,20 +166,19 @@ public sealed class WorkflowProjectionService(
             return Choice(WorkflowStage.Decision, WorkflowProgressState.AwaitingGate, WorkflowGateType.DecisionResolution, "Resolve outstanding decisions through the existing decisions workflow.", reasoning, unknownStates, conflicts);
         }
 
-        if (executionState is RepositoryExecutionState.AwaitingAcceptance)
+        if (executionStatus is WorkflowExecutionStatus.AwaitingAcceptance)
         {
             reasoning.Add("Execution completed and is awaiting handoff acceptance.");
             return Choice(WorkflowStage.Handoff, WorkflowProgressState.AwaitingGate, WorkflowGateType.ExecutionAcceptance, "Review and accept or reject the execution handoff.", reasoning, unknownStates, conflicts);
         }
 
-        if (executionState is RepositoryExecutionState.Executing ||
-            session?.State is ExecutionSessionState.Executing or ExecutionSessionState.Created)
+        if (executionStatus is WorkflowExecutionStatus.Running)
         {
             reasoning.Add("Execution is active.");
             return Choice(WorkflowStage.Execution, WorkflowProgressState.Active, WorkflowGateType.None, "Wait for execution to complete.", reasoning, unknownStates, conflicts);
         }
 
-        if (session is null)
+        if (executionStatus is WorkflowExecutionStatus.NotStarted)
         {
             reasoning.Add("No execution session evidence exists.");
             return Choice(WorkflowStage.WorkSelection, WorkflowProgressState.WaitingForHuman, WorkflowGateType.WorkSelection, "Select work to execute.", reasoning, unknownStates, conflicts);
@@ -212,8 +209,7 @@ public sealed class WorkflowProjectionService(
         List<string> inputs =
         [
             $"repository:{evidence.Repository.Id}",
-            $"execution-state:{evidence.ExecutionState}",
-            evidence.Session is null ? "execution-session:none" : $"execution-session:{evidence.Session.SessionId}:{evidence.Session.State}:{evidence.Session.RepositoryState}",
+            $"execution:{evidence.Execution.ExecutionId?.ToString() ?? "none"}:{evidence.Execution.Status}:handoff={evidence.Execution.HasHandoff}:changes={evidence.Execution.HasChanges}",
             $"decisions:{evidence.Decisions.Count}:{string.Join(",", evidence.Decisions.OrderBy(decision => decision.Id.Value).Select(decision => $"{decision.Id.Value}:{decision.State}"))}",
             $"operational-context-proposals:{evidence.Proposals.Count}:{string.Join(",", evidence.Proposals.OrderBy(proposal => proposal.ProposalId).Select(proposal => $"{proposal.ProposalId}:{proposal.Status}"))}",
             $"git:{evidence.GitStatus.Branch}:ahead={evidence.GitStatus.AheadCount}:behind={evidence.GitStatus.BehindCount}:clean={evidence.GitStatus.DirtyState.IsClean}"
@@ -225,9 +221,9 @@ public sealed class WorkflowProjectionService(
     private static IReadOnlyList<WorkflowTimelineEntry> BuildTimeline(ProjectionEvidence evidence)
     {
         List<WorkflowTimelineEntry> entries = [];
-        ExecutionSessionSummary? session = evidence.Session;
+        WorkflowExecutionProjection execution = evidence.Execution;
 
-        if (session?.StartedAt is DateTimeOffset startedAt)
+        if (execution.StartedAt is DateTimeOffset startedAt)
         {
             entries.Add(CreateTimelineEntry(
                 WorkflowTimelineEventType.ExecutionStarted,
@@ -235,10 +231,10 @@ public sealed class WorkflowProjectionService(
                 startedAt,
                 "Execution session started.",
                 "execution",
-                session.SessionId.ToString()));
+                execution.ExecutionId?.ToString() ?? evidence.Repository.Id.ToString()));
         }
 
-        if (session?.CompletedAt is DateTimeOffset completedAt)
+        if (execution.CompletedAt is DateTimeOffset completedAt)
         {
             entries.Add(CreateTimelineEntry(
                 WorkflowTimelineEventType.ExecutionCompleted,
@@ -246,10 +242,32 @@ public sealed class WorkflowProjectionService(
                 completedAt,
                 "Execution session completed.",
                 "execution",
-                session.SessionId.ToString()));
+                execution.ExecutionId?.ToString() ?? evidence.Repository.Id.ToString()));
         }
 
-        if (session?.AcceptedAt is DateTimeOffset acceptedAt)
+        if (execution.FailedAt is DateTimeOffset failedAt)
+        {
+            entries.Add(CreateTimelineEntry(
+                WorkflowTimelineEventType.ExecutionFailed,
+                WorkflowStage.Execution,
+                failedAt,
+                $"Execution session failed: {execution.FailureReason ?? "Unknown failure."}",
+                "execution",
+                execution.ExecutionId?.ToString() ?? evidence.Repository.Id.ToString()));
+        }
+
+        if (execution.Status is WorkflowExecutionStatus.Cancelled && execution.StartedAt is DateTimeOffset cancelledAt)
+        {
+            entries.Add(CreateTimelineEntry(
+                WorkflowTimelineEventType.ExecutionCancelled,
+                WorkflowStage.Execution,
+                cancelledAt,
+                $"Execution session cancelled: {execution.FailureReason ?? "Cancelled."}",
+                "execution",
+                execution.ExecutionId?.ToString() ?? evidence.Repository.Id.ToString()));
+        }
+
+        if (execution.AcceptedAt is DateTimeOffset acceptedAt)
         {
             entries.Add(CreateTimelineEntry(
                 WorkflowTimelineEventType.ExecutionHandoffAccepted,
@@ -257,7 +275,18 @@ public sealed class WorkflowProjectionService(
                 acceptedAt,
                 "Execution handoff accepted.",
                 "execution",
-                session.SessionId.ToString()));
+                execution.ExecutionId?.ToString() ?? evidence.Repository.Id.ToString()));
+        }
+
+        if (execution.RejectedAt is DateTimeOffset rejectedAt)
+        {
+            entries.Add(CreateTimelineEntry(
+                WorkflowTimelineEventType.ExecutionHandoffRejected,
+                WorkflowStage.Handoff,
+                rejectedAt,
+                "Execution handoff rejected.",
+                "execution",
+                execution.ExecutionId?.ToString() ?? evidence.Repository.Id.ToString()));
         }
 
         entries.AddRange(evidence.Decisions
@@ -291,7 +320,7 @@ public sealed class WorkflowProjectionService(
                 "continuity",
                 proposal.ProposalId)));
 
-        if (session?.CommittedAt is DateTimeOffset committedAt)
+        if (execution.CommittedAt is DateTimeOffset committedAt)
         {
             entries.Add(CreateTimelineEntry(
                 WorkflowTimelineEventType.CommitExecuted,
@@ -299,10 +328,10 @@ public sealed class WorkflowProjectionService(
                 committedAt,
                 "Execution changes committed.",
                 "git",
-                session.CommitSha ?? session.SessionId.ToString()));
+                execution.CommitSha ?? execution.ExecutionId?.ToString() ?? evidence.Repository.Id.ToString()));
         }
 
-        if (session?.PushedAt is DateTimeOffset pushedAt)
+        if (execution.PushedAt is DateTimeOffset pushedAt)
         {
             entries.Add(CreateTimelineEntry(
                 WorkflowTimelineEventType.PushExecuted,
@@ -310,7 +339,7 @@ public sealed class WorkflowProjectionService(
                 pushedAt,
                 "Execution commit pushed.",
                 "git",
-                session.PushedCommitSha ?? session.CommitSha ?? session.SessionId.ToString()));
+                execution.PushedCommitSha ?? execution.CommitSha ?? execution.ExecutionId?.ToString() ?? evidence.Repository.Id.ToString()));
         }
 
         return entries
@@ -338,8 +367,7 @@ public sealed class WorkflowProjectionService(
 
     private sealed record ProjectionEvidence(
         Repository Repository,
-        RepositoryExecutionState ExecutionState,
-        ExecutionSessionSummary? Session,
+        WorkflowExecutionProjection Execution,
         IReadOnlyList<Decision> Decisions,
         IReadOnlyList<OperationalContextProposal> Proposals,
         RepositoryGitStatus GitStatus);
