@@ -12,7 +12,7 @@ Deliver:
 - [ ] `HumanGovernanceReport`.
 - [ ] `WorkflowReadinessReport`.
 - [x] authority certification.
-- [ ] recovery certification.
+- [x] recovery certification.
 - [ ] continuation certification.
 - [ ] preparation certification.
 - [ ] end-to-end workflow fixture.
@@ -74,6 +74,11 @@ Tests:
 - [ ] passing scenarios generate readiness evidence.
 - [x] authority certification detects forbidden mutation.
 - [ ] recovery certification detects lost state, corruption, and duplicate progression.
+  - [x] missing timeline evidence is treated as derived/rebuildable evidence.
+  - [x] stale persisted timeline evidence is detected and domain projection wins.
+  - [ ] corrupted timeline evidence is detected without losing domain state.
+  - [ ] corrupted continuation/preparation history does not duplicate events or artifacts.
+  - [ ] restart duplicate progression is certified.
 - [ ] continuation certification detects missed gate halting.
 - [ ] preparation certification detects duplicate artifacts, parallel commands, and gate bypass attempts.
 - [ ] end-to-end fixture validates progression, gates, recovery, diagnostics, history, and certification.
@@ -84,6 +89,8 @@ Exit criteria:
 - [ ] repository, progression, human-governance, and readiness reports exist.
 - [x] authority certification passes.
 - [ ] recovery certification passes.
+  - [x] initial domain-truth recovery certification passes.
+  - [ ] full corruption and idempotency recovery matrix passes.
 - [ ] continuation certification passes.
 - [ ] preparation certification passes.
 - [ ] end-to-end fixture passes.

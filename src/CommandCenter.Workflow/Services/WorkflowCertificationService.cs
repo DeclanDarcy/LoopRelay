@@ -61,6 +61,18 @@ public sealed class WorkflowCertificationService(
         IReadOnlyList<WorkflowPreparationEvent> preparationHistory =
             await workflowRepository.ListPreparationEventsAsync(repository);
         WorkflowHealthAssessment health = await healthService.AssessHealthAsync(repository.Id);
+        WorkflowTimeline domainTimeline = WorkflowTimelineFactory.Create(projection, DateTimeOffset.UtcNow);
+        WorkflowTimeline? latestTimeline = null;
+        string? timelineLoadError = null;
+        try
+        {
+            latestTimeline = await workflowRepository.GetLatestTimelineAsync(repository);
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException)
+        {
+            timelineLoadError = exception.Message;
+        }
+
         var findings = new List<WorkflowCertificationFinding>();
 
         findings.Add(CertifyReadOnlyAuthorityBoundary(projection, continuationHistory, preparationHistory));
@@ -68,6 +80,7 @@ public sealed class WorkflowCertificationService(
         findings.Add(CertifyContinuationDoesNotCrossAuthorityGates(continuationHistory));
         findings.Add(CertifyPreparationDoesNotSatisfyAuthorityGates(preparationHistory));
         findings.Add(CertifyGateCatalogUsesDomainCommands(projection));
+        findings.Add(CertifyDomainEvidenceWinsDuringRecovery(projection, domainTimeline, latestTimeline, timelineLoadError));
 
         string inputFingerprint = WorkflowFingerprint.FromNormalizedEvidence(string.Join(
             '\n',
@@ -77,6 +90,8 @@ public sealed class WorkflowCertificationService(
             projection.ProgressState,
             projection.BlockingGate,
             string.Join("|", projection.Diagnostics.ProjectionInputs.Order(StringComparer.Ordinal)),
+            latestTimeline?.Fingerprint ?? "latest-timeline:none",
+            timelineLoadError ?? "latest-timeline-load-error:none",
             string.Join("|", continuationHistory.Select(entry => entry.InputFingerprint.Value).Order(StringComparer.Ordinal)),
             string.Join("|", preparationHistory.Select(entry => entry.InputFingerprint.Value).Order(StringComparer.Ordinal)),
             health.InfluenceTrace.Fingerprint)).Value;
@@ -214,6 +229,70 @@ public sealed class WorkflowCertificationService(
             "Workflow may explain which domain command satisfies a gate, but it must not introduce workflow-owned commands for authority actions.",
             gates.Select(gate => $"gate:{gate.Type}:{gate.Status}:{string.Join(",", gate.SatisfyingCommands)}").ToArray(),
             violations.Select(gate => $"Gate '{gate.GateId}' contains a workflow-owned satisfying command.").ToArray());
+    }
+
+    private static WorkflowCertificationFinding CertifyDomainEvidenceWinsDuringRecovery(
+        WorkflowInstance projection,
+        WorkflowTimeline domainTimeline,
+        WorkflowTimeline? latestTimeline,
+        string? timelineLoadError)
+    {
+        bool hasDomainProjection = projection.CurrentStage is not WorkflowStage.Unknown &&
+            projection.ProgressState is not WorkflowProgressState.Failed;
+        bool timelineMatchesDomain = latestTimeline?.Fingerprint == domainTimeline.Fingerprint;
+        bool staleTimelineDetected = latestTimeline is not null && !timelineMatchesDomain;
+        bool timelineRecoverable = latestTimeline is null || timelineMatchesDomain || staleTimelineDetected || timelineLoadError is not null;
+        bool passed = hasDomainProjection && timelineRecoverable;
+
+        string summary = passed
+            ? "Workflow recovery can reconstruct current state from domain evidence."
+            : "Workflow recovery could not prove current state reconstruction from domain evidence.";
+        string detail = staleTimelineDetected
+            ? "Persisted workflow timeline evidence differs from the domain-derived projection; certification treats the domain-derived projection as authoritative recovery input."
+            : "Workflow recovery certification compares the latest persisted timeline with a fresh domain-derived timeline and requires domain evidence to remain reconstructable.";
+
+        var evidence = new List<string>
+        {
+            $"domain:{projection.CurrentStage}:{projection.ProgressState}:{projection.BlockingGate}:{domainTimeline.Fingerprint}",
+            latestTimeline is null
+                ? "persisted-timeline:none"
+                : $"persisted-timeline:{latestTimeline.CurrentStage}:{latestTimeline.ProgressState}:{latestTimeline.BlockingGate}:{latestTimeline.Fingerprint}",
+            $"timeline-load-error:{timelineLoadError ?? "none"}"
+        };
+        var diagnostics = new List<string>();
+
+        if (!hasDomainProjection)
+        {
+            diagnostics.Add($"Domain-derived projection is not reconstructable: {projection.CurrentStage}/{projection.ProgressState}.");
+        }
+
+        if (latestTimeline is null)
+        {
+            diagnostics.Add("No persisted workflow timeline exists; recovery can rebuild timeline evidence from domain projection.");
+        }
+        else if (timelineMatchesDomain)
+        {
+            diagnostics.Add("Persisted workflow timeline matches the domain-derived projection.");
+        }
+        else
+        {
+            diagnostics.Add("Persisted workflow timeline conflicts with the domain-derived projection; domain evidence wins.");
+            diagnostics.Add($"Persisted stage {latestTimeline.CurrentStage} is recoverable to domain stage {projection.CurrentStage}.");
+        }
+
+        if (timelineLoadError is not null)
+        {
+            diagnostics.Add($"Persisted workflow timeline could not be loaded and must not override domain evidence: {timelineLoadError}");
+        }
+
+        return new WorkflowCertificationFinding(
+            "recovery-domain-evidence-wins",
+            "Recovery",
+            passed,
+            summary,
+            detail,
+            evidence,
+            diagnostics);
     }
 
     private static string RenderMarkdown(WorkflowCertificationResult result)

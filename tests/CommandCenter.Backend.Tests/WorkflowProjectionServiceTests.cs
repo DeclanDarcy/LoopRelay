@@ -2991,10 +2991,67 @@ public sealed class WorkflowProjectionServiceTests
         Assert.True(current.Certified);
         Assert.Equal(WorkflowStage.Decision, current.CurrentStage);
         Assert.Equal(WorkflowGateType.DecisionResolution, current.BlockingGate);
-        Assert.All(current.Findings, finding => Assert.Equal("Authority", finding.Category));
+        Assert.Contains(current.Findings, finding => finding.Category == "Authority");
+        Assert.Contains(current.Findings, finding => finding.Category == "Recovery");
         Assert.Contains(current.Findings, finding => finding.Id == "authority-continuation-halts-at-gates" && finding.Passed);
+        Assert.Contains(current.Findings, finding => finding.Id == "recovery-domain-evidence-wins" && finding.Passed);
         Assert.True(persisted.Certified);
         Assert.Single(reportFiles);
+    }
+
+    [Fact]
+    public async Task WorkflowCertificationReportsStaleTimelineRecoveryWithDomainProjectionWinning()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingCommit;
+        fixture.Session = CompletedAcceptedSession(RepositoryExecutionState.AwaitingCommit);
+        var workflowRepository = new FileSystemWorkflowRepository(new MemoryArtifactStore());
+        await workflowRepository.SaveTimelineAsync(
+            fixture.Repository,
+            CreateTimeline(
+                fixture.Repository.Id,
+                DateTimeOffset.Parse("2026-06-23T12:05:00Z"),
+                WorkflowStage.Completed,
+                WorkflowProgressState.AwaitingGate,
+                WorkflowGateType.WorkSelection,
+                WorkflowStage.Push,
+                [WorkflowBlockingCondition.MissingWorkSelection]));
+        WorkflowCertificationService service = fixture.CreateCertificationService(workflowRepository);
+
+        WorkflowCertificationResult result = await service.GetCurrentCertificationAsync(fixture.Repository.Id);
+
+        Assert.True(result.Certified);
+        Assert.Equal(WorkflowStage.Commit, result.CurrentStage);
+        Assert.Equal(WorkflowGateType.CommitApproval, result.BlockingGate);
+        WorkflowCertificationFinding finding = Assert.Single(
+            result.Findings,
+            candidate => candidate.Id == "recovery-domain-evidence-wins");
+        Assert.True(finding.Passed);
+        Assert.Equal("Recovery", finding.Category);
+        Assert.Contains(finding.Evidence, evidence => evidence.Contains("persisted-timeline:Completed", StringComparison.Ordinal));
+        Assert.Contains(finding.Evidence, evidence => evidence.Contains("domain:Commit", StringComparison.Ordinal));
+        Assert.Contains(finding.Diagnostics, diagnostic => diagnostic.Contains("domain evidence wins", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task WorkflowCertificationTreatsMissingTimelineAsDerivedEvidence()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingCommit;
+        fixture.Session = CompletedAcceptedSession(RepositoryExecutionState.AwaitingCommit);
+        var workflowRepository = new FileSystemWorkflowRepository(new MemoryArtifactStore());
+        WorkflowCertificationService service = fixture.CreateCertificationService(workflowRepository);
+
+        WorkflowCertificationResult result = await service.GetCurrentCertificationAsync(fixture.Repository.Id);
+
+        Assert.True(result.Certified);
+        Assert.Equal(WorkflowStage.Commit, result.CurrentStage);
+        WorkflowCertificationFinding finding = Assert.Single(
+            result.Findings,
+            candidate => candidate.Id == "recovery-domain-evidence-wins");
+        Assert.True(finding.Passed);
+        Assert.Contains(finding.Evidence, evidence => evidence == "persisted-timeline:none");
+        Assert.Contains(finding.Diagnostics, diagnostic => diagnostic.Contains("rebuild timeline evidence", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
