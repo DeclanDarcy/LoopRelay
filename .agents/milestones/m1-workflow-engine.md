@@ -46,7 +46,7 @@ Replace client-side workflow derivation with the authoritative workflow projecti
 - [x] Add workflow hooks such as `useWorkflowProjection`, `useWorkflowHistory`, `useWorkflowGates`, `useWorkflowContinuation`, `useWorkflowRecovery`, `useWorkflowHealth`, and `useWorkflowCertification`.
 - [x] Replace `getExecutionWorkflowSteps` usage with workflow projection data.
 - [x] Retire `src/CommandCenter.UI/src/lib/executionWorkflow.ts` after all consumers use authoritative workflow data.
-- [ ] Replace or adapt `WorkspaceRail` and `ExecutionWorkflowRail` to render:
+- [x] Replace or adapt `WorkspaceRail` and `ExecutionWorkflowRail` to render:
    - [x] current stage
    - [x] progress state
    - [x] stage reasoning
@@ -58,7 +58,7 @@ Replace client-side workflow derivation with the authoritative workflow projecti
    - [x] recovery state
    - [x] health dimensions
    - [x] certification findings
-- [ ] Add workflow panels under `src/CommandCenter.UI/src/features/workflow/` or move existing rail components there:
+- [x] Add workflow panels under `src/CommandCenter.UI/src/features/workflow/` or move existing rail components there:
    - [x] `WorkflowOverviewPanel`
    - [x] `WorkflowHistoryPanel`
    - [x] `WorkflowGatePanel`
@@ -76,7 +76,7 @@ Replace client-side workflow derivation with the authoritative workflow projecti
 
 ### Tests
 
-- [ ] Add backend endpoint tests for any route not already covered.
+- [x] Add backend endpoint tests for any route not already covered.
 - [ ] Add shell command tests where feasible.
 - [x] Add UI characterization tests proving workflow panels render projection stage, gate reason, satisfying command, recovery diagnostics, health dimensions, and certification findings.
 - [x] Add a regression test that no UI workflow state is derived from `RepositoryExecutionState`.
@@ -88,5 +88,5 @@ Replace client-side workflow derivation with the authoritative workflow projecti
 - [x] Workflow history is reconstructable from projected evidence.
 - [x] Workflow gates explain why progress is blocked, who owns the unblock action, and which command satisfies it.
 - [ ] No other workspace creates a parallel lifecycle timeline for operational product state.
-- [ ] Parallel client-side workflow derivation is removed.
+- [x] Parallel client-side workflow derivation is removed.
 - [x] Later workspaces have a documented consumption pattern for workflow projection instead of bypassing the operational backbone.
