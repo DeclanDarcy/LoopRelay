@@ -325,6 +325,44 @@ describe('selected repository summary rendering characterization', () => {
     expect(screen.getByText('Timeline events: 2')).toBeInTheDocument()
   })
 
+  it('renders repository governance summary from the decision-session projection', () => {
+    renderSummary({
+      repository: repositoryDashboard({
+        decisionSessionSummary: {
+          ...decisionSessionSummary,
+          decisionSessionId: 'governance-session-1',
+          state: 'Active',
+          lifecycleDecision: 'Transfer',
+          transferEligibilityStatus: 'Blocked',
+          coherenceScore: 0.82,
+          transferPressure: 0.71,
+          cacheMissRisk: 0.44,
+          healthDimensions: [
+            {
+              name: 'Lifecycle',
+              status: 'Warning',
+              findings: ['Transfer recommended but blocked.'],
+            },
+            {
+              name: 'Continuity',
+              status: 'Healthy',
+              findings: [],
+            },
+          ],
+        },
+      }),
+    })
+
+    expect(screen.getByText('Governance session: governance-session-1')).toBeInTheDocument()
+    expect(screen.getByText('Governance state: Active')).toBeInTheDocument()
+    expect(screen.getByText('Lifecycle decision: Transfer')).toBeInTheDocument()
+    expect(screen.getByText('Transfer eligibility: Blocked')).toBeInTheDocument()
+    expect(screen.getByText('Coherence: 0.82')).toBeInTheDocument()
+    expect(screen.getByText('Transfer pressure: 0.71')).toBeInTheDocument()
+    expect(screen.getByText('Cache miss risk: 0.44')).toBeInTheDocument()
+    expect(screen.getByText('Governance health: 2')).toBeInTheDocument()
+  })
+
   it('renders execution display details and existing not-recorded fallbacks', () => {
     renderSummary({
       executionDisplay: executionSummary({

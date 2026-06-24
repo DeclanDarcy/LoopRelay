@@ -4,6 +4,7 @@ export type PrimaryWorkspaceTab =
   | 'workspace'
   | 'execution'
   | 'operational-context'
+  | 'governance'
   | 'decisions'
   | 'reasoning'
   | 'continuity'

@@ -36,37 +36,37 @@ Make the governance lifecycle visible and actionable while preserving `CommandCe
 - [x] Update `src/CommandCenter.UI/src/types/repositories.ts` to include `decisionSessionSummary` on dashboard and workspace projections.
 - [x] Add `src/CommandCenter.UI/src/api/decisionSessions.ts` and export it.
 - [x] Add hooks for lifecycle projection, policy, eligibility, analysis, transfers, recovery, continuity artifacts, health, and certification.
-- [ ] Add repository-level governance summary rendering using `RepositoryDecisionSessionSummary`:
-   - [ ] active session id
-   - [ ] lifecycle state
-   - [ ] lifecycle decision
-   - [ ] transfer eligibility status
-   - [ ] coherence score
-   - [ ] transfer pressure
-   - [ ] cache pressure or miss risk
-   - [ ] health dimensions
-- [ ] Add a dedicated governance workspace under `src/CommandCenter.UI/src/features/governance/`:
-   - [ ] `GovernanceWorkspace`
-   - [ ] `DecisionSessionLifecyclePanel`
-   - [ ] `DecisionSessionAnalysisPanel`
-   - [ ] `DecisionSessionEligibilityPanel`
-   - [ ] `DecisionSessionTransferPanel`
-   - [ ] `DecisionSessionContinuityArtifactPanel`
-   - [ ] `DecisionSessionRecoveryPanel`
-   - [ ] `DecisionSessionHealthPanel`
-   - [ ] `DecisionSessionCertificationPanel`
-- [ ] Lifecycle explanation must display authoritative reuse score, transfer score, reason, contributing factors, transfer pressure, cache risk, continuity benefit, coherence, fragmentation, and growth when present.
-- [ ] Transfer readiness must distinguish "transfer recommended" from "transfer currently executable".
-- [ ] Recovery display must distinguish recovered, diagnosed, requires intervention, duplicate active sessions, interrupted transfers, discarded snapshots, and rebuilt snapshots.
-- [ ] Workflow integration must consume only `IWorkflowDecisionSessionService` and `IDecisionSessionObservabilityService` outputs already exposed through workflow and decision-session endpoints.
-- [ ] Where governance affects product status, render the workflow gate or required human action next to the governance detail instead of inventing a separate governance workflow.
-- [ ] Navigation, page titles, and visible UI labels use Governance terminology while code-facing contracts keep DecisionSession naming where they mirror backend authority.
+- [x] Add repository-level governance summary rendering using `RepositoryDecisionSessionSummary`:
+   - [x] active session id
+   - [x] lifecycle state
+   - [x] lifecycle decision
+   - [x] transfer eligibility status
+   - [x] coherence score
+   - [x] transfer pressure
+   - [x] cache pressure or miss risk
+   - [x] health dimensions
+- [x] Add a dedicated governance workspace under `src/CommandCenter.UI/src/features/governance/`:
+   - [x] `GovernanceWorkspace`
+   - [x] `DecisionSessionLifecyclePanel`
+   - [x] `DecisionSessionAnalysisPanel`
+   - [x] `DecisionSessionEligibilityPanel`
+   - [x] `DecisionSessionTransferPanel`
+   - [x] `DecisionSessionContinuityArtifactPanel`
+   - [x] `DecisionSessionRecoveryPanel`
+   - [x] `DecisionSessionHealthPanel`
+   - [x] `DecisionSessionCertificationPanel`
+- [x] Lifecycle explanation must display authoritative reuse score, transfer score, reason, contributing factors, transfer pressure, cache risk, continuity benefit, coherence, fragmentation, and growth when present.
+- [x] Transfer readiness must distinguish "transfer recommended" from "transfer currently executable".
+- [x] Recovery display must distinguish recovered, diagnosed, requires intervention, duplicate active sessions, interrupted transfers, discarded snapshots, and rebuilt snapshots.
+- [x] Workflow integration must consume only `IWorkflowDecisionSessionService` and `IDecisionSessionObservabilityService` outputs already exposed through workflow and decision-session endpoints.
+- [x] Where governance affects product status, render the workflow gate or required human action next to the governance detail instead of inventing a separate governance workflow.
+- [x] Navigation, page titles, and visible UI labels use Governance terminology while code-facing contracts keep DecisionSession naming where they mirror backend authority.
 
 ### Tests
 
 - [x] Backend endpoint tests for transfer execution and persisted recovery.
 - [ ] Repository projection tests proving `decisionSessionSummary` serializes and TypeScript types include it.
-- [ ] UI tests for repository governance summary, lifecycle explanation, transfer eligibility, recovery, health, and certification.
+- [x] UI tests for repository governance summary, lifecycle explanation, transfer eligibility, recovery, health, and certification.
 
 ### Exit Criteria
 

@@ -355,6 +355,7 @@ button:focus-visible {
 .details-body[data-active-tab='workspace'] .tab-panel:not(.tab-workspace),
 .details-body[data-active-tab='execution'] .tab-panel:not(.tab-execution),
 .details-body[data-active-tab='operational-context'] .tab-panel:not(.tab-operational-context),
+.details-body[data-active-tab='governance'] .tab-panel:not(.tab-governance),
 .details-body[data-active-tab='decisions'] .tab-panel:not(.tab-decisions),
 .details-body[data-active-tab='reasoning'] .tab-panel:not(.tab-reasoning),
 .details-body[data-active-tab='continuity'] .tab-panel:not(.tab-continuity) {
@@ -525,6 +526,7 @@ button:focus-visible {
 }
 
 .execution-workspace,
+.governance-workspace,
 .artifact-workspace-shell {
   min-width: 0;
   display: grid;
@@ -645,6 +647,89 @@ button:focus-visible {
   grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
   align-items: start;
   gap: 14px;
+}
+
+.governance-workspace-grid {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  align-items: start;
+  gap: 14px;
+}
+
+.governance-workspace-main,
+.governance-workspace-rail,
+.governance-panel-stack,
+.governance-panel-list {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+
+.governance-panel {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.governance-fact-grid,
+.governance-workflow-link {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.governance-fact-grid span,
+.governance-workflow-link span {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  color: var(--fg-muted);
+  background: var(--bg-inset);
+  font-size: 0.82rem;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.governance-explanation {
+  margin: 0;
+  color: var(--fg-muted);
+  line-height: 1.5;
+}
+
+.governance-panel-list h5 {
+  margin: 0;
+  color: var(--fg-default);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.governance-panel-list ul {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--fg-muted);
+}
+
+.governance-dimension-card {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--bg-inset);
+}
+
+.governance-dimension-card-header {
+  min-width: 0;
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .execution-tab-main,

@@ -32,6 +32,7 @@ import { DecisionLifecycleTab } from './features/decisions/DecisionLifecycleTab'
 import { ExecutionTab } from './features/execution/ExecutionTab'
 import { GeneratedHandoffReviewPanel } from './features/execution/GeneratedHandoffReviewPanel'
 import { GitWorkflowPanel } from './features/execution/GitWorkflowPanel'
+import { GovernanceWorkspace } from './features/governance/GovernanceWorkspace'
 import { OperationalContextTab } from './features/operational-context/OperationalContextTab'
 import { ReasoningTrajectoryTab } from './features/reasoning/ReasoningTrajectoryTab'
 import { SelectedRepositorySummary } from './features/repositories/SelectedRepositorySummary'
@@ -48,6 +49,7 @@ import {
   useDecisionContext,
   useDecisionDiscovery,
   useDecisionProposals,
+  useDecisionSessions,
   useExecutionDecisionInfluence,
   useExecutionContextPreview,
   useExecutionEvents,
@@ -245,6 +247,18 @@ function App() {
     error: decisionProposalsError,
     refresh: refreshDecisionProposals,
   } = useDecisionProposals(selectedRepository?.repository.id ?? null, selectedDecisionProposalStates)
+  const {
+    snapshot: governanceSnapshot,
+    isLoading: isGovernanceLoading,
+    isTransferring: isGovernanceTransferring,
+    isRecovering: isGovernanceRecovering,
+    isCertifying: isGovernanceCertifying,
+    error: governanceError,
+    refresh: refreshGovernance,
+    executeTransfer: executeGovernanceTransfer,
+    recover: recoverGovernance,
+    runCertification: runGovernanceCertification,
+  } = useDecisionSessions(selectedRepository?.repository.id ?? null)
   const {
     data: reasoningEvents,
     isLoading: isReasoningEventsLoading,
@@ -1760,6 +1774,21 @@ function App() {
                 onGenerateReport={() => void generateContinuityReport()}
                 onOpenOperationalContextSection={openOperationalContextSection}
                 onOpenReport={openWorkspaceArtifact}
+              />
+
+              <GovernanceWorkspace
+                repositorySummary={workspace?.decisionSessionSummary ?? selectedRepository.decisionSessionSummary}
+                snapshot={governanceSnapshot}
+                workflow={workflowProjection}
+                isLoading={isGovernanceLoading}
+                error={governanceError}
+                isTransferring={isGovernanceTransferring}
+                isRecovering={isGovernanceRecovering}
+                isCertifying={isGovernanceCertifying}
+                onRefresh={() => void refreshGovernance()}
+                onExecuteTransfer={() => void executeGovernanceTransfer()}
+                onRecover={() => void recoverGovernance()}
+                onRunCertification={() => void runGovernanceCertification()}
               />
 
               <DecisionLifecycleTab
