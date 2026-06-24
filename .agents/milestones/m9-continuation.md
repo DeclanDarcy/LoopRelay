@@ -135,7 +135,7 @@ Progression rules:
 - [x] context promoted, rejected, or not required projects to commit.
 - [x] commit executed projects to push.
 - [x] push executed or no repository changes projects to completed.
-- [ ] legitimate push skip projects to completed if domain evidence supports it.
+- [ ] legitimate push skip projects to completed if domain evidence supports it. Deferred until Execution or Git introduces explicit domain-owned push-skip evidence; Workflow must not infer it.
 - [x] after push completed or legitimate completion condition exists, persist completion evidence and open work selection gate.
 
 Preparation rules:
@@ -169,7 +169,7 @@ Idempotency rules:
 Tests:
 
 - [x] eligible workflow advances mechanically.
-- [ ] ineligible workflow does not advance.
+- [x] ineligible workflow does not advance.
 - [x] eligible preparation creates reviewable artifacts only through existing domain commands.
 - [x] ineligible preparation does not create artifacts.
 - [x] every open gate stops progression.
@@ -188,11 +188,21 @@ Exit criteria:
 
 - [x] continuation service exists.
 - [x] preparation service exists.
-- [ ] continuation rules exist.
+- [x] continuation rules exist.
 - [x] preparation rules exist.
 - [x] gate halting works.
 - [x] continuation history exists.
 - [x] preparation history exists.
 - [x] hosted runner exists.
-- [ ] recovery integration works.
+- [x] recovery integration works.
+
+Architectural review:
+
+- Confirmed every currently supported canonical continuation transition has implementation and test coverage: execution to handoff, handoff to decision, decision to operational context, operational context to commit, commit to push, push to completed, no-change completion, and completed to work-selection gate halt.
+- Confirmed all authority gates halt continuation: work selection, execution acceptance, decision resolution, operational-context review, operational-context promotion, commit approval, and push approval.
+- Confirmed continuation and preparation remain separate: continuation only records progression evidence and timelines; preparation only invokes existing domain commands for reviewable artifacts.
+- Confirmed preparation does not resolve decisions, review or promote context, commit, push, accept handoffs, or select work.
+- Confirmed persisted timelines, continuation events, preparation events, and completed state are derived evidence and can be rebuilt or deduplicated from domain state after restart.
+- Confirmed hosted continuation is disabled by default, reuses endpoint services, records hosted trigger evidence, handles repository-local failures, and cannot cross gates beyond what the shared continuation service allows.
+- Confirmed legitimate push-skip completion is intentionally not implemented because no current Execution-owned or Git-owned push-skip evidence exists. `WorkflowGitStatus.PushSkipped` remains a reserved projection state for future domain evidence.
 - [x] health assessment exists.
