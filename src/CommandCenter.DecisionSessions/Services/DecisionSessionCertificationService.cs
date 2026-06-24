@@ -511,14 +511,66 @@ public sealed class DecisionSessionCertificationService(
             diagnostics.Add("Lifecycle history has no events despite session evidence.");
         }
 
-        bool blockedOrFailed = projection.TransferEligibility?.Eligibility.Status is DecisionSessionTransferEligibilityStatus.Blocked
+        if (projection.Policy is null)
+        {
+            diagnostics.Add("Lifecycle policy diagnostics are missing.");
+        }
+        else
+        {
+            if (string.IsNullOrWhiteSpace(projection.Policy.Evaluation.Reason))
+            {
+                diagnostics.Add($"Lifecycle policy decision {projection.Policy.Evaluation.Decision} lacks a reason.");
+            }
+
+            if (projection.Policy.Evaluation.ContributingFactors.Count == 0)
+            {
+                diagnostics.Add($"Lifecycle policy decision {projection.Policy.Evaluation.Decision} lacks contributing factors.");
+            }
+        }
+
+        DecisionSessionTransferEligibilityStatus? eligibilityStatus = projection.TransferEligibility?.Eligibility.Status;
+        bool eligibilityRequiresFinding = eligibilityStatus is DecisionSessionTransferEligibilityStatus.Blocked
+            or DecisionSessionTransferEligibilityStatus.Deferred;
+        if (eligibilityRequiresFinding && projection.TransferEligibility?.Eligibility.Findings.Count == 0)
+        {
+            diagnostics.Add($"Transfer eligibility status {eligibilityStatus} lacks eligibility findings.");
+        }
+
+        foreach (DecisionSessionRecoveryResult recovery in projection.RecentRecoveryResults)
+        {
+            bool explainedRecovery = recovery.Findings.Count > 0 ||
+                recovery.Diagnostics.Warnings.Count > 0 ||
+                recovery.Events.Any(recoveryEvent =>
+                    !string.IsNullOrWhiteSpace(recoveryEvent.Message) ||
+                    recoveryEvent.Diagnostics.Count > 0);
+            if (!explainedRecovery)
+            {
+                diagnostics.Add($"Recovery {recovery.RecoveryId} lacks recovery findings, warnings, or events.");
+            }
+        }
+
+        foreach (DecisionSessionTransferEventProjection failedTransfer in projection.TransferEvents.Where(transfer => !transfer.Succeeded))
+        {
+            bool explainedFailure = failedTransfer.Diagnostics.Count > 0 ||
+                failedTransfer.Events.Any(transferEvent =>
+                    !string.IsNullOrWhiteSpace(transferEvent.Message) ||
+                    transferEvent.Diagnostics.Count > 0);
+            if (!explainedFailure)
+            {
+                diagnostics.Add($"Failed transfer {failedTransfer.TransferId} lacks transfer diagnostics or event diagnostics.");
+            }
+        }
+
+        bool blockedOrFailed = eligibilityStatus is DecisionSessionTransferEligibilityStatus.Blocked
             or DecisionSessionTransferEligibilityStatus.Deferred ||
             projection.RecentRecoveryResults.Any(recovery => !recovery.Succeeded) ||
+            projection.TransferEvents.Any(transfer => !transfer.Succeeded) ||
             projection.Diagnostics.Errors.Count > 0;
         bool hasExplanation = projection.Diagnostics.Errors.Count > 0 ||
             projection.Diagnostics.Warnings.Count > 0 ||
             projection.TransferEligibility?.Eligibility.Findings.Count > 0 ||
-            projection.RecentRecoveryResults.Any(recovery => recovery.Findings.Count > 0 || recovery.Diagnostics.Warnings.Count > 0);
+            projection.RecentRecoveryResults.Any(recovery => recovery.Findings.Count > 0 || recovery.Diagnostics.Warnings.Count > 0) ||
+            projection.TransferEvents.Any(transfer => transfer.Diagnostics.Count > 0 || transfer.Events.Any(transferEvent => transferEvent.Diagnostics.Count > 0));
         if (blockedOrFailed && !hasExplanation)
         {
             diagnostics.Add("Blocked, deferred, failed, or invalid lifecycle state lacks diagnostics.");
@@ -533,13 +585,39 @@ public sealed class DecisionSessionCertificationService(
                 ? "Lifecycle diagnostics are present for observable state."
                 : "Lifecycle diagnostics are incomplete.",
             "Certification requires diagnostics for continue, transfer, blocked or deferred eligibility, recovery, and failure states.",
-            [
-                $"projection-errors:{projection.Diagnostics.Errors.Count}",
-                $"projection-warnings:{projection.Diagnostics.Warnings.Count}",
-                $"history-events:{history.Events.Count}",
-                $"eligibility-findings:{projection.TransferEligibility?.Eligibility.Findings.Count ?? 0}"
-            ],
+            BuildDiagnosticsEvidence(projection, history),
             diagnostics);
+    }
+
+    private static IReadOnlyList<string> BuildDiagnosticsEvidence(
+        DecisionSessionLifecycleProjection projection,
+        DecisionSessionLifecycleHistory history)
+    {
+        List<string> evidence =
+        [
+            $"projection-errors:{projection.Diagnostics.Errors.Count}",
+            $"projection-warnings:{projection.Diagnostics.Warnings.Count}",
+            $"history-events:{history.Events.Count}",
+            $"eligibility-findings:{projection.TransferEligibility?.Eligibility.Findings.Count ?? 0}",
+            $"recovery-results:{projection.RecentRecoveryResults.Count}",
+            $"failed-transfers:{projection.TransferEvents.Count(transfer => !transfer.Succeeded)}"
+        ];
+
+        if (projection.Policy is not null)
+        {
+            evidence.Add($"policy:{projection.Policy.Evaluation.Decision}:reason={projection.Policy.Evaluation.Reason}:factors={projection.Policy.Evaluation.ContributingFactors.Count}");
+        }
+
+        if (projection.TransferEligibility is not null)
+        {
+            evidence.Add($"eligibility:{projection.TransferEligibility.Eligibility.Status}:findings={projection.TransferEligibility.Eligibility.Findings.Count}");
+        }
+
+        evidence.AddRange(projection.RecentRecoveryResults.Select(recovery =>
+            $"recovery:{recovery.RecoveryId}:succeeded={recovery.Succeeded}:findings={recovery.Findings.Count}:warnings={recovery.Diagnostics.Warnings.Count}:events={recovery.Events.Count}"));
+        evidence.AddRange(projection.TransferEvents.Select(transfer =>
+            $"transfer:{transfer.TransferId}:succeeded={transfer.Succeeded}:diagnostics={transfer.Diagnostics.Count}:events={transfer.Events.Count}"));
+        return evidence;
     }
 
     private static DecisionSessionCertificationFinding CertifyHealth(

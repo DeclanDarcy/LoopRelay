@@ -200,6 +200,161 @@ public sealed class DecisionSessionCertificationTests
         Assert.Contains(finding.Diagnostics, diagnostic => diagnostic.Contains("lack recovery findings", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public async Task DiagnosticsCertificationSurfacesContinueAndTransferPolicyEvidence()
+    {
+        DecisionSessionTestHarness harness = DecisionSessionTestHarness.Create();
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        DecisionSessionProjection active = CreateSessionProjection(harness.Repository.Id, DecisionSessionState.Active, now.AddHours(-2));
+        DecisionSessionLifecycleProjection transferProjection = CreateProjection(harness.Repository.Id, active, now);
+        DecisionSessionLifecycleProjection continueProjection = CreateProjection(
+            harness.Repository.Id,
+            active,
+            now,
+            eligibilityStatus: DecisionSessionTransferEligibilityStatus.NotApplicable,
+            mutatePolicy: policy => policy with
+            {
+                Evaluation = new DecisionSessionLifecycleEvaluation(
+                    DecisionSessionLifecycleDecision.Continue,
+                    0.8m,
+                    0.2m,
+                    "Policy decided Continue.",
+                    ["reuse value"],
+                    now),
+                Diagnostics = policy.Diagnostics with
+                {
+                    ReuseScore = policy.Diagnostics.ReuseScore with { Score = 0.8m },
+                    TransferScore = policy.Diagnostics.TransferScore with { Score = 0.2m }
+                }
+            });
+        DecisionSessionLifecycleHistory history = CreateHistory(harness.Repository.Id, active.Id, now, includeRecovery: true);
+        DecisionSessionHealthAssessment health = CreateHealth(harness.Repository.Id, DecisionSessionHealthStatus.Healthy, now);
+
+        DecisionSessionCertificationReport transferReport =
+            await CreateService(harness, transferProjection, history, health, now).GetCurrentReportAsync(harness.Repository.Id);
+        DecisionSessionCertificationReport continueReport =
+            await CreateService(harness, continueProjection, history, health, now).GetCurrentReportAsync(harness.Repository.Id);
+
+        DecisionSessionCertificationFinding transferFinding = Assert.Single(
+            transferReport.Result.Findings,
+            finding => finding.Id == "diagnostics-explain-lifecycle-state");
+        DecisionSessionCertificationFinding continueFinding = Assert.Single(
+            continueReport.Result.Findings,
+            finding => finding.Id == "diagnostics-explain-lifecycle-state");
+        Assert.True(transferFinding.Passed, string.Join("; ", transferFinding.Diagnostics));
+        Assert.True(continueFinding.Passed, string.Join("; ", continueFinding.Diagnostics));
+        Assert.Contains(transferFinding.Evidence, evidence => evidence.Contains("policy:Transfer", StringComparison.Ordinal));
+        Assert.Contains(continueFinding.Evidence, evidence => evidence.Contains("policy:Continue", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(DecisionSessionTransferEligibilityStatus.Blocked)]
+    [InlineData(DecisionSessionTransferEligibilityStatus.Deferred)]
+    public async Task DiagnosticsCertificationRequiresEligibilityFindingsForBlockedOrDeferredStatus(
+        DecisionSessionTransferEligibilityStatus status)
+    {
+        DecisionSessionTestHarness harness = DecisionSessionTestHarness.Create();
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        DecisionSessionProjection active = CreateSessionProjection(harness.Repository.Id, DecisionSessionState.Active, now.AddHours(-2));
+        DecisionSessionLifecycleProjection projection = CreateProjection(
+            harness.Repository.Id,
+            active,
+            now,
+            eligibilityStatus: status,
+            omitEligibilityFindings: true);
+        DecisionSessionLifecycleHistory history = CreateHistory(harness.Repository.Id, active.Id, now, includeRecovery: true);
+        DecisionSessionHealthAssessment health = CreateHealth(harness.Repository.Id, DecisionSessionHealthStatus.Warning, now);
+        var service = CreateService(harness, projection, history, health, now);
+
+        DecisionSessionCertificationReport report = await service.GetCurrentReportAsync(harness.Repository.Id);
+
+        DecisionSessionCertificationFinding finding = Assert.Single(report.Result.Findings, finding => finding.Id == "diagnostics-explain-lifecycle-state");
+        Assert.False(finding.Passed);
+        Assert.Contains(finding.Diagnostics, diagnostic => diagnostic.Contains($"Transfer eligibility status {status}", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task DiagnosticsCertificationRequiresRecoveryFindingsWarningsOrEvents()
+    {
+        DecisionSessionTestHarness harness = DecisionSessionTestHarness.Create();
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        DecisionSessionProjection active = CreateSessionProjection(harness.Repository.Id, DecisionSessionState.Active, now.AddHours(-2));
+        DecisionSessionRecoveryResult recovery = CreateRecoveryResult(harness.Repository.Id, active.Id, now, includeExplanation: false);
+        DecisionSessionLifecycleProjection projection = CreateProjection(
+            harness.Repository.Id,
+            active,
+            now,
+            recoveryResults: [recovery]);
+        DecisionSessionLifecycleHistory history = CreateHistory(harness.Repository.Id, active.Id, now, includeRecovery: true);
+        DecisionSessionHealthAssessment health = CreateHealth(harness.Repository.Id, DecisionSessionHealthStatus.Warning, now);
+        var service = CreateService(harness, projection, history, health, now);
+
+        DecisionSessionCertificationReport report = await service.GetCurrentReportAsync(harness.Repository.Id);
+
+        DecisionSessionCertificationFinding finding = Assert.Single(report.Result.Findings, finding => finding.Id == "diagnostics-explain-lifecycle-state");
+        Assert.False(finding.Passed);
+        Assert.Contains(finding.Diagnostics, diagnostic => diagnostic.Contains($"Recovery {recovery.RecoveryId}", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task DiagnosticsCertificationRequiresFailedTransferDiagnostics()
+    {
+        DecisionSessionTestHarness harness = DecisionSessionTestHarness.Create();
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        DecisionSessionProjection active = CreateSessionProjection(harness.Repository.Id, DecisionSessionState.Active, now.AddHours(-2));
+        DecisionSessionTransferEventProjection failedTransfer = CreateTransferProjection(
+            harness.Repository.Id,
+            active.Id,
+            null,
+            null,
+            now,
+            succeeded: false,
+            includeDiagnostics: false);
+        DecisionSessionLifecycleProjection projection = CreateProjection(
+            harness.Repository.Id,
+            active,
+            now,
+            transfer: failedTransfer);
+        DecisionSessionLifecycleHistory history = CreateHistory(harness.Repository.Id, active.Id, now, includeRecovery: true);
+        DecisionSessionHealthAssessment health = CreateHealth(harness.Repository.Id, DecisionSessionHealthStatus.Warning, now);
+        var service = CreateService(harness, projection, history, health, now);
+
+        DecisionSessionCertificationReport report = await service.GetCurrentReportAsync(harness.Repository.Id);
+
+        DecisionSessionCertificationFinding finding = Assert.Single(report.Result.Findings, finding => finding.Id == "diagnostics-explain-lifecycle-state");
+        Assert.False(finding.Passed);
+        Assert.Contains(finding.Diagnostics, diagnostic => diagnostic.Contains($"Failed transfer {failedTransfer.TransferId}", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task DiagnosticsCertificationAcceptsDuplicateActiveAndMissingDerivedSnapshotExplanations()
+    {
+        DecisionSessionTestHarness harness = DecisionSessionTestHarness.Create();
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        DecisionSessionProjection active = CreateSessionProjection(harness.Repository.Id, DecisionSessionState.Active, now.AddHours(-2));
+        DecisionSessionRecoveryResult recovery = CreateDerivedSnapshotRecoveryResult(harness.Repository.Id, active.Id, now);
+        DecisionSessionLifecycleProjection projection = CreateProjection(
+            harness.Repository.Id,
+            active,
+            now,
+            activeSessionCount: 2,
+            diagnosticsErrors: ["More than one active decision session exists for this repository."],
+            recoveryResults: [recovery],
+            omitMetrics: true);
+        DecisionSessionLifecycleHistory history = CreateHistory(harness.Repository.Id, active.Id, now, includeRecovery: true);
+        DecisionSessionHealthAssessment health = CreateHealth(harness.Repository.Id, DecisionSessionHealthStatus.Unhealthy, now);
+        var service = CreateService(harness, projection, history, health, now);
+
+        DecisionSessionCertificationReport report = await service.GetCurrentReportAsync(harness.Repository.Id);
+
+        DecisionSessionCertificationFinding diagnostics = Assert.Single(report.Result.Findings, finding => finding.Id == "diagnostics-explain-lifecycle-state");
+        DecisionSessionCertificationFinding recoveryFinding = Assert.Single(report.Result.Findings, finding => finding.Id == "recovery-rebuilds-derived-evidence");
+        Assert.True(diagnostics.Passed, string.Join("; ", diagnostics.Diagnostics));
+        Assert.True(recoveryFinding.Passed, string.Join("; ", recoveryFinding.Diagnostics));
+        Assert.Contains(diagnostics.Evidence, evidence => evidence.Contains("projection-errors:1", StringComparison.Ordinal));
+        Assert.Contains(diagnostics.Evidence, evidence => evidence.Contains($"recovery:{recovery.RecoveryId}", StringComparison.Ordinal));
+    }
+
     private static DecisionSessionCertificationService CreateService(
         DecisionSessionTestHarness harness,
         DecisionSessionLifecycleProjection projection,
@@ -226,6 +381,8 @@ public sealed class DecisionSessionCertificationTests
         DecisionSessionTransferEventProjection? transfer = null,
         Func<DecisionSessionEconomicsSnapshot, DecisionSessionEconomicsSnapshot>? mutateEconomics = null,
         Func<DecisionSessionLifecycleSnapshot, DecisionSessionLifecycleSnapshot>? mutatePolicy = null,
+        IReadOnlyList<DecisionSessionRecoveryResult>? recoveryResults = null,
+        bool omitEligibilityFindings = false,
         bool omitMetrics = false)
     {
         DecisionSessionMetricsSnapshot metrics = CreateMetricsSnapshot(repositoryId, now);
@@ -234,7 +391,13 @@ public sealed class DecisionSessionCertificationTests
         DecisionSessionCoherenceSnapshot coherence = CreateCoherenceSnapshot(repositoryId, metrics, economics, now);
         DecisionSessionLifecycleSnapshot policy = mutatePolicy?.Invoke(CreatePolicySnapshot(repositoryId, active, metrics, economics, coherence, now)) ??
             CreatePolicySnapshot(repositoryId, active, metrics, economics, coherence, now);
-        DecisionSessionTransferEligibilitySnapshot eligibility = CreateEligibilitySnapshot(repositoryId, active.Id, policy.Evaluation, eligibilityStatus, now);
+        DecisionSessionTransferEligibilitySnapshot eligibility = CreateEligibilitySnapshot(
+            repositoryId,
+            active.Id,
+            policy.Evaluation,
+            eligibilityStatus,
+            now,
+            omitEligibilityFindings);
         IReadOnlyList<DecisionSessionContinuityArtifactProjection> artifactList = artifacts ??
             (transfer?.ContinuityArtifactId is null ? [] : [CreateArtifact(active.Id, transfer.ContinuityArtifactId, now)]);
         IReadOnlyList<DecisionSessionTransferEventProjection> transferList = transfer is null ? [] : [transfer];
@@ -261,7 +424,7 @@ public sealed class DecisionSessionCertificationTests
             [],
             [],
             transferList,
-            [],
+            recoveryResults ?? [],
             new DecisionSessionDiagnostics(
                 repositoryId,
                 diagnosticsErrors is null || diagnosticsErrors.Count == 0,
@@ -397,7 +560,8 @@ public sealed class DecisionSessionCertificationTests
         DecisionSessionId sourceSessionId,
         DecisionSessionLifecycleEvaluation evaluation,
         DecisionSessionTransferEligibilityStatus status,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        bool omitFindings = false)
     {
         return new DecisionSessionTransferEligibilitySnapshot(
             repositoryId,
@@ -405,7 +569,9 @@ public sealed class DecisionSessionCertificationTests
                 status,
                 evaluation,
                 sourceSessionId,
-                [new DecisionSessionTransferEligibilityFinding(status.ToString().ToLowerInvariant(), status == DecisionSessionTransferEligibilityStatus.Eligible ? "Info" : "Blocked", $"Eligibility is {status}.")],
+                omitFindings
+                    ? []
+                    : [new DecisionSessionTransferEligibilityFinding(status.ToString().ToLowerInvariant(), status == DecisionSessionTransferEligibilityStatus.Eligible ? "Info" : "Blocked", $"Eligibility is {status}.")],
                 now),
             new DecisionSessionTransferEligibilityDiagnostics(
                 repositoryId,
@@ -446,9 +612,11 @@ public sealed class DecisionSessionCertificationTests
     private static DecisionSessionTransferEventProjection CreateTransferProjection(
         Guid repositoryId,
         DecisionSessionId sourceSessionId,
-        DecisionSessionId targetSessionId,
+        DecisionSessionId? targetSessionId,
         string? artifactId,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        bool succeeded = true,
+        bool includeDiagnostics = true)
     {
         string transferId = $"transfer.{now.UtcDateTime:yyyyMMddTHHmmss.fffffffZ}.{sourceSessionId}.json";
         return new DecisionSessionTransferEventProjection(
@@ -456,8 +624,8 @@ public sealed class DecisionSessionCertificationTests
             sourceSessionId,
             targetSessionId,
             now,
-            now.AddSeconds(1),
-            true,
+            succeeded ? now.AddSeconds(1) : null,
+            succeeded,
             "Policy decided Transfer.",
             100,
             DecisionSessionLifecycleDecision.Transfer,
@@ -465,29 +633,86 @@ public sealed class DecisionSessionCertificationTests
             0.8m,
             DecisionSessionTransferEligibilityStatus.Eligible,
             artifactId,
-            [
-                new DecisionSessionTransferEvent(
-                    $"{transferId}.started",
-                    DecisionSessionTransferEventType.Started,
-                    repositoryId,
-                    sourceSessionId,
-                    null,
-                    artifactId,
-                    now,
-                    "Started.",
-                    []),
-                new DecisionSessionTransferEvent(
-                    $"{transferId}.completed",
-                    DecisionSessionTransferEventType.Completed,
-                    repositoryId,
-                    sourceSessionId,
-                    targetSessionId,
-                    artifactId,
-                    now.AddSeconds(1),
-                    "Completed.",
-                    [])
-            ],
-            []);
+            includeDiagnostics || succeeded
+                ? [
+                    new DecisionSessionTransferEvent(
+                        $"{transferId}.started",
+                        DecisionSessionTransferEventType.Started,
+                        repositoryId,
+                        sourceSessionId,
+                        null,
+                        artifactId,
+                        now,
+                        "Started.",
+                        []),
+                    new DecisionSessionTransferEvent(
+                        $"{transferId}.{(succeeded ? "completed" : "failed")}",
+                        succeeded ? DecisionSessionTransferEventType.Completed : DecisionSessionTransferEventType.Failed,
+                        repositoryId,
+                        sourceSessionId,
+                        targetSessionId,
+                        artifactId,
+                        now.AddSeconds(1),
+                        succeeded ? "Completed." : "Failed.",
+                        includeDiagnostics ? ["Transfer failed because eligibility changed."] : [])
+                ]
+                : [],
+            includeDiagnostics && !succeeded ? ["Transfer failed because eligibility changed."] : []);
+    }
+
+    private static DecisionSessionRecoveryResult CreateRecoveryResult(
+        Guid repositoryId,
+        DecisionSessionId activeSessionId,
+        DateTimeOffset now,
+        bool includeExplanation)
+    {
+        return new DecisionSessionRecoveryResult(
+            $"recovery.{now.UtcDateTime:yyyyMMddTHHmmss.fffffffZ}.json",
+            repositoryId,
+            true,
+            activeSessionId,
+            1,
+            includeExplanation ? [new DecisionSessionRecoveryFinding("RegistryHealthy", "Info", "Recovery validated registry.", activeSessionId, null)] : [],
+            new DecisionSessionRecoveryDiagnostics(
+                repositoryId,
+                now,
+                new DecisionSessionDiagnostics(repositoryId, true, 1, 1, [], [], now),
+                [],
+                includeExplanation ? ["Recovery validated registry."] : []),
+            includeExplanation
+                ? [new DecisionSessionRecoveryEvent("event.recovered", repositoryId, "Recovered", now, "Recovery completed.", [])]
+                : [],
+            now);
+    }
+
+    private static DecisionSessionRecoveryResult CreateDerivedSnapshotRecoveryResult(
+        Guid repositoryId,
+        DecisionSessionId activeSessionId,
+        DateTimeOffset now)
+    {
+        string[] codes =
+        [
+            "MetricsSnapshotRebuilt",
+            "EconomicsSnapshotRebuilt",
+            "CoherenceSnapshotRebuilt",
+            "LifecyclePolicySnapshotRebuilt",
+            "TransferEligibilitySnapshotRebuilt"
+        ];
+        return new DecisionSessionRecoveryResult(
+            $"recovery.{now.UtcDateTime:yyyyMMddTHHmmss.fffffffZ}.json",
+            repositoryId,
+            true,
+            activeSessionId,
+            1,
+            codes.Select(code => new DecisionSessionRecoveryFinding(code, "Info", $"{code} during recovery.", activeSessionId, code)).ToArray(),
+            new DecisionSessionRecoveryDiagnostics(
+                repositoryId,
+                now,
+                new DecisionSessionDiagnostics(repositoryId, false, 1, 2, ["More than one active decision session exists for this repository."], [], now),
+                [],
+                ["Recovery rebuilt missing derived snapshots."]),
+            [new DecisionSessionRecoveryEvent("event.recovered", repositoryId, "Recovered", now, "Recovery rebuilt missing derived snapshots.", [])],
+            now);
     }
 
     private static DecisionSessionLifecycleHistory CreateHistory(

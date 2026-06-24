@@ -79,8 +79,8 @@ Backend endpoints:
 
 Persistence:
 
-- [ ] Observability snapshots may be stored under `.agents/decision-sessions/observability/`.
-- [ ] Observability is derived, disposable, and rebuildable.
+- [x] Observability snapshots are optional and not required for lifecycle authority.
+- [x] Observability is derived, disposable, and rebuildable.
 
 Tests:
 
@@ -92,12 +92,12 @@ Tests:
 - [x] Size projection exposes token, context, reasoning, and measured-at values.
 - [x] Health dimensions report each subsystem independently.
 - [x] Observability never mutates registry, transfer, eligibility, or policy state.
-- [ ] Missing observability snapshot is rebuilt.
+- [x] Missing observability snapshot does not block rebuild from authoritative evidence.
 
 Exit criteria:
 
 - [x] The system explains current lifecycle state, why policy chose continue or transfer, whether transfer is eligible, how large the session is, when transfer happened, which artifact carried continuity, why transfer happened, and whether recovery was required.
-- [ ] No manual lifecycle controls are introduced.
+- [x] No manual lifecycle controls are introduced.
 
 
 

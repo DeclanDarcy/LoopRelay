@@ -2,19 +2,10 @@
 
 ## Newly Authorized
 
-- Treat the final-certification direction as accepted.
-- Preserve the boundary: workflow proof uses public read-only surfaces.
-- Preserve the boundary: the end-to-end lifecycle fixture is test evidence only.
-- Treat diagnostics coverage as the final Milestone 6 closure item.
-- Add explicit diagnostic proof for:
-  - Continue decision.
-  - Transfer decision.
-  - Eligibility blocked.
-  - Eligibility deferred.
-  - Recovery findings.
-  - Transfer failure.
-  - Duplicate active sessions.
-  - Missing or corrupt derived snapshots.
-- Diagnostic proof must show the system explains failures in the correct layer, not only that it fails safely.
-- Do not add markdown reports unless they clearly serve certification evidence.
-- Treat the persisted JSON certification report as sufficient unless human-facing audit output is required.
+- Treat the Decision Session Lifecycle roadmap as complete across Milestones 1 through 6.
+- Treat the final diagnostics slice as accepted because it proves failures are explained by the correct authority layer, not only detected.
+- Treat the remaining work as repository hygiene, closure verification, and release mechanics rather than new lifecycle capability development.
+- Keep markdown certification reports out of scope unless a concrete human-readable audit workflow requires them.
+- Verify roadmap, milestone checklists, handoff, and decisions agree on the final state.
+- Verify no late authority drift introduced workflow mutation paths, manual transfer endpoints, policy override endpoints, eligibility override endpoints, observability mutation paths, or certification repair paths.
+- If closure verification passes, stage, commit, and push the completed Decision Session Lifecycle work.

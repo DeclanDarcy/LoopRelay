@@ -57,7 +57,7 @@ Backend endpoints:
 Persistence:
 
 - [x] Certification reports under `.agents/decision-sessions/certification/`.
-- [ ] Optional markdown reports under `.agents/decision-sessions/reports/`.
+- [x] Markdown reports remain out of scope unless a concrete human-readable audit workflow requires them.
 
 End-to-end fixture:
 
@@ -83,7 +83,7 @@ Tests:
 - [x] Eligibility prevents unsafe transfer.
 - [x] Transfer preserves continuity through a valid continuity artifact.
 - [x] Recovery reconstructs active session and derived snapshots.
-- [ ] Diagnostics exist for continue, transfer, eligibility blocked, recovery, and failure states.
+- [x] Diagnostics exist for continue, transfer, eligibility blocked, recovery, and failure states.
 - [x] Workflow consumes lifecycle correctly.
 - [x] End-to-end lifecycle passes.
 
@@ -92,7 +92,7 @@ Exit criteria:
 - [x] Certification service exists.
 - [x] Certification reports are persisted.
 - [x] End-to-end lifecycle fixture passes.
-- [ ] The system can prove governance continuity survives long horizons, transfer preserves continuity, recovery reconstructs truth, workflow remains a consumer, and at most one active governance session exists.
+- [x] The system can prove governance continuity survives long horizons, transfer preserves continuity, recovery reconstructs truth, workflow remains a consumer, and at most one active governance session exists.
 
 
 
