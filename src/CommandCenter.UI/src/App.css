@@ -737,6 +737,89 @@ button:focus-visible {
   color: var(--status-danger-fg);
 }
 
+.workflow-panels {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.workflow-panel {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--surface-1);
+}
+
+.workflow-overview-panel {
+  grid-column: 1 / -1;
+}
+
+.workflow-panel-stack,
+.workflow-panel-list {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.workflow-fact-grid {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.workflow-fact-grid span,
+.workflow-panel-list li,
+.workflow-dimension-card p {
+  min-width: 0;
+  color: var(--fg-subtle);
+  font-size: 0.82rem;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.workflow-panel-list h5 {
+  margin: 0;
+  color: var(--fg-default);
+  font-size: 0.8rem;
+  letter-spacing: 0;
+}
+
+.workflow-panel-list ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.workflow-dimension-card {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--bg-inset);
+}
+
+.workflow-dimension-card-header {
+  min-width: 0;
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.workflow-dimension-card-header strong {
+  min-width: 0;
+  color: var(--fg-default);
+  font-size: 0.86rem;
+  overflow-wrap: anywhere;
+}
+
 .execution-context-panel,
 .workspace-milestones-panel,
 .execution-session-panel,
@@ -2619,6 +2702,8 @@ button:focus-visible {
   .decision-lineage-summary,
   .execution-workflow-rail,
   .workspace-workflow-rail,
+  .workflow-panels,
+  .workflow-fact-grid,
   .execution-session-grid,
   .execution-history-row,
   .execution-event-row,

@@ -7,6 +7,7 @@ type WorkspaceTabProps = {
   workflow: WorkflowInstance | null
   isWorkflowLoading?: boolean
   workflowError?: string | null
+  workflowOperations?: ReactNode
   executionContext: ReactNode
   liveActivity: ReactNode
   milestones: ReactNode
@@ -20,6 +21,7 @@ export function WorkspaceTab({
   workflow,
   isWorkflowLoading = false,
   workflowError = null,
+  workflowOperations,
   executionContext,
   liveActivity,
   milestones,
@@ -36,6 +38,7 @@ export function WorkspaceTab({
       <div className="workspace-tab-main">
         {summary}
         <WorkflowRail workflow={workflow} isLoading={isWorkflowLoading} error={workflowError} />
+        {workflowOperations}
         {executionContext}
         {liveActivity}
         {milestones}

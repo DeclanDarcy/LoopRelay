@@ -35,6 +35,7 @@ import { GitWorkflowPanel } from './features/execution/GitWorkflowPanel'
 import { OperationalContextTab } from './features/operational-context/OperationalContextTab'
 import { ReasoningTrajectoryTab } from './features/reasoning/ReasoningTrajectoryTab'
 import { SelectedRepositorySummary } from './features/repositories/SelectedRepositorySummary'
+import { WorkflowOperationsPanel } from './features/workflow/WorkflowPanels'
 import { ExecutionContextPanel } from './features/workspace/ExecutionContextPanel'
 import { WorkspaceLiveActivityPanel } from './features/workspace/WorkspaceLiveActivityPanel'
 import { WorkspaceMilestonesPanel } from './features/workspace/WorkspaceMilestonesPanel'
@@ -1629,6 +1630,14 @@ function App() {
                 workflow={workflowProjection}
                 isWorkflowLoading={isWorkflowLoading}
                 workflowError={workflowError}
+                workflowOperations={
+                  <WorkflowOperationsPanel
+                    repositoryId={selectedRepository.repository.id}
+                    workflow={workflowProjection}
+                    isWorkflowLoading={isWorkflowLoading}
+                    workflowError={workflowError}
+                  />
+                }
                 summary={
                   <SelectedRepositorySummary
                     repository={selectedRepository}

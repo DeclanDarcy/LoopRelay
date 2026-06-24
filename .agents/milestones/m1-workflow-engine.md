@@ -54,18 +54,18 @@ Replace client-side workflow derivation with the authoritative workflow projecti
    - [x] required human action
    - [x] current transition
    - [x] satisfying commands
-   - [ ] continuation state
-   - [ ] recovery state
-   - [ ] health dimensions
-   - [ ] certification findings
+   - [x] continuation state
+   - [x] recovery state
+   - [x] health dimensions
+   - [x] certification findings
 - [ ] Add workflow panels under `src/CommandCenter.UI/src/features/workflow/` or move existing rail components there:
-   - [ ] `WorkflowOverviewPanel`
-   - [ ] `WorkflowHistoryPanel`
-   - [ ] `WorkflowGatePanel`
-   - [ ] `WorkflowContinuationPanel`
-   - [ ] `WorkflowRecoveryPanel`
-   - [ ] `WorkflowHealthPanel`
-   - [ ] `WorkflowCertificationPanel`
+   - [x] `WorkflowOverviewPanel`
+   - [x] `WorkflowHistoryPanel`
+   - [x] `WorkflowGatePanel`
+   - [x] `WorkflowContinuationPanel`
+   - [x] `WorkflowRecoveryPanel`
+   - [x] `WorkflowHealthPanel`
+   - [x] `WorkflowCertificationPanel`
 - [ ] Integrate workflow into repository workspace, execution workspace, and dashboard summary without duplicating the domain model.
 - [ ] Establish a shared workflow consumption pattern for later milestones:
    - [x] repository workspace shows workflow as primary operational status
@@ -77,15 +77,15 @@ Replace client-side workflow derivation with the authoritative workflow projecti
 
 - [ ] Add backend endpoint tests for any route not already covered.
 - [ ] Add shell command tests where feasible.
-- [ ] Add UI characterization tests proving workflow panels render projection stage, gate reason, satisfying command, recovery diagnostics, health dimensions, and certification findings.
+- [x] Add UI characterization tests proving workflow panels render projection stage, gate reason, satisfying command, recovery diagnostics, health dimensions, and certification findings.
 - [x] Add a regression test that no UI workflow state is derived from `RepositoryExecutionState`.
 
 ### Exit Criteria
 
 - [x] Workflow projection is the sole UI workflow source.
-- [ ] Users can see current stage, progress, reasoning, gates, required human actions, continuation, recovery, health, and certification.
-- [ ] Workflow history is reconstructable from projected evidence.
-- [ ] Workflow gates explain why progress is blocked, who owns the unblock action, and which command satisfies it.
+- [x] Users can see current stage, progress, reasoning, gates, required human actions, continuation, recovery, health, and certification.
+- [x] Workflow history is reconstructable from projected evidence.
+- [x] Workflow gates explain why progress is blocked, who owns the unblock action, and which command satisfies it.
 - [ ] No other workspace creates a parallel lifecycle timeline for operational product state.
 - [ ] Parallel client-side workflow derivation is removed.
 - [ ] Later workspaces have a documented consumption pattern for workflow projection instead of bypassing the operational backbone.

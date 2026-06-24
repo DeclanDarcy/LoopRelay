@@ -2,13 +2,16 @@
 
 ## Newly Authorized
 
-- The Milestone 1 consumer-migration slice is accepted as the milestone-defining authority transfer from client-side workflow derivation to backend workflow projection.
-- `Workflow projection is the sole UI workflow source` is now considered achieved for the current UI workflow rails.
-- Removing `getExecutionWorkflowSteps`, its step types, exports, tests, and consumers is the correct retirement of the competing client-side workflow model.
-- `WorkflowRail` may render workflow-owned projection facts directly, including stage, progress reasoning, blocking gate, required action, satisfying command, and transition.
-- The source-level `workflowAuthority.test.ts` guard should remain to prevent reintroducing workflow progression derived from `RepositoryExecutionState`.
-- Remaining Milestone 1 work should focus on surfacing existing workflow authority, not changing authority boundaries.
-- The next implementation ordering should be recovery first, health second, certification third, gates/history fourth, and continuation last.
-- Workflow panels should prefer direct use of `useWorkflowProjection`, `useWorkflowRecovery`, `useWorkflowHealth`, and `useWorkflowCertification`; any adapter must remain purely presentational.
-- Health UI must render decomposed dimensions, findings, evidence, and diagnostics rather than collapsing health to a single summary label.
-- Certification remains observational and must not introduce repair or mutation logic.
+- The workflow panel slice is accepted as a valid Milestone 1 continuation, assuming panels continue consuming existing workflow hooks/projections rather than introducing new workflow aggregation authority.
+- Workflow panels should follow the direct authority path: workflow service to endpoint to hook to panel.
+- Any intermediate workflow UI model is acceptable only if it is purely presentational and does not become a new workflow authority.
+- Workflow surfaces belong in the repository workspace experience because workflow is the operational backbone, not a disconnected subsystem.
+- Health decomposition remains a boundary to defend: health must render dimensions, findings, evidence, and diagnostics, with any summary label derived from those facts.
+- Certification remains observational. It may report, summarize, validate, and explain, but it must not repair, mutate, recover, or advance lifecycle state.
+- The next Milestone 1 slice should focus on repository/dashboard workflow summary integration using existing workflow projections, without creating a dashboard-specific workflow lifecycle.
+- The next Milestone 1 slice should add concise workflow consumption-pattern documentation before moving into Milestone 2.
+- Consumption-pattern documentation should establish that workflow owns operational stage, gates, progression, continuation, recovery, health, and certification.
+- Governance should own decision-session lifecycle, transfer, recovery, and continuity artifacts, while consuming workflow for operational status, blocking gates, and required human action.
+- Execution should own execution-session lifecycle, while consuming workflow for operational placement and progression context.
+- Continuity should own operational-context lifecycle, while consuming workflow where workflow exposes review and promotion requirements.
+- If repository/dashboard workflow summary integration and consumption-pattern documentation complete cleanly, Milestone 1 can be treated as effectively ready to transition into Milestone 2.
