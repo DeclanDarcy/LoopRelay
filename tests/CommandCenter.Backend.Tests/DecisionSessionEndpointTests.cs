@@ -67,6 +67,24 @@ public sealed class DecisionSessionEndpointTests
         DecisionSessionContinuityArtifact[]? continuityArtifacts = await client.GetFromJsonAsync<DecisionSessionContinuityArtifact[]>(
             $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/continuity-artifacts",
             DecisionSessionTestHarness.CreateJsonOptions());
+        DecisionSessionTransfer[]? transfers = await client.GetFromJsonAsync<DecisionSessionTransfer[]>(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/transfers",
+            DecisionSessionTestHarness.CreateJsonOptions());
+        DecisionSessionTransfer[]? transferHistory = await client.GetFromJsonAsync<DecisionSessionTransfer[]>(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/transfers/history",
+            DecisionSessionTestHarness.CreateJsonOptions());
+        DecisionSessionTransferDiagnostics? transferDiagnostics = await client.GetFromJsonAsync<DecisionSessionTransferDiagnostics>(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/transfers/diagnostics",
+            DecisionSessionTestHarness.CreateJsonOptions());
+        DecisionSessionRecoveryResult? recovery = await client.GetFromJsonAsync<DecisionSessionRecoveryResult>(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/recovery",
+            DecisionSessionTestHarness.CreateJsonOptions());
+        DecisionSessionRecoveryHistory? recoveryHistory = await client.GetFromJsonAsync<DecisionSessionRecoveryHistory>(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/recovery/history",
+            DecisionSessionTestHarness.CreateJsonOptions());
+        DecisionSessionRecoveryDiagnostics? recoveryDiagnostics = await client.GetFromJsonAsync<DecisionSessionRecoveryDiagnostics>(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/recovery/diagnostics",
+            DecisionSessionTestHarness.CreateJsonOptions());
 
         Assert.NotNull(sessions);
         Assert.Single(sessions);
@@ -102,6 +120,18 @@ public sealed class DecisionSessionEndpointTests
         Assert.Equal(harness.Repository.Id, transferEligibilityDiagnostics.RepositoryId);
         Assert.NotNull(continuityArtifacts);
         Assert.Empty(continuityArtifacts);
+        Assert.NotNull(transfers);
+        Assert.Empty(transfers);
+        Assert.NotNull(transferHistory);
+        Assert.Empty(transferHistory);
+        Assert.NotNull(transferDiagnostics);
+        Assert.Equal(harness.Repository.Id, transferDiagnostics.RepositoryId);
+        Assert.NotNull(recovery);
+        Assert.Equal(created.Id, recovery.ActiveSessionId);
+        Assert.NotNull(recoveryHistory);
+        Assert.Equal(harness.Repository.Id, recoveryHistory.RepositoryId);
+        Assert.NotNull(recoveryDiagnostics);
+        Assert.Equal(harness.Repository.Id, recoveryDiagnostics.RepositoryId);
     }
 
     [Fact]

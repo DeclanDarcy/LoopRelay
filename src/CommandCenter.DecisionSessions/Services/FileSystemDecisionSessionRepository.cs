@@ -412,6 +412,114 @@ public sealed class FileSystemDecisionSessionRepository(IArtifactStore artifactS
         await artifactStore.WriteAsync(path, JsonSerializer.Serialize(document, DecisionSessionJson.Options));
     }
 
+    public async Task<IReadOnlyList<DecisionSessionTransfer>> ListTransfersAsync(Repository repository)
+    {
+        string root = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.TransfersDirectory());
+        IReadOnlyList<string> files = (await artifactStore.ListAsync(root, "*.json"))
+            .Where(file => Path.GetFileName(file).StartsWith("transfer.", StringComparison.Ordinal))
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var transfers = new List<DecisionSessionTransfer>();
+        foreach (string file in files)
+        {
+            string? json = await artifactStore.ReadAsync(file);
+            if (json is null)
+            {
+                continue;
+            }
+
+            DecisionSessionArtifactDocument<DecisionSessionTransfer>? document =
+                JsonSerializer.Deserialize<DecisionSessionArtifactDocument<DecisionSessionTransfer>>(
+                    json,
+                    DecisionSessionJson.Options);
+            if (document is null)
+            {
+                throw new DecisionSessionValidationException("Decision session transfer could not be deserialized.");
+            }
+
+            ValidateDocument(repository, document, "Decision session transfer");
+            ValidateTransfer(repository, document.Payload);
+            if (!string.Equals(Path.GetFileName(file), document.Payload.TransferId, StringComparison.Ordinal))
+            {
+                throw new DecisionSessionValidationException("Decision session transfer id does not match its path.");
+            }
+
+            transfers.Add(document.Payload);
+        }
+
+        return transfers
+            .OrderBy(transfer => transfer.StartedAt)
+            .ThenBy(transfer => transfer.TransferId, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    public async Task WriteTransferAsync(Repository repository, DecisionSessionTransfer transfer)
+    {
+        ValidateTransfer(repository, transfer);
+        var document = new DecisionSessionArtifactDocument<DecisionSessionTransfer>(
+            DecisionSessionArtifactPaths.SchemaVersion,
+            repository.Id,
+            transfer.StartedAt,
+            DateTimeOffset.UtcNow,
+            transfer);
+        string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.TransferJson(transfer.TransferId));
+        await artifactStore.WriteAsync(path, JsonSerializer.Serialize(document, DecisionSessionJson.Options));
+    }
+
+    public async Task<IReadOnlyList<DecisionSessionRecoveryResult>> ListRecoveryResultsAsync(Repository repository)
+    {
+        string root = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.RecoveryDirectory());
+        IReadOnlyList<string> files = (await artifactStore.ListAsync(root, "*.json"))
+            .Where(file => Path.GetFileName(file).StartsWith("recovery.", StringComparison.Ordinal))
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var results = new List<DecisionSessionRecoveryResult>();
+        foreach (string file in files)
+        {
+            string? json = await artifactStore.ReadAsync(file);
+            if (json is null)
+            {
+                continue;
+            }
+
+            DecisionSessionArtifactDocument<DecisionSessionRecoveryResult>? document =
+                JsonSerializer.Deserialize<DecisionSessionArtifactDocument<DecisionSessionRecoveryResult>>(
+                    json,
+                    DecisionSessionJson.Options);
+            if (document is null)
+            {
+                throw new DecisionSessionValidationException("Decision session recovery result could not be deserialized.");
+            }
+
+            ValidateDocument(repository, document, "Decision session recovery result");
+            ValidateRecoveryResult(repository, document.Payload);
+            if (!string.Equals(Path.GetFileName(file), document.Payload.RecoveryId, StringComparison.Ordinal))
+            {
+                throw new DecisionSessionValidationException("Decision session recovery id does not match its path.");
+            }
+
+            results.Add(document.Payload);
+        }
+
+        return results
+            .OrderBy(result => result.RecoveredAt)
+            .ThenBy(result => result.RecoveryId, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    public async Task WriteRecoveryResultAsync(Repository repository, DecisionSessionRecoveryResult result)
+    {
+        ValidateRecoveryResult(repository, result);
+        var document = new DecisionSessionArtifactDocument<DecisionSessionRecoveryResult>(
+            DecisionSessionArtifactPaths.SchemaVersion,
+            repository.Id,
+            result.RecoveredAt,
+            DateTimeOffset.UtcNow,
+            result);
+        string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.RecoveryJson(result.RecoveryId));
+        await artifactStore.WriteAsync(path, JsonSerializer.Serialize(document, DecisionSessionJson.Options));
+    }
+
     internal async Task<DecisionSessionValidationResult> ValidateAsync(Repository repository)
     {
         string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.RegistryJson());
@@ -520,6 +628,71 @@ public sealed class FileSystemDecisionSessionRepository(IArtifactStore artifactS
             !artifactId.EndsWith(".json", StringComparison.Ordinal))
         {
             throw new ArgumentException("Continuity artifact id is invalid.", nameof(artifactId));
+        }
+    }
+
+    private static void ValidateTransfer(Repository repository, DecisionSessionTransfer transfer)
+    {
+        ValidateTransferId(transfer.TransferId);
+        if (transfer.RepositoryId != repository.Id)
+        {
+            throw new DecisionSessionValidationException("Decision session transfer belongs to a different repository.");
+        }
+
+        foreach (DecisionSessionTransferEvent transferEvent in transfer.Events)
+        {
+            if (transferEvent.RepositoryId != repository.Id)
+            {
+                throw new DecisionSessionValidationException("Decision session transfer event belongs to a different repository.");
+            }
+
+            if (transferEvent.SourceSessionId != transfer.SourceSessionId)
+            {
+                throw new DecisionSessionValidationException("Decision session transfer event source does not match transfer source.");
+            }
+        }
+    }
+
+    private static void ValidateTransferId(string transferId)
+    {
+        if (string.IsNullOrWhiteSpace(transferId) ||
+            transferId.Contains(Path.DirectorySeparatorChar) ||
+            transferId.Contains(Path.AltDirectorySeparatorChar) ||
+            !transferId.StartsWith("transfer.", StringComparison.Ordinal) ||
+            !transferId.EndsWith(".json", StringComparison.Ordinal))
+        {
+            throw new ArgumentException("Decision session transfer id is invalid.", nameof(transferId));
+        }
+    }
+
+    private static void ValidateRecoveryResult(Repository repository, DecisionSessionRecoveryResult result)
+    {
+        ValidateRecoveryId(result.RecoveryId);
+        if (result.RepositoryId != repository.Id ||
+            result.Diagnostics.RepositoryId != repository.Id ||
+            result.Diagnostics.RegistryDiagnostics.RepositoryId != repository.Id)
+        {
+            throw new DecisionSessionValidationException("Decision session recovery result belongs to a different repository.");
+        }
+
+        foreach (DecisionSessionRecoveryEvent recoveryEvent in result.Events)
+        {
+            if (recoveryEvent.RepositoryId != repository.Id)
+            {
+                throw new DecisionSessionValidationException("Decision session recovery event belongs to a different repository.");
+            }
+        }
+    }
+
+    private static void ValidateRecoveryId(string recoveryId)
+    {
+        if (string.IsNullOrWhiteSpace(recoveryId) ||
+            recoveryId.Contains(Path.DirectorySeparatorChar) ||
+            recoveryId.Contains(Path.AltDirectorySeparatorChar) ||
+            !recoveryId.StartsWith("recovery.", StringComparison.Ordinal) ||
+            !recoveryId.EndsWith(".json", StringComparison.Ordinal))
+        {
+            throw new ArgumentException("Decision session recovery id is invalid.", nameof(recoveryId));
         }
     }
 

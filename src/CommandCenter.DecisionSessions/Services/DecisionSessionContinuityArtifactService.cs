@@ -25,23 +25,32 @@ public sealed class DecisionSessionContinuityArtifactService(
         DecisionSessionId? targetSessionId = null)
     {
         Repository repository = await GetRepositoryAsync(repositoryId);
-        DecisionSession? activeSession = await sessionRepository.GetActiveAsync(repository);
-        if (activeSession is null)
+        IReadOnlyList<DecisionSession> sessions = await sessionRepository.ListAsync(repository);
+        DecisionSession? activeSession = sessions.SingleOrDefault(session => session.State == DecisionSessionState.Active);
+        if (activeSession is not null && activeSession.Id != sourceSessionId)
         {
-            throw new KeyNotFoundException($"No active decision session exists for repository: {repositoryId}");
+            throw new DecisionSessionValidationException("Continuity artifact source session must match the active decision session when one exists.");
         }
 
-        if (activeSession.Id != sourceSessionId)
+        DecisionSession? sourceSession = sessions.FirstOrDefault(session => session.Id == sourceSessionId);
+        if (sourceSession is null)
         {
-            throw new DecisionSessionValidationException("Continuity artifact source session must be the active decision session.");
+            throw new KeyNotFoundException($"Decision session was not found: {sourceSessionId}");
+        }
+
+        if (sourceSession.State is not (DecisionSessionState.Active or DecisionSessionState.TransferPending))
+        {
+            throw new DecisionSessionValidationException("Continuity artifact source session must be active or transfer-pending.");
         }
 
         DateTimeOffset createdAt = timeProvider.GetUtcNow();
-        DecisionSessionLifecycleSnapshot policySnapshot = await lifecyclePolicy.EvaluateAsync(repositoryId);
+        DecisionSessionLifecycleSnapshot policySnapshot = sourceSession.State == DecisionSessionState.TransferPending
+            ? await ReadRequiredPolicySnapshotAsync(repository, sourceSessionId)
+            : await lifecyclePolicy.EvaluateAsync(repositoryId);
         DecisionSessionMetricsSnapshot metricsSnapshot = await metricsService.GetMetricsAsync(repositoryId);
         DecisionSessionEconomicsSnapshot economicsSnapshot = await economicsService.GetEconomicsAsync(repositoryId);
         DecisionSessionCoherenceSnapshot coherenceSnapshot = await coherenceService.GetCoherenceAsync(repositoryId);
-        DecisionSessionEvidence evidence = await evidenceReader.ReadAsync(repository, activeSession, createdAt);
+        DecisionSessionEvidence evidence = await evidenceReader.ReadAsync(repository, sourceSession, createdAt);
 
         DecisionSessionContinuityReference[] decisionReferences = CreateReferences(
             evidence,
@@ -108,6 +117,40 @@ public sealed class DecisionSessionContinuityArtifactService(
         return await sessionRepository.ReadContinuityArtifactAsync(repository, artifactId);
     }
 
+    public async Task<DecisionSessionContinuityArtifact> AttachTargetSessionAsync(
+        Guid repositoryId,
+        string artifactId,
+        DecisionSessionId targetSessionId)
+    {
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        DecisionSessionContinuityArtifact artifact = await sessionRepository.ReadContinuityArtifactAsync(repository, artifactId)
+            ?? throw new KeyNotFoundException($"Decision session continuity artifact was not found: {artifactId}");
+        DecisionSessionContinuityArtifact updated = artifact with
+        {
+            TargetSessionId = targetSessionId,
+            ContinuityFingerprint = CreateContinuityFingerprint(
+                artifact.RepositoryId,
+                artifact.SourceSessionId,
+                targetSessionId,
+                artifact.PolicyEvaluation,
+                artifact.Metrics,
+                artifact.Economics,
+                artifact.Coherence,
+                artifact.Cache,
+                artifact.DecisionReferences,
+                artifact.ReasoningReferences,
+                artifact.OperationalContextReferences)
+        };
+        DecisionSessionContinuityArtifactValidation validation = Validate(updated);
+        if (!validation.IsValid)
+        {
+            throw new DecisionSessionValidationException(string.Join("; ", validation.Errors));
+        }
+
+        await sessionRepository.WriteContinuityArtifactAsync(repository, updated);
+        return updated;
+    }
+
     public DecisionSessionContinuityArtifactValidation Validate(DecisionSessionContinuityArtifact artifact)
     {
         var errors = new List<string>();
@@ -169,6 +212,24 @@ public sealed class DecisionSessionContinuityArtifactService(
         Repository? repository = (await repositoryService.GetAllAsync())
             .FirstOrDefault(repository => repository.Id == repositoryId);
         return repository ?? throw new KeyNotFoundException($"Repository was not found: {repositoryId}");
+    }
+
+    private async Task<DecisionSessionLifecycleSnapshot> ReadRequiredPolicySnapshotAsync(
+        Repository repository,
+        DecisionSessionId sourceSessionId)
+    {
+        DecisionSessionLifecycleSnapshot? snapshot = await sessionRepository.ReadLifecyclePolicySnapshotAsync(repository);
+        if (snapshot is null)
+        {
+            throw new DecisionSessionValidationException("A persisted transfer policy snapshot is required after source session is transfer-pending.");
+        }
+
+        if (snapshot.Diagnostics.Inputs.Session.Id != sourceSessionId)
+        {
+            throw new DecisionSessionValidationException("Persisted transfer policy snapshot source does not match the continuity artifact source.");
+        }
+
+        return snapshot;
     }
 
     private static DecisionSessionContinuityReference[] CreateReferences(

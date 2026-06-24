@@ -114,6 +114,36 @@ public static class DecisionSessionEndpoints
                 return artifact ?? throw new KeyNotFoundException($"Decision session continuity artifact was not found: {artifactId}");
             }));
 
+        group.MapGet("/transfers", async (
+            Guid repositoryId,
+            IDecisionSessionTransferService transferService) =>
+            await HandleAsync(() => transferService.ListAsync(repositoryId)));
+
+        group.MapGet("/transfers/history", async (
+            Guid repositoryId,
+            IDecisionSessionTransferService transferService) =>
+            await HandleAsync(() => transferService.ListAsync(repositoryId)));
+
+        group.MapGet("/transfers/diagnostics", async (
+            Guid repositoryId,
+            IDecisionSessionTransferService transferService) =>
+            await HandleAsync(() => transferService.GetDiagnosticsAsync(repositoryId)));
+
+        group.MapGet("/recovery", async (
+            Guid repositoryId,
+            IDecisionSessionRecoveryService recoveryService) =>
+            await HandleAsync(() => recoveryService.GetRecoveryAsync(repositoryId)));
+
+        group.MapGet("/recovery/history", async (
+            Guid repositoryId,
+            IDecisionSessionRecoveryService recoveryService) =>
+            await HandleAsync(() => recoveryService.GetHistoryAsync(repositoryId)));
+
+        group.MapGet("/recovery/diagnostics", async (
+            Guid repositoryId,
+            IDecisionSessionRecoveryService recoveryService) =>
+            await HandleAsync(() => recoveryService.GetRecoveryDiagnosticsAsync(repositoryId)));
+
         return app;
     }
 

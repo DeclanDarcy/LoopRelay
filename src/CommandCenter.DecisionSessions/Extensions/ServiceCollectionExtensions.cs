@@ -25,6 +25,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IDecisionSessionLifecyclePolicy, DecisionSessionLifecyclePolicy>();
         services.AddSingleton<IDecisionSessionTransferEligibilityService, DecisionSessionTransferEligibilityService>();
         services.AddSingleton<IDecisionSessionContinuityArtifactService, DecisionSessionContinuityArtifactService>();
+        services.AddSingleton<IDecisionSessionContinuityCaptureService, DecisionSessionContinuityCaptureService>();
+        services.AddSingleton<IDecisionSessionContinuityIntegrationService, DecisionSessionContinuityIntegrationService>();
+        services.AddSingleton<IDecisionSessionTransferService, DecisionSessionTransferService>();
+        services.AddHostedService<DecisionSessionRecoveryHostedService>();
         return services;
     }
 }

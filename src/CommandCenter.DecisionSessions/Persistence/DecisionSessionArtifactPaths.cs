@@ -23,6 +23,14 @@ public static class DecisionSessionArtifactPaths
 
     public static string ContinuityArtifactJson(string artifactId) => ArtifactPath.CombineRelative(".agents", "decision-sessions", "continuity-artifacts", artifactId);
 
+    public static string TransfersDirectory() => ArtifactPath.CombineRelative(".agents", "decision-sessions", "transfers");
+
+    public static string TransferJson(string transferId) => ArtifactPath.CombineRelative(".agents", "decision-sessions", "transfers", transferId);
+
+    public static string RecoveryDirectory() => ArtifactPath.CombineRelative(".agents", "decision-sessions", "recovery");
+
+    public static string RecoveryJson(string recoveryId) => ArtifactPath.CombineRelative(".agents", "decision-sessions", "recovery", recoveryId);
+
     public static string Resolve(Repository repository, string relativePath)
     {
         return ArtifactPath.ResolveRepositoryPath(repository, relativePath);

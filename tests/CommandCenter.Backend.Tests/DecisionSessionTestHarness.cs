@@ -29,7 +29,7 @@ internal sealed record DecisionSessionTestHarness(
         var repositoryService = new DecisionSessionTestRepositoryService(repository);
         var sessionRepository = new FileSystemDecisionSessionRepository(store);
         var registry = new DecisionSessionRegistry(repositoryService, sessionRepository);
-        var recovery = new DecisionSessionRecoveryService(repositoryService, sessionRepository);
+        var recovery = new DecisionSessionRecoveryService(repositoryService, sessionRepository, TimeProvider.System);
         return new DecisionSessionTestHarness(repository, store, repositoryService, sessionRepository, registry, recovery);
     }
 

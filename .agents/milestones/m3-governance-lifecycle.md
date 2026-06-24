@@ -141,74 +141,74 @@ Continuity artifact rules:
 
 Add models:
 
-- [ ] `DecisionSessionTransfer`
-- [ ] `DecisionSessionTransferEvent`
-- [ ] `DecisionSessionTransferDiagnostics`
-- [ ] `DecisionSessionTransferResult`
+- [x] `DecisionSessionTransfer`
+- [x] `DecisionSessionTransferEvent`
+- [x] `DecisionSessionTransferDiagnostics`
+- [x] `DecisionSessionTransferResult`
 
 Add services:
 
-- [ ] `IDecisionSessionTransferService`
-- [ ] `DecisionSessionTransferService`
-- [ ] `IDecisionSessionContinuityCaptureService`
-- [ ] `DecisionSessionContinuityCaptureService`
-- [ ] `IDecisionSessionContinuityIntegrationService`
-- [ ] `DecisionSessionContinuityIntegrationService`
+- [x] `IDecisionSessionTransferService`
+- [x] `DecisionSessionTransferService`
+- [x] `IDecisionSessionContinuityCaptureService`
+- [x] `DecisionSessionContinuityCaptureService`
+- [x] `IDecisionSessionContinuityIntegrationService`
+- [x] `DecisionSessionContinuityIntegrationService`
 
 Transfer flow:
 
-1. [ ] Load active session.
-2. [ ] Require policy evaluation decision `Transfer`.
-3. [ ] Require transfer eligibility status `Eligible`.
-4. [ ] Mark source session `TransferPending`.
-5. [ ] Create and persist `DecisionSessionContinuityArtifact`.
-6. [ ] Persist transfer started event.
-7. [ ] Integrate the continuity artifact into existing continuity infrastructure without making decision sessions the owner of operational context.
-8. [ ] Retire source session.
-9. [ ] Create replacement session with new identity and inherited repository ownership.
-10. [ ] Activate replacement session.
-11. [ ] Update the continuity artifact with target session id if not known at creation time.
-12. [ ] Mark transfer completed and persist diagnostics.
+1. [x] Load active session.
+2. [x] Require policy evaluation decision `Transfer`.
+3. [x] Require transfer eligibility status `Eligible`.
+4. [x] Mark source session `TransferPending`.
+5. [x] Create and persist `DecisionSessionContinuityArtifact`.
+6. [x] Persist transfer started event.
+7. [x] Integrate the continuity artifact into existing continuity infrastructure without making decision sessions the owner of operational context.
+8. [x] Retire source session.
+9. [x] Create replacement session with new identity and inherited repository ownership.
+10. [x] Activate replacement session.
+11. [x] Update the continuity artifact with target session id if not known at creation time.
+12. [x] Mark transfer completed and persist diagnostics.
 
 Invariant rules:
 
-- [ ] Source must be active before transfer starts.
-- [ ] `TransferPending` is allowed during transfer.
-- [ ] Do not create or activate replacement before source is no longer active.
-- [ ] Do not allow two active sessions at any point.
-- [ ] Failed transfer must leave diagnostics, eligibility findings, and enough state for recovery.
+- [x] Source must be active before transfer starts.
+- [x] `TransferPending` is allowed during transfer.
+- [x] Do not create or activate replacement before source is no longer active.
+- [x] Do not allow two active sessions at any point.
+- [x] Failed transfer must leave diagnostics, eligibility findings, and enough state for recovery.
 
-Persist transfer events under `.agents/decision-sessions/transfers/`.
+[x] Persist transfer events under `.agents/decision-sessions/transfers/`.
 
 ### Recovery And Resilience
 
 Add models:
 
-- [ ] `DecisionSessionRecoveryResult`
-- [ ] `DecisionSessionRecoveryFinding`
-- [ ] `TransferRecoveryAssessment`
-- [ ] `DecisionSessionRecoveryDiagnostics`
-- [ ] `DecisionSessionRecoveryHistory`
-- [ ] `DecisionSessionRecoveryEvent`
+- [x] `DecisionSessionRecoveryResult`
+- [x] `DecisionSessionRecoveryFinding`
+- [x] `TransferRecoveryAssessment`
+- [x] `DecisionSessionRecoveryDiagnostics`
+- [x] `DecisionSessionRecoveryHistory`
+- [x] `DecisionSessionRecoveryEvent`
 
 Extend:
 
-- [ ] `DecisionSessionRecoveryService`
+- [x] `DecisionSessionRecoveryService`
 
 Add hosted service:
 
-- [ ] `DecisionSessionRecoveryHostedService`
+- [x] `DecisionSessionRecoveryHostedService`
 
 Recovery responsibilities:
 
-- [ ] Load registry.
-- [ ] Validate active-session count.
-- [ ] Validate duplicate ids.
-- [ ] Reconstruct active session from registry, transfer events, continuity artifacts, and continuity evidence.
-- [ ] Reconstruct transfer history from transfer events, continuity artifacts, and session records.
-- [ ] Assess interrupted `TransferPending` sessions.
+- [x] Load registry.
+- [x] Validate active-session count.
+- [x] Validate duplicate ids.
+- [x] Reconstruct active session from registry, transfer events, continuity artifacts, and continuity evidence.
+- [x] Reconstruct transfer history from transfer events, continuity artifacts, and session records.
+- [x] Assess interrupted `TransferPending` sessions.
 - [ ] Rebuild missing metrics, economics, coherence, policy, and eligibility snapshots.
-- [ ] Persist recovery events, findings, and diagnostics.
+- [x] Persist recovery events, findings, and diagnostics.
 
 Recovery philosophy:
 
@@ -220,10 +220,10 @@ Recovery philosophy:
 
 Hosted startup behavior:
 
-1. [ ] List repositories through `IRepositoryService`.
-2. [ ] Recover each repository independently.
-3. [ ] Publish diagnostics.
-4. [ ] Continue recovering other repositories if one fails.
+1. [x] List repositories through `IRepositoryService`.
+2. [x] Recover each repository independently.
+3. [x] Publish diagnostics.
+4. [x] Continue recovering other repositories if one fails.
 
 ### Backend Endpoints
 
@@ -233,12 +233,12 @@ Hosted startup behavior:
 - [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/lifecycle/eligibility/diagnostics`
 - [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/continuity-artifacts`
 - [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/continuity-artifacts/{artifactId}`
-- [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/transfers`
-- [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/transfers/history`
-- [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/transfers/diagnostics`
-- [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/recovery`
-- [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/recovery/history`
-- [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/recovery/diagnostics`
+- [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/transfers`
+- [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/transfers/history`
+- [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/transfers/diagnostics`
+- [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/recovery`
+- [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/recovery/history`
+- [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/recovery/diagnostics`
 
 Do not add a manual transfer endpoint.
 
@@ -255,27 +255,27 @@ Do not add a manual transfer endpoint.
 - [x] Eligibility is `Blocked` when continuity artifact generation fails.
 - [x] Eligibility is `Blocked` when operational context evidence is unavailable.
 - [x] Eligibility is `Deferred` or `Blocked` when repository state is unavailable or locked.
-- [ ] Transfer decision plus eligible status results in transfer execution.
-- [ ] Transfer decision plus blocked eligibility does not mutate registry state.
-- [ ] Continuity artifact is created before source retirement.
+- [x] Transfer decision plus eligible status results in transfer execution.
+- [x] Transfer decision plus blocked eligibility does not mutate registry state.
+- [x] Continuity artifact is created before source retirement.
 - [x] Continuity artifact is the canonical transfer payload and validates required references.
-- [ ] Source session is retired.
-- [ ] Replacement session is created and active.
-- [ ] Two active sessions never exist.
-- [ ] Transfer events are durable and auditable.
-- [ ] Active session recovers after restart.
-- [ ] Completed transfer recovers replacement as active.
-- [ ] `TransferPending` after restart emits diagnostics.
+- [x] Source session is retired.
+- [x] Replacement session is created and active.
+- [x] Two active sessions never exist.
+- [x] Transfer events are durable and auditable.
+- [x] Active session recovers after restart.
+- [x] Completed transfer recovers replacement as active.
+- [x] `TransferPending` after restart emits diagnostics.
 - [ ] Missing analysis, policy, and eligibility snapshots are rebuilt.
-- [ ] Duplicate active sessions produce a recovery finding.
-- [ ] Hosted recovery isolates repository failures.
+- [x] Duplicate active sessions produce a recovery finding.
+- [x] Hosted recovery isolates repository failures.
 
 ### Exit Criteria
 
 - [x] Policy can decide continue or transfer.
 - [x] Eligibility can block or defer transfer without changing policy.
-- [ ] Transfer creates a first-class continuity artifact.
-- [ ] Transfer preserves continuity and never creates parallel active sessions.
+- [x] Transfer creates a first-class continuity artifact.
+- [x] Transfer preserves continuity and never creates parallel active sessions.
 - [ ] Recovery survives restart, missing snapshots, duplicate-active corruption, and interrupted transfer states with diagnostics.
 
 

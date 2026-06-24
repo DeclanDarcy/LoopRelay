@@ -14,5 +14,10 @@ public interface IDecisionSessionContinuityArtifactService
 
     Task<DecisionSessionContinuityArtifact?> GetAsync(Guid repositoryId, string artifactId);
 
+    Task<DecisionSessionContinuityArtifact> AttachTargetSessionAsync(
+        Guid repositoryId,
+        string artifactId,
+        DecisionSessionId targetSessionId);
+
     DecisionSessionContinuityArtifactValidation Validate(DecisionSessionContinuityArtifact artifact);
 }

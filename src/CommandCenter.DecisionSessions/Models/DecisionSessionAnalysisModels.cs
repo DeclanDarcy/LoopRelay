@@ -375,3 +375,95 @@ public sealed record DecisionSessionContinuityArtifactValidation(
 {
     public static DecisionSessionContinuityArtifactValidation Valid { get; } = new(true, [], []);
 }
+
+public enum DecisionSessionTransferEventType
+{
+    Started,
+    Completed,
+    Failed
+}
+
+public sealed record DecisionSessionTransferEvent(
+    string EventId,
+    DecisionSessionTransferEventType EventType,
+    Guid RepositoryId,
+    DecisionSessionId SourceSessionId,
+    DecisionSessionId? TargetSessionId,
+    string? ContinuityArtifactId,
+    DateTimeOffset OccurredAt,
+    string Message,
+    IReadOnlyList<string> Diagnostics);
+
+public sealed record DecisionSessionTransfer(
+    string TransferId,
+    Guid RepositoryId,
+    DecisionSessionId SourceSessionId,
+    DecisionSessionId? TargetSessionId,
+    string? ContinuityArtifactId,
+    DateTimeOffset StartedAt,
+    DateTimeOffset? CompletedAt,
+    bool Succeeded,
+    IReadOnlyList<DecisionSessionTransferEvent> Events,
+    IReadOnlyList<string> Diagnostics);
+
+public sealed record DecisionSessionTransferDiagnostics(
+    Guid RepositoryId,
+    DateTimeOffset GeneratedAt,
+    DecisionSessionTransferEligibility Eligibility,
+    IReadOnlyList<DecisionSessionTransferEvent> Events,
+    IReadOnlyList<string> Warnings);
+
+public sealed record DecisionSessionTransferResult(
+    bool Succeeded,
+    DecisionSessionTransfer? Transfer,
+    DecisionSessionTransferDiagnostics Diagnostics,
+    DecisionSession? SourceSession,
+    DecisionSession? ReplacementSession,
+    DecisionSessionContinuityArtifact? ContinuityArtifact);
+
+public sealed record DecisionSessionRecoveryFinding(
+    string Code,
+    string Severity,
+    string Message,
+    DecisionSessionId? SessionId,
+    string? EvidenceId);
+
+public sealed record TransferRecoveryAssessment(
+    string? TransferId,
+    DecisionSessionId SourceSessionId,
+    DecisionSessionId? TargetSessionId,
+    string? ContinuityArtifactId,
+    string Status,
+    string Message,
+    IReadOnlyList<DecisionSessionTransferEvent> Events);
+
+public sealed record DecisionSessionRecoveryEvent(
+    string EventId,
+    Guid RepositoryId,
+    string EventType,
+    DateTimeOffset OccurredAt,
+    string Message,
+    IReadOnlyList<string> Diagnostics);
+
+public sealed record DecisionSessionRecoveryDiagnostics(
+    Guid RepositoryId,
+    DateTimeOffset GeneratedAt,
+    DecisionSessionDiagnostics RegistryDiagnostics,
+    IReadOnlyList<TransferRecoveryAssessment> TransferAssessments,
+    IReadOnlyList<string> Warnings);
+
+public sealed record DecisionSessionRecoveryResult(
+    string RecoveryId,
+    Guid RepositoryId,
+    bool Succeeded,
+    DecisionSessionId? ActiveSessionId,
+    int ActiveSessionCount,
+    IReadOnlyList<DecisionSessionRecoveryFinding> Findings,
+    DecisionSessionRecoveryDiagnostics Diagnostics,
+    IReadOnlyList<DecisionSessionRecoveryEvent> Events,
+    DateTimeOffset RecoveredAt);
+
+public sealed record DecisionSessionRecoveryHistory(
+    Guid RepositoryId,
+    IReadOnlyList<DecisionSessionRecoveryResult> Results,
+    DateTimeOffset GeneratedAt);

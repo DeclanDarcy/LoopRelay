@@ -41,4 +41,12 @@ public interface IDecisionSessionRepository
     Task<DecisionSessionContinuityArtifact?> ReadContinuityArtifactAsync(Repository repository, string artifactId);
 
     Task WriteContinuityArtifactAsync(Repository repository, DecisionSessionContinuityArtifact artifact);
+
+    Task<IReadOnlyList<DecisionSessionTransfer>> ListTransfersAsync(Repository repository);
+
+    Task WriteTransferAsync(Repository repository, DecisionSessionTransfer transfer);
+
+    Task<IReadOnlyList<DecisionSessionRecoveryResult>> ListRecoveryResultsAsync(Repository repository);
+
+    Task WriteRecoveryResultAsync(Repository repository, DecisionSessionRecoveryResult result);
 }
