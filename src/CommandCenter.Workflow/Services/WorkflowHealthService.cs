@@ -359,6 +359,27 @@ public sealed class WorkflowHealthService(
         }
 
         WorkflowContinuationEvent? latest = continuationHistory.OrderByDescending(entry => entry.OccurredAt).FirstOrDefault();
+        IReadOnlyList<IGrouping<string, WorkflowContinuationEvent>> duplicateProgression = continuationHistory
+            .Where(entry => string.Equals(entry.Decision, "Advance", StringComparison.OrdinalIgnoreCase))
+            .GroupBy(entry => string.Join(
+                "|",
+                entry.InputFingerprint.Value,
+                entry.FromStage,
+                entry.ToStage?.ToString() ?? "None",
+                entry.Decision,
+                entry.Reason))
+            .Where(group => group.Count() > 1)
+            .ToArray();
+        if (duplicateProgression.Count > 0)
+        {
+            return new WorkflowHealthDimension(
+                "Continuation",
+                "Degraded",
+                "Continuation history contains duplicate mechanical progression risk.",
+                duplicateProgression.Select(group => $"continuation-duplicate:{group.Key}:count={group.Count()}").ToArray(),
+                duplicateProgression.Select(group => $"Duplicate continuation progression fingerprint '{group.Key}' appears {group.Count()} times.").ToArray());
+        }
+
         if (latest?.Diagnostics.Any(diagnostic => diagnostic.Contains("conflict", StringComparison.OrdinalIgnoreCase)) is true)
         {
             return new WorkflowHealthDimension(
@@ -408,6 +429,34 @@ public sealed class WorkflowHealthService(
         }
 
         WorkflowPreparationEvent? latest = preparationHistory.OrderByDescending(entry => entry.OccurredAt).FirstOrDefault();
+        IReadOnlyList<IGrouping<string, WorkflowPreparationEvent>> duplicateEvents = preparationHistory
+            .Where(entry => entry.CreatedArtifactIds.Count > 0)
+            .GroupBy(entry => string.Join(
+                "|",
+                entry.InputFingerprint.Value,
+                entry.Stage,
+                entry.Command))
+            .Where(group => group.Count() > 1)
+            .ToArray();
+        IReadOnlyList<IGrouping<string, string>> duplicateArtifacts = preparationHistory
+            .SelectMany(entry => entry.CreatedArtifactIds.Select(artifactId => $"{entry.CommandName}|{artifactId}"))
+            .GroupBy(value => value, StringComparer.Ordinal)
+            .Where(group => group.Count() > 1)
+            .ToArray();
+        if (duplicateEvents.Count > 0 || duplicateArtifacts.Count > 0)
+        {
+            return new WorkflowHealthDimension(
+                "Preparation",
+                "Degraded",
+                "Preparation history contains duplicate reviewable artifact risk.",
+                duplicateEvents.Select(group => $"preparation-duplicate-input:{group.Key}:count={group.Count()}")
+                    .Concat(duplicateArtifacts.Select(group => $"preparation-duplicate-artifact:{group.Key}:count={group.Count()}"))
+                    .ToArray(),
+                duplicateEvents.Select(group => $"Duplicate preparation input fingerprint '{group.Key}' created artifacts {group.Count()} times.")
+                    .Concat(duplicateArtifacts.Select(group => $"Duplicate prepared artifact '{group.Key}' appears {group.Count()} times."))
+                    .ToArray());
+        }
+
         if (latest?.Diagnostics.Any(diagnostic => diagnostic.Contains("conflict", StringComparison.OrdinalIgnoreCase)) is true)
         {
             return new WorkflowHealthDimension(

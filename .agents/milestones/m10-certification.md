@@ -7,10 +7,10 @@ Deliver:
 - [x] `IWorkflowCertificationService`.
 - [x] `WorkflowCertificationResult`.
 - [x] `WorkflowCertificationFinding`.
-- [ ] `RepositoryWorkflowReport`.
-- [ ] `WorkflowProgressionReport`.
-- [ ] `HumanGovernanceReport`.
-- [ ] `WorkflowReadinessReport`.
+- [x] `RepositoryWorkflowReport`.
+- [x] `WorkflowProgressionReport`.
+- [x] `HumanGovernanceReport`.
+- [x] `WorkflowReadinessReport`.
 - [x] authority certification.
 - [x] recovery certification.
 - [x] continuation certification.
@@ -18,7 +18,7 @@ Deliver:
 - [ ] end-to-end workflow fixture.
 - [x] workflow history certification.
 - [x] workflow diagnostics certification.
-- [ ] workflow health certification.
+- [x] workflow health certification.
 
 Certification finding categories:
 
@@ -71,7 +71,7 @@ Certification failure conditions:
 Tests:
 
 - [x] failures generate findings.
-- [ ] passing scenarios generate readiness evidence.
+- [x] passing scenarios generate readiness evidence.
 - [x] authority certification detects forbidden mutation.
 - [ ] recovery certification detects lost state, corruption, and duplicate progression.
   - [x] missing timeline evidence is treated as derived/rebuildable evidence.
@@ -87,7 +87,7 @@ Tests:
 Exit criteria:
 
 - [x] certification service exists.
-- [ ] repository, progression, human-governance, and readiness reports exist.
+- [x] repository, progression, human-governance, and readiness reports exist.
 - [x] authority certification passes.
 - [ ] recovery certification passes.
   - [x] initial domain-truth recovery certification passes.
@@ -95,4 +95,4 @@ Exit criteria:
 - [x] continuation certification passes.
 - [x] preparation certification passes.
 - [ ] end-to-end fixture passes.
-- [ ] diagnostics and health certification pass.
+- [x] diagnostics and health certification pass.

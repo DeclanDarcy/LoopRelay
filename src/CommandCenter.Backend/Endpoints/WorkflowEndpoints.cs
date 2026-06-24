@@ -28,6 +28,10 @@ public static class WorkflowEndpoints
         app.MapPostWorkflowPreparationRun();
         app.MapGetWorkflowPreparationHistory();
         app.MapGetWorkflowHealth();
+        app.MapGetRepositoryWorkflowReport();
+        app.MapGetWorkflowProgressionReport();
+        app.MapGetHumanGovernanceReport();
+        app.MapGetWorkflowReadinessReport();
         app.MapGetWorkflowCertification();
         app.MapPostWorkflowCertification();
         return app;
@@ -443,6 +447,82 @@ public static class WorkflowEndpoints
             try
             {
                 return Results.Ok(await workflowHealthService.AssessHealthAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGetRepositoryWorkflowReport(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/workflow/reports/repository", async (
+            Guid repositoryId,
+            IWorkflowReportService workflowReportService) =>
+        {
+            try
+            {
+                return Results.Ok(await workflowReportService.GetRepositoryReportAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGetWorkflowProgressionReport(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/workflow/reports/progression", async (
+            Guid repositoryId,
+            IWorkflowReportService workflowReportService) =>
+        {
+            try
+            {
+                return Results.Ok(await workflowReportService.GetProgressionReportAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGetHumanGovernanceReport(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/workflow/reports/human-governance", async (
+            Guid repositoryId,
+            IWorkflowReportService workflowReportService) =>
+        {
+            try
+            {
+                return Results.Ok(await workflowReportService.GetHumanGovernanceReportAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGetWorkflowReadinessReport(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/workflow/reports/readiness", async (
+            Guid repositoryId,
+            IWorkflowReportService workflowReportService) =>
+        {
+            try
+            {
+                return Results.Ok(await workflowReportService.GetReadinessReportAsync(repositoryId));
             }
             catch (KeyNotFoundException exception)
             {

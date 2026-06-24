@@ -2,36 +2,42 @@
 
 ## New State
 
-- Continued Milestone 10 history and diagnostics certification.
-- `WorkflowCertificationService` now emits two additional findings:
-  - `history-authority-reconstructable` verifies the current stage, blocking gate, gate history, continuation history, and preparation history explain the workflow position without workflow-owned truth.
-  - `workflow-diagnostics-explain-state` verifies blocked, recovered, progressed, failed, unreconstructable, and preparation-decision states carry explanatory diagnostics when present.
-- Certification now fails when:
-  - current workflow stage is `Unknown`.
-  - non-work-selection state has no timeline, continuation, or preparation evidence explaining how it got there.
-  - a blocking gate has no matching open gate in reconstructed gate history.
-  - authority gate history has conflicts or missing source evidence.
-  - failed/unreconstructable/progressed/recovered/preparation states lack reasons or diagnostics.
-- Added certification coverage for:
-  - normal decision-gate state passing history and diagnostics findings.
-  - synthetic unreconstructable state failing with explicit history and diagnostics findings.
-- Updated `m10-certification.md` to mark workflow history certification, workflow diagnostics certification, unreconstructable-state failure, diagnostics failure cases, preparation diagnostics, authority history reconstruction, and generic failure findings complete.
+- Continued Milestone 10 with workflow health certification and minimal report artifacts.
+- Added `IWorkflowReportService` and `WorkflowReportService`.
+- Added read-only report models:
+  - `RepositoryWorkflowReport`.
+  - `WorkflowProgressionReport`.
+  - `HumanGovernanceReport`.
+  - `WorkflowReadinessReport`.
+- Added backend endpoints:
+  - `GET /api/repositories/{repositoryId}/workflow/reports/repository`.
+  - `GET /api/repositories/{repositoryId}/workflow/reports/progression`.
+  - `GET /api/repositories/{repositoryId}/workflow/reports/human-governance`.
+  - `GET /api/repositories/{repositoryId}/workflow/reports/readiness`.
+- Reports aggregate existing projection, health, certification, gate, continuation, and preparation evidence. They do not introduce new workflow authority or lifecycle decisions.
+- `WorkflowCertificationService` now emits `workflow-health-evidence-present`, which certifies that health dimensions and influence trace evidence exist.
+- Health certification is observational:
+  - blocked human gates are valid health states and do not fail certification by themselves.
+  - degraded recoverable evidence is reported through health dimensions and does not become a separate authority decision.
+- `WorkflowHealthService` now surfaces:
+  - duplicate mechanical progression as degraded continuation health.
+  - duplicate reviewable artifact creation risk as degraded preparation health.
+- Updated Milestone 10 checklist for completed health certification, readiness evidence, diagnostics/health certification, and report artifacts.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "FullyQualifiedName~WorkflowProjectionServiceTests"` passed: 115 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "FullyQualifiedName~WorkflowProjectionServiceTests"` passed: 117 tests.
 - `dotnet build CommandCenter.slnx` passed with 0 warnings and 0 errors.
 
 ## Relevant Decisions
 
-- History certification is projection-derived and evidence-based; it does not introduce new persisted authority or recovery behavior.
-- A fresh work-selection state may remain valid without timeline evidence, but later workflow stages must have timeline, continuation, preparation, gate, or domain-derived evidence explaining how they were reached.
-- Diagnostics certification checks for explanations only where the state requires them; it avoids forcing every healthy projection to manufacture diagnostics.
-- The unreconstructable-state test uses a synthetic projection stub so production services remain read-only and unchanged.
+- Minimal workflow reports are read-only aggregates over existing evidence; they intentionally avoid new evaluation logic beyond summarizing projection, health, certification, gates, and history.
+- Health certification checks evidence presence and influence trace coverage, not whether the workflow is currently blocked by a human gate.
+- Overall health remains `Blocked` when an authority gate is open, even if continuation or preparation dimensions are degraded.
+- Duplicate continuation/preparation risks are surfaced in health dimensions and remain separately enforced by certification idempotency findings.
 
 ## Next Slice
 
-- Continue Milestone 10 with workflow health certification and report artifacts:
-  - certify health dimensions and influence trace are present in certification evidence.
-  - add repository/progression/human-governance/readiness reports or the minimal report service surface needed for exit criteria.
-  - then begin the end-to-end fixture once history, diagnostics, and health findings are stable.
+- Continue Milestone 10 with the end-to-end workflow fixture.
+- Prioritize scenarios that prove progression and gate-halting across execution, handoff, decision, operational context, commit, push, completed, recovery, diagnostics, health, and certification.
+- Keep the fixture evidence-based and avoid adding new workflow behavior unless a test exposes an existing correctness gap.

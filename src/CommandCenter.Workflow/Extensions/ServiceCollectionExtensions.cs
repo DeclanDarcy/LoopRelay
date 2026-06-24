@@ -21,6 +21,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IWorkflowPreparationService, WorkflowPreparationService>();
         services.AddSingleton<IWorkflowHealthService, WorkflowHealthService>();
         services.AddSingleton<IWorkflowCertificationService, WorkflowCertificationService>();
+        services.AddSingleton<IWorkflowReportService, WorkflowReportService>();
         services.AddSingleton<IWorkflowRecoveryService, WorkflowRecoveryService>();
         services.AddHostedService<WorkflowRecoveryHostedService>();
         services.AddHostedService<WorkflowContinuationHostedService>();

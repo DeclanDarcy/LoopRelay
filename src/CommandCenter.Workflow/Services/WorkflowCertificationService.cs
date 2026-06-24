@@ -126,6 +126,7 @@ public sealed class WorkflowCertificationService(
         findings.Add(CertifyDerivedHistoryEvidenceIsRecoverable(historyLoadErrors));
         findings.Add(CertifyWorkflowHistoryIsReconstructable(projection, continuationHistory, preparationHistory, historyLoadErrors));
         findings.Add(CertifyWorkflowDiagnosticsExplainState(projection, latestTimeline, timelineLoadError, continuationHistory, preparationHistory));
+        findings.Add(CertifyWorkflowHealthEvidenceIsPresent(health));
         findings.Add(CertifyContinuationHistoryIsIdempotent(continuationHistory));
         findings.Add(CertifyPreparationHistoryIsIdempotent(preparationHistory));
         findings.Add(CertifyPreparationDuplicateDomainEvidence(preparationHistory));
@@ -659,6 +660,76 @@ public sealed class WorkflowCertificationService(
             .Concat(projection.ExecutionDiagnostics.Conflicts)
             .Concat(projection.BlockedTransitions.Select(transition => transition.Reason))
             .ToArray();
+
+    private static WorkflowCertificationFinding CertifyWorkflowHealthEvidenceIsPresent(WorkflowHealthAssessment health)
+    {
+        IReadOnlyList<string> requiredDimensions =
+        [
+            "Projection",
+            "Recovery",
+            "Gates",
+            "Continuation",
+            "Preparation"
+        ];
+        IReadOnlyList<string> missingDimensions = requiredDimensions
+            .Where(required => !health.Dimensions.Any(dimension => string.Equals(dimension.Name, required, StringComparison.Ordinal)))
+            .ToArray();
+        var diagnostics = new List<string>();
+        diagnostics.AddRange(missingDimensions.Select(dimension => $"Workflow health is missing the {dimension} dimension."));
+
+        if (string.IsNullOrWhiteSpace(health.OverallStatus))
+        {
+            diagnostics.Add("Workflow health is missing an overall status.");
+        }
+
+        if (string.IsNullOrWhiteSpace(health.InfluenceTrace.Fingerprint))
+        {
+            diagnostics.Add("Workflow health influence trace is missing a fingerprint.");
+        }
+
+        if (health.InfluenceTrace.EvidencePaths.Count == 0)
+        {
+            diagnostics.Add("Workflow health influence trace contains no evidence paths.");
+        }
+
+        if (health.InfluenceTrace.StageInfluences.Count == 0 ||
+            health.InfluenceTrace.ProgressionInfluences.Count == 0 ||
+            health.InfluenceTrace.PreparationInfluences.Count == 0 ||
+            health.InfluenceTrace.GateInfluences.Count == 0 ||
+            health.InfluenceTrace.BlockingInfluences.Count == 0)
+        {
+            diagnostics.Add("Workflow health influence trace does not cover stage, progression, preparation, gate, and blocking influences.");
+        }
+
+        foreach (WorkflowHealthDimension dimension in health.Dimensions)
+        {
+            if (string.IsNullOrWhiteSpace(dimension.Status) ||
+                string.IsNullOrWhiteSpace(dimension.Reason) ||
+                dimension.Evidence.Count == 0)
+            {
+                diagnostics.Add($"Workflow health dimension '{dimension.Name}' lacks status, reason, or evidence.");
+            }
+        }
+
+        bool passed = diagnostics.Count == 0;
+
+        return new WorkflowCertificationFinding(
+            "workflow-health-evidence-present",
+            "Workflow",
+            passed,
+            passed
+                ? "Workflow health and influence trace evidence are present."
+                : "Workflow health or influence trace evidence is incomplete.",
+            "Health certification is observational: blocked human gates and degraded recoverable evidence are reportable health states, but certification only requires that health dimensions and influence trace evidence are present.",
+            [
+                $"overall-status:{health.OverallStatus}",
+                $"dimensions:{string.Join(",", health.Dimensions.Select(dimension => $"{dimension.Name}={dimension.Status}"))}",
+                $"influence-fingerprint:{health.InfluenceTrace.Fingerprint}",
+                $"influence-evidence-paths:{health.InfluenceTrace.EvidencePaths.Count}",
+                $"health-diagnostics:{health.Diagnostics.Count}"
+            ],
+            diagnostics);
+    }
 
     private static WorkflowCertificationFinding CertifyContinuationHistoryIsIdempotent(
         IReadOnlyList<WorkflowContinuationEvent> continuationHistory)

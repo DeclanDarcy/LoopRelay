@@ -3010,6 +3010,88 @@ public sealed class WorkflowProjectionServiceTests
     }
 
     [Fact]
+    public async Task HealthAssessmentSurfacesDuplicateContinuationAndPreparationRisk()
+    {
+        TestFixture fixture = TestFixture.Create();
+        var workflowRepository = new FileSystemWorkflowRepository(new MemoryArtifactStore());
+        await workflowRepository.SaveContinuationEventAsync(
+            fixture.Repository,
+            new WorkflowContinuationEvent(
+                fixture.Repository.Id,
+                WorkflowArtifactPaths.ContinuationEventId(DateTimeOffset.Parse("2026-06-23T12:02:00Z")),
+                DateTimeOffset.Parse("2026-06-23T12:02:00Z"),
+                "endpoint",
+                WorkflowStage.Handoff,
+                WorkflowStage.Decision,
+                WorkflowProgressState.Ready,
+                WorkflowGateType.None,
+                "Advance",
+                "Advanced once.",
+                new WorkflowContinuationFingerprint("duplicate-continuation"),
+                false,
+                false,
+                "No human action required.",
+                []));
+        await workflowRepository.SaveContinuationEventAsync(
+            fixture.Repository,
+            new WorkflowContinuationEvent(
+                fixture.Repository.Id,
+                WorkflowArtifactPaths.ContinuationEventId(DateTimeOffset.Parse("2026-06-23T12:02:01Z")),
+                DateTimeOffset.Parse("2026-06-23T12:02:01Z"),
+                "hosted",
+                WorkflowStage.Handoff,
+                WorkflowStage.Decision,
+                WorkflowProgressState.Ready,
+                WorkflowGateType.None,
+                "Advance",
+                "Advanced once.",
+                new WorkflowContinuationFingerprint("duplicate-continuation"),
+                false,
+                false,
+                "No human action required.",
+                []));
+        await workflowRepository.SavePreparationEventAsync(
+            fixture.Repository,
+            CreatePreparationEvent(
+                fixture.Repository.Id,
+                DateTimeOffset.Parse("2026-06-23T12:03:00Z"),
+                WorkflowStage.Decision,
+                WorkflowGateType.None,
+                WorkflowPreparationCommand.DiscoverDecisionCandidates,
+                "decisions_discover_candidates",
+                "Created",
+                false,
+                ["decision-candidate:cand-0001"],
+                inputFingerprint: "duplicate-preparation"));
+        await workflowRepository.SavePreparationEventAsync(
+            fixture.Repository,
+            CreatePreparationEvent(
+                fixture.Repository.Id,
+                DateTimeOffset.Parse("2026-06-23T12:03:01Z"),
+                WorkflowStage.Decision,
+                WorkflowGateType.None,
+                WorkflowPreparationCommand.DiscoverDecisionCandidates,
+                "decisions_discover_candidates",
+                "Created",
+                false,
+                ["decision-candidate:cand-0002"],
+                inputFingerprint: "duplicate-preparation"));
+        var service = fixture.CreateHealthService(workflowRepository);
+
+        WorkflowHealthAssessment assessment = await service.AssessHealthAsync(fixture.Repository.Id);
+
+        Assert.Equal("Blocked", assessment.OverallStatus);
+        Assert.Contains(assessment.Dimensions, dimension =>
+            dimension.Name == "Continuation" &&
+            dimension.Status == "Degraded" &&
+            dimension.Diagnostics.Any(diagnostic => diagnostic.Contains("duplicate-continuation", StringComparison.Ordinal)));
+        Assert.Contains(assessment.Dimensions, dimension =>
+            dimension.Name == "Preparation" &&
+            dimension.Status == "Degraded" &&
+            dimension.Diagnostics.Any(diagnostic => diagnostic.Contains("duplicate-preparation", StringComparison.Ordinal)));
+    }
+
+    [Fact]
     public async Task WorkflowCertificationPassesAuthorityBoundaryAndPersistsReport()
     {
         TestFixture fixture = TestFixture.Create();
@@ -3035,8 +3117,59 @@ public sealed class WorkflowProjectionServiceTests
         Assert.Contains(current.Findings, finding => finding.Id == "recovery-domain-evidence-wins" && finding.Passed);
         Assert.Contains(current.Findings, finding => finding.Id == "history-authority-reconstructable" && finding.Passed);
         Assert.Contains(current.Findings, finding => finding.Id == "workflow-diagnostics-explain-state" && finding.Passed);
+        Assert.Contains(current.Findings, finding => finding.Id == "workflow-health-evidence-present" && finding.Passed);
         Assert.True(persisted.Certified);
         Assert.Single(reportFiles);
+    }
+
+    [Fact]
+    public async Task WorkflowReportsSummarizeExistingProjectionHealthCertificationAndHistory()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+        fixture.Decisions.Add(CreateDecision(fixture.Repository.Id, "DEC-0001", DecisionState.Open));
+        var workflowRepository = new FileSystemWorkflowRepository(new MemoryArtifactStore());
+        await workflowRepository.SaveContinuationEventAsync(
+            fixture.Repository,
+            CreateContinuationStopEvent(
+                fixture.Repository.Id,
+                DateTimeOffset.Parse("2026-06-23T12:04:00Z"),
+                "endpoint",
+                WorkflowStage.Decision,
+                WorkflowGateType.DecisionResolution));
+        await workflowRepository.SavePreparationEventAsync(
+            fixture.Repository,
+            CreatePreparationEvent(
+                fixture.Repository.Id,
+                DateTimeOffset.Parse("2026-06-23T12:04:01Z"),
+                WorkflowStage.Decision,
+                WorkflowGateType.DecisionResolution,
+                WorkflowPreparationCommand.DiscoverDecisionCandidates,
+                "decisions_discover_candidates",
+                "Refused",
+                true,
+                []));
+        var reportService = fixture.CreateReportService(workflowRepository);
+
+        RepositoryWorkflowReport repositoryReport = await reportService.GetRepositoryReportAsync(fixture.Repository.Id);
+        WorkflowProgressionReport progressionReport = await reportService.GetProgressionReportAsync(fixture.Repository.Id);
+        HumanGovernanceReport governanceReport = await reportService.GetHumanGovernanceReportAsync(fixture.Repository.Id);
+        WorkflowReadinessReport readinessReport = await reportService.GetReadinessReportAsync(fixture.Repository.Id);
+
+        Assert.Equal(WorkflowStage.Decision, repositoryReport.CurrentStage);
+        Assert.Equal("Blocked", repositoryReport.HealthStatus);
+        Assert.True(repositoryReport.Certified);
+        Assert.Equal(1, repositoryReport.ContinuationEventCount);
+        Assert.Equal(1, repositoryReport.PreparationEventCount);
+        Assert.Contains(progressionReport.BlockedTransitions, transition => transition.Contains("UnresolvedDecision", StringComparison.Ordinal));
+        Assert.Contains(progressionReport.ContinuationEvidence, evidence => evidence.Contains("Stop", StringComparison.Ordinal));
+        Assert.Equal(WorkflowGateType.DecisionResolution, governanceReport.BlockingGate);
+        Assert.Contains(governanceReport.OpenGates, gate => gate.Contains("DecisionResolution", StringComparison.Ordinal));
+        Assert.Contains(governanceReport.AuthorityFindings, finding => finding.Contains("authority-read-only-boundary", StringComparison.Ordinal));
+        Assert.True(readinessReport.Ready);
+        Assert.Equal("Blocked", readinessReport.HealthStatus);
+        Assert.Contains(readinessReport.BlockingReasons, reason => reason.Contains("DecisionResolution", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -4002,6 +4135,14 @@ public sealed class WorkflowProjectionServiceTests
                 workflowRepository,
                 CreateHealthService(workflowRepository));
 
+        public WorkflowReportService CreateReportService(IWorkflowRepository workflowRepository) =>
+            new(
+                new RepositoryServiceStub(Repository),
+                CreateService(),
+                workflowRepository,
+                CreateHealthService(workflowRepository),
+                CreateCertificationService(workflowRepository));
+
         public void ReplaceServices(IServiceCollection services)
         {
             services.RemoveAll<IRepositoryService>();
@@ -4022,6 +4163,7 @@ public sealed class WorkflowProjectionServiceTests
             services.RemoveAll<IWorkflowPreparationService>();
             services.RemoveAll<IWorkflowHealthService>();
             services.RemoveAll<IWorkflowCertificationService>();
+            services.RemoveAll<IWorkflowReportService>();
             services.RemoveAll<IWorkflowRepository>();
             services.RemoveAll<IWorkflowRecoveryService>();
             services.RemoveAll<IHostedService>();
@@ -4045,6 +4187,7 @@ public sealed class WorkflowProjectionServiceTests
             services.AddSingleton<IWorkflowPreparationService, WorkflowPreparationService>();
             services.AddSingleton<IWorkflowHealthService, WorkflowHealthService>();
             services.AddSingleton<IWorkflowCertificationService, WorkflowCertificationService>();
+            services.AddSingleton<IWorkflowReportService, WorkflowReportService>();
             services.AddSingleton<IWorkflowRecoveryService, WorkflowRecoveryService>();
         }
     }
