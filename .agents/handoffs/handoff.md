@@ -2,50 +2,35 @@
 
 ## Slice Summary
 
-- Continued Milestone 1: Foundation And Registry for the Decision Session Lifecycle epic.
-- Initial `.agents/handoffs/handoff.md` and `.agents/decisions/decisions.md` were absent; active `.agents/handoffs` and `.agents/decisions` directories had no rotated files, so no prior active file was renamed in this slice.
-- Added new `src/CommandCenter.DecisionSessions` project with the intended non-execution dependency boundary and `<UseExecutionContextAlias>false</UseExecutionContextAlias>`.
-- Implemented Stage 1 foundation:
-  - `DecisionSessionId`
-  - `DecisionSessionState`
-  - `DecisionSessionOwnership`
-  - `DecisionSessionMetadata`
-  - `DecisionSession`
-  - `DecisionSessionRecord`
-  - `DecisionSessionProjection`
-  - diagnostics, validation, conflict, and validation exception models
-  - schema-wrapped JSON document helpers using `decision-sessions.v1`
-  - `.agents/decision-sessions/registry.json` artifact path
-  - filesystem-backed repository
-  - registry service
-  - recovery diagnostics service
-  - DI registration through `AddDecisionSessions()`
-- Wired backend:
-  - solution includes `CommandCenter.DecisionSessions`
-  - backend and backend tests reference `CommandCenter.DecisionSessions`
-  - `Program.CreateApp()` calls `AddDecisionSessions()`
-  - `Program.CreateApp()` maps `MapDecisionSessionEndpoints()`
-- Added read-only Milestone 1 endpoints:
-  - `GET /api/repositories/{repositoryId:guid}/decision-sessions`
-  - `GET /api/repositories/{repositoryId:guid}/decision-sessions/active`
-  - `GET /api/repositories/{repositoryId:guid}/decision-sessions/diagnostics`
-- Added focused foundation tests covering id round-trip, create/activate/retire, second-active rejection, persistence/listing, duplicate id diagnostics, cross-repository diagnostics, endpoint success, and missing repository 404.
+- Continued Milestone 1 hardening for the Decision Session Lifecycle epic.
+- Added focused coverage to `tests/CommandCenter.Backend.Tests/DecisionSessionFoundationTests.cs` for:
+  - `DecisionSessionState` JSON string enum round-trip.
+  - aggregate ownership and timestamp initialization.
+  - zero-active and one-active registry behavior.
+  - `Active -> TransferPending -> Transferred` lifecycle behavior with a replacement active session.
+  - invalid registry transitions for created, active, transfer-pending, and retired sessions.
+  - repository write rejection for wrong repository ownership.
+  - invalid timestamp diagnostics.
+  - unsupported schema-version diagnostics and repository read rejection.
+- No production code changes were needed in this slice; existing registry, repository, and recovery behavior matched the Stage 1 hardening expectations.
+- Rotated the previous active handoff to `.agents/handoffs/handoff.0001.md` and created this new active handoff.
 
 ## Validation
 
-- `dotnet test .\tests\CommandCenter.Backend.Tests\CommandCenter.Backend.Tests.csproj --filter DecisionSessionFoundationTests` passed: 8 tests.
-- `dotnet test .\CommandCenter.slnx` passed: 638 tests.
+- `dotnet test .\tests\CommandCenter.Backend.Tests\CommandCenter.Backend.Tests.csproj --filter DecisionSessionFoundationTests` passed: 16 tests.
+- `dotnet test .\CommandCenter.slnx` passed: 646 tests.
 
 ## Current State
 
-- Working tree contains unstaged implementation changes plus this handoff.
-- No commits, staging, pushes, or decision-file rotations were performed in this slice.
-- Milestone 1 is partially complete. Foundation, registry, persistence, diagnostics, and endpoints now exist, but remaining Stage 1 hardening is still useful before moving to Stage 2.
+- Working tree contains unstaged DecisionSession implementation from the prior slice plus this slice's added test coverage.
+- `.agents/decisions/decisions.md` was not rotated because no new user response authorized new decisions during this slice.
+- Milestone 1 is effectively hardened at the current checklist level; the remaining useful cleanup is organizational rather than behavioral.
 
 ## Next Slice Recommendation
 
-- Finish Milestone 1 hardening before starting analysis:
-  - add explicit tests for unsupported schema version and invalid timestamp diagnostics;
-  - add tests for `TransferPending`, `Transferred`, and invalid transition behavior;
-  - consider whether recovery diagnostics should report session counts when validation fails but JSON is parseable;
-  - consider adding a dedicated `DecisionSessionRegistryTests.cs` split if the foundation test file grows.
+- Split `DecisionSessionFoundationTests.cs` into dedicated files before starting Stage 2:
+  - `DecisionSessionFoundationTests.cs` for primitives/models.
+  - `DecisionSessionRegistryTests.cs` for state transitions and invariants.
+  - `DecisionSessionRepositoryTests.cs` for persistence/schema validation.
+  - `DecisionSessionEndpointTests.cs` for backend route behavior.
+- Then start Milestone 2A with metrics/statistics/TTL/cache-miss-risk snapshots and diagnostics.

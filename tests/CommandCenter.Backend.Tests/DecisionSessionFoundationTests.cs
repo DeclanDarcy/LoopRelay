@@ -29,6 +29,35 @@ public sealed class DecisionSessionFoundationTests
     }
 
     [Fact]
+    public void StateEnumRoundTripsThroughJson()
+    {
+        string json = JsonSerializer.Serialize(DecisionSessionState.TransferPending, DecisionSessionJson.Options);
+
+        DecisionSessionState state = JsonSerializer.Deserialize<DecisionSessionState>(json, DecisionSessionJson.Options);
+
+        Assert.Equal("\"TransferPending\"", json);
+        Assert.Equal(DecisionSessionState.TransferPending, state);
+    }
+
+    [Fact]
+    public void AggregateCreationSetsRepositoryOwnership()
+    {
+        Guid repositoryId = Guid.NewGuid();
+        DateTimeOffset createdAt = DateTimeOffset.UtcNow;
+
+        DecisionSession session = DecisionSession.Create(repositoryId, "test", createdAt);
+
+        Assert.Equal(repositoryId, session.RepositoryId);
+        Assert.Equal(DecisionSessionState.Created, session.State);
+        Assert.Equal(createdAt, session.CreatedAt);
+        Assert.Equal(repositoryId, session.Ownership.RepositoryId);
+        Assert.Equal("test", session.Ownership.CreatedBy);
+        Assert.Equal(createdAt, session.Ownership.CreatedAt);
+        Assert.Null(session.ActivatedAt);
+        Assert.Null(session.RetiredAt);
+    }
+
+    [Fact]
     public async Task CreateActivateAndRetireSession()
     {
         Harness harness = CreateHarness();
@@ -46,6 +75,23 @@ public sealed class DecisionSessionFoundationTests
     }
 
     [Fact]
+    public async Task ZeroAndOneActiveSessionsAreAllowed()
+    {
+        Harness harness = CreateHarness();
+
+        Assert.Null(await harness.Registry.GetActiveSessionAsync(harness.Repository.Id));
+
+        DecisionSession created = await harness.Registry.CreateSessionAsync(harness.Repository.Id, "test");
+        DecisionSession active = await harness.Registry.ActivateSessionAsync(harness.Repository.Id, created.Id);
+
+        DecisionSession? resolved = await harness.Registry.GetActiveSessionAsync(harness.Repository.Id);
+
+        Assert.Equal(DecisionSessionState.Active, active.State);
+        Assert.NotNull(resolved);
+        Assert.Equal(active.Id, resolved.Id);
+    }
+
+    [Fact]
     public async Task ActivatingSecondSessionIsRejected()
     {
         Harness harness = CreateHarness();
@@ -55,6 +101,55 @@ public sealed class DecisionSessionFoundationTests
 
         await Assert.ThrowsAsync<DecisionSessionConflictException>(() =>
             harness.Registry.ActivateSessionAsync(harness.Repository.Id, second.Id));
+    }
+
+    [Fact]
+    public async Task TransferPendingAndTransferredTransitionsAreEnforced()
+    {
+        Harness harness = CreateHarness();
+        DecisionSession source = await harness.Registry.CreateSessionAsync(harness.Repository.Id, "test");
+        DecisionSession activeSource = await harness.Registry.ActivateSessionAsync(harness.Repository.Id, source.Id);
+        DecisionSession pending = await harness.Registry.MarkTransferPendingAsync(harness.Repository.Id, activeSource.Id, "pressure");
+        DecisionSession target = await harness.Registry.CreateSessionAsync(harness.Repository.Id, "test");
+        DecisionSession activeTarget = await harness.Registry.ActivateSessionAsync(harness.Repository.Id, target.Id);
+
+        DecisionSession transferred = await harness.Registry.MarkTransferredAsync(
+            harness.Repository.Id,
+            pending.Id,
+            activeTarget.Id,
+            "completed");
+
+        Assert.Equal(DecisionSessionState.TransferPending, pending.State);
+        Assert.Equal("pressure", pending.Metadata.TransferReason);
+        Assert.Equal(DecisionSessionState.Transferred, transferred.State);
+        Assert.NotNull(transferred.RetiredAt);
+        Assert.Equal(activeTarget.Id, transferred.Metadata.TransferredToSessionId);
+        Assert.Equal(activeTarget.Id, (await harness.Registry.GetActiveSessionAsync(harness.Repository.Id))?.Id);
+    }
+
+    [Fact]
+    public async Task InvalidRegistryTransitionsAreRejected()
+    {
+        Harness harness = CreateHarness();
+        DecisionSession created = await harness.Registry.CreateSessionAsync(harness.Repository.Id, "test");
+
+        await Assert.ThrowsAsync<DecisionSessionConflictException>(() =>
+            harness.Registry.MarkTransferPendingAsync(harness.Repository.Id, created.Id, "not active"));
+        await Assert.ThrowsAsync<DecisionSessionConflictException>(() =>
+            harness.Registry.RetireSessionAsync(harness.Repository.Id, created.Id, "not active"));
+
+        DecisionSession active = await harness.Registry.ActivateSessionAsync(harness.Repository.Id, created.Id);
+        await Assert.ThrowsAsync<DecisionSessionConflictException>(() =>
+            harness.Registry.ActivateSessionAsync(harness.Repository.Id, active.Id));
+        DecisionSession pending = await harness.Registry.MarkTransferPendingAsync(harness.Repository.Id, active.Id, "pressure");
+        await Assert.ThrowsAsync<DecisionSessionConflictException>(() =>
+            harness.Registry.ActivateSessionAsync(harness.Repository.Id, pending.Id));
+
+        DecisionSession retired = await harness.Registry.RetireSessionAsync(harness.Repository.Id, pending.Id, "done");
+        await Assert.ThrowsAsync<DecisionSessionConflictException>(() =>
+            harness.Registry.ActivateSessionAsync(harness.Repository.Id, retired.Id));
+        await Assert.ThrowsAsync<DecisionSessionConflictException>(() =>
+            harness.Registry.RetireSessionAsync(harness.Repository.Id, retired.Id, "again"));
     }
 
     [Fact]
@@ -72,6 +167,16 @@ public sealed class DecisionSessionFoundationTests
     }
 
     [Fact]
+    public async Task RepositoryRejectsWrongOwnershipOnWrite()
+    {
+        Harness harness = CreateHarness();
+        DecisionSession session = DecisionSession.Create(Guid.NewGuid(), "test", DateTimeOffset.UtcNow);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            harness.RepositoryStore.CreateAsync(harness.Repository, session));
+    }
+
+    [Fact]
     public async Task DuplicateIdsAreRejected()
     {
         Harness harness = CreateHarness();
@@ -85,6 +190,42 @@ public sealed class DecisionSessionFoundationTests
 
         Assert.False(diagnostics.IsValid);
         Assert.Contains(diagnostics.Errors, error => error.Contains("Duplicate decision session id", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task InvalidTimestampStateProducesDiagnostics()
+    {
+        Harness harness = CreateHarness();
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        DecisionSession session = DecisionSession.Create(harness.Repository.Id, "test", now) with
+        {
+            State = DecisionSessionState.Retired,
+            ActivatedAt = now.AddMinutes(2),
+            RetiredAt = now.AddMinutes(1)
+        };
+
+        await WriteRegistryAsync(harness, [session]);
+
+        DecisionSessionDiagnostics diagnostics = await harness.Recovery.GetDiagnosticsAsync(harness.Repository.Id);
+
+        Assert.False(diagnostics.IsValid);
+        Assert.Contains(diagnostics.Errors, error => error.Contains("activation is after retirement", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task UnsupportedSchemaVersionIsRejected()
+    {
+        Harness harness = CreateHarness();
+        DecisionSession session = DecisionSession.Create(harness.Repository.Id, "test", DateTimeOffset.UtcNow);
+
+        await WriteRegistryAsync(harness, [session], schemaVersion: "decision-sessions.v0");
+
+        DecisionSessionDiagnostics diagnostics = await harness.Recovery.GetDiagnosticsAsync(harness.Repository.Id);
+
+        Assert.False(diagnostics.IsValid);
+        Assert.Contains(diagnostics.Errors, error => error.Contains("Unsupported decision session schema version", StringComparison.Ordinal));
+        await Assert.ThrowsAsync<DecisionSessionValidationException>(() =>
+            harness.RepositoryStore.ListAsync(harness.Repository));
     }
 
     [Fact]
