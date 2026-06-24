@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/CommandCenter.Core/CommandCenter.Core.csproj" />
     <Project Path="src/CommandCenter.Continuity/CommandCenter.Continuity.csproj" />
+    <Project Path="src/CommandCenter.DecisionSessions/CommandCenter.DecisionSessions.csproj" />
     <Project Path="src/CommandCenter.Decisions/CommandCenter.Decisions.csproj" />
     <Project Path="src/CommandCenter.Execution/CommandCenter.Execution.csproj" />
     <Project Path="src/CommandCenter.Workflow/CommandCenter.Workflow.csproj" />

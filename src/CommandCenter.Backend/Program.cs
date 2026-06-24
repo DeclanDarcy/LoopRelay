@@ -13,6 +13,7 @@ using System.Text.Json.Serialization;
 using CommandCenter.Continuity.Abstractions;
 using CommandCenter.Execution.Extensions;
 using CommandCenter.Continuity.Extensions;
+using CommandCenter.DecisionSessions.Extensions;
 using CommandCenter.Decisions.Extensions;
 using CommandCenter.Reasoning.Extensions;
 using CommandCenter.Workflow.Extensions;
@@ -37,6 +38,7 @@ public static class Program
         builder.Services.AddContinuity();
         builder.Services.AddDecisions();
         builder.Services.AddReasoning();
+        builder.Services.AddDecisionSessions();
         builder.Services.AddSingleton<IDecisionReasoningCaptureService, DecisionReasoningCaptureService>();
         // Generation lives in Middle (it depends on Execution), so it is wired here
         // rather than inside AddContinuity().
@@ -76,6 +78,7 @@ public static class Program
         app.MapExecutionSessionsEndpoints();
         app.MapDecisionEndpoints();
         app.MapReasoningEndpoints();
+        app.MapDecisionSessionEndpoints();
         app.MapWorkflowEndpoints();
 
         return app;

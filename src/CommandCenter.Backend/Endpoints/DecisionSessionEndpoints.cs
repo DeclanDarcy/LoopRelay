@@ -1,0 +1,69 @@
+using CommandCenter.Core.Repositories;
+using CommandCenter.DecisionSessions.Abstractions;
+using CommandCenter.DecisionSessions.Models;
+
+namespace CommandCenter.Backend.Endpoints;
+
+public static class DecisionSessionEndpoints
+{
+    public static IEndpointRouteBuilder MapDecisionSessionEndpoints(this IEndpointRouteBuilder app)
+    {
+        RouteGroupBuilder group = app.MapGroup("/api/repositories/{repositoryId:guid}/decision-sessions");
+
+        group.MapGet("", async (
+            Guid repositoryId,
+            IRepositoryService repositoryService,
+            IDecisionSessionRepository sessionRepository) =>
+            await HandleAsync(async () =>
+            {
+                Repository repository = await repositoryService.GetRepositoryAsync(repositoryId);
+                return (await sessionRepository.ListAsync(repository))
+                    .Select(DecisionSessionProjection.FromSession)
+                    .ToArray();
+            }));
+
+        group.MapGet("/active", async (
+            Guid repositoryId,
+            IDecisionSessionRegistry registry) =>
+            await HandleAsync(async () =>
+            {
+                DecisionSession? session = await registry.GetActiveSessionAsync(repositoryId);
+                return session is null ? null : DecisionSessionProjection.FromSession(session);
+            }));
+
+        group.MapGet("/diagnostics", async (
+            Guid repositoryId,
+            IDecisionSessionRecoveryService recoveryService) =>
+            await HandleAsync(() => recoveryService.GetDiagnosticsAsync(repositoryId)));
+
+        return app;
+    }
+
+    private static async Task<IResult> HandleAsync<T>(Func<Task<T>> action)
+    {
+        try
+        {
+            return Results.Ok(await action());
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return Results.NotFound(new { error = exception.Message });
+        }
+        catch (ArgumentException exception)
+        {
+            return Results.BadRequest(new { error = exception.Message });
+        }
+        catch (DecisionSessionConflictException exception)
+        {
+            return Results.Conflict(new { error = exception.Message });
+        }
+        catch (DecisionSessionValidationException exception)
+        {
+            return Results.BadRequest(new { error = exception.Message });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Results.BadRequest(new { error = exception.Message });
+        }
+    }
+}

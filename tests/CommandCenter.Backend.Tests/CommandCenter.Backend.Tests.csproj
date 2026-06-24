@@ -23,6 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\CommandCenter.Core\CommandCenter.Core.csproj" />
     <ProjectReference Include="..\..\src\CommandCenter.Continuity\CommandCenter.Continuity.csproj" />
+    <ProjectReference Include="..\..\src\CommandCenter.DecisionSessions\CommandCenter.DecisionSessions.csproj" />
     <ProjectReference Include="..\..\src\CommandCenter.Decisions\CommandCenter.Decisions.csproj" />
     <ProjectReference Include="..\..\src\CommandCenter.Execution\CommandCenter.Execution.csproj" />
     <ProjectReference Include="..\..\src\CommandCenter.Workflow\CommandCenter.Workflow.csproj" />
