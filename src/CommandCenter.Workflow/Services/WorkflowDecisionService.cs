@@ -71,6 +71,7 @@ public sealed class WorkflowDecisionService(
             repository.Id,
             selectedDecision?.Id.Value,
             selectedProposal?.CandidateId ?? selectedCandidate?.Id,
+            selectedCandidate?.State.ToString(),
             selectedProposal?.Id,
             selectedPackage?.Id,
             governanceBlocked ? WorkflowDecisionStatus.AwaitingResolution : status,

@@ -3,7 +3,8 @@ namespace CommandCenter.Workflow.Primitives;
 public enum WorkflowPreparationCommand
 {
     None,
-    GenerateDecisionReviewArtifacts,
+    DiscoverDecisionCandidates,
+    GenerateDecisionProposal,
     GenerateOperationalContextProposal,
     PrepareExecutionCommit
 }

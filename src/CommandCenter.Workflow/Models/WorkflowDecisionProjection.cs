@@ -6,6 +6,7 @@ public sealed record WorkflowDecisionProjection(
     Guid RepositoryId,
     string? DecisionId,
     string? CandidateId,
+    string? CandidateState,
     string? ProposalId,
     string? PackageId,
     WorkflowDecisionStatus Status,

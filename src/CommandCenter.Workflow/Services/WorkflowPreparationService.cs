@@ -1,5 +1,6 @@
 using CommandCenter.Decisions.Abstractions;
 using CommandCenter.Decisions.Models;
+using CommandCenter.Decisions.Primitives;
 using CommandCenter.Continuity.Abstractions;
 using CommandCenter.Core.Repositories;
 using CommandCenter.Execution.Abstractions;
@@ -17,7 +18,8 @@ public sealed class WorkflowPreparationService(
     IWorkflowRepository workflowRepository,
     IDecisionDiscoveryService? decisionDiscoveryService = null,
     IOperationalContextGenerationService? operationalContextGenerationService = null,
-    IExecutionSessionService? executionSessionService = null) : IWorkflowPreparationService
+    IExecutionSessionService? executionSessionService = null,
+    IDecisionGenerationService? decisionGenerationService = null) : IWorkflowPreparationService
 {
     public async Task<WorkflowPreparationEvaluation> EvaluatePreparationAsync(Guid repositoryId)
     {
@@ -27,17 +29,19 @@ public sealed class WorkflowPreparationService(
         WorkflowStage stage = latestTimeline?.CurrentStage ?? projection.CurrentStage;
         WorkflowProgressState progressState = latestTimeline?.ProgressState ?? projection.ProgressState;
         WorkflowGateType blockingGate = ResolveBlockingGate(projection, latestTimeline);
-        WorkflowPreparationCommand command = ResolveCommand(stage);
+        WorkflowPreparationCommand command = ResolveCommand(stage, projection);
         bool hasOpenGate = blockingGate is not WorkflowGateType.None;
         bool isCommitPreparationGate = command is WorkflowPreparationCommand.PrepareExecutionCommit &&
             blockingGate is WorkflowGateType.CommitApproval;
+        bool isDecisionProposalGate = command is WorkflowPreparationCommand.GenerateDecisionProposal &&
+            blockingGate is WorkflowGateType.DecisionResolution;
         bool isRunnableState = progressState is not WorkflowProgressState.Active
             and not WorkflowProgressState.Blocked
             and not WorkflowProgressState.Failed
             and not WorkflowProgressState.Completed;
         IReadOnlyList<string> duplicateEvidence = DetectDuplicateEvidence(projection, command);
         bool hasDuplicateDomainEvidence = duplicateEvidence.Count > 0;
-        bool canPrepare = (!hasOpenGate || isCommitPreparationGate) &&
+        bool canPrepare = (!hasOpenGate || isCommitPreparationGate || isDecisionProposalGate) &&
             isRunnableState &&
             command is not WorkflowPreparationCommand.None &&
             !hasDuplicateDomainEvidence;
@@ -176,14 +180,15 @@ public sealed class WorkflowPreparationService(
     {
         return evaluation.Command switch
         {
-            WorkflowPreparationCommand.GenerateDecisionReviewArtifacts => await RunDecisionReviewArtifactPreparationAsync(evaluation.RepositoryId),
+            WorkflowPreparationCommand.DiscoverDecisionCandidates => await RunDecisionDiscoveryPreparationAsync(evaluation.RepositoryId),
+            WorkflowPreparationCommand.GenerateDecisionProposal => await RunDecisionProposalPreparationAsync(evaluation.RepositoryId),
             WorkflowPreparationCommand.GenerateOperationalContextProposal => await RunOperationalContextProposalPreparationAsync(evaluation.RepositoryId),
             WorkflowPreparationCommand.PrepareExecutionCommit => await RunCommitPreparationAsync(evaluation.RepositoryId),
             _ => []
         };
     }
 
-    private async Task<IReadOnlyList<string>> RunDecisionReviewArtifactPreparationAsync(Guid repositoryId)
+    private async Task<IReadOnlyList<string>> RunDecisionDiscoveryPreparationAsync(Guid repositoryId)
     {
         if (decisionDiscoveryService is null)
         {
@@ -195,6 +200,20 @@ public sealed class WorkflowPreparationService(
             .Select(candidate => $"decision-candidate:{candidate.Id}")
             .Order(StringComparer.Ordinal)
             .ToArray();
+    }
+
+    private async Task<IReadOnlyList<string>> RunDecisionProposalPreparationAsync(Guid repositoryId)
+    {
+        if (decisionGenerationService is null)
+        {
+            return [];
+        }
+
+        WorkflowInstance projection = await projectionService.ProjectAsync(repositoryId);
+        string candidateId = projection.CurrentDecision.CandidateId
+            ?? throw new InvalidOperationException("Decision proposal preparation requires a promoted decision candidate.");
+        DecisionProposal proposal = await decisionGenerationService.GenerateProposalAsync(repositoryId, candidateId);
+        return [$"decision-proposal:{proposal.Id}"];
     }
 
     private async Task<IReadOnlyList<string>> RunOperationalContextProposalPreparationAsync(Guid repositoryId)
@@ -249,9 +268,10 @@ public sealed class WorkflowPreparationService(
         return latestTimeline?.BlockingGate ?? WorkflowGateType.None;
     }
 
-    private static WorkflowPreparationCommand ResolveCommand(WorkflowStage stage) => stage switch
+    private static WorkflowPreparationCommand ResolveCommand(WorkflowStage stage, WorkflowInstance? projection = null) => stage switch
     {
-        WorkflowStage.Decision => WorkflowPreparationCommand.GenerateDecisionReviewArtifacts,
+        WorkflowStage.Decision when IsPromotedCandidate(projection?.CurrentDecision) => WorkflowPreparationCommand.GenerateDecisionProposal,
+        WorkflowStage.Decision => WorkflowPreparationCommand.DiscoverDecisionCandidates,
         WorkflowStage.OperationalContext => WorkflowPreparationCommand.GenerateOperationalContextProposal,
         WorkflowStage.Commit => WorkflowPreparationCommand.PrepareExecutionCommit,
         _ => WorkflowPreparationCommand.None
@@ -259,7 +279,8 @@ public sealed class WorkflowPreparationService(
 
     private static string CommandName(WorkflowPreparationCommand command) => command switch
     {
-        WorkflowPreparationCommand.GenerateDecisionReviewArtifacts => "decisions_generate_review_artifacts",
+        WorkflowPreparationCommand.DiscoverDecisionCandidates => "decisions_discover_candidates",
+        WorkflowPreparationCommand.GenerateDecisionProposal => "decisions_generate_proposal",
         WorkflowPreparationCommand.GenerateOperationalContextProposal => "continuity_generate_operational_context_proposal",
         WorkflowPreparationCommand.PrepareExecutionCommit => "execution_prepare_commit",
         _ => "none"
@@ -273,12 +294,25 @@ public sealed class WorkflowPreparationService(
 
         switch (command)
         {
-            case WorkflowPreparationCommand.GenerateDecisionReviewArtifacts:
+            case WorkflowPreparationCommand.DiscoverDecisionCandidates:
                 if (!string.IsNullOrWhiteSpace(projection.CurrentDecision.CandidateId))
                 {
                     duplicates.Add($"decision-candidate:{projection.CurrentDecision.CandidateId}");
                 }
 
+                if (!string.IsNullOrWhiteSpace(projection.CurrentDecision.ProposalId))
+                {
+                    duplicates.Add($"decision-proposal:{projection.CurrentDecision.ProposalId}");
+                }
+
+                if (!string.IsNullOrWhiteSpace(projection.CurrentDecision.PackageId))
+                {
+                    duplicates.Add($"decision-package:{projection.CurrentDecision.PackageId}");
+                }
+
+                break;
+
+            case WorkflowPreparationCommand.GenerateDecisionProposal:
                 if (!string.IsNullOrWhiteSpace(projection.CurrentDecision.ProposalId))
                 {
                     duplicates.Add($"decision-proposal:{projection.CurrentDecision.ProposalId}");
@@ -370,8 +404,10 @@ public sealed class WorkflowPreparationService(
         bool canPrepare)
     {
         if (hasOpenGate &&
-            !(command is WorkflowPreparationCommand.PrepareExecutionCommit &&
-                blockingGate is WorkflowGateType.CommitApproval))
+            !((command is WorkflowPreparationCommand.PrepareExecutionCommit &&
+                    blockingGate is WorkflowGateType.CommitApproval) ||
+                (command is WorkflowPreparationCommand.GenerateDecisionProposal &&
+                    blockingGate is WorkflowGateType.DecisionResolution)))
         {
             return blockingGate is WorkflowGateType.None
                 ? "Preparation refused because an open authority gate is awaiting human action."
@@ -395,10 +431,19 @@ public sealed class WorkflowPreparationService(
 
         if (canPrepare)
         {
-            return command is WorkflowPreparationCommand.PrepareExecutionCommit &&
-                blockingGate is WorkflowGateType.CommitApproval
-                    ? "Preparation may request execution_prepare_commit to create commit-review evidence; CommitApproval remains a human authority gate."
-                    : $"Preparation may request {CommandName(command)} for workflow stage {stage}.";
+            if (command is WorkflowPreparationCommand.PrepareExecutionCommit &&
+                blockingGate is WorkflowGateType.CommitApproval)
+            {
+                return "Preparation may request execution_prepare_commit to create commit-review evidence; CommitApproval remains a human authority gate.";
+            }
+
+            if (command is WorkflowPreparationCommand.GenerateDecisionProposal &&
+                blockingGate is WorkflowGateType.DecisionResolution)
+            {
+                return "Preparation may request decisions_generate_proposal to create decision-review evidence; DecisionResolution remains a human authority gate.";
+            }
+
+            return $"Preparation may request {CommandName(command)} for workflow stage {stage}.";
         }
 
         return "Preparation refused by workflow evaluation.";
@@ -431,7 +476,9 @@ public sealed class WorkflowPreparationService(
 
         if (projection.OpenGates.Count > 0)
         {
-            reasoning.Add($"Open authority gates refuse preparation: {string.Join(", ", projection.OpenGates.Select(gate => gate.Type).Distinct())}.");
+            reasoning.Add(canPrepare
+                ? $"Open authority gates remain unsatisfied after preparation: {string.Join(", ", projection.OpenGates.Select(gate => gate.Type).Distinct())}."
+                : $"Open authority gates refuse preparation: {string.Join(", ", projection.OpenGates.Select(gate => gate.Type).Distinct())}.");
         }
 
         if (duplicateEvidence.Count > 0)
@@ -446,4 +493,7 @@ public sealed class WorkflowPreparationService(
 
         return reasoning;
     }
+
+    private static bool IsPromotedCandidate(WorkflowDecisionProjection? decision) =>
+        string.Equals(decision?.CandidateState, DecisionCandidateState.Promoted.ToString(), StringComparison.Ordinal);
 }

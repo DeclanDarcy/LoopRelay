@@ -9,7 +9,7 @@ Deliver:
 - [x] `WorkflowContinuationEvaluation`.
 - [x] `WorkflowPreparationEvaluation`.
 - [x] continuation rules for execution complete, handoff accepted, decision resolved, context promoted/rejected/not required, commit executed, push executed, no changes, and completed workflow.
-- [ ] preparation rules for decision discovery/generation, operational-context proposal generation/linkage, and commit preparation.
+- [x] preparation rules for decision discovery/generation, operational-context proposal generation/linkage, and commit preparation.
 - [x] gate halting for work selection, execution acceptance, decision resolution, operational context review, operational context promotion, commit approval, and push approval.
 - [x] `WorkflowContinuationDiagnostics`.
 - [x] `WorkflowPreparationDiagnostics`.
@@ -94,6 +94,11 @@ Slice progress:
   the created preparation snapshot identifier in preparation events, and leaves
   commit approval, commit execution, push approval, push execution, and workflow
   progression untouched.
+- Promoted decision-candidate preparation can now call the existing Decisions
+  proposal-generation command to create reviewable proposal/package evidence,
+  records the created proposal identifier in preparation events, and leaves
+  decision resolution, proposal review transitions, candidate promotion,
+  governance state, and workflow progression untouched.
 - Continuation evaluation consumes the aggregate workflow projection, latest
   persisted workflow timeline evidence, and state-machine, gate, and completion
   evidence.
@@ -116,7 +121,7 @@ Progression rules:
 Preparation rules:
 
 - [x] accepted handoff may trigger decision discovery through the existing Decisions command, but this does not resolve the decision gate and does not itself move the stage beyond decision.
-- [ ] promoted decision candidates may trigger reviewable proposal generation through existing Decisions commands, but this does not resolve the decision gate and does not itself move the stage beyond decision.
+- [x] promoted decision candidates may trigger reviewable proposal generation through existing Decisions commands, but this does not resolve the decision gate and does not itself move the stage beyond decision.
 - [x] resolved decision may trigger operational-context proposal generation or linkage through existing Continuity commands, but this does not review or promote context and does not itself move the stage beyond operational context.
 - [x] context complete may trigger commit preparation through the existing Execution command, but this does not approve or execute commit and does not itself move the stage beyond commit.
 - [x] preparation must record command name, source stage, input fingerprint, created artifact identifiers, skipped reason, and diagnostics.
@@ -163,7 +168,7 @@ Exit criteria:
 - [x] continuation service exists.
 - [x] preparation service exists.
 - [ ] continuation rules exist.
-- [ ] preparation rules exist.
+- [x] preparation rules exist.
 - [x] gate halting works.
 - [x] continuation history exists.
 - [x] preparation history exists.
