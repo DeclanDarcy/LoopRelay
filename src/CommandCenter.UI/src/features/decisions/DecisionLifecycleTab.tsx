@@ -55,6 +55,14 @@ type DecisionLifecycleTabProps = {
   onGenerateProposal?: (candidateId: string) => Promise<string | null> | string | null
   onExpireProposal?: (proposalId: string) => Promise<void> | void
   onDiscardProposal?: (proposalId: string) => Promise<void> | void
+  onSupersedeDecision?: (
+    decisionId: string,
+    replacementDecisionId: string,
+    rationale: string,
+    resolver: string,
+  ) => Promise<void> | void
+  onArchiveDecision?: (decisionId: string, rationale: string, resolver: string) => Promise<void> | void
+  onRefreshExecutionProjection?: () => Promise<void> | void
 }
 
 export function DecisionLifecycleTab({
@@ -79,8 +87,15 @@ export function DecisionLifecycleTab({
   onGenerateProposal,
   onExpireProposal,
   onDiscardProposal,
+  onSupersedeDecision,
+  onArchiveDecision,
+  onRefreshExecutionProjection,
 }: DecisionLifecycleTabProps) {
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null)
+  const [selectedDecisionId, setSelectedDecisionId] = useState<string>('')
+  const [replacementDecisionId, setReplacementDecisionId] = useState<string>('')
+  const [decisionRationale, setDecisionRationale] = useState<string>('')
+  const [decisionResolver, setDecisionResolver] = useState<string>('')
   const {
     data: proposalReviewWorkspace,
     isLoading: isProposalReviewLoading,
@@ -172,6 +187,32 @@ export function DecisionLifecycleTab({
   )
   const proposalExpireAction = getAction(selectedProposalEligibility, 'expire_decision_proposal')
   const proposalDiscardAction = getAction(selectedProposalEligibility, 'discard_decision_proposal')
+  const decisionEligibilities = lifecycleEligibility?.decisions ?? []
+  const selectedDecisionEligibility =
+    decisionEligibilities.find((decision) => decision.entityId === selectedDecisionId) ??
+    decisionEligibilities[0] ??
+    null
+  const activeDecisionId = selectedDecisionEligibility?.entityId ?? ''
+  const resolvedReplacementTargets = decisionEligibilities.filter((decision) =>
+    decision.entityId !== activeDecisionId && decision.currentState === 'Resolved'
+  )
+  const supersedeAction = getAction(selectedDecisionEligibility, 'supersede_decision')
+  const archiveAction = getAction(selectedDecisionEligibility, 'archive_decision')
+  const canSubmitSupersede = Boolean(
+    activeDecisionId &&
+    replacementDecisionId &&
+    decisionRationale.trim() &&
+    decisionResolver.trim() &&
+    onSupersedeDecision &&
+    supersedeAction?.isAllowed,
+  )
+  const canSubmitArchive = Boolean(
+    activeDecisionId &&
+    decisionRationale.trim() &&
+    decisionResolver.trim() &&
+    onArchiveDecision &&
+    archiveAction?.isAllowed,
+  )
 
   return (
     <Panel
@@ -395,6 +436,130 @@ export function DecisionLifecycleTab({
               onRefresh()
             }}
           />
+
+          {actionsEnabled ? (
+            <section className="decision-lifecycle-panel" aria-label="Resolved decision lifecycle actions">
+              <div className="decision-panel-heading">
+                <h5>Decision Actions</h5>
+                <span>{activeDecisionId || 'No decision selected'}</span>
+              </div>
+              {decisionEligibilities.length > 0 ? (
+                <>
+                  <div className="decision-filter-bar" aria-label="Resolved decision selection">
+                    <select
+                      value={activeDecisionId}
+                      onChange={(event) => {
+                        setSelectedDecisionId(event.target.value)
+                        setReplacementDecisionId('')
+                      }}
+                    >
+                      {decisionEligibilities.map((decision) => (
+                        <option value={decision.entityId} key={decision.entityId}>
+                          {decision.entityId} - {decision.currentState}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={replacementDecisionId}
+                      onChange={(event) => setReplacementDecisionId(event.target.value)}
+                      disabled={resolvedReplacementTargets.length === 0 || !supersedeAction?.isAllowed}
+                    >
+                      <option value="">Replacement decision</option>
+                      {resolvedReplacementTargets.map((decision) => (
+                        <option value={decision.entityId} key={decision.entityId}>
+                          {decision.entityId}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {selectedDecisionEligibility ? (
+                    <LifecycleEligibilityDetails
+                      eligibility={selectedDecisionEligibility}
+                      label="Decision"
+                    />
+                  ) : null}
+                  <div className="decision-lifecycle-form">
+                    <label>
+                      <span>Rationale</span>
+                      <textarea
+                        value={decisionRationale}
+                        onChange={(event) => setDecisionRationale(event.target.value)}
+                        rows={3}
+                      />
+                    </label>
+                    <label>
+                      <span>Resolver</span>
+                      <input
+                        type="text"
+                        value={decisionResolver}
+                        onChange={(event) => setDecisionResolver(event.target.value)}
+                      />
+                    </label>
+                  </div>
+                  <div className="context-controls" aria-label="Resolved decision actions">
+                    <button
+                      type="button"
+                      className="secondary-action"
+                      onClick={async () => {
+                        if (!canSubmitSupersede) {
+                          return
+                        }
+
+                        await onSupersedeDecision?.(
+                          activeDecisionId,
+                          replacementDecisionId,
+                          decisionRationale.trim(),
+                          decisionResolver.trim(),
+                        )
+                        await Promise.all([
+                          refreshGovernance(),
+                          refreshQuality(),
+                          onRefreshExecutionProjection?.(),
+                        ])
+                        setDecisionRationale('')
+                        setReplacementDecisionId('')
+                      }}
+                      disabled={!canSubmitSupersede}
+                      title={actionTitle(supersedeAction)}
+                    >
+                      Supersede
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-action"
+                      onClick={async () => {
+                        if (!canSubmitArchive) {
+                          return
+                        }
+
+                        await onArchiveDecision?.(
+                          activeDecisionId,
+                          decisionRationale.trim(),
+                          decisionResolver.trim(),
+                        )
+                        await Promise.all([
+                          refreshGovernance(),
+                          refreshQuality(),
+                          onRefreshExecutionProjection?.(),
+                        ])
+                        setDecisionRationale('')
+                      }}
+                      disabled={!canSubmitArchive}
+                      title={actionTitle(archiveAction)}
+                    >
+                      Archive
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="decision-lifecycle-notice" role="status">
+                  {isLifecycleEligibilityLoading
+                    ? 'Loading decision lifecycle eligibility...'
+                    : 'No resolved decisions are available for supersede or archive actions.'}
+                </div>
+              )}
+            </section>
+          ) : null}
 
           <DecisionRevisionHistory
             lineage={proposalLineage}

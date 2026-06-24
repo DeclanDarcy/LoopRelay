@@ -1681,6 +1681,34 @@ button:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.decision-lifecycle-form {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.decision-lifecycle-form label {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  color: var(--fg-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.decision-lifecycle-form input,
+.decision-lifecycle-form textarea {
+  width: 100%;
+  min-width: 0;
+  color: var(--fg-default);
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  padding: 8px;
+  font: inherit;
+  resize: vertical;
+}
+
 .decision-lifecycle-reasons {
   margin: 0;
   padding: 0;

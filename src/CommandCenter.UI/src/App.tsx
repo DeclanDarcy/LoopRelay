@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   acceptExecutionHandoff,
   acceptOperationalContextProposal as acceptOperationalContextProposalCommand,
+  archiveDecision,
   captureManualReasoning,
   commitExecution,
   editOperationalContextProposal,
@@ -23,6 +24,7 @@ import {
   saveArtifactContent,
   selectRepositoryDirectory,
   startExecution as startExecutionCommand,
+  supersedeDecision,
 } from './api'
 import { ArtifactWorkspace } from './features/artifacts/ArtifactWorkspace'
 import { Button, EmptyState, Panel, SectionHeader } from './components/design'
@@ -1862,6 +1864,37 @@ function App() {
                 onDiscardProposal={async (proposalId) => {
                   await discardDecisionProposal(proposalId)
                   await refreshDecisions()
+                }}
+                onSupersedeDecision={async (
+                  decisionId,
+                  replacementDecisionId,
+                  rationale,
+                  resolver,
+                ) => {
+                  if (!selectedRepository) {
+                    return
+                  }
+
+                  await supersedeDecision(selectedRepository.repository.id, decisionId, {
+                    replacementDecisionId,
+                    rationale,
+                    resolver,
+                  })
+                  await refreshDecisions()
+                }}
+                onArchiveDecision={async (decisionId, rationale, resolver) => {
+                  if (!selectedRepository) {
+                    return
+                  }
+
+                  await archiveDecision(selectedRepository.repository.id, decisionId, {
+                    rationale,
+                    resolver,
+                  })
+                  await refreshDecisions()
+                }}
+                onRefreshExecutionProjection={async () => {
+                  await loadExecutionContextPreview()
                 }}
               />
 

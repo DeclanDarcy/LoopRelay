@@ -68,7 +68,7 @@ Discovery -> Candidate -> Proposal -> Review -> Refinement -> Resolution -> Supe
 - [ ] Update proposal viewer/review panels to render review state, allowed transitions, unavailable reasons, last transition, and transition controls.
    - [x] Proposal action controls consume backend lifecycle eligibility for allowed/blocked transitions.
    - [x] Proposal action controls render backend blocked reasons and governing rules.
-- [ ] Add supersede and archive actions for resolved decisions, including target decision selection, rationale, resulting state, relationships, governance impact, and execution projection refresh.
+- [x] Add supersede and archive actions for resolved decisions, including target decision selection, rationale, resulting state, relationships, governance impact, and execution projection refresh.
 - [ ] Classify lower-priority lifecycle features as Core MVP, Deferred, Internal, or Remove:
    - [ ] proposal review notes
    - [ ] proposal revision list
@@ -82,6 +82,7 @@ Discovery -> Candidate -> Proposal -> Review -> Refinement -> Resolution -> Supe
 - [x] Endpoint test for decision lifecycle eligibility route.
 - [ ] Endpoint tests for remaining shell-reachable lifecycle routes.
 - [ ] UI tests for candidate actions, proposal generation, proposal review transitions, supersede, archive, and refresh behavior.
+  - [x] Supersede/archive action reachability, required fields, blocked eligibility rendering, and execution projection refresh callback.
 - [ ] End-to-end test path:
   - [ ] discover candidate
   - [ ] promote candidate

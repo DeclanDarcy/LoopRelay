@@ -253,6 +253,151 @@ describe('DecisionLifecycleTab navigation', () => {
     expect(screen.getByRole('button', { name: 'Mark Viewed' })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Needs Refinement' })).toBeDisabled()
   })
+
+  it('renders decision supersede and archive eligibility and submits required fields', async () => {
+    const onSupersedeDecision = vi.fn()
+    const onArchiveDecision = vi.fn()
+    const onRefreshExecutionProjection = vi.fn()
+    useDecisionProposalReviewMock.mockReturnValue({
+      data: null,
+      isLoading: false,
+      isMutating: false,
+      refresh: vi.fn(),
+      markViewed: vi.fn(),
+      markNeedsRefinement: vi.fn(),
+      markReadyForResolution: vi.fn(),
+    })
+    useDecisionProposalLineageMock.mockReturnValue({ data: null, isLoading: false, refresh: vi.fn() })
+    useDecisionOptionComparisonMock.mockReturnValue({ data: null, isLoading: false, refresh: vi.fn() })
+    useDecisionEvidenceInspectionMock.mockReturnValue({ data: null, isLoading: false, refresh: vi.fn() })
+    useDecisionSourceAttributionsMock.mockReturnValue({ data: [], isLoading: false, refresh: vi.fn() })
+    useDecisionGovernanceMock.mockReturnValue({
+      currentReport: null,
+      reports: [],
+      isLoading: false,
+      isGenerating: false,
+      error: null,
+      refresh: vi.fn(),
+      generateReport: vi.fn(),
+    })
+    useDecisionCertificationMock.mockReturnValue({
+      currentReport: null,
+      reports: [],
+      isLoading: false,
+      isRunning: false,
+      error: null,
+      refresh: vi.fn(),
+      runCertification: vi.fn(),
+    })
+    useDecisionGenerationCertificationMock.mockReturnValue({
+      currentReport: null,
+      reports: [],
+      isLoading: false,
+      isRunning: false,
+      error: null,
+      refresh: vi.fn(),
+      runCertification: vi.fn(),
+    })
+    useDecisionQualityMock.mockReturnValue({
+      assessments: [],
+      currentReport: null,
+      reports: [],
+      currentTrend: null,
+      trends: [],
+      isLoading: false,
+      isAssessing: false,
+      isGeneratingReport: false,
+      isGeneratingTrend: false,
+      error: null,
+      refresh: vi.fn(),
+      assessProposal: vi.fn(),
+      generateReport: vi.fn(),
+      generateTrend: vi.fn(),
+    })
+    useDecisionProposalRefinementMock.mockReturnValue({
+      refine: vi.fn(),
+      isSubmitting: false,
+      error: null,
+    })
+    useDecisionResolutionMock.mockReturnValue({
+      decision: null,
+      assimilationRecommendation: null,
+      isSubmitting: false,
+      isAssimilationLoading: false,
+      error: null,
+      resolve: vi.fn(),
+      loadAssimilationRecommendation: vi.fn(),
+      proposeAssimilationRecommendation: vi.fn(),
+      reset: vi.fn(),
+    })
+
+    render(
+      <DecisionLifecycleTab
+        context={createContext()}
+        candidates={[createCandidate()]}
+        proposals={createProposals()}
+        selectedProposalStates={[]}
+        hasSelectedRepository
+        isLoading={false}
+        repositoryId="repo-alpha"
+        lifecycleEligibility={createLifecycleEligibilityWithDecisions()}
+        onSelectedProposalStatesChange={vi.fn()}
+        onRefresh={vi.fn()}
+        onSupersedeDecision={onSupersedeDecision}
+        onArchiveDecision={onArchiveDecision}
+        onRefreshExecutionProjection={onRefreshExecutionProjection}
+      />,
+    )
+
+    const decisionSelection = screen.getByLabelText('Resolved decision selection')
+    const decisionSelects = decisionSelection.querySelectorAll('select')
+
+    expect(screen.getByLabelText('Decision lifecycle eligibility')).toHaveTextContent('Supersede')
+    expect(screen.getByLabelText('Decision lifecycle eligibility')).toHaveTextContent('Archive')
+    fireEvent.change(decisionSelects[0], {
+      target: { value: 'DEC-0003' },
+    })
+    expect(screen.getByText('Archived decisions cannot transition.')).toBeInTheDocument()
+    fireEvent.change(decisionSelects[0], {
+      target: { value: 'DEC-0001' },
+    })
+
+    fireEvent.change(decisionSelects[1], {
+      target: { value: 'DEC-0002' },
+    })
+    fireEvent.change(screen.getByLabelText('Rationale'), {
+      target: { value: 'DEC-0002 replaces the earlier architecture choice.' },
+    })
+    fireEvent.change(screen.getByLabelText('Resolver'), {
+      target: { value: 'reviewer' },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Supersede' }))
+
+    await waitFor(() => {
+      expect(onSupersedeDecision).toHaveBeenCalledWith(
+        'DEC-0001',
+        'DEC-0002',
+        'DEC-0002 replaces the earlier architecture choice.',
+        'reviewer',
+      )
+      expect(onRefreshExecutionProjection).toHaveBeenCalledTimes(1)
+    })
+
+    fireEvent.change(screen.getByLabelText('Rationale'), {
+      target: { value: 'Terminal decision no longer participates in execution.' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Archive' }))
+
+    await waitFor(() => {
+      expect(onArchiveDecision).toHaveBeenCalledWith(
+        'DEC-0001',
+        'Terminal decision no longer participates in execution.',
+        'reviewer',
+      )
+      expect(onRefreshExecutionProjection).toHaveBeenCalledTimes(2)
+    })
+  })
 })
 
 function createContext(): DecisionContextSnapshot {
@@ -399,6 +544,38 @@ function createLifecycleEligibility(): DecisionLifecycleEligibilityProjection {
   }
 }
 
+function createLifecycleEligibilityWithDecisions(): DecisionLifecycleEligibilityProjection {
+  return {
+    ...createLifecycleEligibility(),
+    decisions: [
+      createDecisionEligibility('DEC-0001', 'Resolved', [
+        createAction('supersede_decision', 'Supersede', 'Superseded', true, null),
+        createAction('archive_decision', 'Archive', 'Archived', true, null),
+      ], []),
+      createDecisionEligibility('DEC-0002', 'Resolved', [
+        createAction('archive_decision', 'Archive', 'Archived', true, null),
+      ], [
+        createAction(
+          'supersede_decision',
+          'Supersede',
+          'Superseded',
+          false,
+          'Replacement decision must be different from the source decision.',
+        ),
+      ]),
+      createDecisionEligibility('DEC-0003', 'Archived', [], [
+        createAction(
+          'archive_decision',
+          'Archive',
+          'Archived',
+          false,
+          'Archived decisions cannot transition.',
+        ),
+      ]),
+    ],
+  }
+}
+
 function createProposalEligibility(
   entityId: string,
   allowedActions: DecisionLifecycleEntityEligibility['allowedActions'],
@@ -408,6 +585,24 @@ function createProposalEligibility(
     entityKind: 'Proposal',
     entityId,
     currentState: 'Generated',
+    allowedActions,
+    blockedActions,
+    allowedNextStates: allowedActions.map((action) => action.targetState),
+    blockedNextStates: [],
+    diagnostics: [],
+  }
+}
+
+function createDecisionEligibility(
+  entityId: string,
+  currentState: string,
+  allowedActions: DecisionLifecycleEntityEligibility['allowedActions'],
+  blockedActions: DecisionLifecycleEntityEligibility['blockedActions'],
+): DecisionLifecycleEntityEligibility {
+  return {
+    entityKind: 'Decision',
+    entityId,
+    currentState,
     allowedActions,
     blockedActions,
     allowedNextStates: allowedActions.map((action) => action.targetState),

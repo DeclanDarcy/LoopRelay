@@ -2,35 +2,36 @@
 
 ## New State This Slice
 
-- Continued Milestone 3: Decision Pipeline Completion, focusing on UI consumption of backend decision lifecycle eligibility.
-- Wired `useDecisionLifecycleEligibility` into `App.tsx` and included eligibility refresh in `refreshDecisions()`.
-- Passed lifecycle eligibility into `DecisionLifecycleTab` and `DecisionCandidateBrowser`.
-- Candidate lifecycle controls now:
-  - disable backend-blocked lifecycle actions
-  - show backend allowed actions
-  - show backend blocked reasons
-  - show governing lifecycle rule names
-- Proposal review lifecycle controls now:
-  - disable backend-blocked review transitions
-  - show backend allowed actions and allowed next states
-  - show backend blocked reasons
-  - show governing lifecycle rule names
-- Added compact UI styles for lifecycle eligibility and blocked-reason rendering.
-- Added dev Tauri mock support for `get_decision_lifecycle_eligibility`.
+- Continued Milestone 3: Decision Pipeline Completion, focusing on resolved-decision supersede/archive reachability.
+- Added a resolved decision lifecycle action panel to `DecisionLifecycleTab`.
+- The panel consumes backend-owned `lifecycleEligibility.decisions` and renders:
+  - decision ids and current states
+  - allowed actions
+  - allowed next states
+  - blocked reasons
+  - governing lifecycle rules
+- Added supersede target selection from resolved replacement decisions.
+- Added required rationale and resolver capture for supersede/archive commands.
+- Wired `App.tsx` to call existing typed `supersedeDecision` and `archiveDecision` API functions.
+- Supersede/archive now refresh:
+  - centralized decision lifecycle state through `refreshDecisions()`
+  - decision governance panel data
+  - decision quality panel data
+  - execution context preview through the existing execution projection refresh callback
+- Added compact form styles for resolved-decision lifecycle inputs.
 - Added characterization coverage for:
-  - candidate eligibility rendering and disabled blocked actions
-  - proposal eligibility rendering and disabled blocked review transitions
-  - app smoke path with the new mock command available
-- Increased the timeout only for the long-running Operational Context navigation smoke test from 5s to 10s because it now passes behaviorally but can exceed 5s in the full concurrent suite.
-- Updated `.agents/milestones/m3-decision-pipeline.md` to mark the completed eligibility-driven UI subitems.
-- Rotated previous handoff to `.agents/handoffs/handoff.0012.md`.
+  - supersede/archive eligibility rendering
+  - archived-decision blocked reason rendering
+  - required supersede/archive command fields
+  - execution projection refresh callback after both actions
+- Updated `.agents/milestones/m3-decision-pipeline.md` to mark the resolved-decision supersede/archive UI item complete.
+- Rotated previous handoff to `.agents/handoffs/handoff.0013.md`.
 
 ## Verification
 
-- `npm test -- --run src/test/characterization/decisionCandidateBrowser.test.tsx src/test/characterization/decisionLifecycleNavigation.test.tsx` passed with 6 tests.
-- `npm test -- --run src/test/characterization/app.smoke.test.tsx -t "keeps Operational Context cross-links navigation-only without workflow mutations"` passed.
+- `npm test -- --run src/test/characterization/decisionLifecycleNavigation.test.tsx src/test/characterization/decisionCandidateBrowser.test.tsx` passed with 7 tests.
 - `npm run build` passed.
-- `npm test` passed with 189 tests across 54 files.
+- `npm test` passed with 190 tests across 54 files.
 
 ## Remaining Milestone 3 Work
 
@@ -45,9 +46,9 @@
   - last transition rendering
   - review-state placement audit
   - any missing unavailable transition diagnostics
-- Add resolved-decision supersede/archive UI:
-  - target decision selection
-  - rationale capture
-  - governance impact
-  - execution projection refresh
-- Add broader end-to-end lifecycle characterization after supersede/archive is reachable.
+- Classify lower-priority lifecycle features as Core MVP, Deferred, Internal, or Remove:
+  - proposal review notes
+  - proposal revision list
+  - revision comparison
+  - context snapshot listing
+- Add broader end-to-end lifecycle characterization after remaining proposal-generation and review-transparency details are complete.
