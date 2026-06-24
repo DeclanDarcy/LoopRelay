@@ -160,3 +160,80 @@ public sealed record DecisionSessionEconomicsSnapshot(
     DecisionSessionEconomics Economics,
     DecisionSessionEconomicsDiagnostics Diagnostics,
     DateTimeOffset GeneratedAt);
+
+public sealed record DecisionSessionCoherenceOptions(
+    long DenseGraphRelationshipThreshold = 300,
+    long GovernanceEvidenceThreshold = 150,
+    long OperationalContextRevisionThreshold = 50,
+    decimal HighGrowthRateThreshold = 800_000m);
+
+public sealed record DecisionSessionCoherenceInputs(
+    DecisionSessionMetrics Metrics,
+    DecisionSessionStatistics Statistics,
+    DecisionSessionCacheMetrics Cache,
+    DecisionSessionEconomics Economics,
+    long GraphNodeCount,
+    long GraphRelationshipCount,
+    long IsolatedNodeCount,
+    long DisconnectedGroupCount,
+    long ResolvedNodeCount,
+    long UnresolvedNodeCount);
+
+public sealed record FragmentationAssessment(
+    decimal Score,
+    decimal IsolatedNodeContribution,
+    decimal DisconnectedGroupContribution,
+    decimal LowDensityContribution);
+
+public sealed record DensityAssessment(
+    decimal Score,
+    decimal RelationshipDensity,
+    long NodeCount,
+    long RelationshipCount);
+
+public sealed record ContinuityQualityAssessment(
+    decimal Score,
+    decimal GovernanceEvidenceContribution,
+    decimal CrossReferenceContribution,
+    decimal OperationalContextContribution,
+    decimal ResolvedReferenceContribution);
+
+public sealed record TransferPressureAssessment(
+    decimal Score,
+    decimal FragmentationContribution,
+    decimal GrowthContribution,
+    decimal LowCoherenceContribution,
+    decimal CacheRiskContribution,
+    decimal ContextCostContribution);
+
+public sealed record DecisionSessionCoherence(
+    decimal CoherenceScore,
+    decimal FragmentationScore,
+    decimal DensityScore,
+    decimal ContinuityScore,
+    decimal TransferPressure);
+
+public sealed record DecisionSessionCoherenceDiagnostics(
+    Guid RepositoryId,
+    DateTimeOffset GeneratedAt,
+    DecisionSessionCoherenceInputs Inputs,
+    FragmentationAssessment Fragmentation,
+    DensityAssessment Density,
+    ContinuityQualityAssessment ContinuityQuality,
+    TransferPressureAssessment TransferPressure,
+    IReadOnlyList<string> Assumptions,
+    IReadOnlyList<string> Warnings);
+
+public sealed record DecisionSessionCoherenceSnapshot(
+    Guid RepositoryId,
+    DecisionSessionCoherence Coherence,
+    DecisionSessionCoherenceDiagnostics Diagnostics,
+    DateTimeOffset GeneratedAt);
+
+public sealed record DecisionSessionAnalysisDiagnostics(
+    Guid RepositoryId,
+    DateTimeOffset GeneratedAt,
+    DecisionSessionMetricsDiagnostics Metrics,
+    DecisionSessionEconomicsDiagnostics Economics,
+    DecisionSessionCoherenceDiagnostics Coherence,
+    IReadOnlyList<string> Warnings);

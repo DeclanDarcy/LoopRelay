@@ -2,31 +2,27 @@
 
 ## Slice Summary
 
-- Completed Decision Session Stage 2B economics.
-- Added economics models, configurable assumptions, diagnostics, and rebuildable economics snapshots.
-- Added `IDecisionSessionEconomicsService` and `DecisionSessionEconomicsService`.
-- Economics consumes the completed Stage 2A metrics snapshot boundary and does not crawl repository evidence directly.
-- Economics snapshots persist at `.agents/decision-sessions/analysis/economics/snapshot.json` and invalid snapshots are rebuilt.
-- Added read-only endpoint `GET /api/repositories/{repositoryId}/decision-sessions/analysis/economics`.
-- Marked Stage 2B complete in `.agents/milestones/m2-governance-session-analysis.md`.
+- Completed Decision Session Stage 2C coherence and marked Milestone 2 complete.
+- Added coherence models, diagnostics, options, snapshot persistence, and `IDecisionSessionCoherenceService` / `DecisionSessionCoherenceService`.
+- Coherence snapshots persist at `.agents/decision-sessions/analysis/coherence/snapshot.json` and invalid snapshots are rebuilt.
+- Added read-only endpoint `GET /api/repositories/{repositoryId}/decision-sessions/analysis/coherence`.
+- Changed `GET /api/repositories/{repositoryId}/decision-sessions/analysis/diagnostics` from metrics-only to aggregate metrics/economics/coherence diagnostics.
+- Coherence remains analysis-only: no lifecycle policy decision, eligibility check, transfer execution, or registry mutation was added.
 
 ## Validation
 
-- `dotnet test .\tests\CommandCenter.Backend.Tests\CommandCenter.Backend.Tests.csproj --filter DecisionSession` passed: 32 tests.
-- `dotnet test .\CommandCenter.slnx` was run twice and failed in unrelated `ExecutionSessionServiceTests` cases:
-  - First run: file lock in `AppStartupRunsExecutionRecovery`.
-  - Second run: `AcceptAndRejectEndpointsReturnTransitionedSessionMetadata` returned HTTP 500 instead of 200.
+- `dotnet test .\tests\CommandCenter.Backend.Tests\CommandCenter.Backend.Tests.csproj --filter DecisionSession` passed: 39 tests.
+- `dotnet test .\CommandCenter.slnx` passed: 669 tests.
 
 ## Current State
 
-- `.agents/handoffs/handoff.md` was rotated to `.agents/handoffs/handoff.0004.md`; this file is the new active handoff.
+- `.agents/handoffs/handoff.md` was rotated to `.agents/handoffs/handoff.0005.md`; this file is the new active handoff.
 - `.agents/decisions/decisions.md` was not rotated because no user response authorized new decisions during this slice.
-- Stage 2A and Stage 2B are complete. Stage 2C coherence has not started.
+- Stage 2A metrics, Stage 2B economics, Stage 2C coherence, and aggregate analysis diagnostics are complete.
 
 ## Next Slice Recommendation
 
-- Begin Stage 2C coherence:
-  - Add coherence models, diagnostics, and snapshot persistence under `.agents/decision-sessions/analysis/coherence/`.
-  - Implement `IDecisionSessionCoherenceService` using reasoning topology, decision counts, continuity evidence, metrics, and economics.
-  - Add deterministic tests for fragmentation, density, continuity quality, transfer pressure, and missing snapshot rebuild.
-  - Add the read-only coherence endpoint and then stabilize aggregate analysis diagnostics.
+- Begin Milestone 3 governance lifecycle:
+  - Add lifecycle policy models, diagnostics, deterministic policy service, and policy snapshot persistence under `.agents/decision-sessions/lifecycle/policy/`.
+  - Keep policy strictly analytical: it may decide `Continue` or `Transfer`, but must not execute transfer or mutate registry state.
+  - Add read-only policy endpoint and deterministic tests for reuse/transfer decisions, explanations, missing snapshot rebuild, and authority boundaries.

@@ -51,10 +51,33 @@ public static class DecisionSessionEndpoints
             IDecisionSessionEconomicsService economicsService) =>
             await HandleAsync(async () => (await economicsService.GetEconomicsAsync(repositoryId)).Economics));
 
+        group.MapGet("/analysis/coherence", async (
+            Guid repositoryId,
+            IDecisionSessionCoherenceService coherenceService) =>
+            await HandleAsync(async () => (await coherenceService.GetCoherenceAsync(repositoryId)).Coherence));
+
         group.MapGet("/analysis/diagnostics", async (
             Guid repositoryId,
-            IDecisionSessionMetricsService metricsService) =>
-            await HandleAsync(async () => (await metricsService.GetMetricsAsync(repositoryId)).Diagnostics));
+            IDecisionSessionMetricsService metricsService,
+            IDecisionSessionEconomicsService economicsService,
+            IDecisionSessionCoherenceService coherenceService) =>
+            await HandleAsync(async () =>
+            {
+                DecisionSessionMetricsSnapshot metrics = await metricsService.GetMetricsAsync(repositoryId);
+                DecisionSessionEconomicsSnapshot economics = await economicsService.GetEconomicsAsync(repositoryId);
+                DecisionSessionCoherenceSnapshot coherence = await coherenceService.GetCoherenceAsync(repositoryId);
+                return new DecisionSessionAnalysisDiagnostics(
+                    repositoryId,
+                    coherence.GeneratedAt,
+                    metrics.Diagnostics,
+                    economics.Diagnostics,
+                    coherence.Diagnostics,
+                    metrics.Diagnostics.Warnings
+                        .Concat(economics.Diagnostics.Warnings)
+                        .Concat(coherence.Diagnostics.Warnings)
+                        .Distinct(StringComparer.Ordinal)
+                        .ToArray());
+            }));
 
         return app;
     }

@@ -19,6 +19,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IDecisionSessionMetricsService, DecisionSessionMetricsService>();
         services.AddSingleton(new DecisionSessionEconomicsOptions());
         services.AddSingleton<IDecisionSessionEconomicsService, DecisionSessionEconomicsService>();
+        services.AddSingleton(new DecisionSessionCoherenceOptions());
+        services.AddSingleton<IDecisionSessionCoherenceService, DecisionSessionCoherenceService>();
         return services;
     }
 }

@@ -23,4 +23,8 @@ public interface IDecisionSessionRepository
     Task<DecisionSessionEconomicsSnapshot?> ReadEconomicsSnapshotAsync(Repository repository);
 
     Task WriteEconomicsSnapshotAsync(Repository repository, DecisionSessionEconomicsSnapshot snapshot);
+
+    Task<DecisionSessionCoherenceSnapshot?> ReadCoherenceSnapshotAsync(Repository repository);
+
+    Task WriteCoherenceSnapshotAsync(Repository repository, DecisionSessionCoherenceSnapshot snapshot);
 }

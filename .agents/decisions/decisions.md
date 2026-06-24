@@ -2,16 +2,18 @@
 
 ## Newly Authorized
 
-- Treat the Stage 2B economics implementation as successful.
-- Preserve the analysis dependency graph as `Evidence -> Metrics / Statistics / Cache -> Economics -> Coherence -> Policy`.
-- Keep the economics layer operating from the Stage 2A metrics boundary rather than direct repository crawling.
-- Keep economics snapshots derived, rebuildable, and non-authoritative.
-- Keep economics analysis pure: no policy decisions, no transfer execution, and no lifecycle mutation.
-- Accept the temporary assumed coherence score in economics until Stage 2C owns coherence explicitly.
-- Classify the current solution-wide `ExecutionSessionServiceTests` failures as unrelated instability to investigate separately, not a blocker for Stage 2C.
-- Capture the execution-session failure signatures so future lifecycle recovery work does not normalize them as expected noise.
-- Treat Stage 2C coherence as ready to begin.
-- Make coherence primarily topology-driven from reasoning events, threads, relationships, graph structure, decision references, and continuity revisions.
-- Do not make coherence a disguised economics score; token count, context size, cost, TTL, and cache benefit are weak coherence inputs.
-- Keep transfer pressure conceptually separate from coherence as a synthesis signal from coherence, economics, and metrics, even if stored in the coherence snapshot.
-- No roadmap adjustments are indicated.
+- Treat Milestone 2 as complete and structurally aligned with the intended authority model.
+- Treat Milestone 3 as ready to begin.
+- Enforce lifecycle policy as the first true decision layer after analysis.
+- Lifecycle policy may consume metrics, economics, coherence, and transfer pressure.
+- Lifecycle policy may produce only a `Continue` or `Transfer` governance decision with explanation.
+- Lifecycle policy owns reuse score, transfer score, decision, reason, and contributing factors.
+- Lifecycle policy must not own eligibility, transfer execution, registry mutation, session retirement, replacement creation, continuity artifacts, hosted services, or recovery changes.
+- Shape the first Milestone 3A slice around `DecisionSessionLifecycleEvaluation`, reuse score, transfer score, decision, reason, contributing factors, and `EvaluatedAt`.
+- Add `IDecisionSessionLifecyclePolicy` and `DecisionSessionLifecyclePolicy` for Milestone 3A.
+- Persist policy evaluation snapshots at `.agents/decision-sessions/lifecycle/policy/snapshot.json`.
+- Add read-only `GET /lifecycle/policy` for Milestone 3A.
+- Persist both reuse score and transfer score in policy diagnostics even when one clearly wins.
+- Do not collapse transfer pressure into the final lifecycle decision; transfer pressure remains an input signal.
+- Do not add eligibility, transfer execution, mutation, hosted services, or recovery changes in the first policy slice.
+- No roadmap corrections are indicated.

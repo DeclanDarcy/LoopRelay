@@ -46,6 +46,12 @@ public sealed class DecisionSessionEndpointTests
         DecisionSessionEconomics? economics = await client.GetFromJsonAsync<DecisionSessionEconomics>(
             $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/analysis/economics",
             DecisionSessionTestHarness.CreateJsonOptions());
+        DecisionSessionCoherence? coherence = await client.GetFromJsonAsync<DecisionSessionCoherence>(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/analysis/coherence",
+            DecisionSessionTestHarness.CreateJsonOptions());
+        DecisionSessionAnalysisDiagnostics? analysisDiagnostics = await client.GetFromJsonAsync<DecisionSessionAnalysisDiagnostics>(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/analysis/diagnostics",
+            DecisionSessionTestHarness.CreateJsonOptions());
 
         Assert.NotNull(sessions);
         Assert.Single(sessions);
@@ -57,6 +63,13 @@ public sealed class DecisionSessionEndpointTests
         Assert.Equal(0, metrics.DecisionCount);
         Assert.NotNull(economics);
         Assert.True(economics.EstimatedReuseValue >= 0m);
+        Assert.NotNull(coherence);
+        Assert.True(coherence.CoherenceScore >= 0m);
+        Assert.NotNull(analysisDiagnostics);
+        Assert.Equal(harness.Repository.Id, analysisDiagnostics.RepositoryId);
+        Assert.NotNull(analysisDiagnostics.Metrics);
+        Assert.NotNull(analysisDiagnostics.Economics);
+        Assert.NotNull(analysisDiagnostics.Coherence);
     }
 
     [Fact]

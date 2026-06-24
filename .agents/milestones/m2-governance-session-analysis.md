@@ -6,7 +6,7 @@ Stage 2 is one architectural stage, but it should be implemented through three i
 
 - [x] Stage 2A: metrics, statistics, TTL, and cache risk.
 - [x] Stage 2B: economics.
-- [ ] Stage 2C: coherence.
+- [x] Stage 2C: coherence.
 
 Do not start lifecycle policy until all three checkpoints are complete and the aggregate analysis diagnostics are stable.
 
@@ -149,58 +149,58 @@ Stage 2B exit criteria:
 
 Add models:
 
-- [ ] `DecisionSessionCoherence`
-- [ ] `DecisionSessionCoherenceInputs`
-- [ ] `FragmentationAssessment`
-- [ ] `DensityAssessment`
-- [ ] `ContinuityQualityAssessment`
-- [ ] `TransferPressureAssessment`
-- [ ] `DecisionSessionCoherenceDiagnostics`
-- [ ] `DecisionSessionCoherenceSnapshot`
+- [x] `DecisionSessionCoherence`
+- [x] `DecisionSessionCoherenceInputs`
+- [x] `FragmentationAssessment`
+- [x] `DensityAssessment`
+- [x] `ContinuityQualityAssessment`
+- [x] `TransferPressureAssessment`
+- [x] `DecisionSessionCoherenceDiagnostics`
+- [x] `DecisionSessionCoherenceSnapshot`
 
 Coherence fields:
 
-- [ ] `decimal CoherenceScore`
-- [ ] `decimal FragmentationScore`
-- [ ] `decimal DensityScore`
-- [ ] `decimal ContinuityScore`
-- [ ] `decimal TransferPressure`
+- [x] `decimal CoherenceScore`
+- [x] `decimal FragmentationScore`
+- [x] `decimal DensityScore`
+- [x] `decimal ContinuityScore`
+- [x] `decimal TransferPressure`
 
 Add services:
 
-- [ ] `IDecisionSessionCoherenceService`
-- [ ] `DecisionSessionCoherenceService`
+- [x] `IDecisionSessionCoherenceService`
+- [x] `DecisionSessionCoherenceService`
 
 Evidence sources:
 
-- [ ] `IReasoningRepository` for events, threads, relationships.
-- [ ] `IReasoningGraphService.GetGraphAsync` for nodes and graph relationships.
-- [ ] `IDecisionRepository` for decision and proposal counts.
-- [ ] Continuity evidence for operational context revision counts.
+- [x] `IReasoningRepository` for events, threads, relationships.
+- [x] `IReasoningGraphService.GetGraphAsync` for nodes and graph relationships.
+- [x] `IDecisionRepository` for decision and proposal counts.
+- [x] Continuity evidence for operational context revision counts.
 
 Initial deterministic model:
 
-- [ ] Density score increases with relationship count relative to node count.
-- [ ] Fragmentation score increases with many isolated nodes, disconnected thread groups, or low relationship density.
-- [ ] Continuity score increases with resolved decisions, cross-referenced reasoning, and operational context revisions.
-- [ ] Transfer pressure increases with fragmentation, growth, low coherence, cache miss risk, and high context cost.
-- [ ] Transfer pressure remains a signal, not a decision.
+- [x] Density score increases with relationship count relative to node count.
+- [x] Fragmentation score increases with many isolated nodes, disconnected thread groups, or low relationship density.
+- [x] Continuity score increases with resolved decisions, cross-referenced reasoning, and operational context revisions.
+- [x] Transfer pressure increases with fragmentation, growth, low coherence, cache miss risk, and high context cost.
+- [x] Transfer pressure remains a signal, not a decision.
 
 Stage 2C checkpoint tests:
 
-- [ ] Same inputs produce same coherence.
-- [ ] Disconnected reasoning increases fragmentation.
-- [ ] More relationships increase density.
-- [ ] More governance evidence increases continuity score.
-- [ ] Higher fragmentation plus growth increases transfer pressure.
-- [ ] Missing coherence snapshots are rebuilt.
-- [ ] Diagnostics explain reasoning topology, missing evidence, cache risk contribution, and transfer pressure.
+- [x] Same inputs produce same coherence.
+- [x] Disconnected reasoning increases fragmentation.
+- [x] More relationships increase density.
+- [x] More governance evidence increases continuity score.
+- [x] Higher fragmentation plus growth increases transfer pressure.
+- [x] Missing coherence snapshots are rebuilt.
+- [x] Diagnostics explain reasoning topology, missing evidence, cache risk contribution, and transfer pressure.
 
 Stage 2C exit criteria:
 
-- [ ] The system can answer coherence, fragmentation, density, continuity quality, and transfer pressure.
-- [ ] Coherence is rebuildable from reasoning, decisions, continuity, metrics, and economics evidence.
-- [ ] Coherence remains analysis only and cannot make lifecycle decisions.
+- [x] The system can answer coherence, fragmentation, density, continuity quality, and transfer pressure.
+- [x] Coherence is rebuildable from reasoning, decisions, continuity, metrics, and economics evidence.
+- [x] Coherence remains analysis only and cannot make lifecycle decisions.
 
 ### Persistence And Recovery
 
@@ -208,7 +208,7 @@ Persist analysis snapshots under:
 
 - [x] `.agents/decision-sessions/analysis/metrics/`
 - [x] `.agents/decision-sessions/analysis/economics/`
-- [ ] `.agents/decision-sessions/analysis/coherence/`
+- [x] `.agents/decision-sessions/analysis/coherence/`
 
 Analysis snapshots are derived, recoverable, and disposable. If a snapshot is missing or invalid, rebuild it from Decisions, Reasoning, Continuity, and session records.
 
@@ -217,7 +217,7 @@ Analysis snapshots are derived, recoverable, and disposable. If a snapshot is mi
 - [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/analysis/metrics`
 - [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/analysis/statistics`
 - [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/analysis/economics`
-- [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/analysis/coherence`
+- [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/analysis/coherence`
 - [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/analysis/diagnostics`
 
 Optional compatibility aliases may be added for direct `metrics`, `economics`, and `coherence` paths if useful to match existing endpoint naming style.
@@ -226,16 +226,16 @@ Optional compatibility aliases may be added for direct `metrics`, `economics`, a
 
 - [x] Stage 2A checkpoint tests pass.
 - [x] Stage 2B checkpoint tests pass.
-- [ ] Stage 2C checkpoint tests pass.
-- [ ] Same full evidence set produces the same aggregate analysis result.
-- [ ] Missing analysis snapshots are rebuilt.
-- [ ] Aggregate diagnostics explain sources, assumptions, missing evidence, TTL, cache risk, economics, coherence, and transfer pressure.
+- [x] Stage 2C checkpoint tests pass.
+- [x] Same full evidence set produces the same aggregate analysis result.
+- [x] Missing analysis snapshots are rebuilt.
+- [x] Aggregate diagnostics explain sources, assumptions, missing evidence, TTL, cache risk, economics, coherence, and transfer pressure.
 
 ### Exit Criteria
 
-- [ ] Stage 2A, Stage 2B, and Stage 2C exit criteria are all satisfied.
-- [ ] The system can answer session size, age, elapsed duration, idle duration, TTL, cache miss risk, activity, growth, reuse value, transfer value, coherence, fragmentation, density, continuity quality, and transfer pressure.
-- [ ] No lifecycle decision or transfer execution exists yet.
+- [x] Stage 2A, Stage 2B, and Stage 2C exit criteria are all satisfied.
+- [x] The system can answer session size, age, elapsed duration, idle duration, TTL, cache miss risk, activity, growth, reuse value, transfer value, coherence, fragmentation, density, continuity quality, and transfer pressure.
+- [x] No lifecycle decision or transfer execution exists yet.
 
 
 

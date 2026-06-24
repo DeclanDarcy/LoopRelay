@@ -183,6 +183,50 @@ public sealed class FileSystemDecisionSessionRepository(IArtifactStore artifactS
         await artifactStore.WriteAsync(path, JsonSerializer.Serialize(document, DecisionSessionJson.Options));
     }
 
+    public async Task<DecisionSessionCoherenceSnapshot?> ReadCoherenceSnapshotAsync(Repository repository)
+    {
+        string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.CoherenceSnapshotJson());
+        string? json = await artifactStore.ReadAsync(path);
+        if (json is null)
+        {
+            return null;
+        }
+
+        DecisionSessionArtifactDocument<DecisionSessionCoherenceSnapshot>? document =
+            JsonSerializer.Deserialize<DecisionSessionArtifactDocument<DecisionSessionCoherenceSnapshot>>(
+                json,
+                DecisionSessionJson.Options);
+        if (document is null)
+        {
+            throw new DecisionSessionValidationException("Decision session coherence snapshot could not be deserialized.");
+        }
+
+        ValidateDocument(repository, document, "Decision session coherence snapshot");
+        if (document.Payload.RepositoryId != repository.Id || document.Payload.Diagnostics.RepositoryId != repository.Id)
+        {
+            throw new DecisionSessionValidationException("Decision session coherence snapshot belongs to a different repository.");
+        }
+
+        return document.Payload;
+    }
+
+    public async Task WriteCoherenceSnapshotAsync(Repository repository, DecisionSessionCoherenceSnapshot snapshot)
+    {
+        if (snapshot.RepositoryId != repository.Id || snapshot.Diagnostics.RepositoryId != repository.Id)
+        {
+            throw new DecisionSessionValidationException("Decision session coherence snapshot belongs to a different repository.");
+        }
+
+        var document = new DecisionSessionArtifactDocument<DecisionSessionCoherenceSnapshot>(
+            DecisionSessionArtifactPaths.SchemaVersion,
+            repository.Id,
+            snapshot.GeneratedAt,
+            DateTimeOffset.UtcNow,
+            snapshot);
+        string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.CoherenceSnapshotJson());
+        await artifactStore.WriteAsync(path, JsonSerializer.Serialize(document, DecisionSessionJson.Options));
+    }
+
     internal async Task<DecisionSessionValidationResult> ValidateAsync(Repository repository)
     {
         string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.RegistryJson());
