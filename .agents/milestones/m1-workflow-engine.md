@@ -6,44 +6,44 @@ Replace client-side workflow derivation with the authoritative workflow projecti
 
 ### Backend and Shell
 
-- [ ] Keep `CommandCenter.Workflow` as the workflow authority for projection and workflow-derived diagnostics.
-- [ ] Reuse existing routes in `WorkflowEndpoints.cs`:
-   - [ ] `GET /api/repositories/{repositoryId}/workflow`
-   - [ ] `GET /api/repositories/{repositoryId}/workflow/diagnostics`
-   - [ ] `GET /api/repositories/{repositoryId}/workflow/timeline`
-   - [ ] `GET /api/repositories/{repositoryId}/workflow/history`
-   - [ ] `GET /api/repositories/{repositoryId}/workflow/transitions`
-   - [ ] `GET /api/repositories/{repositoryId}/workflow/gates`
-   - [ ] `GET /api/repositories/{repositoryId}/workflow/gates/history`
-   - [ ] `GET /api/repositories/{repositoryId}/workflow/recovery`
-   - [ ] `POST /api/repositories/{repositoryId}/workflow/recover`
-   - [ ] `GET /api/repositories/{repositoryId}/workflow/execution`
-   - [ ] `GET /api/repositories/{repositoryId}/workflow/handoff`
-   - [ ] `GET /api/repositories/{repositoryId}/workflow/decisions`
-   - [ ] `GET /api/repositories/{repositoryId}/workflow/operational-context`
-   - [ ] `GET /api/repositories/{repositoryId}/workflow/git`
-   - [ ] `GET /api/repositories/{repositoryId}/workflow/continuation/evaluation`
-   - [ ] `POST /api/repositories/{repositoryId}/workflow/continuation/run`
-   - [ ] `GET /api/repositories/{repositoryId}/workflow/continuation/history`
-   - [ ] `GET /api/repositories/{repositoryId}/workflow/preparation/evaluation`
-   - [ ] `POST /api/repositories/{repositoryId}/workflow/preparation/run`
-   - [ ] `GET /api/repositories/{repositoryId}/workflow/preparation/history`
-   - [ ] `GET /api/repositories/{repositoryId}/workflow/health`
-   - [ ] `GET /api/repositories/{repositoryId}/workflow/reports/repository`
-   - [ ] `GET /api/repositories/{repositoryId}/workflow/reports/progression`
-   - [ ] `GET /api/repositories/{repositoryId}/workflow/reports/human-governance`
-   - [ ] `GET /api/repositories/{repositoryId}/workflow/reports/readiness`
-   - [ ] `GET /api/repositories/{repositoryId}/workflow/certification`
-   - [ ] `POST /api/repositories/{repositoryId}/workflow/certification`
-- [ ] Add Tauri commands in `src/CommandCenter.Shell/src/main.rs` for every Core MVP workflow read/action route. Prefer small `backend_get_value` and `backend_post_value` helpers to avoid duplicating request/error handling.
-- [ ] Preserve backend error semantics. Return backend conflict, not found, and bad request messages unchanged through the shell.
+- [x] Keep `CommandCenter.Workflow` as the workflow authority for projection and workflow-derived diagnostics.
+- [x] Reuse existing routes in `WorkflowEndpoints.cs`:
+   - [x] `GET /api/repositories/{repositoryId}/workflow`
+   - [x] `GET /api/repositories/{repositoryId}/workflow/diagnostics`
+   - [x] `GET /api/repositories/{repositoryId}/workflow/timeline`
+   - [x] `GET /api/repositories/{repositoryId}/workflow/history`
+   - [x] `GET /api/repositories/{repositoryId}/workflow/transitions`
+   - [x] `GET /api/repositories/{repositoryId}/workflow/gates`
+   - [x] `GET /api/repositories/{repositoryId}/workflow/gates/history`
+   - [x] `GET /api/repositories/{repositoryId}/workflow/recovery`
+   - [x] `POST /api/repositories/{repositoryId}/workflow/recover`
+   - [x] `GET /api/repositories/{repositoryId}/workflow/execution`
+   - [x] `GET /api/repositories/{repositoryId}/workflow/handoff`
+   - [x] `GET /api/repositories/{repositoryId}/workflow/decisions`
+   - [x] `GET /api/repositories/{repositoryId}/workflow/operational-context`
+   - [x] `GET /api/repositories/{repositoryId}/workflow/git`
+   - [x] `GET /api/repositories/{repositoryId}/workflow/continuation/evaluation`
+   - [x] `POST /api/repositories/{repositoryId}/workflow/continuation/run`
+   - [x] `GET /api/repositories/{repositoryId}/workflow/continuation/history`
+   - [x] `GET /api/repositories/{repositoryId}/workflow/preparation/evaluation`
+   - [x] `POST /api/repositories/{repositoryId}/workflow/preparation/run`
+   - [x] `GET /api/repositories/{repositoryId}/workflow/preparation/history`
+   - [x] `GET /api/repositories/{repositoryId}/workflow/health`
+   - [x] `GET /api/repositories/{repositoryId}/workflow/reports/repository`
+   - [x] `GET /api/repositories/{repositoryId}/workflow/reports/progression`
+   - [x] `GET /api/repositories/{repositoryId}/workflow/reports/human-governance`
+   - [x] `GET /api/repositories/{repositoryId}/workflow/reports/readiness`
+   - [x] `GET /api/repositories/{repositoryId}/workflow/certification`
+   - [x] `POST /api/repositories/{repositoryId}/workflow/certification`
+- [x] Add Tauri commands in `src/CommandCenter.Shell/src/main.rs` for every Core MVP workflow read/action route. Prefer small `backend_get_value` and `backend_post_value` helpers to avoid duplicating request/error handling.
+- [x] Preserve backend error semantics. Return backend conflict, not found, and bad request messages unchanged through the shell.
 
 ### UI
 
-- [ ] Add `src/CommandCenter.UI/src/types/workflow.ts` with TypeScript models matching `CommandCenter.Workflow.Models`.
-- [ ] Export workflow types from `src/CommandCenter.UI/src/types/index.ts`.
-- [ ] Add `src/CommandCenter.UI/src/api/workflow.ts` and export it from `src/CommandCenter.UI/src/api/index.ts`.
-- [ ] Add workflow hooks such as `useWorkflowProjection`, `useWorkflowHistory`, `useWorkflowGates`, `useWorkflowContinuation`, `useWorkflowRecovery`, `useWorkflowHealth`, and `useWorkflowCertification`.
+- [x] Add `src/CommandCenter.UI/src/types/workflow.ts` with TypeScript models matching `CommandCenter.Workflow.Models`.
+- [x] Export workflow types from `src/CommandCenter.UI/src/types/index.ts`.
+- [x] Add `src/CommandCenter.UI/src/api/workflow.ts` and export it from `src/CommandCenter.UI/src/api/index.ts`.
+- [x] Add workflow hooks such as `useWorkflowProjection`, `useWorkflowHistory`, `useWorkflowGates`, `useWorkflowContinuation`, `useWorkflowRecovery`, `useWorkflowHealth`, and `useWorkflowCertification`.
 - [ ] Replace `getExecutionWorkflowSteps` usage with workflow projection data.
 - [ ] Retire `src/CommandCenter.UI/src/lib/executionWorkflow.ts` after all consumers use authoritative workflow data.
 - [ ] Replace or adapt `WorkspaceRail` and `ExecutionWorkflowRail` to render:

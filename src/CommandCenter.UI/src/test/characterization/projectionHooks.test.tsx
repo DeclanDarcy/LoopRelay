@@ -36,6 +36,22 @@ const proposalSummary = {
   lastArchivedRelativePath: null,
 } satisfies RepositoryWorkspaceProjection['operationalContextProposalSummary']
 
+const decisionSessionSummary = {
+  decisionSessionId: null,
+  state: null,
+  lifecycleDecision: null,
+  transferEligibilityStatus: null,
+  estimatedTokenCount: null,
+  estimatedCacheTtl: null,
+  cacheMissRisk: null,
+  coherenceScore: null,
+  transferPressure: null,
+  healthDimensions: [],
+  recentTransferLineage: [],
+  diagnostics: [],
+  generatedAt: null,
+} satisfies RepositoryDashboardProjection['decisionSessionSummary']
+
 function createDashboardProjection(): RepositoryDashboardProjection {
   return {
     repository,
@@ -76,6 +92,7 @@ function createDashboardProjection(): RepositoryDashboardProjection {
       lastCertificationAt: null,
       certificationResult: null,
     },
+    decisionSessionSummary,
   }
 }
 
@@ -149,6 +166,7 @@ function createWorkspaceProjection(): RepositoryWorkspaceProjection {
       lastCertificationAt: null,
       certificationResult: null,
     },
+    decisionSessionSummary,
   }
 }
 

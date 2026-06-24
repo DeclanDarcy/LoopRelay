@@ -44,6 +44,22 @@ function executionSummary(overrides: Partial<ExecutionSessionSummary> = {}): Exe
   }
 }
 
+const decisionSessionSummary = {
+  decisionSessionId: null,
+  state: null,
+  lifecycleDecision: null,
+  transferEligibilityStatus: null,
+  estimatedTokenCount: null,
+  estimatedCacheTtl: null,
+  cacheMissRisk: null,
+  coherenceScore: null,
+  transferPressure: null,
+  healthDimensions: [],
+  recentTransferLineage: [],
+  diagnostics: [],
+  generatedAt: null,
+} satisfies RepositoryDashboardProjection['decisionSessionSummary']
+
 function repositoryDashboard(
   overrides: Partial<RepositoryDashboardProjection> = {},
 ): RepositoryDashboardProjection {
@@ -90,6 +106,7 @@ function repositoryDashboard(
       lastCertificationAt: null,
       certificationResult: null,
     },
+    decisionSessionSummary,
     ...overrides,
   }
 }
@@ -186,6 +203,7 @@ function workspaceProjection(
       lastCertificationAt: null,
       certificationResult: null,
     },
+    decisionSessionSummary,
     ...overrides,
   }
 }

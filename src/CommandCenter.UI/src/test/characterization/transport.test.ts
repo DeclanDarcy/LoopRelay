@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { listContinuityReports, refreshRepositoryWorkspace, subscribeToExecutionEvents } from '../../api'
-import type { ExecutionEvent, RepositoryWorkspaceProjection } from '../../types'
+import {
+  getWorkflowProjection,
+  listContinuityReports,
+  refreshRepositoryWorkspace,
+  subscribeToExecutionEvents,
+} from '../../api'
+import type { ExecutionEvent, RepositoryWorkspaceProjection, WorkflowInstance } from '../../types'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -92,6 +97,21 @@ describe('transport boundary characterization', () => {
         lastReconstructionAt: null,
         lastCertificationAt: null,
         certificationResult: null,
+      },
+      decisionSessionSummary: {
+        decisionSessionId: null,
+        state: null,
+        lifecycleDecision: null,
+        transferEligibilityStatus: null,
+        estimatedTokenCount: null,
+        estimatedCacheTtl: null,
+        cacheMissRisk: null,
+        coherenceScore: null,
+        transferPressure: null,
+        healthDimensions: [],
+        recentTransferLineage: [],
+        diagnostics: [],
+        generatedAt: null,
       },
     } satisfies RepositoryWorkspaceProjection
     const invoke = vi.fn().mockResolvedValue(workspace)
@@ -206,6 +226,30 @@ describe('transport boundary characterization', () => {
 
     await expect(listContinuityReports('repo-alpha')).resolves.toEqual([report])
     expect(invoke).toHaveBeenCalledWith('list_continuity_reports', {
+      repositoryId: 'repo-alpha',
+    }, undefined)
+  })
+
+  it('preserves workflow projection command request and response handling', async () => {
+    const workflow = {
+      repositoryId: 'repo-alpha',
+      currentStage: 'Execution',
+      progressState: 'Active',
+      blockingGate: 'None',
+      requiredHumanAction: '',
+    } as WorkflowInstance
+    const invoke = vi.fn().mockResolvedValue(workflow)
+
+    window.__TAURI_INTERNALS__ = {
+      invoke,
+      transformCallback: vi.fn(),
+      unregisterCallback: vi.fn(),
+      callbacks: {},
+      convertFileSrc: vi.fn(),
+    }
+
+    await expect(getWorkflowProjection('repo-alpha')).resolves.toBe(workflow)
+    expect(invoke).toHaveBeenCalledWith('get_workflow_projection', {
       repositoryId: 'repo-alpha',
     }, undefined)
   })

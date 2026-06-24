@@ -2,29 +2,26 @@
 
 ## New State This Slice
 
-- Current `.agents/handoffs/handoff.md` and `.agents/decisions/decisions.md` were absent at slice start; no handoff rotation was possible.
-- Milestone 0 is complete and checked off in `.agents/milestones/m0-capability-verification.md`.
-- Added Milestone 0 evidence artifacts:
-  - `.agents/milestones/m0-capability-inventory.md`
-  - `.agents/milestones/m0-capability-disposition-register.md`
-  - `.agents/milestones/m0-authority-review.md`
-  - `.agents/milestones/m0-mvp-adjustment-log.md`
-- M0 found no need for a new backend authority before M1. Existing backend authorities are sufficient for the MVP sequence.
+- Milestone 1 transport foundation is implemented and checked off in `.agents/milestones/m1-workflow-engine.md`.
+- `src/CommandCenter.Shell/src/main.rs` now exposes every Core MVP workflow route listed in M1 through Tauri commands.
+- The shell bridge uses shared `backend_get_value` and `backend_post_value` helpers returning `serde_json::Value`, preserving backend-owned response shapes and backend error messages.
+- Added workflow frontend types, API client, and foundational hooks:
+  - `src/CommandCenter.UI/src/types/workflow.ts`
+  - `src/CommandCenter.UI/src/api/workflow.ts`
+  - `useWorkflowProjection`, `useWorkflowHistory`, `useWorkflowGates`, `useWorkflowContinuation`, `useWorkflowPreparation`, `useWorkflowRecovery`, `useWorkflowHealth`, and `useWorkflowCertification`
+- Exported workflow API, hooks, and types through existing index barrels.
+- Fixed the frontend repository projection gap by adding `decisionSessionSummary` to repository dashboard/workspace TypeScript types and updating dev/test fixtures.
+- Added frontend transport characterization for `getWorkflowProjection`.
 
-## Highest-Leverage Findings
+## Verification
 
-- Milestone 1 should start by surfacing existing `WorkflowEndpoints.cs`; workflow backend routes already exist.
-- React still derives workflow rail state from `RepositoryExecutionState` through `src/CommandCenter.UI/src/lib/executionWorkflow.ts`; this is the primary duplicate lifecycle model to retire.
-- `src/CommandCenter.UI/src/api/workflow.ts` and `src/CommandCenter.UI/src/types/workflow.ts` are absent.
-- `src/CommandCenter.Shell/src/main.rs` has no workflow command bridge.
-- Middle projections include `RepositoryDecisionSessionSummary`, but `src/CommandCenter.UI/src/types/repositories.ts` does not expose `decisionSessionSummary`.
+- `cargo check` passed in `src/CommandCenter.Shell`.
+- `npm run build` passed in `src/CommandCenter.UI`.
+- `npm run test -- --run src/test/characterization/transport.test.ts src/test/characterization/projectionHooks.test.tsx` passed with 22 tests.
 
-## Recommended Next Slice
+## Still Open In Milestone 1
 
-Begin Milestone 1 with the narrow transport/model foundation:
-
-1. Add workflow TypeScript models matching `CommandCenter.Workflow.Models`.
-2. Add workflow API client methods for the M1 Core MVP read/action routes.
-3. Add Tauri workflow commands using existing backend get/post helpers or equivalent local pattern.
-4. Add initial workflow hooks for projection, gates, history, recovery, health, and certification.
-5. Only after transport is covered, replace `getExecutionWorkflowSteps` consumers with authoritative workflow projection data.
+- Replace `getExecutionWorkflowSteps` consumers with authoritative workflow projection data.
+- Adapt/move workflow rail UI into workflow panels that render stage, gates, required actions, continuation, recovery, health, and certification.
+- Retire `src/CommandCenter.UI/src/lib/executionWorkflow.ts` only after all consumers are migrated.
+- Add UI characterization coverage for visible workflow panels and the no-`RepositoryExecutionState` workflow-derivation regression.

@@ -40,6 +40,38 @@ export type RepositoryReasoningSummary = {
   certificationResult: string | null
 }
 
+export type RepositoryDecisionSessionHealthDimension = {
+  name: string
+  status: string
+  findings: string[]
+}
+
+export type RepositoryDecisionSessionTransferSummary = {
+  transferId: string
+  sourceSessionId: string
+  targetSessionId: string | null
+  continuityArtifactId: string | null
+  startedAt: string
+  completedAt: string | null
+  succeeded: boolean
+}
+
+export type RepositoryDecisionSessionSummary = {
+  decisionSessionId: string | null
+  state: string | null
+  lifecycleDecision: string | null
+  transferEligibilityStatus: string | null
+  estimatedTokenCount: number | null
+  estimatedCacheTtl: string | null
+  cacheMissRisk: number | null
+  coherenceScore: number | null
+  transferPressure: number | null
+  healthDimensions: RepositoryDecisionSessionHealthDimension[]
+  recentTransferLineage: RepositoryDecisionSessionTransferSummary[]
+  diagnostics: string[]
+  generatedAt: string | null
+}
+
 export type RepositoryDashboardProjection = {
   repository: Repository
   availability: RepositoryAvailability
@@ -53,6 +85,7 @@ export type RepositoryDashboardProjection = {
   hasCurrentDecisions: boolean
   continuitySummary: RepositoryContinuitySummary
   reasoningSummary: RepositoryReasoningSummary
+  decisionSessionSummary: RepositoryDecisionSessionSummary
 }
 
 export type RepositoryWorkspaceProjection = {
@@ -71,4 +104,5 @@ export type RepositoryWorkspaceProjection = {
   operationalContextProposalSummary: OperationalContextProposalSummary
   operationalContext: OperationalContextProjection
   reasoningSummary: RepositoryReasoningSummary
+  decisionSessionSummary: RepositoryDecisionSessionSummary
 }

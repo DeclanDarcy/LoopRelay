@@ -1628,6 +1628,222 @@ fn list_continuity_reports(repository_id: String) -> Result<Value, String> {
 }
 
 #[tauri::command]
+fn get_workflow_projection(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/workflow"),
+        "workflow projection lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_workflow_diagnostics(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/workflow/diagnostics"),
+        "workflow diagnostics lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_workflow_timeline(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/workflow/timeline"),
+        "workflow timeline lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_workflow_history(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/workflow/history"),
+        "workflow history lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_workflow_transitions(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/workflow/transitions"),
+        "workflow transitions lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_workflow_gates(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/workflow/gates"),
+        "workflow gates lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_workflow_gate_history(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/workflow/gates/history"),
+        "workflow gate history lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_workflow_recovery(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/workflow/recovery"),
+        "workflow recovery lookup failed",
+    )
+}
+
+#[tauri::command]
+fn recover_workflow(repository_id: String) -> Result<Value, String> {
+    backend_post_value(
+        &format!("/api/repositories/{repository_id}/workflow/recover"),
+        "workflow recovery failed",
+    )
+}
+
+#[tauri::command]
+fn get_workflow_execution(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/workflow/execution"),
+        "workflow execution lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_workflow_handoff(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/workflow/handoff"),
+        "workflow handoff lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_workflow_decisions(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/workflow/decisions"),
+        "workflow decisions lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_workflow_operational_context(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/workflow/operational-context"),
+        "workflow operational context lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_workflow_git(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/workflow/git"),
+        "workflow git lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_workflow_continuation_evaluation(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/workflow/continuation/evaluation"),
+        "workflow continuation evaluation lookup failed",
+    )
+}
+
+#[tauri::command]
+fn run_workflow_continuation(repository_id: String) -> Result<Value, String> {
+    backend_post_value(
+        &format!("/api/repositories/{repository_id}/workflow/continuation/run"),
+        "workflow continuation failed",
+    )
+}
+
+#[tauri::command]
+fn get_workflow_continuation_history(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/workflow/continuation/history"),
+        "workflow continuation history lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_workflow_preparation_evaluation(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/workflow/preparation/evaluation"),
+        "workflow preparation evaluation lookup failed",
+    )
+}
+
+#[tauri::command]
+fn run_workflow_preparation(repository_id: String) -> Result<Value, String> {
+    backend_post_value(
+        &format!("/api/repositories/{repository_id}/workflow/preparation/run"),
+        "workflow preparation failed",
+    )
+}
+
+#[tauri::command]
+fn get_workflow_preparation_history(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/workflow/preparation/history"),
+        "workflow preparation history lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_workflow_health(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/workflow/health"),
+        "workflow health lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_repository_workflow_report(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/workflow/reports/repository"),
+        "repository workflow report lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_workflow_progression_report(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/workflow/reports/progression"),
+        "workflow progression report lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_workflow_human_governance_report(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/workflow/reports/human-governance"),
+        "workflow human governance report lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_workflow_readiness_report(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/workflow/reports/readiness"),
+        "workflow readiness report lookup failed",
+    )
+}
+
+#[tauri::command]
+fn get_workflow_certification(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/workflow/certification"),
+        "workflow certification lookup failed",
+    )
+}
+
+#[tauri::command]
+fn run_workflow_certification(repository_id: String) -> Result<Value, String> {
+    backend_post_value(
+        &format!("/api/repositories/{repository_id}/workflow/certification"),
+        "workflow certification failed",
+    )
+}
+
+#[tauri::command]
 fn start_execution(
     repository_id: String,
     milestone_path: String,
@@ -1822,6 +2038,31 @@ fn trace_reasoning(
             "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/trace/{direction}"
         ))
         .query(&[("kind", kind), ("id", id)])
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, fallback)
+}
+
+fn backend_get_value(path: &str, fallback: &str) -> Result<Value, String> {
+    let response = reqwest::blocking::get(format!("{BACKEND_URL}{path}"))
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, fallback)
+}
+
+fn backend_post_value(path: &str, fallback: &str) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!("{BACKEND_URL}{path}"))
         .send()
         .map_err(|error| error.to_string())?;
 
@@ -2029,6 +2270,33 @@ fn main() {
             get_continuity_diagnostics,
             generate_continuity_report,
             list_continuity_reports,
+            get_workflow_projection,
+            get_workflow_diagnostics,
+            get_workflow_timeline,
+            get_workflow_history,
+            get_workflow_transitions,
+            get_workflow_gates,
+            get_workflow_gate_history,
+            get_workflow_recovery,
+            recover_workflow,
+            get_workflow_execution,
+            get_workflow_handoff,
+            get_workflow_decisions,
+            get_workflow_operational_context,
+            get_workflow_git,
+            get_workflow_continuation_evaluation,
+            run_workflow_continuation,
+            get_workflow_continuation_history,
+            get_workflow_preparation_evaluation,
+            run_workflow_preparation,
+            get_workflow_preparation_history,
+            get_workflow_health,
+            get_repository_workflow_report,
+            get_workflow_progression_report,
+            get_workflow_human_governance_report,
+            get_workflow_readiness_report,
+            get_workflow_certification,
+            run_workflow_certification,
             start_execution,
             get_active_execution,
             get_git_status,

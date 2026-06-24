@@ -228,6 +228,7 @@ function createWorkspace(repository: Repository, inventory: ArtifactInventory): 
     operationalContextProposalSummary,
     operationalContext: createOperationalContextProjection(inventory, operationalContextProposalSummary),
     reasoningSummary: createEmptyReasoningSummary(),
+    decisionSessionSummary: createEmptyDecisionSessionSummary(),
   }
 }
 
@@ -251,6 +252,24 @@ function createEmptyReasoningSummary(): Workspace['reasoningSummary'] {
     lastReconstructionAt: null,
     lastCertificationAt: null,
     certificationResult: null,
+  }
+}
+
+function createEmptyDecisionSessionSummary(): Workspace['decisionSessionSummary'] {
+  return {
+    decisionSessionId: null,
+    state: null,
+    lifecycleDecision: null,
+    transferEligibilityStatus: null,
+    estimatedTokenCount: null,
+    estimatedCacheTtl: null,
+    cacheMissRisk: null,
+    coherenceScore: null,
+    transferPressure: null,
+    healthDimensions: [],
+    recentTransferLineage: [],
+    diagnostics: [],
+    generatedAt: null,
   }
 }
 
@@ -2574,6 +2593,7 @@ function dashboardEntry(workspace: Workspace): DashboardEntry {
       pendingProposalExists: workspace.operationalContextProposalSummary.pendingProposalExists,
     },
     reasoningSummary: workspace.reasoningSummary,
+    decisionSessionSummary: workspace.decisionSessionSummary,
   }
 }
 
