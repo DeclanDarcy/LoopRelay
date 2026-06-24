@@ -22,6 +22,8 @@ public static class WorkflowEndpoints
         app.MapGetWorkflowOperationalContext();
         app.MapGetWorkflowGit();
         app.MapGetWorkflowContinuationEvaluation();
+        app.MapPostWorkflowContinuationRun();
+        app.MapGetWorkflowContinuationHistory();
         return app;
     }
 
@@ -321,6 +323,44 @@ public static class WorkflowEndpoints
             try
             {
                 return Results.Ok(await workflowContinuationService.EvaluateContinuationAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+
+    private static void MapPostWorkflowContinuationRun(this IEndpointRouteBuilder app) =>
+        app.MapPost("/api/repositories/{repositoryId:guid}/workflow/continuation/run", async (
+            Guid repositoryId,
+            IWorkflowContinuationService workflowContinuationService) =>
+        {
+            try
+            {
+                return Results.Ok(await workflowContinuationService.RunContinuationAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGetWorkflowContinuationHistory(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/workflow/continuation/history", async (
+            Guid repositoryId,
+            IWorkflowContinuationService workflowContinuationService) =>
+        {
+            try
+            {
+                return Results.Ok(await workflowContinuationService.GetContinuationHistoryAsync(repositoryId));
             }
             catch (KeyNotFoundException exception)
             {

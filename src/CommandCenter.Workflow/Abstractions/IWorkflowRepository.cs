@@ -13,5 +13,11 @@ public interface IWorkflowRepository
 
     Task<WorkflowTimeline?> GetLatestTimelineAsync(Repository repository);
 
+    Task<WorkflowContinuationEvent> SaveContinuationEventAsync(Repository repository, WorkflowContinuationEvent continuationEvent);
+
+    Task<WorkflowContinuationEvent?> LoadContinuationEventAsync(Repository repository, string eventId);
+
+    Task<IReadOnlyList<WorkflowContinuationEvent>> ListContinuationEventsAsync(Repository repository);
+
     Task SaveReportAsync(Repository repository, string reportId, string jsonContent, string markdownContent);
 }

@@ -72,6 +72,89 @@ public sealed class FileSystemWorkflowRepository(IArtifactStore artifactStore) :
             .OrderByDescending(timeline => timeline.GeneratedAt)
             .FirstOrDefault();
 
+    public async Task<WorkflowContinuationEvent> SaveContinuationEventAsync(
+        Repository repository,
+        WorkflowContinuationEvent continuationEvent)
+    {
+        if (continuationEvent.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException("Workflow continuation event belongs to a different repository.");
+        }
+
+        WorkflowArtifactPaths.ValidateContinuationEventId(continuationEvent.EventId);
+        var document = new WorkflowArtifactDocument<WorkflowContinuationEvent>(
+            WorkflowArtifactPaths.SchemaVersion,
+            repository.Id,
+            continuationEvent.OccurredAt,
+            continuationEvent);
+
+        await artifactStore.WriteAsync(
+            WorkflowArtifactPaths.Resolve(repository, WorkflowArtifactPaths.ContinuationJson(continuationEvent.EventId)),
+            JsonSerializer.Serialize(document, WorkflowJson.Options));
+        await artifactStore.WriteAsync(
+            WorkflowArtifactPaths.Resolve(repository, WorkflowArtifactPaths.ContinuationMarkdown(continuationEvent.EventId)),
+            RenderContinuationMarkdown(continuationEvent));
+        return continuationEvent;
+    }
+
+    public async Task<WorkflowContinuationEvent?> LoadContinuationEventAsync(Repository repository, string eventId)
+    {
+        WorkflowArtifactPaths.ValidateContinuationEventId(eventId);
+        string? json = await artifactStore.ReadAsync(
+            WorkflowArtifactPaths.Resolve(repository, WorkflowArtifactPaths.ContinuationJson(eventId)));
+        if (json is null)
+        {
+            return null;
+        }
+
+        WorkflowArtifactDocument<WorkflowContinuationEvent>? document =
+            JsonSerializer.Deserialize<WorkflowArtifactDocument<WorkflowContinuationEvent>>(json, WorkflowJson.Options);
+        if (document is null)
+        {
+            return null;
+        }
+
+        if (!string.Equals(document.SchemaVersion, WorkflowArtifactPaths.SchemaVersion, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"Unsupported workflow artifact schema version '{document.SchemaVersion}'.");
+        }
+
+        if (document.RepositoryId != repository.Id || document.Payload.RepositoryId != repository.Id)
+        {
+            throw new InvalidOperationException("Workflow artifact belongs to a different repository.");
+        }
+
+        return document.Payload;
+    }
+
+    public async Task<IReadOnlyList<WorkflowContinuationEvent>> ListContinuationEventsAsync(Repository repository)
+    {
+        string root = WorkflowArtifactPaths.Resolve(repository, WorkflowArtifactPaths.ContinuationRoot);
+        IReadOnlyList<string> files = await artifactStore.ListAsync(root, "*.json");
+        var events = new List<WorkflowContinuationEvent>();
+
+        foreach (string file in files
+            .Where(file => Path.GetFileName(file).StartsWith("continuation.", StringComparison.Ordinal))
+            .OrderBy(file => file, StringComparer.Ordinal))
+        {
+            string? eventId = Path.GetFileNameWithoutExtension(file);
+            if (string.IsNullOrWhiteSpace(eventId))
+            {
+                continue;
+            }
+
+            WorkflowContinuationEvent? continuationEvent = await LoadContinuationEventAsync(repository, eventId);
+            if (continuationEvent is not null)
+            {
+                events.Add(continuationEvent);
+            }
+        }
+
+        return events
+            .OrderBy(continuationEvent => continuationEvent.OccurredAt)
+            .ToArray();
+    }
+
     public async Task SaveReportAsync(Repository repository, string reportId, string jsonContent, string markdownContent)
     {
         WorkflowArtifactPaths.ValidateReportId(reportId);
@@ -140,6 +223,43 @@ public sealed class FileSystemWorkflowRepository(IArtifactStore artifactStore) :
             builder.AppendLine($"- {entry.OccurredAt:O} | {entry.Stage} | {entry.EventType} | {entry.Summary}");
             builder.AppendLine($"  - Source: {entry.SourceDomain}:{entry.SourceArtifact}");
             builder.AppendLine($"  - Fingerprint: {entry.Fingerprint}");
+        }
+
+        return builder.ToString();
+    }
+
+    private static string RenderContinuationMarkdown(WorkflowContinuationEvent continuationEvent)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("# Workflow Continuation Event");
+        builder.AppendLine();
+        builder.AppendLine($"Repository: {continuationEvent.RepositoryId}");
+        builder.AppendLine($"Event Id: {continuationEvent.EventId}");
+        builder.AppendLine($"Occurred At: {continuationEvent.OccurredAt:O}");
+        builder.AppendLine($"Trigger: {continuationEvent.Trigger}");
+        builder.AppendLine($"Input Fingerprint: {continuationEvent.InputFingerprint}");
+        builder.AppendLine($"From Stage: {continuationEvent.FromStage}");
+        builder.AppendLine($"To Stage: {continuationEvent.ToStage?.ToString() ?? "None"}");
+        builder.AppendLine($"Progress State: {continuationEvent.ProgressState}");
+        builder.AppendLine($"Blocking Gate: {continuationEvent.BlockingGate}");
+        builder.AppendLine($"Decision: {continuationEvent.Decision}");
+        builder.AppendLine($"Reason: {continuationEvent.Reason}");
+        builder.AppendLine($"Waiting For Human: {continuationEvent.IsWaitingForHuman}");
+        builder.AppendLine($"Complete: {continuationEvent.IsComplete}");
+        builder.AppendLine($"Required Human Action: {continuationEvent.RequiredHumanAction}");
+        builder.AppendLine();
+        builder.AppendLine("## Diagnostics");
+
+        if (continuationEvent.Diagnostics.Count == 0)
+        {
+            builder.AppendLine();
+            builder.AppendLine("- None");
+            return builder.ToString();
+        }
+
+        foreach (string diagnostic in continuationEvent.Diagnostics)
+        {
+            builder.AppendLine($"- {diagnostic}");
         }
 
         return builder.ToString();

@@ -2,49 +2,42 @@
 
 ## New State
 
-- Started Milestone 9 with the authorized evaluation-only continuation slice.
-- Added read-only continuation boundary:
-  `IWorkflowContinuationService` and `WorkflowContinuationService`.
-- Added continuation models:
-  `WorkflowContinuationEvaluation`, `WorkflowContinuationDiagnostics`, and
-  `WorkflowContinuationFingerprint`.
-- Registered continuation service in workflow DI.
-- Added derived endpoint:
-  `GET /api/repositories/{repositoryId}/workflow/continuation/evaluation`.
-- Continuation evaluation consumes only aggregate workflow projection evidence:
-  current projection, state-machine diagnostics, gate catalog evidence, and
-  completion evaluation.
-- Continuation evaluation reports current stage, optional mechanical target
-  stage, open gate, required human action, stop reason, deterministic
-  fingerprint, completion state, and diagnostics.
-- Open authority gates halt continuation evaluation as waiting for human action.
-- Completed workflows remain blocked by the work-selection gate; continuation
-  does not auto-select work.
+- Continued Milestone 9 with endpoint-triggered continuation history
+  persistence.
+- Added `WorkflowContinuationEvent`.
+- Extended `IWorkflowContinuationService` with:
+  `RunContinuationAsync` and `GetContinuationHistoryAsync`.
+- Extended `IWorkflowRepository` and `FileSystemWorkflowRepository` with
+  continuation event save/load/list support.
+- Added continuation artifact paths under `.agents/workflow/continuation`.
+- Continuation events persist both JSON and deterministic markdown evidence.
+- Added endpoint-triggered run endpoint:
+  `POST /api/repositories/{repositoryId}/workflow/continuation/run`.
+- Added history endpoint:
+  `GET /api/repositories/{repositoryId}/workflow/continuation/history`.
+- Continuation run still only evaluates and records evidence; it does not
+  mutate workflow stage or any domain state.
+- Re-running continuation with the same evaluation fingerprint returns the
+  existing event instead of duplicating continuation history.
 - Updated `.agents/milestones/m9-continuation.md` with slice progress.
 - Rotated previous `.agents/handoffs/handoff.md` to
-  `.agents/handoffs/handoff.0009.md`.
+  `.agents/handoffs/handoff.0010.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter WorkflowProjectionServiceTests` passed: 46 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter WorkflowProjectionServiceTests` passed: 49 tests.
 - `dotnet build CommandCenter.slnx` passed with 0 warnings and 0 errors.
-- First full backend test run failed in an unrelated decision endpoint test due
-  to a temporary `execution-sessions.json` file lock while build was running in
-  parallel.
-- Rerun passed:
-  `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj`
-  passed 558 tests.
 
 ## Notes
 
-- This slice does not persist continuation events.
-- This slice does not add hosted continuation.
-- This slice does not add preparation service or invoke domain commands.
-- Continuation evaluation is intentionally advisory/read-only; it does not
-  mutate workflow or domain state.
+- Hosted continuation remains deferred.
+- Preparation service remains deferred.
+- No domain commands are invoked.
+- Recovery integration for continuation history remains deferred.
+- Continuation history is separate from workflow timeline evidence.
 
 ## Next Slice
 
-- Continue M9 by adding continuation event models and repository persistence for
-  endpoint-triggered continuation history, still without hosted continuation or
-  preparation.
+- Continue M9 by adding real mechanical stage progression rules and persisted
+  continuation effects for eligible non-authority transitions, still stopping at
+  all authority gates and without adding preparation or hosted continuation yet.

@@ -821,6 +821,57 @@ public sealed class WorkflowProjectionServiceTests
     }
 
     [Fact]
+    public async Task WorkflowContinuationRunEndpointPersistsContinuationEvent()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingPush;
+        fixture.Session = AwaitingPushCommittedSession();
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services => fixture.ReplaceServices(services));
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+
+        using var client = new HttpClient();
+        HttpResponseMessage runResponse = await client.PostAsync(app.Urls.Single() + $"/api/repositories/{fixture.Repository.Id}/workflow/continuation/run", null);
+        WorkflowContinuationEvent? continuationEvent = await runResponse.Content.ReadFromJsonAsync<WorkflowContinuationEvent>(JsonOptions);
+        HttpResponseMessage historyResponse = await client.GetAsync(app.Urls.Single() + $"/api/repositories/{fixture.Repository.Id}/workflow/continuation/history");
+        WorkflowContinuationEvent[]? history = await historyResponse.Content.ReadFromJsonAsync<WorkflowContinuationEvent[]>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, runResponse.StatusCode);
+        Assert.NotNull(continuationEvent);
+        Assert.Equal(WorkflowStage.Push, continuationEvent.FromStage);
+        Assert.Equal(WorkflowGateType.PushApproval, continuationEvent.BlockingGate);
+        Assert.Equal("Stop", continuationEvent.Decision);
+        Assert.Equal(HttpStatusCode.OK, historyResponse.StatusCode);
+        WorkflowContinuationEvent persisted = Assert.Single(history ?? []);
+        Assert.Equal(continuationEvent.EventId, persisted.EventId);
+        Assert.Equal(continuationEvent.InputFingerprint, persisted.InputFingerprint);
+    }
+
+    [Fact]
+    public async Task ContinuationRunDoesNotDuplicateIdenticalFingerprint()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingCommit;
+        fixture.Session = CompletedAcceptedSession(RepositoryExecutionState.AwaitingCommit);
+        var store = new MemoryArtifactStore();
+        var workflowRepository = new FileSystemWorkflowRepository(store);
+        var service = new WorkflowContinuationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            workflowRepository);
+
+        WorkflowContinuationEvent first = await service.RunContinuationAsync(fixture.Repository.Id);
+        WorkflowContinuationEvent second = await service.RunContinuationAsync(fixture.Repository.Id);
+        IReadOnlyList<WorkflowContinuationEvent> history = await workflowRepository.ListContinuationEventsAsync(fixture.Repository);
+
+        Assert.Equal(first.EventId, second.EventId);
+        Assert.Equal(first.InputFingerprint, second.InputFingerprint);
+        Assert.Single(history);
+    }
+
+    [Fact]
     public async Task GateCatalogMapsEveryAuthorityGateToExistingCommandName()
     {
         TestFixture fixture = TestFixture.Create();
@@ -1156,6 +1207,41 @@ public sealed class WorkflowProjectionServiceTests
         Assert.True(await store.ExistsAsync(WorkflowArtifactPaths.Resolve(fixture.Repository, WorkflowArtifactPaths.TimelineMarkdown("workflow.20260623T110000.0000000Z"))));
         Assert.True(await store.ExistsAsync(WorkflowArtifactPaths.Resolve(fixture.Repository, WorkflowArtifactPaths.ReportJson("repository.20260623T110000Z"))));
         Assert.True(await store.ExistsAsync(WorkflowArtifactPaths.Resolve(fixture.Repository, WorkflowArtifactPaths.ReportMarkdown("repository.20260623T110000Z"))));
+    }
+
+    [Fact]
+    public async Task WorkflowRepositorySavesLoadsAndListsContinuationEvents()
+    {
+        TestFixture fixture = TestFixture.Create();
+        var store = new MemoryArtifactStore();
+        var repository = new FileSystemWorkflowRepository(store);
+        var continuationEvent = new WorkflowContinuationEvent(
+            fixture.Repository.Id,
+            "continuation.20260623T110000.0000000Z",
+            DateTimeOffset.Parse("2026-06-23T11:00:00Z"),
+            "endpoint",
+            WorkflowStage.Commit,
+            WorkflowStage.Push,
+            WorkflowProgressState.Ready,
+            WorkflowGateType.None,
+            "Advance",
+            "Transition Commit -> Push can advance mechanically.",
+            new WorkflowContinuationFingerprint("fingerprint"),
+            false,
+            false,
+            "No human action required.",
+            ["diagnostic"]);
+
+        await repository.SaveContinuationEventAsync(fixture.Repository, continuationEvent);
+
+        WorkflowContinuationEvent? loaded = await repository.LoadContinuationEventAsync(fixture.Repository, continuationEvent.EventId);
+        IReadOnlyList<WorkflowContinuationEvent> listed = await repository.ListContinuationEventsAsync(fixture.Repository);
+
+        Assert.NotNull(loaded);
+        Assert.Equal(continuationEvent.InputFingerprint, loaded.InputFingerprint);
+        WorkflowContinuationEvent persisted = Assert.Single(listed);
+        Assert.Equal(continuationEvent.EventId, persisted.EventId);
+        Assert.True(await store.ExistsAsync(WorkflowArtifactPaths.Resolve(fixture.Repository, WorkflowArtifactPaths.ContinuationMarkdown(continuationEvent.EventId))));
     }
 
     [Fact]
@@ -1567,7 +1653,10 @@ public sealed class WorkflowProjectionServiceTests
             new(new RepositoryServiceStub(Repository), new ExecutionSessionServiceStub(this), new GitServiceStub(this));
 
         public WorkflowContinuationService CreateContinuationService() =>
-            new(CreateService());
+            new(
+                new RepositoryServiceStub(Repository),
+                CreateService(),
+                new FileSystemWorkflowRepository(new MemoryArtifactStore()));
 
         public WorkflowRecoveryService CreateRecoveryService(IWorkflowRepository workflowRepository) =>
             new(new RepositoryServiceStub(Repository), CreateService(), workflowRepository);
@@ -1624,17 +1713,35 @@ public sealed class WorkflowProjectionServiceTests
 
     private sealed class ArtifactStoreStub(TestFixture fixture) : IArtifactStore
     {
-        public Task<bool> ExistsAsync(string path) => Task.FromResult(IsCurrentHandoffPath(path) && fixture.HandoffContent is not null);
+        private readonly MemoryArtifactStore innerStore = new();
 
-        public Task<string?> ReadAsync(string path) => Task.FromResult(IsCurrentHandoffPath(path) ? fixture.HandoffContent : null);
+        public async Task<bool> ExistsAsync(string path)
+        {
+            if (IsCurrentHandoffPath(path) && fixture.HandoffContent is not null)
+            {
+                return true;
+            }
 
-        public Task WriteAsync(string path, string content) => throw new NotSupportedException("Mutating artifact methods are not used by workflow projection.");
+            return await innerStore.ExistsAsync(path);
+        }
 
-        public Task DeleteAsync(string path) => throw new NotSupportedException("Mutating artifact methods are not used by workflow projection.");
+        public async Task<string?> ReadAsync(string path)
+        {
+            if (IsCurrentHandoffPath(path))
+            {
+                return fixture.HandoffContent;
+            }
 
-        public Task<IReadOnlyList<string>> ListAsync(string path, string searchPattern) => Task.FromResult<IReadOnlyList<string>>([]);
+            return await innerStore.ReadAsync(path);
+        }
 
-        public Task<IReadOnlyList<string>> ListDirectoriesAsync(string path) => Task.FromResult<IReadOnlyList<string>>([]);
+        public Task WriteAsync(string path, string content) => innerStore.WriteAsync(path, content);
+
+        public Task DeleteAsync(string path) => innerStore.DeleteAsync(path);
+
+        public Task<IReadOnlyList<string>> ListAsync(string path, string searchPattern) => innerStore.ListAsync(path, searchPattern);
+
+        public Task<IReadOnlyList<string>> ListDirectoriesAsync(string path) => innerStore.ListDirectoriesAsync(path);
 
         private bool IsCurrentHandoffPath(string path)
         {

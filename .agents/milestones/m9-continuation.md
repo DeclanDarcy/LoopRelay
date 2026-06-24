@@ -13,7 +13,7 @@ Deliver:
 - [ ] gate halting for work selection, execution acceptance, decision resolution, operational context review, operational context promotion, commit approval, and push approval.
 - [x] `WorkflowContinuationDiagnostics`.
 - [ ] `WorkflowPreparationDiagnostics`.
-- [ ] `WorkflowContinuationEvent`.
+- [x] `WorkflowContinuationEvent`.
 - [ ] `WorkflowPreparationEvent`.
 - [ ] recovery integration that reevaluates continuation after restart without duplicate progression.
 - [ ] `WorkflowContinuationHostedService`.
@@ -24,10 +24,22 @@ Slice progress:
 
 - Added evaluation-only continuation service and fingerprinting.
 - Added `GET /api/repositories/{repositoryId}/workflow/continuation/evaluation`.
+- Added endpoint-triggered continuation event persistence with
+  `POST /api/repositories/{repositoryId}/workflow/continuation/run`.
+- Added continuation history read endpoint:
+  `GET /api/repositories/{repositoryId}/workflow/continuation/history`.
+- Added continuation event JSON and markdown evidence under
+  `.agents/workflow/continuation`.
+- Continuation events capture trigger, input fingerprint, current stage,
+  optional target stage, blocking gate, decision, stop/advance reason, required
+  human action, completion state, and diagnostics.
+- Re-running continuation with an identical evaluation fingerprint returns the
+  existing event instead of duplicating history.
 - Continuation evaluation consumes only the aggregate workflow projection and its state-machine, gate, and completion evidence.
 - Continuation evaluation reports current stage, optional mechanical target stage, open gate, required human action, stop reason, deterministic fingerprint, and diagnostics.
 - Open authority gates halt evaluation with `WaitingForHuman`; no domain commands are invoked.
-- Persistence, hosted continuation, preparation, continuation events, recovery integration, influence tracing, and health assessment remain deferred.
+- Hosted continuation, preparation, recovery integration, influence tracing, and
+  health assessment remain deferred.
 
 Progression rules:
 
@@ -57,9 +69,10 @@ Gate halting:
 
 Idempotency rules:
 
-- [ ] continuation events carry fingerprints.
+- [x] continuation events carry fingerprints.
 - [ ] preparation events carry fingerprints.
 - [ ] before invoking an allowed preparation command, preparation checks whether equivalent domain evidence already exists.
+- [x] identical endpoint-triggered continuation reevaluation does not duplicate continuation events.
 - [ ] restart reevaluation must not duplicate proposals, commit preparations, timeline entries, or continuation events.
 - [ ] restart reevaluation must not duplicate preparation events or reviewable artifacts.
 
@@ -74,6 +87,7 @@ Tests:
 - [ ] restart does not duplicate progression.
 - [ ] restart does not duplicate preparation.
 - [x] identical workflow state produces identical continuation outcome.
+- [x] identical continuation run input does not duplicate continuation history.
 - [ ] identical preparation inputs produce identical preparation outcome.
 - [x] continuation never selects work, resolves decisions, promotes context, commits, pushes, or accepts handoffs.
 - [ ] preparation never creates parallel commands, satisfies gates, moves workflow stage, or performs authority actions.
@@ -87,7 +101,7 @@ Exit criteria:
 - [ ] continuation rules exist.
 - [ ] preparation rules exist.
 - [ ] gate halting works.
-- [ ] continuation history exists.
+- [x] continuation history exists.
 - [ ] preparation history exists.
 - [ ] hosted runner exists.
 - [ ] recovery integration works.

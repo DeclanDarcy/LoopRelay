@@ -1,11 +1,15 @@
+using CommandCenter.Core.Repositories;
 using CommandCenter.Workflow.Abstractions;
 using CommandCenter.Workflow.Models;
+using CommandCenter.Workflow.Persistence;
 using CommandCenter.Workflow.Primitives;
 
 namespace CommandCenter.Workflow.Services;
 
 public sealed class WorkflowContinuationService(
-    IWorkflowProjectionService projectionService) : IWorkflowContinuationService
+    IRepositoryService repositoryService,
+    IWorkflowProjectionService projectionService,
+    IWorkflowRepository workflowRepository) : IWorkflowContinuationService
 {
     public async Task<WorkflowContinuationEvaluation> EvaluateContinuationAsync(Guid repositoryId)
     {
@@ -64,6 +68,59 @@ public sealed class WorkflowContinuationService(
             transition,
             projection.CompletionEvaluation,
             diagnostics);
+    }
+
+    public async Task<WorkflowContinuationEvent> RunContinuationAsync(Guid repositoryId, string trigger = "endpoint")
+    {
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        WorkflowContinuationEvaluation evaluation = await EvaluateContinuationAsync(repositoryId);
+        IReadOnlyList<WorkflowContinuationEvent> history = await workflowRepository.ListContinuationEventsAsync(repository);
+        WorkflowContinuationEvent? existing = history.FirstOrDefault(continuationEvent =>
+            continuationEvent.InputFingerprint == evaluation.Fingerprint &&
+            continuationEvent.FromStage == evaluation.FromStage &&
+            continuationEvent.ToStage == evaluation.ToStage &&
+            continuationEvent.Decision == evaluation.Outcome &&
+            continuationEvent.Reason == evaluation.StopReason);
+
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        DateTimeOffset occurredAt = DateTimeOffset.UtcNow;
+        var continuationEvent = new WorkflowContinuationEvent(
+            repositoryId,
+            WorkflowArtifactPaths.ContinuationEventId(occurredAt),
+            occurredAt,
+            string.IsNullOrWhiteSpace(trigger) ? "endpoint" : trigger,
+            evaluation.FromStage,
+            evaluation.ToStage,
+            evaluation.ProgressState,
+            evaluation.BlockingGate,
+            evaluation.Outcome,
+            evaluation.StopReason,
+            evaluation.Fingerprint,
+            evaluation.IsWaitingForHuman,
+            evaluation.IsComplete,
+            evaluation.RequiredHumanAction,
+            evaluation.Diagnostics.Reasoning
+                .Concat(evaluation.Diagnostics.StopReasons)
+                .Concat(evaluation.Diagnostics.Conflicts)
+                .ToArray());
+
+        return await workflowRepository.SaveContinuationEventAsync(repository, continuationEvent);
+    }
+
+    public async Task<IReadOnlyList<WorkflowContinuationEvent>> GetContinuationHistoryAsync(Guid repositoryId)
+    {
+        Repository repository = await GetRepositoryAsync(repositoryId);
+        return await workflowRepository.ListContinuationEventsAsync(repository);
+    }
+
+    private async Task<Repository> GetRepositoryAsync(Guid repositoryId)
+    {
+        Repository? repository = (await repositoryService.GetAllAsync()).FirstOrDefault(candidate => candidate.Id == repositoryId);
+        return repository ?? throw new KeyNotFoundException($"Repository '{repositoryId}' was not found.");
     }
 
     private static string BuildStopReason(

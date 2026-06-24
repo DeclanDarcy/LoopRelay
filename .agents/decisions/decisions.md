@@ -2,25 +2,27 @@
 
 ## Newly Authorized
 
-- Proceed with the next M9 slice as continuation event/history persistence.
-- Add `WorkflowContinuationEvent` and endpoint-triggered continuation history
-  persistence.
-- Keep continuation history conceptually separate from workflow timeline.
-- Continuation history records what Workflow evaluated, what Workflow decided,
-  why it advanced, and why it stopped.
-- Workflow timeline remains the record of lifecycle facts: what happened.
-- Continuation events should capture input fingerprint, current stage, target
-  stage, blocking gate, decision, and reason.
-- Continue proving evaluation, explanation, persisted evaluation, and recovery
-  of evaluation evidence before allowing preparation behavior.
+- Proceed with real non-authority continuation progression as the next M9
+  implementation slice.
+- Keep progression narrow and evidence-driven.
+- Treat workflow timeline as lifecycle facts.
+- Treat continuation history as coordinator evaluation evidence.
+- Continuation may persist coordination evidence.
+- Continuation may project eligible stage movement.
+- Continuation may not satisfy gates.
+- Continuation may not mutate domains.
+- Allow mechanical progression only when all of these are true:
+  current projection is known, current stage has exactly one eligible next
+  stage, no open authority gate exists, the state machine validates the
+  transition, the continuation fingerprint has not already been applied, and
+  domain evidence proves the source stage is complete.
+- Stop with diagnostics whenever those progression conditions are not met.
 
 ## Explicitly Deferred
 
-- Do not add preparation service yet.
+- Do not add preparation yet.
 - Do not add hosted continuation yet.
+- Do not add decision generation yet.
+- Do not add context proposal generation yet.
+- Do not add commit preparation yet.
 - Do not invoke domain commands yet.
-- Do not create decisions, operational-context proposals, or commit
-  preparations yet.
-- Re-evaluate the roadmap before permitting preparation services, because
-  preparation is the first intentional step from observation into controlled
-  domain interaction.

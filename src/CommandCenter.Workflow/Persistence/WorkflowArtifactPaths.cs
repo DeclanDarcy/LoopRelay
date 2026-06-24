@@ -8,6 +8,7 @@ public static class WorkflowArtifactPaths
     public const string SchemaVersion = "workflow.v1";
     public const string WorkflowRoot = ".agents/workflow";
     public const string TimelinesRoot = ".agents/workflow/timelines";
+    public const string ContinuationRoot = ".agents/workflow/continuation";
     public const string ReportsRoot = ".agents/workflow/reports";
 
     public static string TimelineJson(string timelineId) =>
@@ -15,6 +16,12 @@ public static class WorkflowArtifactPaths
 
     public static string TimelineMarkdown(string timelineId) =>
         ArtifactPath.CombineRelative(TimelinesRoot, $"{ValidateTimelineId(timelineId)}.md");
+
+    public static string ContinuationJson(string eventId) =>
+        ArtifactPath.CombineRelative(ContinuationRoot, $"{ValidateContinuationEventId(eventId)}.json");
+
+    public static string ContinuationMarkdown(string eventId) =>
+        ArtifactPath.CombineRelative(ContinuationRoot, $"{ValidateContinuationEventId(eventId)}.md");
 
     public static string ReportJson(string reportId) =>
         ArtifactPath.CombineRelative(ReportsRoot, $"{ValidateReportId(reportId)}.json");
@@ -27,6 +34,9 @@ public static class WorkflowArtifactPaths
 
     public static string TimelineId(DateTimeOffset generatedAt) =>
         $"workflow.{generatedAt.UtcDateTime:yyyyMMddTHHmmss.fffffffZ}";
+
+    public static string ContinuationEventId(DateTimeOffset occurredAt) =>
+        $"continuation.{occurredAt.UtcDateTime:yyyyMMddTHHmmss.fffffffZ}";
 
     public static string ValidateTimelineId(string timelineId)
     {
@@ -49,5 +59,17 @@ public static class WorkflowArtifactPaths
         }
 
         return reportId;
+    }
+
+    public static string ValidateContinuationEventId(string eventId)
+    {
+        if (string.IsNullOrWhiteSpace(eventId) ||
+            !eventId.StartsWith("continuation.", StringComparison.Ordinal) ||
+            eventId.Any(character => !(char.IsLetterOrDigit(character) || character is '.' or '-' or '_')))
+        {
+            throw new ArgumentException("Invalid workflow continuation event id.", nameof(eventId));
+        }
+
+        return eventId;
     }
 }
