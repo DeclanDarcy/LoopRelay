@@ -51,12 +51,12 @@ Discovery -> Candidate -> Proposal -> Review -> Refinement -> Resolution -> Supe
 - [x] Expand `src/CommandCenter.UI/src/api/decisions.ts` with typed functions for all Core MVP lifecycle operations.
 - [x] Expand `useDecisionDiscovery`, `useDecisionProposals`, `useDecisionProposalReview`, and related hooks with action methods and refresh behavior.
 - [ ] Update `DecisionCandidateBrowser` to show:
-   - [ ] state
-   - [ ] signals
-   - [ ] evidence
+   - [x] state
+   - [x] signals
+   - [x] evidence
    - [ ] duplicate status
-   - [ ] allowed actions
-   - [ ] unavailable action reasons
+   - [x] allowed actions
+   - [x] unavailable action reasons
 - [ ] Add candidate actions:
    - [x] discover
    - [x] promote
@@ -66,6 +66,8 @@ Discovery -> Candidate -> Proposal -> Review -> Refinement -> Resolution -> Supe
    - [x] generate proposal
 - [ ] Proposal generation flow must refresh candidates, refresh proposals, navigate to the generated proposal where appropriate, and display generation diagnostics, generated proposal id, generation mode, accepted option count, rejected option count, deduplicated option count, and validation diagnostics.
 - [ ] Update proposal viewer/review panels to render review state, allowed transitions, unavailable reasons, last transition, and transition controls.
+   - [x] Proposal action controls consume backend lifecycle eligibility for allowed/blocked transitions.
+   - [x] Proposal action controls render backend blocked reasons and governing rules.
 - [ ] Add supersede and archive actions for resolved decisions, including target decision selection, rationale, resulting state, relationships, governance impact, and execution projection refresh.
 - [ ] Classify lower-priority lifecycle features as Core MVP, Deferred, Internal, or Remove:
    - [ ] proposal review notes

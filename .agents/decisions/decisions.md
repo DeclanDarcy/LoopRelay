@@ -2,31 +2,28 @@
 
 ## Newly Authorized
 
-- Accept the Milestone 3 lifecycle eligibility slice as architecturally sound.
-- Treat backend decision lifecycle legality as established end to end.
-- Treat Milestone 3 Phase 2 backend eligibility as complete.
-- Continue preserving this authority chain:
+- Accept the Milestone 3 eligibility-driven UI slice as architecturally sound.
+- Treat the decision UI transition from heuristic lifecycle legality to projection-driven lifecycle rendering as complete for candidate/proposal controls.
+- Preserve this authority chain:
   - `DecisionLifecycleRules`
-  - eligibility service
-  - eligibility projection
-  - endpoint
-  - shell
-  - TypeScript
-  - React
-- Keep the repository-level eligibility endpoint as the preferred contract to avoid per-item request amplification and inconsistent UI snapshots.
-- Frontend must stop deciding lifecycle legality and should only render backend-owned facts for:
-  - whether an action can run
-  - whether a transition is valid
-  - why an action is disabled or blocked
-- The next Milestone 3 slice is authorized as a UI migration:
-  - replace always-visible lifecycle buttons with eligibility-driven allowed actions
-  - replace UI-assumed disabled states with backend blocked reasons
-  - render backend diagnostics and governing rule names directly
-- Apply the same eligibility-driven rendering principle to proposal review controls.
-- Postpone supersede/archive completion until after the UI consumes lifecycle eligibility.
-- Treat remaining Milestone 3 progression as:
-  1. UI consumes eligibility
-  2. supersede/archive completion
-  3. refresh propagation
-  4. end-to-end lifecycle characterization
-  5. milestone exit audit
+  - lifecycle eligibility projection
+  - React rendering of backend facts
+- Continue rendering backend-owned lifecycle facts in the UI:
+  - allowed actions
+  - blocked actions
+  - blocked reasons
+  - allowed next states
+  - governing rules
+- Keep repository-level eligibility refresh after lifecycle mutations so React does not predict post-mutation legality.
+- Treat dev Tauri mock parity for `get_decision_lifecycle_eligibility` as required for frontend transport alignment.
+- Commit and push the accepted eligibility slice before continuing Milestone 3 work.
+- The next Milestone 3 slice is authorized as supersede/archive completion:
+  - supersede target selection
+  - supersede rationale capture
+  - archive rationale capture where applicable
+  - backend invocation
+  - lifecycle eligibility refresh
+  - governance refresh
+  - execution influence refresh where applicable
+- Keep refresh propagation centralized rather than scattering projection refresh policy across individual components.
+- After supersede/archive are complete, add an end-to-end decision lifecycle characterization path covering discovery through archive.

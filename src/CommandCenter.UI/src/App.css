@@ -1646,6 +1646,58 @@ button:focus-visible {
   margin: 0;
 }
 
+.decision-lifecycle-eligibility,
+.decision-lifecycle-reasons {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.decision-lifecycle-eligibility {
+  padding: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--bg-inset);
+}
+
+.decision-lifecycle-eligibility > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.decision-lifecycle-eligibility span,
+.decision-lifecycle-eligibility small,
+.decision-lifecycle-notice {
+  color: var(--fg-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.decision-lifecycle-eligibility strong {
+  color: var(--fg-default);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.decision-lifecycle-reasons {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.decision-lifecycle-reasons li,
+.decision-lifecycle-notice {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--surface-1);
+}
+
 .decision-proposal-viewer,
 .decision-refinement-panel,
 .decision-resolution-panel,

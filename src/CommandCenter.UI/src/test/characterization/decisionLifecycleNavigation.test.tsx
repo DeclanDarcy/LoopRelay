@@ -4,6 +4,8 @@ import { DecisionLifecycleTab } from '../../features/decisions/DecisionLifecycle
 import type {
   DecisionCandidate,
   DecisionContextSnapshot,
+  DecisionLifecycleEligibilityProjection,
+  DecisionLifecycleEntityEligibility,
   DecisionProposalBrowserItem,
   DecisionReviewWorkspace,
 } from '../../types'
@@ -151,6 +153,106 @@ describe('DecisionLifecycleTab navigation', () => {
     expect(useDecisionEvidenceInspectionMock).toHaveBeenLastCalledWith('repo-alpha', 'PROP-0002')
     expect(useDecisionSourceAttributionsMock).toHaveBeenLastCalledWith('repo-alpha', 'PROP-0002')
   })
+
+  it('renders backend proposal lifecycle eligibility and disables blocked review transitions', async () => {
+    const markViewed = vi.fn()
+    const markNeedsRefinement = vi.fn()
+    useDecisionProposalReviewMock.mockImplementation((repositoryId: string | null, proposalId: string | null) => ({
+      data: repositoryId && proposalId ? createWorkspace(repositoryId, proposalId) : null,
+      isLoading: false,
+      isMutating: false,
+      refresh: vi.fn(),
+      markViewed,
+      markNeedsRefinement,
+      markReadyForResolution: vi.fn(),
+    }))
+    useDecisionProposalLineageMock.mockReturnValue({ data: null, isLoading: false, refresh: vi.fn() })
+    useDecisionOptionComparisonMock.mockReturnValue({ data: null, isLoading: false, refresh: vi.fn() })
+    useDecisionEvidenceInspectionMock.mockReturnValue({ data: null, isLoading: false, refresh: vi.fn() })
+    useDecisionSourceAttributionsMock.mockReturnValue({ data: [], isLoading: false, refresh: vi.fn() })
+    useDecisionGovernanceMock.mockReturnValue({
+      currentReport: null,
+      reports: [],
+      isLoading: false,
+      isGenerating: false,
+      error: null,
+      refresh: vi.fn(),
+      generateReport: vi.fn(),
+    })
+    useDecisionCertificationMock.mockReturnValue({
+      currentReport: null,
+      reports: [],
+      isLoading: false,
+      isRunning: false,
+      error: null,
+      refresh: vi.fn(),
+      runCertification: vi.fn(),
+    })
+    useDecisionGenerationCertificationMock.mockReturnValue({
+      currentReport: null,
+      reports: [],
+      isLoading: false,
+      isRunning: false,
+      error: null,
+      refresh: vi.fn(),
+      runCertification: vi.fn(),
+    })
+    useDecisionQualityMock.mockReturnValue({
+      assessments: [],
+      currentReport: null,
+      reports: [],
+      currentTrend: null,
+      trends: [],
+      isLoading: false,
+      isAssessing: false,
+      isGeneratingReport: false,
+      isGeneratingTrend: false,
+      error: null,
+      refresh: vi.fn(),
+      assessProposal: vi.fn(),
+      generateReport: vi.fn(),
+      generateTrend: vi.fn(),
+    })
+    useDecisionProposalRefinementMock.mockReturnValue({
+      refine: vi.fn(),
+      isSubmitting: false,
+      error: null,
+    })
+    useDecisionResolutionMock.mockReturnValue({
+      decision: null,
+      assimilationRecommendation: null,
+      isSubmitting: false,
+      isAssimilationLoading: false,
+      error: null,
+      resolve: vi.fn(),
+      loadAssimilationRecommendation: vi.fn(),
+      proposeAssimilationRecommendation: vi.fn(),
+      reset: vi.fn(),
+    })
+
+    render(
+      <DecisionLifecycleTab
+        context={createContext()}
+        candidates={[createCandidate()]}
+        proposals={createProposals()}
+        selectedProposalStates={[]}
+        hasSelectedRepository
+        isLoading={false}
+        repositoryId="repo-alpha"
+        lifecycleEligibility={createLifecycleEligibility()}
+        onSelectedProposalStatesChange={vi.fn()}
+        onRefresh={vi.fn()}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Proposal lifecycle eligibility')).toHaveTextContent('Mark viewed')
+    })
+
+    expect(screen.getByText('Generated proposals must be viewed before refinement.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Mark Viewed' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Needs Refinement' })).toBeDisabled()
+  })
 })
 
 function createContext(): DecisionContextSnapshot {
@@ -272,5 +374,62 @@ function createWorkspace(repositoryId: string, proposalId: string): DecisionRevi
       packageSourceProposalFingerprint: null,
       isPackageCurrentForProposalContent: false,
     },
+  }
+}
+
+function createLifecycleEligibility(): DecisionLifecycleEligibilityProjection {
+  return {
+    repositoryId: 'repo-alpha',
+    candidates: [],
+    proposals: [
+      createProposalEligibility('PROP-0001', [
+        createAction('mark_decision_proposal_viewed', 'Mark viewed', 'Viewed', true, null),
+      ], [
+        createAction(
+          'mark_decision_proposal_needs_refinement',
+          'Needs refinement',
+          'NeedsRefinement',
+          false,
+          'Generated proposals must be viewed before refinement.',
+        ),
+      ]),
+    ],
+    decisions: [],
+    diagnostics: [],
+  }
+}
+
+function createProposalEligibility(
+  entityId: string,
+  allowedActions: DecisionLifecycleEntityEligibility['allowedActions'],
+  blockedActions: DecisionLifecycleEntityEligibility['blockedActions'],
+): DecisionLifecycleEntityEligibility {
+  return {
+    entityKind: 'Proposal',
+    entityId,
+    currentState: 'Generated',
+    allowedActions,
+    blockedActions,
+    allowedNextStates: allowedActions.map((action) => action.targetState),
+    blockedNextStates: [],
+    diagnostics: [],
+  }
+}
+
+function createAction(
+  commandName: string,
+  displayName: string,
+  targetState: string,
+  isAllowed: boolean,
+  reason: string | null,
+): DecisionLifecycleEntityEligibility['allowedActions'][number] {
+  return {
+    commandName,
+    displayName,
+    targetState,
+    isAllowed,
+    requiredInputs: ['reason'],
+    reason,
+    governingRule: 'DecisionLifecycleRules.ValidateProposalTransition',
   }
 }

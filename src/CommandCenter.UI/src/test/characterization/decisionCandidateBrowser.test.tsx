@@ -1,7 +1,11 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DecisionCandidateBrowser } from '../../features/decisions/DecisionCandidateBrowser'
-import type { DecisionCandidate, DecisionCandidateState } from '../../types'
+import type {
+  DecisionCandidate,
+  DecisionCandidateState,
+  DecisionLifecycleEntityEligibility,
+} from '../../types'
 
 afterEach(() => {
   cleanup()
@@ -57,6 +61,35 @@ describe('DecisionCandidateBrowser', () => {
     expect(within(selectedPanel).getByText('Tactical')).toBeInTheDocument()
     expect(onSelectedCandidateChange).toHaveBeenLastCalledWith('CAND-0002')
   })
+
+  it('renders backend lifecycle eligibility and disables blocked candidate actions', () => {
+    render(
+      <DecisionCandidateBrowser
+        candidates={createCandidates()}
+        isLoading={false}
+        eligibility={[
+          createEligibility('CAND-0001', 'Promoted', [
+            createAction('dismiss_decision_candidate', 'Dismiss', 'Dismissed', true, null),
+          ], [
+            createAction(
+              'promote_decision_candidate',
+              'Promote',
+              'Promoted',
+              false,
+              'Transition from Promoted to Promoted is not currently allowed.',
+            ),
+          ]),
+        ]}
+        onPromote={vi.fn()}
+        onDismiss={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByLabelText('Candidate lifecycle eligibility')).toHaveTextContent('Dismiss')
+    expect(screen.getByText('Transition from Promoted to Promoted is not currently allowed.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Promote Candidate' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Dismiss' })).toBeEnabled()
+  })
 })
 
 function createCandidates(): DecisionCandidate[] {
@@ -88,5 +121,41 @@ function createCandidate(
     sources: [],
     diagnostics: [],
     history: [],
+  }
+}
+
+function createEligibility(
+  entityId: string,
+  currentState: string,
+  allowedActions: DecisionLifecycleEntityEligibility['allowedActions'],
+  blockedActions: DecisionLifecycleEntityEligibility['blockedActions'],
+): DecisionLifecycleEntityEligibility {
+  return {
+    entityKind: 'Candidate',
+    entityId,
+    currentState,
+    allowedActions,
+    blockedActions,
+    allowedNextStates: allowedActions.map((action) => action.targetState),
+    blockedNextStates: [],
+    diagnostics: [],
+  }
+}
+
+function createAction(
+  commandName: string,
+  displayName: string,
+  targetState: string,
+  isAllowed: boolean,
+  reason: string | null,
+): DecisionLifecycleEntityEligibility['allowedActions'][number] {
+  return {
+    commandName,
+    displayName,
+    targetState,
+    isAllowed,
+    requiredInputs: ['reason'],
+    reason,
+    governingRule: 'DecisionLifecycleRules.ValidateCandidateTransition',
   }
 }

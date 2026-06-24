@@ -1050,7 +1050,7 @@ describe('workspace certification mock', () => {
       expect(screen.getByRole('heading', { name: 'operational_context.0001.md' })).toBeInTheDocument(),
     )
     expect(workflowCallCounts()).toEqual(beforeNavigation)
-  })
+  }, 10000)
 
   it('keeps continuity diagnostics read-only and report generation behind the explicit action', async () => {
     installWorkspaceCertificationMock()

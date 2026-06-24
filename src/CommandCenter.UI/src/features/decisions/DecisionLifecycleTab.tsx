@@ -3,6 +3,9 @@ import { EmptyState, Panel, SectionHeader } from '../../components/design'
 import type {
   DecisionCandidate,
   DecisionContextSnapshot,
+  DecisionLifecycleActionEligibility,
+  DecisionLifecycleEligibilityProjection,
+  DecisionLifecycleEntityEligibility,
   DecisionProposalBrowserItem,
   DecisionProposalState,
 } from '../../types'
@@ -38,6 +41,9 @@ type DecisionLifecycleTabProps = {
   hasSelectedRepository: boolean
   isLoading: boolean
   actionsEnabled?: boolean
+  lifecycleEligibility?: DecisionLifecycleEligibilityProjection | null
+  isLifecycleEligibilityLoading?: boolean
+  lifecycleEligibilityError?: string | null
   repositoryId: string | null
   onSelectedProposalStatesChange: (states: DecisionProposalState[]) => void
   onRefresh: () => void
@@ -59,6 +65,9 @@ export function DecisionLifecycleTab({
   hasSelectedRepository,
   isLoading,
   actionsEnabled = true,
+  lifecycleEligibility,
+  isLifecycleEligibilityLoading = false,
+  lifecycleEligibilityError,
   repositoryId,
   onSelectedProposalStatesChange,
   onRefresh,
@@ -150,6 +159,19 @@ export function DecisionLifecycleTab({
   const reviewableProposalCount = proposals.filter((proposal) =>
     proposal.state !== 'Resolved' && proposal.state !== 'Expired' && proposal.state !== 'Discarded',
   ).length
+  const selectedProposalEligibility =
+    lifecycleEligibility?.proposals.find((proposal) => proposal.entityId === selectedProposalId) ?? null
+  const proposalViewedAction = getAction(selectedProposalEligibility, 'mark_decision_proposal_viewed')
+  const proposalNeedsRefinementAction = getAction(
+    selectedProposalEligibility,
+    'mark_decision_proposal_needs_refinement',
+  )
+  const proposalReadyForResolutionAction = getAction(
+    selectedProposalEligibility,
+    'mark_decision_proposal_ready_for_resolution',
+  )
+  const proposalExpireAction = getAction(selectedProposalEligibility, 'expire_decision_proposal')
+  const proposalDiscardAction = getAction(selectedProposalEligibility, 'discard_decision_proposal')
 
   return (
     <Panel
@@ -189,6 +211,7 @@ export function DecisionLifecycleTab({
             candidates={candidates}
             isLoading={isLoading}
             actionsEnabled={actionsEnabled}
+            eligibility={lifecycleEligibility?.candidates ?? []}
             onDiscover={onDiscover}
             onPromote={onPromoteCandidate}
             onDismiss={onDismissCandidate}
@@ -221,6 +244,23 @@ export function DecisionLifecycleTab({
                 <h5>Proposal Actions</h5>
                 <span>{selectedProposalId ?? 'No proposal selected'}</span>
               </div>
+              {lifecycleEligibilityError ? (
+                <div className="decision-lifecycle-notice" role="alert">
+                  {lifecycleEligibilityError}
+                </div>
+              ) : null}
+              {selectedProposalEligibility ? (
+                <LifecycleEligibilityDetails
+                  eligibility={selectedProposalEligibility}
+                  label="Proposal"
+                />
+              ) : selectedProposalId ? (
+                <div className="decision-lifecycle-notice" role="status">
+                  {isLifecycleEligibilityLoading
+                    ? 'Loading lifecycle eligibility...'
+                    : 'Lifecycle eligibility has not loaded for this proposal.'}
+                </div>
+              ) : null}
               <div className="context-controls">
                 <button
                   type="button"
@@ -230,7 +270,12 @@ export function DecisionLifecycleTab({
                     await Promise.all([refreshProposalLineage(), refreshOptionComparison()])
                     onRefresh()
                   }}
-                  disabled={!selectedProposalId || isProposalReviewMutating}
+                  disabled={
+                    !selectedProposalId ||
+                    isProposalReviewMutating ||
+                    !proposalViewedAction?.isAllowed
+                  }
+                  title={actionTitle(proposalViewedAction)}
                 >
                   Mark Viewed
                 </button>
@@ -242,7 +287,12 @@ export function DecisionLifecycleTab({
                     await Promise.all([refreshProposalLineage(), refreshOptionComparison()])
                     onRefresh()
                   }}
-                  disabled={!selectedProposalId || isProposalReviewMutating}
+                  disabled={
+                    !selectedProposalId ||
+                    isProposalReviewMutating ||
+                    !proposalNeedsRefinementAction?.isAllowed
+                  }
+                  title={actionTitle(proposalNeedsRefinementAction)}
                 >
                   Needs Refinement
                 </button>
@@ -254,7 +304,12 @@ export function DecisionLifecycleTab({
                     await Promise.all([refreshProposalLineage(), refreshOptionComparison()])
                     onRefresh()
                   }}
-                  disabled={!selectedProposalId || isProposalReviewMutating}
+                  disabled={
+                    !selectedProposalId ||
+                    isProposalReviewMutating ||
+                    !proposalReadyForResolutionAction?.isAllowed
+                  }
+                  title={actionTitle(proposalReadyForResolutionAction)}
                 >
                   Ready For Resolution
                 </button>
@@ -270,7 +325,13 @@ export function DecisionLifecycleTab({
                     await refreshProposalReview()
                     onRefresh()
                   }}
-                  disabled={!selectedProposalId || isProposalReviewMutating || !onExpireProposal}
+                  disabled={
+                    !selectedProposalId ||
+                    isProposalReviewMutating ||
+                    !onExpireProposal ||
+                    !proposalExpireAction?.isAllowed
+                  }
+                  title={actionTitle(proposalExpireAction)}
                 >
                   Expire
                 </button>
@@ -286,7 +347,13 @@ export function DecisionLifecycleTab({
                     await refreshProposalReview()
                     onRefresh()
                   }}
-                  disabled={!selectedProposalId || isProposalReviewMutating || !onDiscardProposal}
+                  disabled={
+                    !selectedProposalId ||
+                    isProposalReviewMutating ||
+                    !onDiscardProposal ||
+                    !proposalDiscardAction?.isAllowed
+                  }
+                  title={actionTitle(proposalDiscardAction)}
                 >
                   Discard
                 </button>
@@ -418,5 +485,63 @@ export function DecisionLifecycleTab({
         <EmptyState className="empty-state">Select or add a repository.</EmptyState>
       )}
     </Panel>
+  )
+}
+
+function getAction(
+  eligibility: DecisionLifecycleEntityEligibility | null,
+  commandName: string,
+): DecisionLifecycleActionEligibility | null {
+  return eligibility?.allowedActions.find((action) => action.commandName === commandName) ??
+    eligibility?.blockedActions.find((action) => action.commandName === commandName) ??
+    null
+}
+
+function actionTitle(action: DecisionLifecycleActionEligibility | null) {
+  if (!action) {
+    return 'Lifecycle eligibility has not loaded.'
+  }
+
+  return action.isAllowed
+    ? `${action.displayName} allowed by ${action.governingRule}.`
+    : action.reason ?? `${action.displayName} is blocked by ${action.governingRule}.`
+}
+
+function LifecycleEligibilityDetails({
+  eligibility,
+  label,
+}: {
+  eligibility: DecisionLifecycleEntityEligibility
+  label: string
+}) {
+  return (
+    <div className="decision-lifecycle-eligibility" aria-label={`${label} lifecycle eligibility`}>
+      <div>
+        <span>Allowed actions</span>
+        <strong>{eligibility.allowedActions.map((action) => action.displayName).join(', ') || 'None'}</strong>
+      </div>
+      <div>
+        <span>Allowed next states</span>
+        <strong>{eligibility.allowedNextStates.join(', ') || 'None'}</strong>
+      </div>
+      {eligibility.blockedActions.length > 0 ? (
+        <ul className="decision-lifecycle-reasons" aria-label={`${label} blocked action reasons`}>
+          {eligibility.blockedActions.map((action) => (
+            <li key={action.commandName}>
+              <strong>{action.displayName}</strong>
+              <span>{action.reason ?? 'Blocked by backend lifecycle rules.'}</span>
+              <small>{action.governingRule}</small>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {eligibility.diagnostics.length > 0 ? (
+        <ul className="decision-lifecycle-reasons" aria-label={`${label} eligibility diagnostics`}>
+          {eligibility.diagnostics.map((diagnostic) => (
+            <li key={diagnostic}>{diagnostic}</li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   )
 }

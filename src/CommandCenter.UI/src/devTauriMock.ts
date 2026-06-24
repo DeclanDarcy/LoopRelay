@@ -16,6 +16,9 @@ import type {
   DecisionGenerationCertificationReport,
   DecisionGovernanceReport,
   DecisionInfluenceTrace,
+  DecisionLifecycleActionEligibility,
+  DecisionLifecycleEligibilityProjection,
+  DecisionLifecycleEntityEligibility,
   DecisionOutcome,
   DecisionPackageRegenerationRequest,
   DecisionPackageRegenerationResult,
@@ -805,6 +808,170 @@ function filterDecisionProposalBrowserItems(
 
   const selectedStates = new Set(states)
   return proposals.filter((proposal) => selectedStates.has(proposal.state))
+}
+
+function createDecisionLifecycleEligibility(
+  state: MockState,
+  repositoryId: string,
+): DecisionLifecycleEligibilityProjection {
+  return {
+    repositoryId,
+    candidates: (state.decisionCandidates[repositoryId] ?? []).map((candidate) =>
+      createLifecycleEntity(
+        'Candidate',
+        candidate.id,
+        candidate.state,
+        [
+          createLifecycleAction(
+            'promote_decision_candidate',
+            'Promote',
+            'Promoted',
+            candidate.state === 'Discovered',
+            'DecisionLifecycleRules.ValidateCandidateTransition',
+          ),
+          createLifecycleAction(
+            'dismiss_decision_candidate',
+            'Dismiss',
+            'Dismissed',
+            candidate.state === 'Discovered',
+            'DecisionLifecycleRules.ValidateCandidateTransition',
+          ),
+          createLifecycleAction(
+            'expire_decision_candidate',
+            'Expire',
+            'Expired',
+            candidate.state === 'Discovered',
+            'DecisionLifecycleRules.ValidateCandidateTransition',
+          ),
+          createLifecycleAction(
+            'mark_decision_candidate_duplicate',
+            'Mark duplicate',
+            'Duplicate',
+            candidate.state === 'Discovered',
+            'DecisionLifecycleRules.ValidateCandidateTransition',
+          ),
+        ],
+      ),
+    ),
+    proposals: (state.decisionProposalBrowserItems[repositoryId] ?? []).map((proposal) =>
+      createLifecycleEntity(
+        'Proposal',
+        proposal.proposalId,
+        proposal.state,
+        [
+          createLifecycleAction(
+            'mark_decision_proposal_viewed',
+            'Mark viewed',
+            'Viewed',
+            proposal.state === 'Generated',
+            'DecisionLifecycleRules.ValidateProposalTransition',
+          ),
+          createLifecycleAction(
+            'mark_decision_proposal_needs_refinement',
+            'Needs refinement',
+            'NeedsRefinement',
+            proposal.state === 'Viewed' || proposal.state === 'ReadyForResolution',
+            'DecisionLifecycleRules.ValidateProposalTransition',
+          ),
+          createLifecycleAction(
+            'mark_decision_proposal_ready_for_resolution',
+            'Ready for resolution',
+            'ReadyForResolution',
+            proposal.state === 'Viewed' || proposal.state === 'NeedsRefinement' || proposal.state === 'Refined',
+            'DecisionLifecycleRules.ValidateProposalTransition',
+          ),
+          createLifecycleAction(
+            'resolve_decision_proposal',
+            'Resolve',
+            'Resolved',
+            proposal.state === 'ReadyForResolution',
+            'DecisionLifecycleRules.ValidateProposalTransition',
+          ),
+          createLifecycleAction(
+            'expire_decision_proposal',
+            'Expire',
+            'Expired',
+            proposal.state !== 'Resolved' && proposal.state !== 'Expired' && proposal.state !== 'Discarded',
+            'DecisionLifecycleRules.ValidateProposalTransition',
+          ),
+          createLifecycleAction(
+            'discard_decision_proposal',
+            'Discard',
+            'Discarded',
+            proposal.state !== 'Resolved' && proposal.state !== 'Expired' && proposal.state !== 'Discarded',
+            'DecisionLifecycleRules.ValidateProposalTransition',
+          ),
+        ],
+      ),
+    ),
+    decisions: Object.values(state.decisions[repositoryId] ?? {}).map((decision) =>
+      createLifecycleEntity(
+        'Decision',
+        decision.id,
+        decision.state,
+        [
+          createLifecycleAction(
+            'supersede_decision',
+            'Supersede',
+            'Superseded',
+            decision.state === 'Resolved',
+            'DecisionLifecycleRules.ValidateDecisionTransition',
+          ),
+          createLifecycleAction(
+            'archive_decision',
+            'Archive',
+            'Archived',
+            decision.state === 'Resolved' || decision.state === 'Superseded',
+            'DecisionLifecycleRules.ValidateDecisionTransition',
+          ),
+        ],
+      ),
+    ),
+    diagnostics: [],
+  }
+}
+
+function createLifecycleEntity(
+  entityKind: string,
+  entityId: string,
+  currentState: string,
+  actions: DecisionLifecycleActionEligibility[],
+): DecisionLifecycleEntityEligibility {
+  const allowedActions = actions.filter((action) => action.isAllowed)
+  const blockedActions = actions.filter((action) => !action.isAllowed)
+
+  return {
+    entityKind,
+    entityId,
+    currentState,
+    allowedActions,
+    blockedActions,
+    allowedNextStates: allowedActions.map((action) => action.targetState),
+    blockedNextStates: blockedActions.map((action) => ({
+      state: action.targetState,
+      reason: action.reason ?? `Transition from ${currentState} to ${action.targetState} is not currently allowed.`,
+      governingRule: action.governingRule,
+    })),
+    diagnostics: [],
+  }
+}
+
+function createLifecycleAction(
+  commandName: string,
+  displayName: string,
+  targetState: string,
+  isAllowed: boolean,
+  governingRule: string,
+): DecisionLifecycleActionEligibility {
+  return {
+    commandName,
+    displayName,
+    targetState,
+    isAllowed,
+    requiredInputs: ['reason'],
+    reason: isAllowed ? null : `Transition to ${targetState} is not currently allowed in the mock lifecycle.`,
+    governingRule,
+  }
 }
 
 function getDecisionReviewWorkspace(
@@ -3999,6 +4166,8 @@ export function installDevTauriMock() {
               getStringArrayArg(args, 'states'),
             ),
           )
+        case 'get_decision_lifecycle_eligibility':
+          return clone(createDecisionLifecycleEligibility(state, getStringArg(args, 'repositoryId')))
         case 'get_decision_proposal_review': {
           const repositoryId = getStringArg(args, 'repositoryId')
           const proposalId = getStringArg(args, 'proposalId')

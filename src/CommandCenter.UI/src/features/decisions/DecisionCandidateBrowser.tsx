@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Badge, EmptyState } from '../../components/design'
-import type { DecisionCandidate, DecisionCandidateState } from '../../types'
+import type {
+  DecisionCandidate,
+  DecisionCandidateState,
+  DecisionLifecycleActionEligibility,
+  DecisionLifecycleEntityEligibility,
+} from '../../types'
 
 const candidateStateFilters: DecisionCandidateState[] = [
   'Discovered',
@@ -22,6 +27,7 @@ type DecisionCandidateBrowserProps = {
   candidates: DecisionCandidate[]
   isLoading: boolean
   actionsEnabled?: boolean
+  eligibility?: DecisionLifecycleEntityEligibility[]
   onSelectedCandidateChange?: (candidateId: string | null) => void
   onDiscover?: () => void | Promise<void>
   onPromote?: (candidateId: string) => void | Promise<void>
@@ -35,6 +41,7 @@ export function DecisionCandidateBrowser({
   candidates,
   isLoading,
   actionsEnabled = true,
+  eligibility,
   onSelectedCandidateChange,
   onDiscover,
   onPromote,
@@ -61,7 +68,13 @@ export function DecisionCandidateBrowser({
     filteredCandidates.find((candidate) => candidate.id === selectedCandidateId) ??
     filteredCandidates[0] ??
     null
+  const selectedEligibility =
+    eligibility?.find((candidateEligibility) => candidateEligibility.entityId === selectedCandidate?.id) ?? null
   const duplicateTargets = candidates.filter((candidate) => candidate.id !== selectedCandidate?.id)
+  const promoteAction = getAction(selectedEligibility, 'promote_decision_candidate')
+  const dismissAction = getAction(selectedEligibility, 'dismiss_decision_candidate')
+  const expireAction = getAction(selectedEligibility, 'expire_decision_candidate')
+  const duplicateAction = getAction(selectedEligibility, 'mark_decision_candidate_duplicate')
 
   useEffect(() => {
     if (!selectedCandidateId || filteredCandidates.some((candidate) => candidate.id === selectedCandidateId)) {
@@ -175,6 +188,13 @@ export function DecisionCandidateBrowser({
                   <dd>{selectedCandidate.evidence.length}</dd>
                 </div>
               </dl>
+              {selectedEligibility ? (
+                <LifecycleEligibilityDetails eligibility={selectedEligibility} />
+              ) : actionsEnabled ? (
+                <div className="decision-lifecycle-notice" role="status">
+                  Lifecycle eligibility has not loaded for this candidate.
+                </div>
+              ) : null}
               {actionsEnabled ? (
                 <>
                   <div className="context-controls" aria-label="Candidate actions">
@@ -182,7 +202,8 @@ export function DecisionCandidateBrowser({
                       type="button"
                       className="secondary-action"
                       onClick={() => void onPromote?.(selectedCandidate.id)}
-                      disabled={isLoading || !onPromote}
+                      disabled={isLoading || !onPromote || !promoteAction?.isAllowed}
+                      title={actionTitle(promoteAction)}
                     >
                       Promote Candidate
                     </button>
@@ -198,7 +219,8 @@ export function DecisionCandidateBrowser({
                       type="button"
                       className="secondary-action"
                       onClick={() => void onDismiss?.(selectedCandidate.id)}
-                      disabled={isLoading || !onDismiss}
+                      disabled={isLoading || !onDismiss || !dismissAction?.isAllowed}
+                      title={actionTitle(dismissAction)}
                     >
                       Dismiss
                     </button>
@@ -206,7 +228,8 @@ export function DecisionCandidateBrowser({
                       type="button"
                       className="secondary-action"
                       onClick={() => void onExpire?.(selectedCandidate.id)}
-                      disabled={isLoading || !onExpire}
+                      disabled={isLoading || !onExpire || !expireAction?.isAllowed}
+                      title={actionTitle(expireAction)}
                     >
                       Expire
                     </button>
@@ -228,7 +251,13 @@ export function DecisionCandidateBrowser({
                       type="button"
                       className="secondary-action"
                       onClick={() => void onMarkDuplicate?.(selectedCandidate.id, duplicateOfCandidateId)}
-                      disabled={isLoading || !onMarkDuplicate || !duplicateOfCandidateId}
+                      disabled={
+                        isLoading ||
+                        !onMarkDuplicate ||
+                        !duplicateOfCandidateId ||
+                        !duplicateAction?.isAllowed
+                      }
+                      title={actionTitle(duplicateAction)}
                     >
                       Mark Duplicate
                     </button>
@@ -244,5 +273,53 @@ export function DecisionCandidateBrowser({
         </EmptyState>
       )}
     </section>
+  )
+}
+
+function getAction(
+  eligibility: DecisionLifecycleEntityEligibility | null,
+  commandName: string,
+): DecisionLifecycleActionEligibility | null {
+  return eligibility?.allowedActions.find((action) => action.commandName === commandName) ??
+    eligibility?.blockedActions.find((action) => action.commandName === commandName) ??
+    null
+}
+
+function actionTitle(action: DecisionLifecycleActionEligibility | null) {
+  if (!action) {
+    return 'Lifecycle eligibility has not loaded.'
+  }
+
+  return action.isAllowed
+    ? `${action.displayName} allowed by ${action.governingRule}.`
+    : action.reason ?? `${action.displayName} is blocked by ${action.governingRule}.`
+}
+
+function LifecycleEligibilityDetails({ eligibility }: { eligibility: DecisionLifecycleEntityEligibility }) {
+  return (
+    <div className="decision-lifecycle-eligibility" aria-label="Candidate lifecycle eligibility">
+      <div>
+        <span>Allowed actions</span>
+        <strong>{eligibility.allowedActions.map((action) => action.displayName).join(', ') || 'None'}</strong>
+      </div>
+      {eligibility.blockedActions.length > 0 ? (
+        <ul className="decision-lifecycle-reasons" aria-label="Candidate blocked action reasons">
+          {eligibility.blockedActions.map((action) => (
+            <li key={action.commandName}>
+              <strong>{action.displayName}</strong>
+              <span>{action.reason ?? 'Blocked by backend lifecycle rules.'}</span>
+              <small>{action.governingRule}</small>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {eligibility.diagnostics.length > 0 ? (
+        <ul className="decision-lifecycle-reasons" aria-label="Candidate eligibility diagnostics">
+          {eligibility.diagnostics.map((diagnostic) => (
+            <li key={diagnostic}>{diagnostic}</li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   )
 }

@@ -48,6 +48,7 @@ import {
   useContinuityReports,
   useDecisionContext,
   useDecisionDiscovery,
+  useDecisionLifecycleEligibility,
   useDecisionProposals,
   useDecisionSessions,
   useExecutionDecisionInfluence,
@@ -257,6 +258,12 @@ function App() {
     expireProposal: expireDecisionProposal,
     discardProposal: discardDecisionProposal,
   } = useDecisionProposals(selectedRepository?.repository.id ?? null, selectedDecisionProposalStates)
+  const {
+    data: decisionLifecycleEligibility,
+    isLoading: isDecisionLifecycleEligibilityLoading,
+    error: decisionLifecycleEligibilityError,
+    refresh: refreshDecisionLifecycleEligibility,
+  } = useDecisionLifecycleEligibility(selectedRepository?.repository.id ?? null)
   const {
     snapshot: governanceSnapshot,
     isLoading: isGovernanceLoading,
@@ -1509,6 +1516,7 @@ function App() {
       refreshDecisionContext(),
       refreshDecisionCandidates(),
       refreshDecisionProposals(),
+      refreshDecisionLifecycleEligibility(),
     ])
   }
 
@@ -1809,10 +1817,14 @@ function App() {
                 hasSelectedRepository={Boolean(selectedRepository)}
                 repositoryId={selectedRepository?.repository.id ?? null}
                 actionsEnabled={activePrimaryTab === 'decisions'}
+                lifecycleEligibility={decisionLifecycleEligibility}
+                isLifecycleEligibilityLoading={isDecisionLifecycleEligibilityLoading}
+                lifecycleEligibilityError={decisionLifecycleEligibilityError}
                 isLoading={
                   isDecisionContextLoading ||
                   isDecisionCandidatesLoading ||
                   isDecisionProposalsLoading ||
+                  isDecisionLifecycleEligibilityLoading ||
                   isDecisionCandidatesMutating ||
                   isDecisionProposalsMutating
                 }
