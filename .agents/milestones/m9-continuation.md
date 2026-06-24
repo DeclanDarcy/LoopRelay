@@ -35,7 +35,17 @@ Slice progress:
   human action, completion state, and diagnostics.
 - Re-running continuation with an identical evaluation fingerprint returns the
   existing event instead of duplicating history.
-- Continuation evaluation consumes only the aggregate workflow projection and its state-machine, gate, and completion evidence.
+- Continuation evaluation now uses the latest persisted workflow timeline as
+  the coordinator stage when one exists, then compares it to the current
+  domain-derived projection.
+- Endpoint-triggered continuation can persist a one-step workflow timeline
+  progression when domain evidence has reached or passed the next canonical
+  stage and the coordinator stage has no open gate.
+- A repeated run after a progression stops at the newly exposed authority gate
+  instead of duplicating the same timeline progression.
+- Continuation evaluation consumes the aggregate workflow projection, latest
+  persisted workflow timeline evidence, and state-machine, gate, and completion
+  evidence.
 - Continuation evaluation reports current stage, optional mechanical target stage, open gate, required human action, stop reason, deterministic fingerprint, and diagnostics.
 - Open authority gates halt evaluation with `WaitingForHuman`; no domain commands are invoked.
 - Hosted continuation, preparation, recovery integration, influence tracing, and
@@ -43,7 +53,7 @@ Slice progress:
 
 Progression rules:
 
-- [ ] execution complete and no open execution gate projects to handoff.
+- [x] execution complete and no open source-stage gate projects to handoff.
 - [ ] handoff accepted and no open execution acceptance gate projects to decision.
 - [ ] decision resolved and no decision governance block projects to operational context.
 - [ ] context promoted, rejected, or not required projects to commit.

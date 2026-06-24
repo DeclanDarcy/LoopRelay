@@ -2,42 +2,43 @@
 
 ## New State
 
-- Continued Milestone 9 with endpoint-triggered continuation history
-  persistence.
-- Added `WorkflowContinuationEvent`.
-- Extended `IWorkflowContinuationService` with:
-  `RunContinuationAsync` and `GetContinuationHistoryAsync`.
-- Extended `IWorkflowRepository` and `FileSystemWorkflowRepository` with
-  continuation event save/load/list support.
-- Added continuation artifact paths under `.agents/workflow/continuation`.
-- Continuation events persist both JSON and deterministic markdown evidence.
-- Added endpoint-triggered run endpoint:
-  `POST /api/repositories/{repositoryId}/workflow/continuation/run`.
-- Added history endpoint:
-  `GET /api/repositories/{repositoryId}/workflow/continuation/history`.
-- Continuation run still only evaluates and records evidence; it does not
-  mutate workflow stage or any domain state.
-- Re-running continuation with the same evaluation fingerprint returns the
-  existing event instead of duplicating continuation history.
-- Updated `.agents/milestones/m9-continuation.md` with slice progress.
+- Continued Milestone 9 with persisted one-step continuation progression.
+- Added `WorkflowTimelineFactory` so recovery and continuation construct
+  workflow timelines through the same fingerprinting path.
+- `WorkflowContinuationService` now reads the latest persisted workflow
+  timeline as the coordinator stage when one exists.
+- Continuation compares that coordinator stage with the current domain-derived
+  projection and advances one canonical transition only when:
+  - the coordinator stage has no open gate,
+  - the state machine exposes exactly one valid outgoing transition,
+  - the domain projection has reached or passed that transition target,
+  - the coordinator stage is not active, failed, blocked, or terminal.
+- Endpoint-triggered continuation still persists a continuation event first.
+- When the event is an actual mechanical advance, continuation also persists a
+  workflow timeline snapshot for the advanced stage.
+- A repeated run after `Execution -> Handoff` now stops at
+  `ExecutionAcceptance` instead of duplicating the progression.
+- Updated `.agents/milestones/m9-continuation.md` with this slice progress.
 - Rotated previous `.agents/handoffs/handoff.md` to
-  `.agents/handoffs/handoff.0010.md`.
+  `.agents/handoffs/handoff.0011.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter WorkflowProjectionServiceTests` passed: 49 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter WorkflowProjectionServiceTests` passed: 51 tests.
 - `dotnet build CommandCenter.slnx` passed with 0 warnings and 0 errors.
 
 ## Notes
 
-- Hosted continuation remains deferred.
-- Preparation service remains deferred.
+- No preparation service was added.
+- No hosted continuation service was added.
 - No domain commands are invoked.
-- Recovery integration for continuation history remains deferred.
-- Continuation history is separate from workflow timeline evidence.
+- Continuation progression is currently proven for `Execution -> Handoff`.
+- Remaining continuation transitions still need explicit tests and any required
+  fixture support.
 
 ## Next Slice
 
-- Continue M9 by adding real mechanical stage progression rules and persisted
-  continuation effects for eligible non-authority transitions, still stopping at
-  all authority gates and without adding preparation or hosted continuation yet.
+- Extend the persisted one-step progression tests across the remaining M9
+  transition rules: accepted handoff to decision, resolved decision to
+  operational context, completed context to commit, committed changes to push,
+  pushed or legitimate skip/no-change completion to completed.

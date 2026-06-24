@@ -860,6 +860,7 @@ public sealed class WorkflowProjectionServiceTests
         var service = new WorkflowContinuationService(
             new RepositoryServiceStub(fixture.Repository),
             fixture.CreateService(),
+            new WorkflowStateMachineService(),
             workflowRepository);
 
         WorkflowContinuationEvent first = await service.RunContinuationAsync(fixture.Repository.Id);
@@ -869,6 +870,79 @@ public sealed class WorkflowProjectionServiceTests
         Assert.Equal(first.EventId, second.EventId);
         Assert.Equal(first.InputFingerprint, second.InputFingerprint);
         Assert.Single(history);
+    }
+
+    [Fact]
+    public async Task ContinuationRunAdvancesOnePersistedStageWhenDomainEvidenceIsAhead()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingAcceptance;
+        fixture.Session = CompletedAcceptedSession(RepositoryExecutionState.AwaitingAcceptance);
+        var store = new MemoryArtifactStore();
+        var workflowRepository = new FileSystemWorkflowRepository(store);
+        var service = new WorkflowContinuationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            new WorkflowStateMachineService(),
+            workflowRepository);
+        await workflowRepository.SaveTimelineAsync(
+            fixture.Repository,
+            CreateTimeline(
+                fixture.Repository.Id,
+                DateTimeOffset.Parse("2026-06-23T10:00:00Z"),
+                WorkflowStage.Execution,
+                WorkflowProgressState.Ready,
+                WorkflowGateType.None,
+                WorkflowStage.WorkSelection,
+                []));
+
+        WorkflowContinuationEvent continuationEvent = await service.RunContinuationAsync(fixture.Repository.Id);
+        WorkflowTimeline? latest = await workflowRepository.GetLatestTimelineAsync(fixture.Repository);
+
+        Assert.Equal("Advance", continuationEvent.Decision);
+        Assert.Equal(WorkflowStage.Execution, continuationEvent.FromStage);
+        Assert.Equal(WorkflowStage.Handoff, continuationEvent.ToStage);
+        Assert.NotNull(latest);
+        Assert.Equal(WorkflowStage.Handoff, latest.CurrentStage);
+        Assert.Equal(WorkflowStage.Execution, latest.PreviousStage);
+        Assert.Equal(WorkflowGateType.ExecutionAcceptance, latest.BlockingGate);
+    }
+
+    [Fact]
+    public async Task ContinuationRunDoesNotDuplicateAlreadyAppliedProgression()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingAcceptance;
+        fixture.Session = CompletedAcceptedSession(RepositoryExecutionState.AwaitingAcceptance);
+        var store = new MemoryArtifactStore();
+        var workflowRepository = new FileSystemWorkflowRepository(store);
+        var service = new WorkflowContinuationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            new WorkflowStateMachineService(),
+            workflowRepository);
+        await workflowRepository.SaveTimelineAsync(
+            fixture.Repository,
+            CreateTimeline(
+                fixture.Repository.Id,
+                DateTimeOffset.Parse("2026-06-23T10:00:00Z"),
+                WorkflowStage.Execution,
+                WorkflowProgressState.Ready,
+                WorkflowGateType.None,
+                WorkflowStage.WorkSelection,
+                []));
+
+        WorkflowContinuationEvent first = await service.RunContinuationAsync(fixture.Repository.Id);
+        WorkflowContinuationEvent second = await service.RunContinuationAsync(fixture.Repository.Id);
+        IReadOnlyList<WorkflowContinuationEvent> history = await workflowRepository.ListContinuationEventsAsync(fixture.Repository);
+        WorkflowTimeline? latest = await workflowRepository.GetLatestTimelineAsync(fixture.Repository);
+
+        Assert.Equal("Advance", first.Decision);
+        Assert.Equal("Stop", second.Decision);
+        Assert.Equal(2, history.Count);
+        Assert.NotNull(latest);
+        Assert.Equal(WorkflowStage.Handoff, latest.CurrentStage);
+        Assert.Equal(WorkflowGateType.ExecutionAcceptance, second.BlockingGate);
     }
 
     [Fact]
@@ -1541,6 +1615,23 @@ public sealed class WorkflowProjectionServiceTests
     }
 
     private static WorkflowTimeline CreateTimeline(Guid repositoryId, DateTimeOffset generatedAt, WorkflowStage currentStage)
+        => CreateTimeline(
+            repositoryId,
+            generatedAt,
+            currentStage,
+            WorkflowProgressState.AwaitingGate,
+            WorkflowGateType.CommitApproval,
+            WorkflowStage.Handoff,
+            [WorkflowBlockingCondition.PendingCommitApproval]);
+
+    private static WorkflowTimeline CreateTimeline(
+        Guid repositoryId,
+        DateTimeOffset generatedAt,
+        WorkflowStage currentStage,
+        WorkflowProgressState progressState,
+        WorkflowGateType blockingGate,
+        WorkflowStage previousStage,
+        IReadOnlyList<WorkflowBlockingCondition?> blockingConditions)
     {
         WorkflowTimelineEntry entry = new(
             WorkflowTimelineEventType.ExecutionCompleted,
@@ -1559,18 +1650,18 @@ public sealed class WorkflowProjectionServiceTests
         string fingerprint = WorkflowFingerprint.ForTimeline(
             repositoryId,
             currentStage,
-            WorkflowStage.Handoff,
-            WorkflowProgressState.AwaitingGate,
-            WorkflowGateType.CommitApproval,
+            previousStage,
+            progressState,
+            blockingGate,
             [entry],
-            [WorkflowBlockingCondition.PendingCommitApproval]).Value;
+            blockingConditions).Value;
 
         return new WorkflowTimeline(
             repositoryId,
             currentStage,
-            WorkflowStage.Handoff,
-            WorkflowProgressState.AwaitingGate,
-            WorkflowGateType.CommitApproval,
+            previousStage,
+            progressState,
+            blockingGate,
             generatedAt,
             [entry],
             fingerprint);
@@ -1656,6 +1747,7 @@ public sealed class WorkflowProjectionServiceTests
             new(
                 new RepositoryServiceStub(Repository),
                 CreateService(),
+                new WorkflowStateMachineService(),
                 new FileSystemWorkflowRepository(new MemoryArtifactStore()));
 
         public WorkflowRecoveryService CreateRecoveryService(IWorkflowRepository workflowRepository) =>

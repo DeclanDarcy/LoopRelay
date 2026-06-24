@@ -95,27 +95,5 @@ public sealed class WorkflowRecoveryService(
     }
 
     private static WorkflowTimeline CreateTimeline(WorkflowInstance projection)
-    {
-        WorkflowStage previousStage = projection.Timeline.Count == 0
-            ? WorkflowStage.Unknown
-            : projection.Timeline[^1].Stage;
-        string fingerprint = WorkflowFingerprint.ForTimeline(
-            projection.RepositoryId,
-            projection.CurrentStage,
-            previousStage,
-            projection.ProgressState,
-            projection.BlockingGate,
-            projection.Timeline,
-            projection.BlockedTransitions.Select(transition => transition.BlockingCondition).ToArray()).Value;
-
-        return new WorkflowTimeline(
-            projection.RepositoryId,
-            projection.CurrentStage,
-            previousStage,
-            projection.ProgressState,
-            projection.BlockingGate,
-            DateTimeOffset.UtcNow,
-            projection.Timeline,
-            fingerprint);
-    }
+        => WorkflowTimelineFactory.Create(projection, DateTimeOffset.UtcNow);
 }

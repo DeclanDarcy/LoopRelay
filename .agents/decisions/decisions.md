@@ -2,27 +2,24 @@
 
 ## Newly Authorized
 
-- Proceed with real non-authority continuation progression as the next M9
-  implementation slice.
-- Keep progression narrow and evidence-driven.
-- Treat workflow timeline as lifecycle facts.
-- Treat continuation history as coordinator evaluation evidence.
-- Continuation may persist coordination evidence.
-- Continuation may project eligible stage movement.
-- Continuation may not satisfy gates.
-- Continuation may not mutate domains.
-- Allow mechanical progression only when all of these are true:
-  current projection is known, current stage has exactly one eligible next
-  stage, no open authority gate exists, the state machine validates the
-  transition, the continuation fingerprint has not already been applied, and
-  domain evidence proves the source stage is complete.
-- Stop with diagnostics whenever those progression conditions are not met.
+- Treat persisted workflow timeline state as coordination evidence, not
+  workflow truth.
+- Preserve the invariant that domain projection wins when persisted workflow
+  timeline evidence diverges from domain evidence.
+- Verify divergence behavior explicitly: corrupt or stale persisted workflow
+  stage must be rebuilt or superseded from domain evidence with diagnostics.
+- Keep one-step continuation progression as the canonical M9 progression model.
+- Split remaining M9 progression implementation into two groups:
+  1. `Handoff -> Decision -> OperationalContext`
+  2. `OperationalContext -> Commit -> Push -> Completed`
+- Validate recovery and gate behavior after the first progression group before
+  implementing the second group.
+- Add certification or recovery coverage proving corrupt persisted stage does
+  not become authority.
 
 ## Explicitly Deferred
 
-- Do not add preparation yet.
+- Do not authorize preparation until all canonical stage transitions are
+  implemented, persisted, recovered, and certified.
 - Do not add hosted continuation yet.
-- Do not add decision generation yet.
-- Do not add context proposal generation yet.
-- Do not add commit preparation yet.
 - Do not invoke domain commands yet.
