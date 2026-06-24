@@ -42,7 +42,7 @@ Certification rules:
 - [x] Fail if transfer lacks a valid continuity artifact.
 - [x] Fail if transfer lacks source session retirement, replacement session activation, or continuity evidence.
 - [x] Fail if recovery cannot rebuild missing analysis, policy, or eligibility snapshots.
-- [ ] Fail if workflow can mutate lifecycle state.
+- [x] Fail if workflow can mutate lifecycle state.
 - [x] Fail if lifecycle state lacks diagnostics.
 - [x] Fail if health reports healthy while evidence contradicts it.
 - [x] Certification may inspect, validate, report, and fail.
@@ -61,21 +61,21 @@ Persistence:
 
 End-to-end fixture:
 
-1. [ ] Create session.
-2. [ ] Activate session.
-3. [ ] Build governance session analysis.
-4. [ ] Evaluate lifecycle policy.
-5. [ ] Evaluate transfer eligibility.
-6. [ ] Create continuity artifact.
-7. [ ] Execute transfer when evaluation says `Transfer` and eligibility is `Eligible`.
-8. [ ] Recover after simulated restart.
-9. [ ] Project observability.
-10. [ ] Project workflow consumption.
-11. [ ] Run certification.
+1. [x] Create session.
+2. [x] Activate session.
+3. [x] Build governance session analysis.
+4. [x] Evaluate lifecycle policy.
+5. [x] Evaluate transfer eligibility.
+6. [x] Create continuity artifact.
+7. [x] Execute transfer when evaluation says `Transfer` and eligibility is `Eligible`.
+8. [x] Recover after simulated restart.
+9. [x] Project observability.
+10. [x] Project workflow consumption.
+11. [x] Run certification.
 
 Tests:
 
-- [ ] Authority boundary: workflow cannot transfer.
+- [x] Authority boundary: workflow cannot transfer.
 - [x] Single-active-session certification fails on duplicates.
 - [x] Analysis determinism passes for identical inputs.
 - [x] TTL and cache risk appear in certification evidence.
@@ -84,14 +84,14 @@ Tests:
 - [x] Transfer preserves continuity through a valid continuity artifact.
 - [x] Recovery reconstructs active session and derived snapshots.
 - [ ] Diagnostics exist for continue, transfer, eligibility blocked, recovery, and failure states.
-- [ ] Workflow consumes lifecycle correctly.
-- [ ] End-to-end lifecycle passes.
+- [x] Workflow consumes lifecycle correctly.
+- [x] End-to-end lifecycle passes.
 
 Exit criteria:
 
 - [x] Certification service exists.
 - [x] Certification reports are persisted.
-- [ ] End-to-end lifecycle fixture passes.
+- [x] End-to-end lifecycle fixture passes.
 - [ ] The system can prove governance continuity survives long horizons, transfer preserves continuity, recovery reconstructs truth, workflow remains a consumer, and at most one active governance session exists.
 
 

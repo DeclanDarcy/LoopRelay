@@ -4,8 +4,10 @@ using CommandCenter.Backend;
 using CommandCenter.Core.Artifacts;
 using CommandCenter.Core.Repositories;
 using CommandCenter.DecisionSessions.Models;
+using CommandCenter.DecisionSessions.Persistence;
 using CommandCenter.Workflow.Models;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -13,6 +15,93 @@ namespace CommandCenter.Backend.Tests;
 
 public sealed class DecisionSessionEndpointTests
 {
+    [Fact]
+    public async Task WorkflowDecisionSessionEndpointsAreReadOnlyAndDoNotMutateLifecycleState()
+    {
+        DecisionSessionTestHarness harness = DecisionSessionTestHarness.Create();
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services =>
+            {
+                services.RemoveAll<IArtifactStore>();
+                services.RemoveAll<IRepositoryService>();
+                services.AddSingleton<IArtifactStore>(harness.Store);
+                services.AddSingleton<IRepositoryService>(harness.RepositoryService);
+            });
+        await app.StartAsync();
+        using var client = new HttpClient();
+        string root = app.Urls.Single();
+        DecisionSession created = await harness.Registry.CreateSessionAsync(harness.Repository.Id, "test");
+        await harness.Registry.ActivateSessionAsync(harness.Repository.Id, created.Id);
+
+        string registryBefore = await ReadRequiredAsync(harness, DecisionSessionArtifactPaths.RegistryJson());
+        IReadOnlyList<DecisionSessionTransfer> transfersBefore = await harness.RepositoryStore.ListTransfersAsync(harness.Repository);
+        IReadOnlyList<DecisionSessionContinuityArtifact> artifactsBefore =
+            await harness.RepositoryStore.ListContinuityArtifactsAsync(harness.Repository);
+        IReadOnlyList<string> decisionSessionArtifactsBefore = await harness.Store.ListAsync(
+            DecisionSessionArtifactPaths.Resolve(harness.Repository, Path.Combine(".agents", "decision-sessions")),
+            "*");
+
+        HttpResponseMessage projectionResponse = await client.GetAsync(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/workflow");
+        HttpResponseMessage healthResponse = await client.GetAsync(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/workflow/health");
+        HttpResponseMessage influenceResponse = await client.GetAsync(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/workflow/influence");
+        HttpResponseMessage summaryResponse = await client.GetAsync(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/workflow/summary");
+
+        string registryAfter = await ReadRequiredAsync(harness, DecisionSessionArtifactPaths.RegistryJson());
+        IReadOnlyList<DecisionSessionTransfer> transfersAfter = await harness.RepositoryStore.ListTransfersAsync(harness.Repository);
+        IReadOnlyList<DecisionSessionContinuityArtifact> artifactsAfter =
+            await harness.RepositoryStore.ListContinuityArtifactsAsync(harness.Repository);
+        IReadOnlyList<string> decisionSessionArtifactsAfter = await harness.Store.ListAsync(
+            DecisionSessionArtifactPaths.Resolve(harness.Repository, Path.Combine(".agents", "decision-sessions")),
+            "*");
+
+        Assert.True(projectionResponse.IsSuccessStatusCode);
+        Assert.True(healthResponse.IsSuccessStatusCode);
+        Assert.True(influenceResponse.IsSuccessStatusCode);
+        Assert.True(summaryResponse.IsSuccessStatusCode);
+        Assert.Equal(registryBefore, registryAfter);
+        Assert.Equal(transfersBefore, transfersAfter);
+        Assert.Equal(artifactsBefore, artifactsAfter);
+        Assert.Equal(decisionSessionArtifactsBefore, decisionSessionArtifactsAfter);
+    }
+
+    [Fact]
+    public async Task BackendDoesNotExposeWorkflowLifecycleMutationRoutes()
+    {
+        DecisionSessionTestHarness harness = DecisionSessionTestHarness.Create();
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services =>
+            {
+                services.RemoveAll<IArtifactStore>();
+                services.RemoveAll<IRepositoryService>();
+                services.AddSingleton<IArtifactStore>(harness.Store);
+                services.AddSingleton<IRepositoryService>(harness.RepositoryService);
+            });
+        await app.StartAsync();
+
+        RouteEndpoint[] workflowDecisionSessionEndpoints = app.Services
+            .GetRequiredService<EndpointDataSource>()
+            .Endpoints
+            .OfType<RouteEndpoint>()
+            .Where(endpoint => endpoint.RoutePattern.RawText?.Contains("/decision-sessions/workflow", StringComparison.Ordinal) == true)
+            .ToArray();
+
+        Assert.Equal(4, workflowDecisionSessionEndpoints.Length);
+        Assert.All(workflowDecisionSessionEndpoints, endpoint =>
+        {
+            HttpMethodMetadata metadata = endpoint.Metadata.GetRequiredMetadata<HttpMethodMetadata>();
+            Assert.Equal(["GET"], metadata.HttpMethods);
+            Assert.DoesNotContain("transfer", endpoint.RoutePattern.RawText, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("activate", endpoint.RoutePattern.RawText, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("retire", endpoint.RoutePattern.RawText, StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
     [Fact]
     public async Task EndpointsReturnSessionsActiveAndDiagnostics()
     {
@@ -223,5 +312,11 @@ public sealed class DecisionSessionEndpointTests
         HttpResponseMessage response = await client.GetAsync($"{root}/api/repositories/{Guid.NewGuid()}/decision-sessions");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    private static async Task<string> ReadRequiredAsync(DecisionSessionTestHarness harness, string relativePath)
+    {
+        string? content = await harness.Store.ReadAsync(DecisionSessionArtifactPaths.Resolve(harness.Repository, relativePath));
+        return content ?? throw new InvalidOperationException($"Expected artifact was missing: {relativePath}");
     }
 }
