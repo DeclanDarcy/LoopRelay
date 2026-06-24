@@ -65,6 +65,15 @@ Slice progress:
   diagnostics.
 - Re-running preparation with an identical evaluation fingerprint returns the
   existing event instead of duplicating history.
+- Added duplicate-domain-evidence detection before any preparation command
+  invocation:
+  - decision candidate, proposal, and package evidence.
+  - operational-context proposal, assimilation, and decision/execution linkage
+    evidence.
+  - commit-preparation snapshot and prepared commit evidence.
+- Preparation evaluation now reports `Allowed`, `Refused`, `Skipped`, or
+  `Duplicate` outcomes; duplicate evidence is included in evaluation
+  diagnostics and persisted preparation events.
 - Preparation currently refuses at every open authority gate and reports the
   future command name only when a stage would be eligible; actual Decisions,
   Continuity, and Execution command invocation remains deferred.
@@ -93,7 +102,7 @@ Preparation rules:
 - [ ] resolved decision may trigger operational-context proposal generation or linkage through existing Continuity commands, but this does not review or promote context and does not itself move the stage beyond operational context.
 - [ ] context complete may trigger commit preparation through the existing Execution command, but this does not approve or execute commit and does not itself move the stage beyond commit.
 - [x] preparation must record command name, source stage, input fingerprint, created artifact identifiers, skipped reason, and diagnostics.
-- [ ] preparation must skip when equivalent reviewable artifacts already exist for the same fingerprint.
+- [x] preparation must skip when equivalent reviewable artifacts already exist for the same fingerprint.
 
 Gate halting:
 
@@ -107,7 +116,7 @@ Idempotency rules:
 
 - [x] continuation events carry fingerprints.
 - [x] preparation events carry fingerprints.
-- [ ] before invoking an allowed preparation command, preparation checks whether equivalent domain evidence already exists.
+- [x] before invoking an allowed preparation command, preparation checks whether equivalent domain evidence already exists.
 - [x] identical endpoint-triggered continuation reevaluation does not duplicate continuation events.
 - [x] restart reevaluation must not duplicate continuation events or timeline progression.
 - [ ] restart reevaluation must not duplicate proposals, commit preparations, or preparation events.

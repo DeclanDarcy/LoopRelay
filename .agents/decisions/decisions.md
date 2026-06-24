@@ -2,45 +2,37 @@
 
 ## Newly Authorized
 
-- Proceed next with duplicate-domain-evidence detection before any preparation
-  domain command invocation.
-- Treat the completed preparation slice as the preparation equivalent of the
-  earlier continuation-evaluation milestone:
-  - preparation framework established.
-  - preparation persistence established.
-  - preparation idempotency established.
-  - preparation refusal model established.
-- Preserve the invariant that preparation refuses at every open authority gate.
-- Add duplicate detection for all three preparation categories before invoking
-  any existing domain command.
-- Decision preparation duplicate checks must cover:
-  - equivalent candidate exists.
-  - equivalent proposal exists.
-  - equivalent package exists.
-- Operational-context preparation duplicate checks must cover:
-  - equivalent proposal exists.
-  - equivalent assimilation exists.
-  - equivalent linkage exists.
-- Commit preparation duplicate checks must cover:
-  - equivalent commit preparation exists.
-  - equivalent prepared commit exists.
-- Strengthen preparation evaluation outcomes so certification can distinguish:
-  - allowed.
-  - refused.
-  - skipped.
-  - duplicate.
-- Preserve the distinction:
-  - preparation allowed does not mean preparation executed.
-- Stop again for review before allowing the first actual domain command
-  invocation from workflow.
+- Proceed with the first preparation invocation slice, narrowly limited to:
+  - Decisions review-artifact preparation only.
+- Preserve the invariant:
+  - duplicate outcome is diagnostic only.
+  - `CanPrepare = false` when equivalent domain evidence exists.
+- Before invoking Decisions, require:
+  - no open authority gate.
+  - no duplicate decision evidence.
+  - current workflow stage is `Decision`.
+  - preparation fingerprint is stable.
+  - existing Decisions command is used directly.
+  - workflow records command name and created artifact ids.
+  - preparation does not advance workflow stage.
+  - preparation does not resolve the decision.
+- Add tests proving:
+  - open gate means no command is invoked.
+  - duplicate evidence means no command is invoked.
+  - successful invocation creates a review artifact.
+  - repeating the same fingerprint creates no duplicate artifact.
+  - preparation event is persisted.
+  - workflow stage remains unchanged.
+  - decision gate still requires human resolution.
 
 ## Explicitly Deferred
 
-- Do not invoke Decisions commands yet.
-- Do not invoke Continuity commands yet.
-- Do not invoke Execution commands yet.
-- Do not create decision candidates, proposals, or packages yet.
-- Do not create operational-context proposals or linkages yet.
-- Do not create commit preparations yet.
-- Do not implement decision generation logic, context proposal logic, or commit
-  preparation logic inside `CommandCenter.Workflow`.
+- Do not invoke Continuity preparation.
+- Do not invoke commit preparation.
+- Do not enable hosted continuation.
+- Do not perform any authority action.
+- Do not accept or reject handoffs.
+- Do not resolve, archive, or supersede decisions.
+- Do not review, accept, reject, edit, or promote operational context.
+- Do not commit.
+- Do not push.

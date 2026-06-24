@@ -25,11 +25,23 @@ public sealed class WorkflowPreparationService(
             and not WorkflowProgressState.Blocked
             and not WorkflowProgressState.Failed
             and not WorkflowProgressState.Completed;
+        IReadOnlyList<string> duplicateEvidence = DetectDuplicateEvidence(projection, command);
+        bool hasDuplicateDomainEvidence = duplicateEvidence.Count > 0;
         bool canPrepare = !hasOpenGate &&
             isRunnableState &&
-            command is not WorkflowPreparationCommand.None;
+            command is not WorkflowPreparationCommand.None &&
+            !hasDuplicateDomainEvidence;
 
-        string reason = BuildReason(stage, progressState, blockingGate, command, hasOpenGate, isRunnableState, canPrepare);
+        string reason = BuildReason(
+            stage,
+            progressState,
+            blockingGate,
+            command,
+            hasOpenGate,
+            isRunnableState,
+            hasDuplicateDomainEvidence,
+            duplicateEvidence,
+            canPrepare);
         WorkflowPreparationFingerprint fingerprint = WorkflowPreparationFingerprint.FromEvaluation(
             projection.RepositoryId,
             stage,
@@ -38,12 +50,21 @@ public sealed class WorkflowPreparationService(
             command,
             canPrepare,
             reason,
+            duplicateEvidence,
             projection.Diagnostics.ProjectionInputs
                 .Concat([latestTimeline is null ? "latest-timeline:none" : $"latest-timeline:{latestTimeline.Fingerprint}:{latestTimeline.CurrentStage}"])
                 .ToArray(),
             projection.OpenGates.Select(gate => gate.GateId).Order(StringComparer.Ordinal).ToArray());
 
-        IReadOnlyList<string> reasoning = BuildReasoning(projection, stage, progressState, latestTimeline, command, reason, canPrepare);
+        IReadOnlyList<string> reasoning = BuildReasoning(
+            projection,
+            stage,
+            progressState,
+            latestTimeline,
+            command,
+            reason,
+            duplicateEvidence,
+            canPrepare);
         IReadOnlyList<string> refusalReasons = canPrepare ? [] : [reason];
         var diagnostics = new WorkflowPreparationDiagnostics(
             projection.RepositoryId,
@@ -53,6 +74,7 @@ public sealed class WorkflowPreparationService(
             projection.GateDiagnostics.Reasoning,
             reasoning,
             refusalReasons,
+            duplicateEvidence,
             projection.Diagnostics.Conflicts
                 .Concat(projection.GateDiagnostics.Conflicts)
                 .ToArray(),
@@ -67,10 +89,12 @@ public sealed class WorkflowPreparationService(
             blockingGate,
             canPrepare,
             hasOpenGate,
+            hasDuplicateDomainEvidence,
             command,
             CommandName(command),
-            canPrepare ? "Ready" : "Refused",
+            BuildOutcome(canPrepare, blockingGate, hasOpenGate, hasDuplicateDomainEvidence),
             reason,
+            duplicateEvidence,
             fingerprint,
             diagnostics);
     }
@@ -85,7 +109,8 @@ public sealed class WorkflowPreparationService(
             preparationEvent.Stage == evaluation.Stage &&
             preparationEvent.Command == evaluation.Command &&
             preparationEvent.Decision == evaluation.Outcome &&
-            preparationEvent.Reason == evaluation.Reason);
+            preparationEvent.Reason == evaluation.Reason &&
+            preparationEvent.HasDuplicateDomainEvidence == evaluation.HasDuplicateDomainEvidence);
 
         if (existing is not null)
         {
@@ -107,9 +132,12 @@ public sealed class WorkflowPreparationService(
             evaluation.Reason,
             evaluation.Fingerprint,
             evaluation.IsWaitingForHuman,
+            evaluation.HasDuplicateDomainEvidence,
             [],
+            evaluation.DuplicateEvidence,
             evaluation.Diagnostics.Reasoning
                 .Concat(evaluation.Diagnostics.RefusalReasons)
+                .Concat(evaluation.Diagnostics.DuplicateEvidence)
                 .Concat(evaluation.Diagnostics.Conflicts)
                 .ToArray());
 
@@ -159,6 +187,99 @@ public sealed class WorkflowPreparationService(
         _ => "none"
     };
 
+    private static IReadOnlyList<string> DetectDuplicateEvidence(
+        WorkflowInstance projection,
+        WorkflowPreparationCommand command)
+    {
+        List<string> duplicates = [];
+
+        switch (command)
+        {
+            case WorkflowPreparationCommand.GenerateDecisionReviewArtifacts:
+                if (!string.IsNullOrWhiteSpace(projection.CurrentDecision.CandidateId))
+                {
+                    duplicates.Add($"decision-candidate:{projection.CurrentDecision.CandidateId}");
+                }
+
+                if (!string.IsNullOrWhiteSpace(projection.CurrentDecision.ProposalId))
+                {
+                    duplicates.Add($"decision-proposal:{projection.CurrentDecision.ProposalId}");
+                }
+
+                if (!string.IsNullOrWhiteSpace(projection.CurrentDecision.PackageId))
+                {
+                    duplicates.Add($"decision-package:{projection.CurrentDecision.PackageId}");
+                }
+
+                break;
+
+            case WorkflowPreparationCommand.GenerateOperationalContextProposal:
+                if (!string.IsNullOrWhiteSpace(projection.CurrentOperationalContext.ProposalId))
+                {
+                    duplicates.Add($"operational-context-proposal:{projection.CurrentOperationalContext.ProposalId}");
+                }
+
+                if (!string.IsNullOrWhiteSpace(projection.CurrentOperationalContext.SourceDecisionId))
+                {
+                    duplicates.Add($"operational-context-decision-link:{projection.CurrentOperationalContext.SourceDecisionId}");
+                }
+
+                if (!string.IsNullOrWhiteSpace(projection.CurrentOperationalContext.SourceExecutionId))
+                {
+                    duplicates.Add($"operational-context-execution-link:{projection.CurrentOperationalContext.SourceExecutionId}");
+                }
+
+                if (projection.OperationalContextDiagnostics.LinkageSignals.Any(signal =>
+                    signal.Contains("assimilation recommendation exists", StringComparison.OrdinalIgnoreCase)))
+                {
+                    duplicates.Add("operational-context-assimilation");
+                }
+
+                break;
+
+            case WorkflowPreparationCommand.PrepareExecutionCommit:
+                duplicates.AddRange(projection.CurrentGit.Diagnostics.IncludedEvidence
+                    .Where(input => input.Contains(":preparation=", StringComparison.Ordinal) &&
+                        !input.EndsWith(":preparation=none", StringComparison.Ordinal))
+                    .Select(input => $"commit-preparation:{input.Split(":preparation=", StringSplitOptions.None).Last()}"));
+
+                if (!string.IsNullOrWhiteSpace(projection.CurrentGit.CommitId) ||
+                    projection.CurrentGit.CommitTimestamp is not null ||
+                    projection.CurrentGit.CommitStatus is WorkflowGitStatus.Committed or WorkflowGitStatus.Pushed)
+                {
+                    duplicates.Add($"prepared-commit:{projection.CurrentGit.CommitId ?? projection.CurrentGit.CommitStatus.ToString()}");
+                }
+
+                break;
+        }
+
+        return duplicates
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static string BuildOutcome(
+        bool canPrepare,
+        WorkflowGateType blockingGate,
+        bool hasOpenGate,
+        bool hasDuplicateDomainEvidence)
+    {
+        if (canPrepare)
+        {
+            return "Allowed";
+        }
+
+        if (hasDuplicateDomainEvidence &&
+            blockingGate is not WorkflowGateType.OperationalContextReview and not WorkflowGateType.OperationalContextPromotion)
+        {
+            return "Duplicate";
+        }
+
+        return hasOpenGate ? "Refused" : "Skipped";
+    }
+
     private static string BuildReason(
         WorkflowStage stage,
         WorkflowProgressState progressState,
@@ -166,6 +287,8 @@ public sealed class WorkflowPreparationService(
         WorkflowPreparationCommand command,
         bool hasOpenGate,
         bool isRunnableState,
+        bool hasDuplicateDomainEvidence,
+        IReadOnlyList<string> duplicateEvidence,
         bool canPrepare)
     {
         if (hasOpenGate)
@@ -185,6 +308,11 @@ public sealed class WorkflowPreparationService(
             return $"No preparation command is defined for workflow stage {stage}.";
         }
 
+        if (hasDuplicateDomainEvidence)
+        {
+            return $"Preparation skipped because equivalent domain evidence already exists: {string.Join(", ", duplicateEvidence)}.";
+        }
+
         if (canPrepare)
         {
             return $"Preparation may request {CommandName(command)} for workflow stage {stage}; domain invocation is deferred.";
@@ -200,6 +328,7 @@ public sealed class WorkflowPreparationService(
         WorkflowTimeline? latestTimeline,
         WorkflowPreparationCommand command,
         string reason,
+        IReadOnlyList<string> duplicateEvidence,
         bool canPrepare)
     {
         List<string> reasoning =
@@ -220,6 +349,11 @@ public sealed class WorkflowPreparationService(
         if (projection.OpenGates.Count > 0)
         {
             reasoning.Add($"Open authority gates refuse preparation: {string.Join(", ", projection.OpenGates.Select(gate => gate.Type).Distinct())}.");
+        }
+
+        if (duplicateEvidence.Count > 0)
+        {
+            reasoning.Add($"Equivalent domain evidence already exists: {string.Join(", ", duplicateEvidence)}.");
         }
 
         if (canPrepare)

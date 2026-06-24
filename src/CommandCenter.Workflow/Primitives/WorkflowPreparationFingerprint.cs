@@ -12,6 +12,7 @@ public readonly record struct WorkflowPreparationFingerprint(string Value)
         WorkflowPreparationCommand command,
         bool canPrepare,
         string reason,
+        IReadOnlyList<string> duplicateEvidence,
         IReadOnlyList<string> projectionInputs,
         IReadOnlyList<string> openGateIds)
     {
@@ -25,6 +26,7 @@ public readonly record struct WorkflowPreparationFingerprint(string Value)
             command,
             canPrepare,
             reason,
+            $"duplicates:{string.Join("|", duplicateEvidence)}",
             $"inputs:{string.Join("|", projectionInputs)}",
             $"open-gates:{string.Join("|", openGateIds)}");
 

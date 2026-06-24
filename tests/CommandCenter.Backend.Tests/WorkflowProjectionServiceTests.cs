@@ -971,6 +971,94 @@ public sealed class WorkflowProjectionServiceTests
     }
 
     [Fact]
+    public async Task PreparationEvaluationSkipsDecisionArtifactsWhenEquivalentDomainEvidenceExists()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+        fixture.Candidates.Add(CreateCandidate(fixture.Repository.Id, "cand-0001"));
+        fixture.DecisionProposals.Add(CreateProposal(fixture.Repository.Id, "proposal-0001", "cand-0001"));
+        fixture.PackageVersions.Add(new DecisionPackageVersion(
+            "package-0001",
+            fixture.Repository.Id,
+            "proposal-0001",
+            "cand-0001",
+            DateTimeOffset.Parse("2026-06-23T10:20:00Z"),
+            "package-fingerprint",
+            null!));
+
+        WorkflowPreparationEvaluation evaluation =
+            await fixture.CreatePreparationService().EvaluatePreparationAsync(fixture.Repository.Id);
+
+        Assert.False(evaluation.CanPrepare);
+        Assert.True(evaluation.HasDuplicateDomainEvidence);
+        Assert.Equal("Duplicate", evaluation.Outcome);
+        Assert.Contains("decision-candidate:cand-0001", evaluation.DuplicateEvidence);
+        Assert.Contains("decision-proposal:proposal-0001", evaluation.DuplicateEvidence);
+        Assert.Contains("decision-package:package-0001", evaluation.DuplicateEvidence);
+        Assert.Contains(evaluation.Diagnostics.DuplicateEvidence, evidence => evidence.Contains("decision-package", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PreparationEvaluationSkipsOperationalContextArtifactsWhenEquivalentDomainEvidenceExists()
+    {
+        TestFixture fixture = TestFixture.Create();
+        Decision decision = CreateResolvedDecision(fixture.Repository.Id, "DEC-0001");
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+        fixture.Decisions.Add(decision);
+        fixture.AssimilationRecommendations.Add(CreateAssimilationRecommendation(fixture.Repository.Id, decision, "decision-fingerprint"));
+        fixture.Proposals.Add(CreateOperationalContextProposal(
+            fixture.Repository.Id,
+            "ctx-0001",
+            OperationalContextProposalStatus.Promoted,
+            OperationalContextReviewState.Accepted,
+            DateTimeOffset.Parse("2026-06-23T11:10:00Z"),
+            DateTimeOffset.Parse("2026-06-23T11:20:00Z")));
+
+        var workflowRepository = new FileSystemWorkflowRepository(new MemoryArtifactStore());
+        await workflowRepository.SaveTimelineAsync(
+            fixture.Repository,
+            CreateTimeline(
+                fixture.Repository.Id,
+                DateTimeOffset.Parse("2026-06-23T11:25:00Z"),
+                WorkflowStage.OperationalContext,
+                WorkflowProgressState.Ready,
+                WorkflowGateType.None,
+                WorkflowStage.Decision,
+                []));
+        var service = new WorkflowPreparationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            workflowRepository);
+
+        WorkflowPreparationEvaluation evaluation = await service.EvaluatePreparationAsync(fixture.Repository.Id);
+
+        Assert.False(evaluation.CanPrepare);
+        Assert.True(evaluation.HasDuplicateDomainEvidence);
+        Assert.Equal("Duplicate", evaluation.Outcome);
+        Assert.Contains("operational-context-proposal:ctx-0001", evaluation.DuplicateEvidence);
+        Assert.Contains("operational-context-decision-link:DEC-0001", evaluation.DuplicateEvidence);
+        Assert.Contains("operational-context-assimilation", evaluation.DuplicateEvidence);
+    }
+
+    [Fact]
+    public async Task PreparationEvaluationSkipsCommitPreparationWhenEquivalentDomainEvidenceExists()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = PreparedAcceptedSession();
+
+        WorkflowPreparationEvaluation evaluation =
+            await fixture.CreatePreparationService().EvaluatePreparationAsync(fixture.Repository.Id);
+
+        Assert.False(evaluation.CanPrepare);
+        Assert.True(evaluation.HasDuplicateDomainEvidence);
+        Assert.Equal("Duplicate", evaluation.Outcome);
+        Assert.Contains("commit-preparation:snapshot-0001", evaluation.DuplicateEvidence);
+    }
+
+    [Fact]
     public async Task ContinuationRunDoesNotDuplicateIdenticalFingerprint()
     {
         TestFixture fixture = TestFixture.Create();
@@ -1733,6 +1821,8 @@ public sealed class WorkflowProjectionServiceTests
             "Preparation refused because CommitApproval is awaiting human action.",
             new WorkflowPreparationFingerprint("fingerprint"),
             true,
+            false,
+            [],
             [],
             ["diagnostic"]);
 
@@ -2029,6 +2119,18 @@ public sealed class WorkflowProjectionServiceTests
         HandoffPath = ".agents/handoffs/handoff.md",
         CommittedAt = DateTimeOffset.Parse("2026-06-23T12:00:00Z"),
         CommitSha = "abc123"
+    };
+
+    private static ExecutionSessionSummary PreparedAcceptedSession() => new()
+    {
+        SessionId = Guid.NewGuid(),
+        State = ExecutionSessionState.Completed,
+        RepositoryState = RepositoryExecutionState.Accepted,
+        StartedAt = DateTimeOffset.Parse("2026-06-23T10:00:00Z"),
+        CompletedAt = DateTimeOffset.Parse("2026-06-23T10:10:00Z"),
+        AcceptedAt = DateTimeOffset.Parse("2026-06-23T10:15:00Z"),
+        HandoffPath = ".agents/handoffs/handoff.md",
+        PreparationSnapshotId = "snapshot-0001"
     };
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)

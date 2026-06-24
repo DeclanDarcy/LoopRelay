@@ -2,52 +2,33 @@
 
 ## New State
 
-- Continued Milestone 9 preparation evaluation work.
-- Added preparation model/service surface:
-  - `IWorkflowPreparationService`
-  - `WorkflowPreparationEvaluation`
-  - `WorkflowPreparationDiagnostics`
-  - `WorkflowPreparationEvent`
-  - `WorkflowPreparationCommand`
-  - `WorkflowPreparationFingerprint`
-- Added `WorkflowPreparationService` as evaluation-first and evidence-only:
-  - consumes aggregate workflow projection and latest timeline evidence.
-  - refuses preparation at any open authority gate.
-  - reports candidate future command names without invoking domain commands.
-  - persists preparation events with deterministic fingerprints.
-  - deduplicates identical preparation runs, including after service restart.
-- Added preparation persistence under `.agents/workflow/preparation` with paired
-  JSON and Markdown artifacts.
-- Added backend endpoints:
-  - `GET /api/repositories/{repositoryId}/workflow/preparation/evaluation`
-  - `POST /api/repositories/{repositoryId}/workflow/preparation/run`
-  - `GET /api/repositories/{repositoryId}/workflow/preparation/history`
-- Updated Milestone 9 checklist for completed preparation evaluation,
-  gate-refusal, preparation history, and preparation idempotency coverage.
-- Rotated previous `.agents/handoffs/handoff.md` to
-  `.agents/handoffs/handoff.0015.md`.
+- Continued Milestone 9 preparation work by adding read-only duplicate-domain-evidence detection before any workflow-owned preparation command invocation.
+- Extended preparation evaluation, diagnostics, event persistence, fingerprints, and markdown projection with:
+  - `HasDuplicateDomainEvidence`
+  - `DuplicateEvidence`
+  - explicit `Allowed`, `Refused`, `Skipped`, and `Duplicate` outcomes.
+- Duplicate detection now covers:
+  - decision candidate, proposal, and package evidence.
+  - operational-context proposal, decision/execution linkage, and assimilation evidence.
+  - commit-preparation snapshot and prepared commit evidence.
+- Preparation still does not invoke Decisions, Continuity, Execution, or Git commands.
+- Preparation still does not create candidates, proposals, packages, operational-context proposals, commit preparations, commits, or pushes.
+- Updated `.agents/milestones/m9-continuation.md` to mark equivalent-artifact skip and pre-invocation duplicate checks complete.
+- Rotated previous `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0016.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter WorkflowProjectionServiceTests` passed: 74 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter WorkflowProjectionServiceTests` passed: 77 tests.
 - `dotnet build CommandCenter.slnx` passed with 0 warnings and 0 errors.
 
 ## Notes
 
-- No Decisions, Continuity, or Execution domain command invocation was added.
-- Preparation does not create decision proposals, operational-context proposals,
-  or commit preparations yet.
-- Preparation does not move workflow stage, satisfy gates, accept handoffs,
-  resolve decisions, promote context, commit, or push.
-- Created artifact IDs are currently empty because this slice only records
-  evaluation/refusal evidence.
+- Duplicate outcome is diagnostic only. `CanPrepare` remains false when duplicate evidence exists.
+- Operational-context review and promotion gates remain plain authority refusals; existing pending or accepted context proposals are not reclassified as duplicate preparation.
+- Persisted preparation events now include duplicate evidence separately from created artifact IDs, which remain empty in this slice.
 
 ## Next Slice
 
-- Add preparation duplicate-domain-evidence detection before any command
-  invocation:
-  - existing decision candidates/proposals for the same fingerprint.
-  - existing operational-context proposals/linkage for the same fingerprint.
-  - existing commit-preparation evidence for the same fingerprint.
-- Keep command invocation deferred until the duplicate detection and refusal
-  matrix are reviewed.
+- Implement the first allowed preparation invocation path behind the existing refusal and duplicate matrix, starting with the lowest-risk domain command.
+- Recommended order: Decisions review-artifact preparation first, then Continuity proposal/linkage preparation, then Execution commit preparation.
+- Stop for review again before enabling background hosted continuation/preparation.

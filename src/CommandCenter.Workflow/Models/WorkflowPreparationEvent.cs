@@ -16,5 +16,7 @@ public sealed record WorkflowPreparationEvent(
     string Reason,
     WorkflowPreparationFingerprint InputFingerprint,
     bool IsWaitingForHuman,
+    bool HasDuplicateDomainEvidence,
     IReadOnlyList<string> CreatedArtifactIds,
+    IReadOnlyList<string> DuplicateEvidence,
     IReadOnlyList<string> Diagnostics);

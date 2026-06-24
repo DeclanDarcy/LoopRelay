@@ -366,6 +366,22 @@ public sealed class FileSystemWorkflowRepository(IArtifactStore artifactStore) :
         builder.AppendLine($"Decision: {preparationEvent.Decision}");
         builder.AppendLine($"Reason: {preparationEvent.Reason}");
         builder.AppendLine($"Waiting For Human: {preparationEvent.IsWaitingForHuman}");
+        builder.AppendLine($"Duplicate Domain Evidence: {preparationEvent.HasDuplicateDomainEvidence}");
+        builder.AppendLine();
+        builder.AppendLine("## Duplicate Evidence");
+        if (preparationEvent.DuplicateEvidence.Count == 0)
+        {
+            builder.AppendLine();
+            builder.AppendLine("- None");
+        }
+        else
+        {
+            foreach (string duplicate in preparationEvent.DuplicateEvidence)
+            {
+                builder.AppendLine($"- {duplicate}");
+            }
+        }
+
         builder.AppendLine();
         builder.AppendLine("## Created Artifacts");
         if (preparationEvent.CreatedArtifactIds.Count == 0)

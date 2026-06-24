@@ -9,9 +9,11 @@ public sealed record WorkflowPreparationEvaluation(
     WorkflowGateType BlockingGate,
     bool CanPrepare,
     bool IsWaitingForHuman,
+    bool HasDuplicateDomainEvidence,
     WorkflowPreparationCommand Command,
     string CommandName,
     string Outcome,
     string Reason,
+    IReadOnlyList<string> DuplicateEvidence,
     WorkflowPreparationFingerprint Fingerprint,
     WorkflowPreparationDiagnostics Diagnostics);

@@ -8,6 +8,7 @@ public sealed record WorkflowPreparationDiagnostics(
     IReadOnlyList<string> GateReasoning,
     IReadOnlyList<string> Reasoning,
     IReadOnlyList<string> RefusalReasons,
+    IReadOnlyList<string> DuplicateEvidence,
     IReadOnlyList<string> Conflicts,
     int OpenGateCount,
     int SatisfiedGateCount,
