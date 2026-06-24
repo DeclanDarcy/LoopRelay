@@ -21,6 +21,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IWorkflowPreparationService, WorkflowPreparationService>();
         services.AddSingleton<IWorkflowRecoveryService, WorkflowRecoveryService>();
         services.AddHostedService<WorkflowRecoveryHostedService>();
+        services.AddHostedService<WorkflowContinuationHostedService>();
         return services;
     }
 }

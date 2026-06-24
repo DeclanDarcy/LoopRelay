@@ -23,6 +23,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 
 namespace CommandCenter.Backend.Tests;
 
@@ -2624,6 +2625,184 @@ public sealed class WorkflowProjectionServiceTests
         Assert.Equal(WorkflowStage.Handoff, latest.CurrentStage);
     }
 
+    [Fact]
+    public async Task HostedContinuationDisabledConfigDoesNotRun()
+    {
+        Repository repository = CreateRepository("repo-1");
+        var continuationService = new HostedContinuationServiceStub();
+        var preparationService = new HostedPreparationServiceStub();
+        var hosted = new WorkflowContinuationHostedService(
+            new RepositoryServiceStub(repository),
+            continuationService,
+            preparationService,
+            Options.Create(new WorkflowContinuationOptions
+            {
+                ContinuationEnabled = false,
+                ContinuationIntervalSeconds = 3600
+            }));
+
+        await hosted.StartAsync(CancellationToken.None);
+
+        Assert.Empty(continuationService.CalledRepositoryIds);
+        Assert.Empty(preparationService.CalledRepositoryIds);
+    }
+
+    [Fact]
+    public async Task HostedContinuationEnabledConfigRunsContinuationAndPreparationOnce()
+    {
+        Repository repository = CreateRepository("repo-1");
+        var continuationService = new HostedContinuationServiceStub();
+        var preparationService = new HostedPreparationServiceStub();
+        var hosted = new WorkflowContinuationHostedService(
+            new RepositoryServiceStub(repository),
+            continuationService,
+            preparationService,
+            Options.Create(new WorkflowContinuationOptions
+            {
+                ContinuationEnabled = true,
+                ContinuationIntervalSeconds = 3600
+            }));
+
+        await hosted.StartAsync(CancellationToken.None);
+        await hosted.StopAsync(CancellationToken.None);
+
+        Assert.Equal([repository.Id], continuationService.CalledRepositoryIds);
+        Assert.Equal([repository.Id], preparationService.CalledRepositoryIds);
+        Assert.Equal(["hosted"], continuationService.Triggers);
+        Assert.Equal(["hosted"], preparationService.Triggers);
+    }
+
+    [Fact]
+    public async Task HostedContinuationRestartDoesNotDuplicateContinuationOrPreparationEvidence()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingCommit;
+        fixture.Session = CompletedAcceptedSession(RepositoryExecutionState.AwaitingCommit);
+        var workflowRepository = new FileSystemWorkflowRepository(new MemoryArtifactStore());
+        var firstHosted = new WorkflowContinuationHostedService(
+            new RepositoryServiceStub(fixture.Repository),
+            new WorkflowContinuationService(
+                new RepositoryServiceStub(fixture.Repository),
+                fixture.CreateService(),
+                new WorkflowStateMachineService(),
+                workflowRepository),
+            new WorkflowPreparationService(
+                new RepositoryServiceStub(fixture.Repository),
+                fixture.CreateService(),
+                workflowRepository,
+                null,
+                null,
+                new ExecutionSessionServiceStub(fixture)),
+            Options.Create(new WorkflowContinuationOptions
+            {
+                ContinuationEnabled = true,
+                ContinuationIntervalSeconds = 3600
+            }));
+        var restartedHosted = new WorkflowContinuationHostedService(
+            new RepositoryServiceStub(fixture.Repository),
+            new WorkflowContinuationService(
+                new RepositoryServiceStub(fixture.Repository),
+                fixture.CreateService(),
+                new WorkflowStateMachineService(),
+                workflowRepository),
+            new WorkflowPreparationService(
+                new RepositoryServiceStub(fixture.Repository),
+                fixture.CreateService(),
+                workflowRepository,
+                null,
+                null,
+                new ExecutionSessionServiceStub(fixture)),
+            Options.Create(new WorkflowContinuationOptions
+            {
+                ContinuationEnabled = true,
+                ContinuationIntervalSeconds = 3600
+            }));
+
+        await firstHosted.RunOnceAsync(CancellationToken.None);
+        await restartedHosted.RunOnceAsync(CancellationToken.None);
+
+        IReadOnlyList<WorkflowContinuationEvent> continuationHistory =
+            await workflowRepository.ListContinuationEventsAsync(fixture.Repository);
+        IReadOnlyList<WorkflowPreparationEvent> preparationHistory =
+            await workflowRepository.ListPreparationEventsAsync(fixture.Repository);
+        WorkflowTimeline? latestTimeline = await workflowRepository.GetLatestTimelineAsync(fixture.Repository);
+
+        Assert.Single(continuationHistory);
+        Assert.Single(preparationHistory);
+        Assert.Equal(1, fixture.PrepareCommitCallCount);
+        Assert.Equal(0, fixture.CommitCallCount);
+        Assert.Equal(0, fixture.PushCallCount);
+        Assert.Null(latestTimeline);
+    }
+
+    [Fact]
+    public async Task HostedContinuationOpenGateStopsProgressionWithoutAuthorityAction()
+    {
+        TestFixture fixture = TestFixture.Create();
+        ArrangeAuthorityGateScenario(fixture, "decision-resolution");
+        var workflowRepository = new FileSystemWorkflowRepository(new MemoryArtifactStore());
+        var hosted = new WorkflowContinuationHostedService(
+            new RepositoryServiceStub(fixture.Repository),
+            new WorkflowContinuationService(
+                new RepositoryServiceStub(fixture.Repository),
+                fixture.CreateService(),
+                new WorkflowStateMachineService(),
+                workflowRepository),
+            new WorkflowPreparationService(
+                new RepositoryServiceStub(fixture.Repository),
+                fixture.CreateService(),
+                workflowRepository,
+                new DecisionDiscoveryServiceStub([]),
+                null,
+                new ExecutionSessionServiceStub(fixture)),
+            Options.Create(new WorkflowContinuationOptions
+            {
+                ContinuationEnabled = true,
+                ContinuationIntervalSeconds = 3600
+            }));
+
+        await hosted.RunOnceAsync(CancellationToken.None);
+
+        WorkflowContinuationEvent continuationEvent = Assert.Single(
+            await workflowRepository.ListContinuationEventsAsync(fixture.Repository));
+        WorkflowPreparationEvent preparationEvent = Assert.Single(
+            await workflowRepository.ListPreparationEventsAsync(fixture.Repository));
+        WorkflowTimeline? latestTimeline = await workflowRepository.GetLatestTimelineAsync(fixture.Repository);
+
+        Assert.Equal("Stop", continuationEvent.Decision);
+        Assert.True(continuationEvent.IsWaitingForHuman);
+        Assert.Equal(WorkflowGateType.DecisionResolution, continuationEvent.BlockingGate);
+        Assert.Equal("Refused", preparationEvent.Decision);
+        Assert.Null(latestTimeline);
+        Decision existingDecision = Assert.Single(fixture.Decisions);
+        Assert.Equal(DecisionState.Open, existingDecision.State);
+        Assert.Equal(0, fixture.CommitCallCount);
+        Assert.Equal(0, fixture.PushCallCount);
+    }
+
+    [Fact]
+    public async Task HostedContinuationRepositoryFailureDoesNotBlockOtherRepositories()
+    {
+        Repository failingRepository = CreateRepository("repo-failing");
+        Repository healthyRepository = CreateRepository("repo-healthy");
+        var continuationService = new HostedContinuationServiceStub(failingRepository.Id);
+        var preparationService = new HostedPreparationServiceStub();
+        var hosted = new WorkflowContinuationHostedService(
+            new RepositoryServiceStub(failingRepository, healthyRepository),
+            continuationService,
+            preparationService,
+            Options.Create(new WorkflowContinuationOptions
+            {
+                ContinuationEnabled = true,
+                ContinuationIntervalSeconds = 3600
+            }));
+
+        await hosted.RunOnceAsync(CancellationToken.None);
+
+        Assert.Equal([failingRepository.Id, healthyRepository.Id], continuationService.CalledRepositoryIds);
+        Assert.Equal([healthyRepository.Id], preparationService.CalledRepositoryIds);
+    }
+
     private static ExecutionSessionSummary CompletedAcceptedSession(
         RepositoryExecutionState repositoryState = RepositoryExecutionState.Accepted) => new()
     {
@@ -2634,6 +2813,13 @@ public sealed class WorkflowProjectionServiceTests
         CompletedAt = DateTimeOffset.Parse("2026-06-23T10:10:00Z"),
         AcceptedAt = DateTimeOffset.Parse("2026-06-23T10:15:00Z"),
         HandoffPath = ".agents/handoffs/handoff.md"
+    };
+
+    private static Repository CreateRepository(string name) => new()
+    {
+        Id = Guid.NewGuid(),
+        Name = name,
+        Path = $"C:\\{name}"
     };
 
     private static ExecutionSessionSummary AwaitingPushCommittedSession() => new()
@@ -3113,13 +3299,119 @@ public sealed class WorkflowProjectionServiceTests
         }
     }
 
-    private sealed class RepositoryServiceStub(Repository repository) : IRepositoryService
+    private sealed class RepositoryServiceStub(params Repository[] repositories) : IRepositoryService
     {
-        public Task<IReadOnlyList<Repository>> GetAllAsync() => Task.FromResult<IReadOnlyList<Repository>>([repository]);
+        public Task<IReadOnlyList<Repository>> GetAllAsync() => Task.FromResult<IReadOnlyList<Repository>>(repositories);
 
         public Task<Repository> RegisterAsync(string repositoryPath) => throw new NotSupportedException("Mutating repository methods are not used by workflow projection.");
 
         public Task RemoveAsync(Guid repositoryId) => throw new NotSupportedException("Mutating repository methods are not used by workflow projection.");
+    }
+
+    private sealed class HostedContinuationServiceStub(Guid? failingRepositoryId = null) : IWorkflowContinuationService
+    {
+        public List<Guid> CalledRepositoryIds { get; } = [];
+
+        public List<string> Triggers { get; } = [];
+
+        public Task<WorkflowContinuationEvaluation> EvaluateContinuationAsync(Guid repositoryId) =>
+            throw new NotSupportedException("Hosted service tests call run paths only.");
+
+        public Task<WorkflowContinuationEvent> RunContinuationAsync(Guid repositoryId, string trigger = "endpoint")
+        {
+            CalledRepositoryIds.Add(repositoryId);
+            Triggers.Add(trigger);
+            if (failingRepositoryId == repositoryId)
+            {
+                throw new InvalidOperationException("Simulated repository failure.");
+            }
+
+            return Task.FromResult(new WorkflowContinuationEvent(
+                repositoryId,
+                $"continuation-{CalledRepositoryIds.Count}",
+                DateTimeOffset.Parse("2026-06-23T12:00:00Z"),
+                trigger,
+                WorkflowStage.Handoff,
+                WorkflowStage.Decision,
+                WorkflowProgressState.Ready,
+                WorkflowGateType.None,
+                "Advance",
+                "Advanced for hosted service test.",
+                new WorkflowContinuationFingerprint("fingerprint"),
+                false,
+                false,
+                "No human action required.",
+                []));
+        }
+
+        public Task<IReadOnlyList<WorkflowContinuationEvent>> GetContinuationHistoryAsync(Guid repositoryId) =>
+            Task.FromResult<IReadOnlyList<WorkflowContinuationEvent>>([]);
+    }
+
+    private sealed class HostedPreparationServiceStub : IWorkflowPreparationService
+    {
+        public List<Guid> CalledRepositoryIds { get; } = [];
+
+        public List<string> Triggers { get; } = [];
+
+        public Task<WorkflowPreparationEvaluation> EvaluatePreparationAsync(Guid repositoryId)
+        {
+            var fingerprint = new WorkflowPreparationFingerprint("fingerprint");
+            var diagnostics = new WorkflowPreparationDiagnostics(
+                repositoryId,
+                [],
+                [],
+                ["Hosted service test preparation evaluation."],
+                [],
+                [],
+                [],
+                0,
+                0,
+                fingerprint);
+
+            return Task.FromResult(new WorkflowPreparationEvaluation(
+                repositoryId,
+                WorkflowStage.Decision,
+                WorkflowProgressState.Ready,
+                WorkflowGateType.None,
+                true,
+                false,
+                false,
+                WorkflowPreparationCommand.DiscoverDecisionCandidates,
+                "decisions_discover_candidates",
+                "Allowed",
+                "Allowed for hosted service test.",
+                [],
+                fingerprint,
+                diagnostics));
+        }
+
+        public Task<WorkflowPreparationEvent> RunPreparationAsync(Guid repositoryId, string trigger = "endpoint")
+        {
+            CalledRepositoryIds.Add(repositoryId);
+            Triggers.Add(trigger);
+            return Task.FromResult(new WorkflowPreparationEvent(
+                repositoryId,
+                $"preparation-{CalledRepositoryIds.Count}",
+                DateTimeOffset.Parse("2026-06-23T12:01:00Z"),
+                trigger,
+                WorkflowStage.Decision,
+                WorkflowProgressState.Ready,
+                WorkflowGateType.None,
+                WorkflowPreparationCommand.DiscoverDecisionCandidates,
+                "decisions_discover_candidates",
+                "Skipped",
+                "Skipped for hosted service test.",
+                new WorkflowPreparationFingerprint("fingerprint"),
+                false,
+                false,
+                [],
+                [],
+                []));
+        }
+
+        public Task<IReadOnlyList<WorkflowPreparationEvent>> GetPreparationHistoryAsync(Guid repositoryId) =>
+            Task.FromResult<IReadOnlyList<WorkflowPreparationEvent>>([]);
     }
 
     private sealed class ArtifactStoreStub(TestFixture fixture) : IArtifactStore

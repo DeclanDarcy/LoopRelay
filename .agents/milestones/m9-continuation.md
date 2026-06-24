@@ -16,7 +16,7 @@ Deliver:
 - [x] `WorkflowContinuationEvent`.
 - [x] `WorkflowPreparationEvent`.
 - [x] recovery integration that reevaluates continuation after restart without duplicate progression.
-- [ ] `WorkflowContinuationHostedService`.
+- [x] `WorkflowContinuationHostedService`.
 - [ ] `WorkflowInfluenceTrace`.
 - [ ] `WorkflowHealthAssessment`.
 
@@ -99,13 +99,24 @@ Slice progress:
   records the created proposal identifier in preparation events, and leaves
   decision resolution, proposal review transitions, candidate promotion,
   governance state, and workflow progression untouched.
+- Added `WorkflowContinuationHostedService` behind
+  `CommandCenter:Workflow:ContinuationEnabled` and
+  `CommandCenter:Workflow:ContinuationIntervalSeconds` configuration.
+- Hosted continuation defaults to disabled, runs the same continuation and
+  preparation services as the endpoint path when enabled, and records hosted
+  trigger evidence without adding separate progression or preparation rules.
+- Hosted preparation preflights duplicate domain evidence against existing
+  preparation history so repeated background intervals or restarted hosted
+  services do not keep appending duplicate preparation events for artifacts the
+  hosted path already created.
+- Hosted continuation handles repository-local failures without preventing
+  unrelated repositories from being evaluated in the same cycle.
 - Continuation evaluation consumes the aggregate workflow projection, latest
   persisted workflow timeline evidence, and state-machine, gate, and completion
   evidence.
 - Continuation evaluation reports current stage, optional mechanical target stage, open gate, required human action, stop reason, deterministic fingerprint, and diagnostics.
 - Open authority gates halt evaluation with `WaitingForHuman`; no domain commands are invoked.
-- Hosted continuation, recovery integration, influence tracing, and
-  health assessment remain deferred.
+- Influence tracing and health assessment remain deferred.
 
 Progression rules:
 
@@ -144,6 +155,7 @@ Idempotency rules:
 - [x] restart reevaluation must not duplicate continuation events or timeline progression.
 - [x] restart reevaluation must not duplicate proposals, commit preparations, or preparation events.
 - [x] restart reevaluation must not duplicate preparation events or reviewable artifacts.
+- [x] hosted startup and restart must not duplicate continuation events, preparation events, or reviewable artifacts.
 
 Tests:
 
@@ -172,6 +184,6 @@ Exit criteria:
 - [x] gate halting works.
 - [x] continuation history exists.
 - [x] preparation history exists.
-- [ ] hosted runner exists.
+- [x] hosted runner exists.
 - [ ] recovery integration works.
 - [ ] health assessment exists.

@@ -16,6 +16,7 @@ using CommandCenter.Continuity.Extensions;
 using CommandCenter.Decisions.Extensions;
 using CommandCenter.Reasoning.Extensions;
 using CommandCenter.Workflow.Extensions;
+using CommandCenter.Workflow.Models;
 using CommandCenter.Backend.Services;
 
 namespace CommandCenter.Backend;
@@ -42,6 +43,8 @@ public static class Program
         builder.Services.AddSingleton<IOperationalContextGenerationService, OperationalContextGenerationService>();
         builder.Services.AddSingleton<IPlanningService, PlanningService>();
         builder.Services.AddExecution();
+        builder.Services.Configure<WorkflowContinuationOptions>(
+            builder.Configuration.GetSection("CommandCenter:Workflow"));
         builder.Services.AddWorkflow();
         builder.Services.AddSingleton<IRepositoryProjectionService, RepositoryProjectionService>();
         builder.Services.AddCors(options =>

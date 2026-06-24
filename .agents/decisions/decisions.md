@@ -2,30 +2,22 @@
 
 ## Newly Authorized
 
-- The Decision proposal-generation preparation slice is semantically acceptable.
-- The preserved boundary is:
-  - promoted candidate.
-  - generate reviewable proposal/package.
-  - `DecisionResolution` remains open.
-- Proposal generation is authorized as review-artifact creation in the same category as:
-  - decision candidate discovery.
-  - operational-context proposal generation.
-  - commit preparation.
-- Hosted continuation is authorized narrowly behind configuration.
-- `CommandCenter:Workflow:ContinuationEnabled` must default to `false`.
-- Hosted continuation requires interval configuration.
-- Hosted continuation must use the same endpoint-triggered continuation and preparation services.
-- Hosted continuation must not add new progression logic.
-- Hosted continuation must not add new preparation logic.
-- Hosted continuation must use the same idempotency path.
-- Hosted continuation must use the same gate-halting behavior.
-- Hosted startup and restart must not duplicate events.
-
-## Required Tests
-
-- Disabled config means no background run.
-- Enabled config evaluates and records once.
-- Repeated interval does not duplicate continuation or preparation events.
-- Open gate stops hosted continuation.
-- Hosted service does not resolve, promote, commit, push, or select work.
-- Hosted service handles one repository failure without blocking others.
+- The hosted continuation slice is accepted as the operational completion point for the behavioral portion of Milestone 9.
+- Hosted continuation is valid only as scheduled invocation of the existing continuation and preparation services, not as a new authority system.
+- Proceed next with `WorkflowInfluenceTrace` before `WorkflowHealthAssessment`.
+- `WorkflowInfluenceTrace` should remain evidence lineage, answering:
+  - why the workflow is at its current stage.
+  - what evidence influenced progression.
+  - what evidence influenced preparation.
+  - what evidence opened a gate.
+  - what evidence blocked a transition.
+- Influence trace should explain observed evidence paths rather than create workflow opinions.
+- `WorkflowHealthAssessment` should be derived after influence trace exists.
+- Workflow health should be decomposed into explainable dimensions:
+  - projection health.
+  - recovery health.
+  - gate health.
+  - continuation health.
+  - preparation health.
+- Do not introduce a single opaque workflow score or readiness percentage.
+- After `WorkflowInfluenceTrace` and `WorkflowHealthAssessment` are complete, perform a full Milestone 9 architectural review before final certification work.
