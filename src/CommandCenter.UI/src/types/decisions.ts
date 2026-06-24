@@ -108,6 +108,26 @@ export type DecisionSourceReference = {
   excerpt: string | null
 }
 
+export type DecisionCandidateTransitionRequest = {
+  reason?: string | null
+  duplicateOfCandidateId?: string | null
+}
+
+export type DecisionProposalTransitionRequest = {
+  reason?: string | null
+}
+
+export type SupersedeDecisionCommand = {
+  replacementDecisionId?: string | null
+  rationale?: string | null
+  resolver?: string | null
+}
+
+export type ArchiveDecisionCommand = {
+  rationale?: string | null
+  resolver?: string | null
+}
+
 export type DecisionEvidence = {
   summary: string
   sources: DecisionSourceReference[]
@@ -217,6 +237,27 @@ export type DecisionTradeoffAnalysisDiagnostics = {
   contextFingerprint: string
   unknowns: string[]
   validationWarnings: string[]
+  diagnostics: string[]
+}
+
+export type DecisionOptionValidationIssue = {
+  type: string
+  message: string
+}
+
+export type DecisionOptionValidationResult = {
+  optionId: string
+  isValid: boolean
+  issues: DecisionOptionValidationIssue[]
+}
+
+export type DecisionGenerationDiagnostics = {
+  generatedOptionCount: number
+  acceptedOptionCount: number
+  rejectedOptionCount: number
+  deduplicatedOptionCount: number
+  fallbackOptionCount: number
+  optionValidationResults: DecisionOptionValidationResult[]
   diagnostics: string[]
 }
 
@@ -451,6 +492,7 @@ export type DecisionProposal = {
   analyzedOptions?: AnalyzedDecisionOption[]
   tradeoffComparisons?: DecisionTradeoffComparison[]
   tradeoffAnalysisDiagnostics?: DecisionTradeoffAnalysisDiagnostics | null
+  generationDiagnostics?: DecisionGenerationDiagnostics | null
 }
 
 export type DecisionMetadata = {
@@ -477,6 +519,7 @@ export type DecisionResolvedProposalSnapshot = {
   analyzedOptions?: AnalyzedDecisionOption[]
   tradeoffComparisons?: DecisionTradeoffComparison[]
   tradeoffAnalysisDiagnostics?: DecisionTradeoffAnalysisDiagnostics | null
+  generationDiagnostics?: DecisionGenerationDiagnostics | null
   packageId?: string | null
   packageFingerprint?: string | null
   packageVersionCreatedAt?: string | null
@@ -788,6 +831,20 @@ export type DecisionContextSnapshot = {
   context: DecisionContext
   diagnostics: DecisionContextDiagnostics
   validation: DecisionContextValidationResult
+}
+
+export type DecisionDiscoveryDiagnostics = {
+  contextFingerprint: string
+  contextItemCount: number
+  signalCount: number
+  createdCandidateCount: number
+  suppressedDuplicateCount: number
+  warnings: string[]
+}
+
+export type DecisionDiscoveryResult = {
+  candidates: DecisionCandidate[]
+  diagnostics: DecisionDiscoveryDiagnostics
 }
 
 export type DecisionGovernanceSummary = {

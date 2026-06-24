@@ -37,9 +37,18 @@ type DecisionLifecycleTabProps = {
   selectedProposalStates: DecisionProposalState[]
   hasSelectedRepository: boolean
   isLoading: boolean
+  actionsEnabled?: boolean
   repositoryId: string | null
   onSelectedProposalStatesChange: (states: DecisionProposalState[]) => void
   onRefresh: () => void
+  onDiscover?: () => Promise<void> | void
+  onPromoteCandidate?: (candidateId: string) => Promise<void> | void
+  onDismissCandidate?: (candidateId: string) => Promise<void> | void
+  onExpireCandidate?: (candidateId: string) => Promise<void> | void
+  onMarkCandidateDuplicate?: (candidateId: string, duplicateOfCandidateId: string) => Promise<void> | void
+  onGenerateProposal?: (candidateId: string) => Promise<string | null> | string | null
+  onExpireProposal?: (proposalId: string) => Promise<void> | void
+  onDiscardProposal?: (proposalId: string) => Promise<void> | void
 }
 
 export function DecisionLifecycleTab({
@@ -49,15 +58,28 @@ export function DecisionLifecycleTab({
   selectedProposalStates,
   hasSelectedRepository,
   isLoading,
+  actionsEnabled = true,
   repositoryId,
   onSelectedProposalStatesChange,
   onRefresh,
+  onDiscover,
+  onPromoteCandidate,
+  onDismissCandidate,
+  onExpireCandidate,
+  onMarkCandidateDuplicate,
+  onGenerateProposal,
+  onExpireProposal,
+  onDiscardProposal,
 }: DecisionLifecycleTabProps) {
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null)
   const {
     data: proposalReviewWorkspace,
     isLoading: isProposalReviewLoading,
+    isMutating: isProposalReviewMutating,
     refresh: refreshProposalReview,
+    markViewed,
+    markNeedsRefinement,
+    markReadyForResolution,
   } = useDecisionProposalReview(repositoryId, selectedProposalId)
   const {
     data: proposalLineage,
@@ -163,7 +185,22 @@ export function DecisionLifecycleTab({
             <span>{reviewableProposalCount} reviewable proposals</span>
           </div>
 
-          <DecisionCandidateBrowser candidates={candidates} isLoading={isLoading} />
+          <DecisionCandidateBrowser
+            candidates={candidates}
+            isLoading={isLoading}
+            actionsEnabled={actionsEnabled}
+            onDiscover={onDiscover}
+            onPromote={onPromoteCandidate}
+            onDismiss={onDismissCandidate}
+            onExpire={onExpireCandidate}
+            onMarkDuplicate={onMarkCandidateDuplicate}
+            onGenerateProposal={async (candidateId) => {
+              const proposalId = await onGenerateProposal?.(candidateId)
+              if (proposalId) {
+                setSelectedProposalId(proposalId)
+              }
+            }}
+          />
 
           <DecisionProposalBrowser
             proposals={proposals}
@@ -175,8 +212,87 @@ export function DecisionLifecycleTab({
 
           <DecisionProposalViewer
             workspace={proposalReviewWorkspace}
-            isLoading={isProposalReviewLoading}
+            isLoading={isProposalReviewLoading || isProposalReviewMutating}
           />
+
+          {actionsEnabled ? (
+            <section className="decision-lifecycle-panel" aria-label="Proposal lifecycle actions">
+              <div className="decision-panel-heading">
+                <h5>Proposal Actions</h5>
+                <span>{selectedProposalId ?? 'No proposal selected'}</span>
+              </div>
+              <div className="context-controls">
+                <button
+                  type="button"
+                  className="secondary-action"
+                  onClick={async () => {
+                    await markViewed()
+                    await Promise.all([refreshProposalLineage(), refreshOptionComparison()])
+                    onRefresh()
+                  }}
+                  disabled={!selectedProposalId || isProposalReviewMutating}
+                >
+                  Mark Viewed
+                </button>
+                <button
+                  type="button"
+                  className="secondary-action"
+                  onClick={async () => {
+                    await markNeedsRefinement()
+                    await Promise.all([refreshProposalLineage(), refreshOptionComparison()])
+                    onRefresh()
+                  }}
+                  disabled={!selectedProposalId || isProposalReviewMutating}
+                >
+                  Needs Refinement
+                </button>
+                <button
+                  type="button"
+                  className="secondary-action"
+                  onClick={async () => {
+                    await markReadyForResolution()
+                    await Promise.all([refreshProposalLineage(), refreshOptionComparison()])
+                    onRefresh()
+                  }}
+                  disabled={!selectedProposalId || isProposalReviewMutating}
+                >
+                  Ready For Resolution
+                </button>
+                <button
+                  type="button"
+                  className="secondary-action"
+                  onClick={async () => {
+                    if (!selectedProposalId) {
+                      return
+                    }
+
+                    await onExpireProposal?.(selectedProposalId)
+                    await refreshProposalReview()
+                    onRefresh()
+                  }}
+                  disabled={!selectedProposalId || isProposalReviewMutating || !onExpireProposal}
+                >
+                  Expire
+                </button>
+                <button
+                  type="button"
+                  className="secondary-action"
+                  onClick={async () => {
+                    if (!selectedProposalId) {
+                      return
+                    }
+
+                    await onDiscardProposal?.(selectedProposalId)
+                    await refreshProposalReview()
+                    onRefresh()
+                  }}
+                  disabled={!selectedProposalId || isProposalReviewMutating || !onDiscardProposal}
+                >
+                  Discard
+                </button>
+              </div>
+            </section>
+          ) : null}
 
           <DecisionRefinementPanel
             repositoryId={repositoryId}

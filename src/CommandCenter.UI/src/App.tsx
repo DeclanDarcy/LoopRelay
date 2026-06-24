@@ -240,12 +240,22 @@ function App() {
     isLoading: isDecisionCandidatesLoading,
     error: decisionCandidatesError,
     refresh: refreshDecisionCandidates,
+    isMutating: isDecisionCandidatesMutating,
+    discover: discoverDecisions,
+    promote: promoteDecisionCandidate,
+    dismiss: dismissDecisionCandidate,
+    expire: expireDecisionCandidate,
+    markDuplicate: markDecisionCandidateDuplicate,
   } = useDecisionDiscovery(selectedRepository?.repository.id ?? null)
   const {
     data: decisionProposals,
     isLoading: isDecisionProposalsLoading,
     error: decisionProposalsError,
     refresh: refreshDecisionProposals,
+    isMutating: isDecisionProposalsMutating,
+    generateProposal: generateDecisionProposal,
+    expireProposal: expireDecisionProposal,
+    discardProposal: discardDecisionProposal,
   } = useDecisionProposals(selectedRepository?.repository.id ?? null, selectedDecisionProposalStates)
   const {
     snapshot: governanceSnapshot,
@@ -1798,13 +1808,49 @@ function App() {
                 selectedProposalStates={selectedDecisionProposalStates}
                 hasSelectedRepository={Boolean(selectedRepository)}
                 repositoryId={selectedRepository?.repository.id ?? null}
+                actionsEnabled={activePrimaryTab === 'decisions'}
                 isLoading={
                   isDecisionContextLoading ||
                   isDecisionCandidatesLoading ||
-                  isDecisionProposalsLoading
+                  isDecisionProposalsLoading ||
+                  isDecisionCandidatesMutating ||
+                  isDecisionProposalsMutating
                 }
                 onSelectedProposalStatesChange={setSelectedDecisionProposalStates}
                 onRefresh={() => void refreshDecisions()}
+                onDiscover={async () => {
+                  await discoverDecisions()
+                  await refreshDecisions()
+                }}
+                onPromoteCandidate={async (candidateId) => {
+                  await promoteDecisionCandidate(candidateId)
+                  await refreshDecisions()
+                }}
+                onDismissCandidate={async (candidateId) => {
+                  await dismissDecisionCandidate(candidateId)
+                  await refreshDecisions()
+                }}
+                onExpireCandidate={async (candidateId) => {
+                  await expireDecisionCandidate(candidateId)
+                  await refreshDecisions()
+                }}
+                onMarkCandidateDuplicate={async (candidateId, duplicateOfCandidateId) => {
+                  await markDecisionCandidateDuplicate(candidateId, { duplicateOfCandidateId })
+                  await refreshDecisions()
+                }}
+                onGenerateProposal={async (candidateId) => {
+                  const proposal = await generateDecisionProposal(candidateId)
+                  await refreshDecisions()
+                  return proposal?.id ?? null
+                }}
+                onExpireProposal={async (proposalId) => {
+                  await expireDecisionProposal(proposalId)
+                  await refreshDecisions()
+                }}
+                onDiscardProposal={async (proposalId) => {
+                  await discardDecisionProposal(proposalId)
+                  await refreshDecisions()
+                }}
               />
 
               <ReasoningTrajectoryTab

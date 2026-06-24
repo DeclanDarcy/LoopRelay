@@ -2,28 +2,49 @@
 
 ## New State This Slice
 
-- Closed Milestone 2 governance workspace integration.
-- Added backend serialization coverage in `RepositoryProjectionServiceTests` proving `decisionSessionSummary` serializes on both dashboard and workspace projections with the expected camelCase JSON contract and core governance fields.
-- Confirmed TypeScript type coverage is already exercised by characterization fixtures using `satisfies RepositoryDashboardProjection['decisionSessionSummary']`.
-- Updated `.agents/milestones/m2-governance-workspace.md`:
-  - repository projection serialization/type coverage is checked off
-  - all Milestone 2 exit criteria are checked off
-- Rotated previous handoff to `.agents/handoffs/handoff.0009.md`.
+- Started Milestone 3: Decision Pipeline Completion.
+- Inventoried `DecisionEndpoints.cs` and confirmed core lifecycle HTTP routes already exist for discovery, candidate transitions, proposal generation/review transitions, proposal expire/discard, resolve, supersede, and archive.
+- Added shell commands in `src/CommandCenter.Shell/src/main.rs` for core decision lifecycle operations:
+  - `discover_decisions`
+  - `promote_decision_candidate`
+  - `dismiss_decision_candidate`
+  - `expire_decision_candidate`
+  - `mark_decision_candidate_duplicate`
+  - `generate_decision_proposal`
+  - `expire_decision_proposal`
+  - `discard_decision_proposal`
+  - `mark_decision_proposal_viewed`
+  - `mark_decision_proposal_needs_refinement`
+  - `mark_decision_proposal_ready_for_resolution`
+  - `supersede_decision`
+  - `archive_decision`
+- Added TypeScript decision lifecycle request/response types and typed API wrappers in `src/CommandCenter.UI/src/api/decisions.ts`.
+- Expanded decision hooks with mutation methods and refresh behavior:
+  - `useDecisionDiscovery`
+  - `useDecisionProposals`
+  - `useDecisionProposalReview`
+- Wired candidate lifecycle controls and proposal lifecycle controls into the decision lifecycle UI.
+- Decision lifecycle action controls render only while the Decisions tab is active so inactive tabs do not add unrelated command buttons to other workspaces.
+- Added proposal generation diagnostics rendering to `DecisionProposalViewer`.
+- Added transport characterization coverage for the new decision lifecycle command names and argument shapes.
+- Updated `.agents/milestones/m3-decision-pipeline.md` with completed reachability items.
+- Rotated previous handoff to `.agents/handoffs/handoff.0010.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter RepositoryProjectionServiceTests` passed with 18 tests.
-- `dotnet test` passed with 732 tests.
-- `npm test -- --run src/test/characterization/governanceWorkspace.test.tsx src/test/characterization/selectedRepositorySummary.test.tsx src/test/characterization/transport.test.ts` passed with 12 tests.
-- `npm test` passed with 186 tests across 54 files.
+- `npm test -- --run src/test/characterization/transport.test.ts` passed with 6 tests.
+- `npm test -- --run src/test/characterization/decisionLifecycleNavigation.test.tsx` passed with 1 test.
+- `npm test -- --run src/test/characterization/app.smoke.test.tsx` passed with 16 tests.
+- `npm test` passed with 187 tests across 54 files.
 - `npm run build` passed.
+- `cargo check` passed for `src/CommandCenter.Shell`.
+- `cargo fmt` was run for `src/CommandCenter.Shell`.
 
-## Milestone Position
+## Remaining Milestone 3 Work
 
-- Milestone 2 is complete.
-- No additional Milestone 2 implementation scope was introduced beyond the missing serialization contract test.
-
-## Recommended Next Slice
-
-- Start Milestone 3: Decision Pipeline Completion.
-- First focus should be decision lifecycle reachability from backend-mapped endpoints through Tauri, `src/CommandCenter.UI/src/api/decisions.ts`, hooks, UI actions, and characterization tests.
+- Add backend-owned decision lifecycle eligibility projection over `DecisionLifecycleRules`.
+- Add `get_decision_lifecycle_eligibility` backend/shell/API/hook/UI wiring.
+- Replace temporary always-visible action controls with backend-allowed/blocked action rendering and blocked reasons.
+- Complete proposal generation UX details: generated proposal id, generation mode, validation diagnostics details, and navigation behavior characterization.
+- Add resolved-decision supersede/archive UI, target selection, rationale capture, governance impact, and execution projection refresh.
+- Add backend endpoint tests and broader UI tests for lifecycle actions and refresh behavior.

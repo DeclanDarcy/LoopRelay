@@ -1,11 +1,14 @@
 import type {
   CreateDecisionAssimilationRecommendationCommand,
+  ArchiveDecisionCommand,
   Decision,
   DecisionAssimilationRecommendation,
   DecisionCandidate,
+  DecisionCandidateTransitionRequest,
   DecisionCertificationReport,
   DecisionContextSnapshot,
   DecisionEvidenceInspection,
+  DecisionDiscoveryResult,
   DecisionGenerationCertificationReport,
   DecisionGovernanceReport,
   DecisionInfluenceTrace,
@@ -15,6 +18,7 @@ import type {
   DecisionProposalBrowserItem,
   DecisionProposalLineage,
   DecisionProposalState,
+  DecisionProposalTransitionRequest,
   DecisionPackageRegenerationRequest,
   DecisionPackageRegenerationResult,
   DecisionRefinementAnalysisRequest,
@@ -22,10 +26,12 @@ import type {
   DecisionQualityAssessment,
   DecisionQualityReport,
   DecisionQualityTrend,
+  DecisionReviewStatus,
   DecisionReviewWorkspace,
   RefinementPlan,
   ResolveDecisionCommand,
   DecisionSourceAttribution,
+  SupersedeDecisionCommand,
 } from '../types'
 import { invokeCommand } from './tauri'
 
@@ -39,6 +45,59 @@ export function buildDecisionContext(repositoryId: string) {
 
 export function listDecisionCandidates(repositoryId: string) {
   return invokeCommand<DecisionCandidate[]>('list_decision_candidates', { repositoryId })
+}
+
+export function discoverDecisions(repositoryId: string) {
+  return invokeCommand<DecisionDiscoveryResult>('discover_decisions', { repositoryId })
+}
+
+export function promoteDecisionCandidate(
+  repositoryId: string,
+  candidateId: string,
+  request: DecisionCandidateTransitionRequest = {},
+) {
+  return invokeCommand<DecisionCandidate>('promote_decision_candidate', {
+    repositoryId,
+    candidateId,
+    reason: request.reason ?? null,
+  })
+}
+
+export function dismissDecisionCandidate(
+  repositoryId: string,
+  candidateId: string,
+  request: DecisionCandidateTransitionRequest = {},
+) {
+  return invokeCommand<DecisionCandidate>('dismiss_decision_candidate', {
+    repositoryId,
+    candidateId,
+    reason: request.reason ?? null,
+  })
+}
+
+export function expireDecisionCandidate(
+  repositoryId: string,
+  candidateId: string,
+  request: DecisionCandidateTransitionRequest = {},
+) {
+  return invokeCommand<DecisionCandidate>('expire_decision_candidate', {
+    repositoryId,
+    candidateId,
+    reason: request.reason ?? null,
+  })
+}
+
+export function markDecisionCandidateDuplicate(
+  repositoryId: string,
+  candidateId: string,
+  request: DecisionCandidateTransitionRequest,
+) {
+  return invokeCommand<DecisionCandidate>('mark_decision_candidate_duplicate', {
+    repositoryId,
+    candidateId,
+    duplicateOfCandidateId: request.duplicateOfCandidateId,
+    reason: request.reason ?? null,
+  })
 }
 
 export function listDecisionProposals(repositoryId: string) {
@@ -59,10 +118,77 @@ export function getDecisionProposal(repositoryId: string, proposalId: string) {
   return invokeCommand<DecisionProposal>('get_decision_proposal', { repositoryId, proposalId })
 }
 
+export function generateDecisionProposal(repositoryId: string, candidateId: string) {
+  return invokeCommand<DecisionProposal>('generate_decision_proposal', {
+    repositoryId,
+    candidateId,
+  })
+}
+
 export function getDecisionProposalReview(repositoryId: string, proposalId: string) {
   return invokeCommand<DecisionReviewWorkspace>('get_decision_proposal_review', {
     repositoryId,
     proposalId,
+  })
+}
+
+export function expireDecisionProposal(
+  repositoryId: string,
+  proposalId: string,
+  request: DecisionProposalTransitionRequest = {},
+) {
+  return invokeCommand<DecisionProposal>('expire_decision_proposal', {
+    repositoryId,
+    proposalId,
+    reason: request.reason ?? null,
+  })
+}
+
+export function discardDecisionProposal(
+  repositoryId: string,
+  proposalId: string,
+  request: DecisionProposalTransitionRequest = {},
+) {
+  return invokeCommand<DecisionProposal>('discard_decision_proposal', {
+    repositoryId,
+    proposalId,
+    reason: request.reason ?? null,
+  })
+}
+
+export function markDecisionProposalViewed(
+  repositoryId: string,
+  proposalId: string,
+  request: DecisionProposalTransitionRequest = {},
+) {
+  return invokeCommand<DecisionReviewStatus>('mark_decision_proposal_viewed', {
+    repositoryId,
+    proposalId,
+    reason: request.reason ?? null,
+  })
+}
+
+export function markDecisionProposalNeedsRefinement(
+  repositoryId: string,
+  proposalId: string,
+  request: DecisionProposalTransitionRequest = {},
+) {
+  return invokeCommand<DecisionReviewStatus>('mark_decision_proposal_needs_refinement', {
+    repositoryId,
+    proposalId,
+    reason: request.reason ?? null,
+  })
+}
+
+export function markDecisionProposalReadyForResolution(
+  repositoryId: string,
+  proposalId: string,
+  request: DecisionProposalTransitionRequest = {},
+) {
+  return invokeCommand<DecisionReviewStatus>('mark_decision_proposal_ready_for_resolution', {
+    repositoryId,
+    proposalId,
+    reason: request.reason ?? null,
   })
 }
 
@@ -117,6 +243,30 @@ export function resolveDecisionProposal(
   return invokeCommand<Decision>('resolve_decision_proposal', {
     repositoryId,
     proposalId,
+    request,
+  })
+}
+
+export function supersedeDecision(
+  repositoryId: string,
+  decisionId: string,
+  request: SupersedeDecisionCommand,
+) {
+  return invokeCommand<Decision>('supersede_decision', {
+    repositoryId,
+    decisionId,
+    request,
+  })
+}
+
+export function archiveDecision(
+  repositoryId: string,
+  decisionId: string,
+  request: ArchiveDecisionCommand,
+) {
+  return invokeCommand<Decision>('archive_decision', {
+    repositoryId,
+    decisionId,
     request,
   })
 }

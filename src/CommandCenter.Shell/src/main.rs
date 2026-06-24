@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::{
     env,
     path::PathBuf,
@@ -672,6 +672,78 @@ fn list_decision_candidates(repository_id: String) -> Result<Value, String> {
 }
 
 #[tauri::command]
+fn discover_decisions(repository_id: String) -> Result<Value, String> {
+    backend_post_value(
+        &format!("/api/repositories/{repository_id}/decisions/discover"),
+        "decision discovery failed",
+    )
+}
+
+#[tauri::command]
+fn promote_decision_candidate(
+    repository_id: String,
+    candidate_id: String,
+    reason: Option<String>,
+) -> Result<Value, String> {
+    decision_candidate_transition(
+        repository_id,
+        candidate_id,
+        "promote",
+        json!({ "reason": reason }),
+        "decision candidate promotion failed",
+    )
+}
+
+#[tauri::command]
+fn dismiss_decision_candidate(
+    repository_id: String,
+    candidate_id: String,
+    reason: Option<String>,
+) -> Result<Value, String> {
+    decision_candidate_transition(
+        repository_id,
+        candidate_id,
+        "dismiss",
+        json!({ "reason": reason }),
+        "decision candidate dismissal failed",
+    )
+}
+
+#[tauri::command]
+fn expire_decision_candidate(
+    repository_id: String,
+    candidate_id: String,
+    reason: Option<String>,
+) -> Result<Value, String> {
+    decision_candidate_transition(
+        repository_id,
+        candidate_id,
+        "expire",
+        json!({ "reason": reason }),
+        "decision candidate expiration failed",
+    )
+}
+
+#[tauri::command]
+fn mark_decision_candidate_duplicate(
+    repository_id: String,
+    candidate_id: String,
+    duplicate_of_candidate_id: String,
+    reason: Option<String>,
+) -> Result<Value, String> {
+    decision_candidate_transition(
+        repository_id,
+        candidate_id,
+        "duplicate",
+        json!({
+            "reason": reason,
+            "duplicateOfCandidateId": duplicate_of_candidate_id
+        }),
+        "decision candidate duplicate marking failed",
+    )
+}
+
+#[tauri::command]
 fn list_decision_proposals(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals"
@@ -723,6 +795,17 @@ fn get_decision_proposal(repository_id: String, proposal_id: String) -> Result<V
 }
 
 #[tauri::command]
+fn generate_decision_proposal(
+    repository_id: String,
+    candidate_id: String,
+) -> Result<Value, String> {
+    backend_post_value(
+        &format!("/api/repositories/{repository_id}/decisions/candidates/{candidate_id}/proposals"),
+        "decision proposal generation failed",
+    )
+}
+
+#[tauri::command]
 fn get_decision_proposal_review(
     repository_id: String,
     proposal_id: String,
@@ -737,6 +820,81 @@ fn get_decision_proposal_review(
     }
 
     response_error(response, "decision proposal review lookup failed")
+}
+
+#[tauri::command]
+fn expire_decision_proposal(
+    repository_id: String,
+    proposal_id: String,
+    reason: Option<String>,
+) -> Result<Value, String> {
+    decision_proposal_transition(
+        repository_id,
+        proposal_id,
+        "expire",
+        json!({ "reason": reason }),
+        "decision proposal expiration failed",
+    )
+}
+
+#[tauri::command]
+fn discard_decision_proposal(
+    repository_id: String,
+    proposal_id: String,
+    reason: Option<String>,
+) -> Result<Value, String> {
+    decision_proposal_transition(
+        repository_id,
+        proposal_id,
+        "discard",
+        json!({ "reason": reason }),
+        "decision proposal discard failed",
+    )
+}
+
+#[tauri::command]
+fn mark_decision_proposal_viewed(
+    repository_id: String,
+    proposal_id: String,
+    reason: Option<String>,
+) -> Result<Value, String> {
+    decision_proposal_transition(
+        repository_id,
+        proposal_id,
+        "review/viewed",
+        json!({ "reason": reason }),
+        "decision proposal viewed transition failed",
+    )
+}
+
+#[tauri::command]
+fn mark_decision_proposal_needs_refinement(
+    repository_id: String,
+    proposal_id: String,
+    reason: Option<String>,
+) -> Result<Value, String> {
+    decision_proposal_transition(
+        repository_id,
+        proposal_id,
+        "review/needs-refinement",
+        json!({ "reason": reason }),
+        "decision proposal needs-refinement transition failed",
+    )
+}
+
+#[tauri::command]
+fn mark_decision_proposal_ready_for_resolution(
+    repository_id: String,
+    proposal_id: String,
+    reason: Option<String>,
+) -> Result<Value, String> {
+    decision_proposal_transition(
+        repository_id,
+        proposal_id,
+        "review/ready-for-resolution",
+        json!({ "reason": reason }),
+        "decision proposal ready-for-resolution transition failed",
+    )
 }
 
 #[tauri::command]
@@ -842,6 +1000,32 @@ fn resolve_decision_proposal(
     }
 
     response_error(response, "decision proposal resolution failed")
+}
+
+#[tauri::command]
+fn supersede_decision(
+    repository_id: String,
+    decision_id: String,
+    request: Value,
+) -> Result<Value, String> {
+    backend_post_json_value(
+        &format!("/api/repositories/{repository_id}/decisions/{decision_id}/supersede"),
+        &request,
+        "decision supersession failed",
+    )
+}
+
+#[tauri::command]
+fn archive_decision(
+    repository_id: String,
+    decision_id: String,
+    request: Value,
+) -> Result<Value, String> {
+    backend_post_json_value(
+        &format!("/api/repositories/{repository_id}/decisions/{decision_id}/archive"),
+        &request,
+        "decision archival failed",
+    )
 }
 
 #[tauri::command]
@@ -2356,6 +2540,36 @@ fn trace_reasoning(
     response_error(response, fallback)
 }
 
+fn decision_candidate_transition(
+    repository_id: String,
+    candidate_id: String,
+    operation: &str,
+    body: Value,
+    fallback: &str,
+) -> Result<Value, String> {
+    backend_post_json_value(
+        &format!(
+            "/api/repositories/{repository_id}/decisions/candidates/{candidate_id}/{operation}"
+        ),
+        &body,
+        fallback,
+    )
+}
+
+fn decision_proposal_transition(
+    repository_id: String,
+    proposal_id: String,
+    operation: &str,
+    body: Value,
+    fallback: &str,
+) -> Result<Value, String> {
+    backend_post_json_value(
+        &format!("/api/repositories/{repository_id}/decisions/proposals/{proposal_id}/{operation}"),
+        &body,
+        fallback,
+    )
+}
+
 fn backend_get_value(path: &str, fallback: &str) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!("{BACKEND_URL}{path}"))
         .map_err(|error| error.to_string())?;
@@ -2371,6 +2585,25 @@ fn backend_post_value(path: &str, fallback: &str) -> Result<Value, String> {
     let client = reqwest::blocking::Client::new();
     let response = client
         .post(format!("{BACKEND_URL}{path}"))
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, fallback)
+}
+
+fn backend_post_json_value<T: Serialize>(
+    path: &str,
+    body: &T,
+    fallback: &str,
+) -> Result<Value, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!("{BACKEND_URL}{path}"))
+        .json(body)
         .send()
         .map_err(|error| error.to_string())?;
 
@@ -2518,15 +2751,28 @@ fn main() {
             get_decision_context,
             build_decision_context,
             list_decision_candidates,
+            discover_decisions,
+            promote_decision_candidate,
+            dismiss_decision_candidate,
+            expire_decision_candidate,
+            mark_decision_candidate_duplicate,
             list_decision_proposals,
             list_decision_proposal_browser,
             get_decision_proposal,
+            generate_decision_proposal,
             get_decision_proposal_review,
+            expire_decision_proposal,
+            discard_decision_proposal,
+            mark_decision_proposal_viewed,
+            mark_decision_proposal_needs_refinement,
+            mark_decision_proposal_ready_for_resolution,
             get_decision_proposal_lineage,
             refine_decision_proposal,
             analyze_decision_refinement,
             regenerate_decision_refinement,
             resolve_decision_proposal,
+            supersede_decision,
+            archive_decision,
             get_decision_assimilation_recommendation,
             propose_decision_operational_context_assimilation,
             get_decision_option_comparison,

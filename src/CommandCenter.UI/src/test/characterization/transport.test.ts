@@ -1,17 +1,34 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  archiveDecision,
+  discoverDecisions,
+  dismissDecisionCandidate,
+  discardDecisionProposal,
   executeDecisionSessionTransfer,
+  expireDecisionCandidate,
+  expireDecisionProposal,
+  generateDecisionProposal,
   getDecisionSessionLifecycleProjection,
   getWorkflowProjection,
   listContinuityReports,
+  markDecisionCandidateDuplicate,
+  markDecisionProposalNeedsRefinement,
+  markDecisionProposalReadyForResolution,
+  markDecisionProposalViewed,
+  promoteDecisionCandidate,
   refreshRepositoryWorkspace,
   recoverDecisionSession,
   subscribeToExecutionEvents,
+  supersedeDecision,
 } from '../../api'
 import type {
   DecisionSessionLifecycleProjection,
   DecisionSessionRecoveryResult,
   DecisionSessionTransferResult,
+  DecisionCandidate,
+  DecisionDiscoveryResult,
+  DecisionProposal,
+  DecisionReviewStatus,
   ExecutionEvent,
   RepositoryWorkspaceProjection,
   WorkflowInstance,
@@ -318,6 +335,131 @@ describe('transport boundary characterization', () => {
     }, undefined)
     expect(invoke).toHaveBeenNthCalledWith(3, 'recover_decision_session', {
       repositoryId: 'repo-alpha',
+    }, undefined)
+  })
+
+  it('preserves core decision lifecycle command request and response handling', async () => {
+    const candidate = { id: 'CAND-0001' } as DecisionCandidate
+    const discovery = { candidates: [candidate] } as DecisionDiscoveryResult
+    const proposal = { id: 'PROP-0001' } as DecisionProposal
+    const review = { proposalId: 'PROP-0001', state: 'Viewed' } as DecisionReviewStatus
+    const decision = { id: 'DEC-0001' }
+    const invoke = vi.fn()
+      .mockResolvedValueOnce(discovery)
+      .mockResolvedValueOnce(candidate)
+      .mockResolvedValueOnce(candidate)
+      .mockResolvedValueOnce(candidate)
+      .mockResolvedValueOnce(candidate)
+      .mockResolvedValueOnce(proposal)
+      .mockResolvedValueOnce(review)
+      .mockResolvedValueOnce(review)
+      .mockResolvedValueOnce(review)
+      .mockResolvedValueOnce(proposal)
+      .mockResolvedValueOnce(proposal)
+      .mockResolvedValueOnce(decision)
+      .mockResolvedValueOnce(decision)
+
+    window.__TAURI_INTERNALS__ = {
+      invoke,
+      transformCallback: vi.fn(),
+      unregisterCallback: vi.fn(),
+      callbacks: {},
+      convertFileSrc: vi.fn(),
+    }
+
+    await discoverDecisions('repo-alpha')
+    await promoteDecisionCandidate('repo-alpha', 'CAND-0001', { reason: 'ready' })
+    await dismissDecisionCandidate('repo-alpha', 'CAND-0001')
+    await expireDecisionCandidate('repo-alpha', 'CAND-0001', { reason: 'stale' })
+    await markDecisionCandidateDuplicate('repo-alpha', 'CAND-0001', {
+      duplicateOfCandidateId: 'CAND-0000',
+      reason: 'same source',
+    })
+    await generateDecisionProposal('repo-alpha', 'CAND-0001')
+    await markDecisionProposalViewed('repo-alpha', 'PROP-0001')
+    await markDecisionProposalNeedsRefinement('repo-alpha', 'PROP-0001', { reason: 'needs more evidence' })
+    await markDecisionProposalReadyForResolution('repo-alpha', 'PROP-0001')
+    await expireDecisionProposal('repo-alpha', 'PROP-0001')
+    await discardDecisionProposal('repo-alpha', 'PROP-0001', { reason: 'wrong scope' })
+    await supersedeDecision('repo-alpha', 'DEC-0001', {
+      replacementDecisionId: 'DEC-0002',
+      rationale: 'replacement accepted',
+      resolver: 'Reviewer',
+    })
+    await archiveDecision('repo-alpha', 'DEC-0001', {
+      rationale: 'no longer relevant',
+      resolver: 'Reviewer',
+    })
+
+    expect(invoke).toHaveBeenNthCalledWith(1, 'discover_decisions', {
+      repositoryId: 'repo-alpha',
+    }, undefined)
+    expect(invoke).toHaveBeenNthCalledWith(2, 'promote_decision_candidate', {
+      repositoryId: 'repo-alpha',
+      candidateId: 'CAND-0001',
+      reason: 'ready',
+    }, undefined)
+    expect(invoke).toHaveBeenNthCalledWith(3, 'dismiss_decision_candidate', {
+      repositoryId: 'repo-alpha',
+      candidateId: 'CAND-0001',
+      reason: null,
+    }, undefined)
+    expect(invoke).toHaveBeenNthCalledWith(4, 'expire_decision_candidate', {
+      repositoryId: 'repo-alpha',
+      candidateId: 'CAND-0001',
+      reason: 'stale',
+    }, undefined)
+    expect(invoke).toHaveBeenNthCalledWith(5, 'mark_decision_candidate_duplicate', {
+      repositoryId: 'repo-alpha',
+      candidateId: 'CAND-0001',
+      duplicateOfCandidateId: 'CAND-0000',
+      reason: 'same source',
+    }, undefined)
+    expect(invoke).toHaveBeenNthCalledWith(6, 'generate_decision_proposal', {
+      repositoryId: 'repo-alpha',
+      candidateId: 'CAND-0001',
+    }, undefined)
+    expect(invoke).toHaveBeenNthCalledWith(7, 'mark_decision_proposal_viewed', {
+      repositoryId: 'repo-alpha',
+      proposalId: 'PROP-0001',
+      reason: null,
+    }, undefined)
+    expect(invoke).toHaveBeenNthCalledWith(8, 'mark_decision_proposal_needs_refinement', {
+      repositoryId: 'repo-alpha',
+      proposalId: 'PROP-0001',
+      reason: 'needs more evidence',
+    }, undefined)
+    expect(invoke).toHaveBeenNthCalledWith(9, 'mark_decision_proposal_ready_for_resolution', {
+      repositoryId: 'repo-alpha',
+      proposalId: 'PROP-0001',
+      reason: null,
+    }, undefined)
+    expect(invoke).toHaveBeenNthCalledWith(10, 'expire_decision_proposal', {
+      repositoryId: 'repo-alpha',
+      proposalId: 'PROP-0001',
+      reason: null,
+    }, undefined)
+    expect(invoke).toHaveBeenNthCalledWith(11, 'discard_decision_proposal', {
+      repositoryId: 'repo-alpha',
+      proposalId: 'PROP-0001',
+      reason: 'wrong scope',
+    }, undefined)
+    expect(invoke).toHaveBeenNthCalledWith(12, 'supersede_decision', {
+      repositoryId: 'repo-alpha',
+      decisionId: 'DEC-0001',
+      request: {
+        replacementDecisionId: 'DEC-0002',
+        rationale: 'replacement accepted',
+        resolver: 'Reviewer',
+      },
+    }, undefined)
+    expect(invoke).toHaveBeenNthCalledWith(13, 'archive_decision', {
+      repositoryId: 'repo-alpha',
+      decisionId: 'DEC-0001',
+      request: {
+        rationale: 'no longer relevant',
+        resolver: 'Reviewer',
+      },
     }, undefined)
   })
 })

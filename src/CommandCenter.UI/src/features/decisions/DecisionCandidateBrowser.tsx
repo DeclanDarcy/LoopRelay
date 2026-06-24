@@ -21,19 +21,34 @@ const candidateStateLabels: Record<DecisionCandidateState, string> = {
 type DecisionCandidateBrowserProps = {
   candidates: DecisionCandidate[]
   isLoading: boolean
+  actionsEnabled?: boolean
   onSelectedCandidateChange?: (candidateId: string | null) => void
+  onDiscover?: () => void | Promise<void>
+  onPromote?: (candidateId: string) => void | Promise<void>
+  onDismiss?: (candidateId: string) => void | Promise<void>
+  onExpire?: (candidateId: string) => void | Promise<void>
+  onMarkDuplicate?: (candidateId: string, duplicateOfCandidateId: string) => void | Promise<void>
+  onGenerateProposal?: (candidateId: string) => void | Promise<void>
 }
 
 export function DecisionCandidateBrowser({
   candidates,
   isLoading,
+  actionsEnabled = true,
   onSelectedCandidateChange,
+  onDiscover,
+  onPromote,
+  onDismiss,
+  onExpire,
+  onMarkDuplicate,
+  onGenerateProposal,
 }: DecisionCandidateBrowserProps) {
   const [selectedStates, setSelectedStates] = useState<DecisionCandidateState[]>([
     'Discovered',
     'Promoted',
   ])
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null)
+  const [duplicateOfCandidateId, setDuplicateOfCandidateId] = useState<string>('')
   const selectedStateSet = useMemo(() => new Set(selectedStates), [selectedStates])
   const filteredCandidates = useMemo(() => {
     if (selectedStates.length === 0) {
@@ -46,6 +61,7 @@ export function DecisionCandidateBrowser({
     filteredCandidates.find((candidate) => candidate.id === selectedCandidateId) ??
     filteredCandidates[0] ??
     null
+  const duplicateTargets = candidates.filter((candidate) => candidate.id !== selectedCandidate?.id)
 
   useEffect(() => {
     if (!selectedCandidateId || filteredCandidates.some((candidate) => candidate.id === selectedCandidateId)) {
@@ -72,7 +88,19 @@ export function DecisionCandidateBrowser({
     <section className="decision-lifecycle-panel decision-candidate-browser" aria-label="Decision candidates">
       <div className="decision-panel-heading">
         <h5>Candidates</h5>
-        <span>{filteredCandidates.length} shown</span>
+        <div className="context-controls">
+          <span>{filteredCandidates.length} shown</span>
+          {actionsEnabled ? (
+            <button
+              type="button"
+              className="secondary-action"
+              onClick={() => void onDiscover?.()}
+              disabled={isLoading || !onDiscover}
+            >
+              Discover
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <div className="decision-filter-bar" aria-label="Candidate state filters">
@@ -147,6 +175,66 @@ export function DecisionCandidateBrowser({
                   <dd>{selectedCandidate.evidence.length}</dd>
                 </div>
               </dl>
+              {actionsEnabled ? (
+                <>
+                  <div className="context-controls" aria-label="Candidate actions">
+                    <button
+                      type="button"
+                      className="secondary-action"
+                      onClick={() => void onPromote?.(selectedCandidate.id)}
+                      disabled={isLoading || !onPromote}
+                    >
+                      Promote Candidate
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-action"
+                      onClick={() => void onGenerateProposal?.(selectedCandidate.id)}
+                      disabled={isLoading || !onGenerateProposal}
+                    >
+                      Generate Decision Proposal
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-action"
+                      onClick={() => void onDismiss?.(selectedCandidate.id)}
+                      disabled={isLoading || !onDismiss}
+                    >
+                      Dismiss
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-action"
+                      onClick={() => void onExpire?.(selectedCandidate.id)}
+                      disabled={isLoading || !onExpire}
+                    >
+                      Expire
+                    </button>
+                  </div>
+                  <div className="decision-filter-bar" aria-label="Candidate duplicate action">
+                    <select
+                      value={duplicateOfCandidateId}
+                      onChange={(event) => setDuplicateOfCandidateId(event.target.value)}
+                      disabled={isLoading || duplicateTargets.length === 0}
+                    >
+                      <option value="">Duplicate target</option>
+                      {duplicateTargets.map((candidate) => (
+                        <option value={candidate.id} key={candidate.id}>
+                          {candidate.id}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="secondary-action"
+                      onClick={() => void onMarkDuplicate?.(selectedCandidate.id, duplicateOfCandidateId)}
+                      disabled={isLoading || !onMarkDuplicate || !duplicateOfCandidateId}
+                    >
+                      Mark Duplicate
+                    </button>
+                  </div>
+                </>
+              ) : null}
             </aside>
           ) : null}
         </div>

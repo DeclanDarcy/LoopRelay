@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
-import { formatError, getDecisionProposalReview } from '../api'
-import type { DecisionReviewWorkspace } from '../types'
+import {
+  formatError,
+  getDecisionProposalReview,
+  markDecisionProposalNeedsRefinement,
+  markDecisionProposalReadyForResolution,
+  markDecisionProposalViewed,
+} from '../api'
+import type { DecisionProposalTransitionRequest, DecisionReviewWorkspace } from '../types'
 
 export function useDecisionProposalReview(repositoryId: string | null, proposalId: string | null) {
   const [data, setData] = useState<DecisionReviewWorkspace | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isMutating, setIsMutating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
@@ -47,5 +54,57 @@ export function useDecisionProposalReview(repositoryId: string | null, proposalI
     return () => window.clearTimeout(timeoutId)
   }, [proposalId, refresh, repositoryId])
 
-  return { data, setData, isLoading, error, refresh, load: refresh }
+  const runMutation = useCallback(async <T>(operation: () => Promise<T>) => {
+    if (!repositoryId || !proposalId) {
+      return null
+    }
+
+    setIsMutating(true)
+    setError(null)
+    try {
+      const result = await operation()
+      await refresh()
+      return result
+    } catch (mutationError) {
+      const message = formatError(mutationError)
+      setError(message)
+      return null
+    } finally {
+      setIsMutating(false)
+    }
+  }, [proposalId, refresh, repositoryId])
+
+  const markViewed = useCallback((request: DecisionProposalTransitionRequest = {}) =>
+    runMutation(() => markDecisionProposalViewed(repositoryId as string, proposalId as string, request)), [
+    proposalId,
+    repositoryId,
+    runMutation,
+  ])
+
+  const markNeedsRefinement = useCallback((request: DecisionProposalTransitionRequest = {}) =>
+    runMutation(() => markDecisionProposalNeedsRefinement(repositoryId as string, proposalId as string, request)), [
+    proposalId,
+    repositoryId,
+    runMutation,
+  ])
+
+  const markReadyForResolution = useCallback((request: DecisionProposalTransitionRequest = {}) =>
+    runMutation(() => markDecisionProposalReadyForResolution(repositoryId as string, proposalId as string, request)), [
+    proposalId,
+    repositoryId,
+    runMutation,
+  ])
+
+  return {
+    data,
+    setData,
+    isLoading,
+    isMutating,
+    error,
+    refresh,
+    load: refresh,
+    markViewed,
+    markNeedsRefinement,
+    markReadyForResolution,
+  }
 }

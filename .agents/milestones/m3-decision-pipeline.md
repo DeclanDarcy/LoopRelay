@@ -10,14 +10,14 @@ Discovery -> Candidate -> Proposal -> Review -> Refinement -> Resolution -> Supe
 
 ### Backend and Shell
 
-- [ ] Inventory all decision lifecycle routes already mapped in `DecisionEndpoints.cs`.
+- [x] Inventory all decision lifecycle routes already mapped in `DecisionEndpoints.cs`.
 - [ ] Add or expose any missing request/response models in TypeScript for:
-   - [ ] `DecisionDiscoveryResult`
-   - [ ] `DecisionProposalTransitionRequest`
-   - [ ] `CreateDecisionProposalCommand` or existing generation request type
-   - [ ] `SupersedeDecisionCommand`
-   - [ ] `ArchiveDecisionCommand`
-   - [ ] proposal generation diagnostics
+   - [x] `DecisionDiscoveryResult`
+   - [x] `DecisionProposalTransitionRequest`
+   - [x] `CreateDecisionProposalCommand` or existing generation request type
+   - [x] `SupersedeDecisionCommand`
+   - [x] `ArchiveDecisionCommand`
+   - [x] proposal generation diagnostics
 - [ ] Add a backend read-only lifecycle eligibility projection over `DecisionLifecycleRules`:
    - [ ] current state
    - [ ] allowed next states
@@ -30,26 +30,26 @@ Discovery -> Candidate -> Proposal -> Review -> Refinement -> Resolution -> Supe
    - [ ] `GET /api/repositories/{repositoryId}/decisions/lifecycle/eligibility`
 - [ ] If a single route becomes too large, split by entity while keeping the rule evaluation in one backend service.
 - [ ] Add shell commands for Core MVP lifecycle operations:
-   - [ ] `discover_decisions`
-   - [ ] `promote_decision_candidate`
-   - [ ] `dismiss_decision_candidate`
-   - [ ] `expire_decision_candidate`
-   - [ ] `mark_decision_candidate_duplicate`
-   - [ ] `generate_decision_proposal`
-   - [ ] `expire_decision_proposal`
-   - [ ] `discard_decision_proposal`
-   - [ ] `mark_decision_proposal_viewed`
-   - [ ] `mark_decision_proposal_needs_refinement`
-   - [ ] `mark_decision_proposal_ready_for_resolution`
-   - [ ] `supersede_decision`
-   - [ ] `archive_decision`
+   - [x] `discover_decisions`
+   - [x] `promote_decision_candidate`
+   - [x] `dismiss_decision_candidate`
+   - [x] `expire_decision_candidate`
+   - [x] `mark_decision_candidate_duplicate`
+   - [x] `generate_decision_proposal`
+   - [x] `expire_decision_proposal`
+   - [x] `discard_decision_proposal`
+   - [x] `mark_decision_proposal_viewed`
+   - [x] `mark_decision_proposal_needs_refinement`
+   - [x] `mark_decision_proposal_ready_for_resolution`
+   - [x] `supersede_decision`
+   - [x] `archive_decision`
    - [ ] `get_decision_lifecycle_eligibility`
-- [ ] Shell commands must call backend endpoints and return backend domain responses directly.
+- [x] Shell commands must call backend endpoints and return backend domain responses directly.
 
 ### UI
 
-- [ ] Expand `src/CommandCenter.UI/src/api/decisions.ts` with typed functions for all Core MVP lifecycle operations.
-- [ ] Expand `useDecisionDiscovery`, `useDecisionProposals`, `useDecisionProposalReview`, and related hooks with action methods and refresh behavior.
+- [x] Expand `src/CommandCenter.UI/src/api/decisions.ts` with typed functions for all Core MVP lifecycle operations.
+- [x] Expand `useDecisionDiscovery`, `useDecisionProposals`, `useDecisionProposalReview`, and related hooks with action methods and refresh behavior.
 - [ ] Update `DecisionCandidateBrowser` to show:
    - [ ] state
    - [ ] signals
@@ -58,12 +58,12 @@ Discovery -> Candidate -> Proposal -> Review -> Refinement -> Resolution -> Supe
    - [ ] allowed actions
    - [ ] unavailable action reasons
 - [ ] Add candidate actions:
-   - [ ] discover
-   - [ ] promote
-   - [ ] dismiss
-   - [ ] expire
-   - [ ] mark duplicate
-   - [ ] generate proposal
+   - [x] discover
+   - [x] promote
+   - [x] dismiss
+   - [x] expire
+   - [x] mark duplicate
+   - [x] generate proposal
 - [ ] Proposal generation flow must refresh candidates, refresh proposals, navigate to the generated proposal where appropriate, and display generation diagnostics, generated proposal id, generation mode, accepted option count, rejected option count, deduplicated option count, and validation diagnostics.
 - [ ] Update proposal viewer/review panels to render review state, allowed transitions, unavailable reasons, last transition, and transition controls.
 - [ ] Add supersede and archive actions for resolved decisions, including target decision selection, rationale, resulting state, relationships, governance impact, and execution projection refresh.

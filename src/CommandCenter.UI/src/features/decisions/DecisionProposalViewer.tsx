@@ -56,6 +56,25 @@ export function DecisionProposalViewer({ workspace, isLoading }: DecisionProposa
         <span>{diagnostics.hasEvidence ? 'Proposal evidence present' : 'No proposal evidence'}</span>
       </div>
 
+      {proposal.generationDiagnostics ? (
+        <div className="decision-diagnostics-grid" aria-label="Proposal generation diagnostics">
+          <span>{proposal.generationDiagnostics.generatedOptionCount} generated options</span>
+          <span>{proposal.generationDiagnostics.acceptedOptionCount} accepted options</span>
+          <span>{proposal.generationDiagnostics.rejectedOptionCount} rejected options</span>
+          <span>{proposal.generationDiagnostics.deduplicatedOptionCount} deduplicated options</span>
+          <span>{proposal.generationDiagnostics.fallbackOptionCount} fallback options</span>
+          <span>{proposal.generationDiagnostics.optionValidationResults.length} validation results</span>
+        </div>
+      ) : null}
+
+      {proposal.generationDiagnostics?.diagnostics.length ? (
+        <div className="decision-warning-list" aria-label="Generation diagnostics">
+          {proposal.generationDiagnostics.diagnostics.map((diagnostic) => (
+            <span key={diagnostic}>{diagnostic}</span>
+          ))}
+        </div>
+      ) : null}
+
       {diagnostics.warnings.length > 0 ? (
         <div className="decision-warning-list" aria-label="Review diagnostics warnings">
           {diagnostics.warnings.map((warning) => (
