@@ -2,44 +2,32 @@
 
 ## Newly Authorized
 
-- Proceed from Milestone 9 into Milestone 10 certification.
-- Begin Milestone 10 with:
-  - `WorkflowCertificationResult`
-  - `WorkflowCertificationFinding`
-  - `IWorkflowCertificationService`
-- Do not start Milestone 10 with reports.
-- Implement authority preservation as the first certification category.
-- Certification must prove Workflow never:
-  - accepts handoffs.
-  - rejects handoffs.
-  - resolves decisions.
-  - supersedes decisions.
-  - reviews operational context.
-  - promotes operational context.
-  - approves commits.
-  - executes commits.
-  - approves pushes.
-  - executes pushes.
-  - selects work.
-- After authority certification, preferred certification sequence is:
-  - recovery certification.
-  - idempotency certification.
-  - gate certification.
-  - end-to-end fixture.
-- Recovery certification must prove corrupted persisted workflow evidence is restored from domain truth for:
-  - timeline.
-  - continuation history.
-  - preparation history.
-  - completed state.
-- Idempotency certification must prove restart, repeated continuation, repeated preparation, and hosted continuation cannot duplicate progression, preparation, artifacts, or history.
-- Gate certification must cover:
-  - `WorkSelection`
-  - `ExecutionAcceptance`
-  - `DecisionResolution`
-  - `OperationalContextReview`
-  - `OperationalContextPromotion`
-  - `CommitApproval`
-  - `PushApproval`
-- End-to-end fixture should come only after authority, recovery, idempotency, and gate certification categories exist.
-- Add explicit certification that when persisted workflow says `Completed` but domain projection says `Commit`, domain projection wins.
-- Keep `WorkflowGitStatus.PushSkipped` deferred until explicit domain-owned push-skip evidence exists.
+- Proceed with Milestone 10 recovery certification next.
+- Treat recovery certification as the second-most important certification category after authority certification.
+- Start recovery certification with the completed-vs-commit divergence scenario:
+  - persisted workflow timeline says `Completed`.
+  - domain projection says `Commit`.
+  - domain projection wins.
+  - workflow evidence is rebuilt.
+  - a certification finding is recorded.
+  - persisted `Completed` evidence must never win over domain truth.
+- Add recovery certification for corrupted timeline evidence:
+  - recovery rebuilds projection from domain truth.
+  - recovery does not duplicate progression.
+  - recovery does not duplicate timeline entries.
+- Add recovery certification for corrupted continuation history:
+  - current state is preserved.
+  - restart/recovery does not create duplicate continuation events.
+- Add recovery certification for corrupted preparation history:
+  - duplicate detection still works.
+  - restart/recovery does not create duplicate review artifacts.
+- Add completed-restart recovery certification:
+  - completed workflow recovers as `Completed` with a `WorkSelection` gate.
+  - completed workflow does not advance again after restart.
+- Add explicit derived-evidence certification, either as a separate `DerivedEvidence` category or folded into `Recovery`.
+- Derived-evidence certification must prove deleting workflow timeline, continuation history, and preparation history does not change:
+  - current stage.
+  - current gates.
+  - current eligibility.
+  - current health.
+- Continue focusing Milestone 10 on proving properties rather than adding new workflow authority or capability.

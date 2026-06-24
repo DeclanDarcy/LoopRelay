@@ -2971,6 +2971,70 @@ public sealed class WorkflowProjectionServiceTests
         Assert.Equal(WorkflowStage.Decision, assessment.InfluenceTrace.CurrentStage);
     }
 
+    [Fact]
+    public async Task WorkflowCertificationPassesAuthorityBoundaryAndPersistsReport()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+        fixture.Decisions.Add(CreateDecision(fixture.Repository.Id, "DEC-0001", DecisionState.Open));
+        var store = new MemoryArtifactStore();
+        var workflowRepository = new FileSystemWorkflowRepository(store);
+        WorkflowCertificationService service = fixture.CreateCertificationService(workflowRepository);
+
+        WorkflowCertificationResult current = await service.GetCurrentCertificationAsync(fixture.Repository.Id);
+        WorkflowCertificationResult persisted = await service.RunCertificationAsync(fixture.Repository.Id);
+        IReadOnlyList<string> reportFiles = await store.ListAsync(
+            WorkflowArtifactPaths.Resolve(fixture.Repository, WorkflowArtifactPaths.ReportsRoot),
+            "*.json");
+
+        Assert.True(current.Certified);
+        Assert.Equal(WorkflowStage.Decision, current.CurrentStage);
+        Assert.Equal(WorkflowGateType.DecisionResolution, current.BlockingGate);
+        Assert.All(current.Findings, finding => Assert.Equal("Authority", finding.Category));
+        Assert.Contains(current.Findings, finding => finding.Id == "authority-continuation-halts-at-gates" && finding.Passed);
+        Assert.True(persisted.Certified);
+        Assert.Single(reportFiles);
+    }
+
+    [Fact]
+    public async Task WorkflowCertificationFailsForbiddenPreparationAuthorityCommand()
+    {
+        TestFixture fixture = TestFixture.Create();
+        var workflowRepository = new FileSystemWorkflowRepository(new MemoryArtifactStore());
+        await workflowRepository.SavePreparationEventAsync(
+            fixture.Repository,
+            new WorkflowPreparationEvent(
+                fixture.Repository.Id,
+                WorkflowArtifactPaths.PreparationEventId(DateTimeOffset.Parse("2026-06-23T12:30:00Z")),
+                DateTimeOffset.Parse("2026-06-23T12:30:00Z"),
+                "test",
+                WorkflowStage.Push,
+                WorkflowProgressState.Ready,
+                WorkflowGateType.None,
+                WorkflowPreparationCommand.None,
+                "push_execution",
+                "Created",
+                "Forged authority command.",
+                new WorkflowPreparationFingerprint("forged-authority"),
+                false,
+                false,
+                [],
+                [],
+                []));
+        WorkflowCertificationService service = fixture.CreateCertificationService(workflowRepository);
+
+        WorkflowCertificationResult result = await service.GetCurrentCertificationAsync(fixture.Repository.Id);
+
+        Assert.False(result.Certified);
+        WorkflowCertificationFinding finding = Assert.Single(
+            result.Findings,
+            candidate => candidate.Id == "authority-no-forbidden-preparation-command");
+        Assert.False(finding.Passed);
+        Assert.Contains(finding.Diagnostics, diagnostic => diagnostic.Contains("push_execution", StringComparison.Ordinal));
+        Assert.Contains(result.Failures, failure => failure.Contains("authority-no-forbidden-preparation-command", StringComparison.Ordinal));
+    }
+
     private static void ArrangeAuthorityGateScenario(TestFixture fixture, string scenario)
     {
         switch (scenario)
@@ -3341,6 +3405,13 @@ public sealed class WorkflowProjectionServiceTests
         public WorkflowHealthService CreateHealthService(IWorkflowRepository workflowRepository) =>
             new(new RepositoryServiceStub(Repository), CreateService(), workflowRepository);
 
+        public WorkflowCertificationService CreateCertificationService(IWorkflowRepository workflowRepository) =>
+            new(
+                new RepositoryServiceStub(Repository),
+                CreateService(),
+                workflowRepository,
+                CreateHealthService(workflowRepository));
+
         public void ReplaceServices(IServiceCollection services)
         {
             services.RemoveAll<IRepositoryService>();
@@ -3360,6 +3431,7 @@ public sealed class WorkflowProjectionServiceTests
             services.RemoveAll<IWorkflowContinuationService>();
             services.RemoveAll<IWorkflowPreparationService>();
             services.RemoveAll<IWorkflowHealthService>();
+            services.RemoveAll<IWorkflowCertificationService>();
             services.RemoveAll<IWorkflowRepository>();
             services.RemoveAll<IWorkflowRecoveryService>();
             services.RemoveAll<IHostedService>();
@@ -3382,6 +3454,7 @@ public sealed class WorkflowProjectionServiceTests
             services.AddSingleton<IWorkflowContinuationService, WorkflowContinuationService>();
             services.AddSingleton<IWorkflowPreparationService, WorkflowPreparationService>();
             services.AddSingleton<IWorkflowHealthService, WorkflowHealthService>();
+            services.AddSingleton<IWorkflowCertificationService, WorkflowCertificationService>();
             services.AddSingleton<IWorkflowRecoveryService, WorkflowRecoveryService>();
         }
     }

@@ -28,6 +28,8 @@ public static class WorkflowEndpoints
         app.MapPostWorkflowPreparationRun();
         app.MapGetWorkflowPreparationHistory();
         app.MapGetWorkflowHealth();
+        app.MapGetWorkflowCertification();
+        app.MapPostWorkflowCertification();
         return app;
     }
 
@@ -441,6 +443,44 @@ public static class WorkflowEndpoints
             try
             {
                 return Results.Ok(await workflowHealthService.AssessHealthAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGetWorkflowCertification(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/workflow/certification", async (
+            Guid repositoryId,
+            IWorkflowCertificationService workflowCertificationService) =>
+        {
+            try
+            {
+                return Results.Ok(await workflowCertificationService.GetCurrentCertificationAsync(repositoryId));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+
+    private static void MapPostWorkflowCertification(this IEndpointRouteBuilder app) =>
+        app.MapPost("/api/repositories/{repositoryId:guid}/workflow/certification", async (
+            Guid repositoryId,
+            IWorkflowCertificationService workflowCertificationService) =>
+        {
+            try
+            {
+                return Results.Ok(await workflowCertificationService.RunCertificationAsync(repositoryId));
             }
             catch (KeyNotFoundException exception)
             {

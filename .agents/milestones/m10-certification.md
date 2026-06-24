@@ -4,14 +4,14 @@ Objective: prove the workflow is correct, recoverable, explainable, and authorit
 
 Deliver:
 
-- [ ] `IWorkflowCertificationService`.
-- [ ] `WorkflowCertificationResult`.
-- [ ] `WorkflowCertificationFinding`.
+- [x] `IWorkflowCertificationService`.
+- [x] `WorkflowCertificationResult`.
+- [x] `WorkflowCertificationFinding`.
 - [ ] `RepositoryWorkflowReport`.
 - [ ] `WorkflowProgressionReport`.
 - [ ] `HumanGovernanceReport`.
 - [ ] `WorkflowReadinessReport`.
-- [ ] authority certification.
+- [x] authority certification.
 - [ ] recovery certification.
 - [ ] continuation certification.
 - [ ] preparation certification.
@@ -72,7 +72,7 @@ Tests:
 
 - [ ] failures generate findings.
 - [ ] passing scenarios generate readiness evidence.
-- [ ] authority certification detects forbidden mutation.
+- [x] authority certification detects forbidden mutation.
 - [ ] recovery certification detects lost state, corruption, and duplicate progression.
 - [ ] continuation certification detects missed gate halting.
 - [ ] preparation certification detects duplicate artifacts, parallel commands, and gate bypass attempts.
@@ -80,9 +80,9 @@ Tests:
 
 Exit criteria:
 
-- [ ] certification service exists.
+- [x] certification service exists.
 - [ ] repository, progression, human-governance, and readiness reports exist.
-- [ ] authority certification passes.
+- [x] authority certification passes.
 - [ ] recovery certification passes.
 - [ ] continuation certification passes.
 - [ ] preparation certification passes.

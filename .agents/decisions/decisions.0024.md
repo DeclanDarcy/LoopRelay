@@ -1,0 +1,45 @@
+# Decisions
+
+## Newly Authorized
+
+- Proceed from Milestone 9 into Milestone 10 certification.
+- Begin Milestone 10 with:
+  - `WorkflowCertificationResult`
+  - `WorkflowCertificationFinding`
+  - `IWorkflowCertificationService`
+- Do not start Milestone 10 with reports.
+- Implement authority preservation as the first certification category.
+- Certification must prove Workflow never:
+  - accepts handoffs.
+  - rejects handoffs.
+  - resolves decisions.
+  - supersedes decisions.
+  - reviews operational context.
+  - promotes operational context.
+  - approves commits.
+  - executes commits.
+  - approves pushes.
+  - executes pushes.
+  - selects work.
+- After authority certification, preferred certification sequence is:
+  - recovery certification.
+  - idempotency certification.
+  - gate certification.
+  - end-to-end fixture.
+- Recovery certification must prove corrupted persisted workflow evidence is restored from domain truth for:
+  - timeline.
+  - continuation history.
+  - preparation history.
+  - completed state.
+- Idempotency certification must prove restart, repeated continuation, repeated preparation, and hosted continuation cannot duplicate progression, preparation, artifacts, or history.
+- Gate certification must cover:
+  - `WorkSelection`
+  - `ExecutionAcceptance`
+  - `DecisionResolution`
+  - `OperationalContextReview`
+  - `OperationalContextPromotion`
+  - `CommitApproval`
+  - `PushApproval`
+- End-to-end fixture should come only after authority, recovery, idempotency, and gate certification categories exist.
+- Add explicit certification that when persisted workflow says `Completed` but domain projection says `Commit`, domain projection wins.
+- Keep `WorkflowGitStatus.PushSkipped` deferred until explicit domain-owned push-skip evidence exists.

@@ -2,27 +2,41 @@
 
 ## New State
 
-- Completed the Milestone 9 architectural review requested by decisions.
-- Updated `.agents/milestones/m9-continuation.md` to record the review conclusion.
-- Marked checklist items complete where implementation and tests already prove:
-  - ineligible workflow does not advance.
-  - continuation rules exist for currently supported canonical transitions.
-  - recovery integration works through domain-derived rebuild plus continuation idempotency.
-- Left legitimate push-skip completion unchecked and explicitly deferred until Execution or Git provides domain-owned push-skip evidence.
+- Started Milestone 10 certification with the authorized authority-preservation slice.
+- Added:
+  - `IWorkflowCertificationService`
+  - `WorkflowCertificationResult`
+  - `WorkflowCertificationFinding`
+  - `WorkflowCertificationService`
+- Registered workflow certification in DI.
+- Added backend routes:
+  - `GET /api/repositories/{repositoryId}/workflow/certification`
+  - `POST /api/repositories/{repositoryId}/workflow/certification`
+- `RunCertificationAsync` persists a workflow report artifact through existing `IWorkflowRepository.SaveReportAsync`.
+- Authority certification currently checks:
+  - certification service is observer/report-only.
+  - preparation history contains no forbidden authority command names.
+  - continuation events waiting for humans do not advance to another stage.
+  - preparation events do not satisfy open authority gates.
+  - workflow gates do not introduce workflow-owned authority commands.
+- Updated `.agents/milestones/m10-certification.md` for completed service/model/authority items only.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter WorkflowProjectionServiceTests` passed: 99 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter WorkflowProjectionServiceTests` passed: 101 tests.
 - `dotnet build CommandCenter.slnx` passed with 0 warnings and 0 errors.
 
 ## Relevant Decisions
 
-- Workflow must not infer push-skip authority. `WorkflowGitStatus.PushSkipped` remains reserved for future explicit domain evidence.
-- Milestone 9 review did not authorize new runtime behavior, and no concrete runtime gap was found.
-- Continuation/preparation separation remains the key invariant: continuation records progression evidence; preparation creates only reviewable artifacts through existing domain commands.
+- Certification is an observer. It may write workflow report evidence, but it does not receive domain mutator services.
+- This slice intentionally did not implement repository/progression/human-governance/readiness reports beyond persisting the certification result as a workflow report artifact.
+- Authority certification is evidence-based over workflow projections, continuation history, preparation history, gates, and health. It should be expanded with deeper recovery/idempotency/gate scenarios next.
 
 ## Next Slice
 
-- Start Milestone 10 certification.
-- Begin with certification models and service contract, then add backend read/run/report endpoints.
-- Certification should prove the Milestone 9 invariants first: authority gates halt, hosted continuation is disabled by default, restart recovery does not duplicate continuation or preparation, and workflow never performs domain authority actions.
+- Continue Milestone 10 with recovery certification.
+- High-value next tests:
+  - persisted workflow says `Completed` but domain projection says `Commit`, and domain projection wins.
+  - corrupted timeline evidence is rebuilt from domain truth.
+  - corrupted continuation/preparation history is detected or rebuilt without duplicating events.
+- After recovery certification, proceed to idempotency certification for restart, repeated continuation, repeated preparation, and hosted continuation.
