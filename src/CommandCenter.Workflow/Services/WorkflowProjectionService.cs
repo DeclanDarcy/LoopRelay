@@ -1,5 +1,4 @@
 using CommandCenter.Core.Repositories;
-using CommandCenter.Execution.Abstractions;
 using CommandCenter.Execution.Models;
 using CommandCenter.Workflow.Abstractions;
 using CommandCenter.Workflow.Models;
@@ -13,7 +12,7 @@ public sealed class WorkflowProjectionService(
     IWorkflowHandoffService workflowHandoffService,
     IWorkflowDecisionService workflowDecisionService,
     IWorkflowOperationalContextService workflowOperationalContextService,
-    IGitService gitService,
+    IWorkflowGitService workflowGitService,
     IWorkflowStateMachineService stateMachineService) : IWorkflowProjectionService
 {
     public async Task<WorkflowInstance> ProjectAsync(Guid repositoryId)
@@ -68,6 +67,13 @@ public sealed class WorkflowProjectionService(
             evidence.OperationalContext.IsPromotionEligible,
             evidence.OperationalContext.IsCommitEligible,
             evidence.OperationalContext.Diagnostics,
+            evidence.Git,
+            evidence.Git.CommitStatus,
+            evidence.Git.PushStatus,
+            evidence.Git.HasPendingChanges,
+            evidence.Git.HasUnpushedChanges,
+            evidence.Git.Completion,
+            evidence.Git.Diagnostics,
             stateMachine.CandidateStages,
             stateMachine.ValidTransitions,
             stateMachine.BlockedTransitions,
@@ -108,9 +114,9 @@ public sealed class WorkflowProjectionService(
         WorkflowHandoffProjection handoff = await workflowHandoffService.ProjectHandoffAsync(repository.Id);
         WorkflowDecisionProjection decision = await workflowDecisionService.ProjectDecisionAsync(repository.Id);
         WorkflowOperationalContextProjection operationalContext = await workflowOperationalContextService.ProjectOperationalContextAsync(repository.Id, decision, execution);
-        RepositoryGitStatus gitStatus = await gitService.GetStatusAsync(repository);
+        WorkflowGitProjection git = await workflowGitService.ProjectGitAsync(repository.Id, execution, operationalContext);
 
-        return new ProjectionEvidence(repository, execution, handoff, decision, operationalContext, gitStatus);
+        return new ProjectionEvidence(repository, execution, handoff, decision, operationalContext, git);
     }
 
     private static ProjectionChoice ChooseProjection(ProjectionEvidence evidence)
@@ -126,6 +132,7 @@ public sealed class WorkflowProjectionService(
         conflicts.AddRange(evidence.Handoff.Diagnostics.Conflicts);
         conflicts.AddRange(evidence.Decision.Diagnostics.Conflicts);
         conflicts.AddRange(evidence.OperationalContext.Diagnostics.Conflicts);
+        conflicts.AddRange(evidence.Git.Diagnostics.Conflicts);
 
         if (executionStatus is WorkflowExecutionStatus.Failed)
         {
@@ -151,22 +158,22 @@ public sealed class WorkflowProjectionService(
             return Choice(WorkflowStage.Blocked, WorkflowProgressState.Blocked, WorkflowGateType.WorkSelection, "Select the next work item to execute.", reasoning, unknownStates, conflicts);
         }
 
-        if (execution.PushedAt is not null)
+        if (executionStatus is WorkflowExecutionStatus.AwaitingAcceptance)
         {
-            reasoning.Add("Latest execution session has push evidence.");
-            return Choice(WorkflowStage.Completed, WorkflowProgressState.Completed, WorkflowGateType.WorkSelection, "Select the next work item.", reasoning, unknownStates, conflicts);
+            reasoning.Add("Execution completed and is awaiting handoff acceptance.");
+            return Choice(WorkflowStage.Handoff, WorkflowProgressState.AwaitingGate, WorkflowGateType.ExecutionAcceptance, "Review and accept or reject the execution handoff.", reasoning, unknownStates, conflicts);
         }
 
-        if (execution.CommittedAt is not null)
+        if (executionStatus is WorkflowExecutionStatus.Running)
         {
-            reasoning.Add("Commit evidence exists and push evidence is absent.");
-            return Choice(WorkflowStage.Push, WorkflowProgressState.AwaitingGate, WorkflowGateType.PushApproval, "Review and execute push through the existing git push command.", reasoning, unknownStates, conflicts);
+            reasoning.Add("Execution is active.");
+            return Choice(WorkflowStage.Execution, WorkflowProgressState.Active, WorkflowGateType.None, "Wait for execution to complete.", reasoning, unknownStates, conflicts);
         }
 
-        if (execution.HasChanges)
+        if (executionStatus is WorkflowExecutionStatus.NotStarted)
         {
-            reasoning.Add("Execution has been accepted and is awaiting commit.");
-            return Choice(WorkflowStage.Commit, WorkflowProgressState.AwaitingGate, WorkflowGateType.CommitApproval, "Review and execute commit through the existing git commit command.", reasoning, unknownStates, conflicts);
+            reasoning.Add("No execution session evidence exists.");
+            return Choice(WorkflowStage.WorkSelection, WorkflowProgressState.WaitingForHuman, WorkflowGateType.WorkSelection, "Select work to execute.", reasoning, unknownStates, conflicts);
         }
 
         if (!evidence.Decision.IsResolutionEligible)
@@ -193,25 +200,25 @@ public sealed class WorkflowProjectionService(
             return Choice(WorkflowStage.OperationalContext, WorkflowProgressState.AwaitingGate, WorkflowGateType.OperationalContextPromotion, "Promote the accepted operational-context proposal through the existing continuity command.", reasoning, unknownStates, conflicts);
         }
 
-        if (executionStatus is WorkflowExecutionStatus.AwaitingAcceptance)
+        if (evidence.Git.Completion.IsComplete)
         {
-            reasoning.Add("Execution completed and is awaiting handoff acceptance.");
-            return Choice(WorkflowStage.Handoff, WorkflowProgressState.AwaitingGate, WorkflowGateType.ExecutionAcceptance, "Review and accept or reject the execution handoff.", reasoning, unknownStates, conflicts);
+            reasoning.Add(evidence.Git.Completion.CompletionReason);
+            return Choice(WorkflowStage.Completed, WorkflowProgressState.Completed, WorkflowGateType.WorkSelection, "Select the next work item.", reasoning, unknownStates, conflicts);
         }
 
-        if (executionStatus is WorkflowExecutionStatus.Running)
+        if (evidence.Git.IsPushRequired)
         {
-            reasoning.Add("Execution is active.");
-            return Choice(WorkflowStage.Execution, WorkflowProgressState.Active, WorkflowGateType.None, "Wait for execution to complete.", reasoning, unknownStates, conflicts);
+            reasoning.Add("Git workflow projection reports changes awaiting push.");
+            return Choice(WorkflowStage.Push, WorkflowProgressState.AwaitingGate, WorkflowGateType.PushApproval, "Review and execute push through the existing git push command.", reasoning, unknownStates, conflicts);
         }
 
-        if (executionStatus is WorkflowExecutionStatus.NotStarted)
+        if (evidence.Git.IsCommitRequired)
         {
-            reasoning.Add("No execution session evidence exists.");
-            return Choice(WorkflowStage.WorkSelection, WorkflowProgressState.WaitingForHuman, WorkflowGateType.WorkSelection, "Select work to execute.", reasoning, unknownStates, conflicts);
+            reasoning.Add("Git workflow projection reports changes awaiting commit.");
+            return Choice(WorkflowStage.Commit, WorkflowProgressState.AwaitingGate, WorkflowGateType.CommitApproval, "Review and execute commit through the existing git commit command.", reasoning, unknownStates, conflicts);
         }
 
-        if (!evidence.GitStatus.DirtyState.IsClean)
+        if (evidence.Git.HasPendingChanges)
         {
             reasoning.Add("Repository has uncommitted git changes without an awaiting-commit execution state.");
             return Choice(WorkflowStage.Commit, WorkflowProgressState.AwaitingGate, WorkflowGateType.CommitApproval, "Review repository changes before commit.", reasoning, unknownStates, conflicts);
@@ -240,7 +247,7 @@ public sealed class WorkflowProjectionService(
             $"handoff:{evidence.Handoff.ExecutionId?.ToString() ?? "none"}:{evidence.Handoff.Status}:path={evidence.Handoff.HandoffPath ?? "none"}:valid={evidence.Handoff.Validation.IsValid}",
             $"decision:{evidence.Decision.DecisionId ?? "none"}:{evidence.Decision.Status}:eligible={evidence.Decision.IsResolutionEligible}:governanceBlocked={evidence.Decision.IsGovernanceBlocked}",
             $"operational-context:{evidence.OperationalContext.ProposalId ?? "none"}:{evidence.OperationalContext.Status}:reviewEligible={evidence.OperationalContext.IsReviewEligible}:promotionEligible={evidence.OperationalContext.IsPromotionEligible}:commitEligible={evidence.OperationalContext.IsCommitEligible}",
-            $"git:{evidence.GitStatus.Branch}:ahead={evidence.GitStatus.AheadCount}:behind={evidence.GitStatus.BehindCount}:clean={evidence.GitStatus.DirtyState.IsClean}"
+            $"git:{evidence.Git.Branch}:commit={evidence.Git.CommitStatus}:push={evidence.Git.PushStatus}:pending={evidence.Git.HasPendingChanges}:unpushed={evidence.Git.HasUnpushedChanges}:complete={evidence.Git.Completion.IsComplete}"
         ];
 
         return inputs;
@@ -438,6 +445,18 @@ public sealed class WorkflowProjectionService(
                 operationalContext.ProposalId));
         }
 
+        if (evidence.Git.CommitStatus is WorkflowGitStatus.AwaitingCommit &&
+            execution.AcceptedAt is DateTimeOffset commitPreparedAt)
+        {
+            entries.Add(CreateTimelineEntry(
+                WorkflowTimelineEventType.CommitPrepared,
+                WorkflowStage.Commit,
+                commitPreparedAt,
+                "Execution changes are ready for commit review.",
+                "git",
+                execution.ExecutionId?.ToString() ?? evidence.Repository.Id.ToString()));
+        }
+
         if (execution.CommittedAt is DateTimeOffset committedAt)
         {
             entries.Add(CreateTimelineEntry(
@@ -445,6 +464,18 @@ public sealed class WorkflowProjectionService(
                 WorkflowStage.Commit,
                 committedAt,
                 "Execution changes committed.",
+                "git",
+                execution.CommitSha ?? execution.ExecutionId?.ToString() ?? evidence.Repository.Id.ToString()));
+        }
+
+        if (evidence.Git.PushStatus is WorkflowGitStatus.AwaitingPush &&
+            execution.CommittedAt is DateTimeOffset pushPreparedAt)
+        {
+            entries.Add(CreateTimelineEntry(
+                WorkflowTimelineEventType.PushApproved,
+                WorkflowStage.Push,
+                pushPreparedAt,
+                "Execution commit is ready for push review.",
                 "git",
                 execution.CommitSha ?? execution.ExecutionId?.ToString() ?? evidence.Repository.Id.ToString()));
         }
@@ -489,7 +520,7 @@ public sealed class WorkflowProjectionService(
         WorkflowHandoffProjection Handoff,
         WorkflowDecisionProjection Decision,
         WorkflowOperationalContextProjection OperationalContext,
-        RepositoryGitStatus GitStatus);
+        WorkflowGitProjection Git);
 
     private sealed record ProjectionChoice(
         WorkflowStage Stage,

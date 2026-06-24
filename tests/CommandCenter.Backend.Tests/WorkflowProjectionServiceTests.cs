@@ -509,7 +509,8 @@ public sealed class WorkflowProjectionServiceTests
 
         Assert.Equal(WorkflowOperationalContextStatus.Rejected, rejectedProjection.OperationalContextStatus);
         Assert.True(rejectedProjection.IsOperationalContextCommitEligible);
-        Assert.Equal(WorkflowStage.WorkSelection, rejectedProjection.CurrentStage);
+        Assert.Equal(WorkflowStage.Completed, rejectedProjection.CurrentStage);
+        Assert.Equal(WorkflowGitStatus.NoChangesProduced, rejectedProjection.GitCommitStatus);
         Assert.Contains(rejectedProjection.SatisfiedGates, gate => gate.Type == WorkflowGateType.OperationalContextReview);
         Assert.Contains(rejectedProjection.Timeline, entry => entry.EventType == WorkflowTimelineEventType.OperationalContextRejected);
 
@@ -602,10 +603,22 @@ public sealed class WorkflowProjectionServiceTests
         fixture.ExecutionState = RepositoryExecutionState.AwaitingCommit;
         fixture.Session = CompletedAcceptedSession(RepositoryExecutionState.AwaitingCommit);
 
+        WorkflowGitProjection git = await fixture.CreateGitWorkflowService().ProjectGitAsync(
+            fixture.Repository.Id,
+            await fixture.CreateExecutionService().ProjectExecutionAsync(fixture.Repository.Id),
+            await fixture.CreateOperationalContextService().ProjectOperationalContextAsync(
+                fixture.Repository.Id,
+                await fixture.CreateDecisionService().ProjectDecisionAsync(fixture.Repository.Id),
+                await fixture.CreateExecutionService().ProjectExecutionAsync(fixture.Repository.Id)));
         WorkflowInstance projection = await fixture.CreateService().ProjectAsync(fixture.Repository.Id);
 
+        Assert.Equal(WorkflowGitStatus.AwaitingCommit, git.CommitStatus);
+        Assert.Equal(WorkflowGitStatus.NotReady, git.PushStatus);
+        Assert.True(git.IsCommitGateOpen);
+        Assert.False(git.Completion.IsComplete);
         Assert.Equal(WorkflowStage.Commit, projection.CurrentStage);
         Assert.Equal(WorkflowGateType.CommitApproval, projection.BlockingGate);
+        Assert.Equal(WorkflowGitStatus.AwaitingCommit, projection.GitCommitStatus);
         WorkflowGate openGate = Assert.Single(projection.OpenGates);
         Assert.Equal(WorkflowGateType.CommitApproval, openGate.Type);
         Assert.Equal("commit_execution", openGate.SatisfyingCommand);
@@ -642,10 +655,22 @@ public sealed class WorkflowProjectionServiceTests
         fixture.ExecutionState = RepositoryExecutionState.AwaitingPush;
         fixture.Session = AwaitingPushCommittedSession();
 
+        WorkflowGitProjection git = await fixture.CreateGitWorkflowService().ProjectGitAsync(
+            fixture.Repository.Id,
+            await fixture.CreateExecutionService().ProjectExecutionAsync(fixture.Repository.Id),
+            await fixture.CreateOperationalContextService().ProjectOperationalContextAsync(
+                fixture.Repository.Id,
+                await fixture.CreateDecisionService().ProjectDecisionAsync(fixture.Repository.Id),
+                await fixture.CreateExecutionService().ProjectExecutionAsync(fixture.Repository.Id)));
         WorkflowInstance projection = await fixture.CreateService().ProjectAsync(fixture.Repository.Id);
 
+        Assert.Equal(WorkflowGitStatus.Committed, git.CommitStatus);
+        Assert.Equal(WorkflowGitStatus.AwaitingPush, git.PushStatus);
+        Assert.True(git.IsPushGateOpen);
+        Assert.False(git.Completion.IsComplete);
         Assert.Equal(WorkflowStage.Push, projection.CurrentStage);
         Assert.Equal(WorkflowGateType.PushApproval, projection.BlockingGate);
+        Assert.Equal(WorkflowGitStatus.AwaitingPush, projection.GitPushStatus);
         Assert.Contains(projection.BlockedTransitions, transition => transition.BlockingCondition == WorkflowBlockingCondition.PendingPushApproval);
     }
 
@@ -660,6 +685,8 @@ public sealed class WorkflowProjectionServiceTests
         WorkflowInstance second = await fixture.CreateService().ProjectAsync(fixture.Repository.Id);
 
         Assert.Equal(WorkflowStage.Completed, first.CurrentStage);
+        Assert.Equal(WorkflowGitStatus.Pushed, first.GitPushStatus);
+        Assert.True(first.CompletionEvaluation.IsComplete);
         Assert.Equal(WorkflowGateType.WorkSelection, first.BlockingGate);
         Assert.Equal(first.CurrentStage, second.CurrentStage);
         Assert.Equal(first.ProgressState, second.ProgressState);
@@ -672,6 +699,46 @@ public sealed class WorkflowProjectionServiceTests
         Assert.Contains(first.SatisfiedGates, gate => gate.Type == WorkflowGateType.ExecutionAcceptance);
         Assert.Contains(first.SatisfiedGates, gate => gate.Type == WorkflowGateType.CommitApproval);
         Assert.Contains(first.SatisfiedGates, gate => gate.Type == WorkflowGateType.PushApproval);
+    }
+
+    [Fact]
+    public async Task AcceptedCleanExecutionCompletesAsNoChangesProduced()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+
+        WorkflowInstance projection = await fixture.CreateService().ProjectAsync(fixture.Repository.Id);
+
+        Assert.Equal(WorkflowStage.Completed, projection.CurrentStage);
+        Assert.Equal(WorkflowGitStatus.NoChangesProduced, projection.GitCommitStatus);
+        Assert.Equal(WorkflowGitStatus.NoChangesProduced, projection.GitPushStatus);
+        Assert.True(projection.CompletionEvaluation.IsComplete);
+        Assert.Contains("no changes", projection.CompletionEvaluation.CompletionReason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task WorkflowGitEndpointReturnsGitProjection()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingPush;
+        fixture.Session = AwaitingPushCommittedSession();
+
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services => fixture.ReplaceServices(services));
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+
+        using var client = new HttpClient();
+        HttpResponseMessage response = await client.GetAsync(app.Urls.Single() + $"/api/repositories/{fixture.Repository.Id}/workflow/git");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        WorkflowGitProjection? git = await response.Content.ReadFromJsonAsync<WorkflowGitProjection>(JsonOptions);
+        Assert.NotNull(git);
+        Assert.Equal(WorkflowGitStatus.Committed, git.CommitStatus);
+        Assert.Equal(WorkflowGitStatus.AwaitingPush, git.PushStatus);
+        Assert.False(git.Completion.IsComplete);
     }
 
     [Fact]
@@ -1399,7 +1466,10 @@ public sealed class WorkflowProjectionServiceTests
                 new RepositoryServiceStub(Repository),
                 new OperationalContextProposalStoreStub(this),
                 new DecisionRepositoryStub(this)),
-            new GitServiceStub(this),
+            new WorkflowGitService(
+                new RepositoryServiceStub(Repository),
+                new ExecutionSessionServiceStub(this),
+                new GitServiceStub(this)),
             new WorkflowStateMachineService());
 
         public WorkflowExecutionService CreateExecutionService() =>
@@ -1413,6 +1483,9 @@ public sealed class WorkflowProjectionServiceTests
 
         public WorkflowOperationalContextService CreateOperationalContextService() =>
             new(new RepositoryServiceStub(Repository), new OperationalContextProposalStoreStub(this), new DecisionRepositoryStub(this));
+
+        public WorkflowGitService CreateGitWorkflowService() =>
+            new(new RepositoryServiceStub(Repository), new ExecutionSessionServiceStub(this), new GitServiceStub(this));
 
         public WorkflowRecoveryService CreateRecoveryService(IWorkflowRepository workflowRepository) =>
             new(new RepositoryServiceStub(Repository), CreateService(), workflowRepository);
@@ -1430,6 +1503,7 @@ public sealed class WorkflowProjectionServiceTests
             services.RemoveAll<IWorkflowHandoffService>();
             services.RemoveAll<IWorkflowDecisionService>();
             services.RemoveAll<IWorkflowOperationalContextService>();
+            services.RemoveAll<IWorkflowGitService>();
             services.RemoveAll<IWorkflowProjectionService>();
             services.RemoveAll<IWorkflowGateCatalogService>();
             services.RemoveAll<IWorkflowRepository>();
@@ -1447,6 +1521,7 @@ public sealed class WorkflowProjectionServiceTests
             services.AddSingleton<IWorkflowHandoffService, WorkflowHandoffService>();
             services.AddSingleton<IWorkflowDecisionService, WorkflowDecisionService>();
             services.AddSingleton<IWorkflowOperationalContextService, WorkflowOperationalContextService>();
+            services.AddSingleton<IWorkflowGitService, WorkflowGitService>();
             services.AddSingleton<IWorkflowStateMachineService, WorkflowStateMachineService>();
             services.AddSingleton<IWorkflowProjectionService, WorkflowProjectionService>();
             services.AddSingleton<IWorkflowGateCatalogService, WorkflowGateCatalogService>();

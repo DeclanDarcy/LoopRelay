@@ -20,6 +20,7 @@ public static class WorkflowEndpoints
         app.MapGetWorkflowHandoff();
         app.MapGetWorkflowDecisions();
         app.MapGetWorkflowOperationalContext();
+        app.MapGetWorkflowGit();
         return app;
     }
 
@@ -275,6 +276,31 @@ public static class WorkflowEndpoints
                 WorkflowExecutionProjection execution = await workflowExecutionService.ProjectExecutionAsync(repositoryId);
                 WorkflowDecisionProjection decision = await workflowDecisionService.ProjectDecisionAsync(repositoryId);
                 return Results.Ok(await workflowOperationalContextService.ProjectOperationalContextAsync(repositoryId, decision, execution));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGetWorkflowGit(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/workflow/git", async (
+            Guid repositoryId,
+            IWorkflowExecutionService workflowExecutionService,
+            IWorkflowDecisionService workflowDecisionService,
+            IWorkflowOperationalContextService workflowOperationalContextService,
+            IWorkflowGitService workflowGitService) =>
+        {
+            try
+            {
+                WorkflowExecutionProjection execution = await workflowExecutionService.ProjectExecutionAsync(repositoryId);
+                WorkflowDecisionProjection decision = await workflowDecisionService.ProjectDecisionAsync(repositoryId);
+                WorkflowOperationalContextProjection operationalContext = await workflowOperationalContextService.ProjectOperationalContextAsync(repositoryId, decision, execution);
+                return Results.Ok(await workflowGitService.ProjectGitAsync(repositoryId, execution, operationalContext));
             }
             catch (KeyNotFoundException exception)
             {

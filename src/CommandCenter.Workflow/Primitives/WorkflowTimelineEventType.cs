@@ -25,6 +25,10 @@ public enum WorkflowTimelineEventType
     OperationalContextRejected,
     OperationalContextPromoted,
     OperationalContextArchived,
+    CommitPrepared,
+    CommitApproved,
     CommitExecuted,
+    PushApproved,
+    PushSkipped,
     PushExecuted
 }

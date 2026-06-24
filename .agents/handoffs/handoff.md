@@ -2,52 +2,50 @@
 
 ## New State
 
-- Completed Milestone 7 operational-context workflow integration.
-- Added read-only operational-context workflow boundary:
-  `IWorkflowOperationalContextService` and `WorkflowOperationalContextService`.
-- Added operational-context workflow models:
-  `WorkflowOperationalContextStatus`, `WorkflowOperationalContextProjection`,
-  and `WorkflowOperationalContextDiagnostics`.
-- Extended `WorkflowInstance` with current operational-context projection,
-  context status, review eligibility, promotion eligibility, commit eligibility,
-  and context diagnostics.
+- Completed Milestone 8 git workflow integration.
+- Added read-only git workflow boundary:
+  `IWorkflowGitService` and `WorkflowGitService`.
+- Added git workflow models:
+  `WorkflowGitStatus`, `WorkflowGitProjection`, `WorkflowGitDiagnostics`,
+  and `WorkflowCompletionEvaluation`.
+- Extended `WorkflowInstance` with current git projection, commit status,
+  push status, pending-change flags, completion evaluation, and git
+  diagnostics.
 - Added derived endpoint:
-  `GET /api/repositories/{repositoryId}/workflow/operational-context`.
-- Updated workflow projection to consume operational-context workflow evidence
-  instead of reading Continuity proposals directly.
-- Context review and promotion gates now come only from Continuity-owned proposal
-  status, review state, and promotion state.
-- Added context timeline events for proposed, reviewed, accepted, edited,
-  rejected, promoted, and archived context evidence.
-- Added decision-to-context linkage when a matching decision assimilation
-  recommendation and proposal evidence are present.
-- Marked `.agents/milestones/m7-operational-context.md` complete.
+  `GET /api/repositories/{repositoryId}/workflow/git`.
+- Updated workflow projection to consume git workflow evidence instead of
+  reading `IGitService` directly.
+- Commit and push gates now come from the git workflow projection, which is
+  itself derived from Execution/Git-owned evidence.
+- Added no-change completion as a first-class workflow completion outcome:
+  accepted execution, context commit eligibility, clean git status, and no
+  commit/push evidence.
+- Added git timeline events for commit preparation readiness, commit execution,
+  push readiness, and push execution.
+- Marked `.agents/milestones/m8-git.md` complete.
 - Rotated previous `.agents/handoffs/handoff.md` to
-  `.agents/handoffs/handoff.0007.md`.
+  `.agents/handoffs/handoff.0008.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter WorkflowProjectionServiceTests` passed: 40 tests.
-- First full backend test run hit a transient Windows file-lock in
-  `ExecutionSessionServiceTests.AppStartupRunsExecutionRecovery`.
-- Rerun of `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 552 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter WorkflowProjectionServiceTests` passed: 42 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 554 tests.
 - `dotnet build CommandCenter.slnx` passed with 0 warnings and 0 errors.
 
 ## Notes
 
-- Workflow still never accepts, edits, rejects, promotes, or mutates operational
-  context. It reports Continuity-owned state only.
-- Accepted and edited proposals open only the promotion gate. Pending proposals
-  open the review gate. Rejected and promoted proposals close context gates and
-  make commit eligible.
-- No context required is now an explicit commit-eligible projection outcome with
-  diagnostics explaining that no Continuity proposal exists.
-- Decision-to-context linkage is conservative: source decision id is reported
-  only when decision assimilation evidence matches proposal fingerprints or
-  proposal text evidence.
+- Workflow still never prepares commits, commits, or pushes. Existing Execution
+  and Git services remain the only authority for those actions.
+- `WorkflowGitStatus.PushSkipped` and the push-skipped completion path are
+  modeled, but current Execution/Git evidence has no explicit push-skip
+  artifact. Workflow therefore does not infer push skipped from missing push
+  evidence.
+- Completion ordering now preserves lifecycle authority: execution/handoff,
+  decisions, and operational context must be eligible before git completion can
+  close the workflow.
 
 ## Next Slice
 
-- Start Milestone 8 git workflow integration by adding a read-only git workflow
-  projection service and endpoint, with commit and push gates driven only by
-  existing git/execution authority.
+- Start Milestone 9 workflow continuation engine. Focus first on an evaluation
+  service that can report the next mechanical progression and stop reasons
+  without running background continuation or preparation.
