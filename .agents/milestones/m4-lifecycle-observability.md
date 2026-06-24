@@ -4,8 +4,8 @@ Objective: expose read-only lifecycle visibility and explanations without adding
 
 Add models:
 
-- [ ] `DecisionSessionLifecycleProjection`
-- [ ] `DecisionSessionLifecycleHistory`
+- [x] `DecisionSessionLifecycleProjection`
+- [x] `DecisionSessionLifecycleHistory`
 - [ ] `DecisionSessionInfluenceTrace`
 - [ ] `DecisionSessionTransferEventProjection`
 - [ ] `DecisionSessionContinuityArtifactProjection`
@@ -15,35 +15,35 @@ Add models:
 
 Add service:
 
-- [ ] `IDecisionSessionObservabilityService`
-- [ ] `DecisionSessionObservabilityService`
+- [x] `IDecisionSessionObservabilityService`
+- [x] `DecisionSessionObservabilityService`
 
 Projection composition:
 
-- [ ] Current session projection.
-- [ ] Current metrics.
-- [ ] Current economics.
-- [ ] Current coherence.
-- [ ] Current policy evaluation.
-- [ ] Current transfer eligibility.
-- [ ] Current continuity artifact, if transfer is pending or completed.
-- [ ] Recent transfer events.
-- [ ] Recent recovery events.
-- [ ] Diagnostics.
+- [x] Current session projection.
+- [x] Current metrics.
+- [x] Current economics.
+- [x] Current coherence.
+- [x] Current policy evaluation.
+- [x] Current transfer eligibility.
+- [x] Current continuity artifact, if transfer is pending or completed.
+- [x] Recent transfer events.
+- [x] Recent recovery events.
+- [x] Diagnostics.
 
 History events:
 
-- [ ] Created
-- [ ] Activated
-- [ ] AnalysisCaptured
-- [ ] PolicyEvaluated
-- [ ] TransferEligibilityEvaluated
-- [ ] ContinuityArtifactCreated
-- [ ] TransferStarted
-- [ ] TransferCompleted
-- [ ] Retired
-- [ ] ReplacementCreated
-- [ ] Recovered
+- [x] Created
+- [x] Activated
+- [x] AnalysisCaptured
+- [x] PolicyEvaluated
+- [x] TransferEligibilityEvaluated
+- [x] ContinuityArtifactCreated
+- [x] TransferStarted
+- [x] TransferCompleted
+- [x] Retired
+- [x] ReplacementCreated
+- [x] Recovered
 
 Influence trace categories:
 
@@ -84,14 +84,14 @@ Persistence:
 
 Tests:
 
-- [ ] Projection composes session, analysis, policy, eligibility, continuity artifact, transfer, and recovery.
-- [ ] History reconstructs creation, activation, policy, eligibility, continuity artifact creation, transfer, retirement, and recovery.
+- [x] Projection composes session, analysis, policy, eligibility, continuity artifact, transfer, and recovery.
+- [x] History reconstructs creation, activation, policy, eligibility, continuity artifact creation, transfer, retirement, and recovery.
 - [ ] Influence trace contains economics, coherence, TTL, cache risk, and eligibility signals.
 - [ ] Transfer event projection includes source, target, reason, token size, reuse score, transfer score, and eligibility status.
 - [ ] Continuity artifact projection includes canonical artifact id, fingerprint, source session, target session, and evidence references.
 - [ ] Size projection exposes token, context, reasoning, and measured-at values.
 - [ ] Health dimensions report each subsystem independently.
-- [ ] Observability never mutates registry, transfer, eligibility, or policy state.
+- [x] Observability never mutates registry, transfer, eligibility, or policy state.
 - [ ] Missing observability snapshot is rebuilt.
 
 Exit criteria:
