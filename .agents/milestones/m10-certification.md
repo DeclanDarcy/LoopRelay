@@ -13,7 +13,7 @@ Deliver:
 - [ ] `WorkflowReadinessReport`.
 - [x] authority certification.
 - [x] recovery certification.
-- [ ] continuation certification.
+- [x] continuation certification.
 - [ ] preparation certification.
 - [ ] end-to-end workflow fixture.
 - [ ] workflow history certification.
@@ -56,7 +56,7 @@ Certification failure conditions:
 - [ ] workflow accepted, edited, rejected, or promoted context.
 - [ ] workflow approved or executed commit.
 - [ ] workflow approved or executed push.
-- [ ] workflow crossed an open gate.
+- [x] workflow crossed an open gate.
 - [ ] workflow created or used a parallel domain command.
 - [ ] workflow preparation satisfied a gate.
 - [ ] workflow preparation moved the workflow stage.
@@ -80,7 +80,7 @@ Tests:
   - [x] corrupted continuation/preparation history does not duplicate events or artifacts.
   - [x] restart duplicate progression is certified.
   - [x] derived continuation/preparation history corruption is diagnosed as recoverable derived evidence.
-- [ ] continuation certification detects missed gate halting.
+- [x] continuation certification detects missed gate halting.
 - [ ] preparation certification detects duplicate artifacts, parallel commands, and gate bypass attempts.
 - [ ] end-to-end fixture validates progression, gates, recovery, diagnostics, history, and certification.
 
@@ -92,7 +92,7 @@ Exit criteria:
 - [ ] recovery certification passes.
   - [x] initial domain-truth recovery certification passes.
   - [ ] full corruption and idempotency recovery matrix passes.
-- [ ] continuation certification passes.
+- [x] continuation certification passes.
 - [ ] preparation certification passes.
 - [ ] end-to-end fixture passes.
 - [ ] diagnostics and health certification pass.

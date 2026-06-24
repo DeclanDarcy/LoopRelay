@@ -3259,6 +3259,94 @@ public sealed class WorkflowProjectionServiceTests
         Assert.Contains(result.Failures, failure => failure.Contains("authority-no-forbidden-preparation-command", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task WorkflowCertificationReportsContinuationGateAndTriggerCoverage()
+    {
+        TestFixture fixture = TestFixture.Create();
+        var workflowRepository = new FileSystemWorkflowRepository(new MemoryArtifactStore());
+        await workflowRepository.SaveContinuationEventAsync(
+            fixture.Repository,
+            CreateContinuationStopEvent(
+                fixture.Repository.Id,
+                DateTimeOffset.Parse("2026-06-23T12:35:00Z"),
+                "hosted",
+                WorkflowStage.Completed,
+                WorkflowGateType.WorkSelection));
+
+        foreach ((WorkflowGateType gate, WorkflowStage stage, int minute) in new[]
+        {
+            (WorkflowGateType.ExecutionAcceptance, WorkflowStage.Handoff, 36),
+            (WorkflowGateType.DecisionResolution, WorkflowStage.Decision, 37),
+            (WorkflowGateType.OperationalContextReview, WorkflowStage.OperationalContext, 38),
+            (WorkflowGateType.OperationalContextPromotion, WorkflowStage.OperationalContext, 39),
+            (WorkflowGateType.CommitApproval, WorkflowStage.Commit, 40),
+            (WorkflowGateType.PushApproval, WorkflowStage.Push, 41)
+        })
+        {
+            await workflowRepository.SaveContinuationEventAsync(
+                fixture.Repository,
+                CreateContinuationStopEvent(
+                    fixture.Repository.Id,
+                    DateTimeOffset.Parse($"2026-06-23T12:{minute}:00Z"),
+                    "endpoint",
+                    stage,
+                    gate));
+        }
+
+        WorkflowCertificationService service = fixture.CreateCertificationService(workflowRepository);
+
+        WorkflowCertificationResult result = await service.GetCurrentCertificationAsync(fixture.Repository.Id);
+
+        Assert.True(result.Certified);
+        WorkflowCertificationFinding finding = Assert.Single(
+            result.Findings,
+            candidate => candidate.Id == "authority-continuation-halts-at-gates");
+        Assert.True(finding.Passed);
+        Assert.Contains(finding.Evidence, evidence => evidence == "trigger-coverage:endpoint");
+        Assert.Contains(finding.Evidence, evidence => evidence == "trigger-coverage:hosted");
+        foreach (WorkflowGateType gate in Enum.GetValues<WorkflowGateType>().Where(gate => gate is not WorkflowGateType.None))
+        {
+            Assert.Contains(finding.Evidence, evidence => evidence == $"gate-coverage:{gate}:covered=True");
+            Assert.DoesNotContain(finding.Diagnostics, diagnostic => diagnostic.Contains($"gate {gate}", StringComparison.Ordinal));
+        }
+    }
+
+    [Fact]
+    public async Task WorkflowCertificationFailsContinuationAdvanceAcrossOpenGate()
+    {
+        TestFixture fixture = TestFixture.Create();
+        var workflowRepository = new FileSystemWorkflowRepository(new MemoryArtifactStore());
+        await workflowRepository.SaveContinuationEventAsync(
+            fixture.Repository,
+            new WorkflowContinuationEvent(
+                fixture.Repository.Id,
+                WorkflowArtifactPaths.ContinuationEventId(DateTimeOffset.Parse("2026-06-23T12:45:00Z")),
+                DateTimeOffset.Parse("2026-06-23T12:45:00Z"),
+                "endpoint",
+                WorkflowStage.Decision,
+                WorkflowStage.OperationalContext,
+                WorkflowProgressState.AwaitingGate,
+                WorkflowGateType.DecisionResolution,
+                "Advance",
+                "Forged continuation crossed a decision gate.",
+                new WorkflowContinuationFingerprint("forged-gate-crossing"),
+                true,
+                false,
+                "Resolve the open decision.",
+                []));
+        WorkflowCertificationService service = fixture.CreateCertificationService(workflowRepository);
+
+        WorkflowCertificationResult result = await service.GetCurrentCertificationAsync(fixture.Repository.Id);
+
+        Assert.False(result.Certified);
+        WorkflowCertificationFinding finding = Assert.Single(
+            result.Findings,
+            candidate => candidate.Id == "authority-continuation-halts-at-gates");
+        Assert.False(finding.Passed);
+        Assert.Contains(finding.Diagnostics, diagnostic => diagnostic.Contains("DecisionResolution", StringComparison.Ordinal));
+        Assert.Contains(result.Failures, failure => failure.Contains("authority-continuation-halts-at-gates", StringComparison.Ordinal));
+    }
+
     private static void ArrangeAuthorityGateScenario(TestFixture fixture, string scenario)
     {
         switch (scenario)
@@ -3527,6 +3615,29 @@ public sealed class WorkflowProjectionServiceTests
                 WorkflowGateType.None,
                 WorkflowStage.Decision,
                 []));
+
+    private static WorkflowContinuationEvent CreateContinuationStopEvent(
+        Guid repositoryId,
+        DateTimeOffset occurredAt,
+        string trigger,
+        WorkflowStage stage,
+        WorkflowGateType gate) =>
+        new(
+            repositoryId,
+            WorkflowArtifactPaths.ContinuationEventId(occurredAt),
+            occurredAt,
+            trigger,
+            stage,
+            null,
+            WorkflowProgressState.AwaitingGate,
+            gate,
+            "Stop",
+            $"Workflow is waiting for human action at {gate}.",
+            new WorkflowContinuationFingerprint($"{trigger}-{gate}"),
+            true,
+            gate is WorkflowGateType.WorkSelection,
+            $"Human action required for {gate}.",
+            []);
 
     private sealed class TestFixture
     {

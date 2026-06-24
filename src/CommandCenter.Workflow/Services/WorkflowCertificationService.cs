@@ -34,6 +34,17 @@ public sealed class WorkflowCertificationService(
         "execute_push"
     ];
 
+    private static readonly WorkflowGateType[] AuthorityGateTypes =
+    [
+        WorkflowGateType.WorkSelection,
+        WorkflowGateType.ExecutionAcceptance,
+        WorkflowGateType.DecisionResolution,
+        WorkflowGateType.OperationalContextReview,
+        WorkflowGateType.OperationalContextPromotion,
+        WorkflowGateType.CommitApproval,
+        WorkflowGateType.PushApproval
+    ];
+
     public async Task<WorkflowCertificationResult> GetCurrentCertificationAsync(Guid repositoryId)
     {
         Repository repository = await GetRepositoryAsync(repositoryId);
@@ -180,8 +191,44 @@ public sealed class WorkflowCertificationService(
         IReadOnlyList<WorkflowContinuationEvent> continuationHistory)
     {
         IReadOnlyList<WorkflowContinuationEvent> violations = continuationHistory
-            .Where(entry => entry.IsWaitingForHuman && entry.ToStage is not null)
+            .Where(entry =>
+                entry.IsWaitingForHuman && entry.ToStage is not null ||
+                entry.BlockingGate is not WorkflowGateType.None &&
+                (entry.ToStage is not null || string.Equals(entry.Decision, "Advance", StringComparison.OrdinalIgnoreCase)))
             .ToArray();
+        IReadOnlyList<WorkflowGateType> coveredGates = continuationHistory
+            .Where(entry =>
+                entry.BlockingGate is not WorkflowGateType.None &&
+                entry.IsWaitingForHuman &&
+                entry.ToStage is null &&
+                string.Equals(entry.Decision, "Stop", StringComparison.OrdinalIgnoreCase))
+            .Select(entry => entry.BlockingGate)
+            .Distinct()
+            .Order()
+            .ToArray();
+        IReadOnlyList<WorkflowGateType> missingGates = AuthorityGateTypes
+            .Except(coveredGates)
+            .ToArray();
+        IReadOnlyList<string> coveredTriggers = continuationHistory
+            .Select(entry => string.IsNullOrWhiteSpace(entry.Trigger) ? "endpoint" : entry.Trigger)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var diagnostics = new List<string>();
+        diagnostics.AddRange(violations.Select(entry =>
+            $"Continuation event '{entry.EventId}' advanced to {entry.ToStage} while waiting for {entry.BlockingGate}."));
+        diagnostics.AddRange(missingGates.Select(gate =>
+            $"Continuation halt coverage has not yet observed gate {gate}."));
+
+        if (!coveredTriggers.Contains("endpoint", StringComparer.OrdinalIgnoreCase))
+        {
+            diagnostics.Add("Continuation halt coverage has not yet observed endpoint-triggered continuation.");
+        }
+
+        if (!coveredTriggers.Contains("hosted", StringComparer.OrdinalIgnoreCase))
+        {
+            diagnostics.Add("Continuation halt coverage has not yet observed hosted continuation.");
+        }
 
         return new WorkflowCertificationFinding(
             "authority-continuation-halts-at-gates",
@@ -192,8 +239,11 @@ public sealed class WorkflowCertificationService(
                 : "Continuation history crossed an authority gate.",
             "A continuation event that is waiting for a human must not advance to a next stage.",
             continuationHistory.Select(entry =>
-                $"continuation:{entry.EventId}:{entry.FromStage}->{entry.ToStage?.ToString() ?? "None"}:{entry.BlockingGate}:waiting={entry.IsWaitingForHuman}").ToArray(),
-            violations.Select(entry => $"Continuation event '{entry.EventId}' advanced to {entry.ToStage} while waiting for {entry.BlockingGate}.").ToArray());
+                $"continuation:{entry.EventId}:{entry.Trigger}:{entry.FromStage}->{entry.ToStage?.ToString() ?? "None"}:{entry.BlockingGate}:waiting={entry.IsWaitingForHuman}")
+                .Concat(AuthorityGateTypes.Select(gate => $"gate-coverage:{gate}:covered={coveredGates.Contains(gate)}"))
+                .Concat(coveredTriggers.Select(trigger => $"trigger-coverage:{trigger}"))
+                .ToArray(),
+            diagnostics);
     }
 
     private static WorkflowCertificationFinding CertifyPreparationDoesNotSatisfyAuthorityGates(
