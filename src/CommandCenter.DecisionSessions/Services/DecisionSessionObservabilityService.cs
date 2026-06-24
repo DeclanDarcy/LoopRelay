@@ -33,6 +33,16 @@ public sealed class DecisionSessionObservabilityService(
             () => sessionRepository.ListRecoveryResultsAsync(repository),
             "Decision session recovery results",
             warnings);
+        DecisionSessionMetricsSnapshot? metrics =
+            await ReadNullableAsync(() => sessionRepository.ReadMetricsSnapshotAsync(repository), "Decision session metrics snapshot", warnings);
+        DecisionSessionEconomicsSnapshot? economics =
+            await ReadNullableAsync(() => sessionRepository.ReadEconomicsSnapshotAsync(repository), "Decision session economics snapshot", warnings);
+        DecisionSessionCoherenceSnapshot? coherence =
+            await ReadNullableAsync(() => sessionRepository.ReadCoherenceSnapshotAsync(repository), "Decision session coherence snapshot", warnings);
+        DecisionSessionLifecycleSnapshot? policy =
+            await ReadNullableAsync(() => sessionRepository.ReadLifecyclePolicySnapshotAsync(repository), "Decision session lifecycle policy snapshot", warnings);
+        DecisionSessionTransferEligibilitySnapshot? eligibility =
+            await ReadNullableAsync(() => sessionRepository.ReadTransferEligibilitySnapshotAsync(repository), "Decision session transfer eligibility snapshot", warnings);
         var diagnostics = new DecisionSessionDiagnostics(
             repositoryId,
             errors.Count == 0,
@@ -46,18 +56,28 @@ public sealed class DecisionSessionObservabilityService(
             repositoryId,
             activeSession,
             sessionProjections,
-            await ReadNullableAsync(() => sessionRepository.ReadMetricsSnapshotAsync(repository), "Decision session metrics snapshot", warnings),
-            await ReadNullableAsync(() => sessionRepository.ReadEconomicsSnapshotAsync(repository), "Decision session economics snapshot", warnings),
-            await ReadNullableAsync(() => sessionRepository.ReadCoherenceSnapshotAsync(repository), "Decision session coherence snapshot", warnings),
-            await ReadNullableAsync(() => sessionRepository.ReadLifecyclePolicySnapshotAsync(repository), "Decision session lifecycle policy snapshot", warnings),
-            await ReadNullableAsync(() => sessionRepository.ReadTransferEligibilitySnapshotAsync(repository), "Decision session transfer eligibility snapshot", warnings),
+            metrics,
+            CreateSizeProjection(metrics),
+            economics,
+            coherence,
+            policy,
+            eligibility,
             ResolveCurrentArtifact(sessions, transfers, artifacts),
+            artifacts
+                .OrderByDescending(artifact => artifact.CreatedAt)
+                .Select(CreateArtifactProjection)
+                .ToArray(),
             transfers.OrderByDescending(transfer => transfer.StartedAt).Take(10).ToArray(),
             transfers
                 .SelectMany(transfer => transfer.Events)
                 .OrderByDescending(transferEvent => transferEvent.OccurredAt)
                 .ThenBy(transferEvent => transferEvent.EventId, StringComparer.Ordinal)
                 .Take(25)
+                .ToArray(),
+            transfers
+                .OrderByDescending(transfer => transfer.StartedAt)
+                .Take(25)
+                .Select(transfer => CreateTransferEventProjection(transfer, metrics, policy, eligibility))
                 .ToArray(),
             recoveryResults.OrderByDescending(result => result.RecoveredAt).Take(10).ToArray(),
             diagnostics,
@@ -375,6 +395,266 @@ public sealed class DecisionSessionObservabilityService(
             signals,
             projection.Diagnostics.Errors.Concat(projection.Diagnostics.Warnings).ToArray(),
             timeProvider.GetUtcNow());
+    }
+
+    public async Task<DecisionSessionHealthAssessment> GetHealthAsync(Guid repositoryId)
+    {
+        DecisionSessionLifecycleProjection projection = await GetProjectionAsync(repositoryId);
+        DecisionSessionInfluenceTrace influenceTrace = await GetInfluenceTraceAsync(repositoryId);
+        DecisionSessionHealthDimension[] dimensions =
+        [
+            AssessRegistry(projection),
+            AssessAnalysis(projection),
+            AssessPolicy(projection),
+            AssessEligibility(projection),
+            AssessContinuityArtifact(projection),
+            AssessTransfer(projection),
+            AssessRecovery(projection)
+        ];
+
+        return new DecisionSessionHealthAssessment(
+            repositoryId,
+            dimensions,
+            influenceTrace,
+            timeProvider.GetUtcNow());
+    }
+
+    private static DecisionSessionSizeProjection? CreateSizeProjection(DecisionSessionMetricsSnapshot? metrics)
+    {
+        return metrics is null
+            ? null
+            : new DecisionSessionSizeProjection(
+                metrics.Metrics.EstimatedTokenCount,
+                metrics.Metrics.ContextByteSize,
+                metrics.Metrics.ReasoningEventCount,
+                metrics.Metrics.DecisionCount,
+                metrics.Statistics.SessionAge,
+                metrics.Statistics.IdleDuration,
+                metrics.Cache.EstimatedCacheMissRisk,
+                metrics.Metrics.MeasuredAt);
+    }
+
+    private static DecisionSessionContinuityArtifactProjection CreateArtifactProjection(DecisionSessionContinuityArtifact artifact)
+    {
+        return new DecisionSessionContinuityArtifactProjection(
+            artifact.ArtifactId,
+            artifact.ContinuityFingerprint,
+            artifact.SourceSessionId,
+            artifact.TargetSessionId,
+            artifact.DecisionReferences,
+            artifact.ReasoningReferences,
+            artifact.OperationalContextReferences,
+            artifact.CreatedAt,
+            artifact.Diagnostics);
+    }
+
+    private static DecisionSessionTransferEventProjection CreateTransferEventProjection(
+        DecisionSessionTransfer transfer,
+        DecisionSessionMetricsSnapshot? metrics,
+        DecisionSessionLifecycleSnapshot? policy,
+        DecisionSessionTransferEligibilitySnapshot? eligibility)
+    {
+        return new DecisionSessionTransferEventProjection(
+            transfer.TransferId,
+            transfer.SourceSessionId,
+            transfer.TargetSessionId,
+            transfer.StartedAt,
+            transfer.CompletedAt,
+            transfer.Succeeded,
+            policy?.Evaluation.Reason,
+            metrics?.Metrics.EstimatedTokenCount,
+            policy?.Evaluation.Decision,
+            policy?.Evaluation.ReuseScore,
+            policy?.Evaluation.TransferScore,
+            eligibility?.Eligibility.Status,
+            transfer.ContinuityArtifactId,
+            transfer.Events,
+            transfer.Diagnostics);
+    }
+
+    private static DecisionSessionHealthDimension AssessRegistry(DecisionSessionLifecycleProjection projection)
+    {
+        var findings = new List<string>();
+        if (projection.Diagnostics.Errors.Count > 0)
+        {
+            findings.AddRange(projection.Diagnostics.Errors);
+        }
+
+        if (projection.Diagnostics.ActiveSessionCount > 1)
+        {
+            findings.Add($"Registry contains {projection.Diagnostics.ActiveSessionCount} active decision sessions.");
+        }
+        else if (projection.Diagnostics.ActiveSessionCount == 0)
+        {
+            findings.Add("Registry has no active decision session.");
+        }
+
+        DecisionSessionHealthStatus status = projection.Diagnostics.Errors.Count > 0 || projection.Diagnostics.ActiveSessionCount > 1
+            ? DecisionSessionHealthStatus.Unhealthy
+            : findings.Count > 0
+                ? DecisionSessionHealthStatus.Warning
+                : DecisionSessionHealthStatus.Healthy;
+        return CreateDimension("Registry", status, findings, [$"{projection.Diagnostics.SessionCount} sessions", $"{projection.Diagnostics.ActiveSessionCount} active"]);
+    }
+
+    private static DecisionSessionHealthDimension AssessAnalysis(DecisionSessionLifecycleProjection projection)
+    {
+        var findings = new List<string>();
+        if (projection.Metrics is null)
+        {
+            findings.Add("Metrics snapshot is missing or unreadable.");
+        }
+
+        if (projection.Economics is null)
+        {
+            findings.Add("Economics snapshot is missing or unreadable.");
+        }
+
+        if (projection.Coherence is null)
+        {
+            findings.Add("Coherence snapshot is missing or unreadable.");
+        }
+
+        findings.AddRange(projection.Metrics?.Diagnostics.Warnings ?? []);
+        findings.AddRange(projection.Economics?.Diagnostics.Warnings ?? []);
+        findings.AddRange(projection.Coherence?.Diagnostics.Warnings ?? []);
+        return CreateDimension(
+            "Analysis",
+            findings.Count == 0 ? DecisionSessionHealthStatus.Healthy : DecisionSessionHealthStatus.Warning,
+            findings,
+            FilterNull([
+                projection.Metrics is null ? null : $"metrics measured {projection.Metrics.Metrics.MeasuredAt:O}",
+                projection.Economics is null ? null : $"economics generated {projection.Economics.GeneratedAt:O}",
+                projection.Coherence is null ? null : $"coherence generated {projection.Coherence.GeneratedAt:O}"
+            ]));
+    }
+
+    private static DecisionSessionHealthDimension AssessPolicy(DecisionSessionLifecycleProjection projection)
+    {
+        var findings = new List<string>();
+        if (projection.Policy is null)
+        {
+            findings.Add("Lifecycle policy snapshot is missing or unreadable.");
+        }
+        else
+        {
+            findings.AddRange(projection.Policy.Diagnostics.Warnings);
+        }
+
+        return CreateDimension(
+            "Policy",
+            findings.Count == 0 ? DecisionSessionHealthStatus.Healthy : DecisionSessionHealthStatus.Warning,
+            findings,
+            projection.Policy is null
+                ? []
+                : [$"{projection.Policy.Evaluation.Decision}", $"reuse {projection.Policy.Evaluation.ReuseScore}", $"transfer {projection.Policy.Evaluation.TransferScore}"]);
+    }
+
+    private static DecisionSessionHealthDimension AssessEligibility(DecisionSessionLifecycleProjection projection)
+    {
+        var findings = new List<string>();
+        if (projection.TransferEligibility is null)
+        {
+            findings.Add("Transfer eligibility snapshot is missing or unreadable.");
+            return CreateDimension("Eligibility", DecisionSessionHealthStatus.Warning, findings, []);
+        }
+
+        findings.AddRange(projection.TransferEligibility.Diagnostics.Warnings);
+        findings.AddRange(projection.TransferEligibility.Eligibility.Findings.Select(finding => $"{finding.Severity}: {finding.Message}"));
+        DecisionSessionHealthStatus status = projection.TransferEligibility.Eligibility.Status == DecisionSessionTransferEligibilityStatus.Blocked
+            ? DecisionSessionHealthStatus.Warning
+            : DecisionSessionHealthStatus.Healthy;
+        return CreateDimension(
+            "Eligibility",
+            findings.Count == 0 ? DecisionSessionHealthStatus.Healthy : status,
+            findings,
+            [$"{projection.TransferEligibility.Eligibility.Status}", $"checked {projection.TransferEligibility.Eligibility.CheckedAt:O}"]);
+    }
+
+    private static DecisionSessionHealthDimension AssessContinuityArtifact(DecisionSessionLifecycleProjection projection)
+    {
+        var findings = new List<string>();
+        bool transferExpected =
+            projection.Policy?.Evaluation.Decision == DecisionSessionLifecycleDecision.Transfer &&
+            projection.TransferEligibility?.Eligibility.Status == DecisionSessionTransferEligibilityStatus.Eligible;
+        if (transferExpected && projection.CurrentContinuityArtifact is null)
+        {
+            findings.Add("Transfer is eligible but no current continuity artifact is available.");
+        }
+
+        if (projection.CurrentContinuityArtifact is not null)
+        {
+            findings.AddRange(projection.CurrentContinuityArtifact.Diagnostics);
+        }
+
+        return CreateDimension(
+            "Continuity artifact",
+            findings.Count == 0 ? DecisionSessionHealthStatus.Healthy : DecisionSessionHealthStatus.Warning,
+            findings,
+            projection.CurrentContinuityArtifact is null
+                ? [$"{projection.ContinuityArtifacts.Count} artifacts"]
+                : [projection.CurrentContinuityArtifact.ArtifactId, projection.CurrentContinuityArtifact.ContinuityFingerprint]);
+    }
+
+    private static DecisionSessionHealthDimension AssessTransfer(DecisionSessionLifecycleProjection projection)
+    {
+        var findings = new List<string>();
+        foreach (DecisionSessionTransferEventProjection transfer in projection.TransferEvents)
+        {
+            if (transfer.Events.Any(transferEvent => transferEvent.EventType == DecisionSessionTransferEventType.Failed))
+            {
+                findings.Add($"Transfer {transfer.TransferId} has a failed event.");
+            }
+
+            if (!transfer.Succeeded && transfer.CompletedAt is null)
+            {
+                findings.Add($"Transfer {transfer.TransferId} is incomplete.");
+            }
+
+            findings.AddRange(transfer.Diagnostics.Select(diagnostic => $"Transfer {transfer.TransferId}: {diagnostic}"));
+        }
+
+        DecisionSessionHealthStatus status = findings.Any(finding => finding.Contains("failed", StringComparison.OrdinalIgnoreCase))
+            ? DecisionSessionHealthStatus.Unhealthy
+            : findings.Count > 0
+                ? DecisionSessionHealthStatus.Warning
+                : DecisionSessionHealthStatus.Healthy;
+        return CreateDimension("Transfer", status, findings, [$"{projection.TransferEvents.Count} transfer projections"]);
+    }
+
+    private static DecisionSessionHealthDimension AssessRecovery(DecisionSessionLifecycleProjection projection)
+    {
+        var findings = new List<string>();
+        foreach (DecisionSessionRecoveryResult recovery in projection.RecentRecoveryResults)
+        {
+            if (!recovery.Succeeded)
+            {
+                findings.Add($"Recovery {recovery.RecoveryId} failed.");
+            }
+
+            findings.AddRange(recovery.Findings.Select(finding => $"{finding.Severity}: {finding.Message}"));
+            findings.AddRange(recovery.Diagnostics.Warnings.Select(warning => $"Recovery {recovery.RecoveryId}: {warning}"));
+        }
+
+        DecisionSessionHealthStatus status = findings.Any(finding => finding.StartsWith("Error:", StringComparison.OrdinalIgnoreCase) || finding.Contains("failed", StringComparison.OrdinalIgnoreCase))
+            ? DecisionSessionHealthStatus.Unhealthy
+            : findings.Count > 0
+                ? DecisionSessionHealthStatus.Warning
+                : DecisionSessionHealthStatus.Healthy;
+        return CreateDimension("Recovery", status, findings, [$"{projection.RecentRecoveryResults.Count} recovery results"]);
+    }
+
+    private static DecisionSessionHealthDimension CreateDimension(
+        string name,
+        DecisionSessionHealthStatus status,
+        IEnumerable<string> findings,
+        IEnumerable<string> evidence)
+    {
+        return new DecisionSessionHealthDimension(
+            name,
+            status,
+            findings.Where(finding => !string.IsNullOrWhiteSpace(finding)).Distinct(StringComparer.Ordinal).ToArray(),
+            evidence.Where(item => !string.IsNullOrWhiteSpace(item)).Distinct(StringComparer.Ordinal).ToArray());
     }
 
     private static void AddAnalysisEvents(

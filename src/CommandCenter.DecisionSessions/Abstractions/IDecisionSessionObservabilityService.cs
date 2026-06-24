@@ -9,4 +9,6 @@ public interface IDecisionSessionObservabilityService
     Task<DecisionSessionLifecycleHistory> GetHistoryAsync(Guid repositoryId);
 
     Task<DecisionSessionInfluenceTrace> GetInfluenceTraceAsync(Guid repositoryId);
+
+    Task<DecisionSessionHealthAssessment> GetHealthAsync(Guid repositoryId);
 }

@@ -7,11 +7,11 @@ Add models:
 - [x] `DecisionSessionLifecycleProjection`
 - [x] `DecisionSessionLifecycleHistory`
 - [x] `DecisionSessionInfluenceTrace`
-- [ ] `DecisionSessionTransferEventProjection`
-- [ ] `DecisionSessionContinuityArtifactProjection`
-- [ ] `DecisionSessionSizeProjection`
-- [ ] `DecisionSessionHealthAssessment`
-- [ ] `DecisionSessionHealthDimension`
+- [x] `DecisionSessionTransferEventProjection`
+- [x] `DecisionSessionContinuityArtifactProjection`
+- [x] `DecisionSessionSizeProjection`
+- [x] `DecisionSessionHealthAssessment`
+- [x] `DecisionSessionHealthDimension`
 
 Add service:
 
@@ -60,13 +60,13 @@ Influence trace categories:
 
 Health dimensions:
 
-- [ ] Registry
-- [ ] Analysis
-- [ ] Policy
-- [ ] Eligibility
-- [ ] Continuity artifact
-- [ ] Transfer
-- [ ] Recovery
+- [x] Registry
+- [x] Analysis
+- [x] Policy
+- [x] Eligibility
+- [x] Continuity artifact
+- [x] Transfer
+- [x] Recovery
 
 Health must remain decomposed. Do not hide state in a single opaque score.
 
@@ -75,7 +75,7 @@ Backend endpoints:
 - [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/lifecycle/projection`
 - [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/lifecycle/history`
 - [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/lifecycle/influence`
-- [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/lifecycle/health`
+- [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/lifecycle/health`
 
 Persistence:
 
@@ -87,16 +87,16 @@ Tests:
 - [x] Projection composes session, analysis, policy, eligibility, continuity artifact, transfer, and recovery.
 - [x] History reconstructs creation, activation, policy, eligibility, continuity artifact creation, transfer, retirement, and recovery.
 - [x] Influence trace contains economics, coherence, TTL, cache risk, and eligibility signals.
-- [ ] Transfer event projection includes source, target, reason, token size, reuse score, transfer score, and eligibility status.
-- [ ] Continuity artifact projection includes canonical artifact id, fingerprint, source session, target session, and evidence references.
-- [ ] Size projection exposes token, context, reasoning, and measured-at values.
-- [ ] Health dimensions report each subsystem independently.
+- [x] Transfer event projection includes source, target, reason, token size, reuse score, transfer score, and eligibility status.
+- [x] Continuity artifact projection includes canonical artifact id, fingerprint, source session, target session, and evidence references.
+- [x] Size projection exposes token, context, reasoning, and measured-at values.
+- [x] Health dimensions report each subsystem independently.
 - [x] Observability never mutates registry, transfer, eligibility, or policy state.
 - [ ] Missing observability snapshot is rebuilt.
 
 Exit criteria:
 
-- [ ] The system explains current lifecycle state, why policy chose continue or transfer, whether transfer is eligible, how large the session is, when transfer happened, which artifact carried continuity, why transfer happened, and whether recovery was required.
+- [x] The system explains current lifecycle state, why policy chose continue or transfer, whether transfer is eligible, how large the session is, when transfer happened, which artifact carried continuity, why transfer happened, and whether recovery was required.
 - [ ] No manual lifecycle controls are introduced.
 
 

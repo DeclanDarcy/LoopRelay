@@ -28,13 +28,38 @@ public sealed class DecisionSessionObservabilityTests
         Assert.Equal(harness.Repository.Id, projection.RepositoryId);
         Assert.Equal(active.Id, projection.ActiveSession?.Id);
         Assert.NotNull(projection.Metrics);
+        Assert.NotNull(projection.Size);
+        Assert.Equal(fixtures.Metrics.Metrics.EstimatedTokenCount, projection.Size.EstimatedTokenCount);
+        Assert.Equal(fixtures.Metrics.Metrics.ContextByteSize, projection.Size.ContextByteSize);
+        Assert.Equal(fixtures.Metrics.Metrics.ReasoningEventCount, projection.Size.ReasoningEventCount);
+        Assert.Equal(fixtures.Metrics.Metrics.DecisionCount, projection.Size.DecisionCount);
         Assert.NotNull(projection.Economics);
         Assert.NotNull(projection.Coherence);
         Assert.NotNull(projection.Policy);
         Assert.NotNull(projection.TransferEligibility);
         Assert.Equal(fixtures.Artifact.ArtifactId, projection.CurrentContinuityArtifact?.ArtifactId);
+        DecisionSessionContinuityArtifactProjection artifactProjection = Assert.Single(projection.ContinuityArtifacts);
+        Assert.Equal(fixtures.Artifact.ArtifactId, artifactProjection.ArtifactId);
+        Assert.Equal(fixtures.Artifact.ContinuityFingerprint, artifactProjection.ContinuityFingerprint);
+        Assert.Equal(fixtures.Artifact.SourceSessionId, artifactProjection.SourceSessionId);
+        Assert.Single(artifactProjection.DecisionReferences);
+        Assert.Single(artifactProjection.ReasoningReferences);
+        Assert.Single(artifactProjection.OperationalContextReferences);
         Assert.Single(projection.RecentTransfers);
         Assert.Contains(projection.RecentTransferEvents, transferEvent => transferEvent.EventType == DecisionSessionTransferEventType.Completed);
+        DecisionSessionTransferEventProjection transferProjection = Assert.Single(projection.TransferEvents);
+        Assert.Equal(fixtures.Transfer.TransferId, transferProjection.TransferId);
+        Assert.Equal(fixtures.Transfer.SourceSessionId, transferProjection.SourceSessionId);
+        Assert.Equal(fixtures.Transfer.TargetSessionId, transferProjection.TargetSessionId);
+        Assert.Equal(fixtures.Transfer.StartedAt, transferProjection.StartedAt);
+        Assert.Equal(fixtures.Transfer.CompletedAt, transferProjection.CompletedAt);
+        Assert.True(transferProjection.Succeeded);
+        Assert.Equal(fixtures.Policy.Evaluation.Decision, transferProjection.PolicyDecision);
+        Assert.Equal(fixtures.Policy.Evaluation.ReuseScore, transferProjection.ReuseScore);
+        Assert.Equal(fixtures.Policy.Evaluation.TransferScore, transferProjection.TransferScore);
+        Assert.Equal(fixtures.Metrics.Metrics.EstimatedTokenCount, transferProjection.EstimatedTokenCount);
+        Assert.Equal(fixtures.Eligibility.Eligibility.Status, transferProjection.EligibilityStatus);
+        Assert.Equal(fixtures.Artifact.ArtifactId, transferProjection.ContinuityArtifactId);
         Assert.Single(projection.RecentRecoveryResults);
         Assert.True(projection.Diagnostics.IsValid);
         Assert.Empty(projection.Diagnostics.Errors);
@@ -104,6 +129,36 @@ public sealed class DecisionSessionObservabilityTests
         Assert.Contains(trace.Signals, signal => signal.Category == "Continuity artifact" && signal.Value == fixtures.Artifact.ArtifactId);
         Assert.Contains(trace.Signals, signal => signal.Category == "Transfer" && signal.Name == fixtures.Transfer.TransferId);
         Assert.Contains(trace.Signals, signal => signal.Category == "Recovery" && signal.Name == fixtures.Recovery.RecoveryId);
+    }
+
+    [Fact]
+    public async Task HealthAssessmentReportsIndependentSubsystemDimensions()
+    {
+        DecisionSessionTestHarness harness = DecisionSessionTestHarness.Create();
+        DateTimeOffset now = DateTimeOffset.UtcNow.AddMinutes(-10);
+        DecisionSession active = await CreateActiveSessionAsync(harness, now.AddHours(-1));
+        DecisionSessionFixtures fixtures = CreateFixtures(harness.Repository.Id, active, now);
+        await WriteSnapshotsAsync(harness, fixtures);
+        await harness.RepositoryStore.WriteContinuityArtifactAsync(harness.Repository, fixtures.Artifact);
+        await harness.RepositoryStore.WriteTransferAsync(harness.Repository, fixtures.Transfer);
+        await harness.RepositoryStore.WriteRecoveryResultAsync(harness.Repository, fixtures.Recovery);
+        var service = new DecisionSessionObservabilityService(
+            harness.RepositoryService,
+            harness.RepositoryStore,
+            new FixedTimeProvider(now.AddMinutes(5)));
+
+        DecisionSessionHealthAssessment health = await service.GetHealthAsync(harness.Repository.Id);
+
+        Assert.Equal(harness.Repository.Id, health.RepositoryId);
+        Assert.Equal(harness.Repository.Id, health.InfluenceTrace.RepositoryId);
+        Assert.Contains(health.Dimensions, dimension => dimension.Name == "Registry" && dimension.Status == DecisionSessionHealthStatus.Healthy);
+        Assert.Contains(health.Dimensions, dimension => dimension.Name == "Analysis" && dimension.Status == DecisionSessionHealthStatus.Healthy);
+        Assert.Contains(health.Dimensions, dimension => dimension.Name == "Policy" && dimension.Status == DecisionSessionHealthStatus.Healthy);
+        Assert.Contains(health.Dimensions, dimension => dimension.Name == "Eligibility" && dimension.Status == DecisionSessionHealthStatus.Healthy);
+        Assert.Contains(health.Dimensions, dimension => dimension.Name == "Continuity artifact" && dimension.Status == DecisionSessionHealthStatus.Healthy);
+        Assert.Contains(health.Dimensions, dimension => dimension.Name == "Transfer" && dimension.Status == DecisionSessionHealthStatus.Healthy);
+        Assert.Contains(health.Dimensions, dimension => dimension.Name == "Recovery" && dimension.Status == DecisionSessionHealthStatus.Healthy);
+        Assert.DoesNotContain(health.Dimensions, dimension => dimension.Name == "Composite");
     }
 
     [Fact]

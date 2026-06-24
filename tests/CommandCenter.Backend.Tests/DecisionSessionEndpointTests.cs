@@ -73,6 +73,9 @@ public sealed class DecisionSessionEndpointTests
         DecisionSessionInfluenceTrace? influenceTrace = await client.GetFromJsonAsync<DecisionSessionInfluenceTrace>(
             $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/lifecycle/influence",
             DecisionSessionTestHarness.CreateJsonOptions());
+        DecisionSessionHealthAssessment? health = await client.GetFromJsonAsync<DecisionSessionHealthAssessment>(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/lifecycle/health",
+            DecisionSessionTestHarness.CreateJsonOptions());
         DecisionSessionContinuityArtifact[]? continuityArtifacts = await client.GetFromJsonAsync<DecisionSessionContinuityArtifact[]>(
             $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/continuity-artifacts",
             DecisionSessionTestHarness.CreateJsonOptions());
@@ -137,6 +140,9 @@ public sealed class DecisionSessionEndpointTests
         Assert.NotNull(influenceTrace);
         Assert.Equal(harness.Repository.Id, influenceTrace.RepositoryId);
         Assert.Equal(created.Id, influenceTrace.ActiveSessionId);
+        Assert.NotNull(health);
+        Assert.Equal(harness.Repository.Id, health.RepositoryId);
+        Assert.Contains(health.Dimensions, dimension => dimension.Name == "Registry");
         Assert.NotNull(continuityArtifacts);
         Assert.Empty(continuityArtifacts);
         Assert.NotNull(transfers);

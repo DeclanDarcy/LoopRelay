@@ -114,6 +114,11 @@ public static class DecisionSessionEndpoints
             IDecisionSessionObservabilityService observabilityService) =>
             await HandleAsync(() => observabilityService.GetInfluenceTraceAsync(repositoryId)));
 
+        group.MapGet("/lifecycle/health", async (
+            Guid repositoryId,
+            IDecisionSessionObservabilityService observabilityService) =>
+            await HandleAsync(() => observabilityService.GetHealthAsync(repositoryId)));
+
         group.MapGet("/continuity-artifacts", async (
             Guid repositoryId,
             IDecisionSessionContinuityArtifactService artifactService) =>
