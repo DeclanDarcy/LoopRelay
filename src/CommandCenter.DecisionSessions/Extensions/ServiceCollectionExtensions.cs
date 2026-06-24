@@ -24,6 +24,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(new DecisionSessionLifecyclePolicyOptions());
         services.AddSingleton<IDecisionSessionLifecyclePolicy, DecisionSessionLifecyclePolicy>();
         services.AddSingleton<IDecisionSessionTransferEligibilityService, DecisionSessionTransferEligibilityService>();
+        services.AddSingleton<IDecisionSessionContinuityArtifactService, DecisionSessionContinuityArtifactService>();
         return services;
     }
 }

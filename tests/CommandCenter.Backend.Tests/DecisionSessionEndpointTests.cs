@@ -64,6 +64,9 @@ public sealed class DecisionSessionEndpointTests
         DecisionSessionTransferEligibilityDiagnostics? transferEligibilityDiagnostics = await client.GetFromJsonAsync<DecisionSessionTransferEligibilityDiagnostics>(
             $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/lifecycle/eligibility/diagnostics",
             DecisionSessionTestHarness.CreateJsonOptions());
+        DecisionSessionContinuityArtifact[]? continuityArtifacts = await client.GetFromJsonAsync<DecisionSessionContinuityArtifact[]>(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/continuity-artifacts",
+            DecisionSessionTestHarness.CreateJsonOptions());
 
         Assert.NotNull(sessions);
         Assert.Single(sessions);
@@ -97,6 +100,8 @@ public sealed class DecisionSessionEndpointTests
         });
         Assert.NotNull(transferEligibilityDiagnostics);
         Assert.Equal(harness.Repository.Id, transferEligibilityDiagnostics.RepositoryId);
+        Assert.NotNull(continuityArtifacts);
+        Assert.Empty(continuityArtifacts);
     }
 
     [Fact]

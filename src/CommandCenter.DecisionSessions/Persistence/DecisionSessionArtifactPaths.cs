@@ -19,6 +19,10 @@ public static class DecisionSessionArtifactPaths
 
     public static string TransferEligibilitySnapshotJson() => ArtifactPath.CombineRelative(".agents", "decision-sessions", "lifecycle", "eligibility", "snapshot.json");
 
+    public static string ContinuityArtifactsDirectory() => ArtifactPath.CombineRelative(".agents", "decision-sessions", "continuity-artifacts");
+
+    public static string ContinuityArtifactJson(string artifactId) => ArtifactPath.CombineRelative(".agents", "decision-sessions", "continuity-artifacts", artifactId);
+
     public static string Resolve(Repository repository, string relativePath)
     {
         return ArtifactPath.ResolveRepositoryPath(repository, relativePath);

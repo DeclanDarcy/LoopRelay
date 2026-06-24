@@ -342,3 +342,36 @@ public sealed record DecisionSessionTransferEligibilitySnapshot(
     DecisionSessionTransferEligibility Eligibility,
     DecisionSessionTransferEligibilityDiagnostics Diagnostics,
     DateTimeOffset GeneratedAt);
+
+public sealed record DecisionSessionContinuityReference(
+    string Source,
+    string ReferenceType,
+    long ItemCount,
+    long ByteCount,
+    DateTimeOffset? LastActivityAt,
+    string Fingerprint);
+
+public sealed record DecisionSessionContinuityArtifact(
+    string ArtifactId,
+    Guid RepositoryId,
+    DecisionSessionId SourceSessionId,
+    DecisionSessionId? TargetSessionId,
+    DateTimeOffset CreatedAt,
+    DecisionSessionLifecycleEvaluation PolicyEvaluation,
+    DecisionSessionMetrics Metrics,
+    DecisionSessionEconomics Economics,
+    DecisionSessionCoherence Coherence,
+    DecisionSessionCacheMetrics Cache,
+    IReadOnlyList<DecisionSessionContinuityReference> DecisionReferences,
+    IReadOnlyList<DecisionSessionContinuityReference> ReasoningReferences,
+    IReadOnlyList<DecisionSessionContinuityReference> OperationalContextReferences,
+    string ContinuityFingerprint,
+    IReadOnlyList<string> Diagnostics);
+
+public sealed record DecisionSessionContinuityArtifactValidation(
+    bool IsValid,
+    IReadOnlyList<string> Errors,
+    IReadOnlyList<string> Warnings)
+{
+    public static DecisionSessionContinuityArtifactValidation Valid { get; } = new(true, [], []);
+}

@@ -99,6 +99,21 @@ public static class DecisionSessionEndpoints
             IDecisionSessionTransferEligibilityService eligibilityService) =>
             await HandleAsync(async () => (await eligibilityService.CheckAsync(repositoryId)).Diagnostics));
 
+        group.MapGet("/continuity-artifacts", async (
+            Guid repositoryId,
+            IDecisionSessionContinuityArtifactService artifactService) =>
+            await HandleAsync(() => artifactService.ListAsync(repositoryId)));
+
+        group.MapGet("/continuity-artifacts/{artifactId}", async (
+            Guid repositoryId,
+            string artifactId,
+            IDecisionSessionContinuityArtifactService artifactService) =>
+            await HandleAsync(async () =>
+            {
+                DecisionSessionContinuityArtifact? artifact = await artifactService.GetAsync(repositoryId, artifactId);
+                return artifact ?? throw new KeyNotFoundException($"Decision session continuity artifact was not found: {artifactId}");
+            }));
+
         return app;
     }
 

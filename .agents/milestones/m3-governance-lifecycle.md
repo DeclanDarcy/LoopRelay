@@ -94,48 +94,48 @@ Eligibility rules:
 
 Add a first-class canonical transfer payload:
 
-- [ ] `DecisionSessionContinuityArtifact`
+- [x] `DecisionSessionContinuityArtifact`
 
 This artifact is the durable governance-continuity payload transferred between source and replacement decision sessions. It is not merely a diagnostic snapshot.
 
 Fields:
 
-- [ ] `string ArtifactId`
-- [ ] `Guid RepositoryId`
-- [ ] `DecisionSessionId SourceSessionId`
-- [ ] `DecisionSessionId? TargetSessionId`
-- [ ] `DateTimeOffset CreatedAt`
-- [ ] `DecisionSessionLifecycleEvaluation PolicyEvaluation`
-- [ ] `DecisionSessionMetrics Metrics`
-- [ ] `DecisionSessionEconomics Economics`
-- [ ] `DecisionSessionCoherence Coherence`
-- [ ] `DecisionSessionCacheMetrics Cache`
-- [ ] `IReadOnlyList<DecisionSessionContinuityReference> DecisionReferences`
-- [ ] `IReadOnlyList<DecisionSessionContinuityReference> ReasoningReferences`
-- [ ] `IReadOnlyList<DecisionSessionContinuityReference> OperationalContextReferences`
-- [ ] `string ContinuityFingerprint`
-- [ ] `IReadOnlyList<string> Diagnostics`
+- [x] `string ArtifactId`
+- [x] `Guid RepositoryId`
+- [x] `DecisionSessionId SourceSessionId`
+- [x] `DecisionSessionId? TargetSessionId`
+- [x] `DateTimeOffset CreatedAt`
+- [x] `DecisionSessionLifecycleEvaluation PolicyEvaluation`
+- [x] `DecisionSessionMetrics Metrics`
+- [x] `DecisionSessionEconomics Economics`
+- [x] `DecisionSessionCoherence Coherence`
+- [x] `DecisionSessionCacheMetrics Cache`
+- [x] `IReadOnlyList<DecisionSessionContinuityReference> DecisionReferences`
+- [x] `IReadOnlyList<DecisionSessionContinuityReference> ReasoningReferences`
+- [x] `IReadOnlyList<DecisionSessionContinuityReference> OperationalContextReferences`
+- [x] `string ContinuityFingerprint`
+- [x] `IReadOnlyList<string> Diagnostics`
 
 Add:
 
-- [ ] `DecisionSessionContinuityReference`
-- [ ] `DecisionSessionContinuityArtifactValidation`
-- [ ] `IDecisionSessionContinuityArtifactService`
-- [ ] `DecisionSessionContinuityArtifactService`
+- [x] `DecisionSessionContinuityReference`
+- [x] `DecisionSessionContinuityArtifactValidation`
+- [x] `IDecisionSessionContinuityArtifactService`
+- [x] `DecisionSessionContinuityArtifactService`
 
 Persistence:
 
-- [ ] Store artifacts under `.agents/decision-sessions/continuity-artifacts/`.
-- [ ] Use deterministic artifact ids such as `continuity.YYYYMMDDTHHMMSS.fffffffZ.<source-session-id>.json`.
-- [ ] Store a markdown projection only if useful for human diagnostics.
-- [ ] Validate repository id, source session id, fingerprint, evidence references, and schema version on read.
+- [x] Store artifacts under `.agents/decision-sessions/continuity-artifacts/`.
+- [x] Use deterministic artifact ids such as `continuity.YYYYMMDDTHHMMSS.fffffffZ.<source-session-id>.json`.
+- [x] Store a markdown projection only if useful for human diagnostics.
+- [x] Validate repository id, source session id, fingerprint, evidence references, and schema version on read.
 
 Continuity artifact rules:
 
-- [ ] The artifact is the canonical payload for transfer.
-- [ ] It is durable, recoverable, and auditable.
-- [ ] It records what continuity is being carried forward, not who owns operational context.
-- [ ] Decision Sessions must never own Operational Context. They contribute transfer artifacts that continuity services may consume.
+- [x] The artifact is the canonical payload for transfer.
+- [x] It is durable, recoverable, and auditable.
+- [x] It records what continuity is being carried forward, not who owns operational context.
+- [x] Decision Sessions must never own Operational Context. They contribute transfer artifacts that continuity services may consume.
 
 ### Transfer Execution
 
@@ -231,8 +231,8 @@ Hosted startup behavior:
 - [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/lifecycle/policy/diagnostics`
 - [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/lifecycle/eligibility`
 - [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/lifecycle/eligibility/diagnostics`
-- [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/continuity-artifacts`
-- [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/continuity-artifacts/{artifactId}`
+- [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/continuity-artifacts`
+- [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/continuity-artifacts/{artifactId}`
 - [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/transfers`
 - [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/transfers/history`
 - [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/transfers/diagnostics`
@@ -258,7 +258,7 @@ Do not add a manual transfer endpoint.
 - [ ] Transfer decision plus eligible status results in transfer execution.
 - [ ] Transfer decision plus blocked eligibility does not mutate registry state.
 - [ ] Continuity artifact is created before source retirement.
-- [ ] Continuity artifact is the canonical transfer payload and validates required references.
+- [x] Continuity artifact is the canonical transfer payload and validates required references.
 - [ ] Source session is retired.
 - [ ] Replacement session is created and active.
 - [ ] Two active sessions never exist.
@@ -273,7 +273,7 @@ Do not add a manual transfer endpoint.
 ### Exit Criteria
 
 - [x] Policy can decide continue or transfer.
-- [ ] Eligibility can block or defer transfer without changing policy.
+- [x] Eligibility can block or defer transfer without changing policy.
 - [ ] Transfer creates a first-class continuity artifact.
 - [ ] Transfer preserves continuity and never creates parallel active sessions.
 - [ ] Recovery survives restart, missing snapshots, duplicate-active corruption, and interrupted transfer states with diagnostics.

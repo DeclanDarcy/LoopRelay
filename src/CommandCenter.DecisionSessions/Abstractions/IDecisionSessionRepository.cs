@@ -35,4 +35,10 @@ public interface IDecisionSessionRepository
     Task<DecisionSessionTransferEligibilitySnapshot?> ReadTransferEligibilitySnapshotAsync(Repository repository);
 
     Task WriteTransferEligibilitySnapshotAsync(Repository repository, DecisionSessionTransferEligibilitySnapshot snapshot);
+
+    Task<IReadOnlyList<DecisionSessionContinuityArtifact>> ListContinuityArtifactsAsync(Repository repository);
+
+    Task<DecisionSessionContinuityArtifact?> ReadContinuityArtifactAsync(Repository repository, string artifactId);
+
+    Task WriteContinuityArtifactAsync(Repository repository, DecisionSessionContinuityArtifact artifact);
 }

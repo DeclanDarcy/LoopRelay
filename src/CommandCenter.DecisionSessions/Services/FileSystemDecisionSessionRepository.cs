@@ -334,6 +334,84 @@ public sealed class FileSystemDecisionSessionRepository(IArtifactStore artifactS
         await artifactStore.WriteAsync(path, JsonSerializer.Serialize(document, DecisionSessionJson.Options));
     }
 
+    public async Task<IReadOnlyList<DecisionSessionContinuityArtifact>> ListContinuityArtifactsAsync(Repository repository)
+    {
+        string root = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.ContinuityArtifactsDirectory());
+        IReadOnlyList<string> files = (await artifactStore.ListAsync(root, "*.json"))
+            .Where(file => Path.GetFileName(file).StartsWith("continuity.", StringComparison.Ordinal))
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var artifacts = new List<DecisionSessionContinuityArtifact>();
+        foreach (string file in files)
+        {
+            string? json = await artifactStore.ReadAsync(file);
+            if (json is null)
+            {
+                continue;
+            }
+
+            DecisionSessionArtifactDocument<DecisionSessionContinuityArtifact>? document =
+                JsonSerializer.Deserialize<DecisionSessionArtifactDocument<DecisionSessionContinuityArtifact>>(
+                    json,
+                    DecisionSessionJson.Options);
+            if (document is null)
+            {
+                throw new DecisionSessionValidationException("Decision session continuity artifact could not be deserialized.");
+            }
+
+            ValidateDocument(repository, document, "Decision session continuity artifact");
+            ValidateContinuityArtifact(repository, document.Payload);
+            artifacts.Add(document.Payload);
+        }
+
+        return artifacts
+            .OrderBy(artifact => artifact.CreatedAt)
+            .ThenBy(artifact => artifact.ArtifactId, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    public async Task<DecisionSessionContinuityArtifact?> ReadContinuityArtifactAsync(Repository repository, string artifactId)
+    {
+        ValidateContinuityArtifactId(artifactId);
+        string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.ContinuityArtifactJson(artifactId));
+        string? json = await artifactStore.ReadAsync(path);
+        if (json is null)
+        {
+            return null;
+        }
+
+        DecisionSessionArtifactDocument<DecisionSessionContinuityArtifact>? document =
+            JsonSerializer.Deserialize<DecisionSessionArtifactDocument<DecisionSessionContinuityArtifact>>(
+                json,
+                DecisionSessionJson.Options);
+        if (document is null)
+        {
+            throw new DecisionSessionValidationException("Decision session continuity artifact could not be deserialized.");
+        }
+
+        ValidateDocument(repository, document, "Decision session continuity artifact");
+        ValidateContinuityArtifact(repository, document.Payload);
+        if (!string.Equals(document.Payload.ArtifactId, artifactId, StringComparison.Ordinal))
+        {
+            throw new DecisionSessionValidationException("Decision session continuity artifact id does not match its path.");
+        }
+
+        return document.Payload;
+    }
+
+    public async Task WriteContinuityArtifactAsync(Repository repository, DecisionSessionContinuityArtifact artifact)
+    {
+        ValidateContinuityArtifact(repository, artifact);
+        var document = new DecisionSessionArtifactDocument<DecisionSessionContinuityArtifact>(
+            DecisionSessionArtifactPaths.SchemaVersion,
+            repository.Id,
+            artifact.CreatedAt,
+            DateTimeOffset.UtcNow,
+            artifact);
+        string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.ContinuityArtifactJson(artifact.ArtifactId));
+        await artifactStore.WriteAsync(path, JsonSerializer.Serialize(document, DecisionSessionJson.Options));
+    }
+
     internal async Task<DecisionSessionValidationResult> ValidateAsync(Repository repository)
     {
         string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.RegistryJson());
@@ -404,6 +482,44 @@ public sealed class FileSystemDecisionSessionRepository(IArtifactStore artifactS
         if (document.RepositoryId != repository.Id)
         {
             throw new DecisionSessionValidationException($"{documentName} belongs to a different repository.");
+        }
+    }
+
+    private static void ValidateContinuityArtifact(Repository repository, DecisionSessionContinuityArtifact artifact)
+    {
+        ValidateContinuityArtifactId(artifact.ArtifactId);
+        if (artifact.RepositoryId != repository.Id)
+        {
+            throw new DecisionSessionValidationException("Decision session continuity artifact belongs to a different repository.");
+        }
+
+        if (!artifact.ArtifactId.Contains(artifact.SourceSessionId.ToString(), StringComparison.Ordinal))
+        {
+            throw new DecisionSessionValidationException("Decision session continuity artifact id does not include its source session id.");
+        }
+
+        if (string.IsNullOrWhiteSpace(artifact.ContinuityFingerprint))
+        {
+            throw new DecisionSessionValidationException("Decision session continuity artifact fingerprint is required.");
+        }
+
+        if (artifact.DecisionReferences.Count == 0 ||
+            artifact.ReasoningReferences.Count == 0 ||
+            artifact.OperationalContextReferences.Count == 0)
+        {
+            throw new DecisionSessionValidationException("Decision session continuity artifact must include decision, reasoning, and operational context references.");
+        }
+    }
+
+    private static void ValidateContinuityArtifactId(string artifactId)
+    {
+        if (string.IsNullOrWhiteSpace(artifactId) ||
+            artifactId.Contains(Path.DirectorySeparatorChar) ||
+            artifactId.Contains(Path.AltDirectorySeparatorChar) ||
+            !artifactId.StartsWith("continuity.", StringComparison.Ordinal) ||
+            !artifactId.EndsWith(".json", StringComparison.Ordinal))
+        {
+            throw new ArgumentException("Continuity artifact id is invalid.", nameof(artifactId));
         }
     }
 

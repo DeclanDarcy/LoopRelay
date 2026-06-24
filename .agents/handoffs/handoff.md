@@ -2,30 +2,30 @@
 
 ## Slice Summary
 
-- Continued Milestone 3 governance lifecycle with transfer eligibility.
-- Added transfer eligibility models, status values, findings, diagnostics, snapshot persistence, and `IDecisionSessionTransferEligibilityService` / `DecisionSessionTransferEligibilityService`.
-- Eligibility snapshots persist at `.agents/decision-sessions/lifecycle/eligibility/snapshot.json` and invalid snapshots are rebuilt.
+- Continued Milestone 3 governance lifecycle with first-class continuity artifacts.
+- Added `DecisionSessionContinuityArtifact`, `DecisionSessionContinuityReference`, validation, repository persistence, and `IDecisionSessionContinuityArtifactService` / `DecisionSessionContinuityArtifactService`.
+- Continuity artifacts persist under `.agents/decision-sessions/continuity-artifacts/` with deterministic ids in the form `continuity.YYYYMMDDTHHMMSS.fffffffZ.<source-session-id>.json`.
+- Artifacts include policy evaluation, metrics, economics, coherence, cache, decision references, reasoning references, operational context references, diagnostics, and a SHA-256 continuity fingerprint.
 - Added read-only endpoints:
-  - `GET /api/repositories/{repositoryId}/decision-sessions/lifecycle/policy/diagnostics`
-  - `GET /api/repositories/{repositoryId}/decision-sessions/lifecycle/eligibility`
-  - `GET /api/repositories/{repositoryId}/decision-sessions/lifecycle/eligibility/diagnostics`
-- Updated Milestone 3 checklist for completed eligibility items and endpoint/test coverage.
-- Eligibility is implemented as an operational gate: it can return `NotApplicable`, `Eligible`, `Blocked`, or `Deferred`, but it does not mutate registry state or rewrite lifecycle policy decisions.
+  - `GET /api/repositories/{repositoryId}/decision-sessions/continuity-artifacts`
+  - `GET /api/repositories/{repositoryId}/decision-sessions/continuity-artifacts/{artifactId}`
+- Updated Milestone 3 checklist for completed continuity artifact model, persistence, endpoint, and validation coverage.
 
 ## Validation
 
-- `dotnet test .\tests\CommandCenter.Backend.Tests\CommandCenter.Backend.Tests.csproj --filter DecisionSession` passed: 54 tests.
-- `dotnet test .\CommandCenter.slnx` passed: 684 tests.
+- `dotnet test .\tests\CommandCenter.Backend.Tests\CommandCenter.Backend.Tests.csproj --filter DecisionSession` passed: 60 tests.
+- `dotnet test .\CommandCenter.slnx` passed: 690 tests.
 
 ## Current State
 
-- `.agents/handoffs/handoff.md` was rotated to `.agents/handoffs/handoff.0007.md`; this file is the new active handoff.
+- `.agents/handoffs/handoff.md` was rotated to `.agents/handoffs/handoff.0008.md`; this file is the new active handoff.
 - `.agents/decisions/decisions.md` was not rotated because no user response authorized new decisions during this slice.
-- Milestone 3B transfer eligibility is implemented and validated.
+- Milestone 3C continuity artifacts are implemented and validated as canonical transfer payloads, but transfer execution has not yet been implemented.
 
 ## Next Slice Recommendation
 
-- Continue Milestone 3 with first-class continuity artifacts:
-  - Add `DecisionSessionContinuityArtifact`, continuity references, validation, and `IDecisionSessionContinuityArtifactService` / implementation.
-  - Persist canonical transfer payloads under `.agents/decision-sessions/continuity-artifacts/`.
-  - Keep decision sessions as producers of transfer artifacts only; they must not own operational context.
+- Continue Milestone 3 with transfer execution:
+  - Add `DecisionSessionTransfer`, transfer events, diagnostics, and result models.
+  - Add `IDecisionSessionTransferService` / implementation plus continuity capture and integration services.
+  - Enforce ordering: require transfer policy and eligible status, mark source `TransferPending`, create artifact, persist started event, integrate continuity, retire source, create and activate replacement, update artifact target id, and persist completed event.
+  - Add tests proving blocked eligibility does not mutate registry state and that two active sessions never exist.
