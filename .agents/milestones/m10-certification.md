@@ -14,7 +14,7 @@ Deliver:
 - [x] authority certification.
 - [x] recovery certification.
 - [x] continuation certification.
-- [ ] preparation certification.
+- [x] preparation certification.
 - [ ] end-to-end workflow fixture.
 - [ ] workflow history certification.
 - [ ] workflow diagnostics certification.
@@ -57,13 +57,13 @@ Certification failure conditions:
 - [ ] workflow approved or executed commit.
 - [ ] workflow approved or executed push.
 - [x] workflow crossed an open gate.
-- [ ] workflow created or used a parallel domain command.
-- [ ] workflow preparation satisfied a gate.
-- [ ] workflow preparation moved the workflow stage.
-- [ ] workflow preparation created duplicate review artifacts for the same fingerprint.
+- [x] workflow created or used a parallel domain command.
+- [x] workflow preparation satisfied a gate.
+- [x] workflow preparation moved the workflow stage.
+- [x] workflow preparation created duplicate review artifacts for the same fingerprint.
 - [ ] workflow state cannot be reconstructed from domain evidence.
 - [ ] continuation duplicated progression after restart.
-- [ ] preparation duplicated artifacts or preparation events after restart.
+- [x] preparation duplicated artifacts or preparation events after restart.
 - [ ] blocked, recovered, or progressed states lack diagnostics.
 - [ ] preparation decisions lack diagnostics.
 - [ ] authority history cannot be reconstructed.
@@ -81,7 +81,7 @@ Tests:
   - [x] restart duplicate progression is certified.
   - [x] derived continuation/preparation history corruption is diagnosed as recoverable derived evidence.
 - [x] continuation certification detects missed gate halting.
-- [ ] preparation certification detects duplicate artifacts, parallel commands, and gate bypass attempts.
+- [x] preparation certification detects duplicate artifacts, parallel commands, and gate bypass attempts.
 - [ ] end-to-end fixture validates progression, gates, recovery, diagnostics, history, and certification.
 
 Exit criteria:
@@ -93,6 +93,6 @@ Exit criteria:
   - [x] initial domain-truth recovery certification passes.
   - [ ] full corruption and idempotency recovery matrix passes.
 - [x] continuation certification passes.
-- [ ] preparation certification passes.
+- [x] preparation certification passes.
 - [ ] end-to-end fixture passes.
 - [ ] diagnostics and health certification pass.

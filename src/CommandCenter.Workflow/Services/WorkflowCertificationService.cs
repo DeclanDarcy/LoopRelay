@@ -45,6 +45,32 @@ public sealed class WorkflowCertificationService(
         WorkflowGateType.PushApproval
     ];
 
+    private static readonly (WorkflowPreparationCommand Command, string CommandName)[] AllowedPreparationCommands =
+    [
+        (WorkflowPreparationCommand.DiscoverDecisionCandidates, "decisions_discover_candidates"),
+        (WorkflowPreparationCommand.GenerateDecisionProposal, "decisions_generate_proposal"),
+        (WorkflowPreparationCommand.GenerateOperationalContextProposal, "continuity_generate_operational_context_proposal"),
+        (WorkflowPreparationCommand.PrepareExecutionCommit, "execution_prepare_commit")
+    ];
+
+    private static readonly string[] GateSatisfactionDecisions =
+    [
+        "Accept",
+        "Accepted",
+        "Approve",
+        "Approved",
+        "Commit",
+        "Committed",
+        "Promote",
+        "Promoted",
+        "Push",
+        "Pushed",
+        "Resolve",
+        "Resolved",
+        "Satisfy",
+        "Satisfied"
+    ];
+
     public async Task<WorkflowCertificationResult> GetCurrentCertificationAsync(Guid repositoryId)
     {
         Repository repository = await GetRepositoryAsync(repositoryId);
@@ -90,13 +116,17 @@ public sealed class WorkflowCertificationService(
 
         findings.Add(CertifyReadOnlyAuthorityBoundary(projection, continuationHistory, preparationHistory));
         findings.Add(CertifyNoForbiddenPreparationCommands(preparationHistory));
+        findings.Add(CertifyPreparationUsesAllowedDomainCommands(preparationHistory));
         findings.Add(CertifyContinuationDoesNotCrossAuthorityGates(continuationHistory));
         findings.Add(CertifyPreparationDoesNotSatisfyAuthorityGates(preparationHistory));
+        findings.Add(CertifyPreparationDoesNotMoveWorkflowStage(preparationHistory));
+        findings.Add(CertifyPreparationArtifactsAreReviewable(preparationHistory));
         findings.Add(CertifyGateCatalogUsesDomainCommands(projection));
         findings.Add(CertifyDomainEvidenceWinsDuringRecovery(projection, domainTimeline, latestTimeline, timelineLoadError));
         findings.Add(CertifyDerivedHistoryEvidenceIsRecoverable(historyLoadErrors));
         findings.Add(CertifyContinuationHistoryIsIdempotent(continuationHistory));
         findings.Add(CertifyPreparationHistoryIsIdempotent(preparationHistory));
+        findings.Add(CertifyPreparationDuplicateDomainEvidence(preparationHistory));
 
         string inputFingerprint = WorkflowFingerprint.FromNormalizedEvidence(string.Join(
             '\n',
@@ -187,6 +217,28 @@ public sealed class WorkflowCertificationService(
             violations.Select(entry => $"Forbidden authority command '{entry.CommandName}' appears in preparation event '{entry.EventId}'.").ToArray());
     }
 
+    private static WorkflowCertificationFinding CertifyPreparationUsesAllowedDomainCommands(
+        IReadOnlyList<WorkflowPreparationEvent> preparationHistory)
+    {
+        IReadOnlyList<WorkflowPreparationEvent> violations = preparationHistory
+            .Where(entry => entry.Command is not WorkflowPreparationCommand.None || !string.Equals(entry.CommandName, "none", StringComparison.OrdinalIgnoreCase))
+            .Where(entry => !AllowedPreparationCommands.Any(allowed =>
+                entry.Command == allowed.Command &&
+                string.Equals(entry.CommandName, allowed.CommandName, StringComparison.Ordinal)))
+            .ToArray();
+
+        return new WorkflowCertificationFinding(
+            "preparation-uses-allowed-domain-commands",
+            "Preparation",
+            violations.Count == 0,
+            violations.Count == 0
+                ? "Preparation history uses only allowed existing domain preparation commands."
+                : "Preparation history contains unknown or parallel preparation commands.",
+            "Workflow preparation must call the existing domain preparation surfaces only; it must not introduce workflow-owned or parallel commands that duplicate domain behavior.",
+            preparationHistory.Select(entry => $"preparation-command:{entry.EventId}:{entry.Command}:{entry.CommandName}:{entry.Decision}").ToArray(),
+            violations.Select(entry => $"Preparation event '{entry.EventId}' used unsupported command '{entry.CommandName}' for enum value {entry.Command}.").ToArray());
+    }
+
     private static WorkflowCertificationFinding CertifyContinuationDoesNotCrossAuthorityGates(
         IReadOnlyList<WorkflowContinuationEvent> continuationHistory)
     {
@@ -252,8 +304,8 @@ public sealed class WorkflowCertificationService(
         IReadOnlyList<WorkflowPreparationEvent> violations = preparationHistory
             .Where(entry =>
                 entry.BlockingGate is not WorkflowGateType.None &&
-                !entry.IsWaitingForHuman &&
-                (entry.CreatedArtifactIds.Count > 0 || string.Equals(entry.Decision, "Advance", StringComparison.OrdinalIgnoreCase)))
+                (!entry.IsWaitingForHuman ||
+                    GateSatisfactionDecisions.Contains(entry.Decision, StringComparer.OrdinalIgnoreCase)))
             .ToArray();
 
         return new WorkflowCertificationFinding(
@@ -267,6 +319,64 @@ public sealed class WorkflowCertificationService(
             preparationHistory.Select(entry =>
                 $"preparation:{entry.EventId}:{entry.BlockingGate}:waiting={entry.IsWaitingForHuman}:created={entry.CreatedArtifactIds.Count}:decision={entry.Decision}").ToArray(),
             violations.Select(entry => $"Preparation event '{entry.EventId}' changed authority-gated state for {entry.BlockingGate}.").ToArray());
+    }
+
+    private static WorkflowCertificationFinding CertifyPreparationDoesNotMoveWorkflowStage(
+        IReadOnlyList<WorkflowPreparationEvent> preparationHistory)
+    {
+        IReadOnlyList<WorkflowPreparationEvent> violations = preparationHistory
+            .Where(entry => string.Equals(entry.Decision, "Advance", StringComparison.OrdinalIgnoreCase) ||
+                entry.Diagnostics.Any(diagnostic => diagnostic.Contains("advanced to", StringComparison.OrdinalIgnoreCase) ||
+                    diagnostic.Contains("moved workflow stage", StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
+
+        return new WorkflowCertificationFinding(
+            "authority-preparation-does-not-progress-stage",
+            "Authority",
+            violations.Count == 0,
+            violations.Count == 0
+                ? "Preparation history does not move workflow stages."
+                : "Preparation history appears to move workflow stages.",
+            "Preparation may create reviewable artifacts only. Stage progression is handled by continuation after domain evidence proves the next stage.",
+            preparationHistory.Select(entry =>
+                $"preparation-stage:{entry.EventId}:{entry.Stage}:{entry.ProgressState}:{entry.CommandName}:{entry.Decision}").ToArray(),
+            violations.Select(entry => $"Preparation event '{entry.EventId}' recorded stage progression with decision '{entry.Decision}'.").ToArray());
+    }
+
+    private static WorkflowCertificationFinding CertifyPreparationArtifactsAreReviewable(
+        IReadOnlyList<WorkflowPreparationEvent> preparationHistory)
+    {
+        IReadOnlyList<string> reviewablePrefixes =
+        [
+            "decision-candidate:",
+            "decision-proposal:",
+            "operational-context-proposal:",
+            "commit-preparation:"
+        ];
+        IReadOnlyList<string> violations = preparationHistory
+            .SelectMany(entry => entry.CreatedArtifactIds.Select(artifactId => $"{entry.EventId}|{artifactId}"))
+            .Where(value =>
+            {
+                string artifactId = value.Split('|')[1];
+                return !reviewablePrefixes.Any(prefix => artifactId.StartsWith(prefix, StringComparison.Ordinal));
+            })
+            .ToArray();
+
+        return new WorkflowCertificationFinding(
+            "preparation-artifacts-are-reviewable",
+            "Preparation",
+            violations.Count == 0,
+            violations.Count == 0
+                ? "Preparation history created only reviewable artifact evidence."
+                : "Preparation history created non-reviewable artifact evidence.",
+            "Workflow preparation may create only decision candidates, decision proposals, operational-context proposals, and commit-preparation snapshots for human review.",
+            preparationHistory.Select(entry =>
+                $"preparation-artifacts:{entry.EventId}:{entry.CommandName}:{string.Join(",", entry.CreatedArtifactIds)}").ToArray(),
+            violations.Select(value =>
+            {
+                string[] parts = value.Split('|', 2);
+                return $"Preparation event '{parts[0]}' created non-reviewable artifact '{parts[1]}'.";
+            }).ToArray());
     }
 
     private static WorkflowCertificationFinding CertifyGateCatalogUsesDomainCommands(WorkflowInstance projection)
@@ -414,8 +524,7 @@ public sealed class WorkflowCertificationService(
                 "|",
                 entry.InputFingerprint.Value,
                 entry.Stage,
-                entry.Command,
-                string.Join(",", entry.CreatedArtifactIds.Order(StringComparer.Ordinal))))
+                entry.Command))
             .Where(group => group.Count() > 1)
             .ToArray();
         IReadOnlyList<IGrouping<string, string>> duplicateArtifacts = preparationHistory
@@ -435,8 +544,34 @@ public sealed class WorkflowCertificationService(
             "Restart and recovery must not create duplicate preparation events or duplicate review artifacts for identical preparation inputs.",
             preparationHistory.Select(entry =>
                 $"preparation:{entry.EventId}:{entry.CommandName}:{entry.Decision}:{entry.InputFingerprint}:created={string.Join(",", entry.CreatedArtifactIds)}").ToArray(),
-            duplicateEvents.Select(group => $"Duplicate preparation event fingerprint '{group.Key}' appears {group.Count()} times.")
+            duplicateEvents.Select(group => $"Duplicate preparation input fingerprint '{group.Key}' created artifacts {group.Count()} times.")
                 .Concat(duplicateArtifacts.Select(group => $"Duplicate prepared artifact '{group.Key}' appears {group.Count()} times."))
+                .ToArray());
+    }
+
+    private static WorkflowCertificationFinding CertifyPreparationDuplicateDomainEvidence(
+        IReadOnlyList<WorkflowPreparationEvent> preparationHistory)
+    {
+        IReadOnlyList<WorkflowPreparationEvent> duplicateEvidenceEvents = preparationHistory
+            .Where(entry => entry.HasDuplicateDomainEvidence || entry.DuplicateEvidence.Count > 0)
+            .ToArray();
+        bool duplicateCreationDetected = duplicateEvidenceEvents.All(entry => entry.CreatedArtifactIds.Count == 0);
+
+        return new WorkflowCertificationFinding(
+            "preparation-duplicate-domain-evidence",
+            "Preparation",
+            duplicateCreationDetected,
+            duplicateCreationDetected
+                ? "Preparation duplicate domain evidence is reported without creating new artifacts."
+                : "Preparation duplicate domain evidence created additional artifacts.",
+            "Duplicate decision, operational-context, and commit-preparation evidence must cause preparation to skip or refuse artifact creation instead of duplicating reviewable artifacts.",
+            duplicateEvidenceEvents.Count == 0
+                ? ["preparation-duplicate-domain-evidence:none-observed"]
+                : duplicateEvidenceEvents.Select(entry =>
+                    $"preparation-duplicate-evidence:{entry.EventId}:{entry.CommandName}:{string.Join(",", entry.DuplicateEvidence)}").ToArray(),
+            duplicateEvidenceEvents
+                .Where(entry => entry.CreatedArtifactIds.Count > 0)
+                .Select(entry => $"Preparation event '{entry.EventId}' reported duplicate domain evidence but still created {string.Join(",", entry.CreatedArtifactIds)}.")
                 .ToArray());
     }
 

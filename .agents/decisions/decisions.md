@@ -2,19 +2,23 @@
 
 ## Newly Authorized
 
-- Proceed with Milestone 10 preparation certification next.
-- Preparation certification must preserve the distinction:
-  - missing derived history is not automatically failing.
-  - crossing or satisfying authority gates is a hard certification failure.
-- Preparation certification must prove:
-  - duplicate decision, context, or commit evidence creates no new artifact.
-  - open authority gates block preparation.
-  - preparation events cannot satisfy a gate.
-  - preparation events cannot move workflow stage.
-  - unknown or parallel preparation commands fail certification.
-  - created artifacts are reviewable only.
-- Preparation certification must include failure cases for:
-  - duplicate candidate, proposal, and package evidence.
-  - duplicate context proposal, linkage, and assimilation evidence.
-  - duplicate commit-preparation snapshot evidence.
-- No new behavior should be added unless certification reveals a concrete gap.
+- Proceed next with Workflow History Certification and Workflow Diagnostics Certification before the end-to-end fixture.
+- Do not add additional workflow behavior unless certification exposes a concrete proof gap.
+- History certification should prove reconstructability without workflow-owned truth for:
+  - authority history.
+  - gate history.
+  - continuation history.
+  - preparation history.
+- Certification should fail when the current workflow state cannot explain how it got here.
+- Certification should fail when authority history is unrecoverable.
+- Diagnostics certification should verify explanation exists for:
+  - blocked workflow state.
+  - recovered workflow state.
+  - progressed workflow state.
+  - failed workflow state.
+- Add a specific certification case for workflow state that cannot be reconstructed from missing domain evidence, missing workflow evidence, and conflicting artifacts.
+- That unreconstructable-state case should produce:
+  - certification failure.
+  - explicit finding.
+  - diagnostics present.
+- Perform the full end-to-end fixture only after history and diagnostics certification are stable.

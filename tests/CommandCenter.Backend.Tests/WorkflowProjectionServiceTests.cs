@@ -3260,6 +3260,153 @@ public sealed class WorkflowProjectionServiceTests
     }
 
     [Fact]
+    public async Task WorkflowCertificationFailsUnknownPreparationCommand()
+    {
+        TestFixture fixture = TestFixture.Create();
+        var workflowRepository = new FileSystemWorkflowRepository(new MemoryArtifactStore());
+        await workflowRepository.SavePreparationEventAsync(
+            fixture.Repository,
+            CreatePreparationEvent(
+                fixture.Repository.Id,
+                DateTimeOffset.Parse("2026-06-23T12:31:00Z"),
+                WorkflowStage.OperationalContext,
+                WorkflowGateType.None,
+                WorkflowPreparationCommand.None,
+                "workflow_prepare_operational_context",
+                "Created",
+                false,
+                ["operational-context-proposal:ctx-0001"]));
+        WorkflowCertificationService service = fixture.CreateCertificationService(workflowRepository);
+
+        WorkflowCertificationResult result = await service.GetCurrentCertificationAsync(fixture.Repository.Id);
+
+        Assert.False(result.Certified);
+        WorkflowCertificationFinding finding = Assert.Single(
+            result.Findings,
+            candidate => candidate.Id == "preparation-uses-allowed-domain-commands");
+        Assert.False(finding.Passed);
+        Assert.Contains(finding.Diagnostics, diagnostic => diagnostic.Contains("workflow_prepare_operational_context", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task WorkflowCertificationFailsPreparationGateSatisfactionAndStageAdvance()
+    {
+        TestFixture fixture = TestFixture.Create();
+        var workflowRepository = new FileSystemWorkflowRepository(new MemoryArtifactStore());
+        await workflowRepository.SavePreparationEventAsync(
+            fixture.Repository,
+            CreatePreparationEvent(
+                fixture.Repository.Id,
+                DateTimeOffset.Parse("2026-06-23T12:32:00Z"),
+                WorkflowStage.Decision,
+                WorkflowGateType.DecisionResolution,
+                WorkflowPreparationCommand.GenerateDecisionProposal,
+                "decisions_generate_proposal",
+                "Resolved",
+                false,
+                []));
+        await workflowRepository.SavePreparationEventAsync(
+            fixture.Repository,
+            CreatePreparationEvent(
+                fixture.Repository.Id,
+                DateTimeOffset.Parse("2026-06-23T12:33:00Z"),
+                WorkflowStage.OperationalContext,
+                WorkflowGateType.None,
+                WorkflowPreparationCommand.GenerateOperationalContextProposal,
+                "continuity_generate_operational_context_proposal",
+                "Advance",
+                false,
+                ["operational-context-proposal:ctx-0001"]));
+        WorkflowCertificationService service = fixture.CreateCertificationService(workflowRepository);
+
+        WorkflowCertificationResult result = await service.GetCurrentCertificationAsync(fixture.Repository.Id);
+
+        Assert.False(result.Certified);
+        WorkflowCertificationFinding gateFinding = Assert.Single(
+            result.Findings,
+            candidate => candidate.Id == "authority-preparation-does-not-satisfy-gates");
+        WorkflowCertificationFinding stageFinding = Assert.Single(
+            result.Findings,
+            candidate => candidate.Id == "authority-preparation-does-not-progress-stage");
+        Assert.False(gateFinding.Passed);
+        Assert.False(stageFinding.Passed);
+        Assert.Contains(gateFinding.Diagnostics, diagnostic => diagnostic.Contains("DecisionResolution", StringComparison.Ordinal));
+        Assert.Contains(stageFinding.Diagnostics, diagnostic => diagnostic.Contains("Advance", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task WorkflowCertificationFailsDuplicatePreparationArtifactsForSameFingerprint()
+    {
+        TestFixture fixture = TestFixture.Create();
+        var workflowRepository = new FileSystemWorkflowRepository(new MemoryArtifactStore());
+        await workflowRepository.SavePreparationEventAsync(
+            fixture.Repository,
+            CreatePreparationEvent(
+                fixture.Repository.Id,
+                DateTimeOffset.Parse("2026-06-23T12:34:00Z"),
+                WorkflowStage.Decision,
+                WorkflowGateType.None,
+                WorkflowPreparationCommand.DiscoverDecisionCandidates,
+                "decisions_discover_candidates",
+                "Created",
+                false,
+                ["decision-candidate:cand-0001"],
+                inputFingerprint: "duplicate-fingerprint"));
+        await workflowRepository.SavePreparationEventAsync(
+            fixture.Repository,
+            CreatePreparationEvent(
+                fixture.Repository.Id,
+                DateTimeOffset.Parse("2026-06-23T12:34:01Z"),
+                WorkflowStage.Decision,
+                WorkflowGateType.None,
+                WorkflowPreparationCommand.DiscoverDecisionCandidates,
+                "decisions_discover_candidates",
+                "Created",
+                false,
+                ["decision-candidate:cand-0002"],
+                inputFingerprint: "duplicate-fingerprint"));
+        WorkflowCertificationService service = fixture.CreateCertificationService(workflowRepository);
+
+        WorkflowCertificationResult result = await service.GetCurrentCertificationAsync(fixture.Repository.Id);
+
+        Assert.False(result.Certified);
+        WorkflowCertificationFinding finding = Assert.Single(
+            result.Findings,
+            candidate => candidate.Id == "recovery-preparation-idempotency");
+        Assert.False(finding.Passed);
+        Assert.Contains(finding.Diagnostics, diagnostic => diagnostic.Contains("duplicate-fingerprint", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task WorkflowCertificationFailsNonReviewablePreparationArtifact()
+    {
+        TestFixture fixture = TestFixture.Create();
+        var workflowRepository = new FileSystemWorkflowRepository(new MemoryArtifactStore());
+        await workflowRepository.SavePreparationEventAsync(
+            fixture.Repository,
+            CreatePreparationEvent(
+                fixture.Repository.Id,
+                DateTimeOffset.Parse("2026-06-23T12:34:02Z"),
+                WorkflowStage.Commit,
+                WorkflowGateType.CommitApproval,
+                WorkflowPreparationCommand.PrepareExecutionCommit,
+                "execution_prepare_commit",
+                "Created",
+                true,
+                ["commit:abc123"]));
+        WorkflowCertificationService service = fixture.CreateCertificationService(workflowRepository);
+
+        WorkflowCertificationResult result = await service.GetCurrentCertificationAsync(fixture.Repository.Id);
+
+        Assert.False(result.Certified);
+        WorkflowCertificationFinding finding = Assert.Single(
+            result.Findings,
+            candidate => candidate.Id == "preparation-artifacts-are-reviewable");
+        Assert.False(finding.Passed);
+        Assert.Contains(finding.Diagnostics, diagnostic => diagnostic.Contains("commit:abc123", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task WorkflowCertificationReportsContinuationGateAndTriggerCoverage()
     {
         TestFixture fixture = TestFixture.Create();
@@ -3637,6 +3784,37 @@ public sealed class WorkflowProjectionServiceTests
             true,
             gate is WorkflowGateType.WorkSelection,
             $"Human action required for {gate}.",
+            []);
+
+    private static WorkflowPreparationEvent CreatePreparationEvent(
+        Guid repositoryId,
+        DateTimeOffset occurredAt,
+        WorkflowStage stage,
+        WorkflowGateType gate,
+        WorkflowPreparationCommand command,
+        string commandName,
+        string decision,
+        bool isWaitingForHuman,
+        IReadOnlyList<string> createdArtifactIds,
+        IReadOnlyList<string>? duplicateEvidence = null,
+        string? inputFingerprint = null) =>
+        new(
+            repositoryId,
+            WorkflowArtifactPaths.PreparationEventId(occurredAt),
+            occurredAt,
+            "test",
+            stage,
+            gate is WorkflowGateType.None ? WorkflowProgressState.Ready : WorkflowProgressState.AwaitingGate,
+            gate,
+            command,
+            commandName,
+            decision,
+            $"Test preparation event for {commandName}.",
+            new WorkflowPreparationFingerprint(inputFingerprint ?? $"{commandName}-{occurredAt:O}"),
+            isWaitingForHuman,
+            duplicateEvidence?.Count > 0,
+            createdArtifactIds,
+            duplicateEvidence ?? [],
             []);
 
     private sealed class TestFixture

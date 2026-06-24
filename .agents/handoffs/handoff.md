@@ -2,38 +2,38 @@
 
 ## New State
 
-- Continued Milestone 10 continuation certification.
-- `WorkflowCertificationService` now records explicit continuation halt coverage for all authority gates:
-  - `WorkSelection`
-  - `ExecutionAcceptance`
-  - `DecisionResolution`
-  - `OperationalContextReview`
-  - `OperationalContextPromotion`
-  - `CommitApproval`
-  - `PushApproval`
-- Continuation certification evidence now records trigger coverage, including endpoint and hosted continuation events.
-- Continuation certification now fails if any continuation event advances while a non-`None` blocking gate is present, including forged `Advance` events.
-- Added tests proving:
-  - all authority gates can be represented as stopped continuation evidence.
-  - endpoint and hosted triggers appear in certification evidence.
-  - certification fails when continuation advances across an open gate.
-- Updated `m10-certification.md` to mark continuation certification, open-gate crossing failure detection, and missed gate-halting detection complete.
+- Continued Milestone 10 preparation certification.
+- `WorkflowCertificationService` now adds dedicated preparation findings for:
+  - allowed existing domain preparation commands only.
+  - preparation not satisfying authority gates.
+  - preparation not moving workflow stage.
+  - created artifacts being reviewable only.
+  - duplicate preparation creation for the same input fingerprint.
+  - duplicate domain evidence being reported without new artifact creation.
+- Preparation idempotency certification now fails when the same input fingerprint, stage, and command create artifacts more than once, even if the artifact IDs differ.
+- Added certification tests for forged bad preparation history:
+  - unknown or workflow-owned preparation command.
+  - preparation satisfying a decision gate.
+  - preparation advancing workflow stage.
+  - duplicate artifact creation for the same preparation fingerprint.
+  - non-reviewable artifact creation.
+- Updated `m10-certification.md` to mark preparation certification and related failure conditions complete.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "FullyQualifiedName~WorkflowProjectionServiceTests"` passed: 110 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "FullyQualifiedName~WorkflowProjectionServiceTests"` passed: 114 tests.
 - `dotnet build CommandCenter.slnx` passed with 0 warnings and 0 errors.
 
 ## Relevant Decisions
 
-- Certification remains evidence-based and tolerant of absent derived history, but any persisted continuation event that crosses an authority gate is a certification failure.
-- Gate coverage and trigger coverage are reported as certification evidence/diagnostics rather than becoming hidden workflow authority.
-- Hosted continuation remains disabled by configuration by default; this slice certified hosted evidence shape without changing hosted runner behavior.
+- Preparation certification remains evidence-based: absent derived preparation history is not a failure, but persisted evidence showing gate satisfaction, stage movement, parallel commands, or duplicate created artifacts is a hard certification failure.
+- The certification layer did not add new preparation behavior; it detects invalid or forged preparation evidence.
+- Existing allowed reviewable preparation remains recognized for decision proposals and commit preparation, provided the authority gate remains waiting for human action.
 
 ## Next Slice
 
-- Continue Milestone 10 by moving from continuation certification into preparation certification:
-  - certify duplicate reviewable artifact detection.
-  - certify forbidden/parallel preparation commands fail certification.
-  - certify preparation cannot satisfy gates or move workflow stage.
-  - cover restart/idempotency evidence for preparation history.
+- Continue Milestone 10 with workflow history and diagnostics certification:
+  - certify authority history can be reconstructed.
+  - certify blocked, recovered, and progressed states include diagnostics.
+  - certify workflow state reconstruction failure produces explicit findings.
+  - begin the end-to-end fixture only after history and diagnostics findings are stable.
