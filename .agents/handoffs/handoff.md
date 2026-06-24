@@ -2,50 +2,49 @@
 
 ## New State
 
-- Completed Milestone 8 git workflow integration.
-- Added read-only git workflow boundary:
-  `IWorkflowGitService` and `WorkflowGitService`.
-- Added git workflow models:
-  `WorkflowGitStatus`, `WorkflowGitProjection`, `WorkflowGitDiagnostics`,
-  and `WorkflowCompletionEvaluation`.
-- Extended `WorkflowInstance` with current git projection, commit status,
-  push status, pending-change flags, completion evaluation, and git
-  diagnostics.
+- Started Milestone 9 with the authorized evaluation-only continuation slice.
+- Added read-only continuation boundary:
+  `IWorkflowContinuationService` and `WorkflowContinuationService`.
+- Added continuation models:
+  `WorkflowContinuationEvaluation`, `WorkflowContinuationDiagnostics`, and
+  `WorkflowContinuationFingerprint`.
+- Registered continuation service in workflow DI.
 - Added derived endpoint:
-  `GET /api/repositories/{repositoryId}/workflow/git`.
-- Updated workflow projection to consume git workflow evidence instead of
-  reading `IGitService` directly.
-- Commit and push gates now come from the git workflow projection, which is
-  itself derived from Execution/Git-owned evidence.
-- Added no-change completion as a first-class workflow completion outcome:
-  accepted execution, context commit eligibility, clean git status, and no
-  commit/push evidence.
-- Added git timeline events for commit preparation readiness, commit execution,
-  push readiness, and push execution.
-- Marked `.agents/milestones/m8-git.md` complete.
+  `GET /api/repositories/{repositoryId}/workflow/continuation/evaluation`.
+- Continuation evaluation consumes only aggregate workflow projection evidence:
+  current projection, state-machine diagnostics, gate catalog evidence, and
+  completion evaluation.
+- Continuation evaluation reports current stage, optional mechanical target
+  stage, open gate, required human action, stop reason, deterministic
+  fingerprint, completion state, and diagnostics.
+- Open authority gates halt continuation evaluation as waiting for human action.
+- Completed workflows remain blocked by the work-selection gate; continuation
+  does not auto-select work.
+- Updated `.agents/milestones/m9-continuation.md` with slice progress.
 - Rotated previous `.agents/handoffs/handoff.md` to
-  `.agents/handoffs/handoff.0008.md`.
+  `.agents/handoffs/handoff.0009.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter WorkflowProjectionServiceTests` passed: 42 tests.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 554 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter WorkflowProjectionServiceTests` passed: 46 tests.
 - `dotnet build CommandCenter.slnx` passed with 0 warnings and 0 errors.
+- First full backend test run failed in an unrelated decision endpoint test due
+  to a temporary `execution-sessions.json` file lock while build was running in
+  parallel.
+- Rerun passed:
+  `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj`
+  passed 558 tests.
 
 ## Notes
 
-- Workflow still never prepares commits, commits, or pushes. Existing Execution
-  and Git services remain the only authority for those actions.
-- `WorkflowGitStatus.PushSkipped` and the push-skipped completion path are
-  modeled, but current Execution/Git evidence has no explicit push-skip
-  artifact. Workflow therefore does not infer push skipped from missing push
-  evidence.
-- Completion ordering now preserves lifecycle authority: execution/handoff,
-  decisions, and operational context must be eligible before git completion can
-  close the workflow.
+- This slice does not persist continuation events.
+- This slice does not add hosted continuation.
+- This slice does not add preparation service or invoke domain commands.
+- Continuation evaluation is intentionally advisory/read-only; it does not
+  mutate workflow or domain state.
 
 ## Next Slice
 
-- Start Milestone 9 workflow continuation engine. Focus first on an evaluation
-  service that can report the next mechanical progression and stop reasons
-  without running background continuation or preparation.
+- Continue M9 by adding continuation event models and repository persistence for
+  endpoint-triggered continuation history, still without hosted continuation or
+  preparation.

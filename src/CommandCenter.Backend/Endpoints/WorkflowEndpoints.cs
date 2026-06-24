@@ -21,6 +21,7 @@ public static class WorkflowEndpoints
         app.MapGetWorkflowDecisions();
         app.MapGetWorkflowOperationalContext();
         app.MapGetWorkflowGit();
+        app.MapGetWorkflowContinuationEvaluation();
         return app;
     }
 
@@ -301,6 +302,25 @@ public static class WorkflowEndpoints
                 WorkflowDecisionProjection decision = await workflowDecisionService.ProjectDecisionAsync(repositoryId);
                 WorkflowOperationalContextProjection operationalContext = await workflowOperationalContextService.ProjectOperationalContextAsync(repositoryId, decision, execution);
                 return Results.Ok(await workflowGitService.ProjectGitAsync(repositoryId, execution, operationalContext));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGetWorkflowContinuationEvaluation(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/workflow/continuation/evaluation", async (
+            Guid repositoryId,
+            IWorkflowContinuationService workflowContinuationService) =>
+        {
+            try
+            {
+                return Results.Ok(await workflowContinuationService.EvaluateContinuationAsync(repositoryId));
             }
             catch (KeyNotFoundException exception)
             {

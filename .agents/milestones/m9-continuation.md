@@ -4,14 +4,14 @@ Objective: automate mechanical progression between non-authority stages, introdu
 
 Deliver:
 
-- [ ] `IWorkflowContinuationService`.
+- [x] `IWorkflowContinuationService`.
 - [ ] `IWorkflowPreparationService`.
-- [ ] `WorkflowContinuationEvaluation`.
+- [x] `WorkflowContinuationEvaluation`.
 - [ ] `WorkflowPreparationEvaluation`.
 - [ ] continuation rules for execution complete, handoff accepted, decision resolved, context promoted/rejected/not required, commit executed, push executed, no changes, and completed workflow.
 - [ ] preparation rules for decision discovery/generation, operational-context proposal generation/linkage, and commit preparation.
 - [ ] gate halting for work selection, execution acceptance, decision resolution, operational context review, operational context promotion, commit approval, and push approval.
-- [ ] `WorkflowContinuationDiagnostics`.
+- [x] `WorkflowContinuationDiagnostics`.
 - [ ] `WorkflowPreparationDiagnostics`.
 - [ ] `WorkflowContinuationEvent`.
 - [ ] `WorkflowPreparationEvent`.
@@ -19,6 +19,15 @@ Deliver:
 - [ ] `WorkflowContinuationHostedService`.
 - [ ] `WorkflowInfluenceTrace`.
 - [ ] `WorkflowHealthAssessment`.
+
+Slice progress:
+
+- Added evaluation-only continuation service and fingerprinting.
+- Added `GET /api/repositories/{repositoryId}/workflow/continuation/evaluation`.
+- Continuation evaluation consumes only the aggregate workflow projection and its state-machine, gate, and completion evidence.
+- Continuation evaluation reports current stage, optional mechanical target stage, open gate, required human action, stop reason, deterministic fingerprint, and diagnostics.
+- Open authority gates halt evaluation with `WaitingForHuman`; no domain commands are invoked.
+- Persistence, hosted continuation, preparation, continuation events, recovery integration, influence tracing, and health assessment remain deferred.
 
 Progression rules:
 
@@ -40,10 +49,10 @@ Preparation rules:
 
 Gate halting:
 
-- [ ] Any open authority gate produces `WaitingForHuman` and stops continuation.
+- [x] Any open authority gate produces `WaitingForHuman` and stops continuation.
 - [ ] Work selection gate must never be auto-satisfied.
-- [ ] Commit and push gates must never be crossed by continuation.
-- [ ] Decision resolution and context promotion must never be crossed by continuation.
+- [x] Commit and push gates must never be crossed by continuation.
+- [x] Decision resolution and context promotion must never be crossed by continuation.
 - [ ] Preparation may not run when it would create artifacts on the far side of an unsatisfied gate.
 
 Idempotency rules:
@@ -64,16 +73,16 @@ Tests:
 - [ ] open gates block preparation when the requested artifact would bypass authority.
 - [ ] restart does not duplicate progression.
 - [ ] restart does not duplicate preparation.
-- [ ] identical workflow state produces identical continuation outcome.
+- [x] identical workflow state produces identical continuation outcome.
 - [ ] identical preparation inputs produce identical preparation outcome.
-- [ ] continuation never selects work, resolves decisions, promotes context, commits, pushes, or accepts handoffs.
+- [x] continuation never selects work, resolves decisions, promotes context, commits, pushes, or accepts handoffs.
 - [ ] preparation never creates parallel commands, satisfies gates, moves workflow stage, or performs authority actions.
-- [ ] every continuation decision explains why it advanced or stopped.
+- [x] every continuation decision explains why it advanced or stopped.
 - [ ] every preparation decision explains why it created, skipped, or refused an artifact.
 
 Exit criteria:
 
-- [ ] continuation service exists.
+- [x] continuation service exists.
 - [ ] preparation service exists.
 - [ ] continuation rules exist.
 - [ ] preparation rules exist.

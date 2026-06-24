@@ -742,6 +742,85 @@ public sealed class WorkflowProjectionServiceTests
     }
 
     [Fact]
+    public async Task ContinuationEvaluationStopsAtOpenAuthorityGate()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingPush;
+        fixture.Session = AwaitingPushCommittedSession();
+
+        WorkflowContinuationEvaluation evaluation =
+            await fixture.CreateContinuationService().EvaluateContinuationAsync(fixture.Repository.Id);
+
+        Assert.False(evaluation.CanAdvanceMechanically);
+        Assert.True(evaluation.IsWaitingForHuman);
+        Assert.Equal(WorkflowStage.Push, evaluation.FromStage);
+        Assert.Null(evaluation.ToStage);
+        Assert.Equal(WorkflowGateType.PushApproval, evaluation.BlockingGate);
+        Assert.Contains("PushApproval", evaluation.StopReason, StringComparison.Ordinal);
+        Assert.Contains(evaluation.Diagnostics.Reasoning, reason => reason.Contains("Open authority gates stop continuation", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ContinuationEvaluationIsDeterministicForIdenticalWorkflowState()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingCommit;
+        fixture.Session = CompletedAcceptedSession(RepositoryExecutionState.AwaitingCommit);
+
+        WorkflowContinuationEvaluation first =
+            await fixture.CreateContinuationService().EvaluateContinuationAsync(fixture.Repository.Id);
+        WorkflowContinuationEvaluation second =
+            await fixture.CreateContinuationService().EvaluateContinuationAsync(fixture.Repository.Id);
+
+        Assert.Equal(first.Fingerprint, second.Fingerprint);
+        Assert.Equal(first.CanAdvanceMechanically, second.CanAdvanceMechanically);
+        Assert.Equal(first.FromStage, second.FromStage);
+        Assert.Equal(first.ToStage, second.ToStage);
+        Assert.Equal(first.StopReason, second.StopReason);
+    }
+
+    [Fact]
+    public async Task ContinuationEvaluationDoesNotAutoSelectWorkAfterCompletion()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+
+        WorkflowContinuationEvaluation evaluation =
+            await fixture.CreateContinuationService().EvaluateContinuationAsync(fixture.Repository.Id);
+
+        Assert.True(evaluation.IsComplete);
+        Assert.False(evaluation.CanAdvanceMechanically);
+        Assert.True(evaluation.IsWaitingForHuman);
+        Assert.Equal(WorkflowStage.Completed, evaluation.FromStage);
+        Assert.Equal(WorkflowGateType.WorkSelection, evaluation.BlockingGate);
+        Assert.Contains("WorkSelection", evaluation.StopReason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task WorkflowContinuationEvaluationEndpointReturnsEvaluation()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingPush;
+        fixture.Session = AwaitingPushCommittedSession();
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services => fixture.ReplaceServices(services));
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+
+        using var client = new HttpClient();
+        HttpResponseMessage response = await client.GetAsync(app.Urls.Single() + $"/api/repositories/{fixture.Repository.Id}/workflow/continuation/evaluation");
+        WorkflowContinuationEvaluation? evaluation = await response.Content.ReadFromJsonAsync<WorkflowContinuationEvaluation>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(evaluation);
+        Assert.Equal(WorkflowStage.Push, evaluation.FromStage);
+        Assert.False(evaluation.CanAdvanceMechanically);
+        Assert.Equal(WorkflowGateType.PushApproval, evaluation.BlockingGate);
+    }
+
+    [Fact]
     public async Task GateCatalogMapsEveryAuthorityGateToExistingCommandName()
     {
         TestFixture fixture = TestFixture.Create();
@@ -1487,6 +1566,9 @@ public sealed class WorkflowProjectionServiceTests
         public WorkflowGitService CreateGitWorkflowService() =>
             new(new RepositoryServiceStub(Repository), new ExecutionSessionServiceStub(this), new GitServiceStub(this));
 
+        public WorkflowContinuationService CreateContinuationService() =>
+            new(CreateService());
+
         public WorkflowRecoveryService CreateRecoveryService(IWorkflowRepository workflowRepository) =>
             new(new RepositoryServiceStub(Repository), CreateService(), workflowRepository);
 
@@ -1506,6 +1588,7 @@ public sealed class WorkflowProjectionServiceTests
             services.RemoveAll<IWorkflowGitService>();
             services.RemoveAll<IWorkflowProjectionService>();
             services.RemoveAll<IWorkflowGateCatalogService>();
+            services.RemoveAll<IWorkflowContinuationService>();
             services.RemoveAll<IWorkflowRepository>();
             services.RemoveAll<IWorkflowRecoveryService>();
             services.RemoveAll<IHostedService>();
@@ -1525,6 +1608,7 @@ public sealed class WorkflowProjectionServiceTests
             services.AddSingleton<IWorkflowStateMachineService, WorkflowStateMachineService>();
             services.AddSingleton<IWorkflowProjectionService, WorkflowProjectionService>();
             services.AddSingleton<IWorkflowGateCatalogService, WorkflowGateCatalogService>();
+            services.AddSingleton<IWorkflowContinuationService, WorkflowContinuationService>();
             services.AddSingleton<IWorkflowRecoveryService, WorkflowRecoveryService>();
         }
     }
