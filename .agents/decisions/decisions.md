@@ -2,35 +2,29 @@
 
 ## Newly Authorized
 
-- Accept the Milestone 3 proposal generation slice as architecturally consistent with the roadmap.
-- Treat proposal generation UX as the last major architectural gap in proposal generation.
-- Preserve proposal generation as backend-driven end to end:
-  - backend-owned generation eligibility
-  - authoritative generation command response
-  - React rendering of returned backend facts
-  - centralized decision projection refresh
-- Continue exposing `generate_decision_proposal` through lifecycle eligibility rather than allowing React to infer generation availability.
-- Continue rendering proposal generation result details from the returned `DecisionProposal` instead of proposal-browser summaries.
-- Keep `refreshDecisions()` as the central post-mutation refresh boundary for decision context, candidates, proposals, and lifecycle eligibility.
-- Proceed next with candidate duplicate-status rendering before proposal review transparency.
-- Candidate duplicate rendering should use backend facts rather than deriving duplicate status in React.
-- After duplicate rendering, prioritize proposal review transparency:
-  - last transition
+- Accept the candidate duplicate-status rendering slice as architecturally consistent with Milestone 3.
+- Treat candidate duplicate rendering as complete when it presents backend-authored lifecycle facts instead of reconstructing duplicate relationships in React.
+- Preserve duplicate status ownership in the decision domain through candidate history and source references.
+- Render duplicate target identity from the serialized lifecycle record rather than frontend candidate-list matching or heuristics.
+- Render duplicate transition reason directly from backend-authored candidate history.
+- Continue the projection-first explanation pattern across decision, workflow, governance, execution, reasoning, and continuity surfaces.
+- Keep proposal review transparency together in one focused slice.
+- Make one proposal review panel the obvious source of truth for:
   - current review state
+  - last transition
   - allowed transitions
   - blocked transitions
   - unavailable reasons
-- Perform a proposal review-state placement audit to ensure there is one obvious place for current state, next actions, and unavailable-action reasons.
-- Avoid independently rendering review state in multiple competing panels.
-- Treat remaining Milestone 3 work as final polishing around established architecture:
-  - duplicate candidate rendering
+- Avoid scattering proposal review semantics across multiple components.
+- After proposal review transparency, perform the MVP disposition audit for:
+  - review notes
+  - revision list
+  - revision comparison
+  - context snapshot listing
+- Record explicit Core MVP, Deferred, Internal, or Remove dispositions for lower-priority lifecycle features instead of leaving them unresolved.
+- Treat remaining Milestone 3 work as:
   - proposal review transparency
+  - MVP feature disposition audit
   - end-to-end lifecycle characterization
   - milestone exit audit
-- Maintain the established authority pattern into later transparency milestones:
-  - authoritative domain service
-  - authoritative projection
-  - transport
-  - typed client
-  - hooks
-  - presentation
+- After accepted work is complete, rotate decisions, stage, commit, push, and stop executing.

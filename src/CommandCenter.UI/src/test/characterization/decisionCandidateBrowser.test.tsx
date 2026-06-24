@@ -43,6 +43,23 @@ describe('DecisionCandidateBrowser', () => {
     expect(screen.queryByText('Dismiss candidate')).not.toBeInTheDocument()
   })
 
+  it('renders duplicate status from candidate transition history', () => {
+    render(<DecisionCandidateBrowser candidates={createCandidates()} isLoading={false} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate' }))
+
+    const rows = screen.getByRole('list', { name: 'Candidate browser rows' })
+    expect(within(rows).getByText('Duplicates CAND-0001')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Duplicate proposal browser work/ }))
+
+    const selectedPanel = screen.getByLabelText('Selected candidate')
+    expect(within(selectedPanel).getByLabelText('Candidate duplicate status')).toHaveTextContent('Duplicates CAND-0001')
+    expect(within(selectedPanel).getByLabelText('Candidate duplicate status')).toHaveTextContent(
+      'Candidate duplicates CAND-0001.',
+    )
+  })
+
   it('keeps selected candidate as local presentation state', () => {
     const onSelectedCandidateChange = vi.fn()
 
@@ -165,7 +182,30 @@ function createCandidate(
     evidence: [],
     sources: [],
     diagnostics: [],
-    history: [],
+    history: state === 'Duplicate'
+      ? [
+          {
+            at: '2026-06-24T00:00:00Z',
+            actor: 'MarkedDuplicate',
+            action: 'MarkedDuplicate',
+            fromState: 'Discovered',
+            toState: 'Duplicate',
+            reason: 'Candidate duplicates CAND-0001.',
+            sources: [
+              {
+                sourceKind: 'DecisionCandidate',
+                relativePath: '.agents/decisions/candidates/CAND-0001/candidate.json',
+                section: null,
+                itemId: null,
+                decisionId: null,
+                proposalId: null,
+                candidateId: 'CAND-0001',
+                excerpt: null,
+              },
+            ],
+          },
+        ]
+      : [],
   }
 }
 

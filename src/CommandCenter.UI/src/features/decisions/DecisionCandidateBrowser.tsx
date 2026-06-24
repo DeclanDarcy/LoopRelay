@@ -68,6 +68,7 @@ export function DecisionCandidateBrowser({
     filteredCandidates.find((candidate) => candidate.id === selectedCandidateId) ??
     filteredCandidates[0] ??
     null
+  const selectedDuplicateStatus = selectedCandidate ? getDuplicateStatus(selectedCandidate) : null
   const selectedEligibility =
     eligibility?.find((candidateEligibility) => candidateEligibility.entityId === selectedCandidate?.id) ?? null
   const duplicateTargets = candidates.filter((candidate) => candidate.id !== selectedCandidate?.id)
@@ -144,6 +145,7 @@ export function DecisionCandidateBrowser({
           <div className="decision-row-list" role="list" aria-label="Candidate browser rows">
             {filteredCandidates.map((candidate) => {
               const isSelected = candidate.id === selectedCandidate?.id
+              const duplicateStatus = getDuplicateStatus(candidate)
               return (
                 <button
                   type="button"
@@ -156,6 +158,7 @@ export function DecisionCandidateBrowser({
                   <span>
                     {candidate.id} | {candidateStateLabels[candidate.state]} | {candidate.priority}
                   </span>
+                  {duplicateStatus ? <span>Duplicates {duplicateStatus.duplicateOfCandidateId}</span> : null}
                   <p>{candidate.summary}</p>
                 </button>
               )
@@ -164,6 +167,12 @@ export function DecisionCandidateBrowser({
 
           {selectedCandidate ? (
             <aside className="decision-selection-panel" aria-label="Selected candidate">
+              {selectedDuplicateStatus ? (
+                <div className="decision-lifecycle-notice" aria-label="Candidate duplicate status">
+                  <strong>Duplicates {selectedDuplicateStatus.duplicateOfCandidateId}</strong>
+                  <span>{selectedDuplicateStatus.reason}</span>
+                </div>
+              ) : null}
               <div>
                 <span>Selected candidate</span>
                 <strong>{selectedCandidate.id}</strong>
@@ -276,6 +285,24 @@ export function DecisionCandidateBrowser({
       )}
     </section>
   )
+}
+
+function getDuplicateStatus(candidate: DecisionCandidate) {
+  if (candidate.state !== 'Duplicate') {
+    return null
+  }
+
+  const duplicateHistory = [...candidate.history]
+    .reverse()
+    .find((entry) => entry.toState === 'Duplicate' || entry.action === 'MarkedDuplicate')
+  const duplicateSource = duplicateHistory?.sources.find((source) => source.candidateId)
+
+  return duplicateSource?.candidateId
+    ? {
+        duplicateOfCandidateId: duplicateSource.candidateId,
+        reason: duplicateHistory?.reason ?? `Candidate duplicates ${duplicateSource.candidateId}.`,
+      }
+    : null
 }
 
 function getAction(

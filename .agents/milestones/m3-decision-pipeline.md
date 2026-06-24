@@ -54,7 +54,7 @@ Discovery -> Candidate -> Proposal -> Review -> Refinement -> Resolution -> Supe
    - [x] state
    - [x] signals
    - [x] evidence
-   - [ ] duplicate status
+   - [x] duplicate status
    - [x] allowed actions
    - [x] unavailable action reasons
 - [ ] Add candidate actions:
