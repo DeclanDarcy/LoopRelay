@@ -43,4 +43,7 @@ public sealed record WorkflowInstance(
     IReadOnlyList<WorkflowGate> SatisfiedGates,
     IReadOnlyList<WorkflowGate> GateHistory,
     WorkflowGateDiagnostics GateDiagnostics,
-    WorkflowProjectionDiagnostics Diagnostics);
+    WorkflowProjectionDiagnostics Diagnostics)
+{
+    public WorkflowDecisionSessionProjection? DecisionSession { get; init; }
+}

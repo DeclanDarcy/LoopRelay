@@ -12,7 +12,8 @@ public sealed class WorkflowCertificationService(
     IRepositoryService repositoryService,
     IWorkflowProjectionService projectionService,
     IWorkflowRepository workflowRepository,
-    IWorkflowHealthService healthService) : IWorkflowCertificationService
+    IWorkflowHealthService healthService,
+    IWorkflowDecisionSessionService workflowDecisionSessionService) : IWorkflowCertificationService
 {
     private static readonly string[] ForbiddenAuthorityCommands =
     [
@@ -130,6 +131,7 @@ public sealed class WorkflowCertificationService(
         findings.Add(CertifyContinuationHistoryIsIdempotent(continuationHistory));
         findings.Add(CertifyPreparationHistoryIsIdempotent(preparationHistory));
         findings.Add(CertifyPreparationDuplicateDomainEvidence(preparationHistory));
+        findings.Add(await CertifyDecisionSessionConsumptionAsync(repository.Id));
 
         string inputFingerprint = WorkflowFingerprint.FromNormalizedEvidence(string.Join(
             '\n',
@@ -168,7 +170,8 @@ public sealed class WorkflowCertificationService(
                 $"Workflow certification observed {continuationHistory.Count} continuation events.",
                 $"Workflow certification observed {preparationHistory.Count} preparation events.",
                 $"Workflow certification observed {historyLoadErrors.Count} derived history load errors.",
-                $"Workflow health was {health.OverallStatus}."
+                $"Workflow health was {health.OverallStatus}.",
+                $"Decision-session governance health was {health.GovernanceHealth?.Status ?? "Unknown"}."
             ]);
     }
 
@@ -199,6 +202,33 @@ public sealed class WorkflowCertificationService(
             "The certification service depends on workflow projection, workflow history, workflow health, and repository lookup; it does not receive execution, decision, continuity, or git mutator services.",
             evidence,
             []);
+    }
+
+    private async Task<WorkflowCertificationFinding> CertifyDecisionSessionConsumptionAsync(Guid repositoryId)
+    {
+        WorkflowDecisionSessionProjection projection = await workflowDecisionSessionService.ProjectAsync(repositoryId);
+        IReadOnlyList<string> diagnostics = projection.Diagnostics.Errors
+            .Concat(projection.Readiness.BlockingSignals)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        return new WorkflowCertificationFinding(
+            "decision-session-workflow-consumption-read-only",
+            "Authority",
+            diagnostics.Count == 0,
+            diagnostics.Count == 0
+                ? "Workflow consumes decision-session lifecycle state through the observability service."
+                : "Decision-session workflow consumption reports blocking diagnostics.",
+            "Workflow may summarize lifecycle state, health, influence, transfer lineage, and readiness, but it must not create, activate, retire, transfer, override policy, or evaluate eligibility as authority.",
+            projection.Diagnostics.Evidence
+                .Concat([
+                    $"lifecycle-decision:{projection.CurrentLifecycleDecision ?? "none"}",
+                    $"transfer-eligibility:{projection.TransferEligibilityStatus ?? "none"}",
+                    $"transfer-lineage:{projection.TransferLineage.Count}",
+                    $"artifact-lineage:{projection.ContinuityArtifactLineage.Count}"
+                ])
+                .ToArray(),
+            diagnostics);
     }
 
     private static WorkflowCertificationFinding CertifyNoForbiddenPreparationCommands(

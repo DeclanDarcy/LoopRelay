@@ -3890,7 +3890,8 @@ public sealed class WorkflowProjectionServiceTests
             new RepositoryServiceStub(fixture.Repository),
             new ProjectionServiceStub(unreconstructable),
             workflowRepository,
-            new HealthServiceStub(fixture.Repository.Id, unreconstructable));
+            new HealthServiceStub(fixture.Repository.Id, unreconstructable),
+            new WorkflowDecisionSessionServiceStub(fixture.Repository.Id));
 
         WorkflowCertificationResult result = await service.GetCurrentCertificationAsync(fixture.Repository.Id);
 
@@ -4322,6 +4323,7 @@ public sealed class WorkflowProjectionServiceTests
                 new RepositoryServiceStub(Repository),
                 new ExecutionSessionServiceStub(this),
                 new GitServiceStub(this)),
+            new WorkflowDecisionSessionServiceStub(Repository.Id),
             new WorkflowStateMachineService());
 
         public WorkflowExecutionService CreateExecutionService() =>
@@ -4356,14 +4358,15 @@ public sealed class WorkflowProjectionServiceTests
             new(new RepositoryServiceStub(Repository), CreateService(), workflowRepository);
 
         public WorkflowHealthService CreateHealthService(IWorkflowRepository workflowRepository) =>
-            new(new RepositoryServiceStub(Repository), CreateService(), workflowRepository);
+            new(new RepositoryServiceStub(Repository), CreateService(), workflowRepository, new WorkflowDecisionSessionServiceStub(Repository.Id));
 
         public WorkflowCertificationService CreateCertificationService(IWorkflowRepository workflowRepository) =>
             new(
                 new RepositoryServiceStub(Repository),
                 CreateService(),
                 workflowRepository,
-                CreateHealthService(workflowRepository));
+                CreateHealthService(workflowRepository),
+                new WorkflowDecisionSessionServiceStub(Repository.Id));
 
         public WorkflowReportService CreateReportService(IWorkflowRepository workflowRepository) =>
             new(
@@ -4371,7 +4374,8 @@ public sealed class WorkflowProjectionServiceTests
                 CreateService(),
                 workflowRepository,
                 CreateHealthService(workflowRepository),
-                CreateCertificationService(workflowRepository));
+                CreateCertificationService(workflowRepository),
+                new WorkflowDecisionSessionServiceStub(Repository.Id));
 
         public void ReplaceServices(IServiceCollection services)
         {
@@ -4387,6 +4391,7 @@ public sealed class WorkflowProjectionServiceTests
             services.RemoveAll<IWorkflowDecisionService>();
             services.RemoveAll<IWorkflowOperationalContextService>();
             services.RemoveAll<IWorkflowGitService>();
+            services.RemoveAll<IWorkflowDecisionSessionService>();
             services.RemoveAll<IWorkflowProjectionService>();
             services.RemoveAll<IWorkflowGateCatalogService>();
             services.RemoveAll<IWorkflowContinuationService>();
@@ -4410,6 +4415,7 @@ public sealed class WorkflowProjectionServiceTests
             services.AddSingleton<IWorkflowDecisionService, WorkflowDecisionService>();
             services.AddSingleton<IWorkflowOperationalContextService, WorkflowOperationalContextService>();
             services.AddSingleton<IWorkflowGitService, WorkflowGitService>();
+            services.AddSingleton<IWorkflowDecisionSessionService>(new WorkflowDecisionSessionServiceStub(Repository.Id));
             services.AddSingleton<IWorkflowStateMachineService, WorkflowStateMachineService>();
             services.AddSingleton<IWorkflowProjectionService, WorkflowProjectionService>();
             services.AddSingleton<IWorkflowGateCatalogService, WorkflowGateCatalogService>();
@@ -4429,6 +4435,96 @@ public sealed class WorkflowProjectionServiceTests
         public Task<Repository> RegisterAsync(string repositoryPath) => throw new NotSupportedException("Mutating repository methods are not used by workflow projection.");
 
         public Task RemoveAsync(Guid repositoryId) => throw new NotSupportedException("Mutating repository methods are not used by workflow projection.");
+    }
+
+    private sealed class WorkflowDecisionSessionServiceStub(Guid repositoryId) : IWorkflowDecisionSessionService
+    {
+        private readonly WorkflowGovernanceSummary summary = new(
+            repositoryId,
+            "decision-session-test",
+            "Active",
+            "Continue",
+            "NotApplicable",
+            1200,
+            TimeSpan.FromHours(1),
+            0.1m,
+            0.8m,
+            0.2m,
+            "Healthy",
+            ["Lifecycle decision is Continue."],
+            DateTimeOffset.Parse("2026-06-23T10:00:00Z"));
+
+        private readonly WorkflowGovernanceHealthProjection health = new(
+            "Decision sessions",
+            "Healthy",
+            [],
+            ["decision-session:decision-session-test:Active"]);
+
+        private readonly WorkflowGovernanceInfluenceProjection influence = new(
+            repositoryId,
+            "decision-session-test",
+            "Continue",
+            "NotApplicable",
+            [
+                new WorkflowGovernanceInfluenceSignal(
+                    "Policy",
+                    "Lifecycle decision",
+                    0.8m,
+                    "Continue",
+                    "Workflow test decision-session signal.",
+                    [])
+            ],
+            [],
+            DateTimeOffset.Parse("2026-06-23T10:00:00Z"));
+
+        private readonly DecisionSessionWorkflowDiagnostics diagnostics = new(
+            repositoryId,
+            true,
+            ["decision-session:decision-session-test:Active"],
+            [],
+            [],
+            DateTimeOffset.Parse("2026-06-23T10:00:00Z"));
+
+        public Task<WorkflowDecisionSessionProjection> ProjectAsync(Guid requestedRepositoryId) =>
+            Task.FromResult(new WorkflowDecisionSessionProjection(
+                requestedRepositoryId,
+                "decision-session-test",
+                "Active",
+                1200,
+                TimeSpan.FromHours(1),
+                0.1m,
+                0.8m,
+                0.2m,
+                0.8m,
+                0.2m,
+                "Continue",
+                "NotApplicable",
+                null,
+                null,
+                [],
+                [],
+                [health],
+                summary,
+                new WorkflowGovernanceReadiness(
+                    true,
+                    true,
+                    true,
+                    true,
+                    false,
+                    false,
+                    false,
+                    [],
+                    []),
+                diagnostics,
+                DateTimeOffset.Parse("2026-06-23T10:00:00Z")));
+
+        public Task<WorkflowGovernanceSummary> GetSummaryAsync(Guid requestedRepositoryId) => Task.FromResult(summary);
+
+        public Task<WorkflowGovernanceHealthProjection> GetHealthAsync(Guid requestedRepositoryId) => Task.FromResult(health);
+
+        public Task<WorkflowGovernanceInfluenceProjection> GetInfluenceAsync(Guid requestedRepositoryId) => Task.FromResult(influence);
+
+        public Task<DecisionSessionWorkflowDiagnostics> GetDiagnosticsAsync(Guid requestedRepositoryId) => Task.FromResult(diagnostics);
     }
 
     private sealed class HostedContinuationServiceStub(Guid? failingRepositoryId = null) : IWorkflowContinuationService

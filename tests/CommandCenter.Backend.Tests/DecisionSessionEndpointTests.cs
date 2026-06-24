@@ -4,6 +4,7 @@ using CommandCenter.Backend;
 using CommandCenter.Core.Artifacts;
 using CommandCenter.Core.Repositories;
 using CommandCenter.DecisionSessions.Models;
+using CommandCenter.Workflow.Models;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -97,6 +98,18 @@ public sealed class DecisionSessionEndpointTests
         DecisionSessionRecoveryDiagnostics? recoveryDiagnostics = await client.GetFromJsonAsync<DecisionSessionRecoveryDiagnostics>(
             $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/recovery/diagnostics",
             DecisionSessionTestHarness.CreateJsonOptions());
+        WorkflowDecisionSessionProjection? workflowProjection = await client.GetFromJsonAsync<WorkflowDecisionSessionProjection>(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/workflow",
+            DecisionSessionTestHarness.CreateJsonOptions());
+        WorkflowGovernanceHealthProjection? workflowHealth = await client.GetFromJsonAsync<WorkflowGovernanceHealthProjection>(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/workflow/health",
+            DecisionSessionTestHarness.CreateJsonOptions());
+        WorkflowGovernanceInfluenceProjection? workflowInfluence = await client.GetFromJsonAsync<WorkflowGovernanceInfluenceProjection>(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/workflow/influence",
+            DecisionSessionTestHarness.CreateJsonOptions());
+        WorkflowGovernanceSummary? workflowSummary = await client.GetFromJsonAsync<WorkflowGovernanceSummary>(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/workflow/summary",
+            DecisionSessionTestHarness.CreateJsonOptions());
 
         Assert.NotNull(sessions);
         Assert.Single(sessions);
@@ -157,6 +170,18 @@ public sealed class DecisionSessionEndpointTests
         Assert.Equal(harness.Repository.Id, recoveryHistory.RepositoryId);
         Assert.NotNull(recoveryDiagnostics);
         Assert.Equal(harness.Repository.Id, recoveryDiagnostics.RepositoryId);
+        Assert.NotNull(workflowProjection);
+        Assert.Equal(harness.Repository.Id, workflowProjection.RepositoryId);
+        Assert.Equal(created.Id.ToString(), workflowProjection.DecisionSessionId);
+        Assert.NotNull(workflowProjection.Summary);
+        Assert.NotNull(workflowProjection.Readiness);
+        Assert.NotNull(workflowProjection.Diagnostics);
+        Assert.NotNull(workflowHealth);
+        Assert.Equal("Decision sessions", workflowHealth.Name);
+        Assert.NotNull(workflowInfluence);
+        Assert.Equal(harness.Repository.Id, workflowInfluence.RepositoryId);
+        Assert.NotNull(workflowSummary);
+        Assert.Equal(created.Id.ToString(), workflowSummary.DecisionSessionId);
     }
 
     [Fact]

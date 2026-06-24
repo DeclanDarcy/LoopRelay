@@ -4,42 +4,42 @@ Objective: let workflow and repository summaries consume governance-session stat
 
 Add workflow models in `src/CommandCenter.Workflow/Models`:
 
-- [ ] `WorkflowDecisionSessionProjection`
-- [ ] `WorkflowGovernanceSummary`
-- [ ] `WorkflowTransferProjection`
-- [ ] `WorkflowGovernanceHealthProjection`
-- [ ] `WorkflowGovernanceInfluenceProjection`
-- [ ] `WorkflowGovernanceReadiness`
-- [ ] `DecisionSessionWorkflowDiagnostics`
+- [x] `WorkflowDecisionSessionProjection`
+- [x] `WorkflowGovernanceSummary`
+- [x] `WorkflowTransferProjection`
+- [x] `WorkflowGovernanceHealthProjection`
+- [x] `WorkflowGovernanceInfluenceProjection`
+- [x] `WorkflowGovernanceReadiness`
+- [x] `DecisionSessionWorkflowDiagnostics`
 
 Add workflow service abstraction and implementation:
 
-- [ ] `IWorkflowDecisionSessionService`
-- [ ] `WorkflowDecisionSessionService`
+- [x] `IWorkflowDecisionSessionService`
+- [x] `WorkflowDecisionSessionService`
 
 Integrate into:
 
-- [ ] `WorkflowProjectionService`
-- [ ] `WorkflowHealthService`
-- [ ] `WorkflowReportService`
-- [ ] `WorkflowCertificationService`
+- [x] `WorkflowProjectionService`
+- [x] `WorkflowHealthService`
+- [x] `WorkflowReportService`
+- [x] `WorkflowCertificationService`
 
 Workflow projection fields:
 
-- [ ] Decision session id.
-- [ ] Decision session state.
-- [ ] Estimated token count.
-- [ ] Estimated cache TTL.
-- [ ] Estimated cache miss risk.
-- [ ] Reuse score.
-- [ ] Transfer score.
-- [ ] Coherence score.
-- [ ] Transfer pressure.
-- [ ] Current lifecycle decision.
-- [ ] Transfer eligibility status.
-- [ ] Continuity artifact id and fingerprint when relevant.
-- [ ] Transfer lineage.
-- [ ] Governance health dimensions.
+- [x] Decision session id.
+- [x] Decision session state.
+- [x] Estimated token count.
+- [x] Estimated cache TTL.
+- [x] Estimated cache miss risk.
+- [x] Reuse score.
+- [x] Transfer score.
+- [x] Coherence score.
+- [x] Transfer pressure.
+- [x] Current lifecycle decision.
+- [x] Transfer eligibility status.
+- [x] Continuity artifact id and fingerprint when relevant.
+- [x] Transfer lineage.
+- [x] Governance health dimensions.
 
 Repository summary integration:
 
@@ -49,18 +49,18 @@ Repository summary integration:
 
 Backend endpoints:
 
-- [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/workflow`
-- [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/workflow/health`
-- [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/workflow/influence`
-- [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/workflow/summary`
+- [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/workflow`
+- [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/workflow/health`
+- [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/workflow/influence`
+- [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/workflow/summary`
 
 Authority rules:
 
-- [ ] Workflow may display, report, explain, and certify consumption.
-- [ ] Workflow may not change lifecycle decisions.
-- [ ] Workflow may not evaluate transfer eligibility as authority.
-- [ ] Workflow may not execute transfer.
-- [ ] Workflow may not retire, create, or activate sessions.
+- [x] Workflow may display, report, explain, and certify consumption.
+- [x] Workflow may not change lifecycle decisions.
+- [x] Workflow may not evaluate transfer eligibility as authority.
+- [x] Workflow may not execute transfer.
+- [x] Workflow may not retire, create, or activate sessions.
 
 Tests:
 

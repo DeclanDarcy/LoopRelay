@@ -13,6 +13,7 @@ public sealed class WorkflowProjectionService(
     IWorkflowDecisionService workflowDecisionService,
     IWorkflowOperationalContextService workflowOperationalContextService,
     IWorkflowGitService workflowGitService,
+    IWorkflowDecisionSessionService workflowDecisionSessionService,
     IWorkflowStateMachineService stateMachineService) : IWorkflowProjectionService
 {
     public async Task<WorkflowInstance> ProjectAsync(Guid repositoryId)
@@ -91,7 +92,8 @@ public sealed class WorkflowProjectionService(
             OpenGates = gates.OpenGates,
             SatisfiedGates = gates.SatisfiedGates,
             GateHistory = gates.GateHistory,
-            GateDiagnostics = gates.Diagnostics
+            GateDiagnostics = gates.Diagnostics,
+            DecisionSession = evidence.DecisionSession
         };
     }
 
@@ -115,8 +117,9 @@ public sealed class WorkflowProjectionService(
         WorkflowDecisionProjection decision = await workflowDecisionService.ProjectDecisionAsync(repository.Id);
         WorkflowOperationalContextProjection operationalContext = await workflowOperationalContextService.ProjectOperationalContextAsync(repository.Id, decision, execution);
         WorkflowGitProjection git = await workflowGitService.ProjectGitAsync(repository.Id, execution, operationalContext);
+        WorkflowDecisionSessionProjection decisionSession = await workflowDecisionSessionService.ProjectAsync(repository.Id);
 
-        return new ProjectionEvidence(repository, execution, handoff, decision, operationalContext, git);
+        return new ProjectionEvidence(repository, execution, handoff, decision, operationalContext, git, decisionSession);
     }
 
     private static ProjectionChoice ChooseProjection(ProjectionEvidence evidence)
@@ -247,7 +250,8 @@ public sealed class WorkflowProjectionService(
             $"handoff:{evidence.Handoff.ExecutionId?.ToString() ?? "none"}:{evidence.Handoff.Status}:path={evidence.Handoff.HandoffPath ?? "none"}:valid={evidence.Handoff.Validation.IsValid}",
             $"decision:{evidence.Decision.DecisionId ?? "none"}:{evidence.Decision.Status}:eligible={evidence.Decision.IsResolutionEligible}:governanceBlocked={evidence.Decision.IsGovernanceBlocked}",
             $"operational-context:{evidence.OperationalContext.ProposalId ?? "none"}:{evidence.OperationalContext.Status}:reviewEligible={evidence.OperationalContext.IsReviewEligible}:promotionEligible={evidence.OperationalContext.IsPromotionEligible}:commitEligible={evidence.OperationalContext.IsCommitEligible}",
-            $"git:{evidence.Git.Branch}:commit={evidence.Git.CommitStatus}:push={evidence.Git.PushStatus}:pending={evidence.Git.HasPendingChanges}:unpushed={evidence.Git.HasUnpushedChanges}:complete={evidence.Git.Completion.IsComplete}"
+            $"git:{evidence.Git.Branch}:commit={evidence.Git.CommitStatus}:push={evidence.Git.PushStatus}:pending={evidence.Git.HasPendingChanges}:unpushed={evidence.Git.HasUnpushedChanges}:complete={evidence.Git.Completion.IsComplete}",
+            $"decision-session:{evidence.DecisionSession.DecisionSessionId ?? "none"}:{evidence.DecisionSession.DecisionSessionState ?? "none"}:policy={evidence.DecisionSession.CurrentLifecycleDecision ?? "none"}:eligibility={evidence.DecisionSession.TransferEligibilityStatus ?? "none"}"
         ];
 
         return inputs;
@@ -520,7 +524,8 @@ public sealed class WorkflowProjectionService(
         WorkflowHandoffProjection Handoff,
         WorkflowDecisionProjection Decision,
         WorkflowOperationalContextProjection OperationalContext,
-        WorkflowGitProjection Git);
+        WorkflowGitProjection Git,
+        WorkflowDecisionSessionProjection DecisionSession);
 
     private sealed record ProjectionChoice(
         WorkflowStage Stage,

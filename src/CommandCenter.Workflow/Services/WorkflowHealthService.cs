@@ -8,7 +8,8 @@ namespace CommandCenter.Workflow.Services;
 public sealed class WorkflowHealthService(
     IRepositoryService repositoryService,
     IWorkflowProjectionService projectionService,
-    IWorkflowRepository workflowRepository) : IWorkflowHealthService
+    IWorkflowRepository workflowRepository,
+    IWorkflowDecisionSessionService workflowDecisionSessionService) : IWorkflowHealthService
 {
     public async Task<WorkflowInfluenceTrace> TraceInfluenceAsync(Guid repositoryId)
     {
@@ -26,6 +27,7 @@ public sealed class WorkflowHealthService(
         IReadOnlyList<string> preparationInfluences = BuildPreparationInfluences(preparationHistory, historyLoadErrors);
         IReadOnlyList<string> gateInfluences = BuildGateInfluences(projection);
         IReadOnlyList<string> blockingInfluences = BuildBlockingInfluences(projection);
+        WorkflowGovernanceInfluenceProjection governanceInfluence = await workflowDecisionSessionService.GetInfluenceAsync(repositoryId);
         IReadOnlyList<string> conflicts = projection.Diagnostics.Conflicts
             .Concat(projection.GateDiagnostics.Conflicts)
             .Distinct(StringComparer.Ordinal)
@@ -61,7 +63,10 @@ public sealed class WorkflowHealthService(
             gateInfluences,
             blockingInfluences,
             conflicts,
-            fingerprint);
+            fingerprint)
+        {
+            GovernanceInfluence = governanceInfluence
+        };
     }
 
     public async Task<WorkflowHealthAssessment> AssessHealthAsync(Guid repositoryId)
@@ -79,6 +84,7 @@ public sealed class WorkflowHealthService(
         WorkflowHealthDimension gateHealth = AssessGateHealth(projection);
         WorkflowHealthDimension continuationHealth = AssessContinuationHealth(projection, continuationHistory, historyLoadErrors);
         WorkflowHealthDimension preparationHealth = AssessPreparationHealth(projection, preparationHistory, historyLoadErrors);
+        WorkflowGovernanceHealthProjection governanceHealth = await workflowDecisionSessionService.GetHealthAsync(repositoryId);
         IReadOnlyList<WorkflowHealthDimension> dimensions =
         [
             projectionHealth,
@@ -100,7 +106,10 @@ public sealed class WorkflowHealthService(
             overall,
             dimensions,
             trace,
-            dimensions.SelectMany(dimension => dimension.Diagnostics).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray());
+            dimensions.SelectMany(dimension => dimension.Diagnostics).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray())
+        {
+            GovernanceHealth = governanceHealth
+        };
     }
 
     private async Task<(WorkflowTimeline? Timeline, string? LoadError)> TryGetLatestTimelineAsync(Repository repository)

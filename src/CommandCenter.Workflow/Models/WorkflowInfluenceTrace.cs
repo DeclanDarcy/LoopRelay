@@ -15,4 +15,7 @@ public sealed record WorkflowInfluenceTrace(
     IReadOnlyList<string> GateInfluences,
     IReadOnlyList<string> BlockingInfluences,
     IReadOnlyList<string> Conflicts,
-    string Fingerprint);
+    string Fingerprint)
+{
+    public WorkflowGovernanceInfluenceProjection? GovernanceInfluence { get; init; }
+}

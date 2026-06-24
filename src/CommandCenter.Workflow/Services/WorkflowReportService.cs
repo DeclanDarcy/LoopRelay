@@ -10,7 +10,8 @@ public sealed class WorkflowReportService(
     IWorkflowProjectionService projectionService,
     IWorkflowRepository workflowRepository,
     IWorkflowHealthService healthService,
-    IWorkflowCertificationService certificationService) : IWorkflowReportService
+    IWorkflowCertificationService certificationService,
+    IWorkflowDecisionSessionService workflowDecisionSessionService) : IWorkflowReportService
 {
     public async Task<RepositoryWorkflowReport> GetRepositoryReportAsync(Guid repositoryId)
     {
@@ -18,6 +19,7 @@ public sealed class WorkflowReportService(
         WorkflowInstance projection = await projectionService.ProjectAsync(repository.Id);
         WorkflowHealthAssessment health = await healthService.AssessHealthAsync(repository.Id);
         WorkflowCertificationResult certification = await certificationService.GetCurrentCertificationAsync(repository.Id);
+        WorkflowGovernanceSummary governance = await workflowDecisionSessionService.GetSummaryAsync(repository.Id);
         IReadOnlyList<WorkflowContinuationEvent> continuationHistory = await workflowRepository.ListContinuationEventsAsync(repository);
         IReadOnlyList<WorkflowPreparationEvent> preparationHistory = await workflowRepository.ListPreparationEventsAsync(repository);
 
@@ -37,6 +39,7 @@ public sealed class WorkflowReportService(
             certification.Certified,
             certification.FailedFindingCount,
             health.Diagnostics
+                .Concat(governance.Highlights)
                 .Concat(certification.Failures)
                 .Distinct(StringComparer.Ordinal)
                 .Order(StringComparer.Ordinal)

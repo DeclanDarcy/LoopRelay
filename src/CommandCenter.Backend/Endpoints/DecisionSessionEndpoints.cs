@@ -1,6 +1,7 @@
 using CommandCenter.Core.Repositories;
 using CommandCenter.DecisionSessions.Abstractions;
 using CommandCenter.DecisionSessions.Models;
+using CommandCenter.Workflow.Abstractions;
 
 namespace CommandCenter.Backend.Endpoints;
 
@@ -163,6 +164,26 @@ public static class DecisionSessionEndpoints
             Guid repositoryId,
             IDecisionSessionRecoveryService recoveryService) =>
             await HandleAsync(() => recoveryService.GetRecoveryDiagnosticsAsync(repositoryId)));
+
+        group.MapGet("/workflow", async (
+            Guid repositoryId,
+            IWorkflowDecisionSessionService workflowDecisionSessionService) =>
+            await HandleAsync(() => workflowDecisionSessionService.ProjectAsync(repositoryId)));
+
+        group.MapGet("/workflow/health", async (
+            Guid repositoryId,
+            IWorkflowDecisionSessionService workflowDecisionSessionService) =>
+            await HandleAsync(() => workflowDecisionSessionService.GetHealthAsync(repositoryId)));
+
+        group.MapGet("/workflow/influence", async (
+            Guid repositoryId,
+            IWorkflowDecisionSessionService workflowDecisionSessionService) =>
+            await HandleAsync(() => workflowDecisionSessionService.GetInfluenceAsync(repositoryId)));
+
+        group.MapGet("/workflow/summary", async (
+            Guid repositoryId,
+            IWorkflowDecisionSessionService workflowDecisionSessionService) =>
+            await HandleAsync(() => workflowDecisionSessionService.GetSummaryAsync(repositoryId)));
 
         return app;
     }

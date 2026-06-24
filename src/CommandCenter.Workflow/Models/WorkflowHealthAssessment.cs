@@ -6,4 +6,7 @@ public sealed record WorkflowHealthAssessment(
     string OverallStatus,
     IReadOnlyList<WorkflowHealthDimension> Dimensions,
     WorkflowInfluenceTrace InfluenceTrace,
-    IReadOnlyList<string> Diagnostics);
+    IReadOnlyList<string> Diagnostics)
+{
+    public WorkflowGovernanceHealthProjection? GovernanceHealth { get; init; }
+}
