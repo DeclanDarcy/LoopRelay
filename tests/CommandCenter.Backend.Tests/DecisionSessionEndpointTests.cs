@@ -43,6 +43,9 @@ public sealed class DecisionSessionEndpointTests
         DecisionSessionMetrics? metrics = await client.GetFromJsonAsync<DecisionSessionMetrics>(
             $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/analysis/metrics",
             DecisionSessionTestHarness.CreateJsonOptions());
+        DecisionSessionEconomics? economics = await client.GetFromJsonAsync<DecisionSessionEconomics>(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/analysis/economics",
+            DecisionSessionTestHarness.CreateJsonOptions());
 
         Assert.NotNull(sessions);
         Assert.Single(sessions);
@@ -52,6 +55,8 @@ public sealed class DecisionSessionEndpointTests
         Assert.True(diagnostics.IsValid);
         Assert.NotNull(metrics);
         Assert.Equal(0, metrics.DecisionCount);
+        Assert.NotNull(economics);
+        Assert.True(economics.EstimatedReuseValue >= 0m);
     }
 
     [Fact]

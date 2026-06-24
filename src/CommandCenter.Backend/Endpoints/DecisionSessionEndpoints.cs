@@ -46,6 +46,11 @@ public static class DecisionSessionEndpoints
             IDecisionSessionMetricsService metricsService) =>
             await HandleAsync(async () => (await metricsService.GetMetricsAsync(repositoryId)).Statistics));
 
+        group.MapGet("/analysis/economics", async (
+            Guid repositoryId,
+            IDecisionSessionEconomicsService economicsService) =>
+            await HandleAsync(async () => (await economicsService.GetEconomicsAsync(repositoryId)).Economics));
+
         group.MapGet("/analysis/diagnostics", async (
             Guid repositoryId,
             IDecisionSessionMetricsService metricsService) =>

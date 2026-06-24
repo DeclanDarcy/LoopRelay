@@ -19,4 +19,8 @@ public interface IDecisionSessionRepository
     Task<DecisionSessionMetricsSnapshot?> ReadMetricsSnapshotAsync(Repository repository);
 
     Task WriteMetricsSnapshotAsync(Repository repository, DecisionSessionMetricsSnapshot snapshot);
+
+    Task<DecisionSessionEconomicsSnapshot?> ReadEconomicsSnapshotAsync(Repository repository);
+
+    Task WriteEconomicsSnapshotAsync(Repository repository, DecisionSessionEconomicsSnapshot snapshot);
 }

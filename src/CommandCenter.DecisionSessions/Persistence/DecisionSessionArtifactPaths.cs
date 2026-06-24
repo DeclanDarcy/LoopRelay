@@ -11,6 +11,8 @@ public static class DecisionSessionArtifactPaths
 
     public static string MetricsSnapshotJson() => ArtifactPath.CombineRelative(".agents", "decision-sessions", "analysis", "metrics", "snapshot.json");
 
+    public static string EconomicsSnapshotJson() => ArtifactPath.CombineRelative(".agents", "decision-sessions", "analysis", "economics", "snapshot.json");
+
     public static string Resolve(Repository repository, string relativePath)
     {
         return ArtifactPath.ResolveRepositoryPath(repository, relativePath);

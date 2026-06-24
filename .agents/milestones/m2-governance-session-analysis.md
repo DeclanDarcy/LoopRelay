@@ -5,7 +5,7 @@ Objective: measure session facts, evaluate lifecycle economics, and assess reaso
 Stage 2 is one architectural stage, but it should be implemented through three internal checkpoints:
 
 - [x] Stage 2A: metrics, statistics, TTL, and cache risk.
-- [ ] Stage 2B: economics.
+- [x] Stage 2B: economics.
 - [ ] Stage 2C: coherence.
 
 Do not start lifecycle policy until all three checkpoints are complete and the aggregate analysis diagnostics are stable.
@@ -93,57 +93,57 @@ Stage 2A exit criteria:
 
 Add models:
 
-- [ ] `DecisionSessionEconomics`
-- [ ] `DecisionSessionEconomicsInputs`
-- [ ] `ReuseValueAssessment`
-- [ ] `TransferValueAssessment`
-- [ ] `CacheBenefitAssessment`
-- [ ] `CacheRiskAssessment`
-- [ ] `ContinuityBenefitAssessment`
-- [ ] `DecisionSessionEconomicsDiagnostics`
-- [ ] `DecisionSessionEconomicsSnapshot`
-- [ ] `DecisionSessionEconomicsOptions`
+- [x] `DecisionSessionEconomics`
+- [x] `DecisionSessionEconomicsInputs`
+- [x] `ReuseValueAssessment`
+- [x] `TransferValueAssessment`
+- [x] `CacheBenefitAssessment`
+- [x] `CacheRiskAssessment`
+- [x] `ContinuityBenefitAssessment`
+- [x] `DecisionSessionEconomicsDiagnostics`
+- [x] `DecisionSessionEconomicsSnapshot`
+- [x] `DecisionSessionEconomicsOptions`
 
 Economics fields:
 
-- [ ] `decimal EstimatedReuseValue`
-- [ ] `decimal EstimatedTransferValue`
-- [ ] `decimal EstimatedContextCost`
-- [ ] `decimal EstimatedReasoningCost`
-- [ ] `decimal EstimatedContinuityBenefit`
-- [ ] `decimal EstimatedCacheBenefit`
-- [ ] `decimal EstimatedCacheMissRisk`
+- [x] `decimal EstimatedReuseValue`
+- [x] `decimal EstimatedTransferValue`
+- [x] `decimal EstimatedContextCost`
+- [x] `decimal EstimatedReasoningCost`
+- [x] `decimal EstimatedContinuityBenefit`
+- [x] `decimal EstimatedCacheBenefit`
+- [x] `decimal EstimatedCacheMissRisk`
 
 Add services:
 
-- [ ] `IDecisionSessionEconomicsService`
-- [ ] `DecisionSessionEconomicsService`
+- [x] `IDecisionSessionEconomicsService`
+- [x] `DecisionSessionEconomicsService`
 
 Initial deterministic model:
 
-- [ ] Normalize values to `0.0m` through `1.0m` where useful.
-- [ ] Context cost grows with estimated tokens and context bytes.
-- [ ] Reasoning cost grows with reasoning event count, thread count, and relationship count.
-- [ ] Continuity benefit grows with decision count, reasoning density, and operational context revisions.
-- [ ] Cache benefit uses configurable assumptions such as cached-token cost factor `0.10m`.
-- [ ] Cache risk grows as elapsed duration approaches or exceeds estimated TTL.
-- [ ] Transfer value grows with growth rate, idle duration, cache miss risk, and large context cost.
-- [ ] Reuse value grows with continuity benefit, cache benefit, coherence, and recent activity.
+- [x] Normalize values to `0.0m` through `1.0m` where useful.
+- [x] Context cost grows with estimated tokens and context bytes.
+- [x] Reasoning cost grows with reasoning event count, thread count, and relationship count.
+- [x] Continuity benefit grows with decision count, reasoning density, and operational context revisions.
+- [x] Cache benefit uses configurable assumptions such as cached-token cost factor `0.10m`.
+- [x] Cache risk grows as elapsed duration approaches or exceeds estimated TTL.
+- [x] Transfer value grows with growth rate, idle duration, cache miss risk, and large context cost.
+- [x] Reuse value grows with continuity benefit, cache benefit, coherence, and recent activity.
 
 Stage 2B checkpoint tests:
 
-- [ ] Same inputs produce same economics.
-- [ ] More continuity increases reuse value.
-- [ ] Higher cache miss risk increases transfer value.
-- [ ] Larger reusable corpus increases cache benefit.
-- [ ] Missing economics snapshots are rebuilt.
-- [ ] Diagnostics explain inputs, assumptions, missing evidence, TTL, and cache risk.
+- [x] Same inputs produce same economics.
+- [x] More continuity increases reuse value.
+- [x] Higher cache miss risk increases transfer value.
+- [x] Larger reusable corpus increases cache benefit.
+- [x] Missing economics snapshots are rebuilt.
+- [x] Diagnostics explain inputs, assumptions, missing evidence, TTL, and cache risk.
 
 Stage 2B exit criteria:
 
-- [ ] The system can answer reuse value, transfer value, cache benefit, cache risk, context cost, reasoning cost, and continuity benefit.
-- [ ] Economics is rebuildable from metrics, statistics, TTL/cache inputs, and domain evidence.
-- [ ] Economics remains analysis only and cannot make lifecycle decisions.
+- [x] The system can answer reuse value, transfer value, cache benefit, cache risk, context cost, reasoning cost, and continuity benefit.
+- [x] Economics is rebuildable from metrics, statistics, TTL/cache inputs, and domain evidence.
+- [x] Economics remains analysis only and cannot make lifecycle decisions.
 
 ### Stage 2C: Coherence
 
@@ -207,7 +207,7 @@ Stage 2C exit criteria:
 Persist analysis snapshots under:
 
 - [x] `.agents/decision-sessions/analysis/metrics/`
-- [ ] `.agents/decision-sessions/analysis/economics/`
+- [x] `.agents/decision-sessions/analysis/economics/`
 - [ ] `.agents/decision-sessions/analysis/coherence/`
 
 Analysis snapshots are derived, recoverable, and disposable. If a snapshot is missing or invalid, rebuild it from Decisions, Reasoning, Continuity, and session records.
@@ -216,7 +216,7 @@ Analysis snapshots are derived, recoverable, and disposable. If a snapshot is mi
 
 - [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/analysis/metrics`
 - [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/analysis/statistics`
-- [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/analysis/economics`
+- [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/analysis/economics`
 - [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/analysis/coherence`
 - [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/analysis/diagnostics`
 
@@ -225,7 +225,7 @@ Optional compatibility aliases may be added for direct `metrics`, `economics`, a
 ### Tests
 
 - [x] Stage 2A checkpoint tests pass.
-- [ ] Stage 2B checkpoint tests pass.
+- [x] Stage 2B checkpoint tests pass.
 - [ ] Stage 2C checkpoint tests pass.
 - [ ] Same full evidence set produces the same aggregate analysis result.
 - [ ] Missing analysis snapshots are rebuilt.

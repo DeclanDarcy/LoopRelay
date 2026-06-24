@@ -1,4 +1,5 @@
 using CommandCenter.DecisionSessions.Abstractions;
+using CommandCenter.DecisionSessions.Models;
 using CommandCenter.DecisionSessions.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -16,6 +17,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IDecisionSessionEvidenceReader, DecisionSessionEvidenceReader>();
         services.AddSingleton<ITokenEstimator, DeterministicTokenEstimator>();
         services.AddSingleton<IDecisionSessionMetricsService, DecisionSessionMetricsService>();
+        services.AddSingleton(new DecisionSessionEconomicsOptions());
+        services.AddSingleton<IDecisionSessionEconomicsService, DecisionSessionEconomicsService>();
         return services;
     }
 }

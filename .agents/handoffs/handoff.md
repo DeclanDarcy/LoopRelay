@@ -2,29 +2,31 @@
 
 ## Slice Summary
 
-- Completed Decision Session Stage 2A metrics/statistics/cache-risk work.
-- Added `IDecisionSessionEvidenceReader` and `DecisionSessionEvidenceReader` to separate authoritative evidence loading/sizing from metrics math.
-- Metrics evidence now includes decisions, candidates, proposals, reasoning events/threads/relationships, operational context proposals, and current/historical operational context artifacts discovered through `IArtifactService`/`IArtifactStore`.
-- Metrics reads rebuild from authoritative evidence, persist the latest derived snapshot at `.agents/decision-sessions/analysis/metrics/snapshot.json`, and replace missing or invalid metrics snapshots.
-- Added `TimeProvider` injection for deterministic metrics tests while preserving runtime `TimeProvider.System` behavior.
-- Expanded Stage 2A diagnostics for source counts/sizes, missing evidence, token assumptions, TTL assumptions, cache-risk contribution, and confidence.
-- Marked Stage 2A complete in `.agents/milestones/m2-governance-session-analysis.md`.
+- Completed Decision Session Stage 2B economics.
+- Added economics models, configurable assumptions, diagnostics, and rebuildable economics snapshots.
+- Added `IDecisionSessionEconomicsService` and `DecisionSessionEconomicsService`.
+- Economics consumes the completed Stage 2A metrics snapshot boundary and does not crawl repository evidence directly.
+- Economics snapshots persist at `.agents/decision-sessions/analysis/economics/snapshot.json` and invalid snapshots are rebuilt.
+- Added read-only endpoint `GET /api/repositories/{repositoryId}/decision-sessions/analysis/economics`.
+- Marked Stage 2B complete in `.agents/milestones/m2-governance-session-analysis.md`.
 
 ## Validation
 
-- `dotnet test .\tests\CommandCenter.Backend.Tests\CommandCenter.Backend.Tests.csproj --filter DecisionSession` passed: 26 tests.
-- `dotnet test .\CommandCenter.slnx` passed: 656 tests.
+- `dotnet test .\tests\CommandCenter.Backend.Tests\CommandCenter.Backend.Tests.csproj --filter DecisionSession` passed: 32 tests.
+- `dotnet test .\CommandCenter.slnx` was run twice and failed in unrelated `ExecutionSessionServiceTests` cases:
+  - First run: file lock in `AppStartupRunsExecutionRecovery`.
+  - Second run: `AcceptAndRejectEndpointsReturnTransitionedSessionMetadata` returned HTTP 500 instead of 200.
 
 ## Current State
 
-- `.agents/handoffs/handoff.md` was rotated to `.agents/handoffs/handoff.0003.md`; this file is the new active handoff.
+- `.agents/handoffs/handoff.md` was rotated to `.agents/handoffs/handoff.0004.md`; this file is the new active handoff.
 - `.agents/decisions/decisions.md` was not rotated because no user response authorized new decisions during this slice.
-- Stage 2A is complete. Stage 2B economics has not started.
+- Stage 2A and Stage 2B are complete. Stage 2C coherence has not started.
 
 ## Next Slice Recommendation
 
-- Begin Stage 2B economics:
-  - Add economics models/options/snapshot/diagnostics.
-  - Implement `IDecisionSessionEconomicsService` using metrics, cache risk, and authoritative evidence as analysis inputs.
-  - Persist/rebuild economics snapshots under `.agents/decision-sessions/analysis/economics/`.
-  - Add deterministic economics tests for reuse value, transfer value, cache benefit, and larger-context cost behavior.
+- Begin Stage 2C coherence:
+  - Add coherence models, diagnostics, and snapshot persistence under `.agents/decision-sessions/analysis/coherence/`.
+  - Implement `IDecisionSessionCoherenceService` using reasoning topology, decision counts, continuity evidence, metrics, and economics.
+  - Add deterministic tests for fragmentation, density, continuity quality, transfer pressure, and missing snapshot rebuild.
+  - Add the read-only coherence endpoint and then stabilize aggregate analysis diagnostics.

@@ -139,6 +139,50 @@ public sealed class FileSystemDecisionSessionRepository(IArtifactStore artifactS
         await artifactStore.WriteAsync(path, JsonSerializer.Serialize(document, DecisionSessionJson.Options));
     }
 
+    public async Task<DecisionSessionEconomicsSnapshot?> ReadEconomicsSnapshotAsync(Repository repository)
+    {
+        string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.EconomicsSnapshotJson());
+        string? json = await artifactStore.ReadAsync(path);
+        if (json is null)
+        {
+            return null;
+        }
+
+        DecisionSessionArtifactDocument<DecisionSessionEconomicsSnapshot>? document =
+            JsonSerializer.Deserialize<DecisionSessionArtifactDocument<DecisionSessionEconomicsSnapshot>>(
+                json,
+                DecisionSessionJson.Options);
+        if (document is null)
+        {
+            throw new DecisionSessionValidationException("Decision session economics snapshot could not be deserialized.");
+        }
+
+        ValidateDocument(repository, document, "Decision session economics snapshot");
+        if (document.Payload.RepositoryId != repository.Id || document.Payload.Diagnostics.RepositoryId != repository.Id)
+        {
+            throw new DecisionSessionValidationException("Decision session economics snapshot belongs to a different repository.");
+        }
+
+        return document.Payload;
+    }
+
+    public async Task WriteEconomicsSnapshotAsync(Repository repository, DecisionSessionEconomicsSnapshot snapshot)
+    {
+        if (snapshot.RepositoryId != repository.Id || snapshot.Diagnostics.RepositoryId != repository.Id)
+        {
+            throw new DecisionSessionValidationException("Decision session economics snapshot belongs to a different repository.");
+        }
+
+        var document = new DecisionSessionArtifactDocument<DecisionSessionEconomicsSnapshot>(
+            DecisionSessionArtifactPaths.SchemaVersion,
+            repository.Id,
+            snapshot.GeneratedAt,
+            DateTimeOffset.UtcNow,
+            snapshot);
+        string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.EconomicsSnapshotJson());
+        await artifactStore.WriteAsync(path, JsonSerializer.Serialize(document, DecisionSessionJson.Options));
+    }
+
     internal async Task<DecisionSessionValidationResult> ValidateAsync(Repository repository)
     {
         string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.RegistryJson());

@@ -84,3 +84,79 @@ public sealed record DecisionSessionMetricsSnapshot(
     DecisionSessionCacheMetrics Cache,
     DecisionSessionMetricsDiagnostics Diagnostics,
     DateTimeOffset GeneratedAt);
+
+public sealed record DecisionSessionEconomicsOptions(
+    long LargeContextTokenThreshold = 200_000,
+    long LargeContextByteThreshold = 800_000,
+    long ReasoningEventThreshold = 500,
+    long ReasoningThreadThreshold = 100,
+    long ReasoningRelationshipThreshold = 300,
+    long DecisionThreshold = 100,
+    long OperationalContextRevisionThreshold = 50,
+    decimal CachedTokenCostFactor = 0.10m,
+    decimal AssumedCoherenceScore = 0.50m);
+
+public sealed record DecisionSessionEconomicsInputs(
+    DecisionSessionMetrics Metrics,
+    DecisionSessionStatistics Statistics,
+    DecisionSessionActivity Activity,
+    DecisionSessionGrowth Growth,
+    DecisionSessionCacheMetrics Cache);
+
+public sealed record ReuseValueAssessment(
+    decimal Value,
+    decimal ContinuityContribution,
+    decimal CacheContribution,
+    decimal CoherenceContribution,
+    decimal ActivityContribution);
+
+public sealed record TransferValueAssessment(
+    decimal Value,
+    decimal GrowthContribution,
+    decimal IdleContribution,
+    decimal CacheRiskContribution,
+    decimal ContextCostContribution);
+
+public sealed record CacheBenefitAssessment(
+    decimal Value,
+    decimal ReusableCorpusScore,
+    decimal CachedTokenCostFactor,
+    decimal CacheRiskPenalty);
+
+public sealed record CacheRiskAssessment(
+    decimal Value,
+    TimeSpan EstimatedCacheTtl,
+    DateTimeOffset? EstimatedCacheExpiresAt);
+
+public sealed record ContinuityBenefitAssessment(
+    decimal Value,
+    decimal DecisionContribution,
+    decimal ReasoningDensityContribution,
+    decimal OperationalContextContribution);
+
+public sealed record DecisionSessionEconomics(
+    decimal EstimatedReuseValue,
+    decimal EstimatedTransferValue,
+    decimal EstimatedContextCost,
+    decimal EstimatedReasoningCost,
+    decimal EstimatedContinuityBenefit,
+    decimal EstimatedCacheBenefit,
+    decimal EstimatedCacheMissRisk);
+
+public sealed record DecisionSessionEconomicsDiagnostics(
+    Guid RepositoryId,
+    DateTimeOffset GeneratedAt,
+    DecisionSessionEconomicsInputs Inputs,
+    ReuseValueAssessment ReuseValue,
+    TransferValueAssessment TransferValue,
+    CacheBenefitAssessment CacheBenefit,
+    CacheRiskAssessment CacheRisk,
+    ContinuityBenefitAssessment ContinuityBenefit,
+    IReadOnlyList<string> Assumptions,
+    IReadOnlyList<string> Warnings);
+
+public sealed record DecisionSessionEconomicsSnapshot(
+    Guid RepositoryId,
+    DecisionSessionEconomics Economics,
+    DecisionSessionEconomicsDiagnostics Diagnostics,
+    DateTimeOffset GeneratedAt);

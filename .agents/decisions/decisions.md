@@ -2,11 +2,16 @@
 
 ## Newly Authorized
 
-- Treat Stage 2A as complete.
-- Treat Stage 2B as ready to begin.
-- Preserve the Stage 2B dependency direction: economics consumes metrics; metrics must not consume economics.
-- Implement Stage 2B economics primarily from `DecisionSessionMetrics`, `DecisionSessionStatistics`, and `DecisionSessionCacheMetrics` plus configurable assumptions.
-- Avoid direct repository crawling from economics where possible; use the completed Stage 2A analysis layer as the economics input boundary.
-- Design `DecisionSessionEconomicsDiagnostics` before implementing transfer value and reuse value scoring so economics remains explainable and certifiable.
-- Include economics models, diagnostics, snapshot persistence, and deterministic scoring behavior in the next Stage 2B slice.
-- No roadmap changes are warranted at this point.
+- Treat the Stage 2B economics implementation as successful.
+- Preserve the analysis dependency graph as `Evidence -> Metrics / Statistics / Cache -> Economics -> Coherence -> Policy`.
+- Keep the economics layer operating from the Stage 2A metrics boundary rather than direct repository crawling.
+- Keep economics snapshots derived, rebuildable, and non-authoritative.
+- Keep economics analysis pure: no policy decisions, no transfer execution, and no lifecycle mutation.
+- Accept the temporary assumed coherence score in economics until Stage 2C owns coherence explicitly.
+- Classify the current solution-wide `ExecutionSessionServiceTests` failures as unrelated instability to investigate separately, not a blocker for Stage 2C.
+- Capture the execution-session failure signatures so future lifecycle recovery work does not normalize them as expected noise.
+- Treat Stage 2C coherence as ready to begin.
+- Make coherence primarily topology-driven from reasoning events, threads, relationships, graph structure, decision references, and continuity revisions.
+- Do not make coherence a disguised economics score; token count, context size, cost, TTL, and cache benefit are weak coherence inputs.
+- Keep transfer pressure conceptually separate from coherence as a synthesis signal from coherence, economics, and metrics, even if stored in the coherence snapshot.
+- No roadmap adjustments are indicated.
