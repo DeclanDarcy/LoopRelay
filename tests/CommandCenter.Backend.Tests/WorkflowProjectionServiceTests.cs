@@ -960,11 +960,16 @@ public sealed class WorkflowProjectionServiceTests
 
         Assert.Equal(HttpStatusCode.OK, evaluationResponse.StatusCode);
         Assert.NotNull(evaluation);
-        Assert.False(evaluation.CanPrepare);
+        Assert.True(evaluation.CanPrepare);
         Assert.Equal(WorkflowGateType.CommitApproval, evaluation.BlockingGate);
         Assert.Equal(HttpStatusCode.OK, runResponse.StatusCode);
         Assert.NotNull(preparationEvent);
+        Assert.Equal("Created", preparationEvent.Decision);
+        Assert.Contains("commit-preparation:snapshot-prepared", preparationEvent.CreatedArtifactIds);
         Assert.Equal(evaluation.Fingerprint, preparationEvent.InputFingerprint);
+        Assert.Equal(1, fixture.PrepareCommitCallCount);
+        Assert.Equal(0, fixture.CommitCallCount);
+        Assert.Equal(0, fixture.PushCallCount);
         Assert.Equal(HttpStatusCode.OK, historyResponse.StatusCode);
         WorkflowPreparationEvent persisted = Assert.Single(history ?? []);
         Assert.Equal(preparationEvent.EventId, persisted.EventId);
@@ -1397,6 +1402,107 @@ public sealed class WorkflowProjectionServiceTests
         Assert.True(evaluation.HasDuplicateDomainEvidence);
         Assert.Equal("Duplicate", evaluation.Outcome);
         Assert.Contains("commit-preparation:snapshot-0001", evaluation.DuplicateEvidence);
+    }
+
+    [Fact]
+    public async Task PreparationRunDoesNotInvokeCommitPreparationWhenNonCommitGateIsOpen()
+    {
+        TestFixture fixture = TestFixture.Create();
+        ArrangeAuthorityGateScenario(fixture, "decision-resolution");
+        var service = new WorkflowPreparationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            new FileSystemWorkflowRepository(new MemoryArtifactStore()),
+            null,
+            null,
+            new ExecutionSessionServiceStub(fixture));
+
+        WorkflowPreparationEvent preparationEvent = await service.RunPreparationAsync(fixture.Repository.Id);
+
+        Assert.Equal("Refused", preparationEvent.Decision);
+        Assert.Equal(WorkflowGateType.DecisionResolution, preparationEvent.BlockingGate);
+        Assert.Equal(0, fixture.PrepareCommitCallCount);
+        Assert.Equal(0, fixture.CommitCallCount);
+        Assert.Equal(0, fixture.PushCallCount);
+        Assert.Empty(preparationEvent.CreatedArtifactIds);
+    }
+
+    [Fact]
+    public async Task PreparationRunDoesNotInvokeCommitPreparationWhenPreparedSnapshotExists()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingCommit;
+        fixture.Session = PreparedAwaitingCommitSession();
+        var service = new WorkflowPreparationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            new FileSystemWorkflowRepository(new MemoryArtifactStore()),
+            null,
+            null,
+            new ExecutionSessionServiceStub(fixture));
+
+        WorkflowPreparationEvent preparationEvent = await service.RunPreparationAsync(fixture.Repository.Id);
+
+        Assert.Equal("Duplicate", preparationEvent.Decision);
+        Assert.Equal(0, fixture.PrepareCommitCallCount);
+        Assert.Empty(preparationEvent.CreatedArtifactIds);
+        Assert.Contains("commit-preparation:snapshot-0001", preparationEvent.DuplicateEvidence);
+    }
+
+    [Fact]
+    public async Task PreparationRunInvokesExecutionCommitPreparationAndPreservesCommitGate()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingCommit;
+        fixture.Session = CompletedAcceptedSession(RepositoryExecutionState.AwaitingCommit);
+        var workflowRepository = new FileSystemWorkflowRepository(new MemoryArtifactStore());
+        var service = new WorkflowPreparationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            workflowRepository,
+            null,
+            null,
+            new ExecutionSessionServiceStub(fixture));
+
+        WorkflowPreparationEvent preparationEvent = await service.RunPreparationAsync(fixture.Repository.Id);
+        IReadOnlyList<WorkflowPreparationEvent> history = await workflowRepository.ListPreparationEventsAsync(fixture.Repository);
+        WorkflowInstance projection = await fixture.CreateService().ProjectAsync(fixture.Repository.Id);
+
+        Assert.Equal(1, fixture.PrepareCommitCallCount);
+        Assert.Equal(0, fixture.CommitCallCount);
+        Assert.Equal(0, fixture.PushCallCount);
+        Assert.Equal("Created", preparationEvent.Decision);
+        Assert.Contains("commit-preparation:snapshot-prepared", preparationEvent.CreatedArtifactIds);
+        Assert.Single(history);
+        Assert.Equal(WorkflowStage.Commit, projection.CurrentStage);
+        Assert.Equal(WorkflowGateType.CommitApproval, projection.BlockingGate);
+        Assert.Equal("snapshot-prepared", fixture.Session?.PreparationSnapshotId);
+        Assert.Null(fixture.Session?.CommitSha);
+        Assert.Null(fixture.Session?.PushedCommitSha);
+    }
+
+    [Fact]
+    public async Task PreparationRunRepeatDoesNotCreateDuplicateCommitPreparation()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingCommit;
+        fixture.Session = CompletedAcceptedSession(RepositoryExecutionState.AwaitingCommit);
+        var workflowRepository = new FileSystemWorkflowRepository(new MemoryArtifactStore());
+        var service = new WorkflowPreparationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            workflowRepository,
+            null,
+            null,
+            new ExecutionSessionServiceStub(fixture));
+
+        WorkflowPreparationEvent first = await service.RunPreparationAsync(fixture.Repository.Id);
+        WorkflowPreparationEvent second = await service.RunPreparationAsync(fixture.Repository.Id);
+
+        Assert.Equal(1, fixture.PrepareCommitCallCount);
+        Assert.Equal("Created", first.Decision);
+        Assert.Equal("Duplicate", second.Decision);
+        Assert.Contains("commit-preparation:snapshot-prepared", second.DuplicateEvidence);
     }
 
     [Fact]
@@ -2474,6 +2580,18 @@ public sealed class WorkflowProjectionServiceTests
         PreparationSnapshotId = "snapshot-0001"
     };
 
+    private static ExecutionSessionSummary PreparedAwaitingCommitSession() => new()
+    {
+        SessionId = Guid.NewGuid(),
+        State = ExecutionSessionState.Completed,
+        RepositoryState = RepositoryExecutionState.AwaitingCommit,
+        StartedAt = DateTimeOffset.Parse("2026-06-23T10:00:00Z"),
+        CompletedAt = DateTimeOffset.Parse("2026-06-23T10:10:00Z"),
+        AcceptedAt = DateTimeOffset.Parse("2026-06-23T10:15:00Z"),
+        HandoffPath = ".agents/handoffs/handoff.md",
+        PreparationSnapshotId = "snapshot-0001"
+    };
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         Converters = { new JsonStringEnumConverter() }
@@ -2501,7 +2619,6 @@ public sealed class WorkflowProjectionServiceTests
         yield return [WorkflowGateType.DecisionResolution, "decision-resolution"];
         yield return [WorkflowGateType.OperationalContextReview, "operational-context-review"];
         yield return [WorkflowGateType.OperationalContextPromotion, "operational-context-promotion"];
-        yield return [WorkflowGateType.CommitApproval, "commit-approval"];
         yield return [WorkflowGateType.PushApproval, "push-approval"];
     }
 
@@ -2798,6 +2915,12 @@ public sealed class WorkflowProjectionServiceTests
             CapturedAt = DateTimeOffset.Parse("2026-06-23T10:00:00Z")
         };
 
+        public int PrepareCommitCallCount { get; set; }
+
+        public int CommitCallCount { get; set; }
+
+        public int PushCallCount { get; set; }
+
         public static TestFixture Create() => new();
 
         public WorkflowProjectionService CreateService() =>
@@ -2962,11 +3085,89 @@ public sealed class WorkflowProjectionServiceTests
 
         public Task<ExecutionSessionSummary> RejectAsync(Guid sessionId, ExecutionAcceptanceRequest request) => throw new NotSupportedException("Mutating execution methods are not used by workflow projection.");
 
-        public Task<CommitPreparation> PrepareCommitAsync(Guid sessionId) => throw new NotSupportedException("Mutating execution methods are not used by workflow projection.");
+        public Task<CommitPreparation> PrepareCommitAsync(Guid sessionId)
+        {
+            fixture.PrepareCommitCallCount++;
+            ExecutionSessionSummary summary = fixture.Session
+                ?? throw new KeyNotFoundException($"Execution session was not found: {sessionId}");
+            if (summary.SessionId != sessionId)
+            {
+                throw new KeyNotFoundException($"Execution session was not found: {sessionId}");
+            }
 
-        public Task<ExecutionSessionSummary> CommitAsync(Guid sessionId, CommitRequest request) => throw new NotSupportedException("Mutating execution methods are not used by workflow projection.");
+            var snapshot = new CommitStatusSnapshot
+            {
+                Id = "snapshot-prepared",
+                Branch = "main",
+                DirtyState = new RepositoryDirtyState
+                {
+                    IsClean = false,
+                    ModifiedPaths = ["src/CommandCenter.Workflow/Services/WorkflowPreparationService.cs"]
+                },
+                CapturedAt = DateTimeOffset.Parse("2026-06-23T12:30:00Z")
+            };
+            var preparation = new CommitPreparation
+            {
+                Id = Guid.Parse("11111111-2222-3333-4444-555555555555"),
+                SessionId = sessionId,
+                RepositoryId = fixture.Repository.Id,
+                RepositoryPath = fixture.Repository.Path,
+                ProposedMessage = "Prepare workflow commit",
+                ScopeItems =
+                [
+                    new CommitScopeItem
+                    {
+                        Path = "src/CommandCenter.Workflow/Services/WorkflowPreparationService.cs",
+                        ChangeType = CommitChangeType.Modified
+                    }
+                ],
+                StatusSnapshot = snapshot,
+                GeneratedAt = DateTimeOffset.Parse("2026-06-23T12:31:00Z")
+            };
+            fixture.Session = new ExecutionSessionSummary
+            {
+                SessionId = summary.SessionId,
+                State = summary.State,
+                RepositoryState = summary.RepositoryState,
+                MilestonePath = summary.MilestonePath,
+                StartedAt = summary.StartedAt,
+                CompletedAt = summary.CompletedAt,
+                Duration = summary.Duration,
+                AcceptedAt = summary.AcceptedAt,
+                RejectedAt = summary.RejectedAt,
+                DecisionNote = summary.DecisionNote,
+                LastActivityAt = DateTimeOffset.Parse("2026-06-23T12:31:00Z"),
+                ProviderName = summary.ProviderName,
+                ProviderExecutablePath = summary.ProviderExecutablePath,
+                ProviderProcessId = summary.ProviderProcessId,
+                ProviderStartedAt = summary.ProviderStartedAt,
+                HandoffPath = summary.HandoffPath,
+                CommitSha = summary.CommitSha,
+                CommittedAt = summary.CommittedAt,
+                CommitMessage = summary.CommitMessage,
+                PreparationSnapshotId = snapshot.Id,
+                PushAttemptedAt = summary.PushAttemptedAt,
+                PushedAt = summary.PushedAt,
+                PushedCommitSha = summary.PushedCommitSha,
+                PushRemoteName = summary.PushRemoteName,
+                PushBranchName = summary.PushBranchName,
+                FailureReason = summary.FailureReason
+            };
 
-        public Task<ExecutionSessionSummary> PushAsync(Guid sessionId, PushRequest request) => throw new NotSupportedException("Mutating execution methods are not used by workflow projection.");
+            return Task.FromResult(preparation);
+        }
+
+        public Task<ExecutionSessionSummary> CommitAsync(Guid sessionId, CommitRequest request)
+        {
+            fixture.CommitCallCount++;
+            throw new NotSupportedException("Workflow preparation must not execute commits.");
+        }
+
+        public Task<ExecutionSessionSummary> PushAsync(Guid sessionId, PushRequest request)
+        {
+            fixture.PushCallCount++;
+            throw new NotSupportedException("Workflow preparation must not execute pushes.");
+        }
     }
 
     private sealed class DecisionRepositoryStub(TestFixture fixture) : IDecisionRepository

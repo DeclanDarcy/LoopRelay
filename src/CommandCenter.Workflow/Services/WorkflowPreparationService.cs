@@ -2,6 +2,8 @@ using CommandCenter.Decisions.Abstractions;
 using CommandCenter.Decisions.Models;
 using CommandCenter.Continuity.Abstractions;
 using CommandCenter.Core.Repositories;
+using CommandCenter.Execution.Abstractions;
+using CommandCenter.Execution.Models;
 using CommandCenter.Workflow.Abstractions;
 using CommandCenter.Workflow.Models;
 using CommandCenter.Workflow.Persistence;
@@ -14,7 +16,8 @@ public sealed class WorkflowPreparationService(
     IWorkflowProjectionService projectionService,
     IWorkflowRepository workflowRepository,
     IDecisionDiscoveryService? decisionDiscoveryService = null,
-    IOperationalContextGenerationService? operationalContextGenerationService = null) : IWorkflowPreparationService
+    IOperationalContextGenerationService? operationalContextGenerationService = null,
+    IExecutionSessionService? executionSessionService = null) : IWorkflowPreparationService
 {
     public async Task<WorkflowPreparationEvaluation> EvaluatePreparationAsync(Guid repositoryId)
     {
@@ -26,13 +29,15 @@ public sealed class WorkflowPreparationService(
         WorkflowGateType blockingGate = ResolveBlockingGate(projection, latestTimeline);
         WorkflowPreparationCommand command = ResolveCommand(stage);
         bool hasOpenGate = blockingGate is not WorkflowGateType.None;
+        bool isCommitPreparationGate = command is WorkflowPreparationCommand.PrepareExecutionCommit &&
+            blockingGate is WorkflowGateType.CommitApproval;
         bool isRunnableState = progressState is not WorkflowProgressState.Active
             and not WorkflowProgressState.Blocked
             and not WorkflowProgressState.Failed
             and not WorkflowProgressState.Completed;
         IReadOnlyList<string> duplicateEvidence = DetectDuplicateEvidence(projection, command);
         bool hasDuplicateDomainEvidence = duplicateEvidence.Count > 0;
-        bool canPrepare = !hasOpenGate &&
+        bool canPrepare = (!hasOpenGate || isCommitPreparationGate) &&
             isRunnableState &&
             command is not WorkflowPreparationCommand.None &&
             !hasDuplicateDomainEvidence;
@@ -173,6 +178,7 @@ public sealed class WorkflowPreparationService(
         {
             WorkflowPreparationCommand.GenerateDecisionReviewArtifacts => await RunDecisionReviewArtifactPreparationAsync(evaluation.RepositoryId),
             WorkflowPreparationCommand.GenerateOperationalContextProposal => await RunOperationalContextProposalPreparationAsync(evaluation.RepositoryId),
+            WorkflowPreparationCommand.PrepareExecutionCommit => await RunCommitPreparationAsync(evaluation.RepositoryId),
             _ => []
         };
     }
@@ -202,6 +208,24 @@ public sealed class WorkflowPreparationService(
         return string.IsNullOrWhiteSpace(proposal.ProposalId)
             ? []
             : [$"operational-context-proposal:{proposal.ProposalId}"];
+    }
+
+    private async Task<IReadOnlyList<string>> RunCommitPreparationAsync(Guid repositoryId)
+    {
+        if (executionSessionService is null)
+        {
+            return [];
+        }
+
+        WorkflowInstance projection = await projectionService.ProjectAsync(repositoryId);
+        Guid sessionId = projection.CurrentExecution.ExecutionId
+            ?? throw new InvalidOperationException("Commit preparation requires an execution session.");
+        CommitPreparation preparation = await executionSessionService.PrepareCommitAsync(sessionId);
+        string artifactId = string.IsNullOrWhiteSpace(preparation.StatusSnapshot.Id)
+            ? preparation.Id.ToString()
+            : preparation.StatusSnapshot.Id;
+
+        return [$"commit-preparation:{artifactId}"];
     }
 
     private static WorkflowGateType ResolveBlockingGate(WorkflowInstance projection, WorkflowTimeline? latestTimeline)
@@ -345,7 +369,9 @@ public sealed class WorkflowPreparationService(
         IReadOnlyList<string> duplicateEvidence,
         bool canPrepare)
     {
-        if (hasOpenGate)
+        if (hasOpenGate &&
+            !(command is WorkflowPreparationCommand.PrepareExecutionCommit &&
+                blockingGate is WorkflowGateType.CommitApproval))
         {
             return blockingGate is WorkflowGateType.None
                 ? "Preparation refused because an open authority gate is awaiting human action."
@@ -369,7 +395,10 @@ public sealed class WorkflowPreparationService(
 
         if (canPrepare)
         {
-            return $"Preparation may request {CommandName(command)} for workflow stage {stage}.";
+            return command is WorkflowPreparationCommand.PrepareExecutionCommit &&
+                blockingGate is WorkflowGateType.CommitApproval
+                    ? "Preparation may request execution_prepare_commit to create commit-review evidence; CommitApproval remains a human authority gate."
+                    : $"Preparation may request {CommandName(command)} for workflow stage {stage}.";
         }
 
         return "Preparation refused by workflow evaluation.";
