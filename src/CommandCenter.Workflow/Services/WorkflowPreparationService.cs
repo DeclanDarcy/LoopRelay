@@ -1,5 +1,6 @@
 using CommandCenter.Decisions.Abstractions;
 using CommandCenter.Decisions.Models;
+using CommandCenter.Continuity.Abstractions;
 using CommandCenter.Core.Repositories;
 using CommandCenter.Workflow.Abstractions;
 using CommandCenter.Workflow.Models;
@@ -12,7 +13,8 @@ public sealed class WorkflowPreparationService(
     IRepositoryService repositoryService,
     IWorkflowProjectionService projectionService,
     IWorkflowRepository workflowRepository,
-    IDecisionDiscoveryService? decisionDiscoveryService = null) : IWorkflowPreparationService
+    IDecisionDiscoveryService? decisionDiscoveryService = null,
+    IOperationalContextGenerationService? operationalContextGenerationService = null) : IWorkflowPreparationService
 {
     public async Task<WorkflowPreparationEvaluation> EvaluatePreparationAsync(Guid repositoryId)
     {
@@ -170,6 +172,7 @@ public sealed class WorkflowPreparationService(
         return evaluation.Command switch
         {
             WorkflowPreparationCommand.GenerateDecisionReviewArtifacts => await RunDecisionReviewArtifactPreparationAsync(evaluation.RepositoryId),
+            WorkflowPreparationCommand.GenerateOperationalContextProposal => await RunOperationalContextProposalPreparationAsync(evaluation.RepositoryId),
             _ => []
         };
     }
@@ -186,6 +189,19 @@ public sealed class WorkflowPreparationService(
             .Select(candidate => $"decision-candidate:{candidate.Id}")
             .Order(StringComparer.Ordinal)
             .ToArray();
+    }
+
+    private async Task<IReadOnlyList<string>> RunOperationalContextProposalPreparationAsync(Guid repositoryId)
+    {
+        if (operationalContextGenerationService is null)
+        {
+            return [];
+        }
+
+        var proposal = await operationalContextGenerationService.GenerateAsync(repositoryId);
+        return string.IsNullOrWhiteSpace(proposal.ProposalId)
+            ? []
+            : [$"operational-context-proposal:{proposal.ProposalId}"];
     }
 
     private static WorkflowGateType ResolveBlockingGate(WorkflowInstance projection, WorkflowTimeline? latestTimeline)

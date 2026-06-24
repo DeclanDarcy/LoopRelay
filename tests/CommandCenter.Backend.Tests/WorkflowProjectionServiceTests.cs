@@ -1162,6 +1162,228 @@ public sealed class WorkflowProjectionServiceTests
     }
 
     [Fact]
+    public async Task PreparationRunDoesNotInvokeOperationalContextGenerationWhenGateIsOpen()
+    {
+        TestFixture fixture = TestFixture.Create();
+        ArrangeAuthorityGateScenario(fixture, "operational-context-review");
+        var generationService = new OperationalContextGenerationServiceStub(CreateOperationalContextProposal(
+            fixture.Repository.Id,
+            "ctx-created",
+            OperationalContextProposalStatus.Pending,
+            OperationalContextReviewState.PendingReview,
+            null,
+            null));
+        var service = new WorkflowPreparationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            new FileSystemWorkflowRepository(new MemoryArtifactStore()),
+            null,
+            generationService);
+
+        WorkflowPreparationEvent preparationEvent = await service.RunPreparationAsync(fixture.Repository.Id);
+
+        Assert.Equal("Refused", preparationEvent.Decision);
+        Assert.Equal(WorkflowGateType.OperationalContextReview, preparationEvent.BlockingGate);
+        Assert.Equal(0, generationService.CallCount);
+        Assert.Empty(preparationEvent.CreatedArtifactIds);
+    }
+
+    [Fact]
+    public async Task PreparationRunDoesNotInvokeOperationalContextGenerationWhenProposalEvidenceExists()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+        fixture.Decisions.Add(CreateResolvedDecision(fixture.Repository.Id, "DEC-0001"));
+        fixture.Proposals.Add(CreateOperationalContextProposal(
+            fixture.Repository.Id,
+            "ctx-0001",
+            OperationalContextProposalStatus.Promoted,
+            OperationalContextReviewState.Accepted,
+            DateTimeOffset.Parse("2026-06-23T11:10:00Z"),
+            DateTimeOffset.Parse("2026-06-23T11:20:00Z")));
+        var workflowRepository = new FileSystemWorkflowRepository(new MemoryArtifactStore());
+        await SaveOperationalContextPreparationTimelineAsync(fixture, workflowRepository);
+        var generationService = new OperationalContextGenerationServiceStub(CreateOperationalContextProposal(
+            fixture.Repository.Id,
+            "ctx-created",
+            OperationalContextProposalStatus.Pending,
+            OperationalContextReviewState.PendingReview,
+            null,
+            null));
+        var service = new WorkflowPreparationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            workflowRepository,
+            null,
+            generationService);
+
+        WorkflowPreparationEvent preparationEvent = await service.RunPreparationAsync(fixture.Repository.Id);
+
+        Assert.Equal("Duplicate", preparationEvent.Decision);
+        Assert.Equal(0, generationService.CallCount);
+        Assert.Empty(preparationEvent.CreatedArtifactIds);
+        Assert.Contains("operational-context-proposal:ctx-0001", preparationEvent.DuplicateEvidence);
+    }
+
+    [Fact]
+    public async Task PreparationRunDoesNotInvokeOperationalContextGenerationWhenAssimilationEvidenceExists()
+    {
+        TestFixture fixture = TestFixture.Create();
+        Decision decision = CreateResolvedDecision(fixture.Repository.Id, "DEC-0001");
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+        fixture.Decisions.Add(decision);
+        fixture.AssimilationRecommendations.Add(CreateAssimilationRecommendation(fixture.Repository.Id, decision, "decision-fingerprint"));
+        fixture.Proposals.Add(CreateOperationalContextProposal(
+            fixture.Repository.Id,
+            "ctx-0001",
+            OperationalContextProposalStatus.Promoted,
+            OperationalContextReviewState.Accepted,
+            DateTimeOffset.Parse("2026-06-23T11:10:00Z"),
+            DateTimeOffset.Parse("2026-06-23T11:20:00Z")));
+        var workflowRepository = new FileSystemWorkflowRepository(new MemoryArtifactStore());
+        await SaveOperationalContextPreparationTimelineAsync(fixture, workflowRepository);
+        var generationService = new OperationalContextGenerationServiceStub(CreateOperationalContextProposal(
+            fixture.Repository.Id,
+            "ctx-created",
+            OperationalContextProposalStatus.Pending,
+            OperationalContextReviewState.PendingReview,
+            null,
+            null));
+        var service = new WorkflowPreparationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            workflowRepository,
+            null,
+            generationService);
+
+        WorkflowPreparationEvent preparationEvent = await service.RunPreparationAsync(fixture.Repository.Id);
+
+        Assert.Equal("Duplicate", preparationEvent.Decision);
+        Assert.Equal(0, generationService.CallCount);
+        Assert.Empty(preparationEvent.CreatedArtifactIds);
+        Assert.Contains("operational-context-assimilation", preparationEvent.DuplicateEvidence);
+    }
+
+    [Fact]
+    public async Task PreparationRunDoesNotInvokeOperationalContextGenerationWhenLinkageEvidenceExists()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+        fixture.Decisions.Add(CreateResolvedDecision(fixture.Repository.Id, "DEC-0001"));
+        fixture.Proposals.Add(CreateOperationalContextProposal(
+            fixture.Repository.Id,
+            "ctx-0001",
+            OperationalContextProposalStatus.Promoted,
+            OperationalContextReviewState.Accepted,
+            DateTimeOffset.Parse("2026-06-23T11:10:00Z"),
+            DateTimeOffset.Parse("2026-06-23T11:20:00Z")));
+        var workflowRepository = new FileSystemWorkflowRepository(new MemoryArtifactStore());
+        await SaveOperationalContextPreparationTimelineAsync(fixture, workflowRepository);
+        var generationService = new OperationalContextGenerationServiceStub(CreateOperationalContextProposal(
+            fixture.Repository.Id,
+            "ctx-created",
+            OperationalContextProposalStatus.Pending,
+            OperationalContextReviewState.PendingReview,
+            null,
+            null));
+        var service = new WorkflowPreparationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            workflowRepository,
+            null,
+            generationService);
+
+        WorkflowPreparationEvent preparationEvent = await service.RunPreparationAsync(fixture.Repository.Id);
+
+        Assert.Equal("Duplicate", preparationEvent.Decision);
+        Assert.Equal(0, generationService.CallCount);
+        Assert.Empty(preparationEvent.CreatedArtifactIds);
+        Assert.Contains("operational-context-execution-link", preparationEvent.DuplicateEvidence.Single(evidence =>
+            evidence.StartsWith("operational-context-execution-link:", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task PreparationRunInvokesOperationalContextGenerationAndPersistsCreatedProposal()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+        fixture.Decisions.Add(CreateResolvedDecision(fixture.Repository.Id, "DEC-0001"));
+        OperationalContextProposal proposal = CreateOperationalContextProposal(
+            fixture.Repository.Id,
+            "ctx-created",
+            OperationalContextProposalStatus.Pending,
+            OperationalContextReviewState.PendingReview,
+            null,
+            null);
+        var generationService = new OperationalContextGenerationServiceStub(proposal, created =>
+        {
+            fixture.Proposals.Add(created);
+        });
+        var workflowRepository = new FileSystemWorkflowRepository(new MemoryArtifactStore());
+        await SaveOperationalContextPreparationTimelineAsync(fixture, workflowRepository);
+        var service = new WorkflowPreparationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            workflowRepository,
+            null,
+            generationService);
+
+        WorkflowPreparationEvent preparationEvent = await service.RunPreparationAsync(fixture.Repository.Id);
+        IReadOnlyList<WorkflowPreparationEvent> history = await workflowRepository.ListPreparationEventsAsync(fixture.Repository);
+        WorkflowInstance projection = await fixture.CreateService().ProjectAsync(fixture.Repository.Id);
+
+        Assert.Equal(1, generationService.CallCount);
+        Assert.Equal("Created", preparationEvent.Decision);
+        Assert.Contains("operational-context-proposal:ctx-created", preparationEvent.CreatedArtifactIds);
+        Assert.Single(history);
+        Assert.Equal(WorkflowStage.OperationalContext, projection.CurrentStage);
+        Assert.Equal(WorkflowGateType.OperationalContextReview, projection.BlockingGate);
+        Assert.All(fixture.Proposals, stored => Assert.NotEqual(OperationalContextProposalStatus.Promoted, stored.Status));
+    }
+
+    [Fact]
+    public async Task PreparationRunRepeatDoesNotCreateDuplicateOperationalContextProposal()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = CompletedAcceptedSession();
+        fixture.Decisions.Add(CreateResolvedDecision(fixture.Repository.Id, "DEC-0001"));
+        OperationalContextProposal proposal = CreateOperationalContextProposal(
+            fixture.Repository.Id,
+            "ctx-created",
+            OperationalContextProposalStatus.Pending,
+            OperationalContextReviewState.PendingReview,
+            null,
+            null);
+        var generationService = new OperationalContextGenerationServiceStub(proposal, created =>
+        {
+            fixture.Proposals.Add(created);
+        });
+        var workflowRepository = new FileSystemWorkflowRepository(new MemoryArtifactStore());
+        await SaveOperationalContextPreparationTimelineAsync(fixture, workflowRepository);
+        var service = new WorkflowPreparationService(
+            new RepositoryServiceStub(fixture.Repository),
+            fixture.CreateService(),
+            workflowRepository,
+            null,
+            generationService);
+
+        WorkflowPreparationEvent first = await service.RunPreparationAsync(fixture.Repository.Id);
+        WorkflowPreparationEvent second = await service.RunPreparationAsync(fixture.Repository.Id);
+
+        Assert.Equal(1, generationService.CallCount);
+        Assert.Equal("Created", first.Decision);
+        Assert.Equal("Refused", second.Decision);
+        Assert.Equal(WorkflowGateType.OperationalContextReview, second.BlockingGate);
+        Assert.Single(fixture.Proposals);
+        Assert.DoesNotContain(fixture.Proposals, stored => stored.Promotion.PromotedAt is not null);
+    }
+
+    [Fact]
     public async Task PreparationEvaluationSkipsCommitPreparationWhenEquivalentDomainEvidenceExists()
     {
         TestFixture fixture = TestFixture.Create();
@@ -2522,6 +2744,20 @@ public sealed class WorkflowProjectionServiceTests
             fingerprint);
     }
 
+    private static Task SaveOperationalContextPreparationTimelineAsync(
+        TestFixture fixture,
+        IWorkflowRepository workflowRepository) =>
+        workflowRepository.SaveTimelineAsync(
+            fixture.Repository,
+            CreateTimeline(
+                fixture.Repository.Id,
+                DateTimeOffset.Parse("2026-06-23T11:25:00Z"),
+                WorkflowStage.OperationalContext,
+                WorkflowProgressState.Ready,
+                WorkflowGateType.None,
+                WorkflowStage.Decision,
+                []));
+
     private sealed class TestFixture
     {
         public Repository Repository { get; } = new()
@@ -2817,6 +3053,20 @@ public sealed class WorkflowProjectionServiceTests
             string duplicateOfCandidateId,
             string? reason) =>
             throw new NotSupportedException("Workflow preparation must not mark decision candidates duplicate.");
+    }
+
+    private sealed class OperationalContextGenerationServiceStub(
+        OperationalContextProposal proposal,
+        Action<OperationalContextProposal>? onGenerate = null) : IOperationalContextGenerationService
+    {
+        public int CallCount { get; private set; }
+
+        public Task<OperationalContextProposal> GenerateAsync(Guid repositoryId)
+        {
+            CallCount++;
+            onGenerate?.Invoke(proposal);
+            return Task.FromResult(proposal);
+        }
     }
 
     private sealed class OperationalContextProposalStoreStub(TestFixture fixture) : IOperationalContextProposalStore
