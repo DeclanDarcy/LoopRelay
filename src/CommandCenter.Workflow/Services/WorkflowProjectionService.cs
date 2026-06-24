@@ -16,6 +16,7 @@ namespace CommandCenter.Workflow.Services;
 public sealed class WorkflowProjectionService(
     IRepositoryService repositoryService,
     IWorkflowExecutionService workflowExecutionService,
+    IWorkflowHandoffService workflowHandoffService,
     IDecisionRepository decisionRepository,
     IOperationalContextProposalStore operationalContextProposalStore,
     IGitService gitService,
@@ -58,6 +59,10 @@ public sealed class WorkflowProjectionService(
             evidence.Execution.IsExecutionEligible,
             evidence.Execution.Failure,
             evidence.Execution.Diagnostics,
+            evidence.Handoff,
+            evidence.Handoff.Status,
+            evidence.Handoff.Validation,
+            evidence.Handoff.Diagnostics,
             stateMachine.CandidateStages,
             stateMachine.ValidTransitions,
             stateMachine.BlockedTransitions,
@@ -95,11 +100,12 @@ public sealed class WorkflowProjectionService(
     private async Task<ProjectionEvidence> LoadEvidenceAsync(Repository repository)
     {
         WorkflowExecutionProjection execution = await workflowExecutionService.ProjectExecutionAsync(repository.Id);
+        WorkflowHandoffProjection handoff = await workflowHandoffService.ProjectHandoffAsync(repository.Id);
         IReadOnlyList<Decision> decisions = await decisionRepository.ListDecisionsAsync(repository);
         IReadOnlyList<OperationalContextProposal> proposals = await operationalContextProposalStore.ListAsync(repository);
         RepositoryGitStatus gitStatus = await gitService.GetStatusAsync(repository);
 
-        return new ProjectionEvidence(repository, execution, decisions, proposals, gitStatus);
+        return new ProjectionEvidence(repository, execution, handoff, decisions, proposals, gitStatus);
     }
 
     private static ProjectionChoice ChooseProjection(ProjectionEvidence evidence)
@@ -112,6 +118,7 @@ public sealed class WorkflowProjectionService(
         WorkflowExecutionStatus executionStatus = execution.Status;
 
         conflicts.AddRange(execution.Diagnostics.Conflicts);
+        conflicts.AddRange(evidence.Handoff.Diagnostics.Conflicts);
 
         if (executionStatus is WorkflowExecutionStatus.Failed)
         {
@@ -122,6 +129,18 @@ public sealed class WorkflowProjectionService(
         if (executionStatus is WorkflowExecutionStatus.Cancelled)
         {
             reasoning.Add("Execution projection reports a cancelled state.");
+            return Choice(WorkflowStage.Blocked, WorkflowProgressState.Blocked, WorkflowGateType.WorkSelection, "Select the next work item to execute.", reasoning, unknownStates, conflicts);
+        }
+
+        if (evidence.Handoff.Status is WorkflowHandoffStatus.Invalid)
+        {
+            reasoning.Add("Authoritative handoff evidence is invalid.");
+            return Choice(WorkflowStage.Handoff, WorkflowProgressState.Blocked, WorkflowGateType.ExecutionAcceptance, "Review the invalid execution handoff through the existing execution handoff workflow.", reasoning, unknownStates, conflicts);
+        }
+
+        if (evidence.Handoff.Status is WorkflowHandoffStatus.Rejected)
+        {
+            reasoning.Add("Execution handoff was rejected.");
             return Choice(WorkflowStage.Blocked, WorkflowProgressState.Blocked, WorkflowGateType.WorkSelection, "Select the next work item to execute.", reasoning, unknownStates, conflicts);
         }
 
@@ -210,6 +229,7 @@ public sealed class WorkflowProjectionService(
         [
             $"repository:{evidence.Repository.Id}",
             $"execution:{evidence.Execution.ExecutionId?.ToString() ?? "none"}:{evidence.Execution.Status}:handoff={evidence.Execution.HasHandoff}:changes={evidence.Execution.HasChanges}",
+            $"handoff:{evidence.Handoff.ExecutionId?.ToString() ?? "none"}:{evidence.Handoff.Status}:path={evidence.Handoff.HandoffPath ?? "none"}:valid={evidence.Handoff.Validation.IsValid}",
             $"decisions:{evidence.Decisions.Count}:{string.Join(",", evidence.Decisions.OrderBy(decision => decision.Id.Value).Select(decision => $"{decision.Id.Value}:{decision.State}"))}",
             $"operational-context-proposals:{evidence.Proposals.Count}:{string.Join(",", evidence.Proposals.OrderBy(proposal => proposal.ProposalId).Select(proposal => $"{proposal.ProposalId}:{proposal.Status}"))}",
             $"git:{evidence.GitStatus.Branch}:ahead={evidence.GitStatus.AheadCount}:behind={evidence.GitStatus.BehindCount}:clean={evidence.GitStatus.DirtyState.IsClean}"
@@ -243,6 +263,43 @@ public sealed class WorkflowProjectionService(
                 "Execution session completed.",
                 "execution",
                 execution.ExecutionId?.ToString() ?? evidence.Repository.Id.ToString()));
+        }
+
+        if (evidence.Handoff.CreatedAt is DateTimeOffset handoffCreatedAt &&
+            evidence.Handoff.HandoffPath is not null &&
+            evidence.Handoff.Status is not WorkflowHandoffStatus.Missing)
+        {
+            entries.Add(CreateTimelineEntry(
+                WorkflowTimelineEventType.HandoffCreated,
+                WorkflowStage.Handoff,
+                handoffCreatedAt,
+                $"Execution handoff created at {evidence.Handoff.HandoffPath}.",
+                "execution",
+                evidence.Handoff.HandoffId ?? evidence.Handoff.HandoffPath));
+        }
+
+        if (evidence.Handoff.Status is WorkflowHandoffStatus.Pending or WorkflowHandoffStatus.Accepted or WorkflowHandoffStatus.Rejected &&
+            evidence.Handoff.CreatedAt is DateTimeOffset handoffValidatedAt)
+        {
+            entries.Add(CreateTimelineEntry(
+                WorkflowTimelineEventType.HandoffValidated,
+                WorkflowStage.Handoff,
+                handoffValidatedAt,
+                "Execution handoff validated by Execution-owned evidence.",
+                "execution",
+                evidence.Handoff.HandoffId ?? evidence.Handoff.HandoffPath ?? execution.ExecutionId?.ToString() ?? evidence.Repository.Id.ToString()));
+        }
+
+        if (evidence.Handoff.Status is WorkflowHandoffStatus.Invalid &&
+            evidence.Handoff.CreatedAt is DateTimeOffset handoffInvalidAt)
+        {
+            entries.Add(CreateTimelineEntry(
+                WorkflowTimelineEventType.HandoffInvalid,
+                WorkflowStage.Handoff,
+                handoffInvalidAt,
+                $"Execution handoff invalid: {string.Join("; ", evidence.Handoff.Validation.Failures)}",
+                "execution",
+                evidence.Handoff.HandoffId ?? evidence.Handoff.HandoffPath ?? execution.ExecutionId?.ToString() ?? evidence.Repository.Id.ToString()));
         }
 
         if (execution.FailedAt is DateTimeOffset failedAt)
@@ -368,6 +425,7 @@ public sealed class WorkflowProjectionService(
     private sealed record ProjectionEvidence(
         Repository Repository,
         WorkflowExecutionProjection Execution,
+        WorkflowHandoffProjection Handoff,
         IReadOnlyList<Decision> Decisions,
         IReadOnlyList<OperationalContextProposal> Proposals,
         RepositoryGitStatus GitStatus);

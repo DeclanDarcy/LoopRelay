@@ -2,44 +2,45 @@
 
 ## New State
 
-- Completed Milestone 4 execution workflow integration.
-- Added explicit execution workflow boundary:
-  `IWorkflowExecutionService` and `WorkflowExecutionService`.
-- Added execution workflow models:
-  `WorkflowExecutionStatus`, `WorkflowExecutionProjection`,
-  `WorkflowExecutionFailure`, and `WorkflowExecutionDiagnostics`.
-- Extended `WorkflowInstance` with current execution projection, execution status,
-  execution eligibility, execution failure, and execution diagnostics.
-- Added execution timeline events:
-  `ExecutionFailed`, `ExecutionCancelled`, and `ExecutionHandoffRejected`.
+- Completed Milestone 5 handoff workflow integration.
+- Added read-only handoff workflow boundary:
+  `IWorkflowHandoffService` and `WorkflowHandoffService`.
+- Added handoff workflow models:
+  `WorkflowHandoffStatus`, `WorkflowHandoffProjection`,
+  `WorkflowHandoffValidation`, and `WorkflowHandoffDiagnostics`.
+- Extended `WorkflowInstance` with current handoff projection, handoff status,
+  validation, and diagnostics.
+- Added handoff timeline events:
+  `HandoffCreated`, `HandoffValidated`, and `HandoffInvalid`.
 - Added derived endpoint:
-  `GET /api/repositories/{repositoryId}/workflow/execution`.
-- Updated workflow projection to consume execution through `IWorkflowExecutionService`
-  while preserving timeline derivation for execution start, completion, failure,
-  cancellation, handoff acceptance/rejection, commit, and push evidence.
-- Marked `.agents/milestones/m4-execution.md` complete.
-- Rotated previous `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0004.md`.
+  `GET /api/repositories/{repositoryId}/workflow/handoff`.
+- Updated workflow projection to include handoff evidence in projection inputs,
+  blocking reasoning, diagnostics, timeline reconstruction, and recovery-derived
+  timelines.
+- Marked `.agents/milestones/m5-handoff.md` complete.
+- Rotated previous `.agents/handoffs/handoff.md` to
+  `.agents/handoffs/handoff.0005.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter WorkflowProjectionServiceTests` passed: 27 tests.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 539 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter WorkflowProjectionServiceTests` passed: 29 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 541 tests.
 - `dotnet build CommandCenter.slnx` passed with 0 warnings and 0 errors.
 
 ## Notes
 
-- Workflow execution integration is read-only. The service consumes repository execution
-  state and session summaries; execution launch, cancellation, acceptance, rejection,
-  commit, and push remain owned by Execution/Git domain services.
-- `HasChanges` is intentionally derived from commit-preparation, commit, push, and
-  awaiting-commit/awaiting-push evidence. The current session summary does not expose
-  a reliable generated-change flag before commit preparation, so workflow does not
-  invent one.
-- Recovery remains projection-based: rebuilt workflow timelines now include the
-  execution projection evidence and new execution timeline events.
+- Handoff integration is read-only. Workflow validates and projects handoff
+  evidence but does not accept, reject, repair, rotate, or select handoffs.
+- Execution session summary remains the source for the authoritative handoff
+  path. Workflow reports conflicts if that path diverges from
+  `.agents/handoffs/handoff.md`.
+- Invalid handoff evidence blocks at the handoff stage with the existing
+  execution-acceptance gate; rejected handoffs block at work selection until a
+  new execution cycle is selected.
 
 ## Next Slice
 
-- Start Milestone 5 handoff workflow integration by adding handoff-specific projection,
-  validation, diagnostics, and endpoint coverage around current/rotated handoff evidence,
-  while keeping handoff acceptance/rejection authority in Execution.
+- Start Milestone 6 decision workflow integration by adding decision-specific
+  projection, diagnostics, and endpoint coverage for open, under-review,
+  resolved, and governance-blocked decision states while keeping decision
+  resolution authority in the Decisions domain.

@@ -10,6 +10,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddSingleton<IWorkflowRepository, FileSystemWorkflowRepository>();
         services.AddSingleton<IWorkflowExecutionService, WorkflowExecutionService>();
+        services.AddSingleton<IWorkflowHandoffService, WorkflowHandoffService>();
         services.AddSingleton<IWorkflowStateMachineService, WorkflowStateMachineService>();
         services.AddSingleton<IWorkflowProjectionService, WorkflowProjectionService>();
         services.AddSingleton<IWorkflowGateCatalogService, WorkflowGateCatalogService>();

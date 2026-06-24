@@ -450,6 +450,110 @@ public sealed class WorkflowProjectionServiceTests
     }
 
     [Fact]
+    public async Task WorkflowHandoffServiceProjectsPendingAcceptedRejectedMissingAndInvalidStates()
+    {
+        TestFixture fixture = TestFixture.Create();
+        Guid sessionId = Guid.NewGuid();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingAcceptance;
+        fixture.Session = new ExecutionSessionSummary
+        {
+            SessionId = sessionId,
+            State = ExecutionSessionState.Completed,
+            RepositoryState = RepositoryExecutionState.AwaitingAcceptance,
+            StartedAt = DateTimeOffset.Parse("2026-06-23T10:00:00Z"),
+            CompletedAt = DateTimeOffset.Parse("2026-06-23T10:10:00Z"),
+            HandoffPath = ".agents/handoffs/handoff.md"
+        };
+
+        WorkflowHandoffProjection pending = await fixture.CreateHandoffService().ProjectHandoffAsync(fixture.Repository.Id);
+        Assert.Equal(WorkflowHandoffStatus.Pending, pending.Status);
+        Assert.True(pending.Validation.IsValid);
+
+        fixture.ExecutionState = RepositoryExecutionState.Accepted;
+        fixture.Session = new ExecutionSessionSummary
+        {
+            SessionId = sessionId,
+            State = ExecutionSessionState.Completed,
+            RepositoryState = RepositoryExecutionState.Accepted,
+            StartedAt = DateTimeOffset.Parse("2026-06-23T10:00:00Z"),
+            CompletedAt = DateTimeOffset.Parse("2026-06-23T10:10:00Z"),
+            HandoffPath = ".agents/handoffs/handoff.md",
+            AcceptedAt = DateTimeOffset.Parse("2026-06-23T10:15:00Z")
+        };
+        WorkflowHandoffProjection accepted = await fixture.CreateHandoffService().ProjectHandoffAsync(fixture.Repository.Id);
+        Assert.Equal(WorkflowHandoffStatus.Accepted, accepted.Status);
+
+        fixture.ExecutionState = RepositoryExecutionState.Ready;
+        fixture.Session = new ExecutionSessionSummary
+        {
+            SessionId = sessionId,
+            State = ExecutionSessionState.Completed,
+            RepositoryState = RepositoryExecutionState.Ready,
+            StartedAt = DateTimeOffset.Parse("2026-06-23T10:00:00Z"),
+            CompletedAt = DateTimeOffset.Parse("2026-06-23T10:10:00Z"),
+            HandoffPath = ".agents/handoffs/handoff.md",
+            RejectedAt = DateTimeOffset.Parse("2026-06-23T10:16:00Z")
+        };
+        WorkflowHandoffProjection rejected = await fixture.CreateHandoffService().ProjectHandoffAsync(fixture.Repository.Id);
+        Assert.Equal(WorkflowHandoffStatus.Rejected, rejected.Status);
+
+        fixture.Session = new ExecutionSessionSummary
+        {
+            SessionId = sessionId,
+            State = ExecutionSessionState.Completed,
+            RepositoryState = RepositoryExecutionState.Ready,
+            StartedAt = DateTimeOffset.Parse("2026-06-23T10:00:00Z"),
+            CompletedAt = DateTimeOffset.Parse("2026-06-23T10:10:00Z")
+        };
+        WorkflowHandoffProjection missing = await fixture.CreateHandoffService().ProjectHandoffAsync(fixture.Repository.Id);
+        Assert.Equal(WorkflowHandoffStatus.Missing, missing.Status);
+
+        fixture.Session = new ExecutionSessionSummary
+        {
+            SessionId = sessionId,
+            State = ExecutionSessionState.Completed,
+            RepositoryState = RepositoryExecutionState.AwaitingAcceptance,
+            StartedAt = DateTimeOffset.Parse("2026-06-23T10:00:00Z"),
+            CompletedAt = DateTimeOffset.Parse("2026-06-23T10:10:00Z"),
+            HandoffPath = ".agents/handoffs/handoff.md"
+        };
+        fixture.HandoffContent = "";
+        WorkflowHandoffProjection invalid = await fixture.CreateHandoffService().ProjectHandoffAsync(fixture.Repository.Id);
+        Assert.Equal(WorkflowHandoffStatus.Invalid, invalid.Status);
+        Assert.False(invalid.Validation.IsValid);
+    }
+
+    [Fact]
+    public async Task WorkflowHandoffEndpointReturnsHandoffProjection()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingAcceptance;
+        fixture.Session = new ExecutionSessionSummary
+        {
+            SessionId = Guid.NewGuid(),
+            State = ExecutionSessionState.Completed,
+            RepositoryState = RepositoryExecutionState.AwaitingAcceptance,
+            StartedAt = DateTimeOffset.Parse("2026-06-23T10:00:00Z"),
+            CompletedAt = DateTimeOffset.Parse("2026-06-23T10:10:00Z"),
+            HandoffPath = ".agents/handoffs/handoff.md"
+        };
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services => fixture.ReplaceServices(services));
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+
+        using var client = new HttpClient();
+        HttpResponseMessage response = await client.GetAsync(app.Urls.Single() + $"/api/repositories/{fixture.Repository.Id}/workflow/handoff");
+        WorkflowHandoffProjection? handoff = await response.Content.ReadFromJsonAsync<WorkflowHandoffProjection>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(handoff);
+        Assert.Equal(WorkflowHandoffStatus.Pending, handoff.Status);
+        Assert.Equal(".agents/handoffs/handoff.md", handoff.HandoffPath);
+    }
+
+    [Fact]
     public async Task WorkflowTransitionsEndpointReturnsStateMachineDiagnostics()
     {
         TestFixture fixture = TestFixture.Create();
@@ -734,6 +838,8 @@ public sealed class WorkflowProjectionServiceTests
 
         public ExecutionSessionSummary? Session { get; set; }
 
+        public string? HandoffContent { get; set; } = "# Handoff\n\nGenerated handoff.";
+
         public List<Decision> Decisions { get; } = [];
 
         public List<OperationalContextProposal> Proposals { get; } = [];
@@ -751,6 +857,10 @@ public sealed class WorkflowProjectionServiceTests
             new(
                 new RepositoryServiceStub(Repository),
                 new WorkflowExecutionService(new ExecutionSessionServiceStub(this)),
+                new WorkflowHandoffService(
+                    new RepositoryServiceStub(Repository),
+                    new ExecutionSessionServiceStub(this),
+                    new ArtifactStoreStub(this)),
                 new DecisionRepositoryStub(this),
                 new OperationalContextProposalStoreStub(this),
                 new GitServiceStub(this),
@@ -758,6 +868,9 @@ public sealed class WorkflowProjectionServiceTests
 
         public WorkflowExecutionService CreateExecutionService() =>
             new(new ExecutionSessionServiceStub(this));
+
+        public WorkflowHandoffService CreateHandoffService() =>
+            new(new RepositoryServiceStub(Repository), new ExecutionSessionServiceStub(this), new ArtifactStoreStub(this));
 
         public WorkflowRecoveryService CreateRecoveryService(IWorkflowRepository workflowRepository) =>
             new(new RepositoryServiceStub(Repository), CreateService(), workflowRepository);
@@ -772,6 +885,7 @@ public sealed class WorkflowProjectionServiceTests
             services.RemoveAll<IGitService>();
             services.RemoveAll<IWorkflowStateMachineService>();
             services.RemoveAll<IWorkflowExecutionService>();
+            services.RemoveAll<IWorkflowHandoffService>();
             services.RemoveAll<IWorkflowProjectionService>();
             services.RemoveAll<IWorkflowGateCatalogService>();
             services.RemoveAll<IWorkflowRepository>();
@@ -779,13 +893,14 @@ public sealed class WorkflowProjectionServiceTests
             services.RemoveAll<IHostedService>();
 
             services.AddSingleton<IRepositoryService>(new RepositoryServiceStub(Repository));
-            services.AddSingleton<IArtifactStore, MemoryArtifactStore>();
+            services.AddSingleton<IArtifactStore>(new ArtifactStoreStub(this));
             services.AddSingleton<IExecutionSessionService>(new ExecutionSessionServiceStub(this));
             services.AddSingleton<IDecisionRepository>(new DecisionRepositoryStub(this));
             services.AddSingleton<IOperationalContextProposalStore>(new OperationalContextProposalStoreStub(this));
             services.AddSingleton<IGitService>(new GitServiceStub(this));
             services.AddSingleton<IWorkflowRepository, FileSystemWorkflowRepository>();
             services.AddSingleton<IWorkflowExecutionService, WorkflowExecutionService>();
+            services.AddSingleton<IWorkflowHandoffService, WorkflowHandoffService>();
             services.AddSingleton<IWorkflowStateMachineService, WorkflowStateMachineService>();
             services.AddSingleton<IWorkflowProjectionService, WorkflowProjectionService>();
             services.AddSingleton<IWorkflowGateCatalogService, WorkflowGateCatalogService>();
@@ -800,6 +915,27 @@ public sealed class WorkflowProjectionServiceTests
         public Task<Repository> RegisterAsync(string repositoryPath) => throw new NotSupportedException("Mutating repository methods are not used by workflow projection.");
 
         public Task RemoveAsync(Guid repositoryId) => throw new NotSupportedException("Mutating repository methods are not used by workflow projection.");
+    }
+
+    private sealed class ArtifactStoreStub(TestFixture fixture) : IArtifactStore
+    {
+        public Task<bool> ExistsAsync(string path) => Task.FromResult(IsCurrentHandoffPath(path) && fixture.HandoffContent is not null);
+
+        public Task<string?> ReadAsync(string path) => Task.FromResult(IsCurrentHandoffPath(path) ? fixture.HandoffContent : null);
+
+        public Task WriteAsync(string path, string content) => throw new NotSupportedException("Mutating artifact methods are not used by workflow projection.");
+
+        public Task DeleteAsync(string path) => throw new NotSupportedException("Mutating artifact methods are not used by workflow projection.");
+
+        public Task<IReadOnlyList<string>> ListAsync(string path, string searchPattern) => Task.FromResult<IReadOnlyList<string>>([]);
+
+        public Task<IReadOnlyList<string>> ListDirectoriesAsync(string path) => Task.FromResult<IReadOnlyList<string>>([]);
+
+        private bool IsCurrentHandoffPath(string path)
+        {
+            string expected = Path.Combine(fixture.Repository.Path, ".agents", "handoffs", "handoff.md");
+            return string.Equals(path, expected, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     private sealed class ExecutionSessionServiceStub(TestFixture fixture) : IExecutionSessionService
