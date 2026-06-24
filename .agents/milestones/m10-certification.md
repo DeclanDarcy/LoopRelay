@@ -76,7 +76,7 @@ Tests:
 - [ ] recovery certification detects lost state, corruption, and duplicate progression.
   - [x] missing timeline evidence is treated as derived/rebuildable evidence.
   - [x] stale persisted timeline evidence is detected and domain projection wins.
-  - [ ] corrupted timeline evidence is detected without losing domain state.
+  - [x] corrupted timeline evidence is detected without losing domain state.
   - [ ] corrupted continuation/preparation history does not duplicate events or artifacts.
   - [ ] restart duplicate progression is certified.
 - [ ] continuation certification detects missed gate halting.

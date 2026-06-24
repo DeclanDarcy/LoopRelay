@@ -245,11 +245,15 @@ public sealed class WorkflowCertificationService(
         bool passed = hasDomainProjection && timelineRecoverable;
 
         string summary = passed
-            ? "Workflow recovery can reconstruct current state from domain evidence."
+            ? timelineLoadError is not null
+                ? "Workflow recovery detected corrupted timeline evidence and preserved domain-derived state."
+                : "Workflow recovery can reconstruct current state from domain evidence."
             : "Workflow recovery could not prove current state reconstruction from domain evidence.";
-        string detail = staleTimelineDetected
-            ? "Persisted workflow timeline evidence differs from the domain-derived projection; certification treats the domain-derived projection as authoritative recovery input."
-            : "Workflow recovery certification compares the latest persisted timeline with a fresh domain-derived timeline and requires domain evidence to remain reconstructable.";
+        string detail = timelineLoadError is not null
+            ? "Persisted workflow timeline evidence could not be loaded; certification treats the domain-derived projection as authoritative recovery input and reports that recovery is required."
+            : staleTimelineDetected
+                ? "Persisted workflow timeline evidence differs from the domain-derived projection; certification treats the domain-derived projection as authoritative recovery input."
+                : "Workflow recovery certification compares the latest persisted timeline with a fresh domain-derived timeline and requires domain evidence to remain reconstructable.";
 
         var evidence = new List<string>
         {
@@ -282,6 +286,7 @@ public sealed class WorkflowCertificationService(
 
         if (timelineLoadError is not null)
         {
+            diagnostics.Add("Timeline evidence is corrupted; recovery is required before persisted workflow evidence can be trusted.");
             diagnostics.Add($"Persisted workflow timeline could not be loaded and must not override domain evidence: {timelineLoadError}");
         }
 

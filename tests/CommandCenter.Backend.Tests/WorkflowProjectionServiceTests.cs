@@ -3055,6 +3055,36 @@ public sealed class WorkflowProjectionServiceTests
     }
 
     [Fact]
+    public async Task WorkflowCertificationReportsCorruptedTimelineRecoveryWithDomainProjectionWinning()
+    {
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingCommit;
+        fixture.Session = CompletedAcceptedSession(RepositoryExecutionState.AwaitingCommit);
+        var store = new MemoryArtifactStore();
+        string corruptTimelinePath = WorkflowArtifactPaths.Resolve(
+            fixture.Repository,
+            WorkflowArtifactPaths.TimelineJson(WorkflowArtifactPaths.TimelineId(DateTimeOffset.Parse("2026-06-23T12:10:00Z"))));
+        await store.WriteAsync(corruptTimelinePath, "{ not valid json");
+        var workflowRepository = new FileSystemWorkflowRepository(store);
+        WorkflowCertificationService service = fixture.CreateCertificationService(workflowRepository);
+
+        WorkflowCertificationResult result = await service.GetCurrentCertificationAsync(fixture.Repository.Id);
+
+        Assert.True(result.Certified);
+        Assert.Equal(WorkflowStage.Commit, result.CurrentStage);
+        Assert.Equal(WorkflowGateType.CommitApproval, result.BlockingGate);
+        WorkflowCertificationFinding finding = Assert.Single(
+            result.Findings,
+            candidate => candidate.Id == "recovery-domain-evidence-wins");
+        Assert.True(finding.Passed);
+        Assert.Contains("corrupted timeline evidence", finding.Summary, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(finding.Evidence, evidence => evidence.Contains("domain:Commit", StringComparison.Ordinal));
+        Assert.Contains(finding.Evidence, evidence => evidence.Contains("timeline-load-error:", StringComparison.Ordinal));
+        Assert.Contains(finding.Diagnostics, diagnostic => diagnostic.Contains("recovery is required", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(finding.Diagnostics, diagnostic => diagnostic.Contains("must not override domain evidence", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task WorkflowCertificationFailsForbiddenPreparationAuthorityCommand()
     {
         TestFixture fixture = TestFixture.Create();

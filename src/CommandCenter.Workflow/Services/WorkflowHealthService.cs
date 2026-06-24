@@ -14,13 +14,13 @@ public sealed class WorkflowHealthService(
     {
         Repository repository = await GetRepositoryAsync(repositoryId);
         WorkflowInstance projection = await projectionService.ProjectAsync(repositoryId);
-        WorkflowTimeline? latestTimeline = await workflowRepository.GetLatestTimelineAsync(repository);
+        (WorkflowTimeline? latestTimeline, string? timelineLoadError) = await TryGetLatestTimelineAsync(repository);
         IReadOnlyList<WorkflowContinuationEvent> continuationHistory = await workflowRepository.ListContinuationEventsAsync(repository);
         IReadOnlyList<WorkflowPreparationEvent> preparationHistory = await workflowRepository.ListPreparationEventsAsync(repository);
         DateTimeOffset generatedAt = DateTimeOffset.UtcNow;
 
-        IReadOnlyList<string> evidencePaths = BuildEvidencePaths(projection, latestTimeline, continuationHistory, preparationHistory);
-        IReadOnlyList<string> stageInfluences = BuildStageInfluences(projection, latestTimeline);
+        IReadOnlyList<string> evidencePaths = BuildEvidencePaths(projection, latestTimeline, timelineLoadError, continuationHistory, preparationHistory);
+        IReadOnlyList<string> stageInfluences = BuildStageInfluences(projection, latestTimeline, timelineLoadError);
         IReadOnlyList<string> progressionInfluences = BuildProgressionInfluences(projection, continuationHistory);
         IReadOnlyList<string> preparationInfluences = BuildPreparationInfluences(preparationHistory);
         IReadOnlyList<string> gateInfluences = BuildGateInfluences(projection);
@@ -67,13 +67,13 @@ public sealed class WorkflowHealthService(
     {
         Repository repository = await GetRepositoryAsync(repositoryId);
         WorkflowInstance projection = await projectionService.ProjectAsync(repositoryId);
-        WorkflowTimeline? latestTimeline = await workflowRepository.GetLatestTimelineAsync(repository);
+        (WorkflowTimeline? latestTimeline, string? timelineLoadError) = await TryGetLatestTimelineAsync(repository);
         IReadOnlyList<WorkflowContinuationEvent> continuationHistory = await workflowRepository.ListContinuationEventsAsync(repository);
         IReadOnlyList<WorkflowPreparationEvent> preparationHistory = await workflowRepository.ListPreparationEventsAsync(repository);
         WorkflowInfluenceTrace trace = await TraceInfluenceAsync(repositoryId);
 
         WorkflowHealthDimension projectionHealth = AssessProjectionHealth(projection);
-        WorkflowHealthDimension recoveryHealth = AssessRecoveryHealth(projection, latestTimeline);
+        WorkflowHealthDimension recoveryHealth = AssessRecoveryHealth(projection, latestTimeline, timelineLoadError);
         WorkflowHealthDimension gateHealth = AssessGateHealth(projection);
         WorkflowHealthDimension continuationHealth = AssessContinuationHealth(projection, continuationHistory);
         WorkflowHealthDimension preparationHealth = AssessPreparationHealth(projection, preparationHistory);
@@ -101,6 +101,18 @@ public sealed class WorkflowHealthService(
             dimensions.SelectMany(dimension => dimension.Diagnostics).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray());
     }
 
+    private async Task<(WorkflowTimeline? Timeline, string? LoadError)> TryGetLatestTimelineAsync(Repository repository)
+    {
+        try
+        {
+            return (await workflowRepository.GetLatestTimelineAsync(repository), null);
+        }
+        catch (Exception exception) when (exception is System.Text.Json.JsonException or InvalidOperationException)
+        {
+            return (null, exception.Message);
+        }
+    }
+
     private async Task<Repository> GetRepositoryAsync(Guid repositoryId)
     {
         Repository? repository = (await repositoryService.GetAllAsync()).FirstOrDefault(candidate => candidate.Id == repositoryId);
@@ -110,12 +122,15 @@ public sealed class WorkflowHealthService(
     private static IReadOnlyList<string> BuildEvidencePaths(
         WorkflowInstance projection,
         WorkflowTimeline? latestTimeline,
+        string? timelineLoadError,
         IReadOnlyList<WorkflowContinuationEvent> continuationHistory,
         IReadOnlyList<WorkflowPreparationEvent> preparationHistory)
     {
         List<string> paths = [.. projection.Diagnostics.ProjectionInputs];
         paths.Add(latestTimeline is null
-            ? "workflow-timeline:none"
+            ? timelineLoadError is null
+                ? "workflow-timeline:none"
+                : $"workflow-timeline:load-error:{timelineLoadError}"
             : $"workflow-timeline:{latestTimeline.Fingerprint}:{latestTimeline.CurrentStage}");
         paths.AddRange(projection.Timeline.Select(entry => $"timeline-entry:{entry.SourceDomain}:{entry.SourceArtifact}:{entry.EventType}"));
         paths.AddRange(projection.GateHistory.Select(gate => $"gate:{gate.Type}:{gate.Status}:{gate.SourceDomain}:{gate.SourceArtifact}"));
@@ -124,7 +139,10 @@ public sealed class WorkflowHealthService(
         return paths.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
     }
 
-    private static IReadOnlyList<string> BuildStageInfluences(WorkflowInstance projection, WorkflowTimeline? latestTimeline)
+    private static IReadOnlyList<string> BuildStageInfluences(
+        WorkflowInstance projection,
+        WorkflowTimeline? latestTimeline,
+        string? timelineLoadError)
     {
         List<string> influences =
         [
@@ -133,9 +151,17 @@ public sealed class WorkflowHealthService(
             $"Blocking gate is {projection.BlockingGate}."
         ];
         influences.AddRange(projection.Diagnostics.Reasoning);
-        influences.Add(latestTimeline is null
-            ? "No persisted workflow timeline influenced the coordinator stage."
-            : $"Latest persisted workflow timeline reports {latestTimeline.CurrentStage} with fingerprint {latestTimeline.Fingerprint}.");
+        if (timelineLoadError is not null)
+        {
+            influences.Add($"Persisted workflow timeline could not be loaded and did not influence the coordinator stage: {timelineLoadError}");
+        }
+        else
+        {
+            influences.Add(latestTimeline is null
+                ? "No persisted workflow timeline influenced the coordinator stage."
+                : $"Latest persisted workflow timeline reports {latestTimeline.CurrentStage} with fingerprint {latestTimeline.Fingerprint}.");
+        }
+
         return influences.Distinct(StringComparer.Ordinal).ToArray();
     }
 
@@ -226,8 +252,21 @@ public sealed class WorkflowHealthService(
             projection.Diagnostics.Reasoning);
     }
 
-    private static WorkflowHealthDimension AssessRecoveryHealth(WorkflowInstance projection, WorkflowTimeline? latestTimeline)
+    private static WorkflowHealthDimension AssessRecoveryHealth(
+        WorkflowInstance projection,
+        WorkflowTimeline? latestTimeline,
+        string? timelineLoadError)
     {
+        if (timelineLoadError is not null)
+        {
+            return new WorkflowHealthDimension(
+                "Recovery",
+                "Degraded",
+                "Persisted workflow timeline evidence is corrupted; projection remains recoverable from domain evidence.",
+                projection.Diagnostics.ProjectionInputs,
+                [$"Timeline load failed: {timelineLoadError}"]);
+        }
+
         if (latestTimeline is null)
         {
             return new WorkflowHealthDimension(
