@@ -9,6 +9,8 @@ public static class DecisionSessionArtifactPaths
 
     public static string RegistryJson() => ArtifactPath.CombineRelative(".agents", "decision-sessions", "registry.json");
 
+    public static string MetricsSnapshotJson() => ArtifactPath.CombineRelative(".agents", "decision-sessions", "analysis", "metrics", "snapshot.json");
+
     public static string Resolve(Repository repository, string relativePath)
     {
         return ArtifactPath.ResolveRepositoryPath(repository, relativePath);

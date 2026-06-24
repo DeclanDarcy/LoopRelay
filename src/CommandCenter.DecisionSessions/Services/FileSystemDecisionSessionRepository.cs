@@ -95,6 +95,50 @@ public sealed class FileSystemDecisionSessionRepository(IArtifactStore artifactS
         return Sort(sessions);
     }
 
+    public async Task<DecisionSessionMetricsSnapshot?> ReadMetricsSnapshotAsync(Repository repository)
+    {
+        string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.MetricsSnapshotJson());
+        string? json = await artifactStore.ReadAsync(path);
+        if (json is null)
+        {
+            return null;
+        }
+
+        DecisionSessionArtifactDocument<DecisionSessionMetricsSnapshot>? document =
+            JsonSerializer.Deserialize<DecisionSessionArtifactDocument<DecisionSessionMetricsSnapshot>>(
+                json,
+                DecisionSessionJson.Options);
+        if (document is null)
+        {
+            throw new DecisionSessionValidationException("Decision session metrics snapshot could not be deserialized.");
+        }
+
+        ValidateDocument(repository, document, "Decision session metrics snapshot");
+        if (document.Payload.RepositoryId != repository.Id || document.Payload.Diagnostics.RepositoryId != repository.Id)
+        {
+            throw new DecisionSessionValidationException("Decision session metrics snapshot belongs to a different repository.");
+        }
+
+        return document.Payload;
+    }
+
+    public async Task WriteMetricsSnapshotAsync(Repository repository, DecisionSessionMetricsSnapshot snapshot)
+    {
+        if (snapshot.RepositoryId != repository.Id || snapshot.Diagnostics.RepositoryId != repository.Id)
+        {
+            throw new DecisionSessionValidationException("Decision session metrics snapshot belongs to a different repository.");
+        }
+
+        var document = new DecisionSessionArtifactDocument<DecisionSessionMetricsSnapshot>(
+            DecisionSessionArtifactPaths.SchemaVersion,
+            repository.Id,
+            snapshot.GeneratedAt,
+            DateTimeOffset.UtcNow,
+            snapshot);
+        string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.MetricsSnapshotJson());
+        await artifactStore.WriteAsync(path, JsonSerializer.Serialize(document, DecisionSessionJson.Options));
+    }
+
     internal async Task<DecisionSessionValidationResult> ValidateAsync(Repository repository)
     {
         string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.RegistryJson());
@@ -153,6 +197,19 @@ public sealed class FileSystemDecisionSessionRepository(IArtifactStore artifactS
             records);
         string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.RegistryJson());
         await artifactStore.WriteAsync(path, JsonSerializer.Serialize(document, DecisionSessionJson.Options));
+    }
+
+    private static void ValidateDocument<T>(Repository repository, DecisionSessionArtifactDocument<T> document, string documentName)
+    {
+        if (!string.Equals(document.SchemaVersion, DecisionSessionArtifactPaths.SchemaVersion, StringComparison.Ordinal))
+        {
+            throw new DecisionSessionValidationException($"Unsupported decision session schema version '{document.SchemaVersion}'.");
+        }
+
+        if (document.RepositoryId != repository.Id)
+        {
+            throw new DecisionSessionValidationException($"{documentName} belongs to a different repository.");
+        }
     }
 
     private static DecisionSessionValidationResult Validate(Repository repository, IReadOnlyList<DecisionSession> sessions)

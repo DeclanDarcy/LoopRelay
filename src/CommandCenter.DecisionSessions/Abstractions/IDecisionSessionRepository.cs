@@ -15,4 +15,8 @@ public interface IDecisionSessionRepository
     Task<DecisionSession?> GetActiveAsync(Repository repository);
 
     Task<IReadOnlyList<DecisionSession>> ListAsync(Repository repository);
+
+    Task<DecisionSessionMetricsSnapshot?> ReadMetricsSnapshotAsync(Repository repository);
+
+    Task WriteMetricsSnapshotAsync(Repository repository, DecisionSessionMetricsSnapshot snapshot);
 }

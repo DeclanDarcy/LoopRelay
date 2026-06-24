@@ -6,6 +6,7 @@ using CommandCenter.Decisions.Models;
 using CommandCenter.Decisions.Primitives;
 using CommandCenter.Decisions.Services;
 using CommandCenter.DecisionSessions.Models;
+using CommandCenter.DecisionSessions.Persistence;
 using CommandCenter.DecisionSessions.Services;
 using CommandCenter.Reasoning.Models;
 using CommandCenter.Reasoning.Projections;
@@ -33,19 +34,13 @@ public sealed class DecisionSessionMetricsTests
     {
         DecisionSessionTestHarness harness = DecisionSessionTestHarness.Create();
         var decisionRepository = new InMemoryDecisionRepository();
-        var artifactStore = new MemoryArtifactStore();
-        var reasoningRepository = new FileSystemReasoningRepository(artifactStore, new ReasoningArtifactProjectionService());
-        var contextStore = new FileSystemOperationalContextProposalStore(artifactStore);
-        var service = new DecisionSessionMetricsService(
-            harness.RepositoryService,
-            harness.Registry,
-            decisionRepository,
-            reasoningRepository,
-            contextStore,
-            new DeterministicTokenEstimator());
+        var reasoningRepository = new FileSystemReasoningRepository(harness.Store, new ReasoningArtifactProjectionService());
+        var contextStore = new FileSystemOperationalContextProposalStore(harness.Store);
+        DateTimeOffset measuredAt = DateTimeOffset.UtcNow;
+        var service = CreateService(harness, decisionRepository, reasoningRepository, contextStore, measuredAt);
         DecisionSession session = await harness.Registry.CreateSessionAsync(harness.Repository.Id, "test");
         await harness.Registry.ActivateSessionAsync(harness.Repository.Id, session.Id);
-        DateTimeOffset now = DateTimeOffset.UtcNow;
+        DateTimeOffset now = measuredAt;
 
         await decisionRepository.SaveDecisionAsync(harness.Repository, CreateDecision(harness.Repository.Id, now.AddMinutes(-10)));
         await decisionRepository.SaveCandidateAsync(harness.Repository, CreateCandidate(harness.Repository.Id, now.AddMinutes(-9)));
@@ -75,6 +70,8 @@ public sealed class DecisionSessionMetricsTests
                 GeneratedContentHash = "generated"
             },
             "Operational context revision content.");
+        await harness.Store.WriteAsync(Path.Combine(harness.Repository.Path, ".agents", "operational_context.md"), "Current operational context.");
+        await harness.Store.WriteAsync(Path.Combine(harness.Repository.Path, ".agents", "operational_context.0001.md"), "Historical operational context.");
 
         DecisionSessionMetricsSnapshot snapshot = await service.GetMetricsAsync(harness.Repository.Id);
 
@@ -84,13 +81,132 @@ public sealed class DecisionSessionMetricsTests
         Assert.Equal(1, snapshot.Metrics.ReasoningEventCount);
         Assert.Equal(1, snapshot.Metrics.ReasoningThreadCount);
         Assert.Equal(1, snapshot.Metrics.ReasoningRelationshipCount);
-        Assert.Equal(1, snapshot.Metrics.OperationalContextRevisionCount);
+        Assert.Equal(3, snapshot.Metrics.OperationalContextRevisionCount);
         Assert.True(snapshot.Metrics.EstimatedTokenCount > 0);
         Assert.True(snapshot.Metrics.ContextByteSize > 0);
         Assert.True(snapshot.Statistics.ActivityRate > 0m);
         Assert.True(snapshot.Cache.EstimatedCacheMissRisk >= 0m);
         Assert.Contains(snapshot.Diagnostics.Sources, source => source.Source == "operational-context-proposals" && source.ItemCount == 1);
+        Assert.Contains(snapshot.Diagnostics.Sources, source => source.Source == "operational-context-artifacts" && source.ItemCount == 2);
         Assert.Contains(snapshot.Diagnostics.Assumptions, assumption => assumption.Contains("Token count", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task SameInputsProduceSameMetricsAndStatisticsWhenMeasuredAtIsFixed()
+    {
+        DecisionSessionTestHarness harness = DecisionSessionTestHarness.Create();
+        var decisionRepository = new InMemoryDecisionRepository();
+        var reasoningRepository = new FileSystemReasoningRepository(harness.Store, new ReasoningArtifactProjectionService());
+        var contextStore = new FileSystemOperationalContextProposalStore(harness.Store);
+        DateTimeOffset measuredAt = DateTimeOffset.UtcNow;
+        var service = CreateService(harness, decisionRepository, reasoningRepository, contextStore, measuredAt);
+        DecisionSession session = await harness.Registry.CreateSessionAsync(harness.Repository.Id, "test");
+        await harness.Registry.ActivateSessionAsync(harness.Repository.Id, session.Id);
+        await decisionRepository.SaveDecisionAsync(harness.Repository, CreateDecision(harness.Repository.Id, measuredAt.AddMinutes(-10)));
+
+        DecisionSessionMetricsSnapshot first = await service.GetMetricsAsync(harness.Repository.Id);
+        DecisionSessionMetricsSnapshot second = await service.GetMetricsAsync(harness.Repository.Id);
+
+        Assert.Equal(first.Metrics, second.Metrics);
+        Assert.Equal(first.Statistics, second.Statistics);
+        Assert.Equal(first.Activity, second.Activity);
+        Assert.Equal(first.Growth, second.Growth);
+        Assert.Equal(first.Cache, second.Cache);
+    }
+
+    [Fact]
+    public async Task TtlAndCacheMissRiskIncreaseWithElapsedAndIdleDuration()
+    {
+        DecisionSessionTestHarness harness = DecisionSessionTestHarness.Create();
+        var decisionRepository = new InMemoryDecisionRepository();
+        var reasoningRepository = new FileSystemReasoningRepository(harness.Store, new ReasoningArtifactProjectionService());
+        var contextStore = new FileSystemOperationalContextProposalStore(harness.Store);
+        DateTimeOffset startedAt = DateTimeOffset.UtcNow;
+        DecisionSession session = await harness.Registry.CreateSessionAsync(harness.Repository.Id, "test");
+        await harness.Registry.ActivateSessionAsync(harness.Repository.Id, session.Id);
+        await decisionRepository.SaveDecisionAsync(harness.Repository, CreateDecision(harness.Repository.Id, startedAt.AddMinutes(5)));
+
+        DecisionSessionMetricsSnapshot early = await CreateService(
+            harness,
+            decisionRepository,
+            reasoningRepository,
+            contextStore,
+            startedAt.AddMinutes(10)).GetMetricsAsync(harness.Repository.Id);
+        DecisionSessionMetricsSnapshot later = await CreateService(
+            harness,
+            decisionRepository,
+            reasoningRepository,
+            contextStore,
+            startedAt.AddMinutes(70)).GetMetricsAsync(harness.Repository.Id);
+
+        Assert.True(later.Statistics.SessionElapsedDuration > early.Statistics.SessionElapsedDuration);
+        Assert.True(later.Statistics.IdleDuration > early.Statistics.IdleDuration);
+        Assert.True(later.Cache.EstimatedCacheMissRisk > early.Cache.EstimatedCacheMissRisk);
+    }
+
+    [Fact]
+    public async Task ActivityAndGrowthIncreaseWhenEvidenceIncreases()
+    {
+        DecisionSessionTestHarness harness = DecisionSessionTestHarness.Create();
+        var decisionRepository = new InMemoryDecisionRepository();
+        var reasoningRepository = new FileSystemReasoningRepository(harness.Store, new ReasoningArtifactProjectionService());
+        var contextStore = new FileSystemOperationalContextProposalStore(harness.Store);
+        DateTimeOffset measuredAt = DateTimeOffset.UtcNow;
+        DecisionSession session = await harness.Registry.CreateSessionAsync(harness.Repository.Id, "test");
+        await harness.Registry.ActivateSessionAsync(harness.Repository.Id, session.Id);
+        var service = CreateService(harness, decisionRepository, reasoningRepository, contextStore, measuredAt);
+
+        DecisionSessionMetricsSnapshot empty = await service.GetMetricsAsync(harness.Repository.Id);
+        await decisionRepository.SaveDecisionAsync(harness.Repository, CreateDecision(harness.Repository.Id, measuredAt.AddMinutes(-5)));
+        await harness.Store.WriteAsync(Path.Combine(harness.Repository.Path, ".agents", "operational_context.md"), new string('c', 512));
+        DecisionSessionMetricsSnapshot populated = await service.GetMetricsAsync(harness.Repository.Id);
+
+        Assert.True(populated.Activity.EvidenceItemCount > empty.Activity.EvidenceItemCount);
+        Assert.True(populated.Statistics.ActivityRate > empty.Statistics.ActivityRate);
+        Assert.True(populated.Growth.EvidenceByteSize > empty.Growth.EvidenceByteSize);
+        Assert.True(populated.Statistics.GrowthRate > empty.Statistics.GrowthRate);
+    }
+
+    [Fact]
+    public async Task InvalidMetricsSnapshotIsRebuiltFromAuthoritativeEvidence()
+    {
+        DecisionSessionTestHarness harness = DecisionSessionTestHarness.Create();
+        var decisionRepository = new InMemoryDecisionRepository();
+        var reasoningRepository = new FileSystemReasoningRepository(harness.Store, new ReasoningArtifactProjectionService());
+        var contextStore = new FileSystemOperationalContextProposalStore(harness.Store);
+        DateTimeOffset measuredAt = DateTimeOffset.UtcNow;
+        var service = CreateService(harness, decisionRepository, reasoningRepository, contextStore, measuredAt);
+        DecisionSession session = await harness.Registry.CreateSessionAsync(harness.Repository.Id, "test");
+        await harness.Registry.ActivateSessionAsync(harness.Repository.Id, session.Id);
+        await decisionRepository.SaveDecisionAsync(harness.Repository, CreateDecision(harness.Repository.Id, measuredAt.AddMinutes(-5)));
+        await harness.Store.WriteAsync(
+            DecisionSessionArtifactPaths.Resolve(harness.Repository, DecisionSessionArtifactPaths.MetricsSnapshotJson()),
+            "{ not valid json");
+
+        DecisionSessionMetricsSnapshot snapshot = await service.GetMetricsAsync(harness.Repository.Id);
+        string? persisted = await harness.Store.ReadAsync(DecisionSessionArtifactPaths.Resolve(harness.Repository, DecisionSessionArtifactPaths.MetricsSnapshotJson()));
+
+        Assert.Equal(1, snapshot.Metrics.DecisionCount);
+        Assert.NotNull(persisted);
+        Assert.Contains(snapshot.Diagnostics.Warnings, warning => warning.Contains("rebuilt", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task DiagnosticsExplainSourcesAssumptionsCacheRiskAndMissingEvidence()
+    {
+        DecisionSessionTestHarness harness = DecisionSessionTestHarness.Create();
+        var decisionRepository = new InMemoryDecisionRepository();
+        var reasoningRepository = new FileSystemReasoningRepository(harness.Store, new ReasoningArtifactProjectionService());
+        var contextStore = new FileSystemOperationalContextProposalStore(harness.Store);
+        var service = CreateService(harness, decisionRepository, reasoningRepository, contextStore, DateTimeOffset.UtcNow);
+
+        DecisionSessionMetricsSnapshot snapshot = await service.GetMetricsAsync(harness.Repository.Id);
+
+        Assert.Contains(snapshot.Diagnostics.Sources, source => source.Source == "decisions" && source.ByteCount > 0 && source.CharacterCount > 0);
+        Assert.Contains(snapshot.Diagnostics.Assumptions, assumption => assumption.Contains("Cache TTL assumption", StringComparison.Ordinal));
+        Assert.Contains(snapshot.Diagnostics.Assumptions, assumption => assumption.Contains("Cache risk uses elapsed contribution", StringComparison.Ordinal));
+        Assert.Contains(snapshot.Diagnostics.Assumptions, assumption => assumption.Contains("Confidence", StringComparison.Ordinal));
+        Assert.Contains(snapshot.Diagnostics.Warnings, warning => warning.Contains("Missing evidence source", StringComparison.Ordinal));
     }
 
     private static Decision CreateDecision(Guid repositoryId, DateTimeOffset timestamp)
@@ -159,5 +275,31 @@ public sealed class DecisionSessionMetricsTests
             new ReasoningProvenance("test", "test"),
             [],
             ["decision-session"]);
+    }
+
+    private static DecisionSessionMetricsService CreateService(
+        DecisionSessionTestHarness harness,
+        InMemoryDecisionRepository decisionRepository,
+        FileSystemReasoningRepository reasoningRepository,
+        FileSystemOperationalContextProposalStore contextStore,
+        DateTimeOffset measuredAt)
+    {
+        var artifactService = new ArtifactService(harness.Store);
+        var evidenceReader = new DecisionSessionEvidenceReader(decisionRepository, reasoningRepository, contextStore, artifactService);
+        return new DecisionSessionMetricsService(
+            harness.RepositoryService,
+            harness.Registry,
+            harness.RepositoryStore,
+            evidenceReader,
+            new DeterministicTokenEstimator(),
+            new FixedTimeProvider(measuredAt));
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow()
+        {
+            return utcNow;
+        }
     }
 }

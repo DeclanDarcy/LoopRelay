@@ -1,5 +1,29 @@
 namespace CommandCenter.DecisionSessions.Models;
 
+public sealed record DecisionSessionEvidenceSource(
+    string Source,
+    long ItemCount,
+    long ByteCount,
+    long CharacterCount,
+    string SerializedContent,
+    DateTimeOffset? LastActivityAt,
+    IReadOnlyList<string> Notes);
+
+public sealed record DecisionSessionEvidence(
+    Guid RepositoryId,
+    DateTimeOffset SessionStartedAt,
+    DateTimeOffset LastActivityAt,
+    long EvidenceItemCount,
+    long DecisionCount,
+    long DecisionCandidateCount,
+    long DecisionProposalCount,
+    long ReasoningEventCount,
+    long ReasoningThreadCount,
+    long ReasoningRelationshipCount,
+    long OperationalContextRevisionCount,
+    IReadOnlyList<DecisionSessionEvidenceSource> Sources,
+    IReadOnlyList<string> Warnings);
+
 public sealed record DecisionSessionMetrics(
     long EstimatedTokenCount,
     long ContextByteSize,

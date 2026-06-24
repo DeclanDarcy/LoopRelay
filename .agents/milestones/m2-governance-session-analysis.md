@@ -4,7 +4,7 @@ Objective: measure session facts, evaluate lifecycle economics, and assess reaso
 
 Stage 2 is one architectural stage, but it should be implemented through three internal checkpoints:
 
-- [ ] Stage 2A: metrics, statistics, TTL, and cache risk.
+- [x] Stage 2A: metrics, statistics, TTL, and cache risk.
 - [ ] Stage 2B: economics.
 - [ ] Stage 2C: coherence.
 
@@ -52,7 +52,7 @@ Add services:
 - [x] `ITokenEstimator`
 - [x] `IDecisionSessionMetricsService`
 - [x] `DecisionSessionMetricsService`
-- [ ] `DecisionSessionEvidenceReader`
+- [x] `DecisionSessionEvidenceReader`
 
 Evidence sources:
 
@@ -63,31 +63,31 @@ Evidence sources:
 - [x] `IReasoningRepository.ListThreadsAsync`
 - [x] `IReasoningRepository.ListRelationshipsAsync`
 - [x] `IOperationalContextProposalStore.ListAsync`
-- [ ] `IArtifactService` and `IArtifactStore` for current and historical operational context content.
+- [x] `IArtifactService` and `IArtifactStore` for current and historical operational context content.
 
 Token and TTL estimation:
 
 - [x] Token estimation must be deterministic and provider-independent.
 - [x] Estimate tokens by text length using a stable character-to-token ratio, for example `(characterCount + 3) / 4`.
 - [x] Estimate cache TTL and cache miss risk from session elapsed duration, idle duration, and configurable assumptions.
-- [ ] Include diagnostics describing each source, byte count, character count, TTL assumption, cache risk, and confidence.
+- [x] Include diagnostics describing each source, byte count, character count, TTL assumption, cache risk, and confidence.
 
 Stage 2A checkpoint tests:
 
 - [x] Metrics generated from decisions, reasoning, and operational context evidence.
-- [ ] Same inputs produce same metrics and statistics.
+- [x] Same inputs produce same metrics and statistics.
 - [x] Token estimator is deterministic.
-- [ ] TTL and cache miss risk increase with elapsed and idle duration.
-- [ ] Activity increases when reasoning, decision, or context evidence increases.
-- [ ] Growth reflects larger continuity evidence.
-- [ ] Missing metrics snapshots are rebuilt.
-- [ ] Diagnostics explain sources, TTL assumptions, cache risk, and missing evidence.
+- [x] TTL and cache miss risk increase with elapsed and idle duration.
+- [x] Activity increases when reasoning, decision, or context evidence increases.
+- [x] Growth reflects larger continuity evidence.
+- [x] Missing metrics snapshots are rebuilt.
+- [x] Diagnostics explain sources, TTL assumptions, cache risk, and missing evidence.
 
 Stage 2A exit criteria:
 
-- [ ] The system can answer session size, age, elapsed duration, idle duration, TTL, cache miss risk, activity, and growth.
-- [ ] Metrics and statistics are rebuildable from authoritative evidence.
-- [ ] No economics, coherence, policy, eligibility, or transfer behavior exists yet.
+- [x] The system can answer session size, age, elapsed duration, idle duration, TTL, cache miss risk, activity, and growth.
+- [x] Metrics and statistics are rebuildable from authoritative evidence.
+- [x] No economics, coherence, policy, eligibility, or transfer behavior exists yet.
 
 ### Stage 2B: Economics
 
@@ -206,7 +206,7 @@ Stage 2C exit criteria:
 
 Persist analysis snapshots under:
 
-- [ ] `.agents/decision-sessions/analysis/metrics/`
+- [x] `.agents/decision-sessions/analysis/metrics/`
 - [ ] `.agents/decision-sessions/analysis/economics/`
 - [ ] `.agents/decision-sessions/analysis/coherence/`
 
@@ -224,7 +224,7 @@ Optional compatibility aliases may be added for direct `metrics`, `economics`, a
 
 ### Tests
 
-- [ ] Stage 2A checkpoint tests pass.
+- [x] Stage 2A checkpoint tests pass.
 - [ ] Stage 2B checkpoint tests pass.
 - [ ] Stage 2C checkpoint tests pass.
 - [ ] Same full evidence set produces the same aggregate analysis result.
