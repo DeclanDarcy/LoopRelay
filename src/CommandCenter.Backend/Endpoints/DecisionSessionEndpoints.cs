@@ -79,6 +79,11 @@ public static class DecisionSessionEndpoints
                         .ToArray());
             }));
 
+        group.MapGet("/lifecycle/policy", async (
+            Guid repositoryId,
+            IDecisionSessionLifecyclePolicy lifecyclePolicy) =>
+            await HandleAsync(async () => (await lifecyclePolicy.EvaluateAsync(repositoryId)).Evaluation));
+
         return app;
     }
 

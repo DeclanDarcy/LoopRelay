@@ -52,6 +52,9 @@ public sealed class DecisionSessionEndpointTests
         DecisionSessionAnalysisDiagnostics? analysisDiagnostics = await client.GetFromJsonAsync<DecisionSessionAnalysisDiagnostics>(
             $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/analysis/diagnostics",
             DecisionSessionTestHarness.CreateJsonOptions());
+        DecisionSessionLifecycleEvaluation? lifecyclePolicy = await client.GetFromJsonAsync<DecisionSessionLifecycleEvaluation>(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/lifecycle/policy",
+            DecisionSessionTestHarness.CreateJsonOptions());
 
         Assert.NotNull(sessions);
         Assert.Single(sessions);
@@ -70,6 +73,9 @@ public sealed class DecisionSessionEndpointTests
         Assert.NotNull(analysisDiagnostics.Metrics);
         Assert.NotNull(analysisDiagnostics.Economics);
         Assert.NotNull(analysisDiagnostics.Coherence);
+        Assert.NotNull(lifecyclePolicy);
+        Assert.True(lifecyclePolicy.ReuseScore >= 0m);
+        Assert.True(lifecyclePolicy.TransferScore >= 0m);
     }
 
     [Fact]

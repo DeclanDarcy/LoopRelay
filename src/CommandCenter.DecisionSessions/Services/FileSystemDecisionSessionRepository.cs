@@ -227,6 +227,57 @@ public sealed class FileSystemDecisionSessionRepository(IArtifactStore artifactS
         await artifactStore.WriteAsync(path, JsonSerializer.Serialize(document, DecisionSessionJson.Options));
     }
 
+    public async Task<DecisionSessionLifecycleSnapshot?> ReadLifecyclePolicySnapshotAsync(Repository repository)
+    {
+        string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.LifecyclePolicySnapshotJson());
+        string? json = await artifactStore.ReadAsync(path);
+        if (json is null)
+        {
+            return null;
+        }
+
+        DecisionSessionArtifactDocument<DecisionSessionLifecycleSnapshot>? document =
+            JsonSerializer.Deserialize<DecisionSessionArtifactDocument<DecisionSessionLifecycleSnapshot>>(
+                json,
+                DecisionSessionJson.Options);
+        if (document is null)
+        {
+            throw new DecisionSessionValidationException("Decision session lifecycle policy snapshot could not be deserialized.");
+        }
+
+        ValidateDocument(repository, document, "Decision session lifecycle policy snapshot");
+        if (document.Payload.RepositoryId != repository.Id || document.Payload.Diagnostics.RepositoryId != repository.Id)
+        {
+            throw new DecisionSessionValidationException("Decision session lifecycle policy snapshot belongs to a different repository.");
+        }
+
+        if (document.Payload.Diagnostics.Inputs.Session.RepositoryId != repository.Id)
+        {
+            throw new DecisionSessionValidationException("Decision session lifecycle policy snapshot belongs to a different repository.");
+        }
+
+        return document.Payload;
+    }
+
+    public async Task WriteLifecyclePolicySnapshotAsync(Repository repository, DecisionSessionLifecycleSnapshot snapshot)
+    {
+        if (snapshot.RepositoryId != repository.Id ||
+            snapshot.Diagnostics.RepositoryId != repository.Id ||
+            snapshot.Diagnostics.Inputs.Session.RepositoryId != repository.Id)
+        {
+            throw new DecisionSessionValidationException("Decision session lifecycle policy snapshot belongs to a different repository.");
+        }
+
+        var document = new DecisionSessionArtifactDocument<DecisionSessionLifecycleSnapshot>(
+            DecisionSessionArtifactPaths.SchemaVersion,
+            repository.Id,
+            snapshot.GeneratedAt,
+            DateTimeOffset.UtcNow,
+            snapshot);
+        string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.LifecyclePolicySnapshotJson());
+        await artifactStore.WriteAsync(path, JsonSerializer.Serialize(document, DecisionSessionJson.Options));
+    }
+
     internal async Task<DecisionSessionValidationResult> ValidateAsync(Repository repository)
     {
         string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.RegistryJson());

@@ -237,3 +237,67 @@ public sealed record DecisionSessionAnalysisDiagnostics(
     DecisionSessionEconomicsDiagnostics Economics,
     DecisionSessionCoherenceDiagnostics Coherence,
     IReadOnlyList<string> Warnings);
+
+public enum DecisionSessionLifecycleDecision
+{
+    Continue,
+    Transfer
+}
+
+public sealed record DecisionSessionLifecyclePolicyOptions(
+    decimal ReuseEconomicsWeight = 0.30m,
+    decimal CacheBenefitWeight = 0.25m,
+    decimal ContinuityBenefitWeight = 0.20m,
+    decimal CoherenceWeight = 0.25m,
+    decimal TransferEconomicsWeight = 0.25m,
+    decimal TransferPressureWeight = 0.30m,
+    decimal FragmentationWeight = 0.20m,
+    decimal GrowthWeight = 0.10m,
+    decimal CacheMissRiskWeight = 0.15m,
+    decimal HighGrowthRateThreshold = 800_000m);
+
+public sealed record DecisionSessionLifecycleInputs(
+    DecisionSession Session,
+    DecisionSessionMetrics Metrics,
+    DecisionSessionStatistics Statistics,
+    DecisionSessionCacheMetrics Cache,
+    DecisionSessionEconomics Economics,
+    DecisionSessionCoherence Coherence);
+
+public sealed record ReuseScoreAssessment(
+    decimal Score,
+    decimal EstimatedReuseValueContribution,
+    decimal CacheBenefitContribution,
+    decimal ContinuityBenefitContribution,
+    decimal CoherenceContribution);
+
+public sealed record TransferScoreAssessment(
+    decimal Score,
+    decimal EstimatedTransferValueContribution,
+    decimal TransferPressureContribution,
+    decimal FragmentationContribution,
+    decimal GrowthContribution,
+    decimal CacheMissRiskContribution);
+
+public sealed record DecisionSessionLifecycleEvaluation(
+    DecisionSessionLifecycleDecision Decision,
+    decimal ReuseScore,
+    decimal TransferScore,
+    string Reason,
+    IReadOnlyList<string> ContributingFactors,
+    DateTimeOffset EvaluatedAt);
+
+public sealed record DecisionSessionLifecycleDiagnostics(
+    Guid RepositoryId,
+    DateTimeOffset GeneratedAt,
+    DecisionSessionLifecycleInputs Inputs,
+    ReuseScoreAssessment ReuseScore,
+    TransferScoreAssessment TransferScore,
+    IReadOnlyList<string> Assumptions,
+    IReadOnlyList<string> Warnings);
+
+public sealed record DecisionSessionLifecycleSnapshot(
+    Guid RepositoryId,
+    DecisionSessionLifecycleEvaluation Evaluation,
+    DecisionSessionLifecycleDiagnostics Diagnostics,
+    DateTimeOffset GeneratedAt);

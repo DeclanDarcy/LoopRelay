@@ -27,4 +27,8 @@ public interface IDecisionSessionRepository
     Task<DecisionSessionCoherenceSnapshot?> ReadCoherenceSnapshotAsync(Repository repository);
 
     Task WriteCoherenceSnapshotAsync(Repository repository, DecisionSessionCoherenceSnapshot snapshot);
+
+    Task<DecisionSessionLifecycleSnapshot?> ReadLifecyclePolicySnapshotAsync(Repository repository);
+
+    Task WriteLifecyclePolicySnapshotAsync(Repository repository, DecisionSessionLifecycleSnapshot snapshot);
 }

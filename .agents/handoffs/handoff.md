@@ -2,27 +2,27 @@
 
 ## Slice Summary
 
-- Completed Decision Session Stage 2C coherence and marked Milestone 2 complete.
-- Added coherence models, diagnostics, options, snapshot persistence, and `IDecisionSessionCoherenceService` / `DecisionSessionCoherenceService`.
-- Coherence snapshots persist at `.agents/decision-sessions/analysis/coherence/snapshot.json` and invalid snapshots are rebuilt.
-- Added read-only endpoint `GET /api/repositories/{repositoryId}/decision-sessions/analysis/coherence`.
-- Changed `GET /api/repositories/{repositoryId}/decision-sessions/analysis/diagnostics` from metrics-only to aggregate metrics/economics/coherence diagnostics.
-- Coherence remains analysis-only: no lifecycle policy decision, eligibility check, transfer execution, or registry mutation was added.
+- Began Milestone 3 governance lifecycle with the lifecycle policy slice.
+- Added lifecycle policy models, scoring assessments, diagnostics, options, and `IDecisionSessionLifecyclePolicy` / `DecisionSessionLifecyclePolicy`.
+- Policy snapshots persist at `.agents/decision-sessions/lifecycle/policy/snapshot.json` and invalid snapshots are rebuilt.
+- Added read-only endpoint `GET /api/repositories/{repositoryId}/decision-sessions/lifecycle/policy`.
+- Updated Milestone 3 checklist for completed policy items only.
+- Lifecycle policy remains analytical: it produces `Continue` or `Transfer` with scores, reason, contributing factors, and diagnostics, but does not perform eligibility checks, transfer execution, registry mutation, session retirement, replacement creation, continuity artifact creation, hosted recovery, or workflow integration.
 
 ## Validation
 
-- `dotnet test .\tests\CommandCenter.Backend.Tests\CommandCenter.Backend.Tests.csproj --filter DecisionSession` passed: 39 tests.
-- `dotnet test .\CommandCenter.slnx` passed: 669 tests.
+- `dotnet test .\tests\CommandCenter.Backend.Tests\CommandCenter.Backend.Tests.csproj --filter DecisionSession` passed: 46 tests.
+- `dotnet test .\CommandCenter.slnx` passed: 676 tests.
 
 ## Current State
 
-- `.agents/handoffs/handoff.md` was rotated to `.agents/handoffs/handoff.0005.md`; this file is the new active handoff.
+- `.agents/handoffs/handoff.md` was rotated to `.agents/handoffs/handoff.0006.md`; this file is the new active handoff.
 - `.agents/decisions/decisions.md` was not rotated because no user response authorized new decisions during this slice.
-- Stage 2A metrics, Stage 2B economics, Stage 2C coherence, and aggregate analysis diagnostics are complete.
+- Milestone 3A lifecycle policy is implemented and validated.
 
 ## Next Slice Recommendation
 
-- Begin Milestone 3 governance lifecycle:
-  - Add lifecycle policy models, diagnostics, deterministic policy service, and policy snapshot persistence under `.agents/decision-sessions/lifecycle/policy/`.
-  - Keep policy strictly analytical: it may decide `Continue` or `Transfer`, but must not execute transfer or mutate registry state.
-  - Add read-only policy endpoint and deterministic tests for reuse/transfer decisions, explanations, missing snapshot rebuild, and authority boundaries.
+- Continue Milestone 3 with transfer eligibility:
+  - Add eligibility models, status enum, findings, diagnostics, and `IDecisionSessionTransferEligibilityService` / implementation.
+  - Keep eligibility as an operational gate that consumes policy output but does not change the policy decision.
+  - Add persistence under `.agents/decision-sessions/lifecycle/eligibility/`, read-only eligibility endpoints, and tests for `NotApplicable`, `Blocked`, and `Deferred` cases.

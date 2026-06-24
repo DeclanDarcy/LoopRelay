@@ -6,47 +6,47 @@ Objective: decide whether the active governance session should continue or trans
 
 Add primitives and models:
 
-- [ ] `DecisionSessionLifecycleDecision`: `Continue`, `Transfer`
-- [ ] `DecisionSessionLifecycleEvaluation`
-- [ ] `ReuseScoreAssessment`
-- [ ] `TransferScoreAssessment`
-- [ ] `DecisionSessionLifecycleDiagnostics`
-- [ ] `DecisionSessionLifecycleSnapshot`
-- [ ] `DecisionSessionLifecyclePolicyOptions`
+- [x] `DecisionSessionLifecycleDecision`: `Continue`, `Transfer`
+- [x] `DecisionSessionLifecycleEvaluation`
+- [x] `ReuseScoreAssessment`
+- [x] `TransferScoreAssessment`
+- [x] `DecisionSessionLifecycleDiagnostics`
+- [x] `DecisionSessionLifecycleSnapshot`
+- [x] `DecisionSessionLifecyclePolicyOptions`
 
 Lifecycle evaluation fields:
 
-- [ ] `DecisionSessionLifecycleDecision Decision`
-- [ ] `decimal ReuseScore`
-- [ ] `decimal TransferScore`
-- [ ] `string Reason`
-- [ ] `IReadOnlyList<string> ContributingFactors`
-- [ ] `DateTimeOffset EvaluatedAt`
+- [x] `DecisionSessionLifecycleDecision Decision`
+- [x] `decimal ReuseScore`
+- [x] `decimal TransferScore`
+- [x] `string Reason`
+- [x] `IReadOnlyList<string> ContributingFactors`
+- [x] `DateTimeOffset EvaluatedAt`
 
 Add service:
 
-- [ ] `IDecisionSessionLifecyclePolicy`
-- [ ] `DecisionSessionLifecyclePolicy`
+- [x] `IDecisionSessionLifecyclePolicy`
+- [x] `DecisionSessionLifecyclePolicy`
 
 Inputs:
 
-- [ ] `DecisionSession`
-- [ ] `DecisionSessionMetrics`
-- [ ] `DecisionSessionStatistics`
-- [ ] `DecisionSessionCacheMetrics`
-- [ ] `DecisionSessionEconomics`
-- [ ] `DecisionSessionCoherence`
+- [x] `DecisionSession`
+- [x] `DecisionSessionMetrics`
+- [x] `DecisionSessionStatistics`
+- [x] `DecisionSessionCacheMetrics`
+- [x] `DecisionSessionEconomics`
+- [x] `DecisionSessionCoherence`
 
 Deterministic policy:
 
-- [ ] Reuse score grows with estimated reuse value, cache benefit, continuity benefit, and coherence score.
-- [ ] Transfer score grows with estimated transfer value, transfer pressure, fragmentation, growth, and cache miss risk.
-- [ ] If `ReuseScore > TransferScore`, decide `Continue`.
-- [ ] If `TransferScore > ReuseScore`, decide `Transfer`.
-- [ ] If scores are equal, decide `Continue` to avoid churn.
-- [ ] Same inputs must always produce the same evaluation.
+- [x] Reuse score grows with estimated reuse value, cache benefit, continuity benefit, and coherence score.
+- [x] Transfer score grows with estimated transfer value, transfer pressure, fragmentation, growth, and cache miss risk.
+- [x] If `ReuseScore > TransferScore`, decide `Continue`.
+- [x] If `TransferScore > ReuseScore`, decide `Transfer`.
+- [x] If scores are equal, decide `Continue` to avoid churn.
+- [x] Same inputs must always produce the same evaluation.
 
-Persist lifecycle snapshots under `.agents/decision-sessions/lifecycle/policy/`.
+[x] Persist lifecycle snapshots under `.agents/decision-sessions/lifecycle/policy/`.
 
 ### Transfer Eligibility
 
@@ -227,7 +227,7 @@ Hosted startup behavior:
 
 ### Backend Endpoints
 
-- [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/lifecycle/policy`
+- [x] `GET /api/repositories/{repositoryId:guid}/decision-sessions/lifecycle/policy`
 - [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/lifecycle/policy/diagnostics`
 - [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/lifecycle/eligibility`
 - [ ] `GET /api/repositories/{repositoryId:guid}/decision-sessions/lifecycle/eligibility/diagnostics`
@@ -244,11 +244,11 @@ Do not add a manual transfer endpoint.
 
 ### Tests
 
-- [ ] Same inputs produce same policy decision.
-- [ ] Reuse score greater than transfer score decides `Continue`.
-- [ ] Transfer score greater than reuse score decides `Transfer`.
-- [ ] Equal scores decide `Continue`.
-- [ ] Higher cache miss risk raises transfer score.
+- [x] Same inputs produce same policy decision.
+- [x] Reuse score greater than transfer score decides `Continue`.
+- [x] Transfer score greater than reuse score decides `Transfer`.
+- [x] Equal scores decide `Continue`.
+- [x] Higher cache miss risk raises transfer score.
 - [ ] Eligibility is `NotApplicable` when policy is `Continue`.
 - [ ] Eligibility is `Blocked` when no active session exists.
 - [ ] Eligibility is `Blocked` for duplicate active sessions.
@@ -272,7 +272,7 @@ Do not add a manual transfer endpoint.
 
 ### Exit Criteria
 
-- [ ] Policy can decide continue or transfer.
+- [x] Policy can decide continue or transfer.
 - [ ] Eligibility can block or defer transfer without changing policy.
 - [ ] Transfer creates a first-class continuity artifact.
 - [ ] Transfer preserves continuity and never creates parallel active sessions.
