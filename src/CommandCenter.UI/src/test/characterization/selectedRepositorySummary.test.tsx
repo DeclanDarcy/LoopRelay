@@ -247,6 +247,7 @@ function renderSummary({
   currentExecutionState = 'Ready',
   onOpenExecution,
   onOpenGovernance,
+  onOpenReasoning,
   onOpenMilestones,
   onOpenOperationalContext,
   onOpenHandoffArtifact,
@@ -258,6 +259,7 @@ function renderSummary({
   currentExecutionState?: RepositoryExecutionState
   onOpenExecution?: () => void
   onOpenGovernance?: () => void
+  onOpenReasoning?: () => void
   onOpenMilestones?: () => void
   onOpenOperationalContext?: () => void
   onOpenHandoffArtifact?: (handoffPath: string) => void
@@ -271,6 +273,7 @@ function renderSummary({
       currentExecutionState={currentExecutionState}
       onOpenExecution={onOpenExecution}
       onOpenGovernance={onOpenGovernance}
+      onOpenReasoning={onOpenReasoning}
       onOpenMilestones={onOpenMilestones}
       onOpenOperationalContext={onOpenOperationalContext}
       onOpenHandoffArtifact={onOpenHandoffArtifact}
@@ -373,6 +376,49 @@ describe('selected repository summary rendering characterization', () => {
     fireEvent.click(screen.getByRole('button', { name: 'governance-session-1' }))
     fireEvent.click(screen.getByRole('button', { name: 'Open' }))
     expect(onOpenGovernance).toHaveBeenCalledTimes(2)
+  })
+
+  it('renders reasoning as a compact contextual summary with navigation only', () => {
+    const onOpenReasoning = vi.fn()
+
+    renderSummary({
+      onOpenReasoning,
+      workspace: workspaceProjection({
+        reasoningSummary: {
+          eventCount: 8,
+          threadCount: 3,
+          relationshipCount: 5,
+          hypothesisEventCount: 2,
+          alternativeEventCount: 1,
+          contradictionEventCount: 1,
+          directionEventCount: 1,
+          decisionEvolutionEventCount: 1,
+          assumptionEvolutionEventCount: 1,
+          constraintEvolutionEventCount: 1,
+          evidenceEventCount: 1,
+          lastEventAt: '2026-06-21T17:35:00.000Z',
+          lastThreadActivityAt: '2026-06-21T17:34:00.000Z',
+          lastRelationshipAt: '2026-06-21T17:33:00.000Z',
+          lastActivityAt: '2026-06-21T17:35:00.000Z',
+          lastReconstructionAt: '2026-06-21T17:36:00.000Z',
+          lastCertificationAt: '2026-06-21T17:37:00.000Z',
+          certificationResult: 'Passed',
+        },
+      }),
+    })
+
+    expect(screen.getByText('Reasoning events: 8')).toBeInTheDocument()
+    expect(screen.getByText('Reasoning threads: 3')).toBeInTheDocument()
+    expect(screen.getByText('Reasoning relationships: 5')).toBeInTheDocument()
+    expect(screen.getByText(/Reasoning latest activity:/)).toHaveTextContent(/\d/)
+    expect(screen.getByText('Reasoning certification: Passed')).toBeInTheDocument()
+    expect(screen.queryByText('Reconstruction confidence rationale')).not.toBeInTheDocument()
+    expect(screen.queryByText('Known unreachable reconstruction evidence')).not.toBeInTheDocument()
+    expect(screen.queryByText('Reasoning graph authority')).not.toBeInTheDocument()
+    expect(screen.queryByText('Reasoning materialization authority')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }))
+    expect(onOpenReasoning).toHaveBeenCalledTimes(1)
   })
 
   it('renders execution display details and existing not-recorded fallbacks', () => {

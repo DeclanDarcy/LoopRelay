@@ -21,6 +21,7 @@ type SelectedRepositorySummaryProps = {
   currentExecutionState: RepositoryExecutionState
   onOpenExecution?: () => void
   onOpenGovernance?: () => void
+  onOpenReasoning?: () => void
   onOpenMilestones?: () => void
   onOpenOperationalContext?: () => void
   onOpenHandoffArtifact?: (handoffPath: string) => void
@@ -34,6 +35,7 @@ export function SelectedRepositorySummary({
   currentExecutionState,
   onOpenExecution,
   onOpenGovernance,
+  onOpenReasoning,
   onOpenMilestones,
   onOpenOperationalContext,
   onOpenHandoffArtifact,
@@ -42,6 +44,7 @@ export function SelectedRepositorySummary({
   const milestoneCount = workspace?.milestoneCount ?? repository.milestoneCount
   const hasOperationalContext = Boolean(workspace?.hasOperationalContext)
   const governanceSummary = workspace?.decisionSessionSummary ?? repository.decisionSessionSummary
+  const reasoningSummary = workspace?.reasoningSummary ?? repository.reasoningSummary
 
   return (
     <>
@@ -232,6 +235,23 @@ export function SelectedRepositorySummary({
               type="button"
               className="workspace-cross-link inline-cross-link"
               onClick={onOpenGovernance}
+            >
+              Open
+            </button>
+          </span>
+        ) : null}
+        <span>Reasoning events: {reasoningSummary.eventCount}</span>
+        <span>Reasoning threads: {reasoningSummary.threadCount}</span>
+        <span>Reasoning relationships: {reasoningSummary.relationshipCount}</span>
+        <span>Reasoning latest activity: {formatDateTime(reasoningSummary.lastActivityAt)}</span>
+        <span>Reasoning certification: {reasoningSummary.certificationResult ?? 'Not projected'}</span>
+        {onOpenReasoning ? (
+          <span>
+            Reasoning workspace:{' '}
+            <button
+              type="button"
+              className="workspace-cross-link inline-cross-link"
+              onClick={onOpenReasoning}
             >
               Open
             </button>

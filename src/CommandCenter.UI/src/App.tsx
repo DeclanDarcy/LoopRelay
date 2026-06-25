@@ -1671,6 +1671,11 @@ function App() {
     setSectionTarget('decision-lifecycle')
   }
 
+  const openReasoningTrajectory = () => {
+    setActivePrimaryTab('reasoning')
+    setSectionTarget('reasoning-trajectory')
+  }
+
   const openHandoffArtifact = (handoffPath: string) => {
     if (selectedRepository) {
       selectArtifact(selectedRepository.repository.id, handoffPath)
@@ -1778,6 +1783,7 @@ function App() {
                     currentExecutionState={currentExecutionState}
                     onOpenExecution={() => openExecutionSection('execution-context')}
                     onOpenGovernance={openGovernanceWorkspace}
+                    onOpenReasoning={openReasoningTrajectory}
                     onOpenMilestones={() => {
                       setActivePrimaryTab('workspace')
                       setSectionTarget('workspace-milestones')

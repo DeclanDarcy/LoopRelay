@@ -2,12 +2,12 @@
 
 ## Newly Authorized
 
-- Treat the decision influence consolidation slice as accepted Milestone 9 work:
-  - Decisions owns detailed decision influence, adherence, evidence, and category diagnostics.
-  - Execution may show selected-session influence status as a contextual consumer, but must not duplicate the full influence explanation.
-- Continue Milestone 9 with reasoning summary consolidation as the next implementation slice.
-- For reasoning consolidation:
-  - keep the Reasoning transparency surface as the primary detailed reasoning workspace,
-  - reduce repository and workspace reasoning summaries to counts, status, latest activity, and navigation,
-  - avoid reproducing confidence rationale, missing evidence, reconstruction scope, materialization review, graph diagnostics, or provenance detail outside Reasoning,
-  - add characterization coverage proving secondary reasoning surfaces summarize and navigate rather than rendering detailed reasoning explanation blocks.
+- Treat the reasoning consolidation slice as accepted Milestone 9 work:
+  - Reasoning owns confidence rationale, missing evidence, reconstruction scope, graph diagnostics, materialization review, provenance, and trajectory details.
+  - Repository overview may show event/thread/relationship counts, latest activity, certification summary, and navigation into Reasoning.
+- Continue Milestone 9 with continuity evolution summary consolidation as the next implementation slice.
+- For continuity consolidation:
+  - keep Continuity as the primary detailed surface for semantic diff, compression explanation, operational evolution, contradiction analysis, continuity diagnostics, taxonomy, assimilation, and review evidence,
+  - reduce secondary surfaces to operational summaries such as revision counts, warning counts, pending proposal status, latest activity, and navigation into Continuity,
+  - avoid reproducing semantic diff detail, compression reasoning, identity basis, contradiction evidence, operational evolution timelines, or review diagnostics outside Continuity.
+- After continuity consolidation, shift toward information density optimization, interaction normalization, component retirement, and final cohesion audit.
