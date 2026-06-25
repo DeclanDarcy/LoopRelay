@@ -11,4 +11,6 @@ public sealed record DecisionQualityAssessment(
     int Score,
     IReadOnlyList<DecisionQualitySignal> Signals,
     IReadOnlyList<HumanAuthoringBurdenSignal> HumanAuthoringBurdenSignals,
-    IReadOnlyList<string> Diagnostics);
+    IReadOnlyList<string> Diagnostics,
+    DecisionQualityExplanation? QualityExplanation = null,
+    HumanAuthoringBurdenExplanation? HumanAuthoringBurdenExplanation = null);

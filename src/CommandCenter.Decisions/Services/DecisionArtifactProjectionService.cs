@@ -1290,6 +1290,27 @@ public sealed class DecisionArtifactProjectionService(
             ("Assessed", FormatTimestamp(assessment.AssessedAt)),
             ("Rating", assessment.Rating.ToString()),
             ("Score", assessment.Score.ToString()));
+        if (assessment.QualityExplanation is not null)
+        {
+            markdown.H2("Quality Explanation");
+            markdown.Fields(
+                ("Base score", assessment.QualityExplanation.BaseScore.ToString()),
+                ("Raw score", assessment.QualityExplanation.RawScore.ToString()),
+                ("Clamped score", assessment.QualityExplanation.ClampedScore.ToString()),
+                ("Threshold", assessment.QualityExplanation.Threshold.Reason),
+                ("Override", assessment.QualityExplanation.OverrideReason ?? "None"));
+            markdown.H3("Signal Contributions");
+            foreach (DecisionQualitySignalContribution contribution in assessment.QualityExplanation.SignalContributions
+                .OrderBy(contribution => contribution.Category, StringComparer.Ordinal)
+                .ThenBy(contribution => contribution.SignalId, StringComparer.Ordinal))
+            {
+                markdown.Bullet(
+                    $"{contribution.SignalId} | {contribution.Category} | {contribution.Direction} | {contribution.Severity} | contribution {contribution.ScoreContribution} | {contribution.Summary}");
+            }
+
+            markdown.EmptyListIf(assessment.QualityExplanation.SignalContributions.Count == 0);
+        }
+
         markdown.H2("Quality Signals");
         foreach (DecisionQualitySignal signal in assessment.Signals
             .OrderBy(signal => signal.Category, StringComparer.Ordinal)
@@ -1315,6 +1336,23 @@ public sealed class DecisionArtifactProjectionService(
         }
 
         markdown.EmptyListIf(assessment.HumanAuthoringBurdenSignals.Count == 0);
+        if (assessment.HumanAuthoringBurdenExplanation is not null)
+        {
+            markdown.H2("Human Authoring Burden Explanation");
+            markdown.Fields(
+                ("Selection rule", assessment.HumanAuthoringBurdenExplanation.SelectionRule),
+                ("Effective burden", assessment.HumanAuthoringBurdenExplanation.EffectiveBurden.ToString()),
+                ("Winning signal", assessment.HumanAuthoringBurdenExplanation.WinningSignal?.Id ?? "None"),
+                ("Unknown", assessment.HumanAuthoringBurdenExplanation.IsUnknown.ToString()),
+                ("Inferred", assessment.HumanAuthoringBurdenExplanation.IsInferred.ToString()));
+            foreach (string diagnostic in assessment.HumanAuthoringBurdenExplanation.Diagnostics.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(diagnostic);
+            }
+
+            markdown.EmptyListIf(assessment.HumanAuthoringBurdenExplanation.Diagnostics.Count == 0);
+        }
+
         markdown.H2("Diagnostics");
         foreach (string diagnostic in assessment.Diagnostics.Order(StringComparer.Ordinal))
         {
@@ -1350,6 +1388,17 @@ public sealed class DecisionArtifactProjectionService(
             ("Major refinement", FormatCountRate(report.MajorRefinementCount, report.MajorRefinementRate)),
             ("Full rewrite", FormatCountRate(report.FullRewriteCount, report.FullRewriteRate)),
             ("Generation bypassed", FormatCountRate(report.GenerationBypassedCount, report.GenerationBypassedRate)));
+        if (report.HumanAuthoringBurdenExplanations is { Count: > 0 })
+        {
+            markdown.H3("Effective Burden By Decision");
+            foreach (HumanAuthoringBurdenExplanation explanation in report.HumanAuthoringBurdenExplanations
+                .OrderBy(explanation => explanation.DecisionId, StringComparer.Ordinal))
+            {
+                markdown.Bullet(
+                    $"{explanation.DecisionId} | {explanation.EffectiveBurden} | winner {explanation.WinningSignal?.Id ?? "None"} | unknown {explanation.IsUnknown}");
+            }
+        }
+
         markdown.H2("Assessments");
         foreach (DecisionQualityAssessment assessment in report.Assessments
             .OrderBy(assessment => assessment.DecisionId, StringComparer.Ordinal)

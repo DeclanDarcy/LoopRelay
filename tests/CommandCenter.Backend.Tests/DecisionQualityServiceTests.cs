@@ -37,8 +37,17 @@ public sealed class DecisionQualityServiceTests
             signal.Category == "RecommendationQuality" &&
             signal.Direction == QualitySignalDirection.Positive &&
             signal.Summary.Contains("recommended option", StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(assessment.QualityExplanation);
+        Assert.Contains(assessment.QualityExplanation.SignalContributions, contribution =>
+            contribution.Category == "RecommendationQuality" &&
+            contribution.ScoreContribution > 0);
+        Assert.Equal(50, assessment.QualityExplanation.BaseScore);
+        Assert.Contains("threshold", assessment.QualityExplanation.Threshold.Reason, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(assessment.HumanAuthoringBurdenSignals, signal =>
             signal.Burden == HumanAuthoringBurden.ReviewOnly);
+        Assert.NotNull(assessment.HumanAuthoringBurdenExplanation);
+        Assert.Equal(HumanAuthoringBurden.ReviewOnly, assessment.HumanAuthoringBurdenExplanation.EffectiveBurden);
+        Assert.False(assessment.HumanAuthoringBurdenExplanation.IsUnknown);
     }
 
     [Fact]
@@ -178,11 +187,16 @@ public sealed class DecisionQualityServiceTests
 
         Assert.Contains(rewrittenAssessment.HumanAuthoringBurdenSignals, signal =>
             signal.Burden == HumanAuthoringBurden.FullRewrite);
+        Assert.Equal(HumanAuthoringBurden.FullRewrite, rewrittenAssessment.HumanAuthoringBurdenExplanation?.EffectiveBurden);
         Assert.Contains(bypassedAssessment.HumanAuthoringBurdenSignals, signal =>
             signal.Burden == HumanAuthoringBurden.GenerationBypassed);
         Assert.Contains(bypassedAssessment.Signals, signal =>
             signal.Category == "HumanAuthoringBurden" &&
             signal.Severity == QualitySignalSeverity.Critical);
+        Assert.Contains(report.HumanAuthoringBurdenExplanations ?? [], explanation =>
+            explanation.DecisionId == rewritten.Id.Value &&
+            explanation.EffectiveBurden == HumanAuthoringBurden.FullRewrite &&
+            explanation.WinningSignal?.Burden == HumanAuthoringBurden.FullRewrite);
         Assert.Equal(1, report.FullRewriteCount);
         Assert.Equal(1, report.GenerationBypassedCount);
     }
@@ -242,7 +256,12 @@ public sealed class DecisionQualityServiceTests
         Assert.Equal(report.Id, reloadedReport.Id);
         Assert.Equal(trend.Id, reloadedTrend.Id);
         Assert.Equal(decision.Id.Value, reloadedAssessment.DecisionId);
+        Assert.NotNull(reloadedAssessment.QualityExplanation);
+        Assert.NotNull(reloadedAssessment.HumanAuthoringBurdenExplanation);
         Assert.Contains(reloadedReport.Assessments, item => item.DecisionId == decision.Id.Value);
+        Assert.Contains(reloadedReport.HumanAuthoringBurdenExplanations ?? [], explanation =>
+            explanation.DecisionId == decision.Id.Value &&
+            explanation.EffectiveBurden == HumanAuthoringBurden.ReviewOnly);
         Assert.True(File.Exists(PathFor(repository, $".agents/decisions/quality/assessments/{assessment.Id}.json")));
         Assert.True(File.Exists(PathFor(repository, $".agents/decisions/quality/assessments/{assessment.Id}.md")));
         Assert.True(File.Exists(PathFor(repository, $".agents/decisions/quality/reports/{report.Id}.json")));
@@ -250,7 +269,10 @@ public sealed class DecisionQualityServiceTests
         Assert.True(File.Exists(PathFor(repository, $".agents/decisions/quality/trends/{trend.Id}.json")));
         Assert.True(File.Exists(PathFor(repository, $".agents/decisions/quality/trends/{trend.Id}.md")));
         Assert.Contains("# " + assessment.Id + ": Decision Quality Assessment", await File.ReadAllTextAsync(PathFor(repository, $".agents/decisions/quality/assessments/{assessment.Id}.md")));
+        Assert.Contains("## Quality Explanation", await File.ReadAllTextAsync(PathFor(repository, $".agents/decisions/quality/assessments/{assessment.Id}.md")));
+        Assert.Contains("## Human Authoring Burden Explanation", await File.ReadAllTextAsync(PathFor(repository, $".agents/decisions/quality/assessments/{assessment.Id}.md")));
         Assert.Contains("## Human Authoring Burden", await File.ReadAllTextAsync(PathFor(repository, $".agents/decisions/quality/reports/{report.Id}.md")));
+        Assert.Contains("### Effective Burden By Decision", await File.ReadAllTextAsync(PathFor(repository, $".agents/decisions/quality/reports/{report.Id}.md")));
         Assert.Contains("- Direction: Positive", await File.ReadAllTextAsync(PathFor(repository, $".agents/decisions/quality/trends/{trend.Id}.md")));
     }
 
@@ -373,11 +395,16 @@ public sealed class DecisionQualityServiceTests
 
         Assert.Equal(decision.Id.Value, assessment.DecisionId);
         Assert.Contains(assessment.Signals, signal => signal.Category == "RecommendationQuality");
+        Assert.NotNull(assessment.QualityExplanation);
+        Assert.NotNull(assessment.HumanAuthoringBurdenExplanation);
         Assert.Single(assessments);
         Assert.Equal(assessment.Id, assessments[0].Id);
         Assert.Equal(1, currentReport.DecisionCount);
         Assert.Equal(1, report.GeneratedPackageCount);
         Assert.Contains(report.Assessments, item => item.DecisionId == decision.Id.Value);
+        Assert.Contains(report.HumanAuthoringBurdenExplanations ?? [], explanation =>
+            explanation.DecisionId == decision.Id.Value &&
+            explanation.EffectiveBurden == HumanAuthoringBurden.ReviewOnly);
         Assert.Single(reports);
         Assert.Equal(report.Id, reports[0].Id);
         Assert.Equal(1, currentTrend.AssessmentCount);

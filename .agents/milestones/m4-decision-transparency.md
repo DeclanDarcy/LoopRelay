@@ -23,14 +23,14 @@ Expose why decisions, recommendations, options, quality ratings, governance find
    - [ ] assumptions
    - [ ] alternative explanations
 - [ ] If any of these are computed but not persisted or projected, add them to the owning model and repository serialization.
-- [ ] Add read-only projection fields where quality and burden currently expose labels without basis:
-   - [ ] quality score contribution
-   - [ ] threshold crossed
-   - [ ] signal contribution
-   - [ ] override reason
-   - [ ] burden selection rule
-   - [ ] burden winning signal
-   - [ ] unknown vs inferred status
+- [x] Add read-only projection fields where quality and burden currently expose labels without basis:
+   - [x] quality score contribution
+   - [x] threshold crossed
+   - [x] signal contribution
+   - [x] override reason
+   - [x] burden selection rule
+   - [x] burden winning signal
+   - [x] unknown vs inferred status
 - [ ] Extend governance and influence projections where needed to expose included, excluded, superseded, conflicting, ignored, and blocked decisions with reasons.
 - [ ] Keep these outputs as decision-owned projections. They are the semantic inputs that later shared explainability components will render.
 

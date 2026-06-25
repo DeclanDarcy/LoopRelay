@@ -9,4 +9,5 @@ public sealed record HumanAuthoringBurdenReport(
     int FullRewriteCount,
     int GenerationBypassedCount,
     int UnknownCount,
-    IReadOnlyList<HumanAuthoringBurdenSignal> Signals);
+    IReadOnlyList<HumanAuthoringBurdenSignal> Signals,
+    IReadOnlyList<HumanAuthoringBurdenExplanation>? DecisionExplanations = null);

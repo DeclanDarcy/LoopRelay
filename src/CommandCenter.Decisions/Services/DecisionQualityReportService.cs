@@ -133,11 +133,15 @@ public sealed class DecisionQualityReportService(
             signal.Category == "OptionQuality" && signal.Direction == QualitySignalDirection.Positive));
         int modified = assessments.Count(assessment => assessment.HumanAuthoringBurdenSignals.Any(signal =>
             signal.Burden is HumanAuthoringBurden.MinorEdit or HumanAuthoringBurden.MajorRefinement or HumanAuthoringBurden.FullRewrite));
-        int reviewOnly = EffectiveBurdenCount(assessments, HumanAuthoringBurden.ReviewOnly);
-        int minorEdit = EffectiveBurdenCount(assessments, HumanAuthoringBurden.MinorEdit);
-        int majorRefinement = EffectiveBurdenCount(assessments, HumanAuthoringBurden.MajorRefinement);
-        int fullRewrite = EffectiveBurdenCount(assessments, HumanAuthoringBurden.FullRewrite);
-        int generationBypassed = EffectiveBurdenCount(assessments, HumanAuthoringBurden.GenerationBypassed);
+        IReadOnlyList<HumanAuthoringBurdenExplanation> burdenExplanations = assessments
+            .Select(BuildBurdenExplanation)
+            .OrderBy(explanation => explanation.DecisionId, StringComparer.Ordinal)
+            .ToArray();
+        int reviewOnly = EffectiveBurdenCount(burdenExplanations, HumanAuthoringBurden.ReviewOnly);
+        int minorEdit = EffectiveBurdenCount(burdenExplanations, HumanAuthoringBurden.MinorEdit);
+        int majorRefinement = EffectiveBurdenCount(burdenExplanations, HumanAuthoringBurden.MajorRefinement);
+        int fullRewrite = EffectiveBurdenCount(burdenExplanations, HumanAuthoringBurden.FullRewrite);
+        int generationBypassed = EffectiveBurdenCount(burdenExplanations, HumanAuthoringBurden.GenerationBypassed);
         double averageScore = assessments.Count == 0 ? 0 : assessments.Average(assessment => assessment.Score);
 
         return new DecisionQualityReport(
@@ -170,7 +174,8 @@ public sealed class DecisionQualityReportService(
             Rate(generationBypassed, count),
             RatingForAverage(averageScore),
             assessments,
-            ["Quality report is advisory and does not mutate lifecycle artifacts."]);
+            ["Quality report is advisory and does not mutate lifecycle artifacts."],
+            burdenExplanations);
     }
 
     private static (
@@ -211,19 +216,36 @@ public sealed class DecisionQualityReportService(
     }
 
     private static int EffectiveBurdenCount(
-        IReadOnlyList<DecisionQualityAssessment> assessments,
+        IReadOnlyList<HumanAuthoringBurdenExplanation> explanations,
         HumanAuthoringBurden burden)
     {
-        return assessments.Count(assessment => EffectiveBurden(assessment) == burden);
+        return explanations.Count(explanation => explanation.EffectiveBurden == burden);
     }
 
-    private static HumanAuthoringBurden EffectiveBurden(DecisionQualityAssessment assessment)
+    private static HumanAuthoringBurdenExplanation BuildBurdenExplanation(DecisionQualityAssessment assessment)
     {
-        return assessment.HumanAuthoringBurdenSignals
-            .Select(signal => signal.Burden)
-            .DefaultIfEmpty(HumanAuthoringBurden.Unknown)
-            .OrderByDescending(BurdenWeight)
-            .First();
+        if (assessment.HumanAuthoringBurdenExplanation is not null)
+        {
+            return assessment.HumanAuthoringBurdenExplanation;
+        }
+
+        HumanAuthoringBurdenSignal? winningSignal = assessment.HumanAuthoringBurdenSignals
+            .OrderByDescending(signal => BurdenWeight(signal.Burden))
+            .ThenBy(signal => signal.Id, StringComparer.Ordinal)
+            .FirstOrDefault();
+        HumanAuthoringBurden effectiveBurden = winningSignal?.Burden ?? HumanAuthoringBurden.Unknown;
+        return new HumanAuthoringBurdenExplanation(
+            assessment.DecisionId,
+            "Select the highest-weight human-authoring burden signal; GenerationBypassed > FullRewrite > MajorRefinement > MinorEdit > ReviewOnly > Unknown.",
+            effectiveBurden,
+            winningSignal,
+            effectiveBurden == HumanAuthoringBurden.Unknown,
+            winningSignal is null,
+            [
+                winningSignal is null
+                    ? "No human-authoring burden signal was available, so burden is Unknown."
+                    : $"Signal {winningSignal.Id} selected effective burden {effectiveBurden}."
+            ]);
     }
 
     private static int BurdenWeight(HumanAuthoringBurden burden)

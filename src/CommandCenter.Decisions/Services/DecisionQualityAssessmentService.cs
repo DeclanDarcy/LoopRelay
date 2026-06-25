@@ -19,8 +19,26 @@ public sealed class DecisionQualityAssessmentService(
         IReadOnlyList<DecisionQualitySignal> signals = await signalService.ExtractSignalsAsync(repositoryId, decisionId);
         IReadOnlyList<HumanAuthoringBurdenSignal> burdenSignals =
             await humanAuthoringBurdenService.ExtractSignalsAsync(repositoryId, decisionId);
-        int score = Math.Clamp(50 + signals.Sum(ScoreContribution), 0, 100);
+        IReadOnlyList<DecisionQualitySignalContribution> signalContributions = signals
+            .Select(signal => new DecisionQualitySignalContribution(
+                signal.Id,
+                signal.Category,
+                signal.Direction,
+                signal.Severity,
+                ScoreContribution(signal),
+                signal.Summary))
+            .ToArray();
+        int rawScore = 50 + signalContributions.Sum(contribution => contribution.ScoreContribution);
+        int score = Math.Clamp(rawScore, 0, 100);
+        string? overrideReason = QualityOverrideReason(signals);
         DecisionQualityRating rating = RatingFor(score, signals);
+        DecisionQualityExplanation qualityExplanation = BuildQualityExplanation(
+            score,
+            rawScore,
+            rating,
+            overrideReason,
+            signalContributions);
+        HumanAuthoringBurdenExplanation burdenExplanation = BuildBurdenExplanation(decision.Id.Value, burdenSignals);
         DateTimeOffset assessedAt = DateTimeOffset.UtcNow;
         return new DecisionQualityAssessment(
             $"assessment.{assessedAt:yyyyMMddHHmmssfffffff}",
@@ -31,7 +49,9 @@ public sealed class DecisionQualityAssessmentService(
             score,
             signals,
             burdenSignals,
-            BuildDiagnostics(decision, signals, burdenSignals));
+            BuildDiagnostics(decision, signals, burdenSignals),
+            qualityExplanation,
+            burdenExplanation);
     }
 
     public async Task<IReadOnlyList<DecisionQualityAssessment>> AssessRepositoryAsync(Guid repositoryId)
@@ -119,7 +139,7 @@ public sealed class DecisionQualityAssessmentService(
 
     private static DecisionQualityRating RatingFor(int score, IReadOnlyList<DecisionQualitySignal> signals)
     {
-        if (signals.Any(signal => signal.Direction == QualitySignalDirection.Negative && signal.Severity == QualitySignalSeverity.Critical))
+        if (QualityOverrideReason(signals) is not null)
         {
             return DecisionQualityRating.Poor;
         }
@@ -130,6 +150,113 @@ public sealed class DecisionQualityAssessmentService(
             >= 65 => DecisionQualityRating.Good,
             >= 40 => DecisionQualityRating.Mixed,
             _ => DecisionQualityRating.Poor
+        };
+    }
+
+    private static string? QualityOverrideReason(IReadOnlyList<DecisionQualitySignal> signals)
+    {
+        return signals.Any(signal => signal.Direction == QualitySignalDirection.Negative && signal.Severity == QualitySignalSeverity.Critical)
+            ? "Critical negative quality signal forces Poor rating regardless of score threshold."
+            : null;
+    }
+
+    private static DecisionQualityExplanation BuildQualityExplanation(
+        int score,
+        int rawScore,
+        DecisionQualityRating rating,
+        string? overrideReason,
+        IReadOnlyList<DecisionQualitySignalContribution> signalContributions)
+    {
+        return new DecisionQualityExplanation(
+            50,
+            rawScore,
+            score,
+            ThresholdFor(score, rating, overrideReason),
+            overrideReason,
+            signalContributions,
+            [
+                "Quality score starts at 50 and adds each signal contribution.",
+                "Raw score is clamped to the inclusive 0-100 range before threshold rating is applied."
+            ]);
+    }
+
+    private static DecisionQualityThresholdExplanation ThresholdFor(
+        int score,
+        DecisionQualityRating rating,
+        string? overrideReason)
+    {
+        if (overrideReason is not null)
+        {
+            return new DecisionQualityThresholdExplanation(
+                rating,
+                null,
+                null,
+                overrideReason);
+        }
+
+        return rating switch
+        {
+            DecisionQualityRating.Excellent => new DecisionQualityThresholdExplanation(
+                rating,
+                85,
+                100,
+                $"Clamped score {score} crossed the Excellent threshold of 85."),
+            DecisionQualityRating.Good => new DecisionQualityThresholdExplanation(
+                rating,
+                65,
+                84,
+                $"Clamped score {score} crossed the Good threshold of 65."),
+            DecisionQualityRating.Mixed => new DecisionQualityThresholdExplanation(
+                rating,
+                40,
+                64,
+                $"Clamped score {score} crossed the Mixed threshold of 40."),
+            DecisionQualityRating.Poor => new DecisionQualityThresholdExplanation(
+                rating,
+                0,
+                39,
+                $"Clamped score {score} remained below the Mixed threshold of 40."),
+            _ => new DecisionQualityThresholdExplanation(
+                rating,
+                null,
+                null,
+                $"Clamped score {score} did not match a known quality threshold.")
+        };
+    }
+
+    private static HumanAuthoringBurdenExplanation BuildBurdenExplanation(
+        string decisionId,
+        IReadOnlyList<HumanAuthoringBurdenSignal> burdenSignals)
+    {
+        HumanAuthoringBurdenSignal? winningSignal = burdenSignals
+            .OrderByDescending(signal => BurdenWeight(signal.Burden))
+            .ThenBy(signal => signal.Id, StringComparer.Ordinal)
+            .FirstOrDefault();
+        HumanAuthoringBurden effectiveBurden = winningSignal?.Burden ?? HumanAuthoringBurden.Unknown;
+        return new HumanAuthoringBurdenExplanation(
+            decisionId,
+            "Select the highest-weight human-authoring burden signal; GenerationBypassed > FullRewrite > MajorRefinement > MinorEdit > ReviewOnly > Unknown.",
+            effectiveBurden,
+            winningSignal,
+            effectiveBurden == HumanAuthoringBurden.Unknown,
+            winningSignal is null,
+            [
+                winningSignal is null
+                    ? "No human-authoring burden signal was available, so burden is Unknown."
+                    : $"Signal {winningSignal.Id} selected effective burden {effectiveBurden}."
+            ]);
+    }
+
+    private static int BurdenWeight(HumanAuthoringBurden burden)
+    {
+        return burden switch
+        {
+            HumanAuthoringBurden.GenerationBypassed => 5,
+            HumanAuthoringBurden.FullRewrite => 4,
+            HumanAuthoringBurden.MajorRefinement => 3,
+            HumanAuthoringBurden.MinorEdit => 2,
+            HumanAuthoringBurden.ReviewOnly => 1,
+            _ => 0
         };
     }
 

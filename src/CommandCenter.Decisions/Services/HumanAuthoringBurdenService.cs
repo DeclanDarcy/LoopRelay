@@ -84,19 +84,35 @@ public sealed class HumanAuthoringBurdenService(
             signals.AddRange(await ExtractSignalsAsync(repositoryId, decision.Id.Value));
         }
 
-        HumanAuthoringBurden EffectiveBurden(Decision decision)
+        HumanAuthoringBurdenExplanation BurdenExplanation(Decision decision)
         {
             IReadOnlyList<HumanAuthoringBurdenSignal> decisionSignals = signals
                 .Where(signal => string.Equals(signal.DecisionId, decision.Id.Value, StringComparison.Ordinal))
                 .ToArray();
-            return decisionSignals
-                .Select(signal => signal.Burden)
-                .DefaultIfEmpty(HumanAuthoringBurden.Unknown)
-                .OrderByDescending(BurdenWeight)
-                .First();
+            HumanAuthoringBurdenSignal? winningSignal = decisionSignals
+                .OrderByDescending(signal => BurdenWeight(signal.Burden))
+                .ThenBy(signal => signal.Id, StringComparer.Ordinal)
+                .FirstOrDefault();
+            HumanAuthoringBurden effectiveBurden = winningSignal?.Burden ?? HumanAuthoringBurden.Unknown;
+            return new HumanAuthoringBurdenExplanation(
+                decision.Id.Value,
+                "Select the highest-weight human-authoring burden signal; GenerationBypassed > FullRewrite > MajorRefinement > MinorEdit > ReviewOnly > Unknown.",
+                effectiveBurden,
+                winningSignal,
+                effectiveBurden == HumanAuthoringBurden.Unknown,
+                winningSignal is null,
+                [
+                    winningSignal is null
+                        ? "No human-authoring burden signal was available, so burden is Unknown."
+                        : $"Signal {winningSignal.Id} selected effective burden {effectiveBurden}."
+                ]);
         }
 
-        IReadOnlyList<HumanAuthoringBurden> burdens = decisions.Select(EffectiveBurden).ToArray();
+        IReadOnlyList<HumanAuthoringBurdenExplanation> explanations = decisions
+            .Select(BurdenExplanation)
+            .OrderBy(explanation => explanation.DecisionId, StringComparer.Ordinal)
+            .ToArray();
+        IReadOnlyList<HumanAuthoringBurden> burdens = explanations.Select(explanation => explanation.EffectiveBurden).ToArray();
         return new HumanAuthoringBurdenReport(
             repository.Id,
             decisions.Count,
@@ -106,7 +122,8 @@ public sealed class HumanAuthoringBurdenService(
             burdens.Count(burden => burden == HumanAuthoringBurden.FullRewrite),
             burdens.Count(burden => burden == HumanAuthoringBurden.GenerationBypassed),
             burdens.Count(burden => burden == HumanAuthoringBurden.Unknown),
-            signals);
+            signals,
+            explanations);
     }
 
     private async Task<Repository> GetRepositoryAsync(Guid repositoryId)

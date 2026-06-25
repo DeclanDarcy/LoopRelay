@@ -32,4 +32,5 @@ public sealed record DecisionQualityReport(
     double GenerationBypassedRate,
     DecisionQualityRating Rating,
     IReadOnlyList<DecisionQualityAssessment> Assessments,
-    IReadOnlyList<string> Diagnostics);
+    IReadOnlyList<string> Diagnostics,
+    IReadOnlyList<HumanAuthoringBurdenExplanation>? HumanAuthoringBurdenExplanations = null);
