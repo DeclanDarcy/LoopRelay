@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "identifier": "com.kernritsu.commandcenter",
   "build": {
-    "beforeDevCommand": "dotnet build ../CommandCenter.Backend/CommandCenter.Backend.csproj && npm --prefix ../CommandCenter.UI run dev",
-    "beforeBuildCommand": "dotnet build ../CommandCenter.Backend/CommandCenter.Backend.csproj && npm --prefix ../CommandCenter.UI run build",
+    "beforeDevCommand": "dotnet build CommandCenter.Backend/CommandCenter.Backend.csproj && npm --prefix CommandCenter.UI run dev",
+    "beforeBuildCommand": "dotnet build CommandCenter.Backend/CommandCenter.Backend.csproj && npm --prefix CommandCenter.UI run build",
     "devUrl": "http://localhost:5173",
     "frontendDist": "../CommandCenter.UI/dist"
   },
