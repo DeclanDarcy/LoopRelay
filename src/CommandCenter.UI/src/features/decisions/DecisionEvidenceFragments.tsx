@@ -1,4 +1,9 @@
 import type { DecisionEvidence, DecisionSourceReference } from '../../types'
+import { EvidenceList } from '../../components/explainability'
+import {
+  decisionEvidenceToEvidence,
+  decisionSourceReferencesToEvidence,
+} from '../../lib/explainability'
 
 export function DecisionEvidenceBlock({ title, evidence }: { title: string; evidence: DecisionEvidence[] }) {
   if (evidence.length === 0) {
@@ -6,14 +11,8 @@ export function DecisionEvidenceBlock({ title, evidence }: { title: string; evid
   }
 
   return (
-    <div className="decision-evidence-block" aria-label={title}>
-      <span>{title}</span>
-      {evidence.map((evidenceItem) => (
-        <article key={`${title}-${evidenceItem.summary}`}>
-          <p>{evidenceItem.summary}</p>
-          <DecisionSourceList sources={evidenceItem.sources} />
-        </article>
-      ))}
+    <div aria-label={title}>
+      <EvidenceList evidence={decisionEvidenceToEvidence(evidence, title)} title={title} />
     </div>
   )
 }
@@ -24,15 +23,8 @@ export function DecisionSourceList({ sources }: { sources: DecisionSourceReferen
   }
 
   return (
-    <ul className="decision-source-list" aria-label="Source attribution">
-      {sources.map((source, index) => (
-        <li key={`${source.sourceKind}-${source.relativePath ?? 'none'}-${index}`}>
-          <strong>{source.sourceKind}</strong>
-          {source.relativePath ? <span>{source.relativePath}</span> : null}
-          {source.section ? <span>{source.section}</span> : null}
-          {source.excerpt ? <p>{source.excerpt}</p> : null}
-        </li>
-      ))}
-    </ul>
+    <div aria-label="Source attribution">
+      <EvidenceList evidence={decisionSourceReferencesToEvidence(sources)} title="Source attribution" />
+    </div>
   )
 }

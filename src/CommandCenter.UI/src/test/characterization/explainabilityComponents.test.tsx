@@ -34,8 +34,8 @@ describe('explainability components', () => {
 
     expect(screen.getByText('gate-commit')).toBeInTheDocument()
     expect(screen.getByText('Commit approval gate')).toBeInTheDocument()
-    expect(screen.getByText('Source: .agents/workflow/gates.json')).toBeInTheDocument()
-    expect(screen.getByText('Fingerprint: abc123')).toBeInTheDocument()
+    expect(screen.getByText('.agents/workflow/gates.json')).toBeInTheDocument()
+    expect(screen.getByText('abc123')).toBeInTheDocument()
   })
 
   it('renders constraints, alternatives, uncertainty, diagnostics, actions, health, and certification findings', () => {

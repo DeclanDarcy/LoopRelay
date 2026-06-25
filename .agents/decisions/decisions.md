@@ -2,46 +2,37 @@
 
 ## Newly Authorized
 
-- Stop Milestone 8 feature migration and shift the milestone into validation/audit.
-- Treat the shared explainability layer as propagated through the major application domains:
+- Treat Milestone 8 as complete.
+- Stop Milestone 8 feature migration.
+- Treat the Milestone 8 audit as having verified both coverage and architectural intent.
+- Treat the shared explainability layer as spanning:
   - Workflow,
   - Governance,
   - Decisions,
   - Execution,
   - Reasoning,
   - Continuity / Operational Context.
-- Treat the remaining Milestone 8 work as verification rather than further migration unless the audit finds non-intentional gaps.
-- Run the Milestone 8 audit around four questions:
-  - coverage audit,
-  - authority audit,
-  - preservation audit,
-  - UI audit.
-- During the coverage audit, identify remaining bespoke explainability components and classify each as:
-  - intentional,
-  - compatibility,
-  - retire.
-- During the authority audit, verify adapters are projection-only and do not compute:
-  - lifecycle,
-  - eligibility,
-  - confidence,
-  - quality,
-  - burden,
-  - taxonomy,
-  - certification,
-  - governance,
-  - continuity,
-  - execution outcomes.
-- During the preservation audit, verify adapters preserve:
-  - evidence,
-  - diagnostics,
-  - constraints,
-  - uncertainty,
-  - findings,
-  - actions,
-  - alternatives,
-  - provenance,
-  - review evidence.
-- During the UI audit, run the complete characterization suite, verify no remaining domain-specific rendering paths remain where shared components should be used, and update the Milestone 8 exit checklist with audit results.
-- Treat interaction-specific affordances, including inline continuity warning navigation, as intentional exceptions when they are product-navigation concerns deferred to Milestone 9.
-- If the audit finds only intentional exceptions, close Milestone 8 without another feature-migration round.
-- Let Milestone 9 shift emphasis from explanation rendering mechanics to product cohesion: information density, layout, navigation, terminology, and user experience while preserving Milestone 1-8 authority boundaries.
+- Treat the final Milestone 8 migration gaps as resolved because remaining audited bespoke explanation paths were routed through shared primitives without moving domain authority into React.
+- Treat the Vite large-chunk warning as an optimization concern, not an architectural or correctness concern.
+- Preserve the current semantic layering:
+  - Domain Service,
+  - Authoritative Projection,
+  - Explainability Adapter,
+  - Shared Presentation Components,
+  - React UI.
+- Continue to prohibit React from owning lifecycle decisions, eligibility, taxonomy, quality, burden, confidence, certification, execution outcomes, or continuity semantics.
+- Start Milestone 9 as product architecture work rather than semantic architecture work.
+- Make the first Milestone 9 slice an audit rather than implementation.
+- Structure the first Milestone 9 audit around:
+  - navigation,
+  - workspace cohesion,
+  - information density,
+  - interaction consistency,
+  - endpoint / projection cleanup.
+- For navigation, audit one primary home per capability, contextual links, and duplicated entry points.
+- For workspace cohesion, audit Workflow, Governance, Decisions, Execution, Reasoning, and Continuity for duplicated information, repeated panels, inconsistent interaction models, and inconsistent terminology.
+- For information density, identify overly tall layouts, repeated evidence sections, related cards that should merge, and summaries that should collapse until expanded.
+- Treat the execution history panel as an early likely information-density candidate.
+- For interaction consistency, normalize review, approve, reject, recover, retry, promote, archive, and supersede patterns across workspaces.
+- For endpoint / projection cleanup, identify obsolete bespoke components, compatibility adapters that can retire, duplicate projections, and classify remaining items as Keep, Compatibility, Internal, or Remove.
+- Use Milestone 9 to reduce complexity without changing semantics.

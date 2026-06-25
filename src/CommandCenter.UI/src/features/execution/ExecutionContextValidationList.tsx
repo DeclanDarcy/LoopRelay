@@ -1,6 +1,9 @@
 import type { ExecutionGovernedConflictDiagnostic } from '../../types'
 import { DiagnosticList } from '../../components/explainability'
-import { executionGovernedConflictsToDiagnostics } from '../../lib/explainability'
+import {
+  executionGovernedConflictsToDiagnostics,
+  executionValidationErrorsToDiagnostics,
+} from '../../lib/explainability'
 
 type ExecutionContextValidationListProps = {
   validationErrors: string[]
@@ -64,11 +67,10 @@ export function ExecutionContextValidationList({
         </div>
       ) : null}
       {validationErrors.length > 0 ? (
-        <ul>
-          {validationErrors.map((validationError, index) => (
-            <li key={`${index}:${validationError}`}>{validationError}</li>
-          ))}
-        </ul>
+        <DiagnosticList
+          diagnostics={executionValidationErrorsToDiagnostics(validationErrors)}
+          title="Validation Errors"
+        />
       ) : null}
     </div>
   )

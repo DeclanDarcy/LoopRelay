@@ -31,7 +31,7 @@ describe('DecisionProposalViewer', () => {
 
     const optionEvidence = screen.getByLabelText('Option Evidence')
     expect(within(optionEvidence).getByText('The current slice authorizes inspection-only UI.')).toBeInTheDocument()
-    expect(within(optionEvidence).getByText('Milestone 4')).toBeInTheDocument()
+    expect(within(optionEvidence).getByText(/Milestone 4/)).toBeInTheDocument()
   })
 
   it('renders recommendation mode, supporting context, evidence categories, and option evaluations from the backend', () => {
@@ -39,14 +39,14 @@ describe('DecisionProposalViewer', () => {
 
     const recommendation = screen.getByLabelText('Decision recommendation')
     expect(within(recommendation).getByText('Mode PreferredOption')).toBeInTheDocument()
-    expect(within(recommendation).getByText('Backend read models are already available.')).toBeInTheDocument()
+    expect(within(recommendation).getAllByText('Backend read models are already available.').length).toBeGreaterThan(0)
     expect(within(recommendation).getByText('UI must not infer recommendation confidence.')).toBeInTheDocument()
     expect(within(recommendation).getByText('Assume review workspace remains authoritative.')).toBeInTheDocument()
     expect(within(recommendation).getByText('Alternative manual review flow remains possible.')).toBeInTheDocument()
 
-    const evidenceCategories = screen.getByLabelText('Recommendation evidence categories')
-    expect(within(evidenceCategories).getByText('Benefit')).toBeInTheDocument()
-    expect(within(evidenceCategories).getByText('Keeps recommendation tied to proposal evidence.')).toBeInTheDocument()
+    const recommendationExplanation = screen.getByLabelText('Decision Recommendation explanation')
+    expect(within(recommendationExplanation).getByText('Benefit: OPT-A')).toBeInTheDocument()
+    expect(within(recommendationExplanation).getByText('Keeps recommendation tied to proposal evidence.')).toBeInTheDocument()
 
     const evaluations = screen.getByLabelText('Decision option evaluations')
     expect(within(evaluations).getByText('Rank 1 / Score 92')).toBeInTheDocument()
@@ -67,10 +67,10 @@ describe('DecisionProposalViewer', () => {
     expect(within(optionTransparency).getByText('Blocking: Do not compute scores in React.')).toBeInTheDocument()
 
     const hiddenOptions = screen.getByLabelText('Rejected and hidden proposal options')
-    expect(within(hiddenOptions).getByText('Rejected generated option')).toBeInTheDocument()
-    expect(within(hiddenOptions).getByText('Rejected because it moved authority into React.')).toBeInTheDocument()
-    expect(within(hiddenOptions).getByText('Duplicate generated option')).toBeInTheDocument()
-    expect(within(hiddenOptions).getByText('Duplicate: Same behavior as OPT-A.')).toBeInTheDocument()
+    expect(within(hiddenOptions).getByText(/Rejected generated option/)).toBeInTheDocument()
+    expect(within(hiddenOptions).getByText(/Rejected because it moved authority into React./)).toBeInTheDocument()
+    expect(within(hiddenOptions).getByText(/Duplicate generated option/)).toBeInTheDocument()
+    expect(within(hiddenOptions).getByText(/Duplicate: Same behavior as OPT-A./)).toBeInTheDocument()
     expect(within(hiddenOptions).getByText('EvidenceMissing: Requires reviewer-supplied evidence.')).toBeInTheDocument()
   })
 
@@ -109,8 +109,8 @@ describe('DecisionProposalViewer', () => {
       within(unavailableReasons).getByText('Proposal must be refined before resolution readiness.'),
     ).toBeInTheDocument()
     expect(
-      within(unavailableReasons).getByText('DecisionLifecycleRules.ValidateProposalTransition'),
-    ).toBeInTheDocument()
+      within(unavailableReasons).getAllByText('DecisionLifecycleRules.ValidateProposalTransition').length,
+    ).toBeGreaterThan(0)
   })
 })
 

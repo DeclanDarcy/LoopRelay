@@ -30,7 +30,7 @@ describe('execution context validation list rendering characterization', () => {
 
     render(<ExecutionContextValidationList validationErrors={[validationError]} />)
 
-    expect(screen.getByRole('listitem').textContent).toBe(validationError)
+    expect(screen.getByText((_, element) => element?.textContent === validationError)).toBeInTheDocument()
   })
 
   it('preserves the existing empty fallback', () => {

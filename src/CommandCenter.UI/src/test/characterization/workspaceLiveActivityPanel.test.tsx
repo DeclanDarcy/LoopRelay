@@ -69,6 +69,6 @@ describe('workspace live activity rendering characterization', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open in Execution' }))
 
     expect(onOpenExecutionActivity).toHaveBeenCalledTimes(1)
-    expect(screen.getByText('Navigation event')).toBeInTheDocument()
+    expect(screen.getAllByText('Navigation event').length).toBeGreaterThan(0)
   })
 })

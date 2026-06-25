@@ -1,9 +1,15 @@
 import { Badge, EmptyState } from '../../components/design'
+import { ActionEligibilityView, DiagnosticList } from '../../components/explainability'
 import type {
   DecisionLifecycleEntityEligibility,
   DecisionProposal,
   DecisionReviewWorkspace,
 } from '../../types'
+import {
+  decisionDiagnosticsToExplanation,
+  decisionGenerationDiagnosticsToRejectedOptionDiagnostics,
+  decisionLifecycleEligibilityToActions,
+} from '../../lib/explainability'
 import { DecisionEvidenceBlock, DecisionSourceList } from './DecisionEvidenceFragments'
 import { DecisionOptionEvaluationTable } from './DecisionOptionEvaluationTable'
 import { DecisionRecommendationExplanation } from './DecisionRecommendationExplanation'
@@ -91,24 +97,16 @@ export function DecisionProposalViewer({ workspace, eligibility = null, isLoadin
               <span>Allowed actions</span>
               <strong>{eligibility.allowedActions.map((action) => action.displayName).join(', ') || 'None'}</strong>
             </div>
-            {eligibility.blockedActions.length > 0 ? (
-              <ul className="decision-lifecycle-reasons" aria-label="Proposal unavailable transition reasons">
-                {eligibility.blockedActions.map((action) => (
-                  <li key={action.commandName}>
-                    <strong>{action.displayName}</strong>
-                    <span>{action.reason ?? 'Blocked by backend lifecycle rules.'}</span>
-                    <small>{action.governingRule}</small>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-            {eligibility.diagnostics.length > 0 ? (
-              <ul className="decision-lifecycle-reasons" aria-label="Proposal review diagnostics">
-                {eligibility.diagnostics.map((diagnostic) => (
-                  <li key={diagnostic}>{diagnostic}</li>
-                ))}
-              </ul>
-            ) : null}
+            <div aria-label="Proposal unavailable transition reasons">
+              <ActionEligibilityView
+                actions={decisionLifecycleEligibilityToActions(eligibility)}
+                title="Proposal Action Eligibility"
+              />
+            </div>
+            <DiagnosticList
+              diagnostics={decisionDiagnosticsToExplanation(eligibility.diagnostics, 'Proposal review')}
+              title="Proposal Review Diagnostics"
+            />
           </>
         ) : (
           <div>
@@ -138,21 +136,18 @@ export function DecisionProposalViewer({ workspace, eligibility = null, isLoadin
         </div>
       ) : null}
 
-      {proposal.generationDiagnostics?.diagnostics.length ? (
-        <div className="decision-warning-list" aria-label="Generation diagnostics">
-          {proposal.generationDiagnostics.diagnostics.map((diagnostic) => (
-            <span key={diagnostic}>{diagnostic}</span>
-          ))}
-        </div>
-      ) : null}
+      <DiagnosticList
+        diagnostics={decisionDiagnosticsToExplanation(
+          proposal.generationDiagnostics?.diagnostics ?? [],
+          'Generation diagnostic',
+        )}
+        title="Generation Diagnostics"
+      />
 
-      {diagnostics.warnings.length > 0 ? (
-        <div className="decision-warning-list" aria-label="Review diagnostics warnings">
-          {diagnostics.warnings.map((warning) => (
-            <span key={warning}>{warning}</span>
-          ))}
-        </div>
-      ) : null}
+      <DiagnosticList
+        diagnostics={decisionDiagnosticsToExplanation(diagnostics.warnings, 'Review warning')}
+        title="Review Diagnostics Warnings"
+      />
 
       <ProposalEvidenceBlock title="Proposal Evidence" evidence={proposal.evidence} />
 
@@ -277,11 +272,20 @@ function OptionTransparency({ proposal, optionId }: { proposal: DecisionProposal
       {option?.assumptions?.length ? <FactChips title={`Assumptions for ${optionId}`} values={option.assumptions} /> : null}
       {option?.diagnostics?.length ? <FactChips title={`Diagnostics for ${optionId}`} values={option.diagnostics} /> : null}
       {validation && !validation.isValid ? (
-        <div className="decision-warning-list" aria-label={`Required human action for ${optionId}`}>
-          {validation.issues.map((issue) => (
-            <span key={`${issue.type}-${issue.message}`}>{issue.type}: {issue.message}</span>
-          ))}
-        </div>
+        <DiagnosticList
+          diagnostics={decisionGenerationDiagnosticsToRejectedOptionDiagnostics({
+            generatedOptionCount: 0,
+            acceptedOptionCount: 0,
+            rejectedOptionCount: 0,
+            deduplicatedOptionCount: 0,
+            fallbackOptionCount: 0,
+            optionValidationResults: [validation],
+            diagnostics: [],
+            rejectedOptions: [],
+            deduplicatedOptions: [],
+          })}
+          title={`Required human action for ${optionId}`}
+        />
       ) : null}
       {analyzedOption ? (
         <div className="decision-inspection-list" aria-label={`Analyzed option details for ${optionId}`}>

@@ -196,7 +196,7 @@ describe('WorkspaceInspectorRail', () => {
     expect(screen.getByText((_, element) => element?.textContent === 'Open questions: 1')).toBeInTheDocument()
     expect(screen.getByText((_, element) => element?.textContent === 'Active risks: 1')).toBeInTheDocument()
     expect(screen.getByText((_, element) => element?.textContent === 'Pending proposal: Present')).toBeInTheDocument()
-    expect(screen.getByText('.agents/milestones/m3.md')).toBeInTheDocument()
+    expect(screen.getAllByText('.agents/milestones/m3.md').length).toBeGreaterThan(0)
   })
 
   it('renders current commit preparation without exposing commit actions', () => {
