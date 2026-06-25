@@ -6,6 +6,7 @@ Expose why decisions, recommendations, options, quality ratings, governance find
 
 ### Backend
 
+- [x] Inventory existing recommendation, option, diagnostic, governance, influence, quality, and burden semantic facts before adding projection fields. Evidence: `.agents/milestones/m4-transparency-inventory.md`.
 - [ ] Ensure `DecisionProposal` serialization includes all generated transparency data already produced by services:
    - [ ] generation diagnostics
    - [ ] option validation results
