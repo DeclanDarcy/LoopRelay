@@ -2,29 +2,30 @@
 
 ## New State This Slice
 
-- Completed Milestone 9 final Product Cohesion validation.
-- Added `.agents/milestones/m9-final-cohesion-validation.md`.
-- Updated `.agents/milestones/m9-product-cohesion.md` so all remaining Product Cohesion checklist items and exit criteria are complete.
-- Updated frontend characterization tests to match the shared explainability diagnostics UI and backend-owned git eligibility refresh behavior:
-  - `src/CommandCenter.UI/src/test/characterization/operationalContextCompressionSummaryPanel.test.tsx`
-  - `src/CommandCenter.UI/src/test/characterization/operationalContextCurrentPanel.test.tsx`
-  - `src/CommandCenter.UI/src/test/characterization/app.smoke.test.tsx`
-- Rotated previous handoff to `.agents/handoffs/handoff.0110.md`.
+- Completed Milestone 10 MVP closure and release-readiness certification.
+- Added `.agents/certification/m10-release-readiness-evidence.md`.
+- Added `.agents/certification/mvp-certification-report.md`.
+- Updated `.agents/milestones/m10-release-readiness.md` so all audits, deliverables, and exit criteria are checked complete.
+- Rotated previous handoff to `.agents/handoffs/handoff.0111.md`.
 
 ## Verification
 
-- `npm test -- workflowAuthority.test.ts navigation.test.ts primarySurfaceReachability.test.tsx sidebarNavigation.test.tsx executionWorkflowRail.test.tsx`
-- `npm test -- operationalContextCompressionSummaryPanel.test.tsx operationalContextCurrentPanel.test.tsx app.smoke.test.tsx`
-- `npm test`
+- `dotnet test CommandCenter.slnx`
+  - Passed: 770 backend tests.
+- `npm run lint`
+  - Passed.
+- `npm run test`
+  - Passed: 68 files, 296 tests.
 - `npm run build`
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~BackendEndpointDispositionTests`
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "FullyQualifiedName~BackendEndpointDispositionTests|FullyQualifiedName~WorkflowEndpointTests|FullyQualifiedName~DecisionSessionEndpointTests" -m:1`
+  - Passed with the known non-blocking Vite chunk-size warning for a JavaScript chunk over 500 kB.
+- `npm run test:e2e`
+  - Passed: 6 Playwright tests.
 
 ## Residual Risk
 
-- `npm run build` still reports the existing Vite chunk-size warning for a JavaScript chunk over 500 kB.
-- Backend verification remains focused on endpoint disposition, workflow endpoints, and decision-session endpoints rather than the full backend test suite.
+- The Vite chunk-size warning remains documented as known and non-blocking.
+- No release-blocking authority, transparency, reachability, integration, cleanup, or architectural drift issue was found in this slice.
 
 ## Recommended Next Slice
 
-- Start Milestone 10 release-readiness closure: run the certification/audit checks listed in `.agents/milestones/m10-release-readiness.md`, produce final release-readiness evidence, and avoid new architectural cleanup unless a certification gate exposes a blocking defect.
+- Prepare the release/PR package: rotate `decisions.md` if the user authorizes new decisions, create a new decisions file with only newly-authorized decisions, then stage, commit, push, and stop executing.
