@@ -64,12 +64,12 @@ Expose why decisions, recommendations, options, quality ratings, governance find
 ### Tests
 
 - [x] Backend serialization and projection tests for transparency fields.
-- [ ] UI characterization tests for recommendation explanation, option scoring, rejected options, quality contribution, burden reasoning, governance state, and influence exclusion/conflict reasons.
+- [x] UI characterization tests for recommendation explanation, option scoring, rejected options, quality contribution, burden reasoning, governance state, and influence exclusion/conflict reasons.
    - [x] Proposal viewer characterization covers recommendation explanation, option scoring/rank/explanation, analyzed option details, invalid validation issues, rejected options, and deduplicated options.
    - [x] Quality panel characterization covers backend score basis, threshold reason, signal contribution, effective burden, burden selection rule, winning signal, and governance finding grouping.
    - [x] Governance panel characterization covers review authority freshness, stale authority warning, recommendation divergence, lifecycle state, allowed actions, blocked transitions, and transition reasons.
    - [x] Execution influence characterization covers included, excluded, superseded, conflicting, ignored, and blocked reason categories from backend-owned fields.
-- [ ] Regression tests proving no UI-side scoring, ranking, quality, burden, or governance calculation helpers exist.
+- [x] Regression tests proving no UI-side scoring, ranking, quality, burden, governance, influence, recommendation, or eligibility calculation helpers exist. Evidence: `.agents/milestones/m4-frontend-semantic-regression-audit.md`.
 
 ### Exit Criteria
 
