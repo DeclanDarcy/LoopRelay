@@ -361,6 +361,8 @@ describe('selected repository summary rendering characterization', () => {
               findings: [],
             },
           ],
+          diagnostics: ['Detailed governance health diagnostic belongs in Governance.'],
+          generatedAt: '2026-06-21T17:38:00.000Z',
         },
       }),
     })
@@ -371,7 +373,11 @@ describe('selected repository summary rendering characterization', () => {
     expect(screen.getByText('Governance state: Active')).toBeInTheDocument()
     expect(screen.getByText('Lifecycle decision: Transfer')).toBeInTheDocument()
     expect(screen.getByText('Transfer eligibility: Blocked')).toBeInTheDocument()
-    expect(screen.getByText('Governance health: 2')).toBeInTheDocument()
+    expect(screen.getByText('Governance health dimensions: 2')).toBeInTheDocument()
+    expect(screen.getByText('Governance health findings: 1')).toBeInTheDocument()
+    expect(screen.getByText(/Governance health assessed:/)).toHaveTextContent(/\d/)
+    expect(screen.queryByText('Transfer recommended but blocked.')).not.toBeInTheDocument()
+    expect(screen.queryByText('Detailed governance health diagnostic belongs in Governance.')).not.toBeInTheDocument()
     expect(screen.queryByText('Coherence: 0.82')).not.toBeInTheDocument()
     expect(screen.queryByText('Transfer pressure: 0.71')).not.toBeInTheDocument()
     expect(screen.queryByText('Cache miss risk: 0.44')).not.toBeInTheDocument()
@@ -414,7 +420,8 @@ describe('selected repository summary rendering characterization', () => {
     expect(screen.getByText('Reasoning threads: 3')).toBeInTheDocument()
     expect(screen.getByText('Reasoning relationships: 5')).toBeInTheDocument()
     expect(screen.getByText(/Reasoning latest activity:/)).toHaveTextContent(/\d/)
-    expect(screen.getByText('Reasoning certification: Passed')).toBeInTheDocument()
+    expect(screen.getByText('Reasoning certification result: Passed')).toBeInTheDocument()
+    expect(screen.getByText(/Reasoning certification latest run:/)).toHaveTextContent(/\d/)
     expect(screen.queryByText('Reconstruction confidence rationale')).not.toBeInTheDocument()
     expect(screen.queryByText('Known unreachable reconstruction evidence')).not.toBeInTheDocument()
     expect(screen.queryByText('Reasoning graph authority')).not.toBeInTheDocument()

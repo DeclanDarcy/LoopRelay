@@ -2,31 +2,33 @@
 
 ## New State This Slice
 
-- Continued Milestone 9 with continuity evolution summary consolidation.
-- Added `.agents/milestones/m9-continuity-summary-consolidation.md` as the evidence artifact for this slice.
-- Updated `.agents/milestones/m9-product-cohesion.md` with a completed subitem for continuity summary consolidation.
-- Kept `ContinuityTab` / `#continuity-diagnostics` as the primary surface for continuity diagnostics, compression trends, operational evolution, warnings, diagnostic groups, and reports.
-- Kept `OperationalContextTab` as the primary surface for current understanding, proposal review, semantic changes, compression explanation, decision assimilation, taxonomy, contradictions, and proposal comparison.
-- Added compact selected-repository continuity summary rows for revision count, warning count, pending proposal status, latest activity, and navigation to Continuity diagnostics.
-- Reduced the workspace inspector continuity area to revision/current revision, warning count, pending proposal status, status, latest update, last promotion, and navigation.
-- Removed individual warning text snippets and stable-decision/open-question/active-risk count links from the workspace inspector continuity summary.
-- Rotated previous handoff to `.agents/handoffs/handoff.0085.md`.
+- Continued Milestone 9 with health and certification summary consolidation.
+- Added `.agents/milestones/m9-health-certification-summary-consolidation.md` as the evidence artifact for this slice.
+- Updated `.agents/milestones/m9-product-cohesion.md` with a completed subitem for selected repository health and certification summary consolidation.
+- Updated `SelectedRepositorySummary` so repository-level health/certification facts are compact:
+  - governance health dimensions,
+  - governance health finding count,
+  - governance health assessment timestamp,
+  - reasoning certification result,
+  - reasoning certification latest run timestamp,
+  - navigation to primary Governance and Reasoning workspaces.
+- Updated characterization coverage to prove secondary summaries do not render individual governance health findings, governance diagnostics, reasoning reconstruction details, or reasoning authority details.
+- Rotated previous handoff to `.agents/handoffs/handoff.0086.md`.
 
 ## Verification
 
 - `npm test -- selectedRepositorySummary.test.tsx workspaceInspectorRail.test.tsx`
-- `npm test -- selectedRepositorySummary.test.tsx workspaceInspectorRail.test.tsx operationalContextCurrentPanel.test.tsx continuityDiagnosticsPanel.test.tsx navigation.test.ts`
 - `npm run build`
 
 ## Residual Risk
 
 - `npm run build` still reports the existing Vite chunk-size warning for the main bundle.
-- Milestone 9 duplicate-surface targets remain: health widgets, certification summaries, interaction normalization, unified dashboard cohesion, obsolete UI cleanup, and terminology alignment.
+- Milestone 9 still needs interaction normalization, unified dashboard cohesion, obsolete compatibility cleanup, and terminology alignment.
 
 ## Recommended Next Slice
 
-- Continue Milestone 9 with health widget and certification summary consolidation:
-  - identify primary health/certification surfaces per capability,
-  - reduce secondary health/certification widgets to compact status/counts/latest run/navigation,
-  - keep decomposed dimensions, findings, diagnostics, evidence, and certification detail in primary surfaces,
-  - add characterization coverage proving secondary widgets summarize and navigate rather than rendering full health or certification detail.
+- Continue Milestone 9 with interaction normalization:
+  - audit review, accept, reject, transfer, recover, generate, refine, commit, push, promote, archive, and supersede actions,
+  - identify each action surface's eligibility, evidence, result, and diagnostics presentation,
+  - normalize component structure and labels where the UI already has authoritative backend fields,
+  - add focused characterization coverage for at least one representative lifecycle operation family before broadening.

@@ -57,6 +57,10 @@ export function SelectedRepositorySummary({
   const continuityLatestActivity =
     workspace?.operationalContext.lastUpdatedAt ??
     repository.continuitySummary.operationalContextLastUpdatedAt
+  const governanceHealthFindingCount = governanceSummary.healthDimensions.reduce(
+    (count, dimension) => count + dimension.findings.length,
+    0,
+  )
 
   return (
     <>
@@ -239,7 +243,9 @@ export function SelectedRepositorySummary({
         <span>
           Transfer eligibility: {governanceSummary.transferEligibilityStatus ?? 'Not projected'}
         </span>
-        <span>Governance health: {governanceSummary.healthDimensions.length}</span>
+        <span>Governance health dimensions: {governanceSummary.healthDimensions.length}</span>
+        <span>Governance health findings: {governanceHealthFindingCount}</span>
+        <span>Governance health assessed: {formatDateTime(governanceSummary.generatedAt)}</span>
         {onOpenGovernance ? (
           <span>
             Governance workspace:{' '}
@@ -272,7 +278,8 @@ export function SelectedRepositorySummary({
         <span>Reasoning threads: {reasoningSummary.threadCount}</span>
         <span>Reasoning relationships: {reasoningSummary.relationshipCount}</span>
         <span>Reasoning latest activity: {formatDateTime(reasoningSummary.lastActivityAt)}</span>
-        <span>Reasoning certification: {reasoningSummary.certificationResult ?? 'Not projected'}</span>
+        <span>Reasoning certification result: {reasoningSummary.certificationResult ?? 'Not projected'}</span>
+        <span>Reasoning certification latest run: {formatDateTime(reasoningSummary.lastCertificationAt)}</span>
         {onOpenReasoning ? (
           <span>
             Reasoning workspace:{' '}

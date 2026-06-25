@@ -2,13 +2,22 @@
 
 ## Newly Authorized
 
-- Treat the continuity consolidation slice as accepted Milestone 9 work:
-  - Continuity Diagnostics owns operational evolution, compression, warning detail, grouped diagnostics, and reports.
-  - Operational Context owns current understanding, proposal review, semantic diff, taxonomy, contradictions, assimilation, and comparison.
-  - Repository and Workspace surfaces may show only revision counts, warning counts, pending proposal status, latest activity, and navigation.
-- Continue Milestone 9 with health widget and certification summary consolidation as the next implementation slice.
-- For health and certification consolidation:
-  - keep primary surfaces responsible for health dimensions, findings, diagnostics, evidence, certification details, and historical results,
-  - reduce secondary surfaces to overall status, counts, latest execution, latest certification, and navigation,
-  - avoid reproducing individual findings, dimension breakdowns, evidence, diagnostics, and remediation details outside primary surfaces.
-- After health and certification consolidation, continue toward information-density refinement, interaction normalization, obsolete compatibility presentation removal, endpoint/projection/component retirement, and final cohesion audit.
+- Treat the health and certification summary consolidation slice as accepted Milestone 9 work:
+  - repository summaries serve operational awareness, not detailed health or certification analysis,
+  - governance health may be summarized with counts and latest assessment time,
+  - reasoning certification may be summarized with result and latest run time,
+  - detailed health dimensions, findings, diagnostics, evidence, certification reports, and reasoning certification diagnostics remain in their primary domain workspaces.
+- Continue Milestone 9 with interaction normalization as the next phase.
+- Start interaction normalization by inventorying lifecycle actions and grouping them into common patterns:
+  - generate,
+  - review,
+  - approve,
+  - reject,
+  - recovery,
+  - execution.
+- For each interaction pattern, normalize action placement, button hierarchy, eligibility presentation, blocked-action messaging, evidence presentation, confirmation behavior, post-action refresh, and navigation after completion.
+- Continue the remaining Milestone 9 trajectory in this order after interaction normalization:
+  - information-density refinement,
+  - obsolete compatibility presentation removal,
+  - endpoint/projection/component cleanup where replacements have been validated,
+  - final product cohesion audit.
