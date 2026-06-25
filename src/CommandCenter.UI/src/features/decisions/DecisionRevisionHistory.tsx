@@ -1,5 +1,10 @@
 import { useMemo, useState } from 'react'
 import { Badge, EmptyState } from '../../components/design'
+import { DiagnosticList, EvidenceList } from '../../components/explainability'
+import {
+  decisionDiagnosticsToExplanation,
+  decisionSourceReferencesToEvidence,
+} from '../../lib/explainability'
 import type {
   DecisionProposalLineage,
   DecisionProposalRevisionSnapshot,
@@ -60,10 +65,11 @@ export function DecisionRevisionHistory({ lineage, isLoading }: DecisionRevision
       </article>
 
       {lineage.diagnostics.length > 0 ? (
-        <div className="decision-warning-list" aria-label="Lineage diagnostics">
-          {lineage.diagnostics.map((diagnostic) => (
-            <span key={diagnostic}>{diagnostic}</span>
-          ))}
+        <div aria-label="Lineage diagnostics">
+          <DiagnosticList
+            diagnostics={decisionDiagnosticsToExplanation(lineage.diagnostics, 'Lineage diagnostic')}
+            title="Lineage Diagnostics"
+          />
         </div>
       ) : null}
 
@@ -192,16 +198,9 @@ function SourceList({ sources }: { sources: DecisionSourceReference[] }) {
   }
 
   return (
-    <ul className="decision-source-list" aria-label="Source attribution">
-      {sources.map((source, index) => (
-        <li key={`${source.sourceKind}-${source.relativePath ?? 'none'}-${index}`}>
-          <strong>{source.sourceKind}</strong>
-          {source.relativePath ? <span>{source.relativePath}</span> : null}
-          {source.section ? <span>{source.section}</span> : null}
-          {source.excerpt ? <p>{source.excerpt}</p> : null}
-        </li>
-      ))}
-    </ul>
+    <div aria-label="Source attribution">
+      <EvidenceList evidence={decisionSourceReferencesToEvidence(sources)} title="Source Attribution" />
+    </div>
   )
 }
 

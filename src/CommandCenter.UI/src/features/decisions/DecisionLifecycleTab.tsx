@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { EmptyState, Panel, SectionHeader } from '../../components/design'
-import { InteractionPatternView } from '../../components/explainability'
+import { DiagnosticList, InteractionPatternView } from '../../components/explainability'
 import type {
   Decision,
   DecisionCandidate,
   DecisionContextSnapshot,
+  DecisionGenerationDiagnostics,
   DecisionLifecycleActionEligibility,
   DecisionLifecycleEligibilityProjection,
   DecisionLifecycleEntityEligibility,
@@ -832,23 +833,33 @@ function DecisionProposalGenerationResult({ proposal }: { proposal: DecisionProp
         <span>{diagnostics?.deduplicatedOptionCount ?? 0} deduplicated options</span>
       </div>
       {diagnostics?.optionValidationResults.length ? (
-        <div className="decision-warning-list" aria-label="Generation validation diagnostics">
-          {diagnostics.optionValidationResults.map((result) => (
-            <span key={result.optionId}>
-              {result.optionId}: {result.isValid ? 'valid' : result.issues.map((issue) => issue.message).join('; ')}
-            </span>
-          ))}
+        <div aria-label="Generation validation diagnostics">
+          <DiagnosticList
+            diagnostics={decisionGenerationOptionValidationToDiagnostics(diagnostics)}
+            title="Generation Validation Diagnostics"
+          />
         </div>
       ) : null}
       {diagnostics?.diagnostics.length ? (
-        <div className="decision-warning-list" aria-label="Generation command diagnostics">
-          {diagnostics.diagnostics.map((diagnostic) => (
-            <span key={diagnostic}>{diagnostic}</span>
-          ))}
+        <div aria-label="Generation command diagnostics">
+          <DiagnosticList
+            diagnostics={decisionDiagnosticsToExplanation(diagnostics.diagnostics, 'Generation command diagnostic')}
+            title="Generation Command Diagnostics"
+          />
         </div>
       ) : null}
     </section>
   )
+}
+
+function decisionGenerationOptionValidationToDiagnostics(diagnostics: DecisionGenerationDiagnostics) {
+  return diagnostics.optionValidationResults.map((result) => ({
+    label: `Option ${result.optionId}`,
+    detail: result.isValid
+      ? `${result.optionId}: valid`
+      : `${result.optionId}: ${result.issues.map((issue) => issue.message).join('; ')}`,
+    tone: result.isValid ? 'info' as const : 'warning' as const,
+  }))
 }
 
 function getAction(

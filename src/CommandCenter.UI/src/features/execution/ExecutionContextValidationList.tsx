@@ -1,5 +1,5 @@
 import type { ExecutionGovernedConflictDiagnostic } from '../../types'
-import { DiagnosticList } from '../../components/explainability'
+import { DiagnosticList, EvidenceList } from '../../components/explainability'
 import {
   executionGovernedConflictsToDiagnostics,
   executionValidationErrorsToDiagnostics,
@@ -56,11 +56,15 @@ export function ExecutionContextValidationList({
                 </div>
               </dl>
               {conflict.evidence.length > 0 ? (
-                <ul aria-label={`Evidence for ${conflict.decisionId}`}>
-                  {conflict.evidence.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
+                <div aria-label={`Evidence for ${conflict.decisionId}`}>
+                  <EvidenceList
+                    evidence={conflict.evidence.map((item) => ({
+                      label: 'Conflict evidence',
+                      detail: item,
+                    }))}
+                    title={`Evidence for ${conflict.decisionId}`}
+                  />
+                </div>
               ) : null}
             </article>
           ))}
