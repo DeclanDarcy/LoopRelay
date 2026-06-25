@@ -55,6 +55,7 @@ Make the application feel unified, not merely smaller. Remove fragmentation so e
   - [x] Duplicate decision lifecycle/revision diagnostics, revision source attribution, and execution conflict evidence renderers removed in favor of shared `DiagnosticList` and `EvidenceList`. See `./m9-obsolete-ui-cleanup-decision-execution-diagnostics-evidence.md`.
   - [x] Duplicate decision option evaluation evidence, option diagnostics, analyzed-option diagnostics, and operational-context modification supporting-evidence renderers removed in favor of shared `EvidenceList` and `DiagnosticList`. See `./m9-obsolete-ui-cleanup-decision-continuity-explainability.md`.
   - [x] Execution git commit/push surface terminology aligned so it no longer presents a competing workflow authority label. See `./m9-obsolete-ui-cleanup-execution-git-workflow-terminology.md`.
+  - [x] Final health/certification renderer audit completed; remaining local surfaces are intentional domain wrappers or compact dashboard rollups. See `./m9-health-certification-renderer-audit.md`.
 - [ ] Align terminology across statuses, health, diagnostics, recovery, certification, governance, execution, and explainability.
 
 ### Likely Cleanup Targets
@@ -65,14 +66,15 @@ Make the application feel unified, not merely smaller. Remove fragmentation so e
   - [x] Decision quality priority signals now render through shared diagnostics.
   - [x] Decision option comparison evidence now renders through shared evidence components.
   - [x] Decision recommendation and burden explanation details now render through shared decision-basis components; governance explanation remains a navigation/grouping wrapper over shared diagnostics.
-- [ ] Duplicate health renderers replaced by shared `HealthView`.
-- [ ] Duplicate diagnostics renderers replaced by shared `DiagnosticList`.
+- [x] Duplicate health renderers replaced by shared `HealthView`.
+- [x] Duplicate diagnostics renderers replaced by shared `DiagnosticList`.
   - [x] Execution artifact diagnostics list local renderer removed; `DiagnosticList` is now the only visible artifact diagnostics renderer.
   - [x] Generation certification executive-readiness blocking gaps now render through shared diagnostics.
   - [x] Reasoning graph fallback diagnostics and operational-context warning diagnostics now render through shared diagnostics.
   - [x] Decision lifecycle generation diagnostics, revision lineage diagnostics, revision source attribution, and execution conflict evidence now render through shared explainability components.
   - [x] Decision option and analyzed-option diagnostics now render through shared diagnostics.
   - [x] Workflow certification failure rendering now uses shared diagnostics. See `./m9-obsolete-ui-cleanup-workflow-certification-failures.md`.
+  - [x] Final health/certification audit found no remaining duplicate generic diagnostic renderers requiring replacement. See `./m9-health-certification-renderer-audit.md`.
 
 ### Tests
 
