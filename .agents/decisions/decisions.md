@@ -2,17 +2,19 @@
 
 ## Newly Authorized
 
-- Treat the completed primary surface reachability slice as a valid Milestone 9 validation-focused slice.
-- Treat primary workspace reachability as a user-visible contract requiring the correct tab activation, active navigation state, and expected primary landmark.
-- Keep `Workflow` terminology reserved for the authoritative operational lifecycle.
-- Keep `Git Evidence` terminology as execution-owned evidence, not as a competing workflow concept.
-- Treat backend endpoint disposition verification as the next Milestone 9 slice.
-- Treat endpoint disposition as the backend analogue of the UI reachability audit.
-- Classify retained endpoint routes as `Keep`, `Redirect`, `Internal`, or `Remove`.
-- Verify retained endpoint routes still satisfy the current UI.
-- Verify compatibility routes remain intentional.
-- Verify obsolete routes are removed or explicitly documented.
-- Verify no duplicate endpoint exposes the same semantic capability through parallel APIs.
-- After backend endpoint disposition verification, rerun focused backend endpoint tests, the UI navigation and reachability suite, and update Milestone 9 evidence.
-- Treat Milestone 9 as having moved from implementation into verification.
-- Treat the remaining Milestone 9 work as backend endpoint disposition, final terminology verification, and final cohesion audit before preparing for Milestone 10.
+- Treat endpoint disposition becoming an executable architectural contract as the key Milestone 9 outcome of the backend disposition slice.
+- Keep backend route classification protected by tests rather than relying only on milestone documentation.
+- Keep `Internal` endpoint disposition precisely bounded to decision-session analysis diagnostics.
+- Keep `Compatibility` endpoint disposition precisely bounded to ping and planning readiness.
+- Treat the absence of registered `Remove` and `Redirect` routes as evidence that the backend API surface is stable enough for MVP release readiness, assuming the disposition audit remains comprehensive.
+- Treat final Milestone 9 cohesion validation as the release gate before Milestone 10.
+- Do not begin Milestone 10 until final Milestone 9 cohesion validation is complete.
+- Verify no remaining workflow-derived UI helpers reconstruct backend state.
+- Verify no duplicate frontend lifecycle derivation remains.
+- Verify no duplicate explainability renderers remain where shared components are intended.
+- Verify every major capability still has exactly one primary workspace.
+- Verify no obsolete navigation paths remain.
+- Verify no React-owned semantic state has crept back in during cleanup.
+- Produce the final Milestone 9 evidence package before declaring Product Cohesion complete.
+- Run one focused backend and frontend verification pass before declaring Product Cohesion complete.
+- Treat Milestone 10 as release readiness and certification, not additional architectural cleanup.

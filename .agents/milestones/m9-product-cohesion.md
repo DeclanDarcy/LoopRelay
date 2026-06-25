@@ -17,6 +17,7 @@ Make the application feel unified, not merely smaller. Remove fragmentation so e
   - [x] Selected repository and workspace inspector continuity summaries converted to revision/warning/proposal/latest activity status with navigation to primary Continuity and Operational Context surfaces. See `./m9-continuity-summary-consolidation.md`.
   - [x] Selected repository health and certification summaries converted to counts/status/latest assessment/latest run with navigation to primary Governance and Reasoning workspaces. See `./m9-health-certification-summary-consolidation.md`.
 - [x] Review backend endpoints and classify each as `Keep`, `Redirect`, `Internal`, or `Remove`.
+  - [x] Registered backend route dispositions are now guarded by endpoint disposition tests. See `./m9-backend-endpoint-disposition-verification.md`.
 - [x] Review projections and classify each as authoritative, derived consumer, compatibility, or retire.
 - [x] Review frontend state and classify each state value as authoritative view state, derived display state, disposable UI state, or duplicate domain state.
 - [ ] Normalize interaction patterns for review, accept, reject, transfer, recover, generate, refine, commit, push, promote, archive, and supersede:
@@ -82,7 +83,7 @@ Make the application feel unified, not merely smaller. Remove fragmentation so e
 - [x] Navigation characterization tests.
 - [x] UI tests proving primary surfaces remain reachable.
 - [ ] Static or unit tests for removed duplicate helpers where practical.
-- [ ] Backend endpoint disposition tests for retained routes.
+- [x] Backend endpoint disposition tests for retained routes.
 
 ### Exit Criteria
 
