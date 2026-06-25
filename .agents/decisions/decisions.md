@@ -2,16 +2,12 @@
 
 ## Newly Authorized
 
-- Treat the completed contradiction panel slice as consistent with the continuity authority model: backend continuity projections remain authoritative and React remains presentation-only.
-- Proceed next with a deliberate Milestone 7 projection-gap and exit audit before starting Milestone 8.
-- In the projection-gap audit, verify every backend continuity projection has a visible UI consumer.
-- In the projection-gap audit, confirm typed continuity projections have replaced corresponding compatibility-string-only presentation wherever typed projections exist.
-- Reconcile the existing `ContinuityDiagnosticsPanel` grouped diagnostics implementation against the Milestone 7 checklist so grouped diagnostics can be explicitly closed only if coverage is sufficient.
-- Confirm authority regression tests cover assimilation, taxonomy, semantic diff identity, contradiction, compression, evolution, and grouped diagnostics before declaring Milestone 7 complete.
-- After the audit, continue with `IUnderstandingDiffService` identity-aware semantic diff expansion.
-- Strengthen deterministic identity matching before building the full operational evolution timeline.
-- Expand typed semantic change categories for modification, preservation, loss, resolution, and related continuity outcomes.
-- Preserve identity basis throughout continuity projections.
-- Add backend tests proving only deterministic identity emits modification events.
-- Build `OperationalContextEvolutionTimeline` only after typed semantic change facts are stable enough to avoid compatibility-string-based presentation.
-- If the projection-gap audit confirms no remaining authority leaks, position Milestone 7 for formal exit audit before beginning Milestone 8 shared explainability work.
+- Treat the typed semantic-change slice as an architectural improvement because it moves semantic evolution away from compatibility projections and toward explicit backend-owned domain concepts.
+- Preserve `UnderstandingDiffService` as the single authority for deterministic modification identity and typed semantic change mapping.
+- Keep React presentation-only for semantic evolution: it may group backend-provided semantic values directly and may retain compatibility fallback grouping for legacy data, but must not infer semantic authority.
+- Continue Milestone 7 with compression explanation work before expanding the evolution UI.
+- Use `compressionSummary.itemOutcomes` as the authoritative source for compression outcome, reason category, governing rule, threshold, rationale, and supporting evidence.
+- Build `OperationalContextCompressionExplanation` as a pure renderer of backend-projected compression outcome fields.
+- Add backend tests proving compression outcome categories are emitted correctly for retained, compressed, removed, duplicate removed, transient removed, resolved question, and retired risk.
+- Add UI characterization tests proving React renders backend compression reason categories and evidence verbatim without synthesizing severity, classifications, or outcome interpretation.
+- After compression explanation work, proceed to Milestone 7 projection-gap reconciliation and formal exit audit before starting Milestone 8 shared explainability work.

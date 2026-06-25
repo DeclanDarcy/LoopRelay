@@ -220,7 +220,7 @@ public sealed class OperationalContextGenerationTests
         IReadOnlyList<OperationalContextSemanticChange> changes = diff.Compare(current, proposed);
 
         OperationalContextSemanticChange change = Assert.Single(changes, change =>
-            change.Type == OperationalContextSemanticChangeType.ItemChanged);
+            change.Type == OperationalContextSemanticChangeType.ModifiedConstraint);
         Assert.Equal("persistent-item-id", change.IdentityBasis);
         Assert.Equal("Backend continuity services must own operational context review.", change.PreviousState);
         Assert.Equal("Backend continuity services must own operational context review and promotion.", change.CurrentState);
@@ -265,7 +265,7 @@ public sealed class OperationalContextGenerationTests
         IReadOnlyList<OperationalContextSemanticChange> changes = diff.Compare(current, proposed);
 
         OperationalContextSemanticChange change = Assert.Single(changes, change =>
-            change.Type == OperationalContextSemanticChangeType.ItemChanged);
+            change.Type == OperationalContextSemanticChangeType.ModifiedDecision);
         Assert.Equal("source-reference", change.IdentityBasis);
         Assert.Contains(change.SupportingEvidence, evidence =>
             evidence.Contains(".agents/decisions/decisions.md", StringComparison.OrdinalIgnoreCase));
@@ -296,7 +296,7 @@ public sealed class OperationalContextGenerationTests
         IReadOnlyList<OperationalContextSemanticChange> changes = diff.Compare(current, proposed);
 
         OperationalContextSemanticChange change = Assert.Single(changes, change =>
-            change.Type == OperationalContextSemanticChangeType.ItemChanged);
+            change.Type == OperationalContextSemanticChangeType.ModifiedConstraint);
         Assert.Equal("section-semantic-lineage", change.IdentityBasis);
         Assert.Contains(change.SupportingEvidence, evidence =>
             evidence.Contains("Semantic lineage key", StringComparison.OrdinalIgnoreCase));

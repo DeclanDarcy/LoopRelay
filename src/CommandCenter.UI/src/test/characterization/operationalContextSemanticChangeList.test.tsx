@@ -66,7 +66,7 @@ describe('operational context semantic change list rendering characterization', 
   it('renders identity-aware modification facts without interpreting them', () => {
     renderList([
       {
-        type: 'ItemChanged',
+        type: 'ModifiedConstraint',
         section: 'Constraints',
         description: 'Updated the deployment constraint.',
         itemId: 'constraint-1',
@@ -78,7 +78,8 @@ describe('operational context semantic change list rendering characterization', 
       },
     ])
 
-    expect(screen.getByText('ItemChanged: Updated the deployment constraint.')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Constraints' })).toBeInTheDocument()
+    expect(screen.getByText('ModifiedConstraint: Updated the deployment constraint.')).toBeInTheDocument()
     expect(screen.getByText('Identity basis')).toBeInTheDocument()
     expect(screen.getByText('normalized-kind-and-source')).toBeInTheDocument()
     expect(screen.getByText('Previous')).toBeInTheDocument()

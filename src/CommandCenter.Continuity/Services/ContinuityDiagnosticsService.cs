@@ -419,6 +419,11 @@ public sealed class ContinuityDiagnosticsService(
     {
         return change.Type is
             Primitives.OperationalContextSemanticChangeType.ItemChanged or
+            Primitives.OperationalContextSemanticChangeType.ModifiedArchitecture or
+            Primitives.OperationalContextSemanticChangeType.ModifiedConstraint or
+            Primitives.OperationalContextSemanticChangeType.ModifiedWorkflow or
+            Primitives.OperationalContextSemanticChangeType.ModifiedDecision or
+            Primitives.OperationalContextSemanticChangeType.ModifiedUnderstanding or
             Primitives.OperationalContextSemanticChangeType.SectionChanged;
     }
 
@@ -432,7 +437,11 @@ public sealed class ContinuityDiagnosticsService(
             Primitives.OperationalContextSemanticChangeType.DecisionRemoved or
             Primitives.OperationalContextSemanticChangeType.DecisionRetired or
             Primitives.OperationalContextSemanticChangeType.RationaleLostWarning or
-            Primitives.OperationalContextSemanticChangeType.OpenDecisionResolved;
+            Primitives.OperationalContextSemanticChangeType.OpenDecisionResolved or
+            Primitives.OperationalContextSemanticChangeType.LostUnderstanding or
+            Primitives.OperationalContextSemanticChangeType.ResolvedUnderstanding or
+            Primitives.OperationalContextSemanticChangeType.DuplicateRemoved or
+            Primitives.OperationalContextSemanticChangeType.TransientRemoved;
     }
 
     private static TimeSpan? CalculateRevisionFrequency(IReadOnlyList<UnderstandingRevisionSnapshot> revisions)

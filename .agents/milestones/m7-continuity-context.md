@@ -48,8 +48,8 @@ Make operational context explain why information was retained, removed, compress
    - [ ] rule
    - [ ] evidence
    - [ ] threshold
-- [ ] Improve `UnderstandingDiffService` to detect modifications rather than remove/add pairs when item identity, source reference, section, or stable lineage indicates continuity.
-- [ ] Add or update semantic change types for modified architecture, modified constraint, modified workflow, modified decision, modified understanding, lost understanding, resolved understanding, duplicate removed, and transient removed.
+- [x] Improve `UnderstandingDiffService` to detect modifications rather than remove/add pairs when item identity, source reference, section, or stable lineage indicates continuity.
+- [x] Add or update semantic change types for modified architecture, modified constraint, modified workflow, modified decision, modified understanding, lost understanding, resolved understanding, duplicate removed, and transient removed.
 - [ ] Normalize continuity diagnostics by category:
     - [ ] assimilation
     - [ ] compression
@@ -83,7 +83,7 @@ Make operational context explain why information was retained, removed, compress
 - [x] Backend tests for taxonomy basis and heuristic fallback.
 - [x] Backend tests for assimilation limits and omitted items.
 - [x] Backend tests for all contradiction detection.
-- [ ] Backend tests for identity-aware semantic diff modifications.
+- [x] Backend tests for identity-aware semantic diff modifications.
 - [ ] Backend tests for compression reason categories.
 - [x] UI tests for the new panels and modification rendering.
 
@@ -96,4 +96,4 @@ Make operational context explain why information was retained, removed, compress
 - [x] All contradictions are explorable.
 - [ ] Operational evolution distinguishes added, modified, removed, preserved, lost, and resolved understanding.
 - [ ] Compression explains item-level outcomes.
-- [ ] Semantic diff preserves identity and lineage for modifications.
+- [x] Semantic diff preserves identity and lineage for modifications.

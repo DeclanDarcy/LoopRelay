@@ -7,7 +7,36 @@ type OperationalContextSemanticChangeListProps = {
   emptyText?: string
 }
 
+const semanticChangeCategories: Record<string, string> = {
+  ModifiedArchitecture: 'Architecture',
+  ModifiedConstraint: 'Constraints',
+  ModifiedWorkflow: 'Workflow',
+  ModifiedDecision: 'Decisions',
+  ModifiedUnderstanding: 'Understanding',
+  LostUnderstanding: 'Understanding',
+  ResolvedUnderstanding: 'Understanding',
+  DuplicateRemoved: 'Compression',
+  TransientRemoved: 'Compression',
+}
+
+const semanticChangeOutcomes: Record<string, string> = {
+  ModifiedArchitecture: 'Modified',
+  ModifiedConstraint: 'Modified',
+  ModifiedWorkflow: 'Modified',
+  ModifiedDecision: 'Modified',
+  ModifiedUnderstanding: 'Modified',
+  LostUnderstanding: 'Lost',
+  ResolvedUnderstanding: 'Resolved',
+  DuplicateRemoved: 'Removed',
+  TransientRemoved: 'Removed',
+}
+
 function getSemanticChangeCategory(type: string) {
+  const category = semanticChangeCategories[type]
+  if (category) {
+    return category
+  }
+
   if (type.includes('Decision') || type.includes('Rationale')) {
     return 'Decisions'
   }
@@ -36,6 +65,11 @@ function getSemanticChangeCategory(type: string) {
 }
 
 function getSemanticChangeOutcome(type: string) {
+  const outcome = semanticChangeOutcomes[type]
+  if (outcome) {
+    return outcome
+  }
+
   if (type.includes('Modified') || type.includes('Changed')) {
     return 'Modified'
   }

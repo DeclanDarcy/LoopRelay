@@ -2,29 +2,29 @@
 
 ## New State This Slice
 
-- Continued Milestone 7 contradiction transparency work.
-- Rotated previous handoff to `.agents/handoffs/handoff.0060.md`.
-- Added `OperationalContextContradictionPanel` to render backend-projected contradiction id, severity, conflict type, both decision references, evidence, source paths, and resolution guidance.
-- Wired the contradiction panel into operational-context proposal review after decision consequences.
-- Extended the dev Tauri operational-context proposal mock with representative structured contradiction data.
-- Added focused UI characterization coverage for contradiction rendering without React-derived conflict classification.
-- Updated Milestone 7 checklist items for contradiction projection, panel coverage, backend contradiction tests, and explorable contradictions.
+- Continued Milestone 7 semantic-diff transparency work.
+- Rotated previous handoff to `.agents/handoffs/handoff.0061.md`.
+- Added typed continuity semantic change values for modified architecture, modified constraint, modified workflow, modified decision, modified understanding, lost understanding, resolved understanding, duplicate removed, and transient removed.
+- Updated `UnderstandingDiffService` so deterministic modifications emit specific modified semantic change types instead of generic `ItemChanged` where the item kind is known.
+- Updated continuity diagnostics and decision reasoning capture so typed modification outcomes preserve existing modified counts and reasoning-event capture.
+- Updated `OperationalContextSemanticChangeList` to group new typed semantic change values explicitly while preserving compatibility fallback grouping.
+- Updated backend and UI tests to assert typed identity-aware modification rendering and diagnostics.
+- Marked Milestone 7 checklist items complete for identity-aware semantic diff modification detection, typed semantic change expansion, backend identity-aware diff tests, and semantic diff identity/lineage preservation.
 
 ## Verification
 
-- `npm test -- operationalContextAssimilationPanels.test.tsx`
-- `npm test -- operationalContextAssimilationPanels.test.tsx operationalContextCompressionSummaryPanel.test.tsx operationalContextProposalStatusPanel.test.tsx operationalContextProposalSummaryPanel.test.tsx operationalContextSemanticChangeList.test.tsx operationalContext.test.ts`
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter OperationalContextGenerationTests`
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "OperationalContextGenerationTests|ContinuityDiagnosticsServiceTests"`
+- `npm test -- operationalContextSemanticChangeList.test.tsx continuityDiagnosticsPanel.test.tsx`
 - `npm run build` in `src/CommandCenter.UI`
 - `npm run lint` in `src/CommandCenter.UI`
 
 ## Residual Risk
 
-- Milestone 7 still has open evolution/compression/diagnostic work: dedicated evolution timeline, dedicated compression explanation, identity-aware semantic-diff modifications, richer semantic change types, and normalized diagnostic categories.
-- Existing continuity diagnostics already render grouped diagnostic payloads inside `ContinuityDiagnosticsPanel`, but the milestone's explicit `ContinuityDiagnosticsGroupedPanel` item remains unchecked because it is currently an internal component rather than a named/shared panel.
-- Compression item outcomes are projected and rendered in proposal compression summary, but the milestone still calls for broader compression reason category tests and warning coverage.
+- Milestone 7 still has open projection/UI work: operational evolution timeline, dedicated compression explanation panel, grouped diagnostics checklist reconciliation, compression reason-category backend coverage, and visible compression warnings with specific item reasons and evidence.
+- The enum now contains typed lost/resolved/duplicate/transient outcomes, but duplicate/transient removal is still represented in compression item outcomes rather than operational semantic changes.
+- `OperationalContextProposalComparison` remains a markdown side-by-side view; modification rendering is authoritative through `OperationalContextSemanticChangeList`.
 
 ## Recommended Next Slice
 
-- Continue the Milestone 7 exit audit by reconciling open checklist items against existing `ContinuityDiagnosticsPanel`, `OperationalContextSemanticChangeList`, `UnderstandingDiffService`, and compression outcome projections.
-- If continuing implementation, prioritize identity-aware semantic diff modification detection and semantic change type expansion before building `OperationalContextEvolutionTimeline`; the timeline should consume typed modification/loss/resolution facts rather than compatibility strings.
+- Continue Milestone 7 by building `OperationalContextCompressionExplanation` from existing `compressionSummary.itemOutcomes`, warnings, rules, thresholds, and evidence.
+- Pair that with backend compression reason-category tests so duplicate removed, transient removed, compressed, retained, added, removed, resolved question, and retired risk outcomes are covered before the evolution timeline work.

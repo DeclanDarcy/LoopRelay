@@ -1150,6 +1150,7 @@ public sealed class DecisionReasoningCaptureService(
                 return true;
             case OperationalContextSemanticChangeType.ItemChanged
                 when change.Section.Contains("constraint", StringComparison.OrdinalIgnoreCase):
+            case OperationalContextSemanticChangeType.ModifiedConstraint:
             case OperationalContextSemanticChangeType.SectionChanged
                 when change.Section.Contains("constraint", StringComparison.OrdinalIgnoreCase):
                 family = ReasoningEventFamily.ConstraintEvolution;
@@ -1158,9 +1159,12 @@ public sealed class DecisionReasoningCaptureService(
                 return true;
             case OperationalContextSemanticChangeType.ImportantDecisionIntroduced:
             case OperationalContextSemanticChangeType.DecisionRetired:
+            case OperationalContextSemanticChangeType.ModifiedDecision:
             case OperationalContextSemanticChangeType.RationaleChanged:
             case OperationalContextSemanticChangeType.RationaleLostWarning:
             case OperationalContextSemanticChangeType.OpenDecisionResolved:
+            case OperationalContextSemanticChangeType.ResolvedUnderstanding:
+            case OperationalContextSemanticChangeType.LostUnderstanding:
                 family = ReasoningEventFamily.DecisionEvolution;
                 type = ReasoningEventType.EvidenceAdded;
                 tag = "decision-evolution";

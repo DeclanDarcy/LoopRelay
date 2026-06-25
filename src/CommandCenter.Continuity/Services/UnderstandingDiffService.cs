@@ -91,7 +91,7 @@ public sealed class UnderstandingDiffService : IUnderstandingDiffService
         {
             changes.Add(new OperationalContextSemanticChange
             {
-                Type = OperationalContextSemanticChangeType.ItemChanged,
+                Type = ModifiedTypeFor(section, modification.Current.Kind),
                 Section = section,
                 Description = $"Item modified in {section}: {modification.Previous.Text} -> {modification.Current.Text}",
                 ItemId = string.IsNullOrWhiteSpace(modification.Current.Id) ? modification.Previous.Id : modification.Current.Id,
@@ -185,6 +185,28 @@ public sealed class UnderstandingDiffService : IUnderstandingDiffService
             OperationalContextItemKind.StableDecision => OperationalContextSemanticChangeType.DecisionRetired,
             OperationalContextItemKind.DecisionRationale => OperationalContextSemanticChangeType.RationaleLostWarning,
             _ => OperationalContextSemanticChangeType.ItemRemoved
+        };
+    }
+
+    private static OperationalContextSemanticChangeType ModifiedTypeFor(
+        string section,
+        OperationalContextItemKind kind)
+    {
+        return kind switch
+        {
+            OperationalContextItemKind.Architecture or OperationalContextItemKind.AuthorityBoundary =>
+                OperationalContextSemanticChangeType.ModifiedArchitecture,
+            OperationalContextItemKind.Constraint =>
+                OperationalContextSemanticChangeType.ModifiedConstraint,
+            OperationalContextItemKind.StableDecision or OperationalContextItemKind.DecisionRationale =>
+                OperationalContextSemanticChangeType.ModifiedDecision,
+            OperationalContextItemKind.OpenQuestion or OperationalContextItemKind.ActiveRisk =>
+                OperationalContextSemanticChangeType.ModifiedWorkflow,
+            OperationalContextItemKind.MentalModel or OperationalContextItemKind.RecentChange =>
+                OperationalContextSemanticChangeType.ModifiedUnderstanding,
+            _ when section.Contains("workflow", StringComparison.OrdinalIgnoreCase) =>
+                OperationalContextSemanticChangeType.ModifiedWorkflow,
+            _ => OperationalContextSemanticChangeType.ItemChanged
         };
     }
 

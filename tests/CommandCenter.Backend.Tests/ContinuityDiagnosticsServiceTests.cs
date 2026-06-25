@@ -102,7 +102,7 @@ public sealed class ContinuityDiagnosticsServiceTests
         Assert.Equal(0, diagnostics.ConstraintTrend.RemovedCount);
         OperationalContextSemanticChange change = Assert.Single(
             diagnostics.OperationalEvolution.SemanticChanges,
-            change => change.Type == OperationalContextSemanticChangeType.ItemChanged);
+            change => change.Type == OperationalContextSemanticChangeType.ModifiedConstraint);
         Assert.Equal("section-semantic-lineage", change.IdentityBasis);
         Assert.Equal("Backend workflow projection must own operational lifecycle status.", change.PreviousState);
         Assert.Equal("Backend workflow projection must own operational lifecycle status, gate evidence, and recovery hints.", change.CurrentState);
