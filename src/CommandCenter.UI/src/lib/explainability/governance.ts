@@ -5,7 +5,10 @@ import type {
   DecisionSessionCertificationReport,
   DecisionSessionRecoveryDiagnostics,
   DecisionSessionRecoveryResult,
+  DecisionSessionTransfer,
+  DecisionSessionTransferDiagnostics,
   DecisionSessionTransferEligibility,
+  DecisionSessionContinuityArtifact,
   ExplanationAction,
   ExplanationDiagnostic,
   ExplanationEvidence,
@@ -174,4 +177,125 @@ export function governanceEligibilityFindingsToDiagnostics(
     detail: finding.message,
     tone: toneFromSeverity(finding.severity),
   }))
+}
+
+export function governanceTransferToEvidence({
+  eligibility,
+  transfers,
+  transferDiagnostics,
+  continuityArtifacts,
+}: {
+  eligibility: DecisionSessionTransferEligibility | null
+  transfers: DecisionSessionTransfer[]
+  transferDiagnostics: DecisionSessionTransferDiagnostics | null
+  continuityArtifacts: DecisionSessionContinuityArtifact[]
+}): ExplanationEvidence[] {
+  const evidence: ExplanationEvidence[] = []
+  const latestTransfer = transfers[0] ?? null
+
+  if (eligibility) {
+    evidence.push({
+      id: `${eligibility.sourceSessionId ?? 'unknown'}-transfer-eligibility`,
+      label: 'Transfer eligibility',
+      detail: `${eligibility.status} | checked ${eligibility.checkedAt}`,
+    })
+
+    if (eligibility.sourceSessionId) {
+      evidence.push({
+        id: `${eligibility.sourceSessionId}-source-session`,
+        label: 'Source session',
+        detail: eligibility.sourceSessionId,
+      })
+    }
+  }
+
+  if (latestTransfer) {
+    evidence.push(
+      {
+        id: latestTransfer.transferId,
+        label: 'Latest transfer',
+        detail: latestTransfer.succeeded ? 'Succeeded' : 'Pending or failed',
+      },
+      {
+        id: `${latestTransfer.transferId}-ownership`,
+        label: 'Ownership context',
+        detail: `${latestTransfer.sourceSessionId} to ${latestTransfer.targetSessionId ?? 'not assigned'}`,
+      },
+    )
+
+    if (latestTransfer.continuityArtifactId) {
+      evidence.push({
+        id: latestTransfer.continuityArtifactId,
+        label: 'Continuity artifact',
+        detail: latestTransfer.continuityArtifactId,
+      })
+    }
+  }
+
+  for (const artifact of continuityArtifacts.slice(0, 3)) {
+    evidence.push({
+      id: artifact.artifactId,
+      label: 'Continuity readiness',
+      detail: `${artifact.sourceSessionId} to ${artifact.targetSessionId ?? 'not assigned'} | fingerprint ${artifact.continuityFingerprint}`,
+    })
+  }
+
+  for (const event of transferDiagnostics?.events ?? []) {
+    evidence.push({
+      id: event.eventId,
+      label: `Transfer event: ${event.eventType}`,
+      detail: event.message,
+    })
+  }
+
+  return evidence
+}
+
+export function governanceTransferToDiagnostics({
+  eligibility,
+  transferDiagnostics,
+  transfers,
+}: {
+  eligibility: DecisionSessionTransferEligibility | null
+  transferDiagnostics: DecisionSessionTransferDiagnostics | null
+  transfers: DecisionSessionTransfer[]
+}): ExplanationDiagnostic[] {
+  const diagnostics: ExplanationDiagnostic[] = [
+    ...(eligibility ? governanceEligibilityFindingsToDiagnostics(eligibility) : []),
+    ...diagnosticsFromStrings(transferDiagnostics?.warnings ?? [], 'Transfer Warning'),
+  ]
+
+  for (const transfer of transfers.slice(0, 3)) {
+    diagnostics.push(...diagnosticsFromStrings(transfer.diagnostics, 'Transfer Diagnostic'))
+    for (const event of transfer.events) {
+      diagnostics.push(...diagnosticsFromStrings(event.diagnostics, event.eventType))
+    }
+  }
+
+  return diagnostics
+}
+
+export function governanceTransferResult(
+  eligibility: DecisionSessionTransferEligibility | null,
+  transfers: DecisionSessionTransfer[],
+) {
+  const latestTransfer = transfers[0] ?? null
+
+  if (latestTransfer?.succeeded) {
+    return `Transfer ${latestTransfer.transferId} completed.`
+  }
+
+  if (latestTransfer) {
+    return `Transfer ${latestTransfer.transferId} is pending or failed.`
+  }
+
+  if (eligibility?.status === 'Eligible') {
+    return 'Transfer is eligible and waiting for execution.'
+  }
+
+  if (eligibility) {
+    return `Transfer is ${eligibility.status.toLowerCase()}.`
+  }
+
+  return 'No transfer result has been projected.'
 }

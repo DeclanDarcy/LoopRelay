@@ -2,13 +2,11 @@
 
 ## Newly Authorized
 
-- Treat execution recovery interaction normalization as accepted Milestone 9 work.
-- Keep execution recovery observational through backend recovery state and `ExecutionSessionTransparency`.
-- Do not introduce a UI-owned execution recovery workflow or React-owned recovery semantics.
-- Preserve the authority chain from execution service to recovery projection to `ExecutionRecoveryInteractionSummary` to `InteractionPatternView` to React presentation.
-- Keep `InteractionPatternView` stable around subject, expected result, eligibility, evidence, and diagnostics.
-- Continue using thin domain-specific wrappers to add execution or governance context without expanding the shared interaction component.
-- Treat the execution interaction family as complete for Milestone 9 interaction normalization, covering commit, push, push retry, and recovery.
-- Continue Milestone 9 interaction normalization with decision-session transfer actions next.
-- Compose transfer-specific context such as readiness, continuity artifacts, ownership context, blocked transfer reasons, and recovery guidance around `InteractionPatternView`.
-- After governance transfer normalization, shift Milestone 9 toward interaction consistency audit, information-density refinement, retirement of obsolete presentation, and final product cohesion verification.
+- Treat the decision-session transfer interaction normalization slice as accepted Milestone 9 work.
+- Continue to preserve backend authority for transfer eligibility and lifecycle meaning.
+- Treat governance transfer normalization as presentation-level repackaging of backend evidence, diagnostics, and expected result.
+- Keep `InteractionPatternView` as the shared interaction language for normalized interaction families.
+- Preserve existing execute-button behavior and recent transfer lineage while normalizing surrounding interaction presentation.
+- Continue Milestone 9 with an interaction consistency audit.
+- Audit Governance, Execution, Decisions, Workflow, Reasoning, and Continuity for remaining bespoke action summaries, duplicate eligibility displays, repeated evidence or diagnostic blocks, inconsistent button or result wording, and places where shared explainability already covers the same facts.
+- Classify audit findings as keep, migrate, consolidate, or defer to density/layout cleanup.

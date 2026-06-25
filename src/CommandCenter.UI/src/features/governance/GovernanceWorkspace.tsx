@@ -4,6 +4,7 @@ import {
   CertificationFindingsView,
   DiagnosticList,
   HealthView,
+  InteractionPatternView,
 } from '../../components/explainability'
 import { formatDateTime } from '../../lib'
 import {
@@ -14,6 +15,9 @@ import {
   governanceHealthDimensionsToExplanation,
   governanceRecoveryDiagnosticsToExplanation,
   governanceRecoveryFindingsToDiagnostics,
+  governanceTransferResult,
+  governanceTransferToDiagnostics,
+  governanceTransferToEvidence,
 } from '../../lib/explainability'
 import type {
   DecisionSessionCertificationReport,
@@ -24,6 +28,7 @@ import type {
   DecisionSessionLifecycleEvaluation,
   DecisionSessionRecoveryDiagnostics,
   DecisionSessionRecoveryResult,
+  DecisionSessionTransferDiagnostics,
   DecisionSessionTransferEligibility,
   DecisionSessionTransfer,
   RepositoryDecisionSessionSummary,
@@ -152,8 +157,10 @@ export function GovernanceWorkspace({
           />
           <DecisionSessionTransferPanel
             eligibility={snapshot.transferEligibility}
+            continuityArtifacts={snapshot.continuityArtifacts}
             transfers={snapshot.transfers}
             transferHistory={snapshot.transferHistory}
+            transferDiagnostics={snapshot.transferDiagnostics}
             isTransferring={isTransferring}
             onExecuteTransfer={onExecuteTransfer}
             isLoading={isLoading}
@@ -340,16 +347,20 @@ export function DecisionSessionEligibilityPanel({
 
 export function DecisionSessionTransferPanel({
   eligibility,
+  continuityArtifacts,
   transfers,
   transferHistory,
+  transferDiagnostics,
   isTransferring = false,
   onExecuteTransfer,
   isLoading = false,
   error = null,
 }: {
   eligibility: DecisionSessionTransferEligibility | null
+  continuityArtifacts: DecisionSessionContinuityArtifact[]
   transfers: DecisionSessionTransfer[]
   transferHistory: DecisionSessionTransfer[]
+  transferDiagnostics: DecisionSessionTransferDiagnostics | null
   isTransferring?: boolean
   onExecuteTransfer?: () => void
   isLoading?: boolean
@@ -357,6 +368,18 @@ export function DecisionSessionTransferPanel({
 }) {
   const lineage = transfers.length > 0 ? transfers : transferHistory
   const executable = transferCanExecute(eligibility)
+  const actions = eligibility ? governanceEligibilityToActions(eligibility) : []
+  const evidence = governanceTransferToEvidence({
+    eligibility,
+    transfers: lineage,
+    transferDiagnostics,
+    continuityArtifacts,
+  })
+  const diagnostics = governanceTransferToDiagnostics({
+    eligibility,
+    transferDiagnostics,
+    transfers: lineage,
+  })
 
   return (
     <Panel className="governance-panel governance-transfer-panel" aria-label="Governance transfer">
@@ -374,11 +397,14 @@ export function DecisionSessionTransferPanel({
       />
       {eligibility || lineage.length > 0 ? (
         <div className="governance-panel-stack">
-          <div className="governance-fact-grid">
-            <span>Eligibility: {eligibility?.status ?? 'Not projected'}</span>
-            <span>Executable now: {executable ? 'Yes' : 'No'}</span>
-            <span>Recorded transfers: {lineage.length}</span>
-          </div>
+          <InteractionPatternView
+            actions={actions}
+            diagnostics={diagnostics}
+            evidence={evidence}
+            result={governanceTransferResult(eligibility, lineage)}
+            subject="Decision-session transfer"
+            title="Transfer Interaction Summary"
+          />
           <div className="governance-panel-list">
             <h5>Recent Lineage</h5>
             <ul>

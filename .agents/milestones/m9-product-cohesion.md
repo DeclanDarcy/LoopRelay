@@ -26,11 +26,12 @@ Make the application feel unified, not merely smaller. Remove fragmentation so e
    - [x] Refinement and resolution panels normalized through thin phase-specific wrappers around the shared interaction summary. See `./m9-interaction-normalization-refinement-resolution.md`.
    - [x] Execution commit and push/retry actions normalized through a thin execution-specific wrapper around the shared interaction summary. See `./m9-interaction-normalization-execution-git.md`.
    - [x] Execution recovery transparency normalized through a thin execution-specific wrapper around the shared interaction summary. See `./m9-interaction-normalization-execution-recovery.md`.
-   - [ ] action
-   - [ ] eligibility
-   - [ ] evidence
-   - [ ] result
-   - [ ] diagnostics
+   - [x] Decision-session transfer actions normalized through the shared interaction summary. See `./m9-interaction-normalization-governance-transfer.md`.
+   - [x] action
+   - [x] eligibility
+   - [x] evidence
+   - [x] result
+   - [x] diagnostics
 - [ ] Build or update a unified operational dashboard that summarizes:
    - [ ] workflow
    - [ ] governance

@@ -194,7 +194,44 @@ const snapshot: DecisionSessionGovernanceSnapshot = {
     },
   ],
   transferHistory: [],
-  transferDiagnostics: null,
+  transferDiagnostics: {
+    repositoryId: 'repo-alpha',
+    generatedAt: '2026-06-21T17:33:00.000Z',
+    eligibility: {
+      status: 'Eligible',
+      policyEvaluation: {
+        decision: 'Transfer',
+        reuseScore: 0.22,
+        transferScore: 0.88,
+        reason: 'Transfer is recommended because reuse value is low.',
+        contributingFactors: ['Cache risk exceeds target.'],
+        evaluatedAt: '2026-06-21T17:30:00.000Z',
+      },
+      sourceSessionId: 'session-active',
+      findings: [
+        {
+          code: 'eligible',
+          severity: 'Info',
+          message: 'Transfer policy permits execution.',
+        },
+      ],
+      checkedAt: '2026-06-21T17:31:00.000Z',
+    },
+    events: [
+      {
+        eventId: 'event-1',
+        eventType: 'Started',
+        repositoryId: 'repo-alpha',
+        sourceSessionId: 'session-active',
+        targetSessionId: 'session-next',
+        continuityArtifactId: 'artifact-1',
+        occurredAt: '2026-06-21T17:32:00.000Z',
+        message: 'Transfer started.',
+        diagnostics: ['Transfer entered handoff processing.'],
+      },
+    ],
+    warnings: ['Transfer is waiting for completion evidence.'],
+  },
   recovery: {
     recoveryId: 'recovery-1',
     repositoryId: 'repo-alpha',
@@ -347,6 +384,16 @@ describe('governance workspace characterization', () => {
     const eligibility = screen.getByLabelText('Governance transfer eligibility')
     expect(within(eligibility).getByText('Transfer recommended: Yes')).toBeInTheDocument()
     expect(within(eligibility).getByText('Currently executable: Yes')).toBeInTheDocument()
+
+    const transfer = screen.getByLabelText('Governance transfer')
+    expect(within(transfer).getByLabelText('Transfer Interaction Summary')).toBeInTheDocument()
+    expect(within(transfer).getByText('Action subject')).toBeInTheDocument()
+    expect(within(transfer).getByText('Decision-session transfer')).toBeInTheDocument()
+    expect(within(transfer).getByText('Transfer transfer-1 is pending or failed.')).toBeInTheDocument()
+    expect(within(transfer).getByText('Ownership context')).toBeInTheDocument()
+    expect(within(transfer).getByText('session-active to session-next')).toBeInTheDocument()
+    expect(within(transfer).getByText('Continuity readiness')).toBeInTheDocument()
+    expect(within(transfer).getByText('Transfer is waiting for completion evidence.')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Execute' }))
     fireEvent.click(screen.getByRole('button', { name: 'Recover' }))

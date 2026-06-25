@@ -7,11 +7,17 @@ import {
   governanceHealthDimensionsToExplanation,
   governanceRecoveryDiagnosticsToExplanation,
   governanceRecoveryFindingsToDiagnostics,
+  governanceTransferResult,
+  governanceTransferToDiagnostics,
+  governanceTransferToEvidence,
 } from '../../lib/explainability'
 import type {
   DecisionSessionCertificationReport,
+  DecisionSessionContinuityArtifact,
   DecisionSessionRecoveryDiagnostics,
   DecisionSessionRecoveryResult,
+  DecisionSessionTransfer,
+  DecisionSessionTransferDiagnostics,
   DecisionSessionTransferEligibility,
   WorkflowGovernanceHealthProjection,
 } from '../../types'
@@ -164,7 +170,195 @@ describe('governance explainability adapters', () => {
       },
     ])
   })
+
+  it('preserves transfer action evidence, ownership context, continuity readiness, result, and diagnostics', () => {
+    const eligibility = createTransferEligibility()
+    const transfer = createTransfer()
+    const transferDiagnostics = createTransferDiagnostics(eligibility)
+    const continuityArtifact = createContinuityArtifact(eligibility)
+
+    expect(
+      governanceTransferToEvidence({
+        eligibility,
+        transfers: [transfer],
+        transferDiagnostics,
+        continuityArtifacts: [continuityArtifact],
+      }),
+    ).toEqual([
+      {
+        id: 'session-active-transfer-eligibility',
+        label: 'Transfer eligibility',
+        detail: 'Eligible | checked 2026-01-01T00:00:00Z',
+      },
+      {
+        id: 'session-active-source-session',
+        label: 'Source session',
+        detail: 'session-active',
+      },
+      {
+        id: 'transfer-1',
+        label: 'Latest transfer',
+        detail: 'Pending or failed',
+      },
+      {
+        id: 'transfer-1-ownership',
+        label: 'Ownership context',
+        detail: 'session-active to session-next',
+      },
+      {
+        id: 'artifact-1',
+        label: 'Continuity artifact',
+        detail: 'artifact-1',
+      },
+      {
+        id: 'artifact-1',
+        label: 'Continuity readiness',
+        detail: 'session-active to session-next | fingerprint continuity-fingerprint',
+      },
+      {
+        id: 'event-1',
+        label: 'Transfer event: Started',
+        detail: 'Transfer started.',
+      },
+    ])
+    expect(
+      governanceTransferToDiagnostics({
+        eligibility,
+        transferDiagnostics,
+        transfers: [transfer],
+      }),
+    ).toEqual([
+      {
+        label: 'Info',
+        detail: 'Transfer policy permits execution.',
+        tone: 'info',
+      },
+      {
+        label: 'Transfer Warning',
+        detail: 'Transfer needs operator review.',
+      },
+      {
+        label: 'Transfer Diagnostic',
+        detail: 'Transfer is awaiting completion.',
+      },
+      {
+        label: 'Started',
+        detail: 'Provider handoff confirmed.',
+      },
+    ])
+    expect(governanceTransferResult(eligibility, [transfer])).toBe('Transfer transfer-1 is pending or failed.')
+  })
 })
+
+function createTransferEligibility(): DecisionSessionTransferEligibility {
+  return {
+    status: 'Eligible',
+    sourceSessionId: 'session-active',
+    checkedAt: '2026-01-01T00:00:00Z',
+    policyEvaluation: {
+      decision: 'Transfer',
+      reuseScore: 0.2,
+      transferScore: 0.9,
+      reason: 'Transfer is recommended because reuse value is low.',
+      contributingFactors: ['Cache risk exceeds target.'],
+      evaluatedAt: '2026-01-01T00:00:00Z',
+    },
+    findings: [
+      {
+        code: 'eligible',
+        severity: 'Info',
+        message: 'Transfer policy permits execution.',
+      },
+    ],
+  }
+}
+
+function createTransfer(): DecisionSessionTransfer {
+  return {
+    transferId: 'transfer-1',
+    repositoryId: 'repo-alpha',
+    sourceSessionId: 'session-active',
+    targetSessionId: 'session-next',
+    continuityArtifactId: 'artifact-1',
+    startedAt: '2026-01-01T00:01:00Z',
+    completedAt: null,
+    succeeded: false,
+    events: [
+      {
+        eventId: 'event-1',
+        eventType: 'Started',
+        repositoryId: 'repo-alpha',
+        sourceSessionId: 'session-active',
+        targetSessionId: 'session-next',
+        continuityArtifactId: 'artifact-1',
+        occurredAt: '2026-01-01T00:01:00Z',
+        message: 'Transfer started.',
+        diagnostics: ['Provider handoff confirmed.'],
+      },
+    ],
+    diagnostics: ['Transfer is awaiting completion.'],
+  }
+}
+
+function createTransferDiagnostics(
+  eligibility: DecisionSessionTransferEligibility,
+): DecisionSessionTransferDiagnostics {
+  return {
+    repositoryId: 'repo-alpha',
+    generatedAt: '2026-01-01T00:02:00Z',
+    eligibility,
+    events: createTransfer().events,
+    warnings: ['Transfer needs operator review.'],
+  }
+}
+
+function createContinuityArtifact(
+  eligibility: DecisionSessionTransferEligibility,
+): DecisionSessionContinuityArtifact {
+  return {
+    artifactId: 'artifact-1',
+    repositoryId: 'repo-alpha',
+    sourceSessionId: 'session-active',
+    targetSessionId: 'session-next',
+    createdAt: '2026-01-01T00:01:00Z',
+    policyEvaluation: eligibility.policyEvaluation,
+    metrics: {
+      estimatedTokenCount: 1,
+      contextByteSize: 1,
+      reasoningEventCount: 1,
+      reasoningThreadCount: 1,
+      reasoningRelationshipCount: 1,
+      decisionCount: 1,
+      decisionCandidateCount: 1,
+      decisionProposalCount: 1,
+      operationalContextRevisionCount: 1,
+      lastActivityAt: '2026-01-01T00:00:00Z',
+      measuredAt: '2026-01-01T00:00:00Z',
+    },
+    economics: {
+      estimatedReuseValue: 0.2,
+      estimatedTransferValue: 0.9,
+      estimatedContextCost: 0.6,
+      estimatedReasoningCost: 0.4,
+      estimatedContinuityBenefit: 0.8,
+      estimatedCacheBenefit: 0.3,
+      estimatedCacheMissRisk: 0.42,
+    },
+    coherence: {
+      coherenceScore: 0.81,
+      fragmentationScore: 0.19,
+      densityScore: 0.7,
+      continuityScore: 0.84,
+      transferPressure: 0.73,
+    },
+    cache: {},
+    decisionReferences: [],
+    reasoningReferences: [],
+    operationalContextReferences: [],
+    continuityFingerprint: 'continuity-fingerprint',
+    diagnostics: [],
+  }
+}
 
 function createRecoveryResult(): DecisionSessionRecoveryResult {
   return {
