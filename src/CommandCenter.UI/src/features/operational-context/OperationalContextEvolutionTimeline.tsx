@@ -1,3 +1,5 @@
+import { EvidenceList } from '../../components/explainability'
+import { operationalEvolutionTimelineEntryToEvidence } from '../../lib/explainability'
 import type { OperationalContextSemanticChange, OperationalEvolutionTimelineEntry } from '../../types'
 
 type OperationalContextEvolutionTimelineProps = {
@@ -105,35 +107,7 @@ export function OperationalContextEvolutionTimeline({
 }
 
 function EvolutionFacts({ entry }: { entry: OperationalEvolutionTimelineEntry }) {
-  const facts = [
-    entry.previousState ? ['Previous state', entry.previousState] : null,
-    entry.currentState ? ['Current state', entry.currentState] : null,
-    entry.reason ? ['Reason', entry.reason] : null,
-    entry.identityBasis ? ['Identity basis', entry.identityBasis] : null,
-    entry.itemId ? ['Item id', entry.itemId] : null,
-    entry.previousRevisionNumber ? ['Previous revision', String(entry.previousRevisionNumber)] : null,
-    entry.currentRevisionNumber ? ['Current revision', String(entry.currentRevisionNumber)] : null,
-  ].filter((fact): fact is [string, string] => fact !== null)
+  const evidence = operationalEvolutionTimelineEntryToEvidence(entry)
 
-  return (
-    <>
-      {facts.length > 0 ? (
-        <dl className="operational-evolution-facts">
-          {facts.map(([label, value]) => (
-            <div key={`${entry.semanticEventType}-${label}`}>
-              <dt>{label}</dt>
-              <dd>{value}</dd>
-            </div>
-          ))}
-        </dl>
-      ) : null}
-      {entry.supportingEvidence.length > 0 ? (
-        <ul className="operational-evolution-evidence" aria-label={`Evidence for ${entry.semanticEventType}`}>
-          {entry.supportingEvidence.map((evidence) => (
-            <li key={`${entry.semanticEventType}-${evidence}`}>{evidence}</li>
-          ))}
-        </ul>
-      ) : null}
-    </>
-  )
+  return evidence.length > 0 ? <EvidenceList evidence={evidence} title={`Evidence for ${entry.semanticEventType}`} /> : null
 }

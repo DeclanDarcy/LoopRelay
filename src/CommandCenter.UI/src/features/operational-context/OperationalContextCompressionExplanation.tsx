@@ -1,3 +1,8 @@
+import { ConstraintViewer, EvidenceList } from '../../components/explainability'
+import {
+  operationalContextCompressionOutcomeToConstraints,
+  operationalContextCompressionOutcomeToEvidence,
+} from '../../lib/explainability'
 import type { OperationalContextCompressionOutcome } from '../../types'
 
 type OperationalContextCompressionExplanationProps = {
@@ -22,27 +27,14 @@ export function OperationalContextCompressionExplanation({
               <span>{outcome.itemKind}</span>
             </div>
             <p>{outcome.itemText}</p>
-            <dl className="compression-outcome-metadata">
-              <div>
-                <dt>Rule</dt>
-                <dd>{outcome.rule}</dd>
-              </div>
-              <div>
-                <dt>Threshold</dt>
-                <dd>{outcome.threshold}</dd>
-              </div>
-              <div>
-                <dt>Rationale</dt>
-                <dd>{outcome.rationale}</dd>
-              </div>
-            </dl>
-            {outcome.evidence.length > 0 ? (
-              <ul className="compression-outcome-evidence" aria-label={`${outcome.outcome} evidence`}>
-                {outcome.evidence.map((evidence) => (
-                  <li key={evidence}>{evidence}</li>
-                ))}
-              </ul>
-            ) : null}
+            <ConstraintViewer
+              constraints={operationalContextCompressionOutcomeToConstraints(outcome)}
+              title="Compression Constraints"
+            />
+            <EvidenceList
+              evidence={operationalContextCompressionOutcomeToEvidence(outcome)}
+              title={`${outcome.outcome} evidence`}
+            />
           </li>
         ))}
       </ul>

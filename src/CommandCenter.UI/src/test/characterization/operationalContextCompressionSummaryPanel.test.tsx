@@ -100,16 +100,16 @@ describe('operational context compression summary panel rendering characterizati
       'General warning',
     ])
     expect(within(revisionSummary as HTMLElement).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
-      'Revision one',
-      'Revision two',
+      'Revision summaryRevision one',
+      'Revision summaryRevision two',
     ])
     expect(within(retentionWarnings as HTMLElement).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
       'Retention one',
       'Retention two',
     ])
     expect(within(compressedUnderstanding as HTMLElement).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
-      'Noise one',
-      'Noise two',
+      'Compressed understandinginfoNoise one',
+      'Compressed understandinginfoNoise two',
     ])
   })
 

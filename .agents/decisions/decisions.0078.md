@@ -1,0 +1,41 @@
+# Decisions
+
+## Newly Authorized
+
+- Treat the completed Reasoning explainability migration as a significant Milestone 8 checkpoint and the strongest validation so far that the shared explainability layer remains a rendering abstraction rather than a second semantic model.
+- Continue preserving the Milestone 8 architecture:
+  - Reasoning adapters remain translation layers,
+  - React remains presentation-only,
+  - backend projections remain authoritative for confidence, reachability, materialization outcomes, lifecycle outcomes, evidence, diagnostics, and advisory state.
+- Keep materialization review informational/advisory only. UI rendering must not imply approval, rejection, artifact lifecycle authority, or decision authority.
+- Continue to classify the Vite large-chunk warning as a Milestone 9/product optimization concern, not a Milestone 8 architecture concern.
+- Treat Workflow, Governance, Decisions, Execution, and Reasoning as substantially migrated onto the shared explainability presentation primitives.
+- Use Operational Context / Continuity as the next and primary remaining Milestone 8 domain migration target.
+- Migrate Operational Context / Continuity explainability in this order:
+  - lifecycle explanation,
+  - compression explanation,
+  - semantic diff,
+  - grouped diagnostics,
+  - review findings,
+  - continuity reports.
+- Add Continuity adapter tests that prove preservation of:
+  - lifecycle facts,
+  - compression outcomes,
+  - semantic identity,
+  - evidence,
+  - diagnostics,
+  - review findings,
+  - continuity reports.
+- Continue prohibiting Continuity adapters from deriving:
+  - compression eligibility,
+  - semantic identity,
+  - continuity lifecycle outcome,
+  - context quality,
+  - continuity risk,
+  - assimilation status,
+  - contradiction meaning.
+- After Continuity is migrated, move Milestone 8 toward a comprehensive adapter audit instead of additional feature work:
+  - verify every explainability surface routes through shared presentation primitives,
+  - confirm no adapter computes domain semantics,
+  - identify remaining legacy domain-specific renderers,
+  - prepare for Milestone 9 product cohesion work.

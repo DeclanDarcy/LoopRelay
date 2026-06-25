@@ -1,3 +1,8 @@
+import { DiagnosticList, EvidenceList } from '../../components/explainability'
+import {
+  operationalContextCompressionRevisionsToEvidence,
+  operationalContextCompressionSummaryToDiagnostics,
+} from '../../lib/explainability'
 import type { OperationalContextCompressionSummary } from '../../types'
 
 type OperationalContextCompressionSummaryPanelProps = {
@@ -11,6 +16,9 @@ export function OperationalContextCompressionSummaryPanel({
   onOpenContinuityCompression,
   onOpenContinuityDecisionRetention,
 }: OperationalContextCompressionSummaryPanelProps) {
+  const compressionDiagnostics = operationalContextCompressionSummaryToDiagnostics(compressionSummary)
+  const revisionEvidence = operationalContextCompressionRevisionsToEvidence(compressionSummary)
+
   return (
     <>
       <h5>Compression Summary</h5>
@@ -52,12 +60,7 @@ export function OperationalContextCompressionSummaryPanel({
       ) : null}
       {compressionSummary.revisionSummary.length > 0 ? (
         <div className="proposal-warning-list proposal-revision-summary">
-          <h5>Revision Summary</h5>
-          <ul>
-            {compressionSummary.revisionSummary.map((summary) => (
-              <li key={summary}>{summary}</li>
-            ))}
-          </ul>
+          <EvidenceList evidence={revisionEvidence} title="Revision Summary" />
         </div>
       ) : null}
       {compressionSummary.stableUnderstandingRetentionWarnings.length > 0 ? (
@@ -84,12 +87,12 @@ export function OperationalContextCompressionSummaryPanel({
       ) : null}
       {compressionSummary.noiseRemovedIndicators.length > 0 ? (
         <div className="proposal-warning-list">
-          <h5>Compressed Understanding</h5>
-          <ul>
-            {compressionSummary.noiseRemovedIndicators.map((indicator) => (
-              <li key={indicator}>{indicator}</li>
-            ))}
-          </ul>
+          <DiagnosticList
+            diagnostics={compressionDiagnostics.filter(
+              (diagnostic) => diagnostic.label === 'Compressed understanding',
+            )}
+            title="Compressed Understanding"
+          />
         </div>
       ) : null}
     </>

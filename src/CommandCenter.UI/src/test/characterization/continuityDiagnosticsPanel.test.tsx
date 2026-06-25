@@ -142,8 +142,8 @@ describe('continuity diagnostics panel rendering characterization', () => {
     expect(within(compression as HTMLElement).getByText('Questions resolved: 17')).toBeInTheDocument()
     expect(within(compression as HTMLElement).getByText('Risks retired: 18')).toBeInTheDocument()
     expect(within(compression as HTMLElement).getByText('Warnings: 14')).toBeInTheDocument()
-    expect(within(compression as HTMLElement).getByText('Compression warning')).toBeInTheDocument()
-    expect(within(compression as HTMLElement).getByText('Noise removed')).toBeInTheDocument()
+    expect(within(compression as HTMLElement).getAllByText('Compression warning').length).toBeGreaterThan(0)
+    expect(within(compression as HTMLElement).getAllByText('Noise removed').length).toBeGreaterThan(0)
   })
 
   it('renders understanding evolution from projected diagnostic trends', () => {
@@ -282,12 +282,12 @@ describe('continuity diagnostics panel rendering characterization', () => {
     const groupedDiagnostics = screen.getByLabelText('Grouped continuity diagnostics')
 
     expect(within(groupedDiagnostics).getByRole('heading', { name: 'Grouped Diagnostics' })).toBeInTheDocument()
-    expect(within(groupedDiagnostics).getByText('Operational evolution')).toBeInTheDocument()
-    expect(within(groupedDiagnostics).getByText('evolution')).toBeInTheDocument()
+    expect(within(groupedDiagnostics).getAllByText('Operational evolution').length).toBeGreaterThan(0)
+    expect(within(groupedDiagnostics).getAllByText('evolution').length).toBeGreaterThan(0)
     expect(within(groupedDiagnostics).getByText('Modified item count: 2.')).toBeInTheDocument()
     expect(within(groupedDiagnostics).getByText('Resolved item count: 4.')).toBeInTheDocument()
-    expect(within(groupedDiagnostics).getByText('Compression diagnostics')).toBeInTheDocument()
-    expect(within(groupedDiagnostics).getByText('compression')).toBeInTheDocument()
+    expect(within(groupedDiagnostics).getAllByText('Compression diagnostics').length).toBeGreaterThan(0)
+    expect(within(groupedDiagnostics).getAllByText('compression').length).toBeGreaterThan(0)
     expect(within(groupedDiagnostics).getByText('Proposal count: 3.')).toBeInTheDocument()
     expect(within(groupedDiagnostics).getByText('Removed item count: 5.')).toBeInTheDocument()
     expect(within(groupedDiagnostics).getByText('Semantic diff')).toBeInTheDocument()
@@ -317,9 +317,9 @@ describe('continuity diagnostics panel rendering characterization', () => {
 
     expect(repeatedSignals).not.toBeNull()
     expect(within(repeatedSignals as HTMLElement).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
-      'Investigation repeated',
-      'Question repeated',
-      'Decision reworked',
+      'Repeated investigationinfoInvestigation repeated',
+      'Repeated questioninfoQuestion repeated',
+      'Decision reworkinfoDecision reworked',
     ])
   })
 

@@ -1,5 +1,13 @@
 import { StatusBadge, Table } from '../../components/design'
+import { DiagnosticList, EvidenceList } from '../../components/explainability'
 import { formatDateTime } from '../../lib'
+import {
+  continuityCompressionTrendToDiagnostics,
+  continuityDiagnosticGroupsToDiagnostics,
+  continuityRepeatedSignalsToDiagnostics,
+  continuityReportToEvidence,
+  continuityWarningsToDiagnostics,
+} from '../../lib/explainability'
 import { continuityWarningStatus } from '../../lib/status'
 import type { ContinuityDiagnosticGroup, ContinuityDiagnostics, ContinuityReport, ContinuityTrend } from '../../types'
 import { OperationalContextEvolutionTimeline } from '../operational-context/OperationalContextEvolutionTimeline'
@@ -18,11 +26,10 @@ export function ContinuityDiagnosticsPanel({
   onOpenOperationalContextSection,
   onOpenReport,
 }: ContinuityDiagnosticsPanelProps) {
-  const repeatedSignalCount =
-    diagnostics.repeatedInvestigationIndicators.length +
-    diagnostics.repeatedQuestionIndicators.length +
-    diagnostics.decisionReworkIndicators.length
   const latestReport = reports[0] ?? null
+  const compressionDiagnostics = continuityCompressionTrendToDiagnostics(diagnostics.compressionTrend)
+  const repeatedSignalDiagnostics = continuityRepeatedSignalsToDiagnostics(diagnostics)
+  const warningDiagnostics = continuityWarningsToDiagnostics(diagnostics.continuityWarnings)
 
   return (
     <div className="context-artifact-previews">
@@ -133,50 +140,27 @@ export function ContinuityDiagnosticsPanel({
             <li>Risks retired: {diagnostics.compressionTrend.retiredRiskCount}</li>
             <li>Warnings: {diagnostics.compressionTrend.warningCount}</li>
           </ul>
-          {diagnostics.compressionTrend.warnings.length > 0 ? (
-            <ul aria-label="Compression warnings">
-              {diagnostics.compressionTrend.warnings.map((warning) => (
-                <li key={warning}>{warning}</li>
-              ))}
-            </ul>
-          ) : null}
-          {diagnostics.compressionTrend.noiseRemovedIndicators.length > 0 ? (
-            <ul aria-label="Noise removed indicators">
-              {diagnostics.compressionTrend.noiseRemovedIndicators.map((indicator) => (
-                <li key={indicator}>{indicator}</li>
-              ))}
-            </ul>
-          ) : null}
+          <DiagnosticList
+            diagnostics={compressionDiagnostics}
+            title="Compression Observations"
+            emptyLabel="No compression warnings or removed noise indicators recorded."
+          />
         </div>
         <div>
           <h5>Repeated Signals</h5>
-          {repeatedSignalCount > 0 ? (
-            <ul>
-              {diagnostics.repeatedInvestigationIndicators.map((indicator) => (
-                <li key={`investigation-${indicator}`}>{indicator}</li>
-              ))}
-              {diagnostics.repeatedQuestionIndicators.map((indicator) => (
-                <li key={`question-${indicator}`}>{indicator}</li>
-              ))}
-              {diagnostics.decisionReworkIndicators.map((indicator) => (
-                <li key={`decision-${indicator}`}>{indicator}</li>
-              ))}
-            </ul>
-          ) : (
-            <p>No repeated indicators recorded.</p>
-          )}
+          <DiagnosticList
+            diagnostics={repeatedSignalDiagnostics}
+            title="Repeated Signal Diagnostics"
+            emptyLabel="No repeated indicators recorded."
+          />
         </div>
         <div id="continuity-warnings">
           <h5>Warnings</h5>
-          {diagnostics.continuityWarnings.length > 0 ? (
-            <ul>
-              {diagnostics.continuityWarnings.map((warning) => (
-                <li key={warning}>{warning}</li>
-              ))}
-            </ul>
-          ) : (
-            <p>No continuity warnings recorded.</p>
-          )}
+          <DiagnosticList
+            diagnostics={warningDiagnostics}
+            title="Continuity Warning Diagnostics"
+            emptyLabel="No continuity warnings recorded."
+          />
         </div>
         <div id="continuity-question-risk-lifecycle">
           <h5>Question and Risk Lifecycle</h5>
@@ -192,22 +176,29 @@ export function ContinuityDiagnosticsPanel({
         <div id="continuity-reports">
           <h5>Reports</h5>
           {latestReport ? (
-            <ul>
-              <li>Latest report: {latestReport.reportId}</li>
-              <li>Generated: {formatDateTime(latestReport.generatedAt)}</li>
-              <li>
-                Path:{' '}
-                {onOpenReport ? (
-                  <button type="button" className="link-button" onClick={() => onOpenReport(latestReport.relativePath)}>
-                    {latestReport.relativePath}
-                  </button>
-                ) : (
-                  latestReport.relativePath
-                )}
-              </li>
-              <li>Report history: {reports.length}</li>
-              <li>Diagnostics revisions: {latestReport.diagnostics.revisionCount}</li>
-            </ul>
+            <>
+              <ul>
+                <li>Latest report: {latestReport.reportId}</li>
+                <li>Generated: {formatDateTime(latestReport.generatedAt)}</li>
+                <li>
+                  Path:{' '}
+                  {onOpenReport ? (
+                    <button
+                      type="button"
+                      className="link-button"
+                      onClick={() => onOpenReport(latestReport.relativePath)}
+                    >
+                      {latestReport.relativePath}
+                    </button>
+                  ) : (
+                    latestReport.relativePath
+                  )}
+                </li>
+                <li>Report history: {reports.length}</li>
+                <li>Diagnostics revisions: {latestReport.diagnostics.revisionCount}</li>
+              </ul>
+              <EvidenceList evidence={continuityReportToEvidence(latestReport)} title="Report Evidence" />
+            </>
           ) : (
             <p>No continuity reports recorded.</p>
           )}
@@ -230,30 +221,15 @@ type ContinuityDiagnosticsGroupedPanelProps = {
 }
 
 function ContinuityDiagnosticsGroupedPanel({ groups }: ContinuityDiagnosticsGroupedPanelProps) {
-  const visibleGroups = groups.filter((group) => group.diagnostics.length > 0)
+  const diagnostics = continuityDiagnosticGroupsToDiagnostics(groups)
 
   return (
     <section className="continuity-diagnostic-groups" aria-label="Grouped continuity diagnostics">
-      <h5>Grouped Diagnostics</h5>
-      {visibleGroups.length > 0 ? (
-        <div className="continuity-diagnostic-group-grid">
-          {visibleGroups.map((group, index) => (
-            <article className="continuity-diagnostic-group" key={`${group.category}:${group.title}:${index}`}>
-              <div className="continuity-diagnostic-group-title">
-                <strong>{group.title || group.category}</strong>
-                <span>{group.category}</span>
-              </div>
-              <ul>
-                {group.diagnostics.map((diagnostic) => (
-                  <li key={diagnostic}>{diagnostic}</li>
-                ))}
-              </ul>
-            </article>
-          ))}
-        </div>
-      ) : (
-        <p>No grouped continuity diagnostics recorded.</p>
-      )}
+      <DiagnosticList
+        diagnostics={diagnostics}
+        title="Grouped Diagnostics"
+        emptyLabel="No grouped continuity diagnostics recorded."
+      />
     </section>
   )
 }

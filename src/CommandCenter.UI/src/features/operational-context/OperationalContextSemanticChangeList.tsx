@@ -1,3 +1,5 @@
+import { EvidenceList } from '../../components/explainability'
+import { operationalContextSemanticChangeToEvidence } from '../../lib/explainability'
 import type { OperationalContextSemanticChange } from '../../types'
 
 type OperationalContextSemanticChangeListProps = {
@@ -165,34 +167,11 @@ function SemanticChangeItem({
 }
 
 function SemanticChangeMetadata({ change }: { change: OperationalContextSemanticChange }) {
-  const metadata = [
-    change.identityBasis ? ['Identity basis', change.identityBasis] : null,
-    change.modificationReason ? ['Reason', change.modificationReason] : null,
-    change.previousState ? ['Previous', change.previousState] : null,
-    change.currentState ? ['Current', change.currentState] : null,
-  ].filter((item): item is [string, string] => item !== null)
+  const evidence = operationalContextSemanticChangeToEvidence(change)
 
-  return (
-    <>
-      {metadata.length > 0 ? (
-        <dl className="semantic-change-metadata">
-          {metadata.map(([label, value]) => (
-            <div key={`${change.type}-${label}`}>
-              <dt>{label}</dt>
-              <dd>{value}</dd>
-            </div>
-          ))}
-        </dl>
-      ) : null}
-      {change.supportingEvidence.length > 0 ? (
-        <ul className="semantic-change-evidence" aria-label={`Supporting evidence for ${change.type}`}>
-          {change.supportingEvidence.map((evidence) => (
-            <li key={`${change.type}-${evidence}`}>{evidence}</li>
-          ))}
-        </ul>
-      ) : null}
-    </>
-  )
+  return evidence.length > 0 ? (
+    <EvidenceList evidence={evidence} title={`Supporting evidence for ${change.type}`} />
+  ) : null
 }
 
 function isModificationChange(change: OperationalContextSemanticChange) {
