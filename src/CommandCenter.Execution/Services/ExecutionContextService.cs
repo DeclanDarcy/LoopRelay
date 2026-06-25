@@ -28,6 +28,7 @@ public sealed class ExecutionContextService(
         Repository repository = await GetRepositoryAsync(repositoryId);
         DateTimeOffset generatedAt = DateTimeOffset.UtcNow;
         var validationErrors = new List<string>();
+        var governedConflicts = new List<ExecutionGovernedConflictDiagnostic>();
         var missingOptionalArtifacts = new List<string>();
         var artifacts = new List<ExecutionContextArtifact>();
         ExecutionRepositorySnapshot? snapshot = null;
@@ -79,6 +80,7 @@ public sealed class ExecutionContextService(
                     milestoneContent: milestoneContent);
                 foreach (ExecutionDecisionConflict conflict in decisionProjection.Conflicts)
                 {
+                    governedConflicts.Add(CreateGovernedConflictDiagnostic(conflict));
                     validationErrors.Add(
                         $"Execution request conflicts with governed decision {conflict.DecisionId}: {conflict.ConflictingExcerpt}");
                 }
@@ -89,7 +91,11 @@ public sealed class ExecutionContextService(
             }
         }
 
-        ExecutionContextDiagnostics diagnostics = BuildDiagnostics(artifacts, validationErrors, missingOptionalArtifacts);
+        ExecutionContextDiagnostics diagnostics = BuildDiagnostics(
+            artifacts,
+            validationErrors,
+            governedConflicts,
+            missingOptionalArtifacts);
 
         return new ExecutionContext
         {
@@ -168,6 +174,7 @@ public sealed class ExecutionContextService(
     private static ExecutionContextDiagnostics BuildDiagnostics(
         IReadOnlyList<ExecutionContextArtifact> artifacts,
         IReadOnlyList<string> validationErrors,
+        IReadOnlyList<ExecutionGovernedConflictDiagnostic> governedConflicts,
         IReadOnlyList<string> missingOptionalArtifacts)
     {
         long totalBytes = artifacts.Sum(artifact => artifact.ByteCount);
@@ -198,9 +205,65 @@ public sealed class ExecutionContextService(
             HardLimitExceeded = hardLimitExceeded,
             ArtifactDiagnostics = artifactDiagnostics,
             ValidationErrors = validationErrors.ToArray(),
+            GovernedConflicts = governedConflicts.ToArray(),
             MissingOptionalArtifacts = missingOptionalArtifacts.ToArray(),
             LaunchBlocked = validationErrors.Count > 0 || hardLimitExceeded
         };
+    }
+
+    private static ExecutionGovernedConflictDiagnostic CreateGovernedConflictDiagnostic(ExecutionDecisionConflict conflict)
+    {
+        string affectedContext = DetermineAffectedContext(conflict);
+        string conflictReason = $"Governed decision {conflict.DecisionId} conflicts with selected execution context.";
+
+        return new ExecutionGovernedConflictDiagnostic
+        {
+            Id = conflict.Id,
+            DecisionId = conflict.DecisionId,
+            Title = conflict.Title,
+            Statement = conflict.Statement,
+            ConflictingExcerpt = conflict.ConflictingExcerpt,
+            ConflictReason = conflictReason,
+            AffectedContext = affectedContext,
+            AffectedPromptSection = "Governed Decision Projection",
+            RecommendedResolution =
+                "Resolve or supersede the governed decision conflict before launching execution.",
+            Severity = "Blocking",
+            OriginatingAuthority = "DecisionProjectionService",
+            Sources = conflict.Sources,
+            Evidence = BuildConflictEvidence(conflict),
+            Diagnostics =
+            [
+                "Conflict was projected by the decisions authority and blocks execution context launch."
+            ]
+        };
+    }
+
+    private static string DetermineAffectedContext(ExecutionDecisionConflict conflict)
+    {
+        DecisionSourceReference? source = conflict.Sources.FirstOrDefault(source =>
+            !string.IsNullOrWhiteSpace(source.RelativePath));
+
+        return source?.RelativePath ?? "Selected milestone context";
+    }
+
+    private static IReadOnlyList<string> BuildConflictEvidence(ExecutionDecisionConflict conflict)
+    {
+        var evidence = new List<string>
+        {
+            $"Decision statement: {conflict.Statement}",
+            $"Conflicting excerpt: {conflict.ConflictingExcerpt}"
+        };
+
+        foreach (DecisionSourceReference source in conflict.Sources)
+        {
+            if (!string.IsNullOrWhiteSpace(source.Excerpt))
+            {
+                evidence.Add($"Source excerpt: {source.Excerpt}");
+            }
+        }
+
+        return evidence;
     }
 
     private static bool IsMilestonePath(Repository repository, string relativePath)

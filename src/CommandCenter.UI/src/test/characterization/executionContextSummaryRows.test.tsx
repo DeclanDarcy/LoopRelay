@@ -27,6 +27,7 @@ function executionContextPreview(
       hardLimitExceeded: false,
       artifactDiagnostics: [],
       validationErrors: [],
+      governedConflicts: [],
       missingOptionalArtifacts: [],
       launchBlocked: false,
     },

@@ -206,6 +206,7 @@ function createExecutionContextPreview(
       hardLimitExceeded: false,
       artifactDiagnostics: [],
       validationErrors: [],
+      governedConflicts: [],
       missingOptionalArtifacts: [],
       launchBlocked: false,
     },

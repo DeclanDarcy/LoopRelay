@@ -262,6 +262,7 @@ function ContextDiagnosticsPanel({
             <h5>Validation Errors</h5>
             <ExecutionContextValidationList
               validationErrors={executionContext.diagnostics.validationErrors}
+              governedConflicts={executionContext.diagnostics.governedConflicts}
             />
           </div>
           <div className="execution-rail-list">
@@ -303,6 +304,7 @@ function LaunchReadinessPanel({
         <span>Hard limit exceeded: {diagnostics?.hardLimitExceeded ? 'Yes' : 'No'}</span>
         <span>Warning threshold exceeded: {diagnostics?.warningThresholdExceeded ? 'Yes' : 'No'}</span>
         <span>Validation errors: {diagnostics?.validationErrors.length ?? 'Not loaded'}</span>
+        <span>Governed conflicts: {diagnostics?.governedConflicts.length ?? 'Not loaded'}</span>
       </div>
     </Panel>
   )

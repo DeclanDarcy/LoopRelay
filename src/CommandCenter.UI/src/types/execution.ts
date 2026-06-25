@@ -1,3 +1,4 @@
+import type { DecisionSourceReference } from './decisions'
 import type { RepositoryDirtyState } from './git'
 
 export type ExecutionReadiness = 'MissingPlan' | 'MissingMilestones' | 'Ready'
@@ -218,6 +219,23 @@ export type ExecutionContextArtifactDiagnostic = {
   hardLimitExceeded: boolean
 }
 
+export type ExecutionGovernedConflictDiagnostic = {
+  id: string
+  decisionId: string
+  title: string
+  statement: string
+  conflictingExcerpt: string
+  conflictReason: string
+  affectedContext: string
+  affectedPromptSection: string
+  recommendedResolution: string
+  severity: string
+  originatingAuthority: string
+  sources: DecisionSourceReference[]
+  evidence: string[]
+  diagnostics: string[]
+}
+
 export type ExecutionRepositorySnapshot = {
   branch: string
   dirtyState: RepositoryDirtyState
@@ -233,6 +251,7 @@ export type ExecutionContextDiagnostics = {
   hardLimitExceeded: boolean
   artifactDiagnostics: ExecutionContextArtifactDiagnostic[]
   validationErrors: string[]
+  governedConflicts: ExecutionGovernedConflictDiagnostic[]
   missingOptionalArtifacts: string[]
   launchBlocked: boolean
 }

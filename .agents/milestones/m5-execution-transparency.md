@@ -63,7 +63,7 @@ Make execution explainable: what was launched, what context was included, what r
    - [x] remote branch state
    - [x] previous push failure
    - [x] disabled reasons
-- [ ] Add structured governed decision conflict details to execution context diagnostics instead of only flattened validation strings.
+- [x] Add structured governed decision conflict details to execution context diagnostics instead of only flattened validation strings.
 - [ ] Add handoff processing transparency fields:
    - [ ] handoff produced
    - [ ] handoff missing
@@ -87,6 +87,7 @@ Make execution explainable: what was launched, what context was included, what r
 - [ ] Extend execution TypeScript types for prompt manifest, recovery diagnostics, git eligibility, handoff processing, monitoring health, structured governed conflicts, and semantic event grouping.
    - [x] Added prompt manifest TypeScript types.
    - [x] Added execution transparency TypeScript types for prompt metadata, recovery, and monitoring health.
+   - [x] Added structured governed conflict diagnostic TypeScript types.
 - [x] Add `getExecutionPromptManifest`, `getExecutionTransparency`, and git eligibility client functions.
    - [x] Added `getExecutionPromptManifest`.
    - [x] Added `getExecutionTransparency`.
@@ -99,7 +100,7 @@ Make execution explainable: what was launched, what context was included, what r
 - [ ] Update `GitPathBucket` and `GitWorkflowEvidence` to distinguish execution-generated changes from pre-existing repository changes and provide bulk actions to select only execution-generated changes or deselect pre-existing changes.
 - [ ] Update handoff panels to show post-processing state, archive diagnostics, validation diagnostics, and whether provider failure differs from handoff processing failure.
 - [x] Replace placeholder monitoring text with real monitoring health fields.
-- [ ] Update execution validation list to render governed decision conflicts as governance blockers with decision id, conflicting excerpt, conflict reason, affected prompt/context, and resolution path.
+- [x] Update execution validation list to render governed decision conflicts as governance blockers with decision id, conflicting excerpt, conflict reason, affected prompt/context, and resolution path.
 - [ ] Group execution events by semantic category and display event consequence plus related state change.
 
 ### Tests
@@ -110,6 +111,7 @@ Make execution explainable: what was launched, what context was included, what r
 - [x] Backend tests for push conflict response containing updated retry state.
 - [ ] Backend tests for git eligibility branches and structured governed conflicts.
    - [x] Git eligibility branches cover stale commit preparation, selected path state, missing message, previous push failure, remote branch state, and endpoint projection.
+   - [x] Structured governed conflict diagnostics cover decision id, conflicting excerpt, affected context, affected prompt section, resolution path, blocking severity, authority, evidence, and launch blocking.
 - [ ] UI tests for prompt manifest, provider adjustments, recovery banner, push retry, disabled commit/push reasons, handoff processing diagnostics, pre-existing change warnings, and event grouping.
    - [x] Prompt manifest rendering covers requested vs delivered context, provider adjustments empty state, and `NoProviderDivergenceSignal`.
    - [x] Prompt manifest hook coverage proves shell detail-command loading.
@@ -117,6 +119,7 @@ Make execution explainable: what was launched, what context was included, what r
    - [x] Transparency hook coverage proves shell detail-command loading.
    - [x] Push retry rendering covers previous push failure and last push attempt evidence.
    - [x] Git eligibility rendering and hook coverage prove backend-owned disabled reasons and shell loading.
+   - [x] Governed conflict rendering covers governance blocker details and preserves backend validation strings.
 
 ### Exit Criteria
 
@@ -127,5 +130,5 @@ Make execution explainable: what was launched, what context was included, what r
 - [x] Commit and push controls explain blocked preconditions.
 - [ ] Handoff post-processing is visible and distinguishable from provider failure.
 - [x] Monitoring diagnostics are real.
-- [ ] Governed decision conflicts are distinct from generic validation errors.
+- [x] Governed decision conflicts are distinct from generic validation errors.
 - [ ] Pre-existing changes are separated from execution-generated changes.

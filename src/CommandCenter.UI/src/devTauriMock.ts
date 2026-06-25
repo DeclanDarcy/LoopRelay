@@ -3414,6 +3414,7 @@ function createContextPreview(state: MockState, repositoryId: string, milestoneP
         hardLimitExceeded: false,
       })),
       validationErrors: workspace.readiness === 'Ready' ? [] : [`Repository planning readiness is ${workspace.readiness}.`],
+      governedConflicts: [],
       missingOptionalArtifacts: [
         workspace.artifactInventory.operationalContext ? null : '.agents/operational_context.md',
         workspace.artifactInventory.currentHandoff ? null : '.agents/handoffs/handoff.md',

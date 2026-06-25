@@ -19,6 +19,9 @@ public sealed class ExecutionContextDiagnostics
 
     public IReadOnlyList<string> ValidationErrors { get; init; } = Array.Empty<string>();
 
+    public IReadOnlyList<ExecutionGovernedConflictDiagnostic> GovernedConflicts { get; init; } =
+        Array.Empty<ExecutionGovernedConflictDiagnostic>();
+
     public IReadOnlyList<string> MissingOptionalArtifacts { get; init; } = Array.Empty<string>();
 
     public bool LaunchBlocked { get; init; }

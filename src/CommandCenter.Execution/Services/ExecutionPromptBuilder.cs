@@ -198,8 +198,27 @@ public sealed class ExecutionPromptBuilder : IExecutionPromptBuilder
         builder.AppendLine($"Total characters: {diagnostics.TotalCharacters}");
         builder.AppendLine($"Warning threshold exceeded: {FormatBoolean(diagnostics.WarningThresholdExceeded)}");
         builder.AppendLine($"Hard limit exceeded: {FormatBoolean(diagnostics.HardLimitExceeded)}");
+        AppendGovernedConflictDiagnostics(builder, diagnostics.GovernedConflicts);
         AppendValueGroup(builder, "Missing optional artifacts", diagnostics.MissingOptionalArtifacts);
         builder.AppendLine();
+    }
+
+    private static void AppendGovernedConflictDiagnostics(
+        StringBuilder builder,
+        IReadOnlyList<ExecutionGovernedConflictDiagnostic> governedConflicts)
+    {
+        builder.AppendLine("Governed conflict diagnostics:");
+        if (governedConflicts.Count == 0)
+        {
+            builder.AppendLine("- none");
+            return;
+        }
+
+        foreach (ExecutionGovernedConflictDiagnostic conflict in governedConflicts.OrderBy(conflict => conflict.Id, StringComparer.Ordinal))
+        {
+            builder.AppendLine(
+                $"- {conflict.DecisionId} [{conflict.Severity}]: {conflict.ConflictReason} Affects {conflict.AffectedContext}; resolve by: {conflict.RecommendedResolution}");
+        }
     }
 
     private static void AppendArtifacts(StringBuilder builder, IReadOnlyList<ExecutionContextArtifact> artifacts)

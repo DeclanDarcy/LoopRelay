@@ -287,6 +287,55 @@ public sealed class ExecutionContextServiceTests
     }
 
     [Fact]
+    public async Task DecisionProjectionConflictsAreProjectedAsStructuredGovernanceBlockers()
+    {
+        var projection = new ExecutionDecisionProjection(
+            Guid.Empty,
+            DateTimeOffset.UtcNow,
+            [],
+            [],
+            [],
+            [],
+            [
+                new ExecutionDecisionConflict(
+                    "conflict-1",
+                    "DEC-0007",
+                    "Persistence authority",
+                    "Persistence mutations must remain backend-owned.",
+                    "React recomputes persistence mutation eligibility.",
+                    [
+                        new DecisionSourceReference(
+                            "Decision",
+                            ".agents/decisions/decisions.md",
+                            "Newly Authorized",
+                            Excerpt: "Backend owns persistence mutation eligibility.")
+                    ])
+            ],
+            [],
+            new ExecutionDecisionContext([], [], [], [], [], []));
+        Harness harness = await CreateHarnessAsync(decisionProjection: projection);
+        await WriteAsync(harness.Repository, ".agents/plan.md", "plan");
+        await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
+
+        ExecutionContext context = await harness.ContextService.BuildContextAsync(
+            harness.Repository.Id,
+            ".agents/milestones/m1.md");
+
+        ExecutionGovernedConflictDiagnostic conflict = Assert.Single(context.Diagnostics.GovernedConflicts);
+        Assert.Equal("conflict-1", conflict.Id);
+        Assert.Equal("DEC-0007", conflict.DecisionId);
+        Assert.Equal("React recomputes persistence mutation eligibility.", conflict.ConflictingExcerpt);
+        Assert.Equal(".agents/decisions/decisions.md", conflict.AffectedContext);
+        Assert.Equal("Governed Decision Projection", conflict.AffectedPromptSection);
+        Assert.Equal("Blocking", conflict.Severity);
+        Assert.Equal("DecisionProjectionService", conflict.OriginatingAuthority);
+        Assert.Contains("Resolve or supersede", conflict.RecommendedResolution);
+        Assert.Contains(conflict.Evidence, evidence => evidence.Contains("Persistence mutations", StringComparison.Ordinal));
+        Assert.Contains(context.Diagnostics.ValidationErrors, error => error.Contains("DEC-0007", StringComparison.Ordinal));
+        Assert.True(context.Diagnostics.LaunchBlocked);
+    }
+
+    [Fact]
     public async Task ContextEndpointReturnsDiagnostics()
     {
         string configurationPath = Path.Combine(CreateTemporaryDirectory(), "configuration.json");
