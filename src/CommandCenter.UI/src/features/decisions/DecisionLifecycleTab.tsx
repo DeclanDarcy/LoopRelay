@@ -433,6 +433,7 @@ export function DecisionLifecycleTab({
             repositoryId={repositoryId}
             workspace={proposalReviewWorkspace}
             lineage={proposalLineage}
+            eligibility={selectedProposalEligibility}
             isLoading={isProposalReviewLoading || isProposalLineageLoading}
             onRefined={async () => {
               await Promise.all([
@@ -450,6 +451,7 @@ export function DecisionLifecycleTab({
           <DecisionResolutionPanel
             repositoryId={repositoryId}
             workspace={proposalReviewWorkspace}
+            eligibility={selectedProposalEligibility}
             isLoading={isProposalReviewLoading}
             onResolved={async (decision) => {
               setLastResolvedDecision(decision)

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DecisionRefinementPanel } from '../../features/decisions/DecisionRefinementPanel'
 import type { DecisionProposal, DecisionProposalLineage, DecisionReviewWorkspace } from '../../types'
@@ -39,6 +39,7 @@ describe('DecisionRefinementPanel', () => {
         repositoryId="repo-alpha"
         workspace={workspace}
         lineage={createLineage(workspace)}
+        eligibility={createEligibility(workspace)}
         isLoading={false}
         onRefined={onRefined}
       />,
@@ -77,6 +78,10 @@ describe('DecisionRefinementPanel', () => {
     await waitFor(() => {
       expect(onRefined).toHaveBeenCalledWith(refinedProposal)
     })
+    const interactionSummary = screen.getByLabelText('Refinement interaction summary')
+    expect(within(interactionSummary).getByText('Submit refinement')).toBeInTheDocument()
+    expect(within(interactionSummary).getByText('Proposal PROP-0001 is NeedsRefinement.')).toBeInTheDocument()
+    expect(within(interactionSummary).getByText('Refinement command succeeded for PROP-0001.')).toBeInTheDocument()
     expect(screen.getByText('Refinement submitted for PROP-0001.')).toBeInTheDocument()
   })
 
@@ -166,6 +171,7 @@ describe('DecisionRefinementPanel', () => {
         repositoryId="repo-alpha"
         workspace={workspace}
         lineage={createLineage(workspace)}
+        eligibility={createEligibility(workspace)}
         isLoading={false}
         onRefined={vi.fn()}
       />,
@@ -200,6 +206,9 @@ describe('DecisionRefinementPanel', () => {
     })
     expect(await screen.findByLabelText('Regenerated package comparison')).toHaveTextContent(
       'MajorRefinement',
+    )
+    expect(screen.getByLabelText('Refinement interaction summary')).toHaveTextContent(
+      'Human authoring burden',
     )
     expect(screen.getByLabelText('Recommendation diff')).toHaveTextContent('Current rationale.')
     expect(screen.getByLabelText('Recommendation diff')).toHaveTextContent(
@@ -266,6 +275,29 @@ function createLineage(workspace: DecisionReviewWorkspace): DecisionProposalLine
     revisions: [],
     reviewNotes: [],
     diagnostics: [],
+  }
+}
+
+function createEligibility(workspace: DecisionReviewWorkspace) {
+  return {
+    entityKind: 'Proposal',
+    entityId: workspace.proposal.id,
+    currentState: workspace.proposal.state,
+    allowedActions: [
+      {
+        commandName: 'refine_decision_proposal',
+        displayName: 'Submit refinement',
+        targetState: 'Refined',
+        isAllowed: workspace.proposal.state === 'NeedsRefinement',
+        requiredInputs: ['reason'],
+        reason: null,
+        governingRule: 'proposal-refinement',
+      },
+    ],
+    blockedActions: [],
+    allowedNextStates: ['Refined'],
+    blockedNextStates: [],
+    diagnostics: ['Refinement eligibility projected by backend lifecycle rules.'],
   }
 }
 

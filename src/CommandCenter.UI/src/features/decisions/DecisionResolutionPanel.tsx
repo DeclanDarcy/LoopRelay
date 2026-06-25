@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Badge, EmptyState } from '../../components/design'
-import { DiagnosticList, EvidenceList } from '../../components/explainability'
+import { DiagnosticList, EvidenceList, InteractionPatternView } from '../../components/explainability'
 import { useDecisionResolution } from '../../hooks'
 import {
   decisionDiagnosticsToExplanation,
   decisionEvidenceToEvidence,
+  decisionLifecycleEligibilityToActions,
   decisionSourceReferencesToEvidence,
 } from '../../lib/explainability'
 import type { FormEvent } from 'react'
 import type {
   Decision,
   DecisionAssimilationRecommendation,
+  DecisionLifecycleEntityEligibility,
   DecisionOutcome,
   DecisionReviewWorkspace,
 } from '../../types'
@@ -18,6 +20,7 @@ import type {
 type DecisionResolutionPanelProps = {
   repositoryId: string | null
   workspace: DecisionReviewWorkspace | null
+  eligibility?: DecisionLifecycleEntityEligibility | null
   isLoading: boolean
   onResolved: (decision: Decision) => Promise<void> | void
 }
@@ -27,6 +30,7 @@ const resolvableStates = new Set(['ReadyForResolution'])
 export function DecisionResolutionPanel({
   repositoryId,
   workspace,
+  eligibility = null,
   isLoading,
   onResolved,
 }: DecisionResolutionPanelProps) {
@@ -156,6 +160,16 @@ export function DecisionResolutionPanel({
         </div>
         <p>{authorityText}</p>
       </article>
+
+      <ResolutionInteractionSummary
+        workspace={workspace}
+        eligibility={eligibility}
+        decision={decision}
+        assimilationRecommendation={assimilationRecommendation}
+        selectedOptionId={selectedOptionId}
+        recommendationDiverges={recommendationDiverges}
+        packageMatchesProposal={packageMatchesProposal}
+      />
 
       <div className="decision-resolution-summary" aria-label="Proposal resolution summary">
         <article className="decision-inspection-card">
@@ -326,6 +340,91 @@ export function DecisionResolutionPanel({
         </div>
       ) : null}
     </section>
+  )
+}
+
+function ResolutionInteractionSummary({
+  workspace,
+  eligibility,
+  decision,
+  assimilationRecommendation,
+  selectedOptionId,
+  recommendationDiverges,
+  packageMatchesProposal,
+}: {
+  workspace: DecisionReviewWorkspace
+  eligibility: DecisionLifecycleEntityEligibility | null
+  decision: Decision | null
+  assimilationRecommendation: DecisionAssimilationRecommendation | null
+  selectedOptionId: string
+  recommendationDiverges: boolean
+  packageMatchesProposal: boolean
+}) {
+  const authority = workspace.authority
+  const result = decision?.resolution
+    ? `${decision.resolution.outcome}: ${decision.resolution.selectedOptionId ?? 'No option'} by ${decision.resolution.resolvedBy}.`
+    : assimilationRecommendation
+      ? `Prepared assimilation package for ${assimilationRecommendation.decisionId}.`
+      : 'No resolution command result recorded.'
+  const evidence = [
+    {
+      label: 'Current state',
+      detail: `Proposal ${workspace.proposal.id} is ${workspace.proposal.state}.`,
+    },
+    {
+      label: 'Selected option',
+      detail: selectedOptionId || 'No option selected.',
+    },
+    {
+      label: 'Recommended option',
+      detail: workspace.proposal.recommendation?.optionId ?? 'No recommendation projected.',
+    },
+    {
+      label: 'Reviewed package',
+      detail: authority?.packageId ?? 'No reviewed package projected.',
+    },
+    {
+      label: 'Proposal fingerprint',
+      detail: authority?.proposalFingerprint ?? 'No proposal fingerprint projected.',
+    },
+    ...(recommendationDiverges
+      ? [
+          {
+            label: 'Recommendation override',
+            detail: 'Selected option differs from the backend recommendation and will be recorded.',
+          },
+        ]
+      : []),
+    ...(authority?.packageId && !packageMatchesProposal
+      ? [
+          {
+            label: 'Package authority conflict',
+            detail: 'Reviewed package content does not match the current proposal.',
+          },
+        ]
+      : []),
+  ]
+
+  return (
+    <InteractionPatternView
+      actions={eligibility ? decisionLifecycleEligibilityToActions(eligibility) : []}
+      diagnostics={[
+        ...decisionDiagnosticsToExplanation(workspace.diagnostics.warnings, 'Resolution workspace diagnostic'),
+        ...(authority?.packageId && !packageMatchesProposal
+          ? [
+              {
+                label: 'Resolution authority diagnostic',
+                detail: 'Reviewed package content does not match the current proposal.',
+                tone: 'warning' as const,
+              },
+            ]
+          : []),
+      ]}
+      evidence={evidence}
+      result={result}
+      subject={`Proposal ${workspace.proposal.id}: ${workspace.proposal.state}`}
+      title="Resolution interaction summary"
+    />
   )
 }
 

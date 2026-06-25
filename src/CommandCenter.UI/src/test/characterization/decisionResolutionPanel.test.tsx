@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DecisionResolutionPanel } from '../../features/decisions/DecisionResolutionPanel'
 import type { Decision, DecisionReviewWorkspace } from '../../types'
@@ -39,6 +39,7 @@ describe('DecisionResolutionPanel', () => {
       <DecisionResolutionPanel
         repositoryId="repo-alpha"
         workspace={createWorkspace()}
+        eligibility={createEligibility(createWorkspace())}
         isLoading={false}
         onResolved={onResolved}
       />,
@@ -48,6 +49,9 @@ describe('DecisionResolutionPanel', () => {
       target: { value: 'OPT-B' },
     })
     expect(screen.getByText(/Selected option overrides the recommendation/)).toBeInTheDocument()
+    const interactionSummary = screen.getByLabelText('Resolution interaction summary')
+    expect(within(interactionSummary).getByText('Resolve proposal')).toBeInTheDocument()
+    expect(within(interactionSummary).getByText('Selected option differs from the backend recommendation and will be recorded.')).toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText('Resolver'), {
       target: { value: 'reviewer' },
@@ -169,6 +173,29 @@ function createWorkspace(
       isPackageCurrentForProposalContent: true,
       ...authority,
     },
+  }
+}
+
+function createEligibility(workspace: DecisionReviewWorkspace) {
+  return {
+    entityKind: 'Proposal',
+    entityId: workspace.proposal.id,
+    currentState: workspace.proposal.state,
+    allowedActions: [
+      {
+        commandName: 'resolve_decision_proposal',
+        displayName: 'Resolve proposal',
+        targetState: 'Resolved',
+        isAllowed: workspace.proposal.state === 'ReadyForResolution',
+        requiredInputs: ['resolver', 'rationale', 'selectedOptionId'],
+        reason: null,
+        governingRule: 'proposal-resolution',
+      },
+    ],
+    blockedActions: [],
+    allowedNextStates: ['Resolved'],
+    blockedNextStates: [],
+    diagnostics: ['Resolution eligibility projected by backend lifecycle rules.'],
   }
 }
 

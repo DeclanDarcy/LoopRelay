@@ -1,15 +1,22 @@
 import { useEffect, useMemo, useState } from 'react'
 import { EmptyState } from '../../components/design'
-import { ConstraintViewer, DiagnosticList, EvidenceList } from '../../components/explainability'
+import {
+  ConstraintViewer,
+  DiagnosticList,
+  EvidenceList,
+  InteractionPatternView,
+} from '../../components/explainability'
 import { useDecisionProposalRefinement } from '../../hooks'
 import {
   decisionDiagnosticsToExplanation,
+  decisionLifecycleEligibilityToActions,
   refinementPlanToConstraints,
   refinementPlanToDiagnostics,
 } from '../../lib/explainability'
 import type { FormEvent } from 'react'
 import type {
   DecisionPackageRegenerationResult,
+  DecisionLifecycleEntityEligibility,
   DecisionProposal,
   DecisionProposalLineage,
   DecisionRefinementRequest,
@@ -21,6 +28,7 @@ type DecisionRefinementPanelProps = {
   repositoryId: string | null
   workspace: DecisionReviewWorkspace | null
   lineage: DecisionProposalLineage | null
+  eligibility?: DecisionLifecycleEntityEligibility | null
   isLoading: boolean
   onRefined: (proposal: DecisionProposal) => Promise<void> | void
 }
@@ -31,6 +39,7 @@ export function DecisionRefinementPanel({
   repositoryId,
   workspace,
   lineage,
+  eligibility = null,
   isLoading,
   onRefined,
 }: DecisionRefinementPanelProps) {
@@ -65,6 +74,7 @@ export function DecisionRefinementPanel({
   const proposal = workspace?.proposal ?? null
   const canSubmitState = proposal ? refinableStates.has(proposal.state) : false
   const authority = workspace?.authority ?? null
+  const diagnostics = workspace?.diagnostics.warnings ?? []
   const hasChange = Boolean(context.trim() || recommendationRationale.trim() || rejectedChanges.trim())
   const canSubmit = Boolean(proposal && canSubmitState && reason.trim() && hasChange && !isSubmitting)
   const canAnalyze = Boolean(proposal && canSubmitState && guidance.trim() && !isSubmitting)
@@ -191,6 +201,16 @@ export function DecisionRefinementPanel({
         {baseProposalFingerprint ? <small>{baseProposalFingerprint}</small> : null}
       </article>
 
+      <RefinementInteractionSummary
+        workspace={workspace}
+        lineage={lineage}
+        eligibility={eligibility}
+        plan={plan}
+        regenerationResult={regenerationResult}
+        successMessage={successMessage}
+        diagnostics={diagnostics}
+      />
+
       <section className="decision-directive-refinement" aria-label="Directive-driven refinement">
         <div className="decision-panel-heading">
           <h6>Directive Regeneration</h6>
@@ -311,6 +331,89 @@ export function DecisionRefinementPanel({
         </div>
       ) : null}
     </section>
+  )
+}
+
+function RefinementInteractionSummary({
+  workspace,
+  lineage,
+  eligibility,
+  plan,
+  regenerationResult,
+  successMessage,
+  diagnostics,
+}: {
+  workspace: DecisionReviewWorkspace
+  lineage: DecisionProposalLineage | null
+  eligibility: DecisionLifecycleEntityEligibility | null
+  plan: RefinementPlan | null
+  regenerationResult: DecisionPackageRegenerationResult | null
+  successMessage: string | null
+  diagnostics: string[]
+}) {
+  const authority = workspace.authority
+  const planScope = plan
+    ? [
+        plan.regenerateOptions ? 'Options' : null,
+        plan.reevaluateTradeoffs ? 'Tradeoffs' : null,
+        plan.reevaluateRecommendation ? 'Recommendation' : null,
+        plan.fullRegeneration ? 'Full regeneration' : null,
+      ].filter(Boolean).join(', ') || 'No mutation scope detected'
+    : null
+  const result =
+    successMessage
+      ? `Refinement command succeeded for ${workspace.proposal.id}.`
+      : regenerationResult
+        ? `Regenerated package ${regenerationResult.regeneratedPackageVersion.id}.`
+        : plan
+          ? `Analyzed refinement plan for ${plan.proposalId}.`
+          : 'No refinement command result recorded.'
+  const evidence = [
+    {
+      label: 'Current state',
+      detail: `Proposal ${workspace.proposal.id} is ${workspace.proposal.state}.`,
+    },
+    {
+      label: 'Base proposal fingerprint',
+      detail: lineage?.currentProposalFingerprint ?? authority?.proposalFingerprint ?? 'No proposal fingerprint projected.',
+    },
+    {
+      label: 'Reviewed package',
+      detail: authority?.packageId ?? 'No reviewed package projected.',
+    },
+    ...(planScope
+      ? [
+          {
+            label: 'Refinement plan scope',
+            detail: planScope,
+          },
+        ]
+      : []),
+    ...(regenerationResult
+      ? [
+          {
+            label: 'Human authoring burden',
+            detail: regenerationResult.humanAuthoringBurden,
+          },
+        ]
+      : []),
+  ]
+
+  return (
+    <InteractionPatternView
+      actions={eligibility ? decisionLifecycleEligibilityToActions(eligibility) : []}
+      diagnostics={[
+        ...decisionDiagnosticsToExplanation(diagnostics, 'Refinement workspace diagnostic'),
+        ...(plan ? refinementPlanToDiagnostics(plan) : []),
+        ...(regenerationResult
+          ? decisionDiagnosticsToExplanation(regenerationResult.diagnostics, 'Regeneration diagnostic')
+          : []),
+      ]}
+      evidence={evidence}
+      result={result}
+      subject={`Proposal ${workspace.proposal.id}: ${workspace.proposal.state}`}
+      title="Refinement interaction summary"
+    />
   )
 }
 

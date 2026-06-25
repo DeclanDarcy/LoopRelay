@@ -2,12 +2,12 @@
 
 ## Newly Authorized
 
-- Treat candidate lifecycle interaction normalization as accepted Milestone 9 work because it completes a coherent action family without expanding `InteractionPatternView` beyond subject, result, eligibility, evidence, and diagnostics presentation.
-- Continue preserving the architectural boundary:
-  - backend owns legality, eligibility, transition rules, evidence, and diagnostics,
-  - `InteractionPatternView` owns presentation only.
-- Keep characterization tests focused on normalized interaction presentation rather than duplicating backend lifecycle validation.
-- Evaluate refinement and resolution separately before adopting the same base interaction pattern directly.
-- If refinement or resolution need revision history, before/after comparison, consequence preview, resolution artifacts, or assimilation effects, introduce a thin phase-specific wrapper that composes `InteractionPatternView`.
-- Keep the base `InteractionPatternView` stable while allowing richer lifecycle phases to add only the presentation they genuinely require.
-- Continue incremental action-family normalization rather than a broad lifecycle refactor because each action family remains independently testable and easier to reason about.
+- Treat the refinement and resolution interaction normalization as accepted Milestone 9 work because it proves the shared interaction language can support richer lifecycle phases without over-generalizing the base component.
+- Keep `InteractionPatternView` as the common presentation shell for subject, result, eligibility, evidence, and diagnostics.
+- Continue using thin phase-specific wrappers for rich lifecycle surfaces such as refinement and resolution instead of expanding `InteractionPatternView`.
+- Preserve the boundary where backend projections own lifecycle legality and eligibility, while React coordinates and renders the selected authoritative projection.
+- Keep characterization coverage focused on normalized presentation, not backend lifecycle rule validation.
+- Treat the Decisions domain interaction normalization as coherently spanning proposal review, candidate actions, resolved decision actions, refinement, and resolution.
+- Continue Milestone 9 interaction normalization with execution commit/push actions next.
+- Normalize execution interaction actions in this order: commit preparation, commit execution, push, push retry, then recovery actions.
+- Execution interaction wrappers should present subject, expected result, backend-owned eligibility, evidence, and diagnostics while adding retry history or failure context only where execution-specific transparency requires it.

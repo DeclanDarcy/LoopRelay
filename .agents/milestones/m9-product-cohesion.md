@@ -23,6 +23,7 @@ Make the application feel unified, not merely smaller. Remove fragmentation so e
    - [x] Proposal review lifecycle actions normalized through a shared interaction summary covering action, eligibility, evidence, result, and diagnostics. See `./m9-interaction-normalization-proposal-review.md`.
    - [x] Resolved decision supersede/archive actions normalized through the shared interaction summary. See `./m9-interaction-normalization-decision-actions.md`.
    - [x] Candidate promote/dismiss/expire/duplicate and proposal generation actions normalized through the shared interaction summary. See `./m9-interaction-normalization-candidate-actions.md`.
+   - [x] Refinement and resolution panels normalized through thin phase-specific wrappers around the shared interaction summary. See `./m9-interaction-normalization-refinement-resolution.md`.
    - [ ] action
    - [ ] eligibility
    - [ ] evidence
