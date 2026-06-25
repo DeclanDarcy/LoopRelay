@@ -2,33 +2,31 @@
 
 ## New State This Slice
 
-- Continued Milestone 4: Decision Transparency quality, burden, and governance UI composition.
-- Added TypeScript contract coverage for backend-owned quality transparency fields:
-  - `DecisionQualityExplanation`
-  - `DecisionQualitySignalContribution`
-  - `DecisionQualityThresholdExplanation`
-  - `HumanAuthoringBurdenExplanation`
-  - `DecisionQualityAssessment.qualityExplanation`
-  - `DecisionQualityAssessment.humanAuthoringBurdenExplanation`
-  - `DecisionQualityReport.humanAuthoringBurdenExplanations`
-- Added decision-local renderers:
-  - `DecisionQualityExplanation`
-  - `DecisionBurdenExplanation`
-  - `DecisionGovernanceExplanation`
-- Wired `DecisionQualityPanel` to render backend-provided base/raw/clamped score, threshold bounds/reason, override reason, signal score contributions, explanation diagnostics, effective burden, unknown/inferred status, selection rule, winning burden signal, and burden diagnostics.
-- Extracted governance finding rendering into `DecisionGovernanceExplanation`; it renders existing report findings by severity/category with blocking status, related entities, source attribution, and proposal navigation.
-- Updated Milestone 4 notes to mark the quality and burden panel work complete and to record remaining governance gaps that require composing existing review workspace and lifecycle eligibility projections.
-- Rotated prior handoff to `.agents/handoffs/handoff.0026.md`.
+- Continued Milestone 4 governance transparency composition.
+- Extended `DecisionGovernancePanel` with a render-only `Authority and Lifecycle` section fed by existing authoritative inputs:
+  - selected `DecisionReviewWorkspace`
+  - selected proposal lifecycle eligibility
+  - selected decision lifecycle eligibility
+  - backend-returned resolved decision from proposal resolution
+- The governance panel now displays proposal resolution authority, review state, package freshness, stale package warning, recommendation option, proposal/package fingerprints, lifecycle state, allowed actions, allowed transitions, blocked transition reasons, lifecycle diagnostics, resolved decision outcome, selected option, resolver, recommendation divergence, and source proposal.
+- Updated `DecisionLifecycleTab` to retain the last backend-returned resolved decision and pass it to governance only when it belongs to the selected proposal.
+- Added governance characterization coverage for stale authority, recommendation divergence, lifecycle state, allowed actions, blocked transitions, and transition reasons.
+- Updated `.agents/milestones/m4-decision-transparency.md` to mark governance authority composition and related UI characterization complete.
+- Rotated prior handoff to `.agents/handoffs/handoff.0027.md`.
 
 ## Verification
 
-- `npm test -- decisionQualityPanel.test.tsx decisionGovernancePanel.test.tsx --run` in `src/CommandCenter.UI` passed: 4/4.
+- `npm test -- decisionGovernancePanel.test.tsx --run` in `src/CommandCenter.UI` passed: 3/3.
+- `npm test -- decisionLifecycleNavigation.test.tsx decisionGovernancePanel.test.tsx --run` in `src/CommandCenter.UI` passed: 7/7.
 - `npm run build` in `src/CommandCenter.UI` passed.
+- Build still reports the existing Vite chunk-size warning for the main bundle over 500 kB.
 
 ## Remaining Work
 
-- Continue Milestone 4 governance transparency:
-  - compose review workspace authority and decision lifecycle eligibility into governance-facing UI
-  - show resolution authority, stale authority, recommendation divergence, lifecycle state, allowed transitions, blocked transitions, and transition reasons
-  - add characterization tests for those governance authority and transition facts
-- Keep remaining work render-only unless a concrete backend-owned projection gap appears.
+- Continue Milestone 4 with execution influence transparency:
+  - show why decisions were included, excluded, superseded, conflicted, ignored, blocked, or converted into constraints/directives/priorities/rules
+  - add characterization tests for those influence reason categories
+- Remaining possible backend projection gaps:
+  - proposal recommendation confidence still needs an authoritative backend field before UI can render it
+  - insufficient-evidence and duplicate option categories need explicit backend classification if they must be displayed separately from validation issue text and deduplicated option diagnostics
+- Keep remaining Milestone 4 work render-only unless a concrete authoritative projection field is missing.

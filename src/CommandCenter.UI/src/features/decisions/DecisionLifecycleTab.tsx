@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { EmptyState, Panel, SectionHeader } from '../../components/design'
 import type {
+  Decision,
   DecisionCandidate,
   DecisionContextSnapshot,
   DecisionLifecycleActionEligibility,
@@ -98,6 +99,7 @@ export function DecisionLifecycleTab({
   const [decisionRationale, setDecisionRationale] = useState<string>('')
   const [decisionResolver, setDecisionResolver] = useState<string>('')
   const [lastGeneratedProposal, setLastGeneratedProposal] = useState<DecisionProposal | null>(null)
+  const [lastResolvedDecision, setLastResolvedDecision] = useState<Decision | null>(null)
   const {
     data: proposalReviewWorkspace,
     isLoading: isProposalReviewLoading,
@@ -195,6 +197,10 @@ export function DecisionLifecycleTab({
     decisionEligibilities[0] ??
     null
   const activeDecisionId = selectedDecisionEligibility?.entityId ?? ''
+  const selectedProposalResolvedDecision =
+    lastResolvedDecision?.resolution?.sourceProposalSnapshot?.proposalId === selectedProposalId
+      ? lastResolvedDecision
+      : null
   const resolvedReplacementTargets = decisionEligibilities.filter((decision) =>
     decision.entityId !== activeDecisionId && decision.currentState === 'Resolved'
   )
@@ -430,7 +436,8 @@ export function DecisionLifecycleTab({
             repositoryId={repositoryId}
             workspace={proposalReviewWorkspace}
             isLoading={isProposalReviewLoading}
-            onResolved={async () => {
+            onResolved={async (decision) => {
+              setLastResolvedDecision(decision)
               await Promise.all([
                 refreshProposalReview(),
                 refreshProposalLineage(),
@@ -586,6 +593,10 @@ export function DecisionLifecycleTab({
           <DecisionGovernancePanel
             currentReport={governanceReport}
             reports={governanceReports}
+            selectedProposalWorkspace={proposalReviewWorkspace}
+            selectedProposalEligibility={selectedProposalEligibility}
+            selectedDecisionEligibility={selectedDecisionEligibility}
+            resolvedDecision={selectedProposalResolvedDecision}
             isLoading={isGovernanceLoading}
             isGenerating={isGovernanceGenerating}
             error={governanceError}
