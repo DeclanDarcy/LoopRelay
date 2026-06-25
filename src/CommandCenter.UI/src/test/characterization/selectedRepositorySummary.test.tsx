@@ -284,22 +284,43 @@ function renderSummary({
   )
 }
 
+function detailsList() {
+  const list = document.querySelector('.details-list')
+  expect(list).not.toBeNull()
+  return within(list as HTMLElement)
+}
+
+function dashboardSection(name: string) {
+  return within(screen.getByRole('region', { name: `${name} dashboard summary` }))
+}
+
+function expectFact(
+  section: ReturnType<typeof dashboardSection>,
+  label: string,
+  expected: string | RegExp,
+) {
+  expect(section.getByText(label).parentElement).toHaveTextContent(expected)
+}
+
 describe('selected repository summary rendering characterization', () => {
   it('renders selected repository identity and dashboard fallbacks when workspace is absent', () => {
     renderSummary()
 
+    const details = detailsList()
+    const repository = dashboardSection('Repository')
+    const workflow = dashboardSection('Workflow')
     expect(screen.getByText('Selected repository')).toHaveClass('eyebrow')
     expect(screen.getByRole('heading', { level: 3, name: 'AlphaRepo' })).toBeInTheDocument()
     expect(screen.getByText('Available')).toHaveClass('cc-badge', 'cc-badge-success')
-    expect(screen.getByText('Path').nextElementSibling).toHaveTextContent('C:/work/AlphaRepo')
-    expect(screen.getByText('Readiness').nextElementSibling).toHaveTextContent('Ready')
-    expect(screen.getByText('Execution').nextElementSibling).toHaveTextContent('Ready')
-    expect(screen.getByText('Milestones').nextElementSibling).toHaveTextContent('3')
-    expect(screen.getByText('Plan: Missing')).toBeInTheDocument()
-    expect(screen.getByText('Operational context: Missing')).toBeInTheDocument()
-    expect(screen.getByText('Handoff: Missing')).toBeInTheDocument()
-    expect(screen.getByText('Decisions: Missing')).toBeInTheDocument()
-    expect(screen.getByText('Workflow stage: Not loaded')).toBeInTheDocument()
+    expect(details.getByText('Path').nextElementSibling).toHaveTextContent('C:/work/AlphaRepo')
+    expect(details.getByText('Readiness').nextElementSibling).toHaveTextContent('Ready')
+    expect(details.getByText('Execution').nextElementSibling).toHaveTextContent('Ready')
+    expect(details.getByText('Milestones').nextElementSibling).toHaveTextContent('3')
+    expect(screen.getByRole('heading', { level: 4, name: 'Repository operating picture' })).toBeInTheDocument()
+    expectFact(repository, 'Plan', 'Missing')
+    expectFact(repository, 'Handoff', 'Missing')
+    expectFact(repository, 'Decisions', 'Missing')
+    expectFact(workflow, 'Stage', 'Not loaded')
   })
 
   it('uses workspace facts over dashboard facts when workspace is present', () => {
@@ -309,15 +330,18 @@ describe('selected repository summary rendering characterization', () => {
       currentExecutionState: 'AwaitingCommit',
     })
 
-    expect(screen.getByText('Readiness').nextElementSibling).toHaveTextContent(
+    const details = detailsList()
+    const repository = dashboardSection('Repository')
+    const operationalContext = dashboardSection('Operational context')
+    expect(details.getByText('Readiness').nextElementSibling).toHaveTextContent(
       'Missing milestones',
     )
-    expect(screen.getByText('Execution').nextElementSibling).toHaveTextContent('Awaiting commit')
-    expect(screen.getByText('Milestones').nextElementSibling).toHaveTextContent('5')
-    expect(screen.getByText('Plan: Present')).toBeInTheDocument()
-    expect(screen.getByText('Operational context: Present')).toBeInTheDocument()
-    expect(screen.getByText('Handoff: Missing')).toBeInTheDocument()
-    expect(screen.getByText('Decisions: Present')).toBeInTheDocument()
+    expect(details.getByText('Execution').nextElementSibling).toHaveTextContent('Awaiting commit')
+    expect(details.getByText('Milestones').nextElementSibling).toHaveTextContent('5')
+    expectFact(repository, 'Plan', 'Present')
+    expectFact(operationalContext, 'Current context', 'Present')
+    expectFact(repository, 'Handoff', 'Missing')
+    expectFact(repository, 'Decisions', 'Present')
   })
 
   it('renders dashboard workflow summary from the authoritative workflow projection', () => {
@@ -326,12 +350,11 @@ describe('selected repository summary rendering characterization', () => {
       workflow: workflowProjection(),
     })
 
-    expect(screen.getByText('Workflow stage: Decision')).toBeInTheDocument()
-    expect(screen.getByText('Workflow gate: DecisionResolution')).toBeInTheDocument()
-    expect(screen.getByText(/Required action:/)).toHaveTextContent(
-      'Required action: Resolve the generated decision.',
-    )
-    expect(screen.getByText('Timeline events: 2')).toBeInTheDocument()
+    const workflow = dashboardSection('Workflow')
+    expectFact(workflow, 'Stage', 'Decision')
+    expectFact(workflow, 'Gate', 'DecisionResolution')
+    expectFact(workflow, 'Required action', 'Resolve the generated decision.')
+    expectFact(workflow, 'Timeline events', '2')
   })
 
   it('renders repository governance as a contextual decision-session summary', () => {
@@ -367,23 +390,23 @@ describe('selected repository summary rendering characterization', () => {
       }),
     })
 
-    expect(
-      screen.getByText((_, element) => element?.textContent === 'Governance session: governance-session-1'),
-    ).toBeInTheDocument()
-    expect(screen.getByText('Governance state: Active')).toBeInTheDocument()
-    expect(screen.getByText('Lifecycle decision: Transfer')).toBeInTheDocument()
-    expect(screen.getByText('Transfer eligibility: Blocked')).toBeInTheDocument()
-    expect(screen.getByText('Governance health dimensions: 2')).toBeInTheDocument()
-    expect(screen.getByText('Governance health findings: 1')).toBeInTheDocument()
-    expect(screen.getByText(/Governance health assessed:/)).toHaveTextContent(/\d/)
+    const governance = dashboardSection('Governance')
+    const health = dashboardSection('Health')
+    expectFact(governance, 'Session', 'governance-session-1')
+    expectFact(governance, 'State', 'Active')
+    expectFact(governance, 'Lifecycle decision', 'Transfer')
+    expectFact(governance, 'Transfer eligibility', 'Blocked')
+    expectFact(health, 'Governance dimensions', '2')
+    expectFact(health, 'Governance findings', '1')
+    expectFact(health, 'Assessed', /\d/)
     expect(screen.queryByText('Transfer recommended but blocked.')).not.toBeInTheDocument()
     expect(screen.queryByText('Detailed governance health diagnostic belongs in Governance.')).not.toBeInTheDocument()
     expect(screen.queryByText('Coherence: 0.82')).not.toBeInTheDocument()
     expect(screen.queryByText('Transfer pressure: 0.71')).not.toBeInTheDocument()
     expect(screen.queryByText('Cache miss risk: 0.44')).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'governance-session-1' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Open' }))
+    fireEvent.click(governance.getByRole('button', { name: 'governance-session-1' }))
+    fireEvent.click(governance.getByRole('button', { name: 'Open' }))
     expect(onOpenGovernance).toHaveBeenCalledTimes(2)
   })
 
@@ -416,18 +439,20 @@ describe('selected repository summary rendering characterization', () => {
       }),
     })
 
-    expect(screen.getByText('Reasoning events: 8')).toBeInTheDocument()
-    expect(screen.getByText('Reasoning threads: 3')).toBeInTheDocument()
-    expect(screen.getByText('Reasoning relationships: 5')).toBeInTheDocument()
-    expect(screen.getByText(/Reasoning latest activity:/)).toHaveTextContent(/\d/)
-    expect(screen.getByText('Reasoning certification result: Passed')).toBeInTheDocument()
-    expect(screen.getByText(/Reasoning certification latest run:/)).toHaveTextContent(/\d/)
+    const reasoning = dashboardSection('Reasoning')
+    const certification = dashboardSection('Certification')
+    expectFact(reasoning, 'Events', '8')
+    expectFact(reasoning, 'Threads', '3')
+    expectFact(reasoning, 'Relationships', '5')
+    expectFact(reasoning, 'Latest activity', /\d/)
+    expectFact(certification, 'Reasoning result', 'Passed')
+    expectFact(certification, 'Latest run', /\d/)
     expect(screen.queryByText('Reconstruction confidence rationale')).not.toBeInTheDocument()
     expect(screen.queryByText('Known unreachable reconstruction evidence')).not.toBeInTheDocument()
     expect(screen.queryByText('Reasoning graph authority')).not.toBeInTheDocument()
     expect(screen.queryByText('Reasoning materialization authority')).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open' }))
+    fireEvent.click(reasoning.getByRole('button', { name: 'Open' }))
     expect(onOpenReasoning).toHaveBeenCalledTimes(1)
   })
 
@@ -485,17 +510,19 @@ describe('selected repository summary rendering characterization', () => {
       }),
     })
 
-    expect(screen.getByText('Continuity revisions: 7')).toBeInTheDocument()
-    expect(screen.getByText('Continuity warnings: 1')).toBeInTheDocument()
-    expect(screen.getByText('Continuity pending proposal: Present')).toBeInTheDocument()
-    expect(screen.getByText(/Continuity latest activity:/)).toHaveTextContent(/\d/)
+    const operationalContext = dashboardSection('Operational context')
+    const diagnostics = dashboardSection('Diagnostics')
+    expectFact(operationalContext, 'Revisions', '7')
+    expectFact(diagnostics, 'Continuity warnings', '1')
+    expectFact(operationalContext, 'Pending proposal', 'Present')
+    expectFact(operationalContext, 'Latest activity', /\d/)
     expect(screen.queryByText('Backend continuity services own semantic diff detail.')).not.toBeInTheDocument()
     expect(screen.queryByText('Detailed rationale belongs in Continuity.')).not.toBeInTheDocument()
     expect(screen.queryByText('Should summaries repeat semantic diff evidence?')).not.toBeInTheDocument()
     expect(screen.queryByText('Secondary summary could duplicate diagnostics.')).not.toBeInTheDocument()
     expect(screen.queryByText('Detailed continuity warning stays in Continuity.')).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open' }))
+    fireEvent.click(diagnostics.getByRole('button', { name: 'Open' }))
     expect(onOpenContinuity).toHaveBeenCalledTimes(1)
   })
 
@@ -515,9 +542,7 @@ describe('selected repository summary rendering characterization', () => {
       }),
     })
 
-    const details = screen.getByText('Session').closest('dl')
-    expect(details).not.toBeNull()
-    const scopedDetails = within(details!)
+    const scopedDetails = detailsList()
     expect(scopedDetails.getByText('Session').nextElementSibling).toHaveTextContent('session-42')
     expect(scopedDetails.getByText('Provider').nextElementSibling).toHaveTextContent('Unknown')
     expect(scopedDetails.getByText('Started').nextElementSibling).toHaveTextContent(/\d/)
@@ -560,11 +585,15 @@ describe('selected repository summary rendering characterization', () => {
       onOpenHandoffArtifact,
     })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Awaiting commit' }))
-    fireEvent.click(screen.getByRole('button', { name: 'session-alpha' }))
-    fireEvent.click(screen.getByRole('button', { name: '5' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Present' }))
-    fireEvent.click(screen.getByRole('button', { name: '.agents/handoffs/handoff.md' }))
+    const details = detailsList()
+    const repository = dashboardSection('Repository')
+    const operationalContext = dashboardSection('Operational context')
+
+    fireEvent.click(details.getByRole('button', { name: 'Awaiting commit' }))
+    fireEvent.click(details.getByRole('button', { name: 'session-alpha' }))
+    fireEvent.click(repository.getByRole('button', { name: '5' }))
+    fireEvent.click(operationalContext.getByRole('button', { name: 'Open' }))
+    fireEvent.click(details.getByRole('button', { name: '.agents/handoffs/handoff.md' }))
 
     expect(onOpenExecution).toHaveBeenCalledTimes(2)
     expect(onOpenMilestones).toHaveBeenCalledTimes(1)

@@ -568,6 +568,76 @@ button:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.operational-dashboard {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.operational-dashboard-heading {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.operational-dashboard-heading h4,
+.operational-dashboard-section-header h4 {
+  min-width: 0;
+  margin: 0;
+  color: var(--fg-default);
+  font-size: 0.94rem;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.operational-dashboard-section {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--surface-1);
+}
+
+.operational-dashboard-section-header {
+  min-width: 0;
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.operational-dashboard-facts {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.operational-dashboard-facts span {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  color: var(--fg-muted);
+  background: var(--bg-inset);
+  font-size: 0.82rem;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.operational-dashboard-facts strong {
+  min-width: 0;
+  color: var(--fg-subtle);
+  font-size: 0.72rem;
+  font-weight: 750;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
 .execution-workspace,
 .governance-workspace,
 .artifact-workspace-shell {
@@ -3705,6 +3775,7 @@ button:focus-visible {
   .decision-lineage-summary,
   .execution-workflow-rail,
   .workspace-workflow-rail,
+  .operational-dashboard-facts,
   .workflow-panels,
   .workflow-fact-grid,
   .execution-prompt-context-grid,

@@ -33,16 +33,17 @@ Make the application feel unified, not merely smaller. Remove fragmentation so e
    - [x] evidence
    - [x] result
    - [x] diagnostics
-- [ ] Build or update a unified operational dashboard that summarizes:
-   - [ ] workflow
-   - [ ] governance
-   - [ ] execution
-   - [ ] operational context
-   - [ ] reasoning
-   - [ ] repository
-   - [ ] health
-   - [ ] certification
-   - [ ] diagnostics
+- [x] Build or update a unified operational dashboard that summarizes:
+   - [x] workflow
+   - [x] governance
+   - [x] execution
+   - [x] operational context
+   - [x] reasoning
+   - [x] repository
+   - [x] health
+   - [x] certification
+   - [x] diagnostics
+   - [x] Unified selected-repository operational dashboard completed. See `./m9-operational-dashboard.md`.
 - [ ] Delete obsolete UI components, old workflow derivation, duplicate panels, temporary views, deprecated widgets, obsolete summaries, and unused client functions after replacements are tested.
 - [ ] Align terminology across statuses, health, diagnostics, recovery, certification, governance, execution, and explainability.
 

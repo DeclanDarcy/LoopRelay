@@ -2,13 +2,12 @@
 
 ## Newly Authorized
 
-- Accept the governance recovery migration as the closing slice for Milestone 9 interaction-normalization work.
-- Treat the Governance action family as complete for interaction normalization after transfer and recovery now use the shared interaction language.
-- Preserve the boundary that backend services own recovery eligibility, recovery state, evidence, diagnostics, and lifecycle semantics.
-- Keep governance adapters as presentation reshapers of authoritative backend projections rather than domain authorities.
-- Continue using `InteractionPatternView` for action-oriented interactions that explain action, subject, eligibility, evidence, result, and diagnostics.
-- Do not force non-action surfaces into `InteractionPatternView`, including diagnostics dashboards, evolution reports, evidence explorers, certification summaries, and trajectory visualizations.
-- Treat the unified operational dashboard as the next Milestone 9 slice.
-- Build the dashboard by composing existing projections instead of inventing new lifecycle, evidence, diagnostics, or reasoning authority.
-- Keep dashboard sections high-level and navigational: concise status, counts, recent activity, highest-priority issues, and direct links into owning workspaces.
-- Avoid reproducing detailed evidence, diagnostics, or lifecycle content in the dashboard when those details already have a primary workspace.
+- Treat the selected repository summary as the product's operational dashboard and repository home rather than adding a separate dashboard destination.
+- Preserve the dashboard as an observational composition layer over existing authoritative projections.
+- Keep the dashboard compact and navigational across repository, workflow, execution, governance, operational context, reasoning, health, certification, and diagnostics.
+- Do not introduce a dashboard-specific semantic model or dashboard-owned lifecycle authority.
+- Treat the first full-suite smoke failure from the dashboard slice as a transient/flaky test unless a recurrence pattern emerges.
+- Continue Milestone 9 by removing obsolete presentation now that navigation, explainability, interaction language, summary consolidation, and the dashboard are in place.
+- Use the cleanup disposition `Primary`, `Contextual`, `Compatibility`, and `Duplicate` for remaining duplicate helpers and panels.
+- Prioritize cleanup of workflow/status helpers, legacy contextual panels, duplicated summary widgets, and obsolete presentation helpers left behind after the explainability migration.
+- Treat the remaining Milestone 9 work as redundancy removal and product polish rather than introducing new UI concepts.

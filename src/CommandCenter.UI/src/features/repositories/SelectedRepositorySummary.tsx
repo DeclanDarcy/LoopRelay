@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { formatDateTime, formatDuration } from '../../lib'
 import { StatusBadge } from '../../components/design'
 import {
@@ -26,6 +27,44 @@ type SelectedRepositorySummaryProps = {
   onOpenMilestones?: () => void
   onOpenOperationalContext?: () => void
   onOpenHandoffArtifact?: (handoffPath: string) => void
+}
+
+type DashboardSectionProps = {
+  title: string
+  action?: {
+    label: string
+    onClick: () => void
+  }
+  children: ReactNode
+}
+
+function DashboardSection({ title, action, children }: DashboardSectionProps) {
+  return (
+    <section className="operational-dashboard-section" aria-label={`${title} dashboard summary`}>
+      <div className="operational-dashboard-section-header">
+        <h4>{title}</h4>
+        {action ? (
+          <button
+            type="button"
+            className="workspace-cross-link inline-cross-link"
+            onClick={action.onClick}
+          >
+            {action.label}
+          </button>
+        ) : null}
+      </div>
+      <div className="operational-dashboard-facts">{children}</div>
+    </section>
+  )
+}
+
+function DashboardFact({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <span>
+      <strong>{label}</strong>
+      {value}
+    </span>
+  )
 }
 
 export function SelectedRepositorySummary({
@@ -61,6 +100,34 @@ export function SelectedRepositorySummary({
     (count, dimension) => count + dimension.findings.length,
     0,
   )
+  const workflowDiagnosticCount =
+    (workflow?.diagnostics?.unknownStates.length ?? 0) +
+    (workflow?.diagnostics?.conflicts.length ?? 0) +
+    (workflow?.gateDiagnostics?.missingEvidence.length ?? 0) +
+    (workflow?.gateDiagnostics?.conflicts.length ?? 0) +
+    (workflow?.executionDiagnostics?.missingEvidence.length ?? 0) +
+    (workflow?.executionDiagnostics?.conflicts.length ?? 0) +
+    (workflow?.handoffDiagnostics?.missingEvidence.length ?? 0) +
+    (workflow?.handoffDiagnostics?.conflicts.length ?? 0) +
+    (workflow?.decisionDiagnostics?.conflicts.length ?? 0) +
+    (workflow?.operationalContextDiagnostics?.conflicts.length ?? 0) +
+    (workflow?.gitDiagnostics?.missingEvidence.length ?? 0) +
+    (workflow?.gitDiagnostics?.conflicts.length ?? 0)
+  const governanceDiagnosticCount = governanceSummary.diagnostics.length
+  const continuityDiagnosticCount = continuityWarningCount
+  const diagnosticCount =
+    workflowDiagnosticCount + governanceDiagnosticCount + continuityDiagnosticCount
+  const workflowHealthStatus =
+    workflow?.decisionSession?.summary.healthStatus ??
+    (workflow
+      ? workflow.blockingGate === 'None' && workflow.progressState !== 'Failed'
+        ? 'Healthy'
+        : workflow.progressState
+      : 'Not loaded')
+  const certificationStatus =
+    workflow?.currentDecision?.certificationStatus ??
+    reasoningSummary.certificationResult ??
+    'Not projected'
 
   return (
     <>
@@ -193,105 +260,113 @@ export function SelectedRepositorySummary({
         </div>
       </dl>
 
-      <div className="summary-grid">
-        <span>Plan: {workspace?.hasPlan ? 'Present' : 'Missing'}</span>
-        <span>
-          Operational context:{' '}
-          {hasOperationalContext && onOpenOperationalContext ? (
-            <button
-              type="button"
-              className="workspace-cross-link inline-cross-link"
-              onClick={onOpenOperationalContext}
-            >
-              Present
-            </button>
-          ) : hasOperationalContext ? (
-            'Present'
-          ) : (
-            'Missing'
-          )}
-        </span>
-        <span>Handoff: {workspace?.hasCurrentHandoff ? 'Present' : 'Missing'}</span>
-        <span>Decisions: {workspace?.hasCurrentDecisions ? 'Present' : 'Missing'}</span>
-        <span>Workflow stage: {workflow?.currentStage ?? 'Not loaded'}</span>
-        <span>Workflow gate: {workflow?.blockingGate ?? 'Not loaded'}</span>
-        <span>
-          Required action:{' '}
-          {workflow?.requiredHumanAction && workflow.requiredHumanAction.trim().length > 0
-            ? workflow.requiredHumanAction
-            : workflow
-              ? 'None'
-              : 'Not loaded'}
-        </span>
-        <span>Timeline events: {workflow ? workflow.timeline.length : 'Not loaded'}</span>
-        <span>
-          Governance session:{' '}
-          {governanceSummary.decisionSessionId && onOpenGovernance ? (
-            <button
-              type="button"
-              className="workspace-cross-link inline-cross-link"
-              onClick={onOpenGovernance}
-            >
-              {governanceSummary.decisionSessionId}
-            </button>
-          ) : (
-            governanceSummary.decisionSessionId ?? 'Not projected'
-          )}
-        </span>
-        <span>Governance state: {governanceSummary.state ?? 'Not projected'}</span>
-        <span>Lifecycle decision: {governanceSummary.lifecycleDecision ?? 'Not projected'}</span>
-        <span>
-          Transfer eligibility: {governanceSummary.transferEligibilityStatus ?? 'Not projected'}
-        </span>
-        <span>Governance health dimensions: {governanceSummary.healthDimensions.length}</span>
-        <span>Governance health findings: {governanceHealthFindingCount}</span>
-        <span>Governance health assessed: {formatDateTime(governanceSummary.generatedAt)}</span>
-        {onOpenGovernance ? (
-          <span>
-            Governance workspace:{' '}
-            <button
-              type="button"
-              className="workspace-cross-link inline-cross-link"
-              onClick={onOpenGovernance}
-            >
-              Open
-            </button>
-          </span>
-        ) : null}
-        <span>Continuity revisions: {continuityRevisionCount}</span>
-        <span>Continuity warnings: {continuityWarningCount}</span>
-        <span>Continuity pending proposal: {continuityPendingProposal ? 'Present' : 'None'}</span>
-        <span>Continuity latest activity: {formatDateTime(continuityLatestActivity)}</span>
-        {onOpenContinuity ? (
-          <span>
-            Continuity diagnostics:{' '}
-            <button
-              type="button"
-              className="workspace-cross-link inline-cross-link"
-              onClick={onOpenContinuity}
-            >
-              Open
-            </button>
-          </span>
-        ) : null}
-        <span>Reasoning events: {reasoningSummary.eventCount}</span>
-        <span>Reasoning threads: {reasoningSummary.threadCount}</span>
-        <span>Reasoning relationships: {reasoningSummary.relationshipCount}</span>
-        <span>Reasoning latest activity: {formatDateTime(reasoningSummary.lastActivityAt)}</span>
-        <span>Reasoning certification result: {reasoningSummary.certificationResult ?? 'Not projected'}</span>
-        <span>Reasoning certification latest run: {formatDateTime(reasoningSummary.lastCertificationAt)}</span>
-        {onOpenReasoning ? (
-          <span>
-            Reasoning workspace:{' '}
-            <button
-              type="button"
-              className="workspace-cross-link inline-cross-link"
-              onClick={onOpenReasoning}
-            >
-              Open
-            </button>
-          </span>
-        ) : null}
+      <div className="operational-dashboard" aria-label="Unified operational dashboard">
+        <div className="operational-dashboard-heading">
+          <p className="eyebrow">Operational dashboard</p>
+          <h4>Repository operating picture</h4>
+        </div>
+
+        <DashboardSection title="Repository">
+          <DashboardFact label="Plan" value={workspace?.hasPlan ? 'Present' : 'Missing'} />
+          <DashboardFact label="Handoff" value={workspace?.hasCurrentHandoff ? 'Present' : 'Missing'} />
+          <DashboardFact label="Decisions" value={workspace?.hasCurrentDecisions ? 'Present' : 'Missing'} />
+          <DashboardFact
+            label="Milestones"
+            value={
+              milestoneCount > 0 && onOpenMilestones ? (
+                <button
+                  type="button"
+                  className="workspace-cross-link inline-cross-link"
+                  onClick={onOpenMilestones}
+                >
+                  {milestoneCount}
+                </button>
+              ) : (
+                milestoneCount
+              )
+            }
+          />
+        </DashboardSection>
+
+        <DashboardSection title="Workflow">
+          <DashboardFact label="Stage" value={workflow?.currentStage ?? 'Not loaded'} />
+          <DashboardFact label="Gate" value={workflow?.blockingGate ?? 'Not loaded'} />
+          <DashboardFact
+            label="Required action"
+            value={
+              workflow?.requiredHumanAction && workflow.requiredHumanAction.trim().length > 0
+                ? workflow.requiredHumanAction
+                : workflow
+                  ? 'None'
+                  : 'Not loaded'
+            }
+          />
+          <DashboardFact label="Timeline events" value={workflow ? workflow.timeline.length : 'Not loaded'} />
+        </DashboardSection>
+
+        <DashboardSection title="Execution" action={onOpenExecution ? { label: 'Open', onClick: onOpenExecution } : undefined}>
+          <DashboardFact label="State" value={repositoryExecutionStatus[currentExecutionState].label} />
+          <DashboardFact label="Session" value={executionDisplay?.sessionId ?? 'None'} />
+          <DashboardFact label="Provider" value={executionDisplay?.providerName || 'Unknown'} />
+          <DashboardFact label="Failure" value={executionDisplay?.failureReason || 'None'} />
+        </DashboardSection>
+
+        <DashboardSection title="Governance" action={onOpenGovernance ? { label: 'Open', onClick: onOpenGovernance } : undefined}>
+          <DashboardFact
+            label="Session"
+            value={
+              governanceSummary.decisionSessionId && onOpenGovernance ? (
+                <button
+                  type="button"
+                  className="workspace-cross-link inline-cross-link"
+                  onClick={onOpenGovernance}
+                >
+                  {governanceSummary.decisionSessionId}
+                </button>
+              ) : (
+                governanceSummary.decisionSessionId ?? 'Not projected'
+              )
+            }
+          />
+          <DashboardFact label="State" value={governanceSummary.state ?? 'Not projected'} />
+          <DashboardFact label="Lifecycle decision" value={governanceSummary.lifecycleDecision ?? 'Not projected'} />
+          <DashboardFact label="Transfer eligibility" value={governanceSummary.transferEligibilityStatus ?? 'Not projected'} />
+        </DashboardSection>
+
+        <DashboardSection title="Operational context" action={onOpenOperationalContext ? { label: 'Open', onClick: onOpenOperationalContext } : undefined}>
+          <DashboardFact label="Current context" value={hasOperationalContext ? 'Present' : 'Missing'} />
+          <DashboardFact label="Revisions" value={continuityRevisionCount} />
+          <DashboardFact label="Pending proposal" value={continuityPendingProposal ? 'Present' : 'None'} />
+          <DashboardFact label="Latest activity" value={formatDateTime(continuityLatestActivity)} />
+        </DashboardSection>
+
+        <DashboardSection title="Reasoning" action={onOpenReasoning ? { label: 'Open', onClick: onOpenReasoning } : undefined}>
+          <DashboardFact label="Events" value={reasoningSummary.eventCount} />
+          <DashboardFact label="Threads" value={reasoningSummary.threadCount} />
+          <DashboardFact label="Relationships" value={reasoningSummary.relationshipCount} />
+          <DashboardFact label="Latest activity" value={formatDateTime(reasoningSummary.lastActivityAt)} />
+        </DashboardSection>
+
+        <DashboardSection title="Health" action={onOpenGovernance ? { label: 'Open', onClick: onOpenGovernance } : undefined}>
+          <DashboardFact label="Workflow health" value={workflowHealthStatus} />
+          <DashboardFact label="Governance dimensions" value={governanceSummary.healthDimensions.length} />
+          <DashboardFact label="Governance findings" value={governanceHealthFindingCount} />
+          <DashboardFact label="Assessed" value={formatDateTime(governanceSummary.generatedAt)} />
+        </DashboardSection>
+
+        <DashboardSection title="Certification" action={onOpenReasoning ? { label: 'Open', onClick: onOpenReasoning } : undefined}>
+          <DashboardFact label="Decision certification" value={workflow?.currentDecision?.certificationStatus ?? 'Not projected'} />
+          <DashboardFact label="Reasoning result" value={reasoningSummary.certificationResult ?? 'Not projected'} />
+          <DashboardFact label="Latest run" value={formatDateTime(reasoningSummary.lastCertificationAt)} />
+          <DashboardFact label="Current status" value={certificationStatus} />
+        </DashboardSection>
+
+        <DashboardSection title="Diagnostics" action={onOpenContinuity ? { label: 'Open', onClick: onOpenContinuity } : undefined}>
+          <DashboardFact label="Workflow issues" value={workflow ? workflowDiagnosticCount : 'Not loaded'} />
+          <DashboardFact label="Governance diagnostics" value={governanceDiagnosticCount} />
+          <DashboardFact label="Continuity warnings" value={continuityWarningCount} />
+          <DashboardFact label="Total surfaced" value={workflow ? diagnosticCount : governanceDiagnosticCount + continuityDiagnosticCount} />
+        </DashboardSection>
       </div>
     </>
   )
