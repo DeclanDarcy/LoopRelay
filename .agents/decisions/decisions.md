@@ -2,9 +2,8 @@
 
 ## Newly Authorized
 
-- Continue Milestone 6 with a capture-attempt result model for skipped and deduplicated inferred reasoning capture.
-- Skipped or deduplicated inferred capture must be observable without creating a fake reasoning event.
-- The capture-attempt result should expose attempted capture mode, result, skip reason, duplicate signal, existing event reference, source transition, source artifact, source timestamp, and diagnostics.
-- Capture-attempt results should distinguish captured, skipped, and duplicate outcomes.
-- Wire only the surfaces that need to show capture attempts.
-- Skipped attempts must not be treated as durable reasoning events.
+- Continue Milestone 6 with structured authority-boundary error responses next.
+- Boundary violations should explicitly model why a request was rejected, not only that it failed.
+- Structured boundary responses should include boundary rule, owning domain, rejected assertion, allowed alternative, diagnostic detail, and severity where applicable.
+- Preserve the pattern: domain authority emits structured semantic projection; transport and typed clients carry it; UI renders it without recomputing authority.
+- After authority-boundary diagnostics are complete, continue remaining Milestone 6 work through the same structured transparency pattern for lifecycle risk and grouped diagnostics.

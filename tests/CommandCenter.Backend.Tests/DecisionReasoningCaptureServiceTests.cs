@@ -43,11 +43,31 @@ public sealed class DecisionReasoningCaptureServiceTests
             reasoningRepository);
         OperationalContextProposal proposal = CreatePromotedOperationalContextProposal(repository.Id);
 
-        await captureService.CaptureOperationalContextPromotionAsync(repository.Id, proposal);
-        await captureService.CaptureOperationalContextPromotionAsync(repository.Id, proposal);
+        IReadOnlyList<ReasoningCaptureAttemptResult> firstAttempts =
+            await captureService.CaptureOperationalContextPromotionAsync(repository.Id, proposal);
+        IReadOnlyList<ReasoningCaptureAttemptResult> secondAttempts =
+            await captureService.CaptureOperationalContextPromotionAsync(repository.Id, proposal);
 
         IReadOnlyList<ReasoningEvent> reasoningEvents = await reasoningRepository.ListEventsAsync(repository);
         Assert.Equal(2, reasoningEvents.Count);
+        Assert.Equal(2, firstAttempts.Count(attempt => attempt.Result == ReasoningCaptureAttemptOutcome.Captured));
+        ReasoningCaptureAttemptResult skippedAttempt = Assert.Single(
+            firstAttempts,
+            attempt => attempt.Result == ReasoningCaptureAttemptOutcome.Skipped);
+        Assert.Equal(ReasoningCaptureMode.Inferred, skippedAttempt.AttemptedCaptureMode);
+        Assert.Equal("OperationalContextPromotionReasoningObserved", skippedAttempt.SourceTransition);
+        Assert.Equal(".agents/operational_context/proposals/oc-proposal-1/metadata.json", skippedAttempt.SourceArtifact);
+        Assert.Equal(proposal.Promotion.PromotedAt, skippedAttempt.SourceTimestamp);
+        Assert.Contains("QuestionAdded", skippedAttempt.SkipReason);
+        Assert.Equal(2, secondAttempts.Count(attempt => attempt.Result == ReasoningCaptureAttemptOutcome.Duplicate));
+        Assert.All(
+            secondAttempts.Where(attempt => attempt.Result == ReasoningCaptureAttemptOutcome.Duplicate),
+            attempt =>
+            {
+                Assert.NotNull(attempt.ExistingEventReference);
+                Assert.Null(attempt.CapturedEventReference);
+                Assert.StartsWith("Fingerprint ", attempt.DuplicateSignal);
+            });
         Assert.Contains(reasoningEvents, reasoningEvent =>
             reasoningEvent.Family == ReasoningEventFamily.ConstraintEvolution &&
             reasoningEvent.Type == ReasoningEventType.ConstraintIntroduced &&
@@ -162,10 +182,20 @@ public sealed class DecisionReasoningCaptureServiceTests
             reasoningRepository);
         ExecutionSession session = CreateDecidedExecutionSession(repository, accepted: true, "Direction shifted after review.");
 
-        await captureService.CaptureExecutionHandoffDecisionAsync(session, accepted: true);
-        await captureService.CaptureExecutionHandoffDecisionAsync(session, accepted: true);
+        ReasoningCaptureAttemptResult firstAttempt =
+            await captureService.CaptureExecutionHandoffDecisionAsync(session, accepted: true);
+        ReasoningCaptureAttemptResult secondAttempt =
+            await captureService.CaptureExecutionHandoffDecisionAsync(session, accepted: true);
 
         ReasoningEvent reasoningEvent = Assert.Single(await reasoningRepository.ListEventsAsync(repository));
+        Assert.Equal(ReasoningCaptureAttemptOutcome.Captured, firstAttempt.Result);
+        Assert.Equal("ExecutionHandoffAcceptedReasoningObserved", firstAttempt.SourceTransition);
+        Assert.Equal(".agents/handoffs/handoff.md", firstAttempt.SourceArtifact);
+        Assert.Equal(session.AcceptedAt, firstAttempt.SourceTimestamp);
+        Assert.NotNull(firstAttempt.CapturedEventReference);
+        Assert.Equal(ReasoningCaptureAttemptOutcome.Duplicate, secondAttempt.Result);
+        Assert.NotNull(secondAttempt.ExistingEventReference);
+        Assert.Equal(reasoningEvent.Id, secondAttempt.ExistingEventReference?.Id);
         Assert.Equal(ReasoningEventFamily.Direction, reasoningEvent.Family);
         Assert.Equal(ReasoningEventType.DirectionShifted, reasoningEvent.Type);
         Assert.Equal("InferredExecutionHandoffAcceptance", reasoningEvent.Provenance.SourceKind);
@@ -198,9 +228,15 @@ public sealed class DecisionReasoningCaptureServiceTests
             reasoningRepository);
         ExecutionSession session = CreateDecidedExecutionSession(repository, accepted: true, "accepted");
 
-        await captureService.CaptureExecutionHandoffDecisionAsync(session, accepted: true);
+        ReasoningCaptureAttemptResult attempt =
+            await captureService.CaptureExecutionHandoffDecisionAsync(session, accepted: true);
 
         Assert.Empty(await reasoningRepository.ListEventsAsync(repository));
+        Assert.Equal(ReasoningCaptureAttemptOutcome.Skipped, attempt.Result);
+        Assert.Equal("ExecutionHandoffAcceptedReasoningObserved", attempt.SourceTransition);
+        Assert.Equal(".agents/handoffs/handoff.md", attempt.SourceArtifact);
+        Assert.Equal(session.AcceptedAt, attempt.SourceTimestamp);
+        Assert.Contains("workflow-only", attempt.SkipReason);
     }
 
     [Fact]
@@ -330,10 +366,26 @@ public sealed class DecisionReasoningCaptureServiceTests
             reasoningRepository);
         DecisionGovernanceReport report = CreateGovernanceReport(repository.Id);
 
-        await captureService.CaptureGovernanceContradictionsAsync(repository.Id, report);
-        await captureService.CaptureGovernanceContradictionsAsync(repository.Id, report);
+        IReadOnlyList<ReasoningCaptureAttemptResult> firstAttempts =
+            await captureService.CaptureGovernanceContradictionsAsync(repository.Id, report);
+        IReadOnlyList<ReasoningCaptureAttemptResult> secondAttempts =
+            await captureService.CaptureGovernanceContradictionsAsync(repository.Id, report);
 
         ReasoningEvent reasoningEvent = Assert.Single(await reasoningRepository.ListEventsAsync(repository));
+        ReasoningCaptureAttemptResult capturedAttempt = Assert.Single(
+            firstAttempts,
+            attempt => attempt.Result == ReasoningCaptureAttemptOutcome.Captured);
+        Assert.Equal("GovernanceContradictionObserved", capturedAttempt.SourceTransition);
+        Assert.Equal(".agents/decisions/governance/governance.202606230000000000000.json", capturedAttempt.SourceArtifact);
+        Assert.NotNull(capturedAttempt.CapturedEventReference);
+        ReasoningCaptureAttemptResult skippedAttempt = Assert.Single(
+            firstAttempts,
+            attempt => attempt.Result == ReasoningCaptureAttemptOutcome.Skipped);
+        Assert.Contains("DecisionCoverage", skippedAttempt.SkipReason);
+        ReasoningCaptureAttemptResult duplicateAttempt = Assert.Single(
+            secondAttempts,
+            attempt => attempt.Result == ReasoningCaptureAttemptOutcome.Duplicate);
+        Assert.Equal(reasoningEvent.Id, duplicateAttempt.ExistingEventReference?.Id);
         Assert.Equal(ReasoningEventFamily.Contradiction, reasoningEvent.Family);
         Assert.Equal(ReasoningEventType.ContradictionIdentified, reasoningEvent.Type);
         Assert.Equal("InferredGovernanceContradiction", reasoningEvent.Provenance.SourceKind);

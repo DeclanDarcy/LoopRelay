@@ -6,30 +6,30 @@ namespace CommandCenter.Backend.Services;
 
 public interface IDecisionReasoningCaptureService
 {
-    Task CaptureProposalResolvedAsync(
+    Task<IReadOnlyList<ReasoningCaptureAttemptResult>> CaptureProposalResolvedAsync(
         Guid repositoryId,
         Decision decision,
         ResolveDecisionCommand command);
 
-    Task CaptureDecisionSupersededAsync(
+    Task<IReadOnlyList<ReasoningCaptureAttemptResult>> CaptureDecisionSupersededAsync(
         Guid repositoryId,
         Decision supersededDecision,
         SupersedeDecisionCommand command);
 
-    Task CaptureDecisionArchivedAsync(
+    Task<IReadOnlyList<ReasoningCaptureAttemptResult>> CaptureDecisionArchivedAsync(
         Guid repositoryId,
         Decision archivedDecision,
         ArchiveDecisionCommand command);
 
-    Task CaptureGovernanceContradictionsAsync(
+    Task<IReadOnlyList<ReasoningCaptureAttemptResult>> CaptureGovernanceContradictionsAsync(
         Guid repositoryId,
         DecisionGovernanceReport report);
 
-    Task CaptureOperationalContextPromotionAsync(
+    Task<IReadOnlyList<ReasoningCaptureAttemptResult>> CaptureOperationalContextPromotionAsync(
         Guid repositoryId,
         OperationalContextProposal proposal);
 
-    Task CaptureExecutionHandoffDecisionAsync(
+    Task<ReasoningCaptureAttemptResult> CaptureExecutionHandoffDecisionAsync(
         ExecutionSession session,
         bool accepted);
 }

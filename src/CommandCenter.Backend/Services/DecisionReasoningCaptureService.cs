@@ -25,7 +25,7 @@ public sealed class DecisionReasoningCaptureService(
 {
     private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
 
-    public async Task CaptureProposalResolvedAsync(
+    public async Task<IReadOnlyList<ReasoningCaptureAttemptResult>> CaptureProposalResolvedAsync(
         Guid repositoryId,
         Decision decision,
         ResolveDecisionCommand command)
@@ -54,7 +54,7 @@ public sealed class DecisionReasoningCaptureService(
             ResolvedAt = resolution.ResolvedAt
         });
 
-        ReasoningEvent reasoningEvent = await GetOrCreateProposalResolvedEventAsync(
+        ReasoningCaptureAttemptResult eventAttempt = await GetOrCreateProposalResolvedEventAsync(
             repository,
             decision,
             proposal,
@@ -62,6 +62,7 @@ public sealed class DecisionReasoningCaptureService(
             rationale,
             resolver,
             transitionFingerprint);
+        string reasoningEventId = RequireCapturedOrExistingEventId(eventAttempt);
 
         await CreateDecisionDerivesFromProposalRelationshipIfMissingAsync(
             repository,
@@ -70,10 +71,12 @@ public sealed class DecisionReasoningCaptureService(
             rationale,
             resolver,
             transitionFingerprint,
-            reasoningEvent.Id);
+            reasoningEventId);
+
+        return [eventAttempt];
     }
 
-    public async Task CaptureDecisionSupersededAsync(
+    public async Task<IReadOnlyList<ReasoningCaptureAttemptResult>> CaptureDecisionSupersededAsync(
         Guid repositoryId,
         Decision supersededDecision,
         SupersedeDecisionCommand command)
@@ -98,13 +101,14 @@ public sealed class DecisionReasoningCaptureService(
             Resolver = resolver
         });
 
-        ReasoningEvent reasoningEvent = await GetOrCreateDecisionSupersededEventAsync(
+        ReasoningCaptureAttemptResult eventAttempt = await GetOrCreateDecisionSupersededEventAsync(
             repository,
             supersededDecision,
             replacementDecision,
             rationale,
             resolver,
             transitionFingerprint);
+        string reasoningEventId = RequireCapturedOrExistingEventId(eventAttempt);
 
         await CreateSupersedesRelationshipIfMissingAsync(
             repository,
@@ -113,10 +117,12 @@ public sealed class DecisionReasoningCaptureService(
             rationale,
             resolver,
             transitionFingerprint,
-            reasoningEvent.Id);
+            reasoningEventId);
+
+        return [eventAttempt];
     }
 
-    public async Task CaptureDecisionArchivedAsync(
+    public async Task<IReadOnlyList<ReasoningCaptureAttemptResult>> CaptureDecisionArchivedAsync(
         Guid repositoryId,
         Decision archivedDecision,
         ArchiveDecisionCommand command)
@@ -142,16 +148,18 @@ public sealed class DecisionReasoningCaptureService(
             Resolver = resolver
         });
 
-        await GetOrCreateDecisionArchivedEventAsync(
+        ReasoningCaptureAttemptResult eventAttempt = await GetOrCreateDecisionArchivedEventAsync(
             repository,
             archivedDecision,
             archiveEntry,
             rationale,
             resolver,
             transitionFingerprint);
+
+        return [eventAttempt];
     }
 
-    public async Task CaptureGovernanceContradictionsAsync(
+    public async Task<IReadOnlyList<ReasoningCaptureAttemptResult>> CaptureGovernanceContradictionsAsync(
         Guid repositoryId,
         DecisionGovernanceReport report)
     {
@@ -161,8 +169,21 @@ public sealed class DecisionReasoningCaptureService(
             throw new InvalidOperationException("Governance report belongs to a different repository.");
         }
 
-        foreach (DecisionGovernanceFinding finding in report.Findings.Where(IsContradictionFinding))
+        List<ReasoningCaptureAttemptResult> attempts = [];
+        foreach (DecisionGovernanceFinding finding in report.Findings)
         {
+            if (!IsContradictionFinding(finding))
+            {
+                attempts.Add(SkippedAttempt(
+                    "GovernanceContradictionObserved",
+                    ReasoningReferenceFactory.GovernanceReportPath(report.Id),
+                    report.GeneratedAt,
+                    "Governance finding did not represent a reasoning contradiction.",
+                    $"Finding {finding.Id} category {finding.Category} is not captured as inferred contradiction evidence.",
+                    ["Only consistency, supersession lineage, authority-boundary, execution projection readiness, and fingerprint integrity findings are captured."]));
+                continue;
+            }
+
             string transitionFingerprint = Fingerprint(new
             {
                 Transition = "GovernanceContradictionObserved",
@@ -173,15 +194,17 @@ public sealed class DecisionReasoningCaptureService(
                 Finding = finding
             });
 
-            await GetOrCreateGovernanceContradictionEventAsync(
+            attempts.Add(await GetOrCreateGovernanceContradictionEventAsync(
                 repository,
                 report,
                 finding,
-                transitionFingerprint);
+                transitionFingerprint));
         }
+
+        return attempts;
     }
 
-    public async Task CaptureOperationalContextPromotionAsync(
+    public async Task<IReadOnlyList<ReasoningCaptureAttemptResult>> CaptureOperationalContextPromotionAsync(
         Guid repositoryId,
         OperationalContextProposal proposal)
     {
@@ -197,10 +220,18 @@ public sealed class DecisionReasoningCaptureService(
             throw new InvalidOperationException("Operational-context proposal does not contain successful promotion metadata.");
         }
 
+        List<ReasoningCaptureAttemptResult> attempts = [];
         foreach (OperationalContextSemanticChange change in proposal.SemanticChanges)
         {
             if (!TryClassifyOperationalContextPromotionChange(change, out ReasoningEventFamily family, out ReasoningEventType type, out string tag))
             {
+                attempts.Add(SkippedAttempt(
+                    "OperationalContextPromotionReasoningObserved",
+                    ReasoningReferenceFactory.OperationalContextProposalPath(proposal.ProposalId),
+                    proposal.Promotion.PromotedAt,
+                    "Promoted operational-context change did not map to a reasoning event family.",
+                    $"Semantic change {change.Type} in {change.Section} is not captured as inferred reasoning.",
+                    [$"Change description: {change.Description}"]));
                 continue;
             }
 
@@ -215,18 +246,20 @@ public sealed class DecisionReasoningCaptureService(
                 SemanticChange = change
             });
 
-            await GetOrCreateOperationalContextPromotionEventAsync(
+            attempts.Add(await GetOrCreateOperationalContextPromotionEventAsync(
                 repository,
                 proposal,
                 change,
                 family,
                 type,
                 tag,
-                transitionFingerprint);
+                transitionFingerprint));
         }
+
+        return attempts;
     }
 
-    public async Task CaptureExecutionHandoffDecisionAsync(
+    public async Task<ReasoningCaptureAttemptResult> CaptureExecutionHandoffDecisionAsync(
         ExecutionSession session,
         bool accepted)
     {
@@ -234,14 +267,26 @@ public sealed class DecisionReasoningCaptureService(
         string? handoffPath = NormalizeRelativePath(session.HandoffPath);
         if (handoffPath is null)
         {
-            return;
+            return SkippedAttempt(
+                accepted ? "ExecutionHandoffAcceptedReasoningObserved" : "ExecutionHandoffRejectedReasoningObserved",
+                null,
+                accepted ? session.AcceptedAt : session.RejectedAt,
+                "Execution session did not provide a handoff artifact.",
+                "No handoff path was available for inferred reasoning capture.",
+                [$"Execution session: {session.Id:D}"]);
         }
 
         string? handoffContent = await artifactStore.ReadAsync(ArtifactPath.ResolveRepositoryPath(repository, handoffPath));
         if (string.IsNullOrWhiteSpace(handoffContent) &&
             string.IsNullOrWhiteSpace(session.DecisionNote))
         {
-            return;
+            return SkippedAttempt(
+                accepted ? "ExecutionHandoffAcceptedReasoningObserved" : "ExecutionHandoffRejectedReasoningObserved",
+                handoffPath,
+                accepted ? session.AcceptedAt : session.RejectedAt,
+                "Execution handoff did not contain semantic content.",
+                "Neither the handoff artifact nor the decision note contained text to classify.",
+                [$"Execution session: {session.Id:D}"]);
         }
 
         string semanticText = $"{session.DecisionNote}\n{handoffContent}";
@@ -253,7 +298,13 @@ public sealed class DecisionReasoningCaptureService(
                 out string tag,
                 out string signal))
         {
-            return;
+            return SkippedAttempt(
+                accepted ? "ExecutionHandoffAcceptedReasoningObserved" : "ExecutionHandoffRejectedReasoningObserved",
+                handoffPath,
+                accepted ? session.AcceptedAt : session.RejectedAt,
+                "Execution handoff content did not match a reasoning capture signal.",
+                "The handoff transition was workflow-only from the reasoning perspective.",
+                [$"Execution session: {session.Id:D}"]);
         }
 
         DateTimeOffset? decidedAt = accepted ? session.AcceptedAt : session.RejectedAt;
@@ -280,7 +331,7 @@ public sealed class DecisionReasoningCaptureService(
             Signal = signal
         });
 
-        await GetOrCreateExecutionHandoffDecisionEventAsync(
+        return await GetOrCreateExecutionHandoffDecisionEventAsync(
             repository,
             session,
             accepted,
@@ -294,7 +345,7 @@ public sealed class DecisionReasoningCaptureService(
             transitionFingerprint);
     }
 
-    private async Task<ReasoningEvent> GetOrCreateProposalResolvedEventAsync(
+    private async Task<ReasoningCaptureAttemptResult> GetOrCreateProposalResolvedEventAsync(
         Repository repository,
         Decision decision,
         DecisionResolvedProposalSnapshot proposal,
@@ -309,10 +360,15 @@ public sealed class DecisionReasoningCaptureService(
             string.Equals(reasoningEvent.Provenance.Fingerprint, transitionFingerprint, StringComparison.Ordinal));
         if (existing is not null)
         {
-            return existing;
+            return DuplicateAttempt(
+                "ProposalResolved",
+                ReasoningReferenceFactory.ProposalPath(proposal.ProposalId),
+                resolution.ResolvedAt,
+                "Proposal resolution already has inferred reasoning evidence.",
+                existing);
         }
 
-        return await reasoningRepository.CreateEventAsync(
+        ReasoningEvent created = await reasoningRepository.CreateEventAsync(
             repository,
             new CreateReasoningEventCommand(
                 ReasoningEventFamily.Evidence,
@@ -329,6 +385,12 @@ public sealed class DecisionReasoningCaptureService(
                 Provenance(proposal, rationale, resolver, transitionFingerprint),
                 [],
                 ["decision-evolution", "inferred-capture", "proposal-resolution"]));
+        return CapturedAttempt(
+            "ProposalResolved",
+            ReasoningReferenceFactory.ProposalPath(proposal.ProposalId),
+            resolution.ResolvedAt,
+            "Captured proposal resolution as inferred reasoning evidence.",
+            created);
     }
 
     private async Task CreateDecisionDerivesFromProposalRelationshipIfMissingAsync(
@@ -370,7 +432,7 @@ public sealed class DecisionReasoningCaptureService(
         }
     }
 
-    private async Task<ReasoningEvent> GetOrCreateDecisionSupersededEventAsync(
+    private async Task<ReasoningCaptureAttemptResult> GetOrCreateDecisionSupersededEventAsync(
         Repository repository,
         Decision supersededDecision,
         Decision replacementDecision,
@@ -384,10 +446,15 @@ public sealed class DecisionReasoningCaptureService(
             string.Equals(reasoningEvent.Provenance.Fingerprint, transitionFingerprint, StringComparison.Ordinal));
         if (existing is not null)
         {
-            return existing;
+            return DuplicateAttempt(
+                "DecisionSuperseded",
+                ReasoningReferenceFactory.DecisionPath(supersededDecision.Id.Value),
+                supersededDecision.Metadata.UpdatedAt,
+                "Decision supersession already has inferred reasoning evidence.",
+                existing);
         }
 
-        return await reasoningRepository.CreateEventAsync(
+        ReasoningEvent created = await reasoningRepository.CreateEventAsync(
             repository,
             new CreateReasoningEventCommand(
                 ReasoningEventFamily.DecisionEvolution,
@@ -409,6 +476,12 @@ public sealed class DecisionReasoningCaptureService(
                     transitionFingerprint),
                 [],
                 ["decision-evolution", "inferred-capture", "supersession"]));
+        return CapturedAttempt(
+            "DecisionSuperseded",
+            ReasoningReferenceFactory.DecisionPath(supersededDecision.Id.Value),
+            supersededDecision.Metadata.UpdatedAt,
+            "Captured decision supersession as inferred reasoning evidence.",
+            created);
     }
 
     private async Task CreateSupersedesRelationshipIfMissingAsync(
@@ -456,7 +529,7 @@ public sealed class DecisionReasoningCaptureService(
         }
     }
 
-    private async Task<ReasoningEvent> GetOrCreateDecisionArchivedEventAsync(
+    private async Task<ReasoningCaptureAttemptResult> GetOrCreateDecisionArchivedEventAsync(
         Repository repository,
         Decision archivedDecision,
         DecisionHistoryEntry archiveEntry,
@@ -471,10 +544,15 @@ public sealed class DecisionReasoningCaptureService(
             string.Equals(reasoningEvent.Provenance.Fingerprint, transitionFingerprint, StringComparison.Ordinal));
         if (existing is not null)
         {
-            return existing;
+            return DuplicateAttempt(
+                "DecisionArchived",
+                ReasoningReferenceFactory.DecisionPath(archivedDecision.Id.Value),
+                archiveEntry.Timestamp,
+                "Decision archival already has inferred reasoning evidence.",
+                existing);
         }
 
-        return await reasoningRepository.CreateEventAsync(
+        ReasoningEvent created = await reasoningRepository.CreateEventAsync(
             repository,
             new CreateReasoningEventCommand(
                 ReasoningEventFamily.DecisionEvolution,
@@ -493,9 +571,15 @@ public sealed class DecisionReasoningCaptureService(
                     transitionFingerprint),
                 [],
                 ["decision-evolution", "inferred-capture", "archival"]));
+        return CapturedAttempt(
+            "DecisionArchived",
+            ReasoningReferenceFactory.DecisionPath(archivedDecision.Id.Value),
+            archiveEntry.Timestamp,
+            "Captured decision archival as inferred reasoning evidence.",
+            created);
     }
 
-    private async Task<ReasoningEvent> GetOrCreateGovernanceContradictionEventAsync(
+    private async Task<ReasoningCaptureAttemptResult> GetOrCreateGovernanceContradictionEventAsync(
         Repository repository,
         DecisionGovernanceReport report,
         DecisionGovernanceFinding finding,
@@ -508,10 +592,15 @@ public sealed class DecisionReasoningCaptureService(
             string.Equals(reasoningEvent.Provenance.Fingerprint, transitionFingerprint, StringComparison.Ordinal));
         if (existing is not null)
         {
-            return existing;
+            return DuplicateAttempt(
+                "GovernanceContradictionObserved",
+                ReasoningReferenceFactory.GovernanceReportPath(report.Id),
+                report.GeneratedAt,
+                "Governance contradiction already has inferred reasoning evidence.",
+                existing);
         }
 
-        return await reasoningRepository.CreateEventAsync(
+        ReasoningEvent created = await reasoningRepository.CreateEventAsync(
             repository,
             new CreateReasoningEventCommand(
                 ReasoningEventFamily.Contradiction,
@@ -524,9 +613,15 @@ public sealed class DecisionReasoningCaptureService(
                 GovernanceProvenance(report, finding, transitionFingerprint),
                 [],
                 ["contradiction", "governance", "inferred-capture"]));
+        return CapturedAttempt(
+            "GovernanceContradictionObserved",
+            ReasoningReferenceFactory.GovernanceReportPath(report.Id),
+            report.GeneratedAt,
+            "Captured governance contradiction as inferred reasoning evidence.",
+            created);
     }
 
-    private async Task<ReasoningEvent> GetOrCreateOperationalContextPromotionEventAsync(
+    private async Task<ReasoningCaptureAttemptResult> GetOrCreateOperationalContextPromotionEventAsync(
         Repository repository,
         OperationalContextProposal proposal,
         OperationalContextSemanticChange change,
@@ -542,10 +637,15 @@ public sealed class DecisionReasoningCaptureService(
             string.Equals(reasoningEvent.Provenance.Fingerprint, transitionFingerprint, StringComparison.Ordinal));
         if (existing is not null)
         {
-            return existing;
+            return DuplicateAttempt(
+                "OperationalContextPromotionReasoningObserved",
+                ReasoningReferenceFactory.OperationalContextProposalPath(proposal.ProposalId),
+                proposal.Promotion.PromotedAt,
+                "Operational-context promotion already has inferred reasoning evidence.",
+                existing);
         }
 
-        return await reasoningRepository.CreateEventAsync(
+        ReasoningEvent created = await reasoningRepository.CreateEventAsync(
             repository,
             new CreateReasoningEventCommand(
                 family,
@@ -558,9 +658,15 @@ public sealed class DecisionReasoningCaptureService(
                 OperationalContextPromotionProvenance(proposal, change, transitionFingerprint),
                 [],
                 ["operational-context", "promotion", "inferred-capture", tag]));
+        return CapturedAttempt(
+            "OperationalContextPromotionReasoningObserved",
+            ReasoningReferenceFactory.OperationalContextProposalPath(proposal.ProposalId),
+            proposal.Promotion.PromotedAt,
+            "Captured promoted operational-context change as inferred reasoning evidence.",
+            created);
     }
 
-    private async Task<ReasoningEvent> GetOrCreateExecutionHandoffDecisionEventAsync(
+    private async Task<ReasoningCaptureAttemptResult> GetOrCreateExecutionHandoffDecisionEventAsync(
         Repository repository,
         ExecutionSession session,
         bool accepted,
@@ -580,11 +686,16 @@ public sealed class DecisionReasoningCaptureService(
             string.Equals(reasoningEvent.Provenance.Fingerprint, transitionFingerprint, StringComparison.Ordinal));
         if (existing is not null)
         {
-            return existing;
+            return DuplicateAttempt(
+                accepted ? "ExecutionHandoffAcceptedReasoningObserved" : "ExecutionHandoffRejectedReasoningObserved",
+                handoffPath,
+                accepted ? session.AcceptedAt : session.RejectedAt,
+                "Execution handoff decision already has inferred reasoning evidence.",
+                existing);
         }
 
         string sourceAction = accepted ? "accepted" : "rejected";
-        return await reasoningRepository.CreateEventAsync(
+        ReasoningEvent created = await reasoningRepository.CreateEventAsync(
             repository,
             new CreateReasoningEventCommand(
                 family,
@@ -597,6 +708,12 @@ public sealed class DecisionReasoningCaptureService(
                 ExecutionHandoffDecisionProvenance(session, sourceAction, handoffPath, transitionFingerprint),
                 [],
                 ["execution", "handoff", "inferred-capture", tag]));
+        return CapturedAttempt(
+            accepted ? "ExecutionHandoffAcceptedReasoningObserved" : "ExecutionHandoffRejectedReasoningObserved",
+            handoffPath,
+            accepted ? session.AcceptedAt : session.RejectedAt,
+            "Captured execution handoff decision as inferred reasoning evidence.",
+            created);
     }
 
     private async Task<Repository> GetRepositoryAsync(Guid repositoryId)
@@ -604,6 +721,95 @@ public sealed class DecisionReasoningCaptureService(
         Repository? repository = (await repositoryService.GetAllAsync())
             .FirstOrDefault(repository => repository.Id == repositoryId);
         return repository ?? throw new KeyNotFoundException($"Repository was not found: {repositoryId}");
+    }
+
+    private static ReasoningCaptureAttemptResult CapturedAttempt(
+        string sourceTransition,
+        string? sourceArtifact,
+        DateTimeOffset? sourceTimestamp,
+        string captureReason,
+        ReasoningEvent reasoningEvent)
+    {
+        return new ReasoningCaptureAttemptResult(
+            ReasoningCaptureMode.Inferred,
+            ReasoningCaptureAttemptOutcome.Captured,
+            sourceTransition,
+            sourceArtifact,
+            sourceTimestamp,
+            captureReason,
+            null,
+            DuplicateSignal(reasoningEvent),
+            null,
+            ReasoningEventReference(reasoningEvent),
+            []);
+    }
+
+    private static ReasoningCaptureAttemptResult DuplicateAttempt(
+        string sourceTransition,
+        string? sourceArtifact,
+        DateTimeOffset? sourceTimestamp,
+        string captureReason,
+        ReasoningEvent existingEvent)
+    {
+        return new ReasoningCaptureAttemptResult(
+            ReasoningCaptureMode.Inferred,
+            ReasoningCaptureAttemptOutcome.Duplicate,
+            sourceTransition,
+            sourceArtifact,
+            sourceTimestamp,
+            captureReason,
+            "Equivalent inferred reasoning evidence already exists.",
+            DuplicateSignal(existingEvent),
+            ReasoningEventReference(existingEvent),
+            null,
+            []);
+    }
+
+    private static ReasoningCaptureAttemptResult SkippedAttempt(
+        string sourceTransition,
+        string? sourceArtifact,
+        DateTimeOffset? sourceTimestamp,
+        string captureReason,
+        string skipReason,
+        IReadOnlyList<string> diagnostics)
+    {
+        return new ReasoningCaptureAttemptResult(
+            ReasoningCaptureMode.Inferred,
+            ReasoningCaptureAttemptOutcome.Skipped,
+            sourceTransition,
+            sourceArtifact,
+            sourceTimestamp,
+            captureReason,
+            skipReason,
+            null,
+            null,
+            null,
+            diagnostics);
+    }
+
+    private static string RequireCapturedOrExistingEventId(ReasoningCaptureAttemptResult attempt)
+    {
+        return attempt.CapturedEventReference?.Id ??
+            attempt.ExistingEventReference?.Id ??
+            throw new InvalidOperationException("Reasoning capture attempt did not include a captured or existing event reference.");
+    }
+
+    private static ReasoningReference ReasoningEventReference(ReasoningEvent reasoningEvent)
+    {
+        return new ReasoningReference(
+            ReasoningReferenceKind.ReasoningEvent,
+            reasoningEvent.Id,
+            null,
+            reasoningEvent.Title,
+            reasoningEvent.Narrative.Summary,
+            reasoningEvent.Provenance.Fingerprint);
+    }
+
+    private static string? DuplicateSignal(ReasoningEvent reasoningEvent)
+    {
+        return string.IsNullOrWhiteSpace(reasoningEvent.Provenance.Fingerprint)
+            ? null
+            : $"Fingerprint {reasoningEvent.Provenance.Fingerprint}";
     }
 
     private static ReasoningReference DecisionReference(Decision decision)

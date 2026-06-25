@@ -40,7 +40,7 @@ Make reasoning conclusions explain their provenance, confidence, thresholds, rec
    - [x] Assisted
    - [x] Inferred
 - [x] For inferred capture, expose source transition, source artifact, capture reason, captured by, and source timestamp.
-- [ ] For skipped or deduplicated capture, expose skip reason, existing event id, and duplicate signal where relevant.
+- [x] For skipped or deduplicated capture, expose skip reason, existing event id, and duplicate signal where relevant.
 - [ ] Replace plain boundary errors with structured boundary error responses:
    - [ ] boundary rule
    - [ ] owning domain
