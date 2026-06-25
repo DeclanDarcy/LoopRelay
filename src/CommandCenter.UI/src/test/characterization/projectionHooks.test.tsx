@@ -425,6 +425,7 @@ function createContinuityDiagnostics(repositoryId = 'repo-alpha'): ContinuityDia
       lostCount: 0,
       resolvedCount: 0,
       semanticChanges: [],
+      timelineEntries: [],
       diagnosticGroups: [],
     },
     architectureTrend: emptyTrend,

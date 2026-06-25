@@ -22,7 +22,23 @@ export type OperationalEvolutionSummary = {
   lostCount: number
   resolvedCount: number
   semanticChanges: OperationalContextSemanticChange[]
+  timelineEntries: OperationalEvolutionTimelineEntry[]
   diagnosticGroups: ContinuityDiagnosticGroup[]
+}
+
+export type OperationalEvolutionTimelineEntry = {
+  outcome: string
+  semanticEventType: string
+  section: string
+  description: string
+  itemId?: string | null
+  previousState?: string | null
+  currentState?: string | null
+  reason?: string | null
+  identityBasis?: string | null
+  previousRevisionNumber?: number | null
+  currentRevisionNumber?: number | null
+  supportingEvidence: string[]
 }
 
 export type CompressionTrend = {

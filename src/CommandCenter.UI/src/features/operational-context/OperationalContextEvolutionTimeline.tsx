@@ -1,7 +1,8 @@
-import type { OperationalContextSemanticChange } from '../../types'
+import type { OperationalContextSemanticChange, OperationalEvolutionTimelineEntry } from '../../types'
 
 type OperationalContextEvolutionTimelineProps = {
-  semanticChanges: OperationalContextSemanticChange[]
+  semanticChanges?: OperationalContextSemanticChange[]
+  timelineEntries?: OperationalEvolutionTimelineEntry[]
 }
 
 const semanticChangeOutcomes: Record<string, string> = {
@@ -44,12 +45,27 @@ function getOutcome(change: OperationalContextSemanticChange) {
 }
 
 export function OperationalContextEvolutionTimeline({
-  semanticChanges,
+  semanticChanges = [],
+  timelineEntries,
 }: OperationalContextEvolutionTimelineProps) {
-  const timelineItems = semanticChanges.map((change, index) => ({
-    change,
-    outcome: getOutcome(change),
-    key: `${change.type}-${change.itemId ?? index}`,
+  const entries =
+    timelineEntries ??
+    semanticChanges.map((change): OperationalEvolutionTimelineEntry => ({
+      outcome: getOutcome(change),
+      semanticEventType: change.type,
+      section: change.section,
+      description: change.description,
+      itemId: change.itemId,
+      previousState: change.previousState,
+      currentState: change.currentState,
+      reason: change.modificationReason,
+      identityBasis: change.identityBasis,
+      supportingEvidence: change.supportingEvidence,
+    }))
+  const timelineItems = entries.map((entry, index) => ({
+    entry,
+    outcome: entry.outcome || 'Other',
+    key: `${entry.semanticEventType}-${entry.itemId ?? index}`,
   }))
   const groupedItems = outcomeOrder
     .map((outcome) => ({
@@ -69,14 +85,14 @@ export function OperationalContextEvolutionTimeline({
             <div className="operational-evolution-lane" key={group.outcome}>
               <h6>{group.outcome}</h6>
               <ol>
-                {group.items.map(({ change, outcome, key }) => (
+                {group.items.map(({ entry, outcome, key }) => (
                   <li className="operational-evolution-item" data-outcome={outcome} key={key}>
                     <div className="operational-evolution-item-header">
-                      <strong>{change.description}</strong>
-                      <span>{change.type}</span>
+                      <strong>{entry.description}</strong>
+                      <span>{entry.semanticEventType}</span>
                     </div>
-                    <span className="operational-evolution-section">{change.section}</span>
-                    <EvolutionFacts change={change} />
+                    <span className="operational-evolution-section">{entry.section}</span>
+                    <EvolutionFacts entry={entry} />
                   </li>
                 ))}
               </ol>
@@ -88,13 +104,15 @@ export function OperationalContextEvolutionTimeline({
   )
 }
 
-function EvolutionFacts({ change }: { change: OperationalContextSemanticChange }) {
+function EvolutionFacts({ entry }: { entry: OperationalEvolutionTimelineEntry }) {
   const facts = [
-    change.previousState ? ['Previous state', change.previousState] : null,
-    change.currentState ? ['Current state', change.currentState] : null,
-    change.modificationReason ? ['Reason', change.modificationReason] : null,
-    change.identityBasis ? ['Identity basis', change.identityBasis] : null,
-    change.itemId ? ['Item id', change.itemId] : null,
+    entry.previousState ? ['Previous state', entry.previousState] : null,
+    entry.currentState ? ['Current state', entry.currentState] : null,
+    entry.reason ? ['Reason', entry.reason] : null,
+    entry.identityBasis ? ['Identity basis', entry.identityBasis] : null,
+    entry.itemId ? ['Item id', entry.itemId] : null,
+    entry.previousRevisionNumber ? ['Previous revision', String(entry.previousRevisionNumber)] : null,
+    entry.currentRevisionNumber ? ['Current revision', String(entry.currentRevisionNumber)] : null,
   ].filter((fact): fact is [string, string] => fact !== null)
 
   return (
@@ -102,17 +120,17 @@ function EvolutionFacts({ change }: { change: OperationalContextSemanticChange }
       {facts.length > 0 ? (
         <dl className="operational-evolution-facts">
           {facts.map(([label, value]) => (
-            <div key={`${change.type}-${label}`}>
+            <div key={`${entry.semanticEventType}-${label}`}>
               <dt>{label}</dt>
               <dd>{value}</dd>
             </div>
           ))}
         </dl>
       ) : null}
-      {change.supportingEvidence.length > 0 ? (
-        <ul className="operational-evolution-evidence" aria-label={`Evidence for ${change.type}`}>
-          {change.supportingEvidence.map((evidence) => (
-            <li key={`${change.type}-${evidence}`}>{evidence}</li>
+      {entry.supportingEvidence.length > 0 ? (
+        <ul className="operational-evolution-evidence" aria-label={`Evidence for ${entry.semanticEventType}`}>
+          {entry.supportingEvidence.map((evidence) => (
+            <li key={`${entry.semanticEventType}-${evidence}`}>{evidence}</li>
           ))}
         </ul>
       ) : null}

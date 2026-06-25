@@ -158,6 +158,7 @@ public sealed class ContinuityDiagnosticsService(
         IReadOnlyList<OperationalContextSemanticChange> changes = diffService.Compare(revisions[^2].Document, revisions[^1].Document);
         int resolvedCount = CountResolved(changes) + CountResolutionEvidence(revisions, "resolved question") + CountResolutionEvidence(revisions, "retired risk");
         int removedCount = changes.Count(IsRemovedChange);
+        IReadOnlyList<OperationalEvolutionTimelineEntry> timelineEntries = BuildTimelineEntries(revisions[^2], revisions[^1], changes);
         OperationalEvolutionSummary summary = new()
         {
             AddedCount = changes.Count(IsAddedChange),
@@ -167,6 +168,7 @@ public sealed class ContinuityDiagnosticsService(
             LostCount = Math.Max(0, removedCount - resolvedCount),
             ResolvedCount = resolvedCount,
             SemanticChanges = changes,
+            TimelineEntries = timelineEntries,
             DiagnosticGroups = BuildOperationalEvolutionDiagnosticGroups(changes, removedCount, resolvedCount)
         };
         return summary;
@@ -534,6 +536,98 @@ public sealed class ContinuityDiagnosticsService(
         return previousItems.Intersect(currentItems, StringComparer.OrdinalIgnoreCase).Count();
     }
 
+    private static IReadOnlyList<OperationalEvolutionTimelineEntry> BuildTimelineEntries(
+        RevisionEntry previous,
+        RevisionEntry current,
+        IReadOnlyList<OperationalContextSemanticChange> changes)
+    {
+        List<KnownItemEntry> previousItems = EnumerateKnownItemEntries(previous.Document).ToList();
+        List<KnownItemEntry> currentItems = EnumerateKnownItemEntries(current.Document).ToList();
+        var entries = new List<OperationalEvolutionTimelineEntry>();
+
+        foreach (OperationalContextSemanticChange change in changes)
+        {
+            string outcome = OutcomeFor(change, current.Document);
+            KnownItemEntry? previousItem = FindItem(previousItems, change.ItemId, change.PreviousState);
+            KnownItemEntry? currentItem = FindItem(currentItems, change.ItemId, change.CurrentState);
+            string? previousState = change.PreviousState ?? previousItem?.Item.Text ?? RemovedDescriptionState(change);
+            string? currentState = change.CurrentState ?? currentItem?.Item.Text ?? AddedDescriptionState(change);
+            string? resolutionEvidence = outcome == "Resolved"
+                ? FindResolutionEvidence(current.Document, previousState)
+                : null;
+
+            entries.Add(new OperationalEvolutionTimelineEntry
+            {
+                Outcome = outcome,
+                SemanticEventType = change.Type.ToString(),
+                Section = change.Section,
+                Description = change.Description,
+                ItemId = change.ItemId,
+                PreviousState = previousState,
+                CurrentState = currentState ?? resolutionEvidence,
+                Reason = TimelineReasonFor(change, outcome, resolutionEvidence),
+                IdentityBasis = change.IdentityBasis,
+                PreviousRevisionNumber = previous.Snapshot.RevisionNumber,
+                CurrentRevisionNumber = current.Snapshot.RevisionNumber,
+                SupportingEvidence = TimelineEvidenceFor(change, previous.Snapshot, current.Snapshot, resolutionEvidence)
+            });
+        }
+
+        HashSet<string> changedPreviousStates = changes
+            .Select(change => change.PreviousState ?? RemovedDescriptionState(change))
+            .Where(state => !string.IsNullOrWhiteSpace(state))
+            .Select(state => Normalize(state!))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> changedCurrentStates = changes
+            .Select(change => change.CurrentState ?? AddedDescriptionState(change))
+            .Where(state => !string.IsNullOrWhiteSpace(state))
+            .Select(state => Normalize(state!))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (KnownItemEntry previousItem in previousItems.OrderBy(item => item.Section, StringComparer.OrdinalIgnoreCase).ThenBy(item => item.Item.Text, StringComparer.OrdinalIgnoreCase))
+        {
+            string normalized = Normalize(previousItem.Item.Text);
+            if (changedPreviousStates.Contains(normalized) || changedCurrentStates.Contains(normalized))
+            {
+                continue;
+            }
+
+            KnownItemEntry? currentItem = currentItems.FirstOrDefault(item =>
+                string.Equals(Normalize(item.Item.Text), normalized, StringComparison.OrdinalIgnoreCase));
+            if (currentItem is null)
+            {
+                continue;
+            }
+
+            entries.Add(new OperationalEvolutionTimelineEntry
+            {
+                Outcome = "Preserved",
+                SemanticEventType = "StableUnderstandingPreserved",
+                Section = previousItem.Section,
+                Description = $"Item preserved in {previousItem.Section}: {previousItem.Item.Text}",
+                ItemId = string.IsNullOrWhiteSpace(currentItem.Item.Id) ? previousItem.Item.Id : currentItem.Item.Id,
+                PreviousState = previousItem.Item.Text,
+                CurrentState = currentItem.Item.Text,
+                Reason = "The normalized operational-context item is present in both compared revisions.",
+                IdentityBasis = "normalized-state",
+                PreviousRevisionNumber = previous.Snapshot.RevisionNumber,
+                CurrentRevisionNumber = current.Snapshot.RevisionNumber,
+                SupportingEvidence =
+                [
+                    $"Previous revision: {previous.Snapshot.RevisionNumber} ({previous.Snapshot.RelativePath})",
+                    $"Current revision: {current.Snapshot.RevisionNumber} ({current.Snapshot.RelativePath})",
+                    $"Section: {previousItem.Section}"
+                ]
+            });
+        }
+
+        return entries
+            .OrderBy(entry => OutcomeOrder(entry.Outcome))
+            .ThenBy(entry => entry.Section, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(entry => entry.Description, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
     private static IEnumerable<OperationalContextItem> EnumerateKnownItems(OperationalContextDocument document)
     {
         return document.CurrentMentalModel
@@ -545,6 +639,223 @@ public sealed class ContinuityDiagnosticsService(
             .Concat(document.OpenQuestions)
             .Concat(document.ActiveRisks)
             .Concat(document.RecentUnderstandingChanges);
+    }
+
+    private static IEnumerable<KnownItemEntry> EnumerateKnownItemEntries(OperationalContextDocument document)
+    {
+        foreach (OperationalContextItem item in document.CurrentMentalModel)
+        {
+            yield return new KnownItemEntry("Current Mental Model", item);
+        }
+
+        foreach (OperationalContextItem item in document.Architecture)
+        {
+            yield return new KnownItemEntry("Architecture", item);
+        }
+
+        foreach (OperationalContextItem item in document.AuthorityBoundaries)
+        {
+            yield return new KnownItemEntry("Authority Boundaries", item);
+        }
+
+        foreach (OperationalContextItem item in document.Constraints)
+        {
+            yield return new KnownItemEntry("Constraints", item);
+        }
+
+        foreach (OperationalContextItem item in document.StableDecisions)
+        {
+            yield return new KnownItemEntry("Stable Decisions", item);
+        }
+
+        foreach (OperationalContextItem item in document.DecisionRationale)
+        {
+            yield return new KnownItemEntry("Decision Rationale", item);
+        }
+
+        foreach (OperationalContextItem item in document.OpenQuestions)
+        {
+            yield return new KnownItemEntry("Open Questions", item);
+        }
+
+        foreach (OperationalContextItem item in document.ActiveRisks)
+        {
+            yield return new KnownItemEntry("Active Risks", item);
+        }
+
+        foreach (OperationalContextItem item in document.RecentUnderstandingChanges)
+        {
+            yield return new KnownItemEntry("Recent Understanding Changes", item);
+        }
+    }
+
+    private static KnownItemEntry? FindItem(
+        IReadOnlyList<KnownItemEntry> items,
+        string? itemId,
+        string? state)
+    {
+        if (!string.IsNullOrWhiteSpace(itemId))
+        {
+            KnownItemEntry? byId = items.FirstOrDefault(entry =>
+                string.Equals(entry.Item.Id, itemId, StringComparison.OrdinalIgnoreCase));
+            if (byId is not null)
+            {
+                return byId;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(state))
+        {
+            return null;
+        }
+
+        string normalized = Normalize(state);
+        return items.FirstOrDefault(entry =>
+            string.Equals(Normalize(entry.Item.Text), normalized, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string OutcomeFor(
+        OperationalContextSemanticChange change,
+        OperationalContextDocument current)
+    {
+        if (IsAddedChange(change))
+        {
+            return "Added";
+        }
+
+        if (IsModifiedChange(change))
+        {
+            return "Modified";
+        }
+
+        if (change.Type is OperationalContextSemanticChangeType.OpenDecisionResolved or
+            OperationalContextSemanticChangeType.ResolvedUnderstanding)
+        {
+            return "Resolved";
+        }
+
+        if (change.Type is OperationalContextSemanticChangeType.RationaleLostWarning or
+            OperationalContextSemanticChangeType.LostUnderstanding)
+        {
+            return "Lost";
+        }
+
+        if (IsRemovedChange(change))
+        {
+            string? removedState = change.PreviousState ?? RemovedDescriptionState(change);
+            return FindResolutionEvidence(current, removedState) is null ? "Lost" : "Resolved";
+        }
+
+        return "Other";
+    }
+
+    private static int OutcomeOrder(string outcome)
+    {
+        return outcome switch
+        {
+            "Added" => 0,
+            "Modified" => 1,
+            "Removed" => 2,
+            "Preserved" => 3,
+            "Lost" => 4,
+            "Resolved" => 5,
+            _ => 6
+        };
+    }
+
+    private static string TimelineReasonFor(
+        OperationalContextSemanticChange change,
+        string outcome,
+        string? resolutionEvidence)
+    {
+        if (!string.IsNullOrWhiteSpace(change.ModificationReason))
+        {
+            return change.ModificationReason!;
+        }
+
+        if (outcome == "Resolved" && !string.IsNullOrWhiteSpace(resolutionEvidence))
+        {
+            return "The current operational context records resolution evidence for the removed item.";
+        }
+
+        return outcome switch
+        {
+            "Added" => "The item appears in the current revision and was not present in the previous revision.",
+            "Lost" => "The item was removed from the current revision without matching resolution evidence.",
+            "Removed" => "The item was removed from the current revision.",
+            _ => $"The semantic diff classified this item as {change.Type}."
+        };
+    }
+
+    private static IReadOnlyList<string> TimelineEvidenceFor(
+        OperationalContextSemanticChange change,
+        UnderstandingRevisionSnapshot previous,
+        UnderstandingRevisionSnapshot current,
+        string? resolutionEvidence)
+    {
+        var evidence = new List<string>
+        {
+            $"Previous revision: {previous.RevisionNumber} ({previous.RelativePath})",
+            $"Current revision: {current.RevisionNumber} ({current.RelativePath})"
+        };
+        evidence.AddRange(change.SupportingEvidence);
+        if (!string.IsNullOrWhiteSpace(resolutionEvidence))
+        {
+            evidence.Add($"Resolution evidence: {resolutionEvidence}");
+        }
+
+        return evidence
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static string? FindResolutionEvidence(OperationalContextDocument current, string? previousState)
+    {
+        if (string.IsNullOrWhiteSpace(previousState))
+        {
+            return null;
+        }
+
+        string normalizedPrevious = Normalize(previousState);
+        return current.RecentUnderstandingChanges
+            .Select(item => item.Text)
+            .FirstOrDefault(text =>
+            {
+                string normalized = NormalizeRaw(text);
+                return (normalized.StartsWith("resolved question:", StringComparison.OrdinalIgnoreCase) ||
+                        normalized.StartsWith("retired risk:", StringComparison.OrdinalIgnoreCase)) &&
+                    normalized.Contains(normalizedPrevious, StringComparison.OrdinalIgnoreCase);
+            });
+    }
+
+    private static string NormalizeRaw(string value)
+    {
+        return string.Join(' ', value.Trim().ToLowerInvariant().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    private static string? AddedDescriptionState(OperationalContextSemanticChange change)
+    {
+        const string marker = ": ";
+        if (!IsAddedChange(change))
+        {
+            return null;
+        }
+
+        int index = change.Description.IndexOf(marker, StringComparison.Ordinal);
+        return index < 0 ? null : change.Description[(index + marker.Length)..].Trim();
+    }
+
+    private static string? RemovedDescriptionState(OperationalContextSemanticChange change)
+    {
+        const string marker = ": ";
+        if (!IsRemovedChange(change))
+        {
+            return null;
+        }
+
+        int index = change.Description.IndexOf(marker, StringComparison.Ordinal);
+        return index < 0 ? null : change.Description[(index + marker.Length)..].Trim();
     }
 
     private static bool IsAddedChange(OperationalContextSemanticChange change)
@@ -624,4 +935,8 @@ public sealed class ContinuityDiagnosticsService(
     private sealed record RevisionEntry(
         OperationalContextDocument Document,
         UnderstandingRevisionSnapshot Snapshot);
+
+    private sealed record KnownItemEntry(
+        string Section,
+        OperationalContextItem Item);
 }

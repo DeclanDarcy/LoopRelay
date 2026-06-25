@@ -2,6 +2,7 @@ import { StatusBadge, Table } from '../../components/design'
 import { formatDateTime } from '../../lib'
 import { continuityWarningStatus } from '../../lib/status'
 import type { ContinuityDiagnosticGroup, ContinuityDiagnostics, ContinuityReport, ContinuityTrend } from '../../types'
+import { OperationalContextEvolutionTimeline } from '../operational-context/OperationalContextEvolutionTimeline'
 import { OperationalContextSemanticChangeList } from '../operational-context/OperationalContextSemanticChangeList'
 
 type ContinuityDiagnosticsPanelProps = {
@@ -213,6 +214,7 @@ export function ContinuityDiagnosticsPanel({
         </div>
       </div>
       <ContinuityDiagnosticsGroupedPanel groups={diagnostics.diagnosticGroups} />
+      <OperationalContextEvolutionTimeline timelineEntries={diagnostics.operationalEvolution.timelineEntries} />
       <OperationalContextSemanticChangeList
         semanticChanges={diagnostics.operationalEvolution.semanticChanges}
         grouping="outcome"

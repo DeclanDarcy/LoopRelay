@@ -3,29 +3,29 @@
 ## New State This Slice
 
 - Continued Milestone 7 continuity and operational-context transparency.
-- Rotated previous handoff to `.agents/handoffs/handoff.0064.md`.
-- Added `OperationalContextEvolutionTimeline` to the operational-context proposal review flow.
-- The timeline renders backend-provided semantic changes as added, modified, removed, preserved, lost, resolved, or other lifecycle lanes.
-- The timeline displays backend-provided section, semantic event type, previous state, current state, modification reason, identity basis, item id, and supporting evidence.
-- React still does not parse proposal markdown or rebuild modification relationships for the timeline.
-- Added CSS for the timeline using existing UI tokens and responsive wrapping.
-- Added UI characterization coverage for empty state, lifecycle lane rendering, and modification metadata/evidence rendering.
-- Updated the Milestone 7 checklist to mark `OperationalContextEvolutionTimeline` complete.
+- Rotated previous handoff to `.agents/handoffs/handoff.0065.md`.
+- Added `OperationalEvolutionTimelineEntry` and `OperationalEvolutionSummary.TimelineEntries`.
+- `ContinuityDiagnosticsService` now builds revision-history timeline entries from the latest two operational-context revisions.
+- Timeline entries include outcome, semantic event type, section, description, item id, previous state, current state, reason, identity basis, previous/current revision numbers, and supporting evidence.
+- Modified entries continue to come from `UnderstandingDiffService` identity-aware semantic changes.
+- Preserved entries are emitted when normalized operational-context items remain present across both compared revisions.
+- Removed open questions and active risks are classified as resolved when the current revision records matching `Resolved question:` or `Retired risk:` evidence; otherwise they are classified as lost.
+- The Continuity diagnostics tab now renders backend `timelineEntries` via `OperationalContextEvolutionTimeline`.
+- The proposal-review timeline remains compatible with `semanticChanges`.
+- Updated Milestone 7 checklist to mark operational evolution reporting and its exit criterion complete.
 
 ## Verification
 
-- `npm test -- --run src/test/characterization/operationalContextEvolutionTimeline.test.tsx src/test/characterization/operationalContextSemanticChangeList.test.tsx`
-- `npm test -- --run src/test/characterization/operationalContextEvolutionTimeline.test.tsx`
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter ContinuityDiagnosticsServiceTests`
+- `npm test -- --run src/test/characterization/continuityDiagnosticsPanel.test.tsx src/test/characterization/operationalContextEvolutionTimeline.test.tsx`
 - `npm run build`
 
 ## Residual Risk
 
-- Backend operational evolution reporting remains open for explicit revision-history event detail, especially preserved/lost/resolved previous/current state, reason, and evidence beyond currently available semantic changes and summary counts.
-- The broader Milestone 7 exit criterion for operational evolution is intentionally still unchecked.
-- Compression taxonomy gaps for item-level `Merged` and distinct `NoiseRemoved` outcomes remain unresolved.
-- `OperationalContextProposalComparison` remains markdown side-by-side; `OperationalContextSemanticChangeList` and the new timeline surface typed semantic changes.
+- Milestone 7 still has open compression taxonomy gaps for item-level `Merged` and distinct `NoiseRemoved` outcomes.
+- Milestone 7 still has an unchecked UI task to update `OperationalContextProposalComparison` and `OperationalContextSemanticChangeList` so modification presentation is consistently modification-first rather than side-by-side markdown.
+- Preservation matching uses normalized item state; if future backend item ids become stable across persisted operational-context revisions, preservation identity could be made stronger.
 
 ## Recommended Next Slice
 
-- Extend backend `OperationalEvolutionSummary` with explicit timeline entries for revision-history evolution, using `UnderstandingDiffService` semantic changes plus preserved item evidence from previous/current operational-context documents.
-- Then surface that summary in the Continuity diagnostics tab, reusing the timeline component shape only if the backend projection supplies authoritative previous/current state, reason, and evidence.
+- Reconcile the remaining Milestone 7 UI checklist item for `OperationalContextProposalComparison` and `OperationalContextSemanticChangeList`, then audit whether the remaining compression `merged` and `noise removed` checklist items are supported by backend semantics or should stay explicitly deferred.

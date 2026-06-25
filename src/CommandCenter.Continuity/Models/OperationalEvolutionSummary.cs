@@ -16,5 +16,7 @@ public sealed class OperationalEvolutionSummary
 
     public IReadOnlyList<OperationalContextSemanticChange> SemanticChanges { get; init; } = [];
 
+    public IReadOnlyList<OperationalEvolutionTimelineEntry> TimelineEntries { get; init; } = [];
+
     public IReadOnlyList<ContinuityDiagnosticGroup> DiagnosticGroups { get; init; } = [];
 }

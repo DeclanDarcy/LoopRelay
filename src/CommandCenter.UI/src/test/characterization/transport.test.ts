@@ -232,6 +232,7 @@ describe('transport boundary characterization', () => {
           lostCount: 0,
           resolvedCount: 0,
           semanticChanges: [],
+          timelineEntries: [],
           diagnosticGroups: [],
         },
         architectureTrend: { addedCount: 0, modifiedCount: 0, removedCount: 0, resolvedCount: 0, lostCount: 0 },

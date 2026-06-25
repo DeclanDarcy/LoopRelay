@@ -4524,6 +4524,7 @@ function getContinuityDiagnostics(state: MockState, repositoryId: string): Conti
       lostCount: 0,
       resolvedCount: 0,
       semanticChanges: [],
+      timelineEntries: [],
       diagnosticGroups: [],
     },
     architectureTrend: zeroTrend(),

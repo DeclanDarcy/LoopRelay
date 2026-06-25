@@ -118,6 +118,72 @@ public sealed class ContinuityDiagnosticsServiceTests
             diagnostic.Contains("Current state: Backend workflow projection must own operational lifecycle status, gate evidence, and recovery hints.", StringComparison.Ordinal));
         Assert.Contains(modificationGroup.Diagnostics, diagnostic =>
             diagnostic.Contains("Supporting evidence: Semantic lineage key", StringComparison.OrdinalIgnoreCase));
+        OperationalEvolutionTimelineEntry timelineEntry = Assert.Single(
+            diagnostics.OperationalEvolution.TimelineEntries,
+            entry => entry.Outcome == "Modified");
+        Assert.Equal("ModifiedConstraint", timelineEntry.SemanticEventType);
+        Assert.Equal("Constraints", timelineEntry.Section);
+        Assert.Equal("Backend workflow projection must own operational lifecycle status.", timelineEntry.PreviousState);
+        Assert.Equal("Backend workflow projection must own operational lifecycle status, gate evidence, and recovery hints.", timelineEntry.CurrentState);
+        Assert.Equal("section-semantic-lineage", timelineEntry.IdentityBasis);
+        Assert.Equal(1, timelineEntry.PreviousRevisionNumber);
+        Assert.Equal(2, timelineEntry.CurrentRevisionNumber);
+        Assert.Contains(timelineEntry.SupportingEvidence, evidence =>
+            evidence.Contains("Previous revision: 1", StringComparison.Ordinal));
+        Assert.Contains(timelineEntry.SupportingEvidence, evidence =>
+            evidence.Contains("Current revision: 2", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task OperationalEvolutionTimelineProjectsPreservedResolvedAndLostEntries()
+    {
+        Harness harness = await CreateHarnessAsync();
+        await WriteAsync(harness.Repository, ".agents/operational_context.0001.md", """
+            # Operational Context
+
+            ## Architecture
+
+            - Backend owns operational context authority.
+
+            ## Open Questions
+
+            - Should diagnostics expose revision evidence?
+            - Should lost questions remain visible?
+            """);
+        await WriteAsync(harness.Repository, ".agents/operational_context.md", """
+            # Operational Context
+
+            ## Architecture
+
+            - Backend owns operational context authority.
+
+            ## Recent Understanding Changes
+
+            - Resolved question: Should diagnostics expose revision evidence?
+            """);
+
+        ContinuityDiagnostics diagnostics = await harness.DiagnosticsService.GetDiagnosticsAsync(harness.Repository.Id);
+
+        Assert.Contains(diagnostics.OperationalEvolution.TimelineEntries, entry =>
+            entry.Outcome == "Preserved" &&
+            entry.SemanticEventType == "StableUnderstandingPreserved" &&
+            entry.Section == "Architecture" &&
+            entry.PreviousState == "Backend owns operational context authority." &&
+            entry.CurrentState == "Backend owns operational context authority." &&
+            entry.IdentityBasis == "normalized-state");
+        Assert.Contains(diagnostics.OperationalEvolution.TimelineEntries, entry =>
+            entry.Outcome == "Resolved" &&
+            entry.Section == "Open Questions" &&
+            entry.PreviousState == "Should diagnostics expose revision evidence?" &&
+            entry.CurrentState == "Resolved question: Should diagnostics expose revision evidence?" &&
+            entry.Reason == "The current operational context records resolution evidence for the removed item." &&
+            entry.SupportingEvidence.Any(evidence => evidence.Contains("Resolution evidence:", StringComparison.Ordinal)));
+        Assert.Contains(diagnostics.OperationalEvolution.TimelineEntries, entry =>
+            entry.Outcome == "Lost" &&
+            entry.Section == "Open Questions" &&
+            entry.PreviousState == "Should lost questions remain visible?" &&
+            entry.CurrentState is null &&
+            entry.Reason == "The item was removed from the current revision without matching resolution evidence.");
     }
 
     [Fact]

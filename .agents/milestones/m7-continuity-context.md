@@ -26,17 +26,17 @@ Make operational context explain why information was retained, removed, compress
    - [x] reason
 - [x] Expose consequences with originating decision, reasoning, and operational impact.
 - [x] Surface every detected contradiction with decision A, decision B, conflict type, evidence, severity, and resolution guidance.
-- [ ] Extend operational evolution reporting:
-   - [ ] added
-   - [ ] modified
-   - [ ] removed
-   - [ ] preserved
-   - [ ] lost
-   - [ ] resolved
-   - [ ] previous state
-   - [ ] current state
-   - [ ] reason
-   - [ ] evidence
+- [x] Extend operational evolution reporting:
+   - [x] added
+   - [x] modified
+   - [x] removed
+   - [x] preserved
+   - [x] lost
+   - [x] resolved
+   - [x] previous state
+   - [x] current state
+   - [x] reason
+   - [x] evidence
 - [ ] Extend compression output:
    - [x] retained
    - [x] compressed
@@ -94,6 +94,6 @@ Make operational context explain why information was retained, removed, compress
 - [ ] Assimilation limits and omitted items are visible.
 - [ ] Consequences stay linked to originating decisions.
 - [x] All contradictions are explorable.
-- [ ] Operational evolution distinguishes added, modified, removed, preserved, lost, and resolved understanding.
+- [x] Operational evolution distinguishes added, modified, removed, preserved, lost, and resolved understanding.
 - [x] Compression explains item-level outcomes.
 - [x] Semantic diff preserves identity and lineage for modifications.

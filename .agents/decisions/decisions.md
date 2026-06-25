@@ -2,11 +2,10 @@
 
 ## Newly Authorized
 
-- Treat the proposal-review `OperationalContextEvolutionTimeline` as complete for Milestone 7.
-- Keep the broader operational evolution exit criterion open until backend revision-history entries expose preserved, lost, resolved, and modified facts with previous state, current state, reason, evidence, and identity basis where relevant.
-- Continue to require React to render backend semantic events for operational-context timelines without parsing markdown, classifying events, inferring relationships, or reconstructing operational-context meaning.
-- Make the next Milestone 7 dependency a backend revision-history slice that extends `OperationalEvolutionSummary` with explicit timeline entries.
-- Surface backend revision-history timeline entries in the Continuity diagnostics tab only after the backend projection supplies authoritative timeline facts.
-- Add backend tests proving continuity services emit revision-history timeline facts.
-- Add UI tests proving React renders revision-history timeline facts without classification or inference.
-- Continue deferring `Merged` and item-level `NoiseRemoved` compression outcomes unless the compression engine gains distinct backend semantic actions for them.
+- Treat the revision-history-backed `OperationalEvolutionTimelineEntry` projection as a significant Milestone 7 increment that closes the gap between summary-level operational evolution and revision-history-backed evolution.
+- Continue the authority split where `UnderstandingDiffService` owns semantic change detection, `ContinuityDiagnosticsService` enriches semantic facts with revision-history context, and React renders typed timeline projections without interpreting operational-context meaning.
+- Keep normalized item-state preservation as an intentionally conservative interim identity fallback until durable cross-revision operational-context item identifiers exist.
+- Make the remaining Milestone 7 work reconciliation-focused rather than broad feature expansion.
+- Reconcile `OperationalContextProposalComparison` and `OperationalContextSemanticChangeList` so they consistently consume the richer typed semantic model.
+- Review `Merged` and item-level `NoiseRemoved` compression outcomes against real backend operations; model them explicitly only if genuine backend semantics exist, otherwise leave them intentionally absent.
+- Before formal Milestone 7 exit, perform a projection-gap audit covering backend projection consumers, absence of UI semantic reconstruction, retirement of compatibility-string surfaces where typed projections exist, and field-to-surface mapping against exit criteria.

@@ -68,6 +68,7 @@ function createDiagnostics(
       lostCount: 25,
       resolvedCount: 26,
       semanticChanges: [],
+      timelineEntries: [],
       diagnosticGroups: [],
     },
     compressionTrend: {
@@ -182,6 +183,36 @@ describe('continuity diagnostics panel rendering characterization', () => {
                 supportingEvidence: ['.agents/operational_context.md#architecture'],
               },
             ],
+            timelineEntries: [
+              {
+                outcome: 'Modified',
+                semanticEventType: 'ItemChanged',
+                section: 'Architecture',
+                description: 'Updated the service ownership statement.',
+                itemId: 'architecture-1',
+                previousState: 'UI owns service state.',
+                currentState: 'Backend owns service state.',
+                reason: 'Matched authoritative ownership.',
+                identityBasis: 'kind+source',
+                previousRevisionNumber: 7,
+                currentRevisionNumber: 8,
+                supportingEvidence: ['Previous revision: 7 (.agents/operational_context.0007.md)'],
+              },
+              {
+                outcome: 'Preserved',
+                semanticEventType: 'StableUnderstandingPreserved',
+                section: 'Constraints',
+                description: 'Item preserved in Constraints: Keep lifecycle authority in backend.',
+                itemId: 'constraint-1',
+                previousState: 'Keep lifecycle authority in backend.',
+                currentState: 'Keep lifecycle authority in backend.',
+                reason: 'The normalized operational-context item is present in both compared revisions.',
+                identityBasis: 'normalized-state',
+                previousRevisionNumber: 7,
+                currentRevisionNumber: 8,
+                supportingEvidence: ['Section: Constraints'],
+              },
+            ],
             diagnosticGroups: [],
           },
         })}
@@ -198,17 +229,24 @@ describe('continuity diagnostics panel rendering characterization', () => {
     expect(within(evolution as HTMLElement).getByText('Lost: 5')).toBeInTheDocument()
     expect(within(evolution as HTMLElement).getByText('Preserved: 6')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Operational Evolution Changes' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Modified' })).toBeInTheDocument()
+    expect(screen.getAllByRole('heading', { name: 'Modified' }).length).toBeGreaterThan(0)
     expect(screen.getByText('ItemChanged: Updated the service ownership statement.')).toBeInTheDocument()
-    expect(screen.getByText('Identity basis')).toBeInTheDocument()
-    expect(screen.getByText('kind+source')).toBeInTheDocument()
+    expect(screen.getAllByText('Identity basis').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('kind+source').length).toBeGreaterThan(0)
     expect(screen.getByText('Previous')).toBeInTheDocument()
-    expect(screen.getByText('UI owns service state.')).toBeInTheDocument()
+    expect(screen.getAllByText('UI owns service state.').length).toBeGreaterThan(0)
     expect(screen.getByText('Current')).toBeInTheDocument()
-    expect(screen.getByText('Backend owns service state.')).toBeInTheDocument()
-    expect(screen.getByText('Reason')).toBeInTheDocument()
-    expect(screen.getByText('Matched authoritative ownership.')).toBeInTheDocument()
+    expect(screen.getAllByText('Backend owns service state.').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Reason').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Matched authoritative ownership.').length).toBeGreaterThan(0)
     expect(screen.getByText('.agents/operational_context.md#architecture')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Operational Evolution Timeline' })).toBeInTheDocument()
+    expect(screen.getAllByText('Previous revision').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('7').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Current revision').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('8').length).toBeGreaterThan(0)
+    expect(screen.getByText('Item preserved in Constraints: Keep lifecycle authority in backend.')).toBeInTheDocument()
+    expect(screen.getByText('normalized-state')).toBeInTheDocument()
   })
 
   it('renders grouped continuity diagnostics from backend categories without deriving severity', () => {
