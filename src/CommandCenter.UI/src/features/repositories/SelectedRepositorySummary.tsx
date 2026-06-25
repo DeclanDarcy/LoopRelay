@@ -22,6 +22,7 @@ type SelectedRepositorySummaryProps = {
   onOpenExecution?: () => void
   onOpenGovernance?: () => void
   onOpenReasoning?: () => void
+  onOpenContinuity?: () => void
   onOpenMilestones?: () => void
   onOpenOperationalContext?: () => void
   onOpenHandoffArtifact?: (handoffPath: string) => void
@@ -36,6 +37,7 @@ export function SelectedRepositorySummary({
   onOpenExecution,
   onOpenGovernance,
   onOpenReasoning,
+  onOpenContinuity,
   onOpenMilestones,
   onOpenOperationalContext,
   onOpenHandoffArtifact,
@@ -45,6 +47,16 @@ export function SelectedRepositorySummary({
   const hasOperationalContext = Boolean(workspace?.hasOperationalContext)
   const governanceSummary = workspace?.decisionSessionSummary ?? repository.decisionSessionSummary
   const reasoningSummary = workspace?.reasoningSummary ?? repository.reasoningSummary
+  const continuityRevisionCount =
+    workspace?.operationalContext.revisionCount ??
+    repository.continuitySummary.operationalContextRevisionCount
+  const continuityWarningCount = workspace?.operationalContext.continuityWarnings.length ?? 0
+  const continuityPendingProposal =
+    workspace?.operationalContextProposalSummary.pendingProposalExists ??
+    repository.continuitySummary.pendingProposalExists
+  const continuityLatestActivity =
+    workspace?.operationalContext.lastUpdatedAt ??
+    repository.continuitySummary.operationalContextLastUpdatedAt
 
   return (
     <>
@@ -235,6 +247,22 @@ export function SelectedRepositorySummary({
               type="button"
               className="workspace-cross-link inline-cross-link"
               onClick={onOpenGovernance}
+            >
+              Open
+            </button>
+          </span>
+        ) : null}
+        <span>Continuity revisions: {continuityRevisionCount}</span>
+        <span>Continuity warnings: {continuityWarningCount}</span>
+        <span>Continuity pending proposal: {continuityPendingProposal ? 'Present' : 'None'}</span>
+        <span>Continuity latest activity: {formatDateTime(continuityLatestActivity)}</span>
+        {onOpenContinuity ? (
+          <span>
+            Continuity diagnostics:{' '}
+            <button
+              type="button"
+              className="workspace-cross-link inline-cross-link"
+              onClick={onOpenContinuity}
             >
               Open
             </button>

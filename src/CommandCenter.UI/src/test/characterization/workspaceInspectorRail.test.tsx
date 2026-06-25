@@ -192,10 +192,13 @@ describe('WorkspaceInspectorRail', () => {
     expect(screen.getByText('Behind: 1')).toBeInTheDocument()
     expect(screen.getByText('Changed paths: 3')).toBeInTheDocument()
     expect(screen.getByText('Revisions: 4')).toBeInTheDocument()
-    expect(screen.getByText((_, element) => element?.textContent === 'Stable decisions: 2')).toBeInTheDocument()
-    expect(screen.getByText((_, element) => element?.textContent === 'Open questions: 1')).toBeInTheDocument()
-    expect(screen.getByText((_, element) => element?.textContent === 'Active risks: 1')).toBeInTheDocument()
+    expect(screen.getByText('Current revision: 4')).toBeInTheDocument()
+    expect(screen.getByText((_, element) => element?.textContent === 'Continuity warnings: 0')).toBeInTheDocument()
     expect(screen.getByText((_, element) => element?.textContent === 'Pending proposal: Present')).toBeInTheDocument()
+    expect(screen.getByText(/Last updated:/)).toHaveTextContent(/\d/)
+    expect(screen.queryByText('Keep backend authority.')).not.toBeInTheDocument()
+    expect(screen.queryByText('Which link anchors remain?')).not.toBeInTheDocument()
+    expect(screen.queryByText('Inspector overreach.')).not.toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Execution history summary' })).toBeInTheDocument()
     expect(screen.getByText('Latest milestone: .agents/milestones/m3.md')).toBeInTheDocument()
     expect(screen.getByText('Latest state: Awaiting push')).toBeInTheDocument()
@@ -236,19 +239,15 @@ describe('WorkspaceInspectorRail', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Current' }))
     fireEvent.click(screen.getByRole('button', { name: 'Proposal' }))
-    fireEvent.click(screen.getByRole('button', { name: '2' }))
-    fireEvent.click(screen.getAllByRole('button', { name: '1' })[0])
     fireEvent.click(screen.getByRole('button', { name: 'Present' }))
 
-    expect(onOpenOperationalContext).toHaveBeenCalledTimes(5)
+    expect(onOpenOperationalContext).toHaveBeenCalledTimes(3)
     expect(onOpenOperationalContext).toHaveBeenNthCalledWith(1, 'operational-current')
     expect(onOpenOperationalContext).toHaveBeenNthCalledWith(2, 'proposal-review')
-    expect(onOpenOperationalContext).toHaveBeenNthCalledWith(3, 'operational-stable-decisions')
-    expect(onOpenOperationalContext).toHaveBeenNthCalledWith(4, 'operational-open-questions')
-    expect(onOpenOperationalContext).toHaveBeenNthCalledWith(5, 'proposal-review')
+    expect(onOpenOperationalContext).toHaveBeenNthCalledWith(3, 'proposal-review')
   })
 
-  it('uses navigation callbacks for continuity warning snippets and execution history summaries', () => {
+  it('uses navigation callbacks for continuity warning counts and execution history summaries', () => {
     const { onOpenContinuityWarnings, onOpenExecutionSession } = renderRail({
       operationalContext: {
         ...operationalContext,
@@ -256,7 +255,9 @@ describe('WorkspaceInspectorRail', () => {
       },
     })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Decision continuity warning' }))
+    expect(screen.queryByText('Decision continuity warning')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '1' }))
     fireEvent.click(screen.getByRole('button', { name: 'Open in Execution' }))
 
     expect(onOpenContinuityWarnings).toHaveBeenCalledTimes(1)

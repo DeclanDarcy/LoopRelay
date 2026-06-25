@@ -2,12 +2,13 @@
 
 ## Newly Authorized
 
-- Treat the reasoning consolidation slice as accepted Milestone 9 work:
-  - Reasoning owns confidence rationale, missing evidence, reconstruction scope, graph diagnostics, materialization review, provenance, and trajectory details.
-  - Repository overview may show event/thread/relationship counts, latest activity, certification summary, and navigation into Reasoning.
-- Continue Milestone 9 with continuity evolution summary consolidation as the next implementation slice.
-- For continuity consolidation:
-  - keep Continuity as the primary detailed surface for semantic diff, compression explanation, operational evolution, contradiction analysis, continuity diagnostics, taxonomy, assimilation, and review evidence,
-  - reduce secondary surfaces to operational summaries such as revision counts, warning counts, pending proposal status, latest activity, and navigation into Continuity,
-  - avoid reproducing semantic diff detail, compression reasoning, identity basis, contradiction evidence, operational evolution timelines, or review diagnostics outside Continuity.
-- After continuity consolidation, shift toward information density optimization, interaction normalization, component retirement, and final cohesion audit.
+- Treat the continuity consolidation slice as accepted Milestone 9 work:
+  - Continuity Diagnostics owns operational evolution, compression, warning detail, grouped diagnostics, and reports.
+  - Operational Context owns current understanding, proposal review, semantic diff, taxonomy, contradictions, assimilation, and comparison.
+  - Repository and Workspace surfaces may show only revision counts, warning counts, pending proposal status, latest activity, and navigation.
+- Continue Milestone 9 with health widget and certification summary consolidation as the next implementation slice.
+- For health and certification consolidation:
+  - keep primary surfaces responsible for health dimensions, findings, diagnostics, evidence, certification details, and historical results,
+  - reduce secondary surfaces to overall status, counts, latest execution, latest certification, and navigation,
+  - avoid reproducing individual findings, dimension breakdowns, evidence, diagnostics, and remediation details outside primary surfaces.
+- After health and certification consolidation, continue toward information-density refinement, interaction normalization, obsolete compatibility presentation removal, endpoint/projection/component retirement, and final cohesion audit.

@@ -248,6 +248,7 @@ function renderSummary({
   onOpenExecution,
   onOpenGovernance,
   onOpenReasoning,
+  onOpenContinuity,
   onOpenMilestones,
   onOpenOperationalContext,
   onOpenHandoffArtifact,
@@ -260,6 +261,7 @@ function renderSummary({
   onOpenExecution?: () => void
   onOpenGovernance?: () => void
   onOpenReasoning?: () => void
+  onOpenContinuity?: () => void
   onOpenMilestones?: () => void
   onOpenOperationalContext?: () => void
   onOpenHandoffArtifact?: (handoffPath: string) => void
@@ -274,6 +276,7 @@ function renderSummary({
       onOpenExecution={onOpenExecution}
       onOpenGovernance={onOpenGovernance}
       onOpenReasoning={onOpenReasoning}
+      onOpenContinuity={onOpenContinuity}
       onOpenMilestones={onOpenMilestones}
       onOpenOperationalContext={onOpenOperationalContext}
       onOpenHandoffArtifact={onOpenHandoffArtifact}
@@ -419,6 +422,74 @@ describe('selected repository summary rendering characterization', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Open' }))
     expect(onOpenReasoning).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders continuity as compact contextual status with diagnostics navigation only', () => {
+    const onOpenContinuity = vi.fn()
+
+    renderSummary({
+      onOpenContinuity,
+      workspace: workspaceProjection({
+        operationalContextProposalSummary: {
+          pendingProposalExists: true,
+          latestProposalId: 'proposal-1',
+          generatedAt: '2026-06-21T17:40:00.000Z',
+          status: 'Pending',
+          sourceInputCount: 4,
+          contentByteCount: 2400,
+          contentCharacterCount: 2200,
+          lastPromotedAt: null,
+          lastArchivedRelativePath: null,
+        },
+        operationalContext: {
+          ...workspaceProjection().operationalContext,
+          revisionCount: 7,
+          currentRevisionNumber: 7,
+          lastUpdatedAt: '2026-06-21T17:45:00.000Z',
+          stableDecisions: [
+            {
+              id: 'decision-1',
+              kind: 'StableDecision',
+              text: 'Backend continuity services own semantic diff detail.',
+              rationale: 'Detailed rationale belongs in Continuity.',
+              sourceRelativePath: null,
+            },
+          ],
+          openQuestions: [
+            {
+              id: 'question-1',
+              kind: 'OpenQuestion',
+              text: 'Should summaries repeat semantic diff evidence?',
+              rationale: null,
+              sourceRelativePath: null,
+            },
+          ],
+          activeRisks: [
+            {
+              id: 'risk-1',
+              kind: 'ActiveRisk',
+              text: 'Secondary summary could duplicate diagnostics.',
+              rationale: null,
+              sourceRelativePath: null,
+            },
+          ],
+          continuityWarnings: ['Detailed continuity warning stays in Continuity.'],
+        },
+      }),
+    })
+
+    expect(screen.getByText('Continuity revisions: 7')).toBeInTheDocument()
+    expect(screen.getByText('Continuity warnings: 1')).toBeInTheDocument()
+    expect(screen.getByText('Continuity pending proposal: Present')).toBeInTheDocument()
+    expect(screen.getByText(/Continuity latest activity:/)).toHaveTextContent(/\d/)
+    expect(screen.queryByText('Backend continuity services own semantic diff detail.')).not.toBeInTheDocument()
+    expect(screen.queryByText('Detailed rationale belongs in Continuity.')).not.toBeInTheDocument()
+    expect(screen.queryByText('Should summaries repeat semantic diff evidence?')).not.toBeInTheDocument()
+    expect(screen.queryByText('Secondary summary could duplicate diagnostics.')).not.toBeInTheDocument()
+    expect(screen.queryByText('Detailed continuity warning stays in Continuity.')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }))
+    expect(onOpenContinuity).toHaveBeenCalledTimes(1)
   })
 
   it('renders execution display details and existing not-recorded fallbacks', () => {

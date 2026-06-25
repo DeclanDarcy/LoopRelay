@@ -94,22 +94,8 @@ export function WorkspaceInspectorRail({
           operationalContext={operationalContext}
           proposalSummary={proposalSummary}
           onOpenOperationalContext={onOpenOperationalContext}
+          onOpenContinuityWarnings={onOpenContinuityWarnings}
         />
-        {operationalContext?.continuityWarnings.length ? (
-          <div className="workspace-cross-link-list" aria-label="Continuity warnings">
-            {operationalContext.continuityWarnings.slice(0, 3).map((warning) => (
-              <button
-                type="button"
-                className="workspace-cross-link warning-link"
-                key={warning}
-                onClick={onOpenContinuityWarnings}
-                disabled={!onOpenContinuityWarnings}
-              >
-                {warning}
-              </button>
-            ))}
-          </div>
-        ) : null}
         <div className="workspace-inspector-actions">
           <Button
             type="button"
@@ -262,38 +248,39 @@ type OperationalContextInspectorSummaryProps = {
   operationalContext: OperationalContextProjection | null
   proposalSummary: OperationalContextProposalSummary | null
   onOpenOperationalContext?: (sectionId: OperationalContextSectionId) => void
+  onOpenContinuityWarnings?: () => void
 }
 
 function OperationalContextInspectorSummary({
   operationalContext,
   proposalSummary,
   onOpenOperationalContext,
+  onOpenContinuityWarnings,
 }: OperationalContextInspectorSummaryProps) {
   if (!operationalContext || !proposalSummary) {
     return <EmptyState className="empty-state">Operational context is not loaded.</EmptyState>
   }
 
+  const warningCount = operationalContext.continuityWarnings.length
+
   return (
     <div className="workspace-inspector-summary">
       <span>Revisions: {operationalContext.revisionCount}</span>
-      <InspectorCrossLink
-        label="Stable decisions"
-        value={operationalContext.stableDecisions.length}
-        sectionId="operational-stable-decisions"
-        onOpenOperationalContext={onOpenOperationalContext}
-      />
-      <InspectorCrossLink
-        label="Open questions"
-        value={operationalContext.openQuestions.length}
-        sectionId="operational-open-questions"
-        onOpenOperationalContext={onOpenOperationalContext}
-      />
-      <InspectorCrossLink
-        label="Active risks"
-        value={operationalContext.activeRisks.length}
-        sectionId="operational-active-risks"
-        onOpenOperationalContext={onOpenOperationalContext}
-      />
+      <span>Current revision: {operationalContext.currentRevisionNumber}</span>
+      <span>
+        Continuity warnings:{' '}
+        {warningCount > 0 && onOpenContinuityWarnings ? (
+          <button
+            type="button"
+            className="workspace-cross-link inline-cross-link warning-link"
+            onClick={onOpenContinuityWarnings}
+          >
+            {warningCount}
+          </button>
+        ) : (
+          warningCount
+        )}
+      </span>
       <span>
         Pending proposal:{' '}
         {proposalSummary.pendingProposalExists && onOpenOperationalContext ? (
@@ -311,38 +298,8 @@ function OperationalContextInspectorSummary({
         )}
       </span>
       <span>Status: {proposalSummary.status ?? 'None'}</span>
+      <span>Last updated: {formatDateTime(operationalContext.lastUpdatedAt)}</span>
       <span>Last promoted: {formatDateTime(proposalSummary.lastPromotedAt)}</span>
     </div>
-  )
-}
-
-type InspectorCrossLinkProps = {
-  label: string
-  value: number
-  sectionId: OperationalContextSectionId
-  onOpenOperationalContext?: (sectionId: OperationalContextSectionId) => void
-}
-
-function InspectorCrossLink({
-  label,
-  value,
-  sectionId,
-  onOpenOperationalContext,
-}: InspectorCrossLinkProps) {
-  return (
-    <span>
-      {label}:{' '}
-      {value > 0 && onOpenOperationalContext ? (
-        <button
-          type="button"
-          className="workspace-cross-link inline-cross-link"
-          onClick={() => onOpenOperationalContext(sectionId)}
-        >
-          {value}
-        </button>
-      ) : (
-        value
-      )}
-    </span>
   )
 }

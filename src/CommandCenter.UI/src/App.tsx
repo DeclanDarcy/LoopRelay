@@ -1784,6 +1784,7 @@ function App() {
                     onOpenExecution={() => openExecutionSection('execution-context')}
                     onOpenGovernance={openGovernanceWorkspace}
                     onOpenReasoning={openReasoningTrajectory}
+                    onOpenContinuity={() => openContinuitySection('continuity-diagnostics')}
                     onOpenMilestones={() => {
                       setActivePrimaryTab('workspace')
                       setSectionTarget('workspace-milestones')
