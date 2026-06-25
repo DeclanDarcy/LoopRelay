@@ -1,7 +1,7 @@
 import { StatusBadge, Table } from '../../components/design'
 import { formatDateTime } from '../../lib'
 import { continuityWarningStatus } from '../../lib/status'
-import type { ContinuityDiagnostics, ContinuityReport, ContinuityTrend } from '../../types'
+import type { ContinuityDiagnosticGroup, ContinuityDiagnostics, ContinuityReport, ContinuityTrend } from '../../types'
 import { OperationalContextSemanticChangeList } from '../operational-context/OperationalContextSemanticChangeList'
 
 type ContinuityDiagnosticsPanelProps = {
@@ -212,6 +212,7 @@ export function ContinuityDiagnosticsPanel({
           )}
         </div>
       </div>
+      <ContinuityDiagnosticsGroupedPanel groups={diagnostics.diagnosticGroups} />
       <OperationalContextSemanticChangeList
         semanticChanges={diagnostics.operationalEvolution.semanticChanges}
         grouping="outcome"
@@ -219,6 +220,39 @@ export function ContinuityDiagnosticsPanel({
         emptyText="No operational evolution changes recorded."
       />
     </div>
+  )
+}
+
+type ContinuityDiagnosticsGroupedPanelProps = {
+  groups: ContinuityDiagnosticGroup[]
+}
+
+function ContinuityDiagnosticsGroupedPanel({ groups }: ContinuityDiagnosticsGroupedPanelProps) {
+  const visibleGroups = groups.filter((group) => group.diagnostics.length > 0)
+
+  return (
+    <section className="continuity-diagnostic-groups" aria-label="Grouped continuity diagnostics">
+      <h5>Grouped Diagnostics</h5>
+      {visibleGroups.length > 0 ? (
+        <div className="continuity-diagnostic-group-grid">
+          {visibleGroups.map((group, index) => (
+            <article className="continuity-diagnostic-group" key={`${group.category}:${group.title}:${index}`}>
+              <div className="continuity-diagnostic-group-title">
+                <strong>{group.title || group.category}</strong>
+                <span>{group.category}</span>
+              </div>
+              <ul>
+                {group.diagnostics.map((diagnostic) => (
+                  <li key={diagnostic}>{diagnostic}</li>
+                ))}
+              </ul>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p>No grouped continuity diagnostics recorded.</p>
+      )}
+    </section>
   )
 }
 

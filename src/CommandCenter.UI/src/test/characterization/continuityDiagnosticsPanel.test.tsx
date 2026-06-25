@@ -211,6 +211,67 @@ describe('continuity diagnostics panel rendering characterization', () => {
     expect(screen.getByText('.agents/operational_context.md#architecture')).toBeInTheDocument()
   })
 
+  it('renders grouped continuity diagnostics from backend categories without deriving severity', () => {
+    render(
+      <ContinuityDiagnosticsPanel
+        diagnostics={createDiagnostics({
+          diagnosticGroups: [
+            {
+              category: 'evolution',
+              title: 'Operational evolution',
+              diagnostics: ['Modified item count: 2.', 'Resolved item count: 4.'],
+            },
+            {
+              category: 'compression',
+              title: 'Compression diagnostics',
+              diagnostics: ['Proposal count: 3.', 'Removed item count: 5.'],
+            },
+            {
+              category: 'diff',
+              title: 'Semantic diff',
+              diagnostics: ['ItemChanged in Architecture: Backend owns lifecycle state.'],
+            },
+            {
+              category: 'classification',
+              title: 'Empty classification diagnostics',
+              diagnostics: [],
+            },
+          ],
+        })}
+      />,
+    )
+
+    const groupedDiagnostics = screen.getByLabelText('Grouped continuity diagnostics')
+
+    expect(within(groupedDiagnostics).getByRole('heading', { name: 'Grouped Diagnostics' })).toBeInTheDocument()
+    expect(within(groupedDiagnostics).getByText('Operational evolution')).toBeInTheDocument()
+    expect(within(groupedDiagnostics).getByText('evolution')).toBeInTheDocument()
+    expect(within(groupedDiagnostics).getByText('Modified item count: 2.')).toBeInTheDocument()
+    expect(within(groupedDiagnostics).getByText('Resolved item count: 4.')).toBeInTheDocument()
+    expect(within(groupedDiagnostics).getByText('Compression diagnostics')).toBeInTheDocument()
+    expect(within(groupedDiagnostics).getByText('compression')).toBeInTheDocument()
+    expect(within(groupedDiagnostics).getByText('Proposal count: 3.')).toBeInTheDocument()
+    expect(within(groupedDiagnostics).getByText('Removed item count: 5.')).toBeInTheDocument()
+    expect(within(groupedDiagnostics).getByText('Semantic diff')).toBeInTheDocument()
+    expect(within(groupedDiagnostics).getByText('diff')).toBeInTheDocument()
+    expect(
+      within(groupedDiagnostics).getByText('ItemChanged in Architecture: Backend owns lifecycle state.'),
+    ).toBeInTheDocument()
+    expect(within(groupedDiagnostics).queryByText('Empty classification diagnostics')).not.toBeInTheDocument()
+    expect(within(groupedDiagnostics).queryByText(/severity/i)).not.toBeInTheDocument()
+    expect(within(groupedDiagnostics).queryByText(/critical/i)).not.toBeInTheDocument()
+  })
+
+  it('renders a neutral fallback when grouped continuity diagnostics are empty', () => {
+    render(<ContinuityDiagnosticsPanel diagnostics={createDiagnostics({ diagnosticGroups: [] })} />)
+
+    const groupedDiagnostics = screen.getByLabelText('Grouped continuity diagnostics')
+
+    expect(
+      within(groupedDiagnostics).getByText('No grouped continuity diagnostics recorded.'),
+    ).toBeInTheDocument()
+  })
+
   it('preserves repeated-signal ordering across indicator groups', () => {
     render(<ContinuityDiagnosticsPanel diagnostics={createDiagnostics()} />)
 
