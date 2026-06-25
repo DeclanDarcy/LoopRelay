@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { EmptyState } from '../../components/design'
-import { DiagnosticList, EvidenceList } from '../../components/explainability'
+import { DiagnosticList } from '../../components/explainability'
 import {
   decisionDiagnosticsToExplanation,
   decisionQualitySignalsToDiagnostics,
@@ -10,7 +10,6 @@ import { DecisionQualityExplanation } from './DecisionQualityExplanation'
 import type {
   DecisionQualityAssessment,
   DecisionQualityReport,
-  DecisionQualitySignal,
   DecisionQualityTrend,
 } from '../../types'
 
@@ -141,9 +140,10 @@ export function DecisionQualityPanel({
           <div className="decision-inspection-list" aria-label="Priority quality signals">
             <h6>Priority Signals</h6>
             {prioritizedSignals.length > 0 ? (
-              prioritizedSignals.map((signal) => (
-                <QualitySignalCard signal={signal} key={`${signal.decisionId}-${signal.id}`} />
-              ))
+              <DiagnosticList
+                diagnostics={decisionQualitySignalsToDiagnostics(prioritizedSignals)}
+                title="Priority Signal Diagnostics"
+              />
             ) : (
               <EmptyState className="empty-state">No priority quality signals are available.</EmptyState>
             )}
@@ -237,23 +237,6 @@ export function DecisionQualityPanel({
         </EmptyState>
       )}
     </section>
-  )
-}
-
-function QualitySignalCard({ signal }: { signal: DecisionQualitySignal }) {
-  const [diagnostic] = decisionQualitySignalsToDiagnostics([signal])
-
-  return (
-    <article className="decision-quality-signal">
-      <div>
-        <span>
-          {signal.category} / {signal.direction} / {signal.severity}
-        </span>
-        <strong>{signal.summary}</strong>
-      </div>
-      <p>{signal.detail}</p>
-      <EvidenceList title="Quality Signal Evidence" evidence={diagnostic?.evidence ?? []} />
-    </article>
   )
 }
 
