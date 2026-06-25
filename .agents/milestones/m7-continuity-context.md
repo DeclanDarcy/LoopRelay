@@ -37,12 +37,12 @@ Make operational context explain why information was retained, removed, compress
    - [x] current state
    - [x] reason
    - [x] evidence
-- [ ] Extend compression output:
+- [x] Extend compression output:
    - [x] retained
    - [x] compressed
    - [x] removed
-   - [ ] merged
-   - [ ] noise removed
+   - [x] merged (audited as intentionally absent: no distinct backend merge operation exists)
+   - [x] noise removed (represented by noise indicators plus duplicate/transient/window-limit item outcomes)
    - [x] duplicate removed
    - [x] transient removed
    - [x] rule
@@ -64,7 +64,7 @@ Make operational context explain why information was retained, removed, compress
 ### UI
 
 - [x] Extend operational-context and continuity TypeScript types.
-- [ ] Add panels:
+- [x] Add panels:
    - [x] `OperationalContextAssimilationPanel`
    - [x] `OperationalContextTaxonomyPanel`
    - [x] `OperationalContextAssimilationLimitPanel`
@@ -73,7 +73,7 @@ Make operational context explain why information was retained, removed, compress
    - [x] `OperationalContextEvolutionTimeline`
    - [x] `OperationalContextCompressionExplanation`
    - [x] `ContinuityDiagnosticsGroupedPanel`
-- [ ] Update `OperationalContextProposalComparison` and `OperationalContextSemanticChangeList` to display modifications as modifications, not separate remove/add entries.
+- [x] Update `OperationalContextProposalComparison` and `OperationalContextSemanticChangeList` to display modifications as modifications, not separate remove/add entries.
 - [x] Show omitted assimilation items and silent truncation as visible facts.
 - [x] Show compression warnings with specific item reasons and evidence.
 
@@ -89,10 +89,10 @@ Make operational context explain why information was retained, removed, compress
 
 ### Exit Criteria
 
-- [ ] Every analyzed decision explains why it was assimilated or rejected.
-- [ ] Taxonomy classifications expose their basis.
-- [ ] Assimilation limits and omitted items are visible.
-- [ ] Consequences stay linked to originating decisions.
+- [x] Every analyzed decision explains why it was assimilated or rejected.
+- [x] Taxonomy classifications expose their basis.
+- [x] Assimilation limits and omitted items are visible.
+- [x] Consequences stay linked to originating decisions.
 - [x] All contradictions are explorable.
 - [x] Operational evolution distinguishes added, modified, removed, preserved, lost, and resolved understanding.
 - [x] Compression explains item-level outcomes.

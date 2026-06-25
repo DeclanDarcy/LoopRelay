@@ -2,10 +2,9 @@
 
 ## Newly Authorized
 
-- Treat the revision-history-backed `OperationalEvolutionTimelineEntry` projection as a significant Milestone 7 increment that closes the gap between summary-level operational evolution and revision-history-backed evolution.
-- Continue the authority split where `UnderstandingDiffService` owns semantic change detection, `ContinuityDiagnosticsService` enriches semantic facts with revision-history context, and React renders typed timeline projections without interpreting operational-context meaning.
-- Keep normalized item-state preservation as an intentionally conservative interim identity fallback until durable cross-revision operational-context item identifiers exist.
-- Make the remaining Milestone 7 work reconciliation-focused rather than broad feature expansion.
-- Reconcile `OperationalContextProposalComparison` and `OperationalContextSemanticChangeList` so they consistently consume the richer typed semantic model.
-- Review `Merged` and item-level `NoiseRemoved` compression outcomes against real backend operations; model them explicitly only if genuine backend semantics exist, otherwise leave them intentionally absent.
-- Before formal Milestone 7 exit, perform a projection-gap audit covering backend projection consumers, absence of UI semantic reconstruction, retirement of compatibility-string surfaces where typed projections exist, and field-to-surface mapping against exit criteria.
+- Declare Milestone 7 complete.
+- Treat the Milestone 7 implementation as satisfying continuity transparency through assimilation transparency, immutable taxonomy basis presentation, excluded-versus-omitted-by-limit visibility, consequence links, structured contradiction presentation, identity-aware semantic modifications, typed semantic change categories, grouped continuity diagnostics, compression summaries, item-level compression explanations, operational evolution timeline, revision-history timeline entries, proposal comparison driven by backend semantic facts, and an exit audit artifact.
+- Preserve the Milestone 7 authority split: `UnderstandingDiffService` remains semantic-change authority, `ContinuityDiagnosticsService` owns diagnostic and revision-history projections, compression semantics remain backend-owned, and React consumes typed projections without reconstructing operational-context meaning.
+- Do not introduce synthetic `Merged` or item-level `NoiseRemoved` outcomes for Milestone 7 because there is no backend merge operation, item-level removals already use concrete backend outcomes, and aggregate noise reporting already exists through `NoiseRemovedIndicators`.
+- Start Milestone 8 with an explanation surface inventory across workflow, governance, decisions, execution, reasoning, continuity, health, diagnostics, and certification.
+- For the first Milestone 8 goal, extract presentation primitives that organize already-authoritative projections without introducing a second semantic model.

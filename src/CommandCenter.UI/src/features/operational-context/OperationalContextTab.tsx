@@ -298,6 +298,7 @@ export function OperationalContextTab({
             <OperationalContextProposalComparison
               currentContent={currentContent}
               proposedContent={proposalDraft}
+              semanticChanges={proposal.semanticChanges}
             />
           </div>
         ) : null}

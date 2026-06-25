@@ -2801,6 +2801,93 @@ button:focus-visible {
   gap: 0.35rem;
 }
 
+.proposal-comparison {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.proposal-modification-summary {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--bg-inset);
+}
+
+.proposal-modification-summary h5 {
+  margin: 0;
+}
+
+.proposal-modification-summary > ul {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.proposal-modification-summary > ul > li {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--bg-panel);
+  color: var(--fg-muted);
+  font-size: 0.84rem;
+  overflow-wrap: anywhere;
+}
+
+.proposal-modification-summary strong {
+  color: var(--fg-default);
+  font-weight: 750;
+}
+
+.proposal-modification-states {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+}
+
+.proposal-modification-states div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.proposal-modification-states dt,
+.proposal-modification-states dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.proposal-modification-states dt {
+  color: var(--fg-subtle);
+  font-size: 0.72rem;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.proposal-modification-states dd {
+  color: var(--fg-muted);
+}
+
+.proposal-modification-evidence {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+  list-style: disc;
+}
+
 .proposal-comparison-grid {
   min-width: 0;
   display: grid;

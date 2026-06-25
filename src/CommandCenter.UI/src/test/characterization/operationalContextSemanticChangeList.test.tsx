@@ -78,7 +78,7 @@ describe('operational context semantic change list rendering characterization', 
       },
     ])
 
-    expect(screen.getByRole('heading', { name: 'Constraints' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Modified' })).toBeInTheDocument()
     expect(screen.getByText('ModifiedConstraint: Updated the deployment constraint.')).toBeInTheDocument()
     expect(screen.getByText('Identity basis')).toBeInTheDocument()
     expect(screen.getByText('normalized-kind-and-source')).toBeInTheDocument()
@@ -89,5 +89,36 @@ describe('operational context semantic change list rendering characterization', 
     expect(screen.getByText('Reason')).toBeInTheDocument()
     expect(screen.getByText('Current context records the automation boundary.')).toBeInTheDocument()
     expect(screen.getByText('.agents/operational_context.md#constraints')).toBeInTheDocument()
+  })
+
+  it('places modification facts before other semantic outcomes', () => {
+    renderList([
+      {
+        type: 'RiskRetired',
+        section: 'Active Risks',
+        description: 'Retired the flaky certification risk.',
+        itemId: 'risk-1',
+        previousState: null,
+        currentState: null,
+        modificationReason: null,
+        identityBasis: null,
+        supportingEvidence: [],
+      },
+      {
+        type: 'ModifiedWorkflow',
+        section: 'Workflow',
+        description: 'Updated continuation ownership.',
+        itemId: 'workflow-1',
+        previousState: 'React derived continuation state.',
+        currentState: 'Workflow projection owns continuation state.',
+        modificationReason: 'Matched workflow lifecycle item by source.',
+        identityBasis: 'normalized-kind-and-source',
+        supportingEvidence: [],
+      },
+    ])
+
+    const headings = screen.getAllByRole('heading', { level: 6 }).map((heading) => heading.textContent)
+
+    expect(headings).toEqual(['Modified', 'Risks'])
   })
 })

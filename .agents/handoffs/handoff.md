@@ -2,30 +2,27 @@
 
 ## New State This Slice
 
-- Continued Milestone 7 continuity and operational-context transparency.
-- Rotated previous handoff to `.agents/handoffs/handoff.0065.md`.
-- Added `OperationalEvolutionTimelineEntry` and `OperationalEvolutionSummary.TimelineEntries`.
-- `ContinuityDiagnosticsService` now builds revision-history timeline entries from the latest two operational-context revisions.
-- Timeline entries include outcome, semantic event type, section, description, item id, previous state, current state, reason, identity basis, previous/current revision numbers, and supporting evidence.
-- Modified entries continue to come from `UnderstandingDiffService` identity-aware semantic changes.
-- Preserved entries are emitted when normalized operational-context items remain present across both compared revisions.
-- Removed open questions and active risks are classified as resolved when the current revision records matching `Resolved question:` or `Retired risk:` evidence; otherwise they are classified as lost.
-- The Continuity diagnostics tab now renders backend `timelineEntries` via `OperationalContextEvolutionTimeline`.
-- The proposal-review timeline remains compatible with `semanticChanges`.
-- Updated Milestone 7 checklist to mark operational evolution reporting and its exit criterion complete.
+- Continued and completed Milestone 7 continuity and operational-context transparency.
+- Rotated previous handoff to `.agents/handoffs/handoff.0066.md`.
+- `OperationalContextProposalComparison` now accepts backend `semanticChanges` and renders a leading `Modification Review` section with type, description, section, previous state, current state, reason, identity basis, and evidence before the raw current/proposed markdown panes.
+- `OperationalContextTab` now passes proposal semantic changes into `OperationalContextProposalComparison`.
+- `OperationalContextSemanticChangeList` now renders modification facts first under a `Modified` group, then renders remaining backend-provided semantic changes by the selected grouping mode.
+- Added characterization coverage for proposal-comparison modification facts and modification-first semantic-change ordering.
+- Added `.agents/milestones/m7-continuity-exit-audit.md` documenting projection coverage, UI reconstruction boundaries, compression taxonomy, and exit-criteria mapping.
+- Updated `.agents/milestones/m7-continuity-context.md` to mark Milestone 7 complete, including compression `merged` and item-level `noise removed` as audited/intentional absences rather than synthetic outcomes.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter ContinuityDiagnosticsServiceTests`
-- `npm test -- --run src/test/characterization/continuityDiagnosticsPanel.test.tsx src/test/characterization/operationalContextEvolutionTimeline.test.tsx`
+- `npm test -- --run src/test/characterization/operationalContextProposalComparison.test.tsx src/test/characterization/operationalContextSemanticChangeList.test.tsx`
+- `npm test -- --run src/test/characterization/operationalContextProposalComparison.test.tsx src/test/characterization/operationalContextSemanticChangeList.test.tsx src/test/characterization/operationalContextEvolutionTimeline.test.tsx src/test/characterization/continuityDiagnosticsPanel.test.tsx src/test/characterization/operationalContextCompressionExplanation.test.tsx src/test/characterization/operationalContextCompressionSummaryPanel.test.tsx src/test/characterization/operationalContextAssimilationPanels.test.tsx`
 - `npm run build`
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "ContinuityDiagnosticsServiceTests|OperationalContextGenerationTests"`
 
 ## Residual Risk
 
-- Milestone 7 still has open compression taxonomy gaps for item-level `Merged` and distinct `NoiseRemoved` outcomes.
-- Milestone 7 still has an unchecked UI task to update `OperationalContextProposalComparison` and `OperationalContextSemanticChangeList` so modification presentation is consistently modification-first rather than side-by-side markdown.
-- Preservation matching uses normalized item state; if future backend item ids become stable across persisted operational-context revisions, preservation identity could be made stronger.
+- Milestone 7 is checklist-complete, but compression still has no distinct backend merge operation and no separate item-level `NoiseRemoved` outcome; the audit records why these remain intentionally absent.
+- The UI still keeps raw markdown comparison panes as context previews, but modification explanation is now driven by backend semantic changes.
 
 ## Recommended Next Slice
 
-- Reconcile the remaining Milestone 7 UI checklist item for `OperationalContextProposalComparison` and `OperationalContextSemanticChangeList`, then audit whether the remaining compression `merged` and `noise removed` checklist items are supported by backend semantics or should stay explicitly deferred.
+- Start Milestone 8 unified explainability layer by inventorying existing explanation surfaces across workflow, governance, decisions, execution, reasoning, and continuity, then extract the smallest shared presentation primitives that preserve each backend authority.

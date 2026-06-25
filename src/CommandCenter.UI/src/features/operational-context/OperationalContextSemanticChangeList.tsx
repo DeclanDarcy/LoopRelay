@@ -103,7 +103,9 @@ export function OperationalContextSemanticChangeList({
   title = 'Semantic Changes',
   emptyText = 'No coarse semantic changes detected.',
 }: OperationalContextSemanticChangeListProps) {
-  const groupedChanges = semanticChanges.reduce<Record<string, OperationalContextSemanticChange[]>>(
+  const modificationChanges = semanticChanges.filter(isModificationChange)
+  const remainingChanges = semanticChanges.filter((change) => !isModificationChange(change))
+  const groupedChanges = remainingChanges.reduce<Record<string, OperationalContextSemanticChange[]>>(
     (groups, change) => {
       const category =
         grouping === 'outcome' ? getSemanticChangeOutcome(change.type) : getSemanticChangeCategory(change.type)
@@ -121,17 +123,22 @@ export function OperationalContextSemanticChangeList({
         <p>{emptyText}</p>
       ) : (
         <div className="semantic-change-groups">
+          {modificationChanges.length > 0 ? (
+            <div>
+              <h6>Modified</h6>
+              <ul>
+                {modificationChanges.map((change, index) => (
+                  <SemanticChangeItem change={change} key={`${change.type}-${change.itemId ?? index}`} />
+                ))}
+              </ul>
+            </div>
+          ) : null}
           {Object.entries(groupedChanges).map(([category, changes]) => (
             <div key={category}>
               <h6>{category}</h6>
               <ul>
                 {changes.map((change, index) => (
-                  <li className="semantic-change-item" key={`${change.type}-${change.itemId ?? index}`}>
-                    <strong>
-                      {change.type}: {change.description}
-                    </strong>
-                    <SemanticChangeMetadata change={change} />
-                  </li>
+                  <SemanticChangeItem change={change} key={`${change.type}-${change.itemId ?? index}`} />
                 ))}
               </ul>
             </div>
@@ -139,6 +146,21 @@ export function OperationalContextSemanticChangeList({
         </div>
       )}
     </>
+  )
+}
+
+function SemanticChangeItem({
+  change,
+}: {
+  change: OperationalContextSemanticChange
+}) {
+  return (
+    <li className="semantic-change-item">
+      <strong>
+        {change.type}: {change.description}
+      </strong>
+      <SemanticChangeMetadata change={change} />
+    </li>
   )
 }
 
@@ -170,5 +192,14 @@ function SemanticChangeMetadata({ change }: { change: OperationalContextSemantic
         </ul>
       ) : null}
     </>
+  )
+}
+
+function isModificationChange(change: OperationalContextSemanticChange) {
+  return (
+    change.type.includes('Modified') ||
+    change.type.includes('Changed') ||
+    change.previousState !== null ||
+    change.currentState !== null
   )
 }
