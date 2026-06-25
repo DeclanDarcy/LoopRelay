@@ -2405,6 +2405,146 @@ button:focus-visible {
   padding-left: 18px;
 }
 
+.operational-evolution-timeline {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--bg-inset);
+}
+
+.operational-evolution-timeline h5,
+.operational-evolution-lane h6 {
+  margin: 0;
+  color: var(--fg-default);
+  letter-spacing: 0;
+}
+
+.operational-evolution-timeline h5 {
+  font-size: 0.9rem;
+}
+
+.operational-evolution-lanes {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.operational-evolution-lane {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.operational-evolution-lane h6 {
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.operational-evolution-lane ol {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.operational-evolution-item {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--surface-1);
+  overflow-wrap: anywhere;
+}
+
+.operational-evolution-item[data-outcome='Added'],
+.operational-evolution-item[data-outcome='Preserved'],
+.operational-evolution-item[data-outcome='Resolved'] {
+  border-color: var(--status-success-muted);
+}
+
+.operational-evolution-item[data-outcome='Modified'] {
+  border-color: var(--status-info-muted);
+}
+
+.operational-evolution-item[data-outcome='Removed'],
+.operational-evolution-item[data-outcome='Lost'] {
+  border-color: var(--status-warning-muted);
+}
+
+.operational-evolution-item-header {
+  min-width: 0;
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.operational-evolution-item-header strong,
+.operational-evolution-item-header span,
+.operational-evolution-section,
+.operational-evolution-facts dt,
+.operational-evolution-facts dd,
+.operational-evolution-evidence li {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.operational-evolution-item-header strong {
+  color: var(--fg-default);
+  font-size: 0.86rem;
+}
+
+.operational-evolution-item-header span,
+.operational-evolution-section,
+.operational-evolution-facts dt {
+  color: var(--fg-subtle);
+  font-size: 0.72rem;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.operational-evolution-facts {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+}
+
+.operational-evolution-facts div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.operational-evolution-facts dt,
+.operational-evolution-facts dd {
+  margin: 0;
+}
+
+.operational-evolution-facts dd,
+.operational-evolution-evidence li,
+.operational-evolution-timeline p {
+  color: var(--fg-muted);
+  font-size: 0.84rem;
+}
+
+.operational-evolution-evidence {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+}
+
 .commit-review-panel,
 .commit-message-editor,
 .proposal-editor,

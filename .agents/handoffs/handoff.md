@@ -2,29 +2,30 @@
 
 ## New State This Slice
 
-- Continued Milestone 7 continuity diagnostics transparency.
-- Rotated previous handoff to `.agents/handoffs/handoff.0063.md`.
-- Extended `ContinuityDiagnosticsService` grouped diagnostics so backend projection now emits normalized categories for assimilation, classification, contradictions, evolution, diff, lost understanding, resolved understanding, compression, and recovery.
-- Added backend recovery diagnostics from proposal lifecycle attention states, stale review reasons, and promotion write/archive failure reasons.
-- Added backend classification diagnostics from existing `DecisionTaxonomyBasis` counts instead of deriving classification status in React.
-- Added backend assimilation diagnostics from existing decision-assimilation limits and per-decision assimilation records.
-- Added backend contradiction diagnostics from existing projected decision contradictions.
-- Added compression diagnostic coverage for noise-removed indicator counts.
-- Added backend test coverage asserting all Milestone 7 diagnostic categories are projected and that assimilation, classification, contradiction, and recovery facts are populated from authoritative backend state.
-- Updated Milestone 7 checklist to mark normalized continuity diagnostics and `ContinuityDiagnosticsGroupedPanel` complete.
+- Continued Milestone 7 continuity and operational-context transparency.
+- Rotated previous handoff to `.agents/handoffs/handoff.0064.md`.
+- Added `OperationalContextEvolutionTimeline` to the operational-context proposal review flow.
+- The timeline renders backend-provided semantic changes as added, modified, removed, preserved, lost, resolved, or other lifecycle lanes.
+- The timeline displays backend-provided section, semantic event type, previous state, current state, modification reason, identity basis, item id, and supporting evidence.
+- React still does not parse proposal markdown or rebuild modification relationships for the timeline.
+- Added CSS for the timeline using existing UI tokens and responsive wrapping.
+- Added UI characterization coverage for empty state, lifecycle lane rendering, and modification metadata/evidence rendering.
+- Updated the Milestone 7 checklist to mark `OperationalContextEvolutionTimeline` complete.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "ContinuityDiagnosticsServiceTests"`
+- `npm test -- --run src/test/characterization/operationalContextEvolutionTimeline.test.tsx src/test/characterization/operationalContextSemanticChangeList.test.tsx`
+- `npm test -- --run src/test/characterization/operationalContextEvolutionTimeline.test.tsx`
+- `npm run build`
 
 ## Residual Risk
 
-- Milestone 7 still has open operational evolution reporting/timeline work.
-- Compression taxonomy still has unchecked `merged` and distinct `noise removed` output-category items; diagnostics now count noise indicators, but compression item outcomes still do not expose a dedicated `NoiseRemoved` outcome.
-- `OperationalContextEvolutionTimeline` remains unbuilt.
-- `OperationalContextProposalComparison` remains markdown side-by-side; `OperationalContextSemanticChangeList` handles typed semantic changes.
+- Backend operational evolution reporting remains open for explicit revision-history event detail, especially preserved/lost/resolved previous/current state, reason, and evidence beyond currently available semantic changes and summary counts.
+- The broader Milestone 7 exit criterion for operational evolution is intentionally still unchecked.
+- Compression taxonomy gaps for item-level `Merged` and distinct `NoiseRemoved` outcomes remain unresolved.
+- `OperationalContextProposalComparison` remains markdown side-by-side; `OperationalContextSemanticChangeList` and the new timeline surface typed semantic changes.
 
 ## Recommended Next Slice
 
-- Continue Milestone 7 with operational evolution reporting and `OperationalContextEvolutionTimeline`, using existing `OperationalEvolutionSummary.semanticChanges` and preserving backend-owned previous/current state, reason, and evidence.
-- Then reconcile compression taxonomy gaps for `Merged` and item-level `NoiseRemoved` only where backend semantics truly distinguish them.
+- Extend backend `OperationalEvolutionSummary` with explicit timeline entries for revision-history evolution, using `UnderstandingDiffService` semantic changes plus preserved item evidence from previous/current operational-context documents.
+- Then surface that summary in the Continuity diagnostics tab, reusing the timeline component shape only if the backend projection supplies authoritative previous/current state, reason, and evidence.

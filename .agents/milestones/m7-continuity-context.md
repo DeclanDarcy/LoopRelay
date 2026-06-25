@@ -70,7 +70,7 @@ Make operational context explain why information was retained, removed, compress
    - [x] `OperationalContextAssimilationLimitPanel`
    - [x] `OperationalContextConsequencePanel`
    - [x] `OperationalContextContradictionPanel`
-   - [ ] `OperationalContextEvolutionTimeline`
+   - [x] `OperationalContextEvolutionTimeline`
    - [x] `OperationalContextCompressionExplanation`
    - [x] `ContinuityDiagnosticsGroupedPanel`
 - [ ] Update `OperationalContextProposalComparison` and `OperationalContextSemanticChangeList` to display modifications as modifications, not separate remove/add entries.
