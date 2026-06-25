@@ -5,6 +5,7 @@ import type {
   DecisionCertificationEvidence,
   DecisionEvidence,
   DecisionEvidenceInspectionItem,
+  DecisionGenerationExecutiveReport,
   DecisionGenerationCertificationFinding,
   DecisionGenerationDiagnostics,
   DecisionGovernanceFinding,
@@ -162,6 +163,29 @@ export function decisionGenerationCertificationFindingsToExplanation(
     ],
     diagnostics: [],
   }))
+}
+
+export function decisionGenerationExecutiveReportToEvidence(
+  report: DecisionGenerationExecutiveReport,
+): ExplanationEvidence[] {
+  return report.evidence.map((item, index) => ({
+    id: `generation-executive-evidence-${index}`,
+    label: 'Executive readiness evidence',
+    detail: item,
+  }))
+}
+
+export function decisionGenerationExecutiveReportToDiagnostics(
+  report: DecisionGenerationExecutiveReport,
+): ExplanationDiagnostic[] {
+  return [
+    ...report.blockingGaps.map((gap) => ({
+      label: 'Executive readiness blocking gap',
+      detail: gap,
+      tone: 'warning' as const,
+    })),
+    ...decisionDiagnosticsToExplanation(report.diagnostics, 'Executive readiness diagnostic'),
+  ]
 }
 
 export function decisionDiagnosticsToExplanation(

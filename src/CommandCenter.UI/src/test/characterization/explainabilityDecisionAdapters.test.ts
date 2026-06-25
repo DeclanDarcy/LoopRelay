@@ -4,6 +4,8 @@ import {
   decisionDiagnosticsToExplanation,
   decisionEvidenceInspectionItemsToEvidence,
   decisionGenerationCertificationFindingsToExplanation,
+  decisionGenerationExecutiveReportToDiagnostics,
+  decisionGenerationExecutiveReportToEvidence,
   decisionGenerationDiagnosticsToRejectedOptionDiagnostics,
   decisionGovernanceFindingsToCertificationFindings,
   decisionGovernanceFindingsToDiagnostics,
@@ -24,6 +26,7 @@ import {
 import type {
   DecisionCertificationEvidence,
   DecisionGenerationDiagnostics,
+  DecisionGenerationExecutiveReport,
   DecisionEvidenceInspectionItem,
   DecisionGenerationCertificationFinding,
   DecisionGovernanceFinding,
@@ -146,6 +149,44 @@ describe('decision explainability adapters', () => {
           { label: 'Decision DEC-0001', detail: 'Related decision' },
         ],
         diagnostics: [],
+      },
+    ])
+  })
+
+  it('preserves generation executive readiness evidence and blocking gaps as shared explainability facts', () => {
+    const report: DecisionGenerationExecutiveReport = {
+      replacementReady: false,
+      answer: 'System generation has not replaced primary human decision production.',
+      summary: 'Quality and execution evidence are incomplete.',
+      evidence: [
+        'Generated decisions resolved: 1.',
+        'Execution influence coverage: 0%.',
+      ],
+      blockingGaps: ['workflow-replacement failed because quality evidence is missing.'],
+      diagnostics: ['Executive readiness avoids an opaque numeric score.'],
+    }
+
+    expect(decisionGenerationExecutiveReportToEvidence(report)).toEqual([
+      {
+        id: 'generation-executive-evidence-0',
+        label: 'Executive readiness evidence',
+        detail: 'Generated decisions resolved: 1.',
+      },
+      {
+        id: 'generation-executive-evidence-1',
+        label: 'Executive readiness evidence',
+        detail: 'Execution influence coverage: 0%.',
+      },
+    ])
+    expect(decisionGenerationExecutiveReportToDiagnostics(report)).toEqual([
+      {
+        label: 'Executive readiness blocking gap',
+        detail: 'workflow-replacement failed because quality evidence is missing.',
+        tone: 'warning',
+      },
+      {
+        label: 'Executive readiness diagnostic',
+        detail: 'Executive readiness avoids an opaque numeric score.',
       },
     ])
   })

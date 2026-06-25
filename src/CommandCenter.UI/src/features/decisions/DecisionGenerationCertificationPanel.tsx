@@ -1,7 +1,9 @@
 import { EmptyState } from '../../components/design'
-import { CertificationFindingsView, DiagnosticList } from '../../components/explainability'
+import { CertificationFindingsView, DiagnosticList, EvidenceList } from '../../components/explainability'
 import {
   decisionDiagnosticsToExplanation,
+  decisionGenerationExecutiveReportToDiagnostics,
+  decisionGenerationExecutiveReportToEvidence,
   decisionGenerationCertificationFindingsToExplanation,
 } from '../../lib/explainability'
 import type {
@@ -151,20 +153,16 @@ function ExecutiveReadinessSummary({ report }: { report: DecisionGenerationCerti
         <span>{formatRate(report.workflowReport.executionInfluenceCoverageRate)} influence coverage</span>
         <span>{formatRate(report.workflowReport.recommendationDivergenceRate)} recommendation divergence</span>
       </div>
-      {report.executiveReport.evidence.length > 0 ? (
-        <div className="decision-warning-list" aria-label="Executive replacement readiness evidence">
-          {report.executiveReport.evidence.map((item) => (
-            <span key={item}>{item}</span>
-          ))}
-        </div>
-      ) : null}
-      {report.executiveReport.blockingGaps.length > 0 ? (
-        <div className="decision-warning-list" aria-label="Executive replacement readiness blocking gaps">
-          {report.executiveReport.blockingGaps.map((gap) => (
-            <span key={gap}>{gap}</span>
-          ))}
-        </div>
-      ) : null}
+      <EvidenceList
+        evidence={decisionGenerationExecutiveReportToEvidence(report.executiveReport)}
+        emptyLabel="No executive readiness evidence projected."
+        title="Executive Readiness Evidence"
+      />
+      <DiagnosticList
+        diagnostics={decisionGenerationExecutiveReportToDiagnostics(report.executiveReport)}
+        emptyLabel="No executive readiness diagnostics or blocking gaps projected."
+        title="Executive Readiness Diagnostics"
+      />
     </div>
   )
 }
