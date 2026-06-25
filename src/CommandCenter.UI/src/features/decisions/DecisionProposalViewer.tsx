@@ -1,6 +1,7 @@
 import { Badge, EmptyState } from '../../components/design'
 import type {
   DecisionEvidence,
+  DecisionLifecycleEntityEligibility,
   DecisionProposal,
   DecisionReviewWorkspace,
   DecisionSourceReference,
@@ -8,10 +9,11 @@ import type {
 
 type DecisionProposalViewerProps = {
   workspace: DecisionReviewWorkspace | null
+  eligibility?: DecisionLifecycleEntityEligibility | null
   isLoading: boolean
 }
 
-export function DecisionProposalViewer({ workspace, isLoading }: DecisionProposalViewerProps) {
+export function DecisionProposalViewer({ workspace, eligibility = null, isLoading }: DecisionProposalViewerProps) {
   if (!workspace) {
     return (
       <section className="decision-lifecycle-panel decision-proposal-viewer" aria-label="Proposal viewer">
@@ -24,6 +26,7 @@ export function DecisionProposalViewer({ workspace, isLoading }: DecisionProposa
   }
 
   const { proposal, review, notes, revisions, diagnostics } = workspace
+  const lastTransition = getLastTransition(proposal.history)
 
   return (
     <section className="decision-lifecycle-panel decision-proposal-viewer" aria-label="Proposal viewer">
@@ -46,6 +49,72 @@ export function DecisionProposalViewer({ workspace, isLoading }: DecisionProposa
         <p>{proposal.context}</p>
         <small>Historical revisions explain proposal evolution; this current proposal remains authoritative.</small>
       </article>
+
+      <section className="decision-lifecycle-eligibility" aria-label="Proposal review state">
+        <div>
+          <span>Current review state</span>
+          <strong>{review.state}</strong>
+        </div>
+        <div>
+          <span>Review updated</span>
+          <strong>{formatDate(review.updatedAt)}</strong>
+        </div>
+        <div>
+          <span>Proposal lifecycle state</span>
+          <strong>{eligibility?.currentState ?? proposal.state}</strong>
+        </div>
+        <div>
+          <span>Last transition</span>
+          <strong>{lastTransition ? formatTransition(lastTransition) : 'No lifecycle transition recorded'}</strong>
+        </div>
+        {lastTransition?.reason ? (
+          <div>
+            <span>Last transition reason</span>
+            <strong>{lastTransition.reason}</strong>
+          </div>
+        ) : null}
+        {review.reason ? (
+          <div>
+            <span>Review reason</span>
+            <strong>{review.reason}</strong>
+          </div>
+        ) : null}
+        {eligibility ? (
+          <>
+            <div>
+              <span>Allowed transitions</span>
+              <strong>{eligibility.allowedNextStates.join(', ') || 'None'}</strong>
+            </div>
+            <div>
+              <span>Allowed actions</span>
+              <strong>{eligibility.allowedActions.map((action) => action.displayName).join(', ') || 'None'}</strong>
+            </div>
+            {eligibility.blockedActions.length > 0 ? (
+              <ul className="decision-lifecycle-reasons" aria-label="Proposal unavailable transition reasons">
+                {eligibility.blockedActions.map((action) => (
+                  <li key={action.commandName}>
+                    <strong>{action.displayName}</strong>
+                    <span>{action.reason ?? 'Blocked by backend lifecycle rules.'}</span>
+                    <small>{action.governingRule}</small>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {eligibility.diagnostics.length > 0 ? (
+              <ul className="decision-lifecycle-reasons" aria-label="Proposal review diagnostics">
+                {eligibility.diagnostics.map((diagnostic) => (
+                  <li key={diagnostic}>{diagnostic}</li>
+                ))}
+              </ul>
+            ) : null}
+          </>
+        ) : (
+          <div>
+            <span>Allowed transitions</span>
+            <strong>Lifecycle eligibility has not loaded.</strong>
+          </div>
+        )}
+      </section>
 
       <div className="decision-diagnostics-grid" aria-label="Review diagnostics">
         <span>{diagnostics.optionCount} options</span>
@@ -235,4 +304,17 @@ function formatDate(value: string) {
   }
 
   return date.toLocaleString()
+}
+
+function getLastTransition(history: DecisionProposal['history'][number][]) {
+  return [...history]
+    .reverse()
+    .find((entry) => entry.fromState !== entry.toState && (entry.fromState || entry.toState))
+}
+
+function formatTransition(entry: DecisionProposal['history'][number]) {
+  const fromState = entry.fromState ?? 'None'
+  const toState = entry.toState ?? 'None'
+
+  return `${entry.action}: ${fromState} -> ${toState}`
 }

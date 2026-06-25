@@ -2,29 +2,18 @@
 
 ## Newly Authorized
 
-- Accept the candidate duplicate-status rendering slice as architecturally consistent with Milestone 3.
-- Treat candidate duplicate rendering as complete when it presents backend-authored lifecycle facts instead of reconstructing duplicate relationships in React.
-- Preserve duplicate status ownership in the decision domain through candidate history and source references.
-- Render duplicate target identity from the serialized lifecycle record rather than frontend candidate-list matching or heuristics.
-- Render duplicate transition reason directly from backend-authored candidate history.
-- Continue the projection-first explanation pattern across decision, workflow, governance, execution, reasoning, and continuity surfaces.
-- Keep proposal review transparency together in one focused slice.
-- Make one proposal review panel the obvious source of truth for:
-  - current review state
-  - last transition
-  - allowed transitions
-  - blocked transitions
-  - unavailable reasons
-- Avoid scattering proposal review semantics across multiple components.
-- After proposal review transparency, perform the MVP disposition audit for:
-  - review notes
-  - revision list
-  - revision comparison
-  - context snapshot listing
-- Record explicit Core MVP, Deferred, Internal, or Remove dispositions for lower-priority lifecycle features instead of leaving them unresolved.
-- Treat remaining Milestone 3 work as:
-  - proposal review transparency
-  - MVP feature disposition audit
-  - end-to-end lifecycle characterization
-  - milestone exit audit
-- After accepted work is complete, rotate decisions, stage, commit, push, and stop executing.
+- Accept the proposal review transparency slice as architecturally complete for the proposal-review portion of Milestone 3.
+- Treat proposal review as projection-driven when the UI renders backend-owned proposal history, review state, and lifecycle eligibility rather than interpreting lifecycle meaning in React.
+- Use `proposal.history` as the authority for proposal last transition and transition reason.
+- Keep `DecisionLifecycleRules -> Eligibility Projection -> Proposal Viewer` as the lifecycle semantics path for proposal review.
+- Treat review state, lifecycle state, last transition, review reason, transition reason, allowed transitions, allowed actions, blocked transitions, and governing rules as semantic facts supplied by backend projections.
+- Defer the Proposal Actions panel consolidation decision until the proposal feature disposition audit.
+- Evaluate the Proposal Actions panel by semantic duplication, not by component count.
+- Classify lower-priority proposal features against whether they are necessary for the decision lifecycle MVP and whether they add unique semantic value.
+- Use the initial disposition expectations:
+  - proposal review notes: Core MVP only if they participate in lifecycle or governance; otherwise Deferred
+  - proposal revision list: Deferred unless already integrated into current review flow
+  - revision comparison: Deferred
+  - context snapshot listing: Internal or Deferred unless required to explain review decisions
+- Treat remaining Milestone 3 work as proposal feature disposition audit, Proposal Actions panel consolidation decision, end-to-end lifecycle characterization, and Milestone 3 exit audit.
+- Stage, commit, and push the accepted proposal review transparency slice before continuing Milestone 3 closure work.

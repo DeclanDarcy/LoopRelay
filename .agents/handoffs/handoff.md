@@ -2,30 +2,35 @@
 
 ## New State This Slice
 
-- Continued Milestone 3: Decision Pipeline Completion, focusing on candidate duplicate-status rendering.
-- Updated `DecisionCandidateBrowser` to render duplicate status from backend-serialized candidate history and source references.
-- Duplicate candidates now show `Duplicates {candidateId}` in candidate rows when the backend duplicate transition includes a target candidate source.
-- The selected candidate panel now renders an explicit duplicate-status notice with:
-  - duplicate target candidate id
-  - backend transition reason
-- Added UI characterization coverage for duplicate status rendered from candidate transition history.
-- Updated `.agents/milestones/m3-decision-pipeline.md` to mark candidate duplicate-status rendering complete.
-- Rotated previous handoff to `.agents/handoffs/handoff.0015.md`.
+- Continued Milestone 3: Decision Pipeline Completion, focusing on proposal review transparency.
+- `DecisionProposalViewer` now accepts the selected proposal lifecycle eligibility projection from `DecisionLifecycleTab`.
+- The proposal viewer now renders an authoritative `Proposal review state` block with:
+  - current backend review state
+  - backend review updated timestamp
+  - backend proposal lifecycle state
+  - last lifecycle transition from `proposal.history`
+  - last transition reason
+  - review reason
+  - allowed next transitions and allowed actions from lifecycle eligibility
+  - unavailable transition reasons and governing rules from lifecycle eligibility
+- `DecisionLifecycleTab` passes the selected proposal eligibility into `DecisionProposalViewer`.
+- Added characterization coverage for review state, last transition, allowed transition, unavailable transition reason, and governing rule rendering.
+- Scoped an existing lifecycle-navigation assertion because blocked proposal reasons now intentionally render in both the viewer and the action-control panel.
+- Updated `.agents/milestones/m3-decision-pipeline.md` to mark proposal viewer review-state and transition transparency complete.
+- Rotated previous handoff to `.agents/handoffs/handoff.0016.md`.
 
 ## Verification
 
-- `npm test -- --run src/test/characterization/decisionCandidateBrowser.test.tsx` passed with 7 tests.
+- `npm test -- --run src/test/characterization/decisionProposalViewer.test.tsx` passed with 4 tests.
+- `npm test -- --run src/test/characterization/decisionLifecycleNavigation.test.tsx` passed with 4 tests.
 - `npm run build` passed.
 
 ## Remaining Milestone 3 Work
 
-- Finish proposal review transparency beyond controls:
-  - last transition rendering
-  - review-state placement audit
-  - any missing unavailable transition diagnostics
+- Perform the review-state placement audit and decide whether the separate Proposal Actions panel should remain as-is or be consolidated with the viewer in a later cleanup.
 - Classify lower-priority lifecycle features as Core MVP, Deferred, Internal, or Remove:
   - proposal review notes
   - proposal revision list
   - revision comparison
   - context snapshot listing
-- Add broader end-to-end lifecycle characterization after review-transparency details are complete.
+- Add broader end-to-end lifecycle characterization after the disposition audit.

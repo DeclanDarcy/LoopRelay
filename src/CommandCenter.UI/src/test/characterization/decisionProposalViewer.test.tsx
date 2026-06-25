@@ -1,7 +1,7 @@
 import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { DecisionProposalViewer } from '../../features/decisions/DecisionProposalViewer'
-import type { DecisionReviewWorkspace } from '../../types'
+import type { DecisionLifecycleEntityEligibility, DecisionReviewWorkspace } from '../../types'
 
 afterEach(() => {
   cleanup()
@@ -43,6 +43,34 @@ describe('DecisionProposalViewer', () => {
     const revisions = screen.getByLabelText('Proposal revisions')
     expect(within(revisions).getByText('REV-0001')).toBeInTheDocument()
     expect(within(revisions).getByText('context, options')).toBeInTheDocument()
+  })
+
+  it('renders backend review state, last transition, and unavailable transition reasons', () => {
+    render(
+      <DecisionProposalViewer
+        workspace={createWorkspace()}
+        eligibility={createEligibility()}
+        isLoading={false}
+      />,
+    )
+
+    const reviewState = screen.getByLabelText('Proposal review state')
+
+    expect(within(reviewState).getByText('Current review state')).toBeInTheDocument()
+    expect(within(reviewState).getAllByText('Viewed')).toHaveLength(2)
+    expect(within(reviewState).getByText(/Generated -> Viewed/)).toBeInTheDocument()
+    expect(within(reviewState).getByText('Reviewer opened the generated proposal.')).toBeInTheDocument()
+    expect(within(reviewState).getByText('Allowed transitions')).toBeInTheDocument()
+    expect(within(reviewState).getByText('NeedsRefinement')).toBeInTheDocument()
+
+    const unavailableReasons = screen.getByLabelText('Proposal unavailable transition reasons')
+    expect(within(unavailableReasons).getByText('Ready for resolution')).toBeInTheDocument()
+    expect(
+      within(unavailableReasons).getByText('Proposal must be refined before resolution readiness.'),
+    ).toBeInTheDocument()
+    expect(
+      within(unavailableReasons).getByText('DecisionLifecycleRules.ValidateProposalTransition'),
+    ).toBeInTheDocument()
   })
 })
 
@@ -120,14 +148,24 @@ function createWorkspace(): DecisionReviewWorkspace {
           sources: [source],
         },
       ],
-      history: [],
+      history: [
+        {
+          at: '2026-06-22T17:02:00.000Z',
+          actor: 'DecisionProposalReviewService',
+          action: 'MarkViewed',
+          fromState: 'Generated',
+          toState: 'Viewed',
+          reason: 'Reviewer opened the generated proposal.',
+          sources: [source],
+        },
+      ],
     },
     review: {
       repositoryId: 'repo-alpha',
       proposalId: 'PROP-0001',
-      state: 'NotStarted',
+      state: 'Viewed',
       updatedAt: '2026-06-22T17:00:00.000Z',
-      reason: null,
+      reason: 'Review workspace loaded.',
       sources: [source],
     },
     notes: [
@@ -187,5 +225,44 @@ function createWorkspace(): DecisionReviewWorkspace {
       packageSourceProposalFingerprint: 'proposal-fingerprint-current',
       isPackageCurrentForProposalContent: true,
     },
+  }
+}
+
+function createEligibility(): DecisionLifecycleEntityEligibility {
+  return {
+    entityKind: 'Proposal',
+    entityId: 'PROP-0001',
+    currentState: 'Viewed',
+    allowedActions: [
+      {
+        commandName: 'mark_decision_proposal_needs_refinement',
+        displayName: 'Needs refinement',
+        targetState: 'NeedsRefinement',
+        isAllowed: true,
+        requiredInputs: ['reason'],
+        reason: null,
+        governingRule: 'DecisionLifecycleRules.ValidateProposalTransition',
+      },
+    ],
+    blockedActions: [
+      {
+        commandName: 'mark_decision_proposal_ready_for_resolution',
+        displayName: 'Ready for resolution',
+        targetState: 'ReadyForResolution',
+        isAllowed: false,
+        requiredInputs: ['reason'],
+        reason: 'Proposal must be refined before resolution readiness.',
+        governingRule: 'DecisionLifecycleRules.ValidateProposalTransition',
+      },
+    ],
+    allowedNextStates: ['NeedsRefinement'],
+    blockedNextStates: [
+      {
+        state: 'ReadyForResolution',
+        reason: 'Proposal must be refined before resolution readiness.',
+        governingRule: 'DecisionLifecycleRules.ValidateProposalTransition',
+      },
+    ],
+    diagnostics: ['Review transition eligibility loaded from backend lifecycle rules.'],
   }
 }

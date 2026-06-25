@@ -250,7 +250,11 @@ describe('DecisionLifecycleTab navigation', () => {
       expect(screen.getByLabelText('Proposal lifecycle eligibility')).toHaveTextContent('Mark viewed')
     })
 
-    expect(screen.getByText('Generated proposals must be viewed before refinement.')).toBeInTheDocument()
+    expect(
+      within(screen.getByLabelText('Proposal lifecycle actions')).getByText(
+        'Generated proposals must be viewed before refinement.',
+      ),
+    ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Mark Viewed' })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Needs Refinement' })).toBeDisabled()
   })

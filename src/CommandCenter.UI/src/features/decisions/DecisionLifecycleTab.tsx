@@ -281,6 +281,7 @@ export function DecisionLifecycleTab({
 
           <DecisionProposalViewer
             workspace={proposalReviewWorkspace}
+            eligibility={selectedProposalEligibility}
             isLoading={isProposalReviewLoading || isProposalReviewMutating}
           />
 

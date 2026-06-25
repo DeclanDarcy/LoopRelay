@@ -68,6 +68,7 @@ Discovery -> Candidate -> Proposal -> Review -> Refinement -> Resolution -> Supe
 - [ ] Update proposal viewer/review panels to render review state, allowed transitions, unavailable reasons, last transition, and transition controls.
    - [x] Proposal action controls consume backend lifecycle eligibility for allowed/blocked transitions.
    - [x] Proposal action controls render backend blocked reasons and governing rules.
+   - [x] Proposal viewer renders backend review state, proposal lifecycle state, last transition, allowed transitions, and unavailable transition reasons.
 - [x] Add supersede and archive actions for resolved decisions, including target decision selection, rationale, resulting state, relationships, governance impact, and execution projection refresh.
 - [ ] Classify lower-priority lifecycle features as Core MVP, Deferred, Internal, or Remove:
    - [ ] proposal review notes
