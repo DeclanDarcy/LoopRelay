@@ -1,3 +1,5 @@
+import { EvidenceList } from '../../components/explainability'
+import { operationalContextSemanticChangeSupportingEvidenceToEvidence } from '../../lib/explainability'
 import { renderMarkdown } from '../../lib/markdown'
 import type { OperationalContextSemanticChange } from '../../types'
 
@@ -58,14 +60,10 @@ export function OperationalContextProposalComparison({
                   ) : null}
                 </dl>
                 {change.supportingEvidence.length > 0 ? (
-                  <ul
-                    className="proposal-modification-evidence"
-                    aria-label={`Supporting evidence for ${change.type}`}
-                  >
-                    {change.supportingEvidence.map((evidence) => (
-                      <li key={`${change.type}-${evidence}`}>{evidence}</li>
-                    ))}
-                  </ul>
+                  <EvidenceList
+                    evidence={operationalContextSemanticChangeSupportingEvidenceToEvidence(change)}
+                    title={`Supporting evidence for ${change.type}`}
+                  />
                 ) : null}
               </li>
             ))}

@@ -2,11 +2,10 @@
 
 ## Newly Authorized
 
-- Continue Milestone 9 cleanup under the rule: share generic presentation and retain domain composition.
-- Treat the following presentation path as the preferred shape for generic explainability surfaces: backend projection, adapter, shared `EvidenceList` or `DiagnosticList`, domain wrapper, then domain-specific visualization.
-- Keep revision comparison, lifecycle summaries, conflict detail cards, timelines, graphs, and navigation wrappers domain-owned.
-- Prefer the shared explainability layer whenever a component is only iterating over evidence, diagnostics, findings, certification items, or health entries.
-- Use the next cleanup audit targets: `DecisionOptionEvaluationTable`, `DecisionProposalViewer`, `ReasoningReconstructionPanel`, and operational-context proposal/comparison panels.
-- For those targets, migrate generic evidence, diagnostics, findings, certification, and health renderers to shared components.
-- Preserve comparison matrices, reconstruction visualization, proposal structure, semantic relationships, and timeline composition as thin domain wrappers.
-- Treat remaining Milestone 9 work as refinement: retire last duplicated renderers, preserve intentional domain-specific composition, perform the final cohesion audit, and prepare for Milestone 10.
+- Continue Milestone 9 cleanup under the existing separation: shared explainability components own generic rendering, and domain components own composition, comparison, navigation, lifecycle framing, summaries, metrics, and visualization.
+- Treat the preferred presentation path as: backend projection, narrow adapter, shared `EvidenceList` or `DiagnosticList` or `HealthView` or `CertificationFindingsView`, domain wrapper, then domain-specific layout.
+- Prefer narrow adapters over broadening an existing adapter when only a subset of a projection should render through a shared component.
+- For the next slice, audit remaining health and certification renderers across workflow, governance, decision, reasoning, and repository summary surfaces.
+- Replace renderers that only present health entries, certification findings, evidence, or diagnostics with `HealthView`, `CertificationFindingsView`, `EvidenceList`, or `DiagnosticList`.
+- Keep domain-specific navigation, timelines, lifecycle framing, comparison, summaries, metrics, and visualization in their owning workspace components.
+- Treat remaining Milestone 9 renderer cleanup as finite and mechanical unless a surface is found to be mixing authority or duplicating domain state.

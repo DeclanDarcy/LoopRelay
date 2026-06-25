@@ -1,6 +1,7 @@
 import { EmptyState } from '../../components/design'
+import { EvidenceList } from '../../components/explainability'
 import type { DecisionProposal, OptionEvaluation } from '../../types'
-import { DecisionEvidenceBlock } from './DecisionEvidenceFragments'
+import { decisionRecommendationEvidenceToEvidence } from '../../lib/explainability'
 
 export function DecisionOptionEvaluationTable({ proposal }: { proposal: DecisionProposal }) {
   const evaluations = proposal.recommendation?.optionEvaluations ?? []
@@ -41,16 +42,10 @@ function OptionEvaluationCard({ evaluation }: { evaluation: OptionEvaluation }) 
       <OptionEvaluationList title="Constraints" values={evaluation.constraints} />
       {evaluation.evidence.length > 0 ? (
         <div className="decision-inspection-list" aria-label={`Evaluation evidence for ${evaluation.optionId}`}>
-          {evaluation.evidence.map((item) => (
-            <article className="decision-tradeoff" key={`${evaluation.optionId}-${item.type}-${item.summary}`}>
-              <div>
-                <span>{item.type}</span>
-                <strong>{item.optionId}</strong>
-              </div>
-              <p>{item.summary}</p>
-              <DecisionEvidenceBlock title={`${item.type} Evidence`} evidence={item.evidence} />
-            </article>
-          ))}
+          <EvidenceList
+            title={`Evaluation Evidence for ${evaluation.optionId}`}
+            evidence={decisionRecommendationEvidenceToEvidence(evaluation.evidence)}
+          />
         </div>
       ) : null}
     </article>

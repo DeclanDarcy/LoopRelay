@@ -168,6 +168,15 @@ export function operationalContextSemanticChangeToEvidence(
   ]
 }
 
+export function operationalContextSemanticChangeSupportingEvidenceToEvidence(
+  change: OperationalContextSemanticChange,
+): ExplanationEvidence[] {
+  return change.supportingEvidence.map((evidence) => ({
+    label: 'Supporting evidence',
+    detail: evidence,
+  }))
+}
+
 export function operationalEvolutionTimelineEntryToEvidence(
   entry: OperationalEvolutionTimelineEntry,
 ): ExplanationEvidence[] {

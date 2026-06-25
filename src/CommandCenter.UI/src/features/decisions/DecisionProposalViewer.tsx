@@ -270,7 +270,12 @@ function OptionTransparency({ proposal, optionId }: { proposal: DecisionProposal
       </div>
       {option?.dependencies?.length ? <FactChips title={`Dependencies for ${optionId}`} values={option.dependencies} /> : null}
       {option?.assumptions?.length ? <FactChips title={`Assumptions for ${optionId}`} values={option.assumptions} /> : null}
-      {option?.diagnostics?.length ? <FactChips title={`Diagnostics for ${optionId}`} values={option.diagnostics} /> : null}
+      {option?.diagnostics?.length ? (
+        <DiagnosticList
+          diagnostics={decisionDiagnosticsToExplanation(option.diagnostics, `Diagnostics for ${optionId}`)}
+          title={`Diagnostics for ${optionId}`}
+        />
+      ) : null}
       {validation && !validation.isValid ? (
         <DiagnosticList
           diagnostics={decisionGenerationDiagnosticsToRejectedOptionDiagnostics({
@@ -294,7 +299,10 @@ function OptionTransparency({ proposal, optionId }: { proposal: DecisionProposal
           <AnalyzedFacts title="Risks" facts={analyzedOption.risks.map((item) => `${item.severity}: ${item.statement}`)} />
           <AnalyzedFacts title="Dependencies" facts={analyzedOption.dependencies.map((item) => item.statement)} />
           <AnalyzedFacts title="Consequences" facts={analyzedOption.consequences.map((item) => `${item.impact}: ${item.statement}`)} />
-          <FactChips title={`Analysis diagnostics for ${optionId}`} values={analyzedOption.diagnostics} />
+          <DiagnosticList
+            diagnostics={decisionDiagnosticsToExplanation(analyzedOption.diagnostics, `Analysis diagnostics for ${optionId}`)}
+            title={`Analysis diagnostics for ${optionId}`}
+          />
           <ProposalEvidenceBlock title="Analysis Evidence" evidence={analyzedOption.evidence} />
         </div>
       ) : null}

@@ -2,27 +2,27 @@
 
 ## New State This Slice
 
-- Continued Milestone 9 obsolete UI cleanup for decision lifecycle/revision diagnostics and execution governed-conflict evidence.
-- Added `.agents/milestones/m9-obsolete-ui-cleanup-decision-execution-diagnostics-evidence.md` as cleanup evidence.
+- Continued Milestone 9 obsolete UI cleanup for decision proposal option evidence/diagnostics and operational-context modification evidence.
+- Added `.agents/milestones/m9-obsolete-ui-cleanup-decision-continuity-explainability.md` as cleanup evidence.
 - Updated `.agents/milestones/m9-product-cohesion.md` to record the new cleanup.
-- Changed `DecisionLifecycleTab` generated proposal validation and command diagnostics to render through shared `DiagnosticList`.
-- Changed `DecisionRevisionHistory` lineage diagnostics to render through shared `DiagnosticList`.
-- Changed `DecisionRevisionHistory` source attribution to render through shared `EvidenceList` with `decisionSourceReferencesToEvidence`.
-- Changed `ExecutionContextValidationList` governed-conflict evidence to render through shared `EvidenceList`.
-- Preserved decision lifecycle summaries, generated proposal counters, revision selection/comparison, lineage event sequencing, and execution conflict detail cards as domain composition.
-- Rotated previous handoff to `.agents/handoffs/handoff.0103.md`.
+- Added `decisionRecommendationEvidenceToEvidence` and reused it in `decisionRecommendationToExplanation`.
+- Changed `DecisionOptionEvaluationTable` to render option evaluation recommendation evidence through shared `EvidenceList`.
+- Changed `DecisionProposalViewer` option diagnostics and analyzed-option diagnostics to render through shared `DiagnosticList`.
+- Added `operationalContextSemanticChangeSupportingEvidenceToEvidence`.
+- Changed `OperationalContextProposalComparison` modification supporting evidence to render through shared `EvidenceList` while preserving modification metadata and markdown comparison as domain composition.
+- Confirmed `ReasoningReconstructionPanel` already uses shared explainability components; no change needed there.
+- Rotated previous handoff to `.agents/handoffs/handoff.0104.md`.
 
 ## Verification
 
-- `npm test -- decisionLifecycleNavigation.test.tsx decisionCandidateBrowser.test.tsx`
-- `npm test -- executionContextValidationList.test.tsx executionEventFeed.test.tsx`
+- `npm test -- decisionLifecycleNavigation.test.tsx operationalContextProposalComparison.test.tsx`
 - `npm run build`
 
 ## Residual Risk
 
 - `npm run build` still reports the existing Vite chunk-size warning for the main bundle.
-- Milestone 9 obsolete UI cleanup remains partial; this slice retired only decision lifecycle/revision diagnostic/source evidence duplication and execution conflict evidence duplication.
+- Milestone 9 obsolete UI cleanup remains partial; likely remaining work is duplicate health/certification renderers and final terminology alignment.
 
 ## Recommended Next Slice
 
-- Continue Milestone 9 obsolete UI cleanup by auditing remaining manual generic renderers in `DecisionOptionEvaluationTable`, `DecisionProposalViewer`, `ReasoningReconstructionPanel`, and operational-context proposal/comparison panels; replace only plain evidence, diagnostic, finding, certification, or health lists that duplicate shared components, and keep domain comparison, timeline, proposal, and graph composition intact.
+- Continue Milestone 9 by auditing duplicate health and certification renderers across workflow, governance, decision, reasoning, and repository summary surfaces; migrate generic dimensions/findings/diagnostics/evidence to `HealthView`, `CertificationFindingsView`, `DiagnosticList`, and `EvidenceList`, while preserving domain navigation and summary composition.

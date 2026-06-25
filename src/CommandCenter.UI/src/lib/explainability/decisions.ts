@@ -17,6 +17,7 @@ import type {
   DecisionQualitySignal,
   DecisionQualitySignalContribution,
   DecisionRecommendation,
+  RecommendationEvidence,
   HumanAuthoringBurdenExplanation,
   HumanAuthoringBurdenSignal,
   RefinementPlan,
@@ -353,14 +354,7 @@ export function decisionRecommendationToExplanation(
     why: recommendation.rationale,
     evidence: [
       ...decisionEvidenceToEvidence(recommendation.evidence, 'Recommendation Evidence'),
-      ...(recommendation.recommendationEvidence ?? []).flatMap((item) => [
-        {
-          id: `${item.type}-${item.optionId}-${item.summary}`,
-          label: `${item.type}: ${item.optionId}`,
-          detail: item.summary,
-        },
-        ...decisionEvidenceToEvidence(item.evidence, `${item.type} Evidence`),
-      ]),
+      ...decisionRecommendationEvidenceToEvidence(recommendation.recommendationEvidence ?? []),
     ],
     constraints: (recommendation.concerns ?? []).map((concern) => ({
       label: 'Concern',
@@ -387,6 +381,19 @@ export function decisionRecommendationToExplanation(
       })),
     ],
   }
+}
+
+export function decisionRecommendationEvidenceToEvidence(
+  evidence: RecommendationEvidence[],
+): ExplanationEvidence[] {
+  return evidence.flatMap((item) => [
+    {
+      id: `${item.type}-${item.optionId}-${item.summary}`,
+      label: `${item.type}: ${item.optionId}`,
+      detail: item.summary,
+    },
+    ...decisionEvidenceToEvidence(item.evidence, `${item.type} Evidence`),
+  ])
 }
 
 export function decisionOptionsToAlternatives(
