@@ -2,11 +2,12 @@
 
 ## Newly Authorized
 
-- Accept the Milestone 4 frontend semantic-authority regression audit slice.
-- Treat the frontend semantic-authority regression guard as valid architectural protection for Milestone 4.
-- Preserve the rule that React must not become a semantic authority for decision scoring, ranking, quality, burden, governance, influence, recommendation, or eligibility.
-- Continue to omit recommendation confidence until the backend owns confidence, confidence rationale, and confidence evidence.
-- Continue to avoid standalone insufficient-evidence and duplicate option UI categories until the backend introduces them as first-class semantic categories.
-- Keep shared explainability abstraction work deferred to Milestone 8 after Execution, Reasoning, and Continuity reach similar transparency maturity.
-- Proceed next with a Milestone 4 exit audit and closure documentation after the accepted slice is committed and pushed.
-- Do not begin the Milestone 4 exit audit before completing the post-acceptance stage, commit, and push process.
+- Accept Milestone 4 as complete and closed.
+- Treat the Milestone 4 exit audit and closure documentation as accepted.
+- Preserve the Milestone 4 authority boundary: decision reasoning remains backend-owned and React remains render-only.
+- Keep recommendation confidence, confidence rationale, and confidence evidence deferred until backend-owned semantic fields exist.
+- Keep standalone insufficient-evidence and duplicate-option categories deferred until backend projections expose them as first-class semantic classifications.
+- Keep shared explainability abstractions deferred to Milestone 8.
+- Begin Milestone 5 next, after committing and pushing the accepted Milestone 4 closure.
+- Sequence Milestone 5 backend-first: execution prompt metadata, prompt manifest, retryable push context, structured governed conflicts, and execution transparency projections before shell, TypeScript, hooks, or UI composition.
+- After completing this post-acceptance stage, commit, and push process, stop executing before starting Milestone 5 implementation.

@@ -38,7 +38,7 @@ Expose why decisions, recommendations, options, quality ratings, governance find
 
 ### UI
 
-- [ ] Add decision-specific projection renderers under `src/CommandCenter.UI/src/features/decisions/`:
+- [x] Add decision-specific projection renderers under `src/CommandCenter.UI/src/features/decisions/`:
    - [x] `DecisionRecommendationExplanation`
    - [x] `DecisionOptionEvaluationTable`
    - [x] `DecisionRejectedOptionList`
@@ -46,20 +46,20 @@ Expose why decisions, recommendations, options, quality ratings, governance find
    - [x] `DecisionBurdenExplanation`
    - [x] `DecisionGovernanceExplanation`
    - [x] `DecisionInfluenceExplorer`
-- [ ] Update `DecisionProposalViewer` to display recommendation mode, rationale, confidence when available, supporting factors, concerns, assumptions, alternative explanations, recommendation evidence, and option evaluations.
+- [x] Update `DecisionProposalViewer` to display recommendation mode, rationale, confidence when available, supporting factors, concerns, assumptions, alternative explanations, recommendation evidence, and option evaluations.
    - [x] Recommendation mode, summary, rationale, supporting factors, concerns, assumptions, alternative explanations, recommendation evidence, and option evaluations render from backend fields.
-   - [ ] Confidence still needs a backend field before the UI can render it.
+   - [x] Confidence is intentionally deferred because no backend-owned confidence, confidence rationale, or confidence evidence field exists yet.
 - [x] Update option views to display score, rank, score explanation, benefits, costs, risks, dependencies, constraints, disqualification, and required human action.
-- [ ] Display rejected, disqualified, deduplicated, invalid, insufficient-evidence, and duplicate options in a visible section rather than hiding them behind diagnostics.
+- [x] Display rejected, disqualified, deduplicated, invalid, insufficient-evidence, and duplicate options in a visible section rather than hiding them behind diagnostics.
    - [x] Rejected options, deduplicated options, invalid option validation issues, disqualifying constraints, and required human action render visibly from backend fields.
-   - [ ] Insufficient-evidence and duplicate categories need explicit backend classification if they should be separated beyond validation issue text and deduplicated option diagnostics.
+   - [x] Insufficient-evidence and duplicate standalone categories are intentionally deferred because the backend does not expose them as first-class semantic classifications yet.
 - [x] Update `DecisionQualityPanel` to show score, rating, signal contribution, thresholds, overrides, warnings, unknowns, and burden reasoning.
-- [ ] Update governance panels to show resolution authority, stale authority, recommendation divergence, lifecycle state, allowed transitions, blocked transitions, transition reasons, governance findings, and authority violations.
+- [x] Update governance panels to show resolution authority, stale authority, recommendation divergence, lifecycle state, allowed transitions, blocked transitions, transition reasons, governance findings, and authority violations.
    - [x] Governance report findings, severities, categories, execution-blocking status, related entities, diagnostics, and source attribution render through `DecisionGovernanceExplanation`.
    - [x] Resolution authority, stale authority, recommendation divergence, lifecycle state, allowed/blocked transitions, and transition reasons render from the selected proposal review workspace, lifecycle eligibility projection, and backend-returned resolved decision.
 - [x] Update execution influence panels to show why decisions were included, excluded, superseded, conflicted, ignored, blocked, or converted into constraints/directives/priorities/rules.
 - [x] Keep all calculations in backend projections. UI components render fields and group them for comprehension only.
-- [ ] Avoid building generic explanation abstractions in this milestone. If a component would be useful across domains, keep it local and migrate it during Milestone 8.
+- [x] Avoid building generic explanation abstractions in this milestone. If a component would be useful across domains, keep it local and migrate it during Milestone 8.
 
 ### Tests
 
@@ -73,8 +73,10 @@ Expose why decisions, recommendations, options, quality ratings, governance find
 
 ### Exit Criteria
 
-- [ ] Every recommendation explains why it exists and which assumptions, concerns, evidence, and alternatives matter.
-- [ ] Every option explains score, rank, constraints, disqualification, and evidence.
-- [ ] Rejected and excluded alternatives remain visible.
-- [ ] Quality, burden, governance, and influence are explainable from authoritative data.
-- [ ] Duplicate decision reasoning and duplicate presentation summaries are removed or replaced.
+- [x] Every recommendation explains why it exists and which assumptions, concerns, evidence, and alternatives matter.
+- [x] Every option explains score, rank, constraints, disqualification, and evidence.
+- [x] Rejected and excluded alternatives remain visible.
+- [x] Quality, burden, governance, and influence are explainable from authoritative data.
+- [x] Duplicate decision reasoning and duplicate presentation summaries are removed or replaced.
+
+Closure evidence: `.agents/milestones/m4-exit-audit.md`.
