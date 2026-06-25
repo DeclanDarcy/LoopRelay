@@ -1,5 +1,7 @@
 import { EmptyState, Panel, SectionHeader } from '../../components/design'
+import { DiagnosticList } from '../../components/explainability'
 import { getOperationalContextSectionItems } from '../../lib'
+import { continuityWarningsToDiagnostics } from '../../lib/explainability'
 import type {
   OperationalContextCompressionSummary,
   OperationalContextProposal,
@@ -324,6 +326,8 @@ function DecisionContinuityReview({
   warnings,
   onOpenContinuityDecisionRetention,
 }: DecisionContinuityReviewProps) {
+  const warningDiagnostics = continuityWarningsToDiagnostics(warnings, 'Decision continuity warning')
+
   return (
     <div className="proposal-warning-list proposal-decision-review">
       <h5>Decision Continuity Review</h5>
@@ -363,20 +367,17 @@ function DecisionContinuityReview({
       </div>
       {warnings.length > 0 ? (
         <>
-          <h6>Decision Warnings</h6>
-          <ul>
-            {warnings.map((warning) => (
-              <li key={warning}>
-                <button
-                  type="button"
-                  className="workspace-cross-link inline-cross-link warning-link"
-                  onClick={onOpenContinuityDecisionRetention}
-                >
-                  {warning}
-                </button>
-              </li>
-            ))}
-          </ul>
+          <DiagnosticList
+            title="Decision Warnings"
+            diagnostics={warningDiagnostics}
+          />
+          <button
+            type="button"
+            className="workspace-cross-link inline-cross-link warning-link"
+            onClick={onOpenContinuityDecisionRetention}
+          >
+            Open decision retention
+          </button>
         </>
       ) : null}
     </div>

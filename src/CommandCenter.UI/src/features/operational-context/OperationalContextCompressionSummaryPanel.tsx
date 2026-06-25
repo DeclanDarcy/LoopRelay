@@ -18,6 +18,15 @@ export function OperationalContextCompressionSummaryPanel({
 }: OperationalContextCompressionSummaryPanelProps) {
   const compressionDiagnostics = operationalContextCompressionSummaryToDiagnostics(compressionSummary)
   const revisionEvidence = operationalContextCompressionRevisionsToEvidence(compressionSummary)
+  const compressionWarningDiagnostics = compressionDiagnostics.filter(
+    (diagnostic) => diagnostic.label === 'Compression warning',
+  )
+  const retentionWarningDiagnostics = compressionDiagnostics.filter(
+    (diagnostic) => diagnostic.label === 'Retention warning',
+  )
+  const compressedUnderstandingDiagnostics = compressionDiagnostics.filter(
+    (diagnostic) => diagnostic.label === 'Compressed understanding',
+  )
 
   return (
     <>
@@ -38,24 +47,19 @@ export function OperationalContextCompressionSummaryPanel({
       </div>
       {compressionSummary.warnings.length > 0 ? (
         <div className="proposal-warning-list">
-          <h5>Compression Warnings</h5>
-          <ul>
-            {compressionSummary.warnings.map((warning) => (
-              <li key={warning}>
-                {onOpenContinuityCompression ? (
-                  <button
-                    type="button"
-                    className="workspace-cross-link inline-cross-link warning-link"
-                    onClick={onOpenContinuityCompression}
-                  >
-                    {warning}
-                  </button>
-                ) : (
-                  warning
-                )}
-              </li>
-            ))}
-          </ul>
+          <DiagnosticList
+            diagnostics={compressionWarningDiagnostics}
+            title="Compression Warnings"
+          />
+          {onOpenContinuityCompression ? (
+            <button
+              type="button"
+              className="workspace-cross-link inline-cross-link warning-link"
+              onClick={onOpenContinuityCompression}
+            >
+              Open compression diagnostics
+            </button>
+          ) : null}
         </div>
       ) : null}
       {compressionSummary.revisionSummary.length > 0 ? (
@@ -65,32 +69,25 @@ export function OperationalContextCompressionSummaryPanel({
       ) : null}
       {compressionSummary.stableUnderstandingRetentionWarnings.length > 0 ? (
         <div className="proposal-warning-list">
-          <h5>Retention Warnings</h5>
-          <ul>
-            {compressionSummary.stableUnderstandingRetentionWarnings.map((warning) => (
-              <li key={warning}>
-                {onOpenContinuityDecisionRetention ? (
-                  <button
-                    type="button"
-                    className="workspace-cross-link inline-cross-link warning-link"
-                    onClick={onOpenContinuityDecisionRetention}
-                  >
-                    {warning}
-                  </button>
-                ) : (
-                  warning
-                )}
-              </li>
-            ))}
-          </ul>
+          <DiagnosticList
+            diagnostics={retentionWarningDiagnostics}
+            title="Retention Warnings"
+          />
+          {onOpenContinuityDecisionRetention ? (
+            <button
+              type="button"
+              className="workspace-cross-link inline-cross-link warning-link"
+              onClick={onOpenContinuityDecisionRetention}
+            >
+              Open decision retention
+            </button>
+          ) : null}
         </div>
       ) : null}
       {compressionSummary.noiseRemovedIndicators.length > 0 ? (
         <div className="proposal-warning-list">
           <DiagnosticList
-            diagnostics={compressionDiagnostics.filter(
-              (diagnostic) => diagnostic.label === 'Compressed understanding',
-            )}
+            diagnostics={compressedUnderstandingDiagnostics}
             title="Compressed Understanding"
           />
         </div>

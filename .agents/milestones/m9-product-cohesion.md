@@ -51,6 +51,7 @@ Make the application feel unified, not merely smaller. Remove fragmentation so e
   - [x] Duplicate decision recommendation and burden explanation renderers removed in favor of shared `DecisionBasis`, `EvidenceList`, and `DiagnosticList`. See `./m9-obsolete-ui-cleanup-decision-explanations.md`.
   - [x] Duplicate generation certification executive-readiness evidence and blocking-gap renderers removed in favor of shared `EvidenceList` and `DiagnosticList`. See `./m9-obsolete-ui-cleanup-generation-certification.md`.
   - [x] Duplicate governance lifecycle factor and analysis warning renderers removed in favor of shared `EvidenceList` and `DiagnosticList`. See `./m9-obsolete-ui-cleanup-governance-signals.md`.
+  - [x] Duplicate reasoning graph fallback diagnostics and operational-context warning lists removed in favor of shared `DiagnosticList`. See `./m9-obsolete-ui-cleanup-continuity-reasoning-diagnostics.md`.
 - [ ] Align terminology across statuses, health, diagnostics, recovery, certification, governance, execution, and explainability.
 
 ### Likely Cleanup Targets
@@ -65,6 +66,7 @@ Make the application feel unified, not merely smaller. Remove fragmentation so e
 - [ ] Duplicate diagnostics renderers replaced by shared `DiagnosticList`.
   - [x] Execution artifact diagnostics list local renderer removed; `DiagnosticList` is now the only visible artifact diagnostics renderer.
   - [x] Generation certification executive-readiness blocking gaps now render through shared diagnostics.
+  - [x] Reasoning graph fallback diagnostics and operational-context warning diagnostics now render through shared diagnostics.
 
 ### Tests
 

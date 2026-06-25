@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
 import { EmptyState } from '../../components/design'
+import { DiagnosticList } from '../../components/explainability'
+import { reasoningDiagnosticsToExplanation } from '../../lib/explainability'
 import type {
   ReasoningGraph,
   ReasoningGraphNode,
@@ -173,11 +175,11 @@ export function ReasoningGraphPanel({
       <ReasoningDiagnosticGroups groups={graph?.diagnosticGroups} label="Grouped graph diagnostics" />
 
       {graph?.diagnostics.length && !graph.diagnosticGroups?.length ? (
-        <div className="reasoning-diagnostics" aria-label="Reasoning graph diagnostics">
-          <h5>Diagnostics</h5>
-          {graph.diagnostics.map((diagnostic) => (
-            <p key={diagnostic}>{diagnostic}</p>
-          ))}
+        <div aria-label="Reasoning graph diagnostics">
+          <DiagnosticList
+            title="Graph Diagnostics"
+            diagnostics={reasoningDiagnosticsToExplanation(graph.diagnostics, 'Graph diagnostic')}
+          />
         </div>
       ) : null}
     </section>
@@ -262,11 +264,10 @@ function ReasoningTraceList({
           <ReasoningDiagnosticGroups groups={trace.diagnosticGroups} label={`${title} grouped diagnostics`} />
 
           {trace.diagnostics.length && !trace.diagnosticGroups?.length ? (
-            <div className="reasoning-diagnostics">
-              {trace.diagnostics.map((diagnostic) => (
-                <p key={diagnostic}>{diagnostic}</p>
-              ))}
-            </div>
+            <DiagnosticList
+              title={`${title} Diagnostics`}
+              diagnostics={reasoningDiagnosticsToExplanation(trace.diagnostics, 'Trace diagnostic')}
+            />
           ) : null}
         </>
       ) : (

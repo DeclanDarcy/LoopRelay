@@ -244,23 +244,15 @@ export function OperationalContextCurrentPanel({
             />
           ) : null}
           {operationalContext.continuityWarnings.length > 0 ? (
-            <ul>
-              {operationalContext.continuityWarnings.map((warning) => (
-                <li key={warning}>
-                  {onOpenContinuityWarnings ? (
-                    <button
-                      type="button"
-                      className="workspace-cross-link inline-cross-link warning-link"
-                      onClick={onOpenContinuityWarnings}
-                    >
-                      {warning}
-                    </button>
-                  ) : (
-                    warning
-                  )}
-                </li>
-              ))}
-            </ul>
+            onOpenContinuityWarnings ? (
+              <button
+                type="button"
+                className="workspace-cross-link inline-cross-link warning-link"
+                onClick={onOpenContinuityWarnings}
+              >
+                Open continuity warnings
+              </button>
+            ) : null
           ) : (
             <p>No continuity warnings recorded.</p>
           )}
