@@ -76,6 +76,10 @@ export function workflowDiagnosticsToExplanation(values: string[]): ExplanationD
   return diagnosticsFromStrings(values)
 }
 
+export function workflowCertificationFailuresToDiagnostics(values: string[]): ExplanationDiagnostic[] {
+  return diagnosticsFromStrings(values, 'Certification Failure')
+}
+
 export function workflowRecoveryDiagnosticsToExplanation(
   recovery: WorkflowRecoveryDiagnostics,
 ): ExplanationDiagnostic[] {

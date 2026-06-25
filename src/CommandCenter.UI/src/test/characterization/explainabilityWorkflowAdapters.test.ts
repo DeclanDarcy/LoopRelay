@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   workflowCertificationFindingsToExplanation,
+  workflowCertificationFailuresToDiagnostics,
   workflowContinuationDiagnosticsToExplanation,
   workflowContinuationToActions,
   workflowDiagnosticsToExplanation,
@@ -111,6 +112,9 @@ describe('workflow explainability adapters', () => {
     ])
     expect(workflowDiagnosticsToExplanation(certification.diagnostics)).toEqual([
       { label: 'Diagnostic', detail: 'Certification is observational only.' },
+    ])
+    expect(workflowCertificationFailuresToDiagnostics(['Commit gate lacks approval'])).toEqual([
+      { label: 'Certification Failure', detail: 'Commit gate lacks approval' },
     ])
   })
 

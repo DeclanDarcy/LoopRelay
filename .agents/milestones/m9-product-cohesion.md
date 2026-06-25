@@ -71,6 +71,7 @@ Make the application feel unified, not merely smaller. Remove fragmentation so e
   - [x] Reasoning graph fallback diagnostics and operational-context warning diagnostics now render through shared diagnostics.
   - [x] Decision lifecycle generation diagnostics, revision lineage diagnostics, revision source attribution, and execution conflict evidence now render through shared explainability components.
   - [x] Decision option and analyzed-option diagnostics now render through shared diagnostics.
+  - [x] Workflow certification failure rendering now uses shared diagnostics. See `./m9-obsolete-ui-cleanup-workflow-certification-failures.md`.
 
 ### Tests
 

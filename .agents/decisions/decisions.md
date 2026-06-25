@@ -2,10 +2,15 @@
 
 ## Newly Authorized
 
-- Continue Milestone 9 cleanup under the existing separation: shared explainability components own generic rendering, and domain components own composition, comparison, navigation, lifecycle framing, summaries, metrics, and visualization.
-- Treat the preferred presentation path as: backend projection, narrow adapter, shared `EvidenceList` or `DiagnosticList` or `HealthView` or `CertificationFindingsView`, domain wrapper, then domain-specific layout.
-- Prefer narrow adapters over broadening an existing adapter when only a subset of a projection should render through a shared component.
-- For the next slice, audit remaining health and certification renderers across workflow, governance, decision, reasoning, and repository summary surfaces.
-- Replace renderers that only present health entries, certification findings, evidence, or diagnostics with `HealthView`, `CertificationFindingsView`, `EvidenceList`, or `DiagnosticList`.
-- Keep domain-specific navigation, timelines, lifecycle framing, comparison, summaries, metrics, and visualization in their owning workspace components.
-- Treat remaining Milestone 9 renderer cleanup as finite and mechanical unless a surface is found to be mixing authority or duplicating domain state.
+- Continue Milestone 9 as a retire-compatibility-presentation phase focused on auditing remaining legacy workflow and status helpers.
+- Audit remaining uses of `RepositoryExecutionState` to distinguish execution-state display from workflow-state derivation.
+- Keep uses of `RepositoryExecutionState` that only display execution state.
+- Replace uses of `RepositoryExecutionState` that derive workflow state with authoritative workflow projection.
+- Consolidate or remove UI paths that duplicate information already available from the Workflow domain.
+- Apply the same audit to remaining rails, badges, and status widgets.
+- Preserve the boundary that Execution may summarize workflow, but Execution must not compute workflow.
+- Treat Workflow as the sole lifecycle authority.
+- Continue preserving certification as observational: render findings, failures, and diagnostics without inferring repairs, lifecycle transitions, or workflow legality.
+- Preserve the narrow adapter pattern: backend projection, small adapter, shared component, then domain panel.
+- Keep domain-specific composition, navigation, comparisons, timelines, graphs, and summaries in the owning domain surfaces.
+- Before Milestone 10, confirm every remaining duplicate presentation path has either been retired or intentionally retained.

@@ -8,6 +8,7 @@ import {
 } from '../../components/explainability'
 import { formatDateTime } from '../../lib'
 import {
+  workflowCertificationFailuresToDiagnostics,
   workflowCertificationFindingsToExplanation,
   workflowContinuationDiagnosticsToExplanation,
   workflowContinuationToActions,
@@ -232,10 +233,11 @@ export function WorkflowCertificationPanel({
             <span>Gate: {certification.blockingGate}</span>
           </div>
           <CertificationFindingsView findings={workflowCertificationFindingsToExplanation(certification)} />
-          <div className="workflow-panel-list">
-            <h5>Failures</h5>
-            <ul>{listItems(certification.failures, 'No certification failures projected.')}</ul>
-          </div>
+          <DiagnosticList
+            title="Certification Failures"
+            diagnostics={workflowCertificationFailuresToDiagnostics(certification.failures)}
+            emptyLabel="No certification failures projected."
+          />
           <DiagnosticList
             title="Certification Diagnostics"
             diagnostics={workflowDiagnosticsToExplanation(certification.diagnostics)}
