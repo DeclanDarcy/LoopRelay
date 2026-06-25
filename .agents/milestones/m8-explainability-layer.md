@@ -50,12 +50,13 @@ Each component must render:
 ### Integration
 
 - [ ] Add adapter functions under `src/CommandCenter.UI/src/lib/explainability/` for each domain. Adapters map authoritative domain fields into presentation concepts without computing domain outcomes.
-   - [x] Workflow health and certification adapter slice.
+   - [x] Workflow health, certification, recovery, gates, continuation, and reports adapter slice.
 - [ ] Adapters may reorganize authoritative information, but they must not omit semantically relevant evidence, constraints, uncertainty, diagnostics, findings, or eligible actions.
 - [ ] Replace domain-specific explanation widgets in:
    - [ ] decisions
    - [ ] workflow
       - [x] Workflow health dimensions and certification findings now render through shared explainability components.
+      - [x] Workflow recovery diagnostics/artifacts, gate action eligibility/diagnostics, continuation action eligibility/diagnostics, and workflow reports now render through shared explainability components.
    - [ ] decision sessions
    - [ ] execution
    - [ ] reasoning
@@ -70,9 +71,9 @@ Each component must render:
 
 - [x] Component tests for all shared explainability components.
 - [ ] Adapter tests proving adapters do not compute domain scores, decisions, lifecycle state, or eligibility.
-   - [x] Workflow adapter preservation coverage for health and certification.
+   - [x] Workflow adapter preservation coverage for health, certification, recovery, gates, continuation, and reports.
 - [ ] Adapter tests proving semantically relevant evidence and diagnostics are preserved when mapping into presentation concepts.
-   - [x] Workflow health and certification evidence/diagnostic preservation coverage.
+   - [x] Workflow health, certification, recovery, gates, continuation, and report evidence/diagnostic preservation coverage.
 - [ ] UI characterization tests proving major domains use shared explainability components.
 
 ### Exit Criteria

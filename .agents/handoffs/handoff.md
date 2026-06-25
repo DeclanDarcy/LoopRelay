@@ -2,15 +2,13 @@
 
 ## New State This Slice
 
-- Started Milestone 8 unified explainability layer.
-- Rotated previous handoff to `.agents/handoffs/handoff.0067.md`.
-- Added presentation-only explainability types in `src/CommandCenter.UI/src/types/explainability.ts` and exported them through `src/CommandCenter.UI/src/types/index.ts`.
-- Added shared explainability components under `src/CommandCenter.UI/src/components/explainability/`: `EvidenceList`, `DecisionBasis`, `ConstraintViewer`, `AlternativeExplorer`, `UncertaintyView`, `HealthView`, `DiagnosticList`, `ActionEligibilityView`, and `CertificationFindingsView`.
-- Added workflow explainability adapters in `src/CommandCenter.UI/src/lib/explainability/workflow.ts` for workflow health dimensions, workflow certification findings, and workflow diagnostics.
-- Integrated shared explainability rendering into workflow health and certification panels while preserving existing workflow authority fields.
-- Added shared explainability styling in `src/CommandCenter.UI/src/App.css`.
-- Added `.agents/milestones/m8-explainability-surface-inventory.md` documenting current cross-domain explanation surfaces, the implemented foundation, authority boundaries, verification, and residual work.
-- Updated `.agents/milestones/m8-explainability-layer.md` to mark shared types/components complete and workflow health/certification integration partially complete.
+- Continued Milestone 8 unified explainability layer.
+- Rotated previous handoff to `.agents/handoffs/handoff.0068.md`.
+- Expanded workflow explainability adapters in `src/CommandCenter.UI/src/lib/explainability/workflow.ts` for recovery diagnostics/artifacts, gate actions/diagnostics, continuation actions/diagnostics, and workflow report evidence/diagnostics.
+- Updated workflow panels in `src/CommandCenter.UI/src/features/workflow/WorkflowPanels.tsx` so recovery, gates, continuation, and reports render through shared `EvidenceList`, `DiagnosticList`, and `ActionEligibilityView` components.
+- Added `WorkflowReportsPanel` to surface already-fetched repository, progression, human-governance, and readiness workflow reports through shared explainability components.
+- Extended workflow adapter and panel characterization tests for the new mappings and visible shared-rendering behavior.
+- Updated `.agents/milestones/m8-explainability-layer.md` and `.agents/milestones/m8-explainability-surface-inventory.md` to record workflow expansion progress.
 
 ## Verification
 
@@ -19,10 +17,10 @@
 
 ## Residual Risk
 
-- Milestone 8 is foundational only; most domains still use existing domain-specific explanation widgets.
-- Workflow integration currently covers health dimensions, certification findings, and diagnostics; workflow gates, continuation, recovery, reports, and cross-domain panels still need shared rendering.
-- The workflow adapter maps status strings to badge tones for presentation only. It preserves the original status text and does not compute domain state.
+- Workflow is now the proof domain for the shared explainability layer, but other domains still mostly render explanation details through domain-specific widgets.
+- Workflow report rendering is intentionally observational and uses existing report projections already loaded by `useWorkflowHealth`; it does not add report generation controls.
+- `workflowGatesToActions` marks open gates as blocked actions because the authoritative gate catalog only supplies open gates to that adapter. It preserves gate status text as a constraint and does not compute gate satisfaction.
 
 ## Recommended Next Slice
 
-- Continue Milestone 8 by expanding workflow integration to gates, continuation, recovery, and reports, then use that pattern to migrate governance certification/recovery and decision certification/governance panels through shared `DiagnosticList`, `EvidenceList`, `ActionEligibilityView`, and `CertificationFindingsView`.
+- Continue Milestone 8 by migrating governance certification/recovery and decision certification/governance panels through shared `DiagnosticList`, `EvidenceList`, `ActionEligibilityView`, and `CertificationFindingsView`, with adapter tests proving the shared layer preserves authoritative fields without computing domain outcomes.

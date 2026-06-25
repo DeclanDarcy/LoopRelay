@@ -2,13 +2,19 @@
 
 ## Newly Authorized
 
-- Preserve the Milestone 8 foundation approach: start with shared presentation primitives, then prove the adapter boundary on a clean domain before migrating more complex surfaces.
-- Treat the shared explainability components as renderers of explanation structure only.
-- Treat explainability adapters as projection reshaping only; they must not compute lifecycle, eligibility, health, scores, certification, semantic outcomes, or domain authority.
-- Continue Milestone 8 workflow expansion before other domains, in this order:
-  - Gates
-  - Continuation
+- Proceed next with Milestone 8 governance migration before decision migration.
+- Governance migration order:
+  - Certification
   - Recovery
-  - Reports
-- After workflow expansion, migrate governance certification and recovery, then decision certification and governance panels.
-- Keep each migration backed by adapter tests proving no domain outcome is computed in the shared layer.
+  - Health/findings
+  - Eligible actions
+- Decision migration order:
+  - Certification
+  - Governance explanation
+  - Evidence
+  - Diagnostics
+  - Constraints
+  - Eligible actions
+- Continue the established Milestone 8 discipline: adapters reorganize only, shared components render only, and backend projections remain authoritative.
+- Add adapter preservation tests for migrated domains that verify evidence, diagnostics, uncertainty, constraints, findings, and eligible actions are preserved.
+- Add adapter tests proving migrated adapters do not derive lifecycle state, certification result, recommendation score, health, governance outcome, or eligibility.

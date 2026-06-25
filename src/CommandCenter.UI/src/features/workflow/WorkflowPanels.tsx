@@ -1,10 +1,24 @@
 import { Button, EmptyState, Panel, SectionHeader } from '../../components/design'
-import { CertificationFindingsView, DiagnosticList, HealthView } from '../../components/explainability'
+import {
+  ActionEligibilityView,
+  CertificationFindingsView,
+  DiagnosticList,
+  EvidenceList,
+  HealthView,
+} from '../../components/explainability'
 import { formatDateTime } from '../../lib'
 import {
   workflowCertificationFindingsToExplanation,
+  workflowContinuationDiagnosticsToExplanation,
+  workflowContinuationToActions,
   workflowDiagnosticsToExplanation,
+  workflowGateDiagnosticsToExplanation,
+  workflowGatesToActions,
   workflowHealthDimensionsToExplanation,
+  workflowRecoveryArtifactsToEvidence,
+  workflowRecoveryDiagnosticsToExplanation,
+  workflowReportDiagnosticsToExplanation,
+  workflowReportEvidenceToExplanation,
 } from '../../lib/explainability'
 import {
   useWorkflowCertification,
@@ -18,10 +32,14 @@ import type {
   WorkflowCertificationResult,
   WorkflowContinuationEvaluation,
   WorkflowGateCatalogProjection,
+  HumanGovernanceReport,
   WorkflowHealthAssessment,
   WorkflowHistoryProjection,
   WorkflowInstance,
+  WorkflowProgressionReport,
   WorkflowRecoveryDiagnostics,
+  WorkflowReadinessReport,
+  RepositoryWorkflowReport,
   WorkflowTimeline,
 } from '../../types'
 
@@ -117,18 +135,21 @@ export function WorkflowRecoveryPanel({
             <span>Evidence matched: {diagnostics.persistedEvidenceMatchedDomain ? 'Yes' : 'No'}</span>
             <span>Domain fingerprint: {diagnostics.domainFingerprint}</span>
           </div>
-          <div className="workflow-panel-list">
-            <h5>Diagnostics</h5>
-            <ul>{listItems(diagnostics.diagnostics, 'No recovery diagnostics projected.')}</ul>
-          </div>
-          <div className="workflow-panel-list">
-            <h5>Recovered Artifacts</h5>
-            <ul>{listItems(diagnostics.recoveredArtifacts, 'No artifacts recovered.')}</ul>
-          </div>
-          <div className="workflow-panel-list">
-            <h5>Discarded Artifacts</h5>
-            <ul>{listItems(diagnostics.discardedArtifacts, 'No artifacts discarded.')}</ul>
-          </div>
+          <DiagnosticList
+            title="Recovery Diagnostics"
+            diagnostics={workflowRecoveryDiagnosticsToExplanation(diagnostics)}
+            emptyLabel="No recovery diagnostics projected."
+          />
+          <EvidenceList
+            title="Recovered Artifacts"
+            evidence={workflowRecoveryArtifactsToEvidence(diagnostics.recoveredArtifacts, 'Recovered artifact')}
+            emptyLabel="No artifacts recovered."
+          />
+          <EvidenceList
+            title="Discarded Artifacts"
+            evidence={workflowRecoveryArtifactsToEvidence(diagnostics.discardedArtifacts, 'Discarded artifact')}
+            emptyLabel="No artifacts discarded."
+          />
         </div>
       ) : (
         state ?? <EmptyState className="empty-state">No recovery diagnostics are projected.</EmptyState>
@@ -243,24 +264,17 @@ export function WorkflowGatePanel({ gates, isLoading = false, error = null }: Wo
           {gates.openGates.length === 0 ? (
             <EmptyState className="empty-state">No open gates.</EmptyState>
           ) : (
-            gates.openGates.map((gate) => (
-              <article className="workflow-dimension-card" key={gate.gateId}>
-                <div className="workflow-dimension-card-header">
-                  <strong>{gate.type}</strong>
-                  <span>{gate.status}</span>
-                </div>
-                <p>{gate.reason}</p>
-                <div className="workflow-fact-grid">
-                  <span>Required action: {gate.requiredAction}</span>
-                  <span>Command: {gate.satisfyingCommands[0] ?? gate.satisfyingCommand}</span>
-                </div>
-              </article>
-            ))
+            <ActionEligibilityView
+              title="Open Gate Actions"
+              actions={workflowGatesToActions(gates)}
+              emptyLabel="No open gate actions projected."
+            />
           )}
-          <div className="workflow-panel-list">
-            <h5>Gate Reasoning</h5>
-            <ul>{listItems(gates.diagnostics.reasoning, 'No gate reasoning projected.')}</ul>
-          </div>
+          <DiagnosticList
+            title="Gate Diagnostics"
+            diagnostics={workflowGateDiagnosticsToExplanation(gates)}
+            emptyLabel="No gate diagnostics projected."
+          />
         </div>
       ) : (
         state ?? <EmptyState className="empty-state">No workflow gate catalog is projected.</EmptyState>
@@ -344,13 +358,73 @@ export function WorkflowContinuationPanel({
             <span>Required action: {evaluation.requiredHumanAction || 'None'}</span>
             <span>Stop reason: {evaluation.stopReason || 'None'}</span>
           </div>
-          <div className="workflow-panel-list">
-            <h5>Reasoning</h5>
-            <ul>{listItems(evaluation.diagnostics.reasoning, 'No continuation reasoning projected.')}</ul>
-          </div>
+          <ActionEligibilityView
+            title="Continuation Action"
+            actions={workflowContinuationToActions(evaluation)}
+            emptyLabel="No continuation action projected."
+          />
+          <DiagnosticList
+            title="Continuation Diagnostics"
+            diagnostics={workflowContinuationDiagnosticsToExplanation(evaluation)}
+            emptyLabel="No continuation diagnostics projected."
+          />
         </div>
       ) : (
         state ?? <EmptyState className="empty-state">No workflow continuation evaluation is projected.</EmptyState>
+      )}
+    </Panel>
+  )
+}
+
+type WorkflowReportsPanelProps = WorkflowPanelStateProps & {
+  repositoryReport: RepositoryWorkflowReport | null
+  progressionReport: WorkflowProgressionReport | null
+  humanGovernanceReport: HumanGovernanceReport | null
+  readinessReport: WorkflowReadinessReport | null
+}
+
+export function WorkflowReportsPanel({
+  repositoryReport,
+  progressionReport,
+  humanGovernanceReport,
+  readinessReport,
+  isLoading = false,
+  error = null,
+}: WorkflowReportsPanelProps) {
+  const state = <WorkflowPanelState isLoading={isLoading} error={error} />
+  const hasReports = repositoryReport || progressionReport || humanGovernanceReport || readinessReport
+
+  return (
+    <Panel className="workflow-panel workflow-reports-panel" aria-label="Workflow reports">
+      <SectionHeader eyebrow="Reports" title={repositoryReport?.healthStatus ?? 'Workflow reports'} headingLevel={4} />
+      {hasReports ? (
+        <div className="workflow-panel-stack">
+          <div className="workflow-fact-grid">
+            <span>Ready: {readinessReport ? (readinessReport.ready ? 'Yes' : 'No') : 'Unknown'}</span>
+            <span>Certified: {readinessReport ? (readinessReport.certified ? 'Yes' : 'No') : 'Unknown'}</span>
+            <span>Valid transitions: {progressionReport?.validTransitionCount ?? 'Unknown'}</span>
+            <span>Blocked transitions: {progressionReport?.blockedTransitionCount ?? 'Unknown'}</span>
+            <span>Open gates: {humanGovernanceReport?.openGateCount ?? 'Unknown'}</span>
+            <span>Satisfied gates: {humanGovernanceReport?.satisfiedGateCount ?? 'Unknown'}</span>
+          </div>
+          <EvidenceList
+            title="Report Evidence"
+            evidence={workflowReportEvidenceToExplanation(progressionReport, humanGovernanceReport, readinessReport)}
+            emptyLabel="No report evidence projected."
+          />
+          <DiagnosticList
+            title="Report Diagnostics"
+            diagnostics={workflowReportDiagnosticsToExplanation(
+              repositoryReport,
+              progressionReport,
+              humanGovernanceReport,
+              readinessReport,
+            )}
+            emptyLabel="No report diagnostics projected."
+          />
+        </div>
+      ) : (
+        state ?? <EmptyState className="empty-state">No workflow reports are projected.</EmptyState>
       )}
     </Panel>
   )
@@ -395,6 +469,14 @@ export function WorkflowOperationsPanel({
         onRun={() => void certification.run()}
       />
       <WorkflowGatePanel gates={gates.gates} isLoading={gates.isLoading} error={gates.error} />
+      <WorkflowReportsPanel
+        repositoryReport={health.repositoryReport}
+        progressionReport={health.progressionReport}
+        humanGovernanceReport={health.humanGovernanceReport}
+        readinessReport={health.readinessReport}
+        isLoading={health.isLoading}
+        error={health.error}
+      />
       <WorkflowHistoryPanel
         history={history.history}
         timeline={history.timeline}

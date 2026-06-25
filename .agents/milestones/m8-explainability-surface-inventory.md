@@ -2,7 +2,7 @@
 
 ## New State This Slice
 
-Milestone 8 now has a shared presentation foundation in the UI. The first integrated domain is workflow health and workflow certification.
+Milestone 8 now has a shared presentation foundation in the UI. Workflow is the first integrated domain across health, certification, recovery, gates, continuation, and reports.
 
 ## Current Explanation Surfaces
 
@@ -28,14 +28,14 @@ Milestone 8 now has a shared presentation foundation in the UI. The first integr
   - `DiagnosticList`
   - `ActionEligibilityView`
   - `CertificationFindingsView`
-- Added workflow adapter functions under `src/CommandCenter.UI/src/lib/explainability/workflow.ts`.
-- Integrated `HealthView`, `DiagnosticList`, and `CertificationFindingsView` into workflow health and certification panels.
+- Added workflow adapter functions under `src/CommandCenter.UI/src/lib/explainability/workflow.ts` for health, certification, recovery, gates, continuation, and reports.
+- Integrated `HealthView`, `DiagnosticList`, `CertificationFindingsView`, `EvidenceList`, and `ActionEligibilityView` into workflow health, certification, recovery, gates, continuation, and report panels.
 
 ## Authority Boundary
 
 - The shared types are presentation concepts only.
-- Workflow health status, reasons, evidence, diagnostics, and certification pass/fail state still come from workflow projections.
-- The workflow adapter maps strings and typed workflow objects into presentation props without recomputing status, certification, gate state, lifecycle state, or eligibility.
+- Workflow health status, reasons, evidence, diagnostics, certification pass/fail state, gate state, continuation outcome, recovery state, and report status still come from workflow projections.
+- The workflow adapter maps strings and typed workflow objects into presentation props without recomputing status, certification, gate state, lifecycle state, readiness, continuation, recovery, or eligibility.
 
 ## Verification
 
@@ -44,6 +44,5 @@ Milestone 8 now has a shared presentation foundation in the UI. The first integr
 
 ## Residual Work
 
-- Integrate shared components into workflow gates, continuation, recovery, and reports.
 - Add adapters and shared rendering for governance, decisions, execution, reasoning, operational context, continuity, diagnostics, and certification.
 - Add cross-domain characterization tests proving major workspaces render shared explainability components.
