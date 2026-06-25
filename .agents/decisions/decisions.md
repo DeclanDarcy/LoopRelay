@@ -2,33 +2,40 @@
 
 ## Newly Authorized
 
-- Treat the core Execution explainability migration as a solid Milestone 8 increment that preserves Milestone 5 authority boundaries.
-- Continue using the established Milestone 8 migration pattern for Execution:
-  - adapters remain presentation-only,
-  - backend execution projections remain authoritative,
-  - shared explainability components provide a common rendering vocabulary only.
-- Recognize Milestone 8 as now exercised across four major domains:
-  - Workflow,
-  - Governance,
-  - Decisions,
-  - Core Execution.
-- Continue the remaining Execution migration before beginning Reasoning, in this order:
-  - artifact diagnostics and context-threshold explanations,
-  - execution event consequences,
-  - execution history and session-failure evidence,
-  - generated handoff validation and review evidence.
-- Continue extending Execution adapter preservation tests to verify forwarding of:
+- Treat the completed Reasoning explainability migration as a significant Milestone 8 checkpoint and the strongest validation so far that the shared explainability layer remains a rendering abstraction rather than a second semantic model.
+- Continue preserving the Milestone 8 architecture:
+  - Reasoning adapters remain translation layers,
+  - React remains presentation-only,
+  - backend projections remain authoritative for confidence, reachability, materialization outcomes, lifecycle outcomes, evidence, diagnostics, and advisory state.
+- Keep materialization review informational/advisory only. UI rendering must not imply approval, rejection, artifact lifecycle authority, or decision authority.
+- Continue to classify the Vite large-chunk warning as a Milestone 9/product optimization concern, not a Milestone 8 architecture concern.
+- Treat Workflow, Governance, Decisions, Execution, and Reasoning as substantially migrated onto the shared explainability presentation primitives.
+- Use Operational Context / Continuity as the next and primary remaining Milestone 8 domain migration target.
+- Migrate Operational Context / Continuity explainability in this order:
+  - lifecycle explanation,
+  - compression explanation,
+  - semantic diff,
+  - grouped diagnostics,
+  - review findings,
+  - continuity reports.
+- Add Continuity adapter tests that prove preservation of:
+  - lifecycle facts,
+  - compression outcomes,
+  - semantic identity,
   - evidence,
   - diagnostics,
-  - validation findings,
-  - consequences,
-  - generated review artifacts,
-  - actions.
-- Continue prohibiting Execution adapters from deriving:
-  - execution success or failure,
-  - retry decisions,
-  - recovery state,
-  - repository validity,
-  - prompt composition,
-  - conflict resolution.
-- After remaining Execution surfaces are complete, move to Reasoning as the next major proving ground for evidence, uncertainty, provenance, reachability, and diagnostics while keeping the shared layer presentation-only.
+  - review findings,
+  - continuity reports.
+- Continue prohibiting Continuity adapters from deriving:
+  - compression eligibility,
+  - semantic identity,
+  - continuity lifecycle outcome,
+  - context quality,
+  - continuity risk,
+  - assimilation status,
+  - contradiction meaning.
+- After Continuity is migrated, move Milestone 8 toward a comprehensive adapter audit instead of additional feature work:
+  - verify every explainability surface routes through shared presentation primitives,
+  - confirm no adapter computes domain semantics,
+  - identify remaining legacy domain-specific renderers,
+  - prepare for Milestone 9 product cohesion work.

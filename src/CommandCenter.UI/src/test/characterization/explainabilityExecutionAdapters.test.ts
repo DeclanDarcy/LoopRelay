@@ -1,18 +1,25 @@
 import { describe, expect, it } from 'vitest'
 import {
+  executionArtifactDiagnosticsToExplanation,
   executionGitEligibilityToActions,
   executionGitEligibilityToDiagnostics,
   executionGovernedConflictsToDiagnostics,
+  executionEventsToDiagnostics,
   executionPromptManifestToDiagnostics,
   executionPromptManifestToEvidence,
   executionRepositorySnapshotToEvidence,
+  executionSessionSummaryToDiagnostics,
+  executionSessionSummaryToEvidence,
   executionSessionTransparencyToDiagnostics,
+  generatedHandoffReviewToActions,
 } from '../../lib/explainability'
 import type {
+  ExecutionEvent,
   ExecutionGitActionEligibility,
   ExecutionGovernedConflictDiagnostic,
   ExecutionPromptManifest,
   ExecutionRepositorySnapshot,
+  ExecutionSessionSummary,
   ExecutionSessionTransparency,
 } from '../../types'
 
@@ -97,6 +104,38 @@ function gitEligibility(): ExecutionGitActionEligibility {
   }
 }
 
+function sessionSummary(overrides: Partial<ExecutionSessionSummary> = {}): ExecutionSessionSummary {
+  return {
+    sessionId: 'session-alpha',
+    state: 'Completed',
+    repositoryState: 'AwaitingAcceptance',
+    milestonePath: '.agents/milestones/m8-explainability-layer.md',
+    startedAt: '2026-06-21T16:00:00.000Z',
+    completedAt: '2026-06-21T16:20:00.000Z',
+    duration: '00:20:00',
+    acceptedAt: null,
+    rejectedAt: null,
+    decisionNote: null,
+    lastActivityAt: '2026-06-21T16:20:00.000Z',
+    providerName: 'codex',
+    providerExecutablePath: 'codex',
+    providerProcessId: 123,
+    providerStartedAt: '2026-06-21T16:00:01.000Z',
+    handoffPath: '.agents/handoffs/handoff.md',
+    commitSha: 'abc123',
+    committedAt: null,
+    commitMessage: null,
+    preparationSnapshotId: null,
+    pushAttemptedAt: '2026-06-21T16:30:00.000Z',
+    pushedAt: null,
+    pushedCommitSha: null,
+    pushRemoteName: null,
+    pushBranchName: null,
+    failureReason: null,
+    ...overrides,
+  }
+}
+
 describe('execution explainability adapters', () => {
   it('preserves prompt manifest requested and delivered context facts as evidence', () => {
     const evidence = executionPromptManifestToEvidence(promptManifest())
@@ -170,6 +209,101 @@ describe('execution explainability adapters', () => {
         expect.objectContaining({ label: 'Deleted path', source: 'deleted.ts' }),
         expect.objectContaining({ label: 'Renamed path', source: 'old.ts -> new.ts' }),
         expect.objectContaining({ label: 'Untracked path', source: 'scratch.md' }),
+      ]),
+    )
+  })
+
+  it('preserves artifact size thresholds as diagnostics with artifact evidence', () => {
+    const diagnostics = executionArtifactDiagnosticsToExplanation([
+      {
+        role: 'Plan',
+        relativePath: '.agents/plan.md',
+        byteCount: 300000,
+        characterCount: 250000,
+        warningThresholdBytes: 98304,
+        hardLimitBytes: 262144,
+        warningThresholdExceeded: true,
+        hardLimitExceeded: true,
+      },
+    ])
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        label: 'Plan: .agents/plan.md',
+        detail: '300000 bytes | 250000 chars | warning 98304 | hard limit 262144',
+        tone: 'danger',
+        evidence: [expect.objectContaining({ label: 'Artifact', source: '.agents/plan.md' })],
+      }),
+    ])
+  })
+
+  it('preserves execution event consequences and raw event evidence', () => {
+    const event: ExecutionEvent = {
+      sequence: 3,
+      timestamp: '2026-06-21T16:17:00.000Z',
+      type: 'HandoffValidated',
+      category: 'Handoff',
+      consequence: 'Handoff passed validation and the repository is awaiting acceptance.',
+      message: 'Current handoff validated for review.',
+    }
+
+    expect(executionEventsToDiagnostics([event])).toEqual([
+      expect.objectContaining({
+        label: 'Handoff: HandoffValidated',
+        detail: 'Handoff passed validation and the repository is awaiting acceptance.',
+        evidence: expect.arrayContaining([
+          expect.objectContaining({ label: 'Event sequence', detail: '#3' }),
+          expect.objectContaining({ label: 'Event timestamp', detail: '2026-06-21T16:17:00.000Z' }),
+          expect.objectContaining({ label: 'Event message', detail: 'Current handoff validated for review.' }),
+        ]),
+      }),
+    ])
+  })
+
+  it('preserves execution history evidence and failure diagnostics from session summaries', () => {
+    const session = sessionSummary({
+      repositoryState: 'Failed',
+      failureReason: 'Provider exited before generating a handoff.',
+      decisionNote: 'Rejected generated handoff.',
+    })
+
+    expect(executionSessionSummaryToEvidence(session)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: 'Session state', detail: 'Completed | Failed' }),
+        expect.objectContaining({ label: 'Milestone', source: '.agents/milestones/m8-explainability-layer.md' }),
+        expect.objectContaining({ label: 'Handoff', source: '.agents/handoffs/handoff.md' }),
+        expect.objectContaining({ label: 'Commit', fingerprint: 'abc123' }),
+      ]),
+    )
+    expect(executionSessionSummaryToDiagnostics(session)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: 'Session failure', detail: 'Provider exited before generating a handoff.' }),
+        expect.objectContaining({ label: 'Handoff decision note', detail: 'Rejected generated handoff.' }),
+      ]),
+    )
+  })
+
+  it('preserves generated handoff review actions without deriving decision state', () => {
+    const actions = generatedHandoffReviewToActions(sessionSummary(), false)
+
+    expect(actions).toEqual([
+      expect.objectContaining({
+        label: 'Accept generated handoff',
+        eligible: false,
+        command: 'acceptExecutionHandoff',
+        reason: 'Generated handoff is not awaiting a review decision.',
+      }),
+      expect.objectContaining({
+        label: 'Reject generated handoff',
+        eligible: false,
+        command: 'rejectExecutionHandoff',
+        reason: 'Generated handoff is not awaiting a review decision.',
+      }),
+    ])
+    expect(actions[0].constraints).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: 'Handoff path recorded', satisfied: true }),
+        expect.objectContaining({ label: 'Review decision pending', satisfied: false }),
       ]),
     )
   })

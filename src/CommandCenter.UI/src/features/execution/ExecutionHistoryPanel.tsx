@@ -1,5 +1,10 @@
 import { formatDateTime, formatDuration } from '../../lib'
 import { Panel, SectionHeader, StatusBadge } from '../../components/design'
+import { DiagnosticList, EvidenceList } from '../../components/explainability'
+import {
+  executionSessionSummaryToDiagnostics,
+  executionSessionSummaryToEvidence,
+} from '../../lib/explainability'
 import { repositoryExecutionStatus } from '../../lib/status'
 import type { ExecutionSessionSummary } from '../../types'
 
@@ -28,6 +33,15 @@ export function ExecutionHistoryPanel({ sessions, onOpenSession }: ExecutionHist
               <small>Duration {formatDuration(session.duration)}</small>
               <small>Commit {session.commitSha ?? 'Not recorded'}</small>
               <small>Push {session.pushedAt ? formatDateTime(session.pushedAt) : 'Not recorded'}</small>
+              <EvidenceList
+                evidence={executionSessionSummaryToEvidence(session)}
+                title="Session Evidence"
+              />
+              <DiagnosticList
+                diagnostics={executionSessionSummaryToDiagnostics(session)}
+                title="Session Diagnostics"
+                emptyLabel="No session diagnostics recorded."
+              />
             </>
           )
 

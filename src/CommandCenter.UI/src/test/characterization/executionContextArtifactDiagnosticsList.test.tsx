@@ -40,13 +40,15 @@ describe('execution context artifact diagnostics rendering characterization', ()
       />,
     )
 
-    const diagnostics = screen.getAllByText(/\.agents\//)
+    const diagnostics = document.querySelectorAll('.diagnostic-item span')
 
     expect(diagnostics).toHaveLength(2)
     expect(diagnostics[0]).toHaveTextContent(
       '.agents/milestones/m0-frontend-foundations.md: 2048 bytes',
     )
     expect(diagnostics[1]).toHaveTextContent('.agents/operational_context.md: 512 bytes')
+    expect(screen.getByText('Artifact Diagnostics')).toBeInTheDocument()
+    expect(screen.getByText('Plan: .agents/milestones/m0-frontend-foundations.md')).toBeInTheDocument()
   })
 
   it('preserves the warning and hard-limit suffix labels', () => {
@@ -74,6 +76,7 @@ describe('execution context artifact diagnostics rendering characterization', ()
     const { container } = render(<ExecutionContextArtifactDiagnosticsList diagnostics={[]} />)
 
     expect(container.querySelector('.diagnostic-list')).toBeInTheDocument()
+    expect(screen.getByText('No artifact diagnostics recorded.')).toBeInTheDocument()
     expect(screen.queryByText(/bytes/)).not.toBeInTheDocument()
   })
 })

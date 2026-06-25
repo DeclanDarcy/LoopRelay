@@ -1,3 +1,11 @@
+import { ConstraintViewer, DiagnosticList, EvidenceList } from '../../components/explainability'
+import {
+  reasoningDiagnosticsToExplanation,
+  reasoningMaterializationConceptToConstraints,
+  reasoningMaterializationConceptToDiagnostics,
+  reasoningMaterializationConceptToEvidence,
+  reasoningTaxonomyFindingsToDiagnostics,
+} from '../../lib/explainability'
 import type {
   ReasoningConceptMaterializationReview,
   ReasoningMaterializationReviewReport,
@@ -59,16 +67,11 @@ export function ReasoningMaterializationReviewPanel({
           </div>
 
           {review.taxonomyFindings.length > 0 ? (
-            <div className="reasoning-diagnostics" aria-label="Materialization taxonomy findings">
-              <strong>Taxonomy findings</strong>
-              {review.taxonomyFindings.map((finding) => (
-                <p key={finding.family}>
-                  {finding.family}: {finding.summary} ({finding.eventTypeCount}/
-                  {finding.eventTypeThreshold} event types; terminal event types{' '}
-                  {finding.terminalEventTypePresent ? finding.terminalEventTypes.join(', ') : 'absent'}
-                  ). {finding.riskReason}
-                </p>
-              ))}
+            <div aria-label="Materialization taxonomy findings">
+              <DiagnosticList
+                title="Taxonomy Findings"
+                diagnostics={reasoningTaxonomyFindingsToDiagnostics(review.taxonomyFindings)}
+              />
             </div>
           ) : null}
 
@@ -78,11 +81,10 @@ export function ReasoningMaterializationReviewPanel({
           />
 
           {(!review.diagnosticGroups?.length && review.diagnostics.length > 0) ? (
-            <div className="reasoning-diagnostics" aria-label="Materialization diagnostics">
-              {review.diagnostics.map((diagnostic) => (
-                <p key={diagnostic}>{diagnostic}</p>
-              ))}
-            </div>
+            <DiagnosticList
+              title="Materialization Diagnostics"
+              diagnostics={reasoningDiagnosticsToExplanation(review.diagnostics)}
+            />
           ) : null}
         </>
       ) : (
@@ -112,24 +114,19 @@ function ConceptReviewCard({ concept }: { concept: ReasoningConceptMaterializati
           Repeated workflow {concept.repeatedWorkflowCount}/{concept.repeatedWorkflowThreshold}
         </span>
       </div>
-      <dl className="reasoning-provenance">
-        <div>
-          <dt>Signals</dt>
-          <dd>
-            {concept.elevatedRiskSignals.length > 0
-              ? concept.elevatedRiskSignals.join(' / ')
-              : 'No elevated risk signals'}
-          </dd>
-        </div>
-        <div>
-          <dt>Evidence</dt>
-          <dd>{concept.evidence.length > 0 ? concept.evidence.join(' / ') : 'Evidence insufficient'}</dd>
-        </div>
-        <div>
-          <dt>Risk</dt>
-          <dd>{concept.risks.length > 0 ? concept.risks.join(' / ') : riskFor(concept.recommendation)}</dd>
-        </div>
-      </dl>
+      <EvidenceList
+        title={`${concept.concept} Evidence`}
+        evidence={reasoningMaterializationConceptToEvidence(concept)}
+        emptyLabel="Evidence insufficient"
+      />
+      <ConstraintViewer
+        title={`${concept.concept} Thresholds`}
+        constraints={reasoningMaterializationConceptToConstraints(concept)}
+      />
+      <DiagnosticList
+        title={`${concept.concept} Materialization Diagnostics`}
+        diagnostics={reasoningMaterializationConceptToDiagnostics(concept)}
+      />
     </article>
   )
 }
@@ -153,14 +150,6 @@ function formatOutcome(value: ReasoningMaterializationOutcome) {
     default:
       return value
   }
-}
-
-function riskFor(value: ReasoningMaterializationOutcome) {
-  if (value === 'RemainDerived') {
-    return 'Premature entity persistence would imply authority the reasoning domain does not own.'
-  }
-
-  return 'Any stronger persistence still requires Decision Lifecycle adoption before authority changes.'
 }
 
 function formatTimestamp(value: string) {

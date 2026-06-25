@@ -1,5 +1,7 @@
 import { formatDateTime } from '../../lib'
 import { EmptyState, Panel, SectionHeader, StatusBadge } from '../../components/design'
+import { DiagnosticList } from '../../components/explainability'
+import { executionEventsToDiagnostics } from '../../lib/explainability'
 import { executionSessionStatus } from '../../lib/status'
 import type { ExecutionEvent } from '../../types'
 import type { ExecutionSessionSummary } from '../../types'
@@ -36,6 +38,11 @@ export function ExecutionEventFeed({
                 <span>{group.category}</span>
                 <span>{group.events.length} event{group.events.length === 1 ? '' : 's'}</span>
               </div>
+              <DiagnosticList
+                diagnostics={executionEventsToDiagnostics(group.events)}
+                title={`${group.category} Consequences`}
+                emptyLabel="No event consequences projected."
+              />
               {group.events.map((executionEvent) => (
                 <div
                   className="execution-event-row"

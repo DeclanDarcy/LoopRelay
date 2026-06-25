@@ -1,3 +1,5 @@
+import { DiagnosticList } from '../../components/explainability'
+import { reasoningDiagnosticGroupsToExplanation } from '../../lib/explainability'
 import type { ReasoningDiagnosticGroup } from '../../types'
 
 type ReasoningDiagnosticGroupsProps = {
@@ -12,21 +14,11 @@ export function ReasoningDiagnosticGroups({ groups, label }: ReasoningDiagnostic
   }
 
   return (
-    <div className="reasoning-diagnostics" aria-label={label}>
-      <h5>Grouped Diagnostics</h5>
-      {visibleGroups.map((group) => (
-        <article className="reasoning-reconstruction-section" key={`${group.category}:${group.title ?? ''}`}>
-          <div className="reasoning-list-title">
-            <strong>{group.title ?? group.category}</strong>
-            <span>{group.category}</span>
-          </div>
-          <ul>
-            {group.diagnostics.map((diagnostic) => (
-              <li key={diagnostic}>{diagnostic}</li>
-            ))}
-          </ul>
-        </article>
-      ))}
+    <div aria-label={label}>
+      <DiagnosticList
+        title="Grouped Diagnostics"
+        diagnostics={reasoningDiagnosticGroupsToExplanation(visibleGroups)}
+      />
     </div>
   )
 }

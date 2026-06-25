@@ -2,41 +2,39 @@
 
 ## New State This Slice
 
-- Continued Milestone 8 unified explainability layer with the first execution-domain migration slice.
-- Rotated previous handoff to `.agents/handoffs/handoff.0072.md`.
-- Added `src/CommandCenter.UI/src/lib/explainability/execution.ts` and exported it from the explainability adapter barrel.
-- Added presentation-only execution adapters for:
-  - launched prompt manifest evidence and diagnostics,
-  - execution repository snapshot evidence,
-  - execution context artifact diagnostics,
-  - governed decision conflict diagnostics and source evidence,
-  - validation error diagnostics,
-  - git commit/push action eligibility, constraints, and diagnostics,
-  - execution recovery, monitoring, and handoff-processing diagnostics.
-- Migrated execution UI surfaces to shared explainability components:
-  - `ExecutionSessionPanel.tsx` now renders prompt manifest evidence/diagnostics and execution transparency diagnostics through shared components.
-  - `ExecutionRepositorySnapshotPanel.tsx` now renders repository snapshot evidence through shared `EvidenceList`.
-  - `ExecutionContextValidationList.tsx` now renders governed conflict diagnostics through shared `DiagnosticList`.
-  - `GitWorkflowEvidence.tsx` now renders commit/push eligibility and diagnostics through shared `ActionEligibilityView` and `DiagnosticList`.
-- Added `explainabilityExecutionAdapters.test.ts` coverage for preservation of prompt manifest facts, repository snapshot path evidence, governed conflict evidence, git eligibility actions/constraints/diagnostics, and recovery/monitoring/handoff diagnostics.
-- Updated `gitWorkflowEvidence.test.tsx` to characterize shared git eligibility rendering.
-- Updated `.agents/milestones/m8-explainability-layer.md` with completed execution adapter/test progress.
+- Continued Milestone 8 unified explainability layer with the first Reasoning migration slice.
+- Rotated previous handoff to `.agents/handoffs/handoff.0074.md`.
+- Added `src/CommandCenter.UI/src/lib/explainability/reasoning.ts` and exported it from the shared explainability index.
+- Added presentation-only reasoning adapters for:
+  - reasoning references and reconstruction evidence,
+  - reconstruction confidence diagnostics and uncertainty,
+  - reconstruction scope, reachability, and known unreachable evidence,
+  - diagnostic groups and fallback string diagnostics,
+  - materialization branch evidence, thresholds, risks, and taxonomy findings,
+  - certification evidence as shared certification findings.
+- Migrated reasoning UI surfaces to shared explainability components:
+  - `ReasoningReconstructionPanel.tsx` now uses shared evidence, diagnostic, and uncertainty components for confidence, scope, evidence, and fallback diagnostics.
+  - `ReasoningQueryPanel.tsx` now uses shared confidence diagnostics, scope evidence, uncertainty, and fallback diagnostics in query transparency.
+  - `ReasoningMaterializationReviewPanel.tsx` now uses shared evidence, constraint, and diagnostic components for materialization branch facts and taxonomy findings.
+  - `ReasoningCertificationPanel.tsx` now uses shared certification findings and diagnostics.
+  - `ReasoningDiagnosticGroups.tsx` now delegates grouped diagnostics to shared `DiagnosticList`.
+- Added `src/CommandCenter.UI/src/test/characterization/explainabilityReasoningAdapters.test.ts`.
+- Updated `src/CommandCenter.UI/src/test/characterization/reasoningTrajectory.test.tsx` to assert the shared explainability rendering while preserving the same reasoning facts.
+- Updated `.agents/milestones/m8-explainability-layer.md` to record the completed Reasoning migration coverage.
 
 ## Verification
 
-- `npm test -- --run src/test/characterization/explainabilityExecutionAdapters.test.ts src/test/characterization/executionSessionPanel.test.tsx src/test/characterization/executionRepositorySnapshotPanel.test.tsx src/test/characterization/executionContextValidationList.test.tsx src/test/characterization/gitWorkflowEvidence.test.tsx`
+- `npm test -- --run src/test/characterization/explainabilityReasoningAdapters.test.ts src/test/characterization/reasoningTrajectory.test.tsx`
 - `npm run build`
 
 ## Residual Risk
 
-- This slice did not migrate `ExecutionEventFeed`, `ExecutionHistoryPanel`, `ExecutionContextArtifactDiagnosticsList`, or generated handoff review surfaces.
-- Some execution panels intentionally keep domain-specific summaries beside shared explainability components for scanability; Milestone 9 can revisit density and duplication.
-- `executionArtifactDiagnosticsToExplanation` and `executionValidationErrorsToDiagnostics` are adapter-ready but are not yet wired into their artifact/validation surfaces beyond governed conflicts.
+- Reasoning migration is now covered for reconstruction, materialization review, diagnostics, and certification, but not every reasoning surface has been deeply density-tuned after moving to shared components.
+- Milestone 8 still needs operational context, cross-cutting health, diagnostics, and certification surfaces.
 
 ## Recommended Next Slice
 
-- Continue Milestone 8 with the remaining execution surfaces before moving to reasoning:
-  - artifact diagnostics and context size threshold findings,
-  - execution event feed consequences and monitoring diagnostics,
-  - execution history/session failure evidence,
-  - generated handoff validation/review evidence.
+- Continue Milestone 8 with operational context / continuity explainability:
+  - adapt operational-context lifecycle, compression, semantic diff, diagnostics, review findings, and continuity report facts into shared explainability types,
+  - migrate continuity and operational-context panels to shared evidence/diagnostic/uncertainty/constraint components,
+  - add adapter preservation tests proving React does not derive compression eligibility, semantic identity, lifecycle outcome, context quality, or continuity risk.

@@ -1,6 +1,11 @@
 import { useMemo } from 'react'
+import { CertificationFindingsView, DiagnosticList } from '../../components/explainability'
 import { EmptyState } from '../../components/design'
-import type { ReasoningCertificationEvidence, ReasoningCertificationReport } from '../../types'
+import {
+  reasoningCertificationEvidenceToFindings,
+  reasoningDiagnosticsToExplanation,
+} from '../../lib/explainability'
+import type { ReasoningCertificationReport } from '../../types'
 
 type ReasoningCertificationPanelProps = {
   currentReport: ReasoningCertificationReport | null
@@ -67,22 +72,27 @@ export function ReasoningCertificationPanel({
           </div>
 
           {currentReport.diagnostics.length > 0 ? (
-            <div className="reasoning-diagnostics" aria-label="Reasoning certification diagnostics">
-              {currentReport.diagnostics.map((diagnostic) => (
-                <p key={diagnostic}>{diagnostic}</p>
-              ))}
+            <div aria-label="Reasoning certification diagnostics">
+              <DiagnosticList
+                title="Reasoning Certification Diagnostics"
+                diagnostics={reasoningDiagnosticsToExplanation(
+                  currentReport.diagnostics,
+                  'Certification diagnostic',
+                  'warning',
+                )}
+              />
             </div>
           ) : null}
 
           <div className="reasoning-certification-evidence" aria-label="Reasoning certification evidence">
-            {failedEvidence.length > 0 ? (
-              <EvidenceGroup title="Failed" evidence={failedEvidence} />
-            ) : null}
-            {passedEvidence.length > 0 ? (
-              <EvidenceGroup title="Passed" evidence={passedEvidence} />
-            ) : (
-              <EmptyState className="empty-state">No certification evidence is available.</EmptyState>
-            )}
+            <CertificationFindingsView
+              title="Reasoning Certification Findings"
+              findings={reasoningCertificationEvidenceToFindings([
+                ...failedEvidence,
+                ...passedEvidence,
+              ])}
+              emptyLabel="No certification evidence is available."
+            />
           </div>
 
           <div className="reasoning-certification-history" aria-label="Reasoning certification report history">
@@ -111,56 +121,6 @@ export function ReasoningCertificationPanel({
         </EmptyState>
       )}
     </section>
-  )
-}
-
-function EvidenceGroup({
-  title,
-  evidence,
-}: {
-  title: string
-  evidence: ReasoningCertificationEvidence[]
-}) {
-  return (
-    <div className="reasoning-certification-group">
-      <h6>{title}</h6>
-      {evidence.map((item) => (
-        <EvidenceCard evidence={item} key={item.id} />
-      ))}
-    </div>
-  )
-}
-
-function EvidenceCard({ evidence }: { evidence: ReasoningCertificationEvidence }) {
-  return (
-    <article className="reasoning-certification-card">
-      <div className="reasoning-event-heading">
-        <strong>{evidence.scenario}</strong>
-        <span>{evidence.passed ? 'Passed' : 'Failed'}</span>
-      </div>
-      <p>{evidence.summary}</p>
-      {evidence.details.length > 0 ? (
-        <ul>
-          {evidence.details.map((detail) => (
-            <li key={detail}>{detail}</li>
-          ))}
-        </ul>
-      ) : null}
-      {evidence.references.length > 0 ? (
-        <dl className="reasoning-provenance" aria-label={`${evidence.id} references`}>
-          {evidence.references.map((reference, index) => (
-            <div key={`${evidence.id}-${reference.kind}-${reference.id}-${index}`}>
-              <dt>{reference.kind}</dt>
-              <dd>
-                {reference.id}
-                {reference.relativePath ? ` / ${reference.relativePath}` : ''}
-                {reference.section ? ` / ${reference.section}` : ''}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      ) : null}
-    </article>
   )
 }
 

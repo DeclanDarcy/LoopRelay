@@ -954,10 +954,16 @@ describe('reasoning trajectory tab', () => {
     const reconstructionRegion = screen.getByRole('region', { name: 'Reasoning reconstruction' })
     expect(
       within(reconstructionRegion).getByLabelText('Reconstruction confidence rationale'),
-    ).toHaveTextContent('Relationship evidenceNot present')
+    ).toHaveTextContent('Relationship evidence')
     expect(
       within(reconstructionRegion).getByLabelText('Reconstruction confidence rationale'),
-    ).toHaveTextContent('Trace diagnosticsPresent')
+    ).toHaveTextContent('Not present')
+    expect(
+      within(reconstructionRegion).getByLabelText('Reconstruction confidence rationale'),
+    ).toHaveTextContent('Trace diagnostics')
+    expect(
+      within(reconstructionRegion).getByLabelText('Reconstruction confidence rationale'),
+    ).toHaveTextContent('Present')
     expect(
       within(reconstructionRegion).getByLabelText('Reconstruction confidence rationale'),
     ).toHaveTextContent('No relationship evidence was reachable for this query.')
@@ -1070,10 +1076,10 @@ describe('reasoning trajectory tab', () => {
     )
     expect(within(certificationRegion).getByText('Provenance completeness')).toBeInTheDocument()
     expect(within(certificationRegion).getByText('EVT-9999 is missing provenance.')).toBeInTheDocument()
-    expect(within(certificationRegion).getByLabelText('CERT-010 references')).toHaveTextContent(
+    expect(within(certificationRegion).getByLabelText('Reasoning certification evidence')).toHaveTextContent(
       'ReasoningEvent',
     )
-    expect(within(certificationRegion).getByLabelText('CERT-010 references')).toHaveTextContent(
+    expect(within(certificationRegion).getByLabelText('Reasoning certification evidence')).toHaveTextContent(
       'EVT-9999',
     )
   })

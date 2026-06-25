@@ -48,10 +48,13 @@ describe('execution event feed rendering characterization', () => {
     expect(screen.getByText('stdout')).toBeInTheDocument()
     expect(screen.getByLabelText('Provider execution events')).toBeInTheDocument()
     expect(within(screen.getByLabelText('Provider execution events')).getByText('2 events')).toBeInTheDocument()
-    expect(screen.getByText('Provider emitted standard error output.')).toBeInTheDocument()
-    expect(screen.getByText('Provider emitted standard output.')).toBeInTheDocument()
-    expect(screen.getByText('Second event').tagName).toBe('PRE')
-    expect(screen.getByText('Seventh event').tagName).toBe('PRE')
+    expect(screen.getAllByText('Provider emitted standard error output.')).not.toHaveLength(0)
+    expect(screen.getAllByText('Provider emitted standard output.')).not.toHaveLength(0)
+    expect(screen.getByText('Provider Consequences')).toBeInTheDocument()
+    expect(Array.from(document.querySelectorAll('pre')).map((node) => node.textContent)).toEqual([
+      'Second event',
+      'Seventh event',
+    ])
   })
 
   it('groups events by backend semantic category in first-seen order', () => {
@@ -87,13 +90,16 @@ describe('execution event feed rendering characterization', () => {
     expect(screen.getByLabelText('Launch execution events')).toBeInTheDocument()
     expect(screen.getByLabelText('Failure execution events')).toBeInTheDocument()
     expect(screen.getByLabelText('Handoff execution events')).toBeInTheDocument()
-    expect(screen.getByText('Provider execution began.')).toHaveClass('execution-event-consequence')
-    expect(screen.getByText('Execution is failed or requires recovery before normal progression can continue.')).toHaveClass(
+    expect(screen.getAllByText('Provider execution began.').at(-1)).toHaveClass('execution-event-consequence')
+    expect(screen.getAllByText('Execution is failed or requires recovery before normal progression can continue.').at(-1)).toHaveClass(
       'execution-event-consequence',
     )
-    expect(screen.getByText('Handoff passed validation and the repository is awaiting acceptance.')).toHaveClass(
+    expect(screen.getAllByText('Handoff passed validation and the repository is awaiting acceptance.').at(-1)).toHaveClass(
       'execution-event-consequence',
     )
+    expect(screen.getByText('Launch Consequences')).toBeInTheDocument()
+    expect(screen.getByText('Failure Consequences')).toBeInTheDocument()
+    expect(screen.getByText('Handoff Consequences')).toBeInTheDocument()
     expect(Array.from(document.querySelectorAll('.execution-event-row')).map((row) => row.getAttribute('data-event-category'))).toEqual([
       'Launch',
       'Failure',
@@ -116,7 +122,7 @@ describe('execution event feed rendering characterization', () => {
     )
 
     expect(screen.getByLabelText('Monitoring execution events')).toBeInTheDocument()
-    expect(screen.getByText('Execution monitoring recorded activity.')).toBeInTheDocument()
-    expect(screen.getByText('Older event')).toBeInTheDocument()
+    expect(screen.getAllByText('Execution monitoring recorded activity.')).not.toHaveLength(0)
+    expect(document.querySelector('pre')).toHaveTextContent('Older event')
   })
 })

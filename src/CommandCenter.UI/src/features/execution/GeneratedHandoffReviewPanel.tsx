@@ -1,5 +1,10 @@
 import { Panel, SectionHeader } from '../../components/design'
+import { ActionEligibilityView, EvidenceList } from '../../components/explainability'
 import { formatDateTime, formatDuration } from '../../lib'
+import {
+  executionSessionSummaryToEvidence,
+  generatedHandoffReviewToActions,
+} from '../../lib/explainability'
 import { repositoryExecutionStatus } from '../../lib/status'
 import type { ExecutionSessionSummary } from '../../types'
 import { GeneratedHandoffContent } from './GeneratedHandoffContent'
@@ -52,6 +57,10 @@ export function GeneratedHandoffReviewPanel({
         </div>
       </div>
       <div className="handoff-review-actions">
+        <ActionEligibilityView
+          actions={generatedHandoffReviewToActions(execution, isDecisionPending)}
+          title="Handoff Review Actions"
+        />
         <button
           type="button"
           className="primary-action"
@@ -69,6 +78,10 @@ export function GeneratedHandoffReviewPanel({
           {isRejecting ? 'Rejecting...' : 'Reject Handoff'}
         </button>
       </div>
+      <EvidenceList
+        evidence={executionSessionSummaryToEvidence(execution)}
+        title="Generated Handoff Evidence"
+      />
       <GeneratedHandoffContent content={content} isLoading={isContentLoading} />
     </Panel>
   )

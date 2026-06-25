@@ -1,4 +1,12 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { DiagnosticList, EvidenceList, UncertaintyView } from '../../components/explainability'
+import {
+  formatReasoningReference,
+  reasoningDiagnosticsToExplanation,
+  reasoningReconstructionConfidenceToDiagnostics,
+  reasoningReconstructionConfidenceToUncertainty,
+  reasoningReconstructionScopeToEvidence,
+} from '../../lib/explainability'
 import type {
   ReasoningGraph,
   ReasoningQuery,
@@ -221,10 +229,6 @@ export function ReasoningQueryPanel({
           <div className="reasoning-query-transparency" aria-label="Reasoning query transparency">
             <dl className="reasoning-reconstruction-metadata">
               <div>
-                <dt>Confidence basis</dt>
-                <dd>{queryResult.reconstruction.confidenceRationale.rationale}</dd>
-              </div>
-              <div>
                 <dt>Scope</dt>
                 <dd>
                   {queryResult.reconstruction.scope.direction} from{' '}
@@ -248,32 +252,23 @@ export function ReasoningQueryPanel({
                 <dd>{queryResult.reconstruction.scope.unreachableEvidence.length} known item(s)</dd>
               </div>
             </dl>
-            {queryResult.reconstruction.confidenceRationale.missingEvidence.length > 0 ? (
-              <div className="reasoning-reconstruction-section">
-                <div className="reasoning-list-title">
-                  <strong>Missing Evidence</strong>
-                  <span>{queryResult.reconstruction.confidenceRationale.missingEvidence.length} items</span>
-                </div>
-                <ul>
-                  {queryResult.reconstruction.confidenceRationale.missingEvidence.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            {queryResult.reconstruction.confidenceRationale.whyNotHigher.length > 0 ? (
-              <div className="reasoning-reconstruction-section">
-                <div className="reasoning-list-title">
-                  <strong>Why Confidence Was Not Higher</strong>
-                  <span>{queryResult.reconstruction.confidenceRationale.whyNotHigher.length} items</span>
-                </div>
-                <ul>
-                  {queryResult.reconstruction.confidenceRationale.whyNotHigher.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
+            <DiagnosticList
+              title="Query Confidence Diagnostics"
+              diagnostics={reasoningReconstructionConfidenceToDiagnostics(
+                queryResult.reconstruction.confidenceRationale,
+              )}
+            />
+            <EvidenceList
+              title="Query Scope Evidence"
+              evidence={reasoningReconstructionScopeToEvidence(queryResult.reconstruction)}
+            />
+            <UncertaintyView
+              title="Query Uncertainty"
+              uncertainty={reasoningReconstructionConfidenceToUncertainty(
+                queryResult.reconstruction.confidenceRationale,
+              )}
+              emptyLabel="No missing evidence or confidence blockers projected."
+            />
           </div>
           <ReasoningDiagnosticGroups
             groups={queryResult.diagnosticGroups ?? queryResult.reconstruction.diagnosticGroups}
@@ -282,11 +277,10 @@ export function ReasoningQueryPanel({
 
           {(!(queryResult.diagnosticGroups?.length || queryResult.reconstruction.diagnosticGroups?.length) &&
             queryResult.diagnostics.length > 0) ? (
-            <div className="reasoning-diagnostics">
-              {queryResult.diagnostics.map((diagnostic) => (
-                <p key={diagnostic}>{diagnostic}</p>
-              ))}
-            </div>
+            <DiagnosticList
+              diagnostics={reasoningDiagnosticsToExplanation(queryResult.diagnostics)}
+              title="Query Diagnostics"
+            />
           ) : null}
         </div>
       ) : null}
@@ -320,8 +314,5 @@ const referenceKinds: ReasoningReferenceKind[] = [
 ]
 
 function formatReference(reference: ReasoningReference) {
-  const qualifiers = [reference.relativePath, reference.section].filter(Boolean)
-  return qualifiers.length > 0
-    ? `${reference.kind} ${reference.id} (${qualifiers.join(' - ')})`
-    : `${reference.kind} ${reference.id}`
+  return formatReasoningReference(reference)
 }

@@ -1,9 +1,11 @@
 import type {
   ExecutionContextArtifactDiagnostic,
+  ExecutionEvent,
   ExecutionGitActionEligibility,
   ExecutionGovernedConflictDiagnostic,
   ExecutionPromptManifest,
   ExecutionRepositorySnapshot,
+  ExecutionSessionSummary,
   ExecutionSessionTransparency,
   ExplanationAction,
   ExplanationConstraint,
@@ -20,7 +22,7 @@ function toneFromSeverity(severity: string): ExplanationTone {
     return 'danger'
   }
 
-  if (normalized.includes('warning') || normalized.includes('failed') || normalized.includes('stale')) {
+  if (normalized.includes('warning') || normalized.includes('failed') || normalized.includes('failure') || normalized.includes('stale')) {
     return 'warning'
   }
 
@@ -126,6 +128,125 @@ export function executionArtifactDiagnosticsToExplanation(
       },
     ],
   }))
+}
+
+export function executionEventsToDiagnostics(events: ExecutionEvent[]): ExplanationDiagnostic[] {
+  return events.map((executionEvent) => ({
+    label: `${executionEvent.category?.trim() || 'Monitoring'}: ${executionEvent.type}`,
+    detail: executionEvent.consequence?.trim() || 'Execution monitoring recorded activity.',
+    tone: toneFromSeverity(executionEvent.category ?? executionEvent.type),
+    evidence: [
+      {
+        label: 'Event sequence',
+        detail: `#${executionEvent.sequence}`,
+      },
+      {
+        label: 'Event timestamp',
+        detail: executionEvent.timestamp,
+      },
+      {
+        label: 'Event message',
+        detail: executionEvent.message,
+      },
+    ],
+  }))
+}
+
+export function executionSessionSummaryToEvidence(
+  session: ExecutionSessionSummary,
+): ExplanationEvidence[] {
+  return [
+    {
+      id: `${session.sessionId}-state`,
+      label: 'Session state',
+      detail: `${session.state} | ${session.repositoryState}`,
+    },
+    {
+      id: `${session.sessionId}-milestone`,
+      label: 'Milestone',
+      detail: session.milestonePath ?? 'Milestone not recorded',
+      source: session.milestonePath,
+    },
+    {
+      id: `${session.sessionId}-provider`,
+      label: 'Provider',
+      detail: session.providerName || 'Provider not recorded',
+      source: session.providerExecutablePath,
+    },
+    {
+      id: `${session.sessionId}-handoff`,
+      label: 'Handoff',
+      detail: session.handoffPath ?? 'Handoff not recorded',
+      source: session.handoffPath,
+    },
+    {
+      id: `${session.sessionId}-commit`,
+      label: 'Commit',
+      detail: session.commitSha ?? 'Commit not recorded',
+      fingerprint: session.commitSha ?? undefined,
+    },
+    {
+      id: `${session.sessionId}-push`,
+      label: 'Push',
+      detail: session.pushedAt
+        ? `${session.pushRemoteName ?? 'remote'}:${session.pushBranchName ?? 'branch'} at ${session.pushedAt}`
+        : session.pushAttemptedAt
+          ? `Attempted at ${session.pushAttemptedAt}`
+          : 'Push not recorded',
+      fingerprint: session.pushedCommitSha ?? undefined,
+    },
+  ]
+}
+
+export function executionSessionSummaryToDiagnostics(
+  session: ExecutionSessionSummary,
+): ExplanationDiagnostic[] {
+  return [
+    ...(session.failureReason
+      ? [
+          {
+            label: 'Session failure',
+            detail: session.failureReason,
+            tone: 'danger' as const,
+          },
+        ]
+      : []),
+    ...(session.decisionNote
+      ? [
+          {
+            label: 'Handoff decision note',
+            detail: session.decisionNote,
+            tone: 'info' as const,
+          },
+        ]
+      : []),
+  ]
+}
+
+export function generatedHandoffReviewToActions(
+  session: ExecutionSessionSummary,
+  isDecisionPending: boolean,
+): ExplanationAction[] {
+  const reason = isDecisionPending ? null : 'Generated handoff is not awaiting a review decision.'
+
+  return [
+    {
+      label: 'Accept generated handoff',
+      detail: session.handoffPath ?? 'Generated handoff path not recorded.',
+      eligible: isDecisionPending,
+      reason,
+      command: 'acceptExecutionHandoff',
+      constraints: generatedHandoffReviewConstraints(session, isDecisionPending),
+    },
+    {
+      label: 'Reject generated handoff',
+      detail: session.handoffPath ?? 'Generated handoff path not recorded.',
+      eligible: isDecisionPending,
+      reason,
+      command: 'rejectExecutionHandoff',
+      constraints: generatedHandoffReviewConstraints(session, isDecisionPending),
+    },
+  ]
 }
 
 export function executionGovernedConflictsToDiagnostics(
@@ -294,5 +415,28 @@ function gitEligibilityConstraints(
       detail: reason,
       satisfied: false,
     })),
+  ]
+}
+
+function generatedHandoffReviewConstraints(
+  session: ExecutionSessionSummary,
+  isDecisionPending: boolean,
+): ExplanationConstraint[] {
+  return [
+    {
+      label: 'Session exists',
+      detail: session.sessionId,
+      satisfied: true,
+    },
+    {
+      label: 'Handoff path recorded',
+      detail: session.handoffPath ?? 'No handoff path recorded',
+      satisfied: Boolean(session.handoffPath),
+    },
+    {
+      label: 'Review decision pending',
+      detail: isDecisionPending ? 'Awaiting review decision' : 'No review decision pending',
+      satisfied: isDecisionPending,
+    },
   ]
 }
