@@ -109,9 +109,9 @@ Make execution explainable: what was launched, what context was included, what r
 
 ### Tests
 
-- [ ] Backend tests proving prompt manifest is persisted, distinguishes requested and delivered context, records provider adjustments, and differs from preview when appropriate.
+- [x] Backend tests proving prompt manifest is persisted, distinguishes requested and delivered context, records provider adjustments, and differs from preview when appropriate.
    - [x] Prompt manifest persistence covers requested vs delivered artifacts and the explicit no-provider-divergence diagnostic.
-   - [ ] Preview-vs-launched prompt differences still need coverage when preview and launch surfaces are wired together.
+   - [x] Preview-vs-launched prompt differences are covered by proving launch persists a manifest separately from a stale preview context and captures updated launch-time context.
 - [x] Backend tests for push conflict response containing updated retry state.
 - [x] Backend tests for git eligibility branches and structured governed conflicts.
    - [x] Git eligibility branches cover stale commit preparation, selected path state, missing message, previous push failure, remote branch state, and endpoint projection.

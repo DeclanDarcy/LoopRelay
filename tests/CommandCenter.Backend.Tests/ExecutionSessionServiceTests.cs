@@ -1400,6 +1400,45 @@ public sealed class ExecutionSessionServiceTests
     }
 
     [Fact]
+    public async Task LaunchPersistsPromptManifestDistinctFromPreviewContext()
+    {
+        Harness harness = await CreateHarnessAsync();
+        await WriteReadyArtifactsAsync(harness.Repository);
+        await WriteAsync(harness.Repository, ".agents/operational_context.md", "preview operational context");
+        string milestonePath = ".agents/milestones/m2.md";
+
+        ExecutionContext preview = await harness.ContextService.BuildContextAsync(harness.Repository.Id, milestonePath);
+        ExecutionContextArtifact previewOperationalContext = Assert.Single(
+            preview.Artifacts,
+            artifact => artifact.Role == "OperationalContext");
+        Assert.Equal("preview operational context", previewOperationalContext.Content);
+
+        await WriteAsync(harness.Repository, ".agents/operational_context.md", "launched operational context with updated evidence");
+
+        ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
+            harness.Repository.Id,
+            new ExecutionStartRequest { MilestonePath = milestonePath });
+        ExecutionSession session = (await harness.Store.LoadAsync()).Single(session => session.Id == summary.SessionId);
+        ExecutionPromptManifest manifest = session.PromptManifest!;
+        ExecutionPromptManifestArtifact deliveredOperationalContext = Assert.Single(
+            manifest.DeliveredArtifacts,
+            artifact => artifact.Role == "OperationalContext");
+        ExecutionPromptManifestArtifact requestedOperationalContext = Assert.Single(
+            manifest.RequestedArtifacts,
+            artifact => artifact.Role == "OperationalContext");
+
+        Assert.Equal(summary.SessionId, manifest.SessionId);
+        Assert.Equal("DeliveredAsRequested", manifest.ProviderDeliveryStatus);
+        Assert.Empty(manifest.ProviderAdjustments);
+        Assert.Contains(ExecutionPromptManifest.NoProviderDivergenceSignalDiagnostic, manifest.Diagnostics);
+        Assert.Contains("launched operational context with updated evidence", manifest.PromptText);
+        Assert.DoesNotContain("preview operational context", manifest.PromptText);
+        Assert.Equal("launched operational context with updated evidence".Length, deliveredOperationalContext.CharacterCount);
+        Assert.Equal(deliveredOperationalContext.CharacterCount, requestedOperationalContext.CharacterCount);
+        Assert.NotEqual(previewOperationalContext.CharacterCount, deliveredOperationalContext.CharacterCount);
+    }
+
+    [Fact]
     public async Task AppStartupRunsExecutionRecovery()
     {
         string configurationPath = Path.Combine(CreateTemporaryDirectory(), "configuration.json");
