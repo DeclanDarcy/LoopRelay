@@ -2,10 +2,11 @@
 
 ## Newly Authorized
 
-- Accept Milestone 5 as properly closed.
-- Treat the preview-versus-launched prompt regression test as the correct final gap to close before Milestone 5 graduation.
-- Preserve the durable Milestone 5 outcome: execution is inspectable across launch, provider delivery, recovery, monitoring, governance blockers, handoff processing, git eligibility, git change origin, push retry state, and semantic events.
-- Begin Milestone 6 with a reasoning transparency audit.
-- Close the first Milestone 6 projection gap around confidence rationale, missing evidence, reconstruction scope, reconstruction direction, and evidence present versus absent.
-- Preserve the Milestone 6 authority rule: reasoning service owns reasoning semantics, and UI renders reasoning projections.
-- Start Milestone 6 backend-first rather than by improving reasoning UI language.
+- Treat the first Milestone 6 reconstruction transparency slice as architecturally correct because it establishes backend reasoning authority before UI presentation.
+- Preserve the backend-owned confidence rationale model; the UI must not invent explanations for confidence values.
+- Preserve explicit reconstruction scope as an authority projection, including direction, source, target, historical cutoff, reachable evidence, and known unreachable evidence.
+- Preserve reachable versus known unreachable evidence as distinct semantic concepts for reconstruction transparency.
+- Continue Milestone 6 with UI consumption of the new `confidenceRationale` and `scope` fields.
+- Update `ReasoningReconstructionPanel` and `ReasoningQueryPanel` next, with characterization coverage for high versus limited confidence, forward/backward direction, reachable versus unreachable evidence, historical cutoff, and missing evidence branches.
+- Keep the UI presentation semantically decomposed rather than collapsing confidence rationale and scope into prose, so Milestone 8 explainability adapters can consume structured fields.
+- Treat the full-suite backend and UI order-dependent failures as infrastructure debt that should be addressed before the reasoning test matrix grows substantially, but do not let them block this completed slice.

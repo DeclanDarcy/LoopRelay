@@ -127,6 +127,10 @@ public sealed class ReasoningArtifactProjectionService : IReasoningArtifactProje
         }
 
         builder.AppendLine($"- Confidence: {reconstruction.Confidence}");
+        builder.AppendLine($"- Confidence Rationale: {reconstruction.ConfidenceRationale.Rationale}");
+        builder.AppendLine($"- Direction: {reconstruction.Scope.Direction}");
+        builder.AppendLine($"- Source: {FormatReference(reconstruction.Scope.Source)}");
+        builder.AppendLine($"- Historical Cutoff: {reconstruction.Scope.HistoricalCutoff?.ToString("O") ?? "None"}");
         builder.AppendLine();
         builder.AppendLine("## Narrative");
         builder.AppendLine();
@@ -147,6 +151,27 @@ public sealed class ReasoningArtifactProjectionService : IReasoningArtifactProje
         else
         {
             foreach (ReasoningReconstructionEvidence evidence in reconstruction.Evidence.OrderBy(item => item.Kind, StringComparer.Ordinal).ThenBy(item => item.Id, StringComparer.Ordinal))
+            {
+                builder.AppendLine($"- {evidence.Kind} {evidence.Id}: {evidence.Title} - {evidence.Summary}");
+            }
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("## Missing Evidence");
+        AppendValues(builder, reconstruction.ConfidenceRationale.MissingEvidence);
+        builder.AppendLine();
+        builder.AppendLine("## Why Confidence Was Not Higher");
+        AppendValues(builder, reconstruction.ConfidenceRationale.WhyNotHigher);
+        builder.AppendLine();
+        builder.AppendLine("## Unreachable Evidence");
+        builder.AppendLine();
+        if (reconstruction.Scope.UnreachableEvidence.Count == 0)
+        {
+            builder.AppendLine("- None");
+        }
+        else
+        {
+            foreach (ReasoningReconstructionEvidence evidence in reconstruction.Scope.UnreachableEvidence.OrderBy(item => item.Kind, StringComparer.Ordinal).ThenBy(item => item.Id, StringComparer.Ordinal))
             {
                 builder.AppendLine($"- {evidence.Kind} {evidence.Id}: {evidence.Title} - {evidence.Summary}");
             }
@@ -265,5 +290,10 @@ public sealed class ReasoningArtifactProjectionService : IReasoningArtifactProje
         {
             builder.AppendLine($"- {label}: {value}");
         }
+    }
+
+    private static string FormatReference(ReasoningReference? reference)
+    {
+        return reference is null ? "None" : $"{reference.Kind} {reference.Id}";
     }
 }

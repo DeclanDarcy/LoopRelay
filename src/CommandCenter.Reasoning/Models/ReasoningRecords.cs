@@ -145,9 +145,28 @@ public sealed record ReasoningReconstruction(
     ReasoningQuery Query,
     ReasoningNarrative Narrative,
     string Confidence,
+    ReasoningReconstructionConfidence ConfidenceRationale,
+    ReasoningReconstructionScope Scope,
     ReasoningTrace Trace,
     IReadOnlyList<ReasoningReconstructionEvidence> Evidence,
     IReadOnlyList<string> Diagnostics);
+
+public sealed record ReasoningReconstructionConfidence(
+    string Level,
+    string Rationale,
+    bool EventEvidencePresent,
+    bool RelationshipEvidencePresent,
+    bool TraceDiagnosticsPresent,
+    IReadOnlyList<string> MissingEvidence,
+    IReadOnlyList<string> WhyNotHigher);
+
+public sealed record ReasoningReconstructionScope(
+    ReasoningTraceDirection Direction,
+    ReasoningReference Target,
+    ReasoningReference? Source,
+    DateTimeOffset? HistoricalCutoff,
+    IReadOnlyList<ReasoningReconstructionEvidence> ReachableEvidence,
+    IReadOnlyList<ReasoningReconstructionEvidence> UnreachableEvidence);
 
 public sealed record ReasoningReconstructionEvidence(
     string Kind,

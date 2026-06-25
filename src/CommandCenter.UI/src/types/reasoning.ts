@@ -258,12 +258,33 @@ export type ReasoningReconstructionEvidence = {
   provenance: ReasoningProvenance | null
 }
 
+export type ReasoningReconstructionConfidence = {
+  level: string
+  rationale: string
+  eventEvidencePresent: boolean
+  relationshipEvidencePresent: boolean
+  traceDiagnosticsPresent: boolean
+  missingEvidence: string[]
+  whyNotHigher: string[]
+}
+
+export type ReasoningReconstructionScope = {
+  direction: ReasoningTraceDirection
+  target: ReasoningReference
+  source: ReasoningReference | null
+  historicalCutoff: string | null
+  reachableEvidence: ReasoningReconstructionEvidence[]
+  unreachableEvidence: ReasoningReconstructionEvidence[]
+}
+
 export type ReasoningReconstruction = {
   repositoryId: string
   generatedAt: string
   query: ReasoningQuery
   narrative: ReasoningNarrative
   confidence: string
+  confidenceRationale: ReasoningReconstructionConfidence
+  scope: ReasoningReconstructionScope
   trace: ReasoningTrace
   evidence: ReasoningReconstructionEvidence[]
   diagnostics: string[]

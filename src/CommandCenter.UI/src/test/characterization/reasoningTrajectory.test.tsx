@@ -214,6 +214,35 @@ const reconstruction: ReasoningReconstruction = {
       'Question: Why did this decision change?\nTarget: ReasoningEvent EVT-0001\nTrace direction: Backward\nScale diagnostics: 2 evidence item(s), 1 event(s), 1 relationship edge(s), 0 external reference(s), 1 thread(s).\nEvidence summary: 1 event(s), 1 relationship edge(s), 0 external reference(s), 1 thread(s).\nEvents:\n- Event EVT-0001: HypothesisRaised: Event substrate can stay narrow - Reasoning should begin as immutable events with provenance.\nRelationships:\n- GraphRelationship ThreadMembership:EVT-0001:THR-0001: BelongsTo - Event belongs to thread\nExternal References:\n- None\nThreads:\n- Thread THR-0001: Milestone 1 ontology boundary - Tracks why the event substrate remains explanatory.',
   },
   confidence: 'High',
+  confidenceRationale: {
+    level: 'High',
+    rationale: 'Event evidence and relationship evidence were both reachable, and the trace reported no diagnostics.',
+    eventEvidencePresent: true,
+    relationshipEvidencePresent: true,
+    traceDiagnosticsPresent: false,
+    missingEvidence: [],
+    whyNotHigher: [],
+  },
+  scope: {
+    direction: 'Backward',
+    target: {
+      kind: 'ReasoningEvent',
+      id: 'EVT-0001',
+      relativePath: null,
+      section: null,
+      excerpt: null,
+    },
+    source: {
+      kind: 'ReasoningThread',
+      id: 'THR-0001',
+      relativePath: null,
+      section: null,
+      excerpt: null,
+    },
+    historicalCutoff: null,
+    reachableEvidence: [],
+    unreachableEvidence: [],
+  },
   trace: backwardTrace,
   evidence: [
     {

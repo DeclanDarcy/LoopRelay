@@ -41,12 +41,17 @@ public sealed class ReasoningReconstructionService(
             diagnostics.Add("No cited reasoning evidence was found for the requested trace.");
         }
 
+        ReasoningReconstructionConfidence confidenceRationale = BuildConfidenceRationale(context, trace);
+        ReasoningReconstructionScope scope = BuildScope(query, context, events);
+
         return new ReasoningReconstruction(
             repositoryId,
             DateTimeOffset.UtcNow,
             query,
             new ReasoningNarrative(summary, details),
-            CalculateConfidence(context, trace),
+            confidenceRationale.Level,
+            confidenceRationale,
+            scope,
             trace,
             context.Evidence,
             diagnostics.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray());
@@ -242,19 +247,112 @@ public sealed class ReasoningReconstructionService(
         }
     }
 
-    private static string CalculateConfidence(EvidenceContext context, ReasoningTrace trace)
+    private static ReasoningReconstructionConfidence BuildConfidenceRationale(EvidenceContext context, ReasoningTrace trace)
     {
+        bool eventEvidencePresent = context.EventEvidence.Count > 0;
+        bool relationshipEvidencePresent = context.RelationshipEvidence.Count > 0;
+        bool traceDiagnosticsPresent = trace.Diagnostics.Count > 0;
+        var missingEvidence = new List<string>();
+        var whyNotHigher = new List<string>();
+
+        if (!eventEvidencePresent)
+        {
+            missingEvidence.Add("No event evidence was reachable for the requested trace.");
+            whyNotHigher.Add("High confidence requires at least one reachable reasoning event.");
+        }
+
+        if (!relationshipEvidencePresent)
+        {
+            missingEvidence.Add("No relationship evidence was reachable for the requested trace.");
+            whyNotHigher.Add("High confidence requires at least one reachable reasoning relationship.");
+        }
+
+        if (traceDiagnosticsPresent)
+        {
+            whyNotHigher.Add("Trace diagnostics were present during reconstruction.");
+        }
+
         if (context.EventEvidence.Count > 0 && context.RelationshipEvidence.Count > 0 && trace.Diagnostics.Count == 0)
         {
-            return "High";
+            return new ReasoningReconstructionConfidence(
+                "High",
+                "Event evidence and relationship evidence were both reachable, and the trace reported no diagnostics.",
+                eventEvidencePresent,
+                relationshipEvidencePresent,
+                traceDiagnosticsPresent,
+                missingEvidence,
+                whyNotHigher);
         }
 
         if (context.EventEvidence.Count > 0 || context.RelationshipEvidence.Count > 0)
         {
-            return "Medium";
+            return new ReasoningReconstructionConfidence(
+                "Medium",
+                "Reconstruction found partial reasoning evidence but did not satisfy the complete high-confidence evidence threshold.",
+                eventEvidencePresent,
+                relationshipEvidencePresent,
+                traceDiagnosticsPresent,
+                missingEvidence,
+                whyNotHigher);
         }
 
-        return "Low";
+        return new ReasoningReconstructionConfidence(
+            "Low",
+            "Reconstruction did not find cited event or relationship evidence for the requested trace.",
+            eventEvidencePresent,
+            relationshipEvidencePresent,
+            traceDiagnosticsPresent,
+            missingEvidence,
+            whyNotHigher);
+    }
+
+    private static ReasoningReconstructionScope BuildScope(
+        ReasoningQuery query,
+        EvidenceContext context,
+        IReadOnlyList<ReasoningEvent> events)
+    {
+        ReasoningReference? source = context.Evidence
+            .Select(evidence => evidence.Reference)
+            .FirstOrDefault(reference => reference is not null && !IsSameReference(reference, query.Target));
+        IReadOnlyList<ReasoningReconstructionEvidence> unreachableEvidence = query.HistoricalAt is null
+            ? []
+            : BuildHistoricalUnreachableEvidence(query, events);
+
+        return new ReasoningReconstructionScope(
+            query.Direction,
+            query.Target,
+            source,
+            query.HistoricalAt,
+            context.Evidence,
+            unreachableEvidence);
+    }
+
+    private static IReadOnlyList<ReasoningReconstructionEvidence> BuildHistoricalUnreachableEvidence(
+        ReasoningQuery query,
+        IReadOnlyList<ReasoningEvent> events)
+    {
+        DateTimeOffset historicalAt = query.HistoricalAt!.Value;
+        ReasoningEventFamily? family = FamilyFor(query.Category);
+        return events
+            .Where(reasoningEvent => reasoningEvent.CreatedAt > historicalAt)
+            .Where(reasoningEvent => family is null || reasoningEvent.Family == family)
+            .OrderBy(reasoningEvent => reasoningEvent.CreatedAt)
+            .ThenBy(reasoningEvent => reasoningEvent.Id, StringComparer.Ordinal)
+            .Select(reasoningEvent => new ReasoningReconstructionEvidence(
+                "Event",
+                reasoningEvent.Id,
+                $"{reasoningEvent.Type}: {reasoningEvent.Title}",
+                reasoningEvent.Narrative.Summary,
+                new ReasoningReference(ReasoningReferenceKind.ReasoningEvent, reasoningEvent.Id),
+                reasoningEvent.Provenance))
+            .ToArray();
+    }
+
+    private static bool IsSameReference(ReasoningReference? first, ReasoningReference second)
+    {
+        return first is not null &&
+            first.Kind == second.Kind &&
+            string.Equals(first.Id, second.Id, StringComparison.Ordinal);
     }
 
     private static ReasoningEventFamily? FamilyFor(ReasoningQueryCategory category)

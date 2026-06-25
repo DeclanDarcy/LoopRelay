@@ -45,6 +45,16 @@ public sealed class ReasoningReconstructionServiceTests
         Assert.Contains(reconstruction.Evidence, evidence => evidence.Kind == "Event" && evidence.Id == supersession.Id);
         Assert.Contains(reconstruction.Evidence, evidence => evidence.Kind == "Relationship" && evidence.Title == "CausedBy");
         Assert.Contains(reconstruction.Trace.Relationships, relationship => relationship.Type == ReasoningRelationshipType.CausedBy);
+        Assert.Equal("High", reconstruction.Confidence);
+        Assert.Equal("High", reconstruction.ConfidenceRationale.Level);
+        Assert.True(reconstruction.ConfidenceRationale.EventEvidencePresent);
+        Assert.True(reconstruction.ConfidenceRationale.RelationshipEvidencePresent);
+        Assert.False(reconstruction.ConfidenceRationale.TraceDiagnosticsPresent);
+        Assert.Empty(reconstruction.ConfidenceRationale.MissingEvidence);
+        Assert.Equal(ReasoningTraceDirection.Backward, reconstruction.Scope.Direction);
+        Assert.Equal("DEC-0001", reconstruction.Scope.Target.Id);
+        Assert.Equal(supersession.Id, reconstruction.Scope.Source?.Id);
+        Assert.Empty(reconstruction.Scope.UnreachableEvidence);
         Assert.False(Directory.Exists(Path.Combine(repository.Path, ".agents", "reasoning", "hypotheses")));
         Assert.False(Directory.Exists(Path.Combine(repository.Path, ".agents", "reasoning", "alternatives")));
         Assert.False(Directory.Exists(Path.Combine(repository.Path, ".agents", "reasoning", "contradictions")));
@@ -84,6 +94,77 @@ public sealed class ReasoningReconstructionServiceTests
         Assert.Equal(
             firstResult.Reconstruction.Evidence.Select(evidence => $"{evidence.Kind}:{evidence.Id}").ToArray(),
             secondResult.Reconstruction.Evidence.Select(evidence => $"{evidence.Kind}:{evidence.Id}").ToArray());
+    }
+
+    [Fact]
+    public async Task ReconstructionConfidenceRationaleExplainsMissingEvidence()
+    {
+        var store = new MemoryArtifactStore();
+        Repository repository = CreateRepository();
+        IReasoningRepository reasoningRepository = CreateReasoningRepository(store);
+        IReasoningGraphService graphService = CreateGraphService(repository, reasoningRepository, store);
+        IReasoningReconstructionService reconstructionService = CreateReconstructionService(repository, reasoningRepository, graphService);
+        var artifactReference = new ReasoningReference(ReasoningReferenceKind.Artifact, "docs/design.md", "docs/design.md");
+        await reasoningRepository.CreateEventAsync(repository, new CreateReasoningEventCommand(
+            ReasoningEventFamily.Evidence,
+            ReasoningEventType.EvidenceAdded,
+            "Design evidence referenced",
+            new ReasoningNarrative("The artifact is referenced but does not itself cite event or relationship evidence."),
+            [artifactReference],
+            Provenance(),
+            [],
+            []));
+
+        ReasoningReconstruction reconstruction = await reconstructionService.ReconstructAsync(
+            repository.Id,
+            new ReasoningQuery(
+                ReasoningQueryCategory.Decision,
+                "What explains this artifact by itself?",
+                artifactReference));
+
+        Assert.Equal("Low", reconstruction.Confidence);
+        Assert.False(reconstruction.ConfidenceRationale.EventEvidencePresent);
+        Assert.False(reconstruction.ConfidenceRationale.RelationshipEvidencePresent);
+        Assert.Contains("No event evidence was reachable for the requested trace.", reconstruction.ConfidenceRationale.MissingEvidence);
+        Assert.Contains("No relationship evidence was reachable for the requested trace.", reconstruction.ConfidenceRationale.MissingEvidence);
+        Assert.Contains("High confidence requires at least one reachable reasoning event.", reconstruction.ConfidenceRationale.WhyNotHigher);
+        Assert.Contains("High confidence requires at least one reachable reasoning relationship.", reconstruction.ConfidenceRationale.WhyNotHigher);
+        Assert.Contains(reconstruction.Scope.ReachableEvidence, evidence => evidence.Kind == "Reference" && evidence.Id == artifactReference.Id);
+    }
+
+    [Fact]
+    public async Task ReconstructionScopePreservesForwardDirectionAndSourceReference()
+    {
+        var store = new MemoryArtifactStore();
+        Repository repository = CreateRepository();
+        IReasoningRepository reasoningRepository = CreateReasoningRepository(store);
+        IReasoningGraphService graphService = CreateGraphService(repository, reasoningRepository, store);
+        IReasoningReconstructionService reconstructionService = CreateReconstructionService(repository, reasoningRepository, graphService);
+        ReasoningEvent source = await reasoningRepository.CreateEventAsync(repository, EventCommand(
+            "Decision path changed",
+            ReasoningEventType.DecisionReframed,
+            ReasoningEventFamily.DecisionEvolution));
+        await reasoningRepository.CreateRelationshipAsync(repository, new CreateReasoningRelationshipCommand(
+            ReasoningRelationshipType.LeadsTo,
+            new ReasoningReference(ReasoningReferenceKind.ReasoningEvent, source.Id),
+            new ReasoningReference(ReasoningReferenceKind.Decision, "DEC-0002"),
+            new ReasoningNarrative("The event leads to the reframed decision."),
+            Provenance()));
+
+        ReasoningReconstruction reconstruction = await reconstructionService.ReconstructAsync(
+            repository.Id,
+            new ReasoningQuery(
+                ReasoningQueryCategory.Decision,
+                "What changed after this event?",
+                new ReasoningReference(ReasoningReferenceKind.ReasoningEvent, source.Id),
+                ReasoningTraceDirection.Forward));
+
+        Assert.Equal(ReasoningTraceDirection.Forward, reconstruction.Scope.Direction);
+        Assert.Equal(ReasoningReferenceKind.ReasoningEvent, reconstruction.Scope.Target.Kind);
+        Assert.Equal(source.Id, reconstruction.Scope.Target.Id);
+        Assert.Equal(ReasoningReferenceKind.Decision, reconstruction.Scope.Source?.Kind);
+        Assert.Equal("DEC-0002", reconstruction.Scope.Source?.Id);
+        Assert.Contains(reconstruction.Scope.ReachableEvidence, evidence => evidence.Kind == "Relationship" && evidence.Title == "LeadsTo");
     }
 
     [Fact]
@@ -173,7 +254,36 @@ public sealed class ReasoningReconstructionServiceTests
             Assert.Contains(reconstruction.Evidence, evidence => evidence.Kind == "Event" && evidence.Id == expectedEvent.Id);
             Assert.Contains("Historical state is derived from event timelines", reconstruction.Narrative.Details, StringComparison.Ordinal);
             Assert.Contains(reconstruction.Diagnostics, diagnostic => diagnostic.Contains("Historical reconstruction used events visible", StringComparison.Ordinal));
+            Assert.Equal(historicalAt, reconstruction.Scope.HistoricalCutoff);
+            Assert.Equal(ReasoningTraceDirection.Backward, reconstruction.Scope.Direction);
         }
+    }
+
+    [Fact]
+    public async Task HistoricalScopeReportsFutureEvidenceAsUnreachable()
+    {
+        var store = new MemoryArtifactStore();
+        Repository repository = CreateRepository();
+        IReasoningRepository reasoningRepository = CreateReasoningRepository(store);
+        IReasoningGraphService graphService = CreateGraphService(repository, reasoningRepository, store);
+        IReasoningReconstructionService reconstructionService = CreateReconstructionService(repository, reasoningRepository, graphService);
+        ReasoningEvent future = await reasoningRepository.CreateEventAsync(repository, EventCommand(
+            "Future decision event",
+            ReasoningEventType.DecisionReframed,
+            ReasoningEventFamily.DecisionEvolution));
+        DateTimeOffset historicalAt = DateTimeOffset.UtcNow.AddDays(-1);
+
+        ReasoningReconstruction reconstruction = await reconstructionService.ReconstructAsync(
+            repository.Id,
+            new ReasoningQuery(
+                ReasoningQueryCategory.Decision,
+                "What decision evidence was available yesterday?",
+                new ReasoningReference(ReasoningReferenceKind.ReasoningEvent, future.Id),
+                HistoricalAt: historicalAt));
+
+        Assert.Equal(historicalAt, reconstruction.Scope.HistoricalCutoff);
+        Assert.DoesNotContain(reconstruction.Scope.ReachableEvidence, evidence => evidence.Kind == "Event" && evidence.Id == future.Id);
+        Assert.Contains(reconstruction.Scope.UnreachableEvidence, evidence => evidence.Kind == "Event" && evidence.Id == future.Id);
     }
 
     [Fact]

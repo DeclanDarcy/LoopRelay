@@ -3128,6 +3128,26 @@ function createReasoningReconstruction(
     item.kind === 'Relationship' || item.kind === 'GraphRelationship',
   ).length
   const eventEvidenceCount = evidence.filter((item) => item.kind === 'Event').length
+  const missingEvidence = [
+    ...(eventEvidenceCount > 0 ? [] : ['No event evidence was reachable for the requested trace.']),
+    ...(relationshipEvidenceCount > 0 ? [] : ['No relationship evidence was reachable for the requested trace.']),
+  ]
+  const whyNotHigher = [
+    ...(eventEvidenceCount > 0 ? [] : ['High confidence requires at least one reachable reasoning event.']),
+    ...(relationshipEvidenceCount > 0
+      ? []
+      : ['High confidence requires at least one reachable reasoning relationship.']),
+    ...(trace.diagnostics.length > 0 ? ['Trace diagnostics were present during reconstruction.'] : []),
+  ]
+  const confidence =
+    eventEvidenceCount > 0 && relationshipEvidenceCount > 0 && trace.diagnostics.length === 0
+      ? 'High'
+      : eventEvidenceCount > 0 || relationshipEvidenceCount > 0
+        ? 'Medium'
+        : 'Low'
+  const source = evidence
+    .map((item) => item.reference)
+    .find((reference) => reference && !(reference.kind === query.target.kind && reference.id === query.target.id)) ?? null
 
   return {
     repositoryId,
@@ -3143,7 +3163,29 @@ function createReasoningReconstruction(
         ...evidence.map((item) => `- ${item.kind} ${item.id}: ${item.title} - ${item.summary}`),
       ].join('\n'),
     },
-    confidence: eventEvidenceCount > 0 && relationshipEvidenceCount > 0 ? 'High' : evidence.length > 0 ? 'Medium' : 'Low',
+    confidence,
+    confidenceRationale: {
+      level: confidence,
+      rationale:
+        confidence === 'High'
+          ? 'Event evidence and relationship evidence were both reachable, and the trace reported no diagnostics.'
+          : confidence === 'Medium'
+            ? 'Reconstruction found partial reasoning evidence but did not satisfy the complete high-confidence evidence threshold.'
+            : 'Reconstruction did not find cited event or relationship evidence for the requested trace.',
+      eventEvidencePresent: eventEvidenceCount > 0,
+      relationshipEvidencePresent: relationshipEvidenceCount > 0,
+      traceDiagnosticsPresent: trace.diagnostics.length > 0,
+      missingEvidence,
+      whyNotHigher,
+    },
+    scope: {
+      direction: query.direction,
+      target: query.target,
+      source,
+      historicalCutoff: query.historicalAt ?? null,
+      reachableEvidence: evidence,
+      unreachableEvidence: [],
+    },
     trace,
     evidence,
     diagnostics: trace.diagnostics,

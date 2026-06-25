@@ -2,27 +2,30 @@
 
 ## New State This Slice
 
-- Continued the Milestone 5 Exit Audit.
-- Rotated previous handoff to `.agents/handoffs/handoff.0039.md`.
-- Added backend regression coverage in `ExecutionSessionServiceTests.LaunchPersistsPromptManifestDistinctFromPreviewContext`.
-- The new test proves a preview context can become stale, while launch persists a distinct `ExecutionPromptManifest` built from launch-time context, including updated requested/delivered operational context and explicit provider delivery metadata.
-- Marked the remaining Milestone 5 backend prompt-manifest test gap complete in `.agents/milestones/m5-execution-transparency.md`.
-- Added `.agents/milestones/m5-exit-audit.md`.
-- Milestone 5 is now complete.
+- Began Milestone 6 backend-first with the reconstruction transparency gap.
+- Rotated previous handoff to `.agents/handoffs/handoff.0040.md`.
+- Extended `ReasoningReconstruction` with structured `ConfidenceRationale` and `Scope` projections.
+- `ConfidenceRationale` now exposes level, rationale, event evidence presence, relationship evidence presence, trace diagnostic presence, missing evidence, and why confidence was not higher.
+- `Scope` now exposes reconstruction direction, target reference, source reference, historical cutoff, reachable evidence, and historical unreachable evidence where known.
+- Updated reconstruction report Markdown projection to include confidence rationale, missing evidence, confidence blockers, scope, and unreachable evidence.
+- Updated frontend reasoning TypeScript types, dev Tauri mock reconstruction responses, and the reasoning trajectory characterization fixture for the new response shape.
+- Added `.agents/milestones/m6-reconstruction-transparency.md`.
+- Marked the Milestone 6 reconstruction model checklist and backend reconstruction tests for confidence/scope complete.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "FullyQualifiedName~ExecutionSessionServiceTests"` passed: 43 tests.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 748 tests.
-- `npm test` passed: 55 files, 214 tests.
-- `dotnet build CommandCenter.slnx` passed.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "FullyQualifiedName~ReasoningReconstructionServiceTests"` passed: 8 tests.
+- `npm test -- reasoningTrajectory` passed: 1 file, 10 tests.
 - `npm run build` passed. Vite still reports the existing large chunk warning.
+- `dotnet build CommandCenter.slnx` passed.
+- Full backend suite currently has an order-dependent failure in `ExecutionSessionServiceTests.AcceptAndRejectEndpointsReturnTransitionedSessionMetadata`; it passed in isolation.
+- Full UI suite currently has an order-dependent smoke failure for commit preparation; it passed in isolation.
 
 ## Residual Risk
 
-- Provider-level delivered-context divergence still cannot be simulated until the provider abstraction returns delivered prompt mutations or adjustment metadata. Current behavior intentionally records `DeliveredAsRequested`, empty provider adjustments, and `NoProviderDivergenceSignal`.
+- Milestone 6 UI presentation still needs to render the new confidence rationale and scope fields.
+- Unreachable evidence is only populated for historical event cutoffs where the service can identify future events.
 
 ## Recommended Next Slice
 
-- Begin Milestone 6: Reasoning Transparency.
-- First inspect existing `CommandCenter.Reasoning` models/services/endpoints and the UI reasoning surfaces, then close the highest-authority projection gap for confidence rationale, missing evidence, and reconstruction scope before adding presentation work.
+- Continue Milestone 6 by updating `ReasoningReconstructionPanel` and `ReasoningQueryPanel` to render the new `confidenceRationale` and `scope` fields, with characterization coverage for missing evidence, why-confidence-was-not-higher, direction, source/target, historical cutoff, and unreachable evidence.

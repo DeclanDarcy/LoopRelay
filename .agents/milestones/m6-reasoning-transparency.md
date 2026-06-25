@@ -25,16 +25,16 @@ Make reasoning conclusions explain their provenance, confidence, thresholds, rec
    - [ ] branch reason
    - [ ] diagnostics
 - [ ] Extend reconstruction models to include:
-   - [ ] confidence rationale
-   - [ ] event evidence present
-   - [ ] relationship evidence present
-   - [ ] trace diagnostics present
-   - [ ] missing evidence
-   - [ ] why confidence was not higher
-   - [ ] forward or backward direction
-   - [ ] target and source reference
-   - [ ] historical cutoff
-   - [ ] reachable and unreachable evidence where known
+   - [x] confidence rationale
+   - [x] event evidence present
+   - [x] relationship evidence present
+   - [x] trace diagnostics present
+   - [x] missing evidence
+   - [x] why confidence was not higher
+   - [x] forward or backward direction
+   - [x] target and source reference
+   - [x] historical cutoff
+   - [x] reachable and unreachable evidence where known
 - [ ] Extend reasoning event or projection models to distinguish capture modes:
    - [ ] Manual
    - [ ] Assisted
@@ -77,8 +77,8 @@ Make reasoning conclusions explain their provenance, confidence, thresholds, rec
 ### Tests
 
 - [ ] Backend tests for materialization threshold branches.
-- [ ] Backend tests for confidence rationale branches.
-- [ ] Backend tests for forward/backward reconstruction scope.
+- [x] Backend tests for confidence rationale branches.
+- [x] Backend tests for forward/backward reconstruction scope.
 - [ ] Backend tests for manual, assisted, and inferred capture.
 - [ ] Backend tests for boundary violation explanations.
 - [ ] Backend tests for lifecycle risk thresholds.
