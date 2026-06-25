@@ -246,6 +246,7 @@ function renderSummary({
   executionDisplay = null,
   currentExecutionState = 'Ready',
   onOpenExecution,
+  onOpenGovernance,
   onOpenMilestones,
   onOpenOperationalContext,
   onOpenHandoffArtifact,
@@ -256,6 +257,7 @@ function renderSummary({
   executionDisplay?: ExecutionSessionSummary | null
   currentExecutionState?: RepositoryExecutionState
   onOpenExecution?: () => void
+  onOpenGovernance?: () => void
   onOpenMilestones?: () => void
   onOpenOperationalContext?: () => void
   onOpenHandoffArtifact?: (handoffPath: string) => void
@@ -268,6 +270,7 @@ function renderSummary({
       executionDisplay={executionDisplay}
       currentExecutionState={currentExecutionState}
       onOpenExecution={onOpenExecution}
+      onOpenGovernance={onOpenGovernance}
       onOpenMilestones={onOpenMilestones}
       onOpenOperationalContext={onOpenOperationalContext}
       onOpenHandoffArtifact={onOpenHandoffArtifact}
@@ -325,8 +328,11 @@ describe('selected repository summary rendering characterization', () => {
     expect(screen.getByText('Timeline events: 2')).toBeInTheDocument()
   })
 
-  it('renders repository governance summary from the decision-session projection', () => {
+  it('renders repository governance as a contextual decision-session summary', () => {
+    const onOpenGovernance = vi.fn()
+
     renderSummary({
+      onOpenGovernance,
       repository: repositoryDashboard({
         decisionSessionSummary: {
           ...decisionSessionSummary,
@@ -353,14 +359,20 @@ describe('selected repository summary rendering characterization', () => {
       }),
     })
 
-    expect(screen.getByText('Governance session: governance-session-1')).toBeInTheDocument()
+    expect(
+      screen.getByText((_, element) => element?.textContent === 'Governance session: governance-session-1'),
+    ).toBeInTheDocument()
     expect(screen.getByText('Governance state: Active')).toBeInTheDocument()
     expect(screen.getByText('Lifecycle decision: Transfer')).toBeInTheDocument()
     expect(screen.getByText('Transfer eligibility: Blocked')).toBeInTheDocument()
-    expect(screen.getByText('Coherence: 0.82')).toBeInTheDocument()
-    expect(screen.getByText('Transfer pressure: 0.71')).toBeInTheDocument()
-    expect(screen.getByText('Cache miss risk: 0.44')).toBeInTheDocument()
     expect(screen.getByText('Governance health: 2')).toBeInTheDocument()
+    expect(screen.queryByText('Coherence: 0.82')).not.toBeInTheDocument()
+    expect(screen.queryByText('Transfer pressure: 0.71')).not.toBeInTheDocument()
+    expect(screen.queryByText('Cache miss risk: 0.44')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'governance-session-1' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }))
+    expect(onOpenGovernance).toHaveBeenCalledTimes(2)
   })
 
   it('renders execution display details and existing not-recorded fallbacks', () => {

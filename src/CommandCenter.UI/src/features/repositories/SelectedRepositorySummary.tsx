@@ -20,6 +20,7 @@ type SelectedRepositorySummaryProps = {
   executionDisplay: ExecutionSessionSummary | null
   currentExecutionState: RepositoryExecutionState
   onOpenExecution?: () => void
+  onOpenGovernance?: () => void
   onOpenMilestones?: () => void
   onOpenOperationalContext?: () => void
   onOpenHandoffArtifact?: (handoffPath: string) => void
@@ -32,6 +33,7 @@ export function SelectedRepositorySummary({
   executionDisplay,
   currentExecutionState,
   onOpenExecution,
+  onOpenGovernance,
   onOpenMilestones,
   onOpenOperationalContext,
   onOpenHandoffArtifact,
@@ -203,31 +205,38 @@ export function SelectedRepositorySummary({
               : 'Not loaded'}
         </span>
         <span>Timeline events: {workflow ? workflow.timeline.length : 'Not loaded'}</span>
-        <span>Governance session: {governanceSummary.decisionSessionId ?? 'Not projected'}</span>
+        <span>
+          Governance session:{' '}
+          {governanceSummary.decisionSessionId && onOpenGovernance ? (
+            <button
+              type="button"
+              className="workspace-cross-link inline-cross-link"
+              onClick={onOpenGovernance}
+            >
+              {governanceSummary.decisionSessionId}
+            </button>
+          ) : (
+            governanceSummary.decisionSessionId ?? 'Not projected'
+          )}
+        </span>
         <span>Governance state: {governanceSummary.state ?? 'Not projected'}</span>
         <span>Lifecycle decision: {governanceSummary.lifecycleDecision ?? 'Not projected'}</span>
         <span>
           Transfer eligibility: {governanceSummary.transferEligibilityStatus ?? 'Not projected'}
         </span>
-        <span>
-          Coherence:{' '}
-          {governanceSummary.coherenceScore === null
-            ? 'Not projected'
-            : governanceSummary.coherenceScore.toFixed(2)}
-        </span>
-        <span>
-          Transfer pressure:{' '}
-          {governanceSummary.transferPressure === null
-            ? 'Not projected'
-            : governanceSummary.transferPressure.toFixed(2)}
-        </span>
-        <span>
-          Cache miss risk:{' '}
-          {governanceSummary.cacheMissRisk === null
-            ? 'Not projected'
-            : governanceSummary.cacheMissRisk.toFixed(2)}
-        </span>
         <span>Governance health: {governanceSummary.healthDimensions.length}</span>
+        {onOpenGovernance ? (
+          <span>
+            Governance workspace:{' '}
+            <button
+              type="button"
+              className="workspace-cross-link inline-cross-link"
+              onClick={onOpenGovernance}
+            >
+              Open
+            </button>
+          </span>
+        ) : null}
       </div>
     </>
   )

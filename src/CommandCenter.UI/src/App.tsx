@@ -1661,6 +1661,11 @@ function App() {
     setSectionTarget('workflow-operations')
   }
 
+  const openGovernanceWorkspace = () => {
+    setActivePrimaryTab('governance')
+    setSectionTarget('governance-workspace')
+  }
+
   const openHandoffArtifact = (handoffPath: string) => {
     if (selectedRepository) {
       selectArtifact(selectedRepository.repository.id, handoffPath)
@@ -1767,6 +1772,7 @@ function App() {
                     executionDisplay={executionDisplay}
                     currentExecutionState={currentExecutionState}
                     onOpenExecution={() => openExecutionSection('execution-context')}
+                    onOpenGovernance={openGovernanceWorkspace}
                     onOpenMilestones={() => {
                       setActivePrimaryTab('workspace')
                       setSectionTarget('workspace-milestones')
