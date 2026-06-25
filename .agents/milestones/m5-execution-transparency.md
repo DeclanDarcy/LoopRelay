@@ -85,8 +85,10 @@ Make execution explainable: what was launched, what context was included, what r
 ### UI
 
 - [ ] Extend execution TypeScript types for prompt manifest, recovery diagnostics, git eligibility, handoff processing, monitoring health, structured governed conflicts, and semantic event grouping.
+   - [x] Added prompt manifest TypeScript types.
 - [ ] Add `getExecutionPromptManifest`, `getExecutionTransparency`, and git eligibility client functions.
-- [ ] Update `ExecutionSessionPanel` and `ExecutionTab` to show the session-level launched prompt manifest. Clearly distinguish preview context, requested launched context, delivered launched context, and provider adjustments.
+   - [x] Added `getExecutionPromptManifest`.
+- [x] Update `ExecutionSessionPanel` and `ExecutionTab` to show the session-level launched prompt manifest. Clearly distinguish preview context, requested launched context, delivered launched context, and provider adjustments.
 - [ ] Add recovery banner and recovery event details to distinguish normal run failure from startup recovery failure.
 - [ ] Update `GitWorkflowPanel` to show commit and push precondition checklists, blocked reasons, retry warnings, previous push failure, and push attempt history.
 - [ ] Update `GitPathBucket` and `GitWorkflowEvidence` to distinguish execution-generated changes from pre-existing repository changes and provide bulk actions to select only execution-generated changes or deselect pre-existing changes.
@@ -103,11 +105,13 @@ Make execution explainable: what was launched, what context was included, what r
 - [ ] Backend tests for push conflict response containing updated retry state.
 - [ ] Backend tests for git eligibility branches and structured governed conflicts.
 - [ ] UI tests for prompt manifest, provider adjustments, recovery banner, push retry, disabled commit/push reasons, handoff processing diagnostics, pre-existing change warnings, and event grouping.
+   - [x] Prompt manifest rendering covers requested vs delivered context, provider adjustments empty state, and `NoProviderDivergenceSignal`.
+   - [x] Prompt manifest hook coverage proves shell detail-command loading.
 
 ### Exit Criteria
 
-- [ ] Users can inspect requested context and delivered context for the provider launch.
-- [ ] Provider adjustments are represented explicitly, even when no adjustment signal is available.
+- [x] Users can inspect requested context and delivered context for the provider launch.
+- [x] Provider adjustments are represented explicitly, even when no adjustment signal is available.
 - [ ] Recovery behavior is distinct from normal execution failure.
 - [ ] Push failures leave an understandable retryable state.
 - [ ] Commit and push controls explain blocked preconditions.

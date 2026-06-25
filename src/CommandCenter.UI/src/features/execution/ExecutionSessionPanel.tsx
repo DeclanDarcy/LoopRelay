@@ -1,16 +1,26 @@
 import { formatDateTime, formatDuration } from '../../lib'
-import { Button, Panel, SectionHeader, StatusBadge } from '../../components/design'
+import { Button, EmptyState, Panel, SectionHeader, StatusBadge } from '../../components/design'
 import { executionSessionStatus, repositoryExecutionStatus } from '../../lib/status'
-import type { ExecutionSessionSummary } from '../../types'
+import type {
+  ExecutionPromptManifest,
+  ExecutionPromptManifestArtifact,
+  ExecutionSessionSummary,
+} from '../../types'
 
 type ExecutionSessionPanelProps = {
   session: ExecutionSessionSummary
+  promptManifest?: ExecutionPromptManifest | null
+  isPromptManifestLoading?: boolean
+  promptManifestError?: string | null
   onOpenMilestone?: () => void
   onOpenHandoff?: () => void
 }
 
 export function ExecutionSessionPanel({
   session,
+  promptManifest = null,
+  isPromptManifestLoading = false,
+  promptManifestError = null,
   onOpenMilestone,
   onOpenHandoff,
 }: ExecutionSessionPanelProps) {
@@ -70,6 +80,171 @@ export function ExecutionSessionPanel({
         <span>Pushed commit: {session.pushedCommitSha || 'Not recorded'}</span>
         {session.failureReason ? <span className="execution-failure">Failure: {session.failureReason}</span> : null}
       </div>
+      <PromptManifestSection
+        manifest={promptManifest}
+        isLoading={isPromptManifestLoading}
+        error={promptManifestError}
+      />
     </Panel>
   )
+}
+
+type PromptManifestSectionProps = {
+  manifest: ExecutionPromptManifest | null
+  isLoading: boolean
+  error: string | null
+}
+
+function PromptManifestSection({ manifest, isLoading, error }: PromptManifestSectionProps) {
+  if (isLoading && !manifest) {
+    return <EmptyState className="empty-state">Loading launched prompt manifest.</EmptyState>
+  }
+
+  if (error && !manifest) {
+    return <div className="execution-rail-warning">Prompt manifest: {error}</div>
+  }
+
+  if (!manifest) {
+    return <EmptyState className="empty-state">No launched prompt manifest recorded.</EmptyState>
+  }
+
+  return (
+    <div className="execution-prompt-manifest" aria-label="Launched prompt manifest">
+      <div className="execution-rail-list">
+        <h5>Launched Prompt</h5>
+        <div className="execution-rail-summary">
+          <span>Generated: {formatDateTime(manifest.generatedAt)}</span>
+          <span>Prompt artifact: {manifest.promptArtifactPath || 'Inline manifest text'}</span>
+          <span>Provider delivery: {manifest.providerDeliveryStatus || 'Not recorded'}</span>
+          <span>Divergence: {manifest.divergenceReason || 'No divergence recorded'}</span>
+        </div>
+      </div>
+
+      <div className="execution-prompt-context-grid">
+        <PromptContextColumn
+          title="Requested Context"
+          byteCount={manifest.requestedContextBytes}
+          characterCount={manifest.requestedContextCharacters}
+          dirtyRepository={manifest.dirtyRepositoryAtRequestTime}
+          governedDecisionCount={manifest.governedDecisionCountRequested}
+          operationalContextSource={manifest.operationalContextSourceRequested}
+          handoffSource={manifest.handoffSourceRequested}
+          milestoneSource={manifest.milestoneSourceRequested}
+          artifacts={manifest.requestedArtifacts}
+        />
+        <PromptContextColumn
+          title="Delivered Context"
+          byteCount={manifest.deliveredContextBytes}
+          characterCount={manifest.deliveredContextCharacters}
+          dirtyRepository={manifest.dirtyRepositoryAtDeliveryTime}
+          governedDecisionCount={manifest.governedDecisionCountDelivered}
+          operationalContextSource={manifest.operationalContextSourceDelivered}
+          handoffSource={manifest.handoffSourceDelivered}
+          milestoneSource={manifest.milestoneSourceDelivered}
+          artifacts={manifest.deliveredArtifacts}
+        />
+      </div>
+
+      <PromptStringList title="Provider Adjustments" values={manifest.providerAdjustments} empty="No provider adjustments recorded." />
+      <PromptStringList title="Diagnostics" values={manifest.diagnostics} empty="No prompt diagnostics recorded." />
+    </div>
+  )
+}
+
+type PromptContextColumnProps = {
+  title: string
+  byteCount: number
+  characterCount: number
+  dirtyRepository: boolean | null
+  governedDecisionCount: number
+  operationalContextSource: string | null
+  handoffSource: string | null
+  milestoneSource: string | null
+  artifacts: ExecutionPromptManifestArtifact[]
+}
+
+function PromptContextColumn({
+  title,
+  byteCount,
+  characterCount,
+  dirtyRepository,
+  governedDecisionCount,
+  operationalContextSource,
+  handoffSource,
+  milestoneSource,
+  artifacts,
+}: PromptContextColumnProps) {
+  return (
+    <div className="execution-prompt-context-column">
+      <h5>{title}</h5>
+      <div className="execution-rail-summary">
+        <span>Context bytes: {byteCount}</span>
+        <span>Context characters: {characterCount}</span>
+        <span>Dirty repository: {formatNullableBoolean(dirtyRepository)}</span>
+        <span>Governed decisions: {governedDecisionCount}</span>
+        <span>Operational context: {operationalContextSource || 'Not requested'}</span>
+        <span>Handoff: {handoffSource || 'Not requested'}</span>
+        <span>Milestone: {milestoneSource || 'Not requested'}</span>
+      </div>
+      <ArtifactManifestList artifacts={artifacts} />
+    </div>
+  )
+}
+
+function ArtifactManifestList({ artifacts }: { artifacts: ExecutionPromptManifestArtifact[] }) {
+  if (artifacts.length === 0) {
+    return <EmptyState className="empty-state">No artifacts recorded.</EmptyState>
+  }
+
+  return (
+    <ul className="execution-prompt-artifact-list">
+      {artifacts.map((artifact) => (
+        <li key={`${artifact.role}-${artifact.relativePath}`}>
+          <strong>{artifact.role}</strong>
+          <span>{artifact.relativePath}</span>
+          <small>
+            {artifact.delivered ? 'Delivered' : 'Missing'} - {formatNullableCount(artifact.byteCount)} bytes -{' '}
+            {formatNullableCount(artifact.characterCount)} chars
+          </small>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function PromptStringList({
+  title,
+  values,
+  empty,
+}: {
+  title: string
+  values: string[]
+  empty: string
+}) {
+  return (
+    <div className="execution-rail-list">
+      <h5>{title}</h5>
+      {values.length > 0 ? (
+        <ul className="execution-prompt-string-list">
+          {values.map((value) => (
+            <li key={value}>{value}</li>
+          ))}
+        </ul>
+      ) : (
+        <EmptyState className="empty-state">{empty}</EmptyState>
+      )}
+    </div>
+  )
+}
+
+function formatNullableBoolean(value: boolean | null) {
+  if (value === null) {
+    return 'Unknown'
+  }
+
+  return value ? 'Yes' : 'No'
+}
+
+function formatNullableCount(value: number | null) {
+  return value === null ? 'unknown' : value
 }

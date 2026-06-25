@@ -1,6 +1,7 @@
 import type {
   CommitPreparation,
   ExecutionContextPreview,
+  ExecutionPromptManifest,
   ExecutionSessionSummary,
   ExecutionStatus,
 } from '../types'
@@ -39,6 +40,10 @@ export function previewExecutionContext(repositoryId: string, milestonePath: str
 
 export function startExecution(repositoryId: string, milestonePath: string) {
   return invokeCommand<ExecutionSessionSummary>('start_execution', { repositoryId, milestonePath })
+}
+
+export function getExecutionPromptManifest(sessionId: string) {
+  return invokeCommand<ExecutionPromptManifest>('get_execution_prompt_manifest', { sessionId })
 }
 
 export function acceptExecutionHandoff(sessionId: string) {

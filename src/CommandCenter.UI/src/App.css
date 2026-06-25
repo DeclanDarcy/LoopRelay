@@ -2402,6 +2402,70 @@ button:focus-visible {
   gap: 10px;
 }
 
+.execution-prompt-manifest {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.execution-prompt-context-grid {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.execution-prompt-context-column {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.execution-prompt-context-column h5 {
+  margin: 0;
+  color: var(--fg-subtle);
+  font-size: 0.76rem;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.execution-prompt-artifact-list,
+.execution-prompt-string-list {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.execution-prompt-artifact-list li,
+.execution-prompt-string-list li {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: 9px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  color: var(--fg-muted);
+  background: var(--bg-inset);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.execution-prompt-artifact-list strong {
+  color: var(--fg-default);
+  font-size: 0.82rem;
+}
+
+.execution-prompt-artifact-list span,
+.execution-prompt-artifact-list small {
+  min-width: 0;
+  color: var(--fg-subtle);
+  overflow-wrap: anywhere;
+}
+
 .execution-decision-influence,
 .execution-influence-section,
 .execution-influence-statement-list,
@@ -2878,6 +2942,7 @@ button:focus-visible {
   .workspace-workflow-rail,
   .workflow-panels,
   .workflow-fact-grid,
+  .execution-prompt-context-grid,
   .execution-session-grid,
   .execution-history-row,
   .execution-event-row,

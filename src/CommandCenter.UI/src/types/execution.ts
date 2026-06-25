@@ -49,6 +49,41 @@ export type ExecutionSession = ExecutionSessionSummary & {
   repositoryPath: string
 }
 
+export type ExecutionPromptManifestArtifact = {
+  role: string
+  relativePath: string
+  byteCount: number | null
+  characterCount: number | null
+  delivered: boolean
+}
+
+export type ExecutionPromptManifest = {
+  sessionId: string
+  generatedAt: string
+  promptText: string
+  promptArtifactPath: string | null
+  requestedArtifacts: ExecutionPromptManifestArtifact[]
+  requestedContextBytes: number
+  requestedContextCharacters: number
+  deliveredArtifacts: ExecutionPromptManifestArtifact[]
+  deliveredContextBytes: number
+  deliveredContextCharacters: number
+  dirtyRepositoryAtRequestTime: boolean
+  dirtyRepositoryAtDeliveryTime: boolean | null
+  governedDecisionCountRequested: number
+  governedDecisionCountDelivered: number
+  operationalContextSourceRequested: string | null
+  operationalContextSourceDelivered: string | null
+  handoffSourceRequested: string | null
+  handoffSourceDelivered: string | null
+  milestoneSourceRequested: string | null
+  milestoneSourceDelivered: string | null
+  providerDeliveryStatus: string
+  providerAdjustments: string[]
+  divergenceReason: string | null
+  diagnostics: string[]
+}
+
 export type ExecutionEvent = {
   sequence: number
   timestamp: string

@@ -36,6 +36,7 @@ import type {
   RefinementPlan,
   ExecutionDecisionProjection,
   ExecutionContextPreview,
+  ExecutionPromptManifest,
   ExecutionSessionState,
   ExecutionSession,
   ExecutionSessionSummary,
@@ -3597,6 +3598,83 @@ function startExecution(state: MockState, repositoryId: string, milestonePath: s
   return summary
 }
 
+function createExecutionPromptManifest(state: MockState, sessionId: string): ExecutionPromptManifest {
+  const session = state.sessions[sessionId]
+  if (!session) {
+    throw new Error('Execution session was not found.')
+  }
+
+  const workspace = state.workspaces[session.repositoryId]
+  if (!workspace) {
+    throw new Error(`Repository was not found: ${session.repositoryId}`)
+  }
+
+  const requestedArtifacts = [
+    createManifestArtifact(state, 'Plan', workspace.artifactInventory.plan?.relativePath ?? '.agents/plan.md'),
+    createManifestArtifact(state, 'Milestone', session.milestonePath),
+    createManifestArtifact(
+      state,
+      'OperationalContext',
+      workspace.artifactInventory.operationalContext?.relativePath ?? '.agents/operational_context.md',
+    ),
+    createManifestArtifact(
+      state,
+      'CurrentHandoff',
+      workspace.artifactInventory.currentHandoff?.relativePath ?? '.agents/handoffs/handoff.md',
+    ),
+    createManifestArtifact(
+      state,
+      'CurrentDecisions',
+      workspace.artifactInventory.currentDecisions?.relativePath ?? '.agents/decisions/decisions.md',
+    ),
+  ]
+  const deliveredArtifacts = requestedArtifacts.filter((artifact) => artifact.delivered)
+  const requestedContextBytes = requestedArtifacts.reduce((sum, artifact) => sum + (artifact.byteCount ?? 0), 0)
+  const requestedContextCharacters = requestedArtifacts.reduce(
+    (sum, artifact) => sum + (artifact.characterCount ?? 0),
+    0,
+  )
+
+  return {
+    sessionId,
+    generatedAt: session.startedAt ?? new Date().toISOString(),
+    promptText: 'Mock launched prompt text.',
+    promptArtifactPath: null,
+    requestedArtifacts,
+    requestedContextBytes,
+    requestedContextCharacters,
+    deliveredArtifacts,
+    deliveredContextBytes: requestedContextBytes,
+    deliveredContextCharacters: requestedContextCharacters,
+    dirtyRepositoryAtRequestTime: false,
+    dirtyRepositoryAtDeliveryTime: false,
+    governedDecisionCountRequested: 3,
+    governedDecisionCountDelivered: 3,
+    operationalContextSourceRequested: workspace.artifactInventory.operationalContext?.relativePath ?? null,
+    operationalContextSourceDelivered: workspace.artifactInventory.operationalContext?.relativePath ?? null,
+    handoffSourceRequested: workspace.artifactInventory.currentHandoff?.relativePath ?? null,
+    handoffSourceDelivered: workspace.artifactInventory.currentHandoff?.relativePath ?? null,
+    milestoneSourceRequested: session.milestonePath,
+    milestoneSourceDelivered: session.milestonePath,
+    providerDeliveryStatus: 'Delivered',
+    providerAdjustments: [],
+    divergenceReason: null,
+    diagnostics: ['NoProviderDivergenceSignal'],
+  }
+}
+
+function createManifestArtifact(state: MockState, role: string, relativePath: string | null) {
+  const content = relativePath ? state.content[relativePath] : undefined
+
+  return {
+    role,
+    relativePath: relativePath ?? '',
+    byteCount: content === undefined ? null : content.length,
+    characterCount: content === undefined ? null : content.length,
+    delivered: content !== undefined,
+  }
+}
+
 function commitExecution(state: MockState, args: InvokeArgs): ExecutionSessionSummary {
   const sessionId = getStringArg(args, 'sessionId')
   const message = getStringArg(args, 'message')
@@ -4599,6 +4677,8 @@ export function installDevTauriMock() {
 
           return clone(session)
         }
+        case 'get_execution_prompt_manifest':
+          return clone(createExecutionPromptManifest(state, getStringArg(args, 'sessionId')))
         case 'accept_execution_handoff':
           return clone(decideHandoff(state, getStringArg(args, 'sessionId'), 'accept'))
         case 'reject_execution_handoff':

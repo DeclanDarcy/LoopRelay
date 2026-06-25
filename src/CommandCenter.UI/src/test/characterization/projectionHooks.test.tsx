@@ -7,6 +7,7 @@ import {
   useContinuityReports,
   useExecutionContextPreview,
   useExecutionEvents,
+  useExecutionPromptManifest,
   useExecutionSession,
   useGitStatus,
   useRepositories,
@@ -14,6 +15,7 @@ import {
 } from '../../hooks'
 import type {
   ExecutionContextPreview,
+  ExecutionPromptManifest,
   ExecutionStatus,
   ContinuityDiagnostics,
   ContinuityReport,
@@ -232,6 +234,58 @@ function createExecutionStatus(sessionId = 'session-alpha'): ExecutionStatus {
         message: 'Execution started',
       },
     ],
+  }
+}
+
+function createExecutionPromptManifest(sessionId = 'session-alpha'): ExecutionPromptManifest {
+  return {
+    sessionId,
+    generatedAt: '2026-01-01T00:00:30Z',
+    promptText: 'Launched prompt',
+    promptArtifactPath: null,
+    requestedArtifacts: [
+      {
+        role: 'Milestone',
+        relativePath: '.agents/milestones/m5.md',
+        byteCount: 100,
+        characterCount: 100,
+        delivered: true,
+      },
+      {
+        role: 'CurrentHandoff',
+        relativePath: '.agents/handoffs/handoff.md',
+        byteCount: null,
+        characterCount: null,
+        delivered: false,
+      },
+    ],
+    requestedContextBytes: 100,
+    requestedContextCharacters: 100,
+    deliveredArtifacts: [
+      {
+        role: 'Milestone',
+        relativePath: '.agents/milestones/m5.md',
+        byteCount: 100,
+        characterCount: 100,
+        delivered: true,
+      },
+    ],
+    deliveredContextBytes: 100,
+    deliveredContextCharacters: 100,
+    dirtyRepositoryAtRequestTime: true,
+    dirtyRepositoryAtDeliveryTime: true,
+    governedDecisionCountRequested: 2,
+    governedDecisionCountDelivered: 2,
+    operationalContextSourceRequested: '.agents/operational_context.md',
+    operationalContextSourceDelivered: '.agents/operational_context.md',
+    handoffSourceRequested: '.agents/handoffs/handoff.md',
+    handoffSourceDelivered: null,
+    milestoneSourceRequested: '.agents/milestones/m5.md',
+    milestoneSourceDelivered: '.agents/milestones/m5.md',
+    providerDeliveryStatus: 'Delivered',
+    providerAdjustments: [],
+    divergenceReason: null,
+    diagnostics: ['NoProviderDivergenceSignal'],
   }
 }
 
@@ -555,6 +609,19 @@ describe('projection hook characterization', () => {
     expect(fetch).toHaveBeenCalledWith(
       'http://backend.test/api/execution-sessions/session-existing/status',
     )
+  })
+
+  it('loads the launched prompt manifest through the shell detail command', async () => {
+    const manifest = createExecutionPromptManifest('session-alpha')
+    const invoke = vi.fn().mockResolvedValue(manifest)
+    installInvokeMock(invoke)
+
+    const { result } = renderHook(() => useExecutionPromptManifest('session-alpha'))
+
+    await waitFor(() => expect(result.current.data).toBe(manifest))
+    expect(invoke).toHaveBeenCalledWith('get_execution_prompt_manifest', {
+      sessionId: 'session-alpha',
+    }, undefined)
   })
 
   it('does not leak stale execution session loads across repository boundaries', async () => {

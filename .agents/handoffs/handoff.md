@@ -2,26 +2,34 @@
 
 ## New State This Slice
 
-- Began Milestone 5: Execution Transparency.
-- Added execution-owned prompt manifest models:
+- Continued Milestone 5: Execution Transparency by wiring the persisted execution prompt manifest into the product surface.
+- Added UI prompt-manifest types:
   - `ExecutionPromptManifest`
   - `ExecutionPromptManifestArtifact`
-- Persisted `ExecutionSession.PromptManifest` for launched sessions.
-- Added manifest composition from the authoritative `ExecutionContext` and built `ExecutionPrompt`.
-- Recorded requested artifacts separately from delivered artifacts, including missing optional context such as current handoff/decisions.
-- Recorded requested and delivered context byte/character counts, dirty repository flags, governed decision counts, operational context source, handoff source, milestone source, provider delivery status, provider adjustments, divergence reason, diagnostics, and full prompt text.
-- Since providers cannot yet report delivered-context divergence, manifests currently record delivered context equal to requested context, empty provider adjustments, and `NoProviderDivergenceSignal`.
-- Preserved prompt manifest across session mutation/copy paths in execution monitoring, handoff processing, and git lifecycle mutations.
-- Added `GET /api/execution-sessions/{sessionId}/prompt`.
-- Updated `.agents/milestones/m5-execution-transparency.md` for completed prompt-manifest backend items.
-- Rotated prior handoff to `.agents/handoffs/handoff.0031.md`.
+- Added `getExecutionPromptManifest(sessionId)` in the TypeScript execution API.
+- Added `useExecutionPromptManifest(sessionId)` for opt-in detail loading without adding prompt manifest data to execution summaries.
+- Added Tauri command bridge `get_execution_prompt_manifest` mapping to `GET /api/execution-sessions/{sessionId}/prompt`.
+- Updated `ExecutionTab` and `ExecutionSessionPanel` to render launched prompt manifest details:
+  - launched prompt generated timestamp
+  - prompt artifact/inline status
+  - provider delivery status
+  - divergence reason
+  - requested context bytes/characters, dirty flag, governed decision count, sources, and artifacts
+  - delivered context bytes/characters, dirty flag, governed decision count, sources, and artifacts
+  - provider adjustments
+  - diagnostics including `NoProviderDivergenceSignal`
+- Updated the development Tauri mock to synthesize prompt manifests for local UI flows.
+- Updated `.agents/milestones/m5-execution-transparency.md` for completed prompt-manifest UI/client/shell work and related test coverage.
+- Rotated prior handoff to `.agents/handoffs/handoff.0032.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter ExecutionSessionServiceTests` passed: 38 tests.
+- `npm test -- --run src/test/characterization/executionSessionPanel.test.tsx src/test/characterization/projectionHooks.test.tsx` passed: 2 files, 22 tests.
+- `npm run build` passed. Vite still reports the existing large chunk warning.
+- `cargo fmt --check` passed in `src/CommandCenter.Shell`.
+- `cargo check` passed in `src/CommandCenter.Shell`.
 
 ## Remaining Work
 
-- Continue Milestone 5 backend-first.
-- Next high-leverage backend item: add execution transparency/read model fields for recovery and monitoring state, or continue adjacent prompt-manifest integration by adding shell and TypeScript client access to `/api/execution-sessions/{sessionId}/prompt`.
-- Keep UI render-only; do not infer prompt delivery, provider adjustments, recovery semantics, git eligibility, or governed conflicts in React.
+- Continue Milestone 5 with recovery and monitoring transparency, or start the push retry-state fix if prioritizing user-action failure clarity.
+- Do not move recovery, monitoring, git eligibility, provider divergence, or conflict interpretation into React; add authority-owned projections first.

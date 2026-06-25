@@ -6,6 +6,7 @@ import type {
   ExecutionContextPreview,
   DecisionInfluenceTrace,
   ExecutionEvent,
+  ExecutionPromptManifest,
   ExecutionSessionSummary,
   RepositoryExecutionState,
   WorkflowInstance,
@@ -21,6 +22,9 @@ import { ExecutionWorkflowRail } from './ExecutionWorkflowRail'
 
 type ExecutionTabProps = {
   execution: ExecutionSessionSummary | null
+  executionPromptManifest: ExecutionPromptManifest | null
+  isExecutionPromptManifestLoading?: boolean
+  executionPromptManifestError?: string | null
   executionContext: ExecutionContextPreview | null
   decisionInfluenceTrace: DecisionInfluenceTrace | null
   isDecisionInfluenceLoading?: boolean
@@ -44,6 +48,9 @@ type ExecutionTabProps = {
 
 export function ExecutionTab({
   execution,
+  executionPromptManifest,
+  isExecutionPromptManifestLoading = false,
+  executionPromptManifestError = null,
   executionContext,
   decisionInfluenceTrace,
   isDecisionInfluenceLoading = false,
@@ -101,6 +108,9 @@ export function ExecutionTab({
           {execution ? (
             <ExecutionSessionPanel
               session={execution}
+              promptManifest={executionPromptManifest}
+              isPromptManifestLoading={isExecutionPromptManifestLoading}
+              promptManifestError={executionPromptManifestError}
               onOpenMilestone={
                 execution.milestonePath
                   ? () => onOpenWorkspaceMilestone(execution.milestonePath as string)

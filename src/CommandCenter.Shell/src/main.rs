@@ -2469,6 +2469,14 @@ fn get_execution_session(session_id: String) -> Result<Value, String> {
 }
 
 #[tauri::command]
+fn get_execution_prompt_manifest(session_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/execution-sessions/{session_id}/prompt"),
+        "execution prompt manifest lookup failed",
+    )
+}
+
+#[tauri::command]
 fn accept_execution_handoff(session_id: String) -> Result<ExecutionSessionSummary, String> {
     complete_handoff_decision(session_id, "accept")
 }
@@ -2900,6 +2908,7 @@ fn main() {
             commit_execution,
             push_execution,
             get_execution_session,
+            get_execution_prompt_manifest,
             accept_execution_handoff,
             reject_execution_handoff
         ])

@@ -1,7 +1,7 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { ExecutionSessionPanel } from '../../features/execution/ExecutionSessionPanel'
-import type { ExecutionSessionSummary } from '../../types'
+import type { ExecutionPromptManifest, ExecutionSessionSummary } from '../../types'
 
 afterEach(() => {
   cleanup()
@@ -36,6 +36,58 @@ function sessionSummary(overrides: Partial<ExecutionSessionSummary> = {}): Execu
     pushBranchName: null,
     failureReason: null,
     ...overrides,
+  }
+}
+
+function promptManifest(): ExecutionPromptManifest {
+  return {
+    sessionId: 'session-alpha',
+    generatedAt: '2026-06-21T16:00:30.000Z',
+    promptText: 'Launched prompt text',
+    promptArtifactPath: null,
+    requestedArtifacts: [
+      {
+        role: 'Milestone',
+        relativePath: '.agents/milestones/m0.md',
+        byteCount: 128,
+        characterCount: 128,
+        delivered: true,
+      },
+      {
+        role: 'CurrentHandoff',
+        relativePath: '.agents/handoffs/handoff.md',
+        byteCount: null,
+        characterCount: null,
+        delivered: false,
+      },
+    ],
+    requestedContextBytes: 128,
+    requestedContextCharacters: 128,
+    deliveredArtifacts: [
+      {
+        role: 'Milestone',
+        relativePath: '.agents/milestones/m0.md',
+        byteCount: 128,
+        characterCount: 128,
+        delivered: true,
+      },
+    ],
+    deliveredContextBytes: 128,
+    deliveredContextCharacters: 128,
+    dirtyRepositoryAtRequestTime: true,
+    dirtyRepositoryAtDeliveryTime: true,
+    governedDecisionCountRequested: 4,
+    governedDecisionCountDelivered: 4,
+    operationalContextSourceRequested: '.agents/operational_context.md',
+    operationalContextSourceDelivered: '.agents/operational_context.md',
+    handoffSourceRequested: '.agents/handoffs/handoff.md',
+    handoffSourceDelivered: null,
+    milestoneSourceRequested: '.agents/milestones/m0.md',
+    milestoneSourceDelivered: '.agents/milestones/m0.md',
+    providerDeliveryStatus: 'Delivered',
+    providerAdjustments: [],
+    divergenceReason: null,
+    diagnostics: ['NoProviderDivergenceSignal'],
   }
 }
 
@@ -84,5 +136,20 @@ describe('execution session panel rendering characterization', () => {
     expect(screen.getByText('Commit: Not recorded')).toBeInTheDocument()
     expect(screen.getByText('Pushed commit: Not recorded')).toBeInTheDocument()
     expect(screen.getByText('Failure: Commit preparation failed')).toHaveClass('execution-failure')
+  })
+
+  it('renders requested and delivered launched prompt manifest context distinctly', () => {
+    render(<ExecutionSessionPanel session={sessionSummary()} promptManifest={promptManifest()} />)
+
+    expect(screen.getByLabelText('Launched prompt manifest')).toBeInTheDocument()
+    expect(screen.getByText('Launched Prompt')).toBeInTheDocument()
+    expect(screen.getByText('Provider delivery: Delivered')).toBeInTheDocument()
+    expect(screen.getByText('Requested Context')).toBeInTheDocument()
+    expect(screen.getByText('Delivered Context')).toBeInTheDocument()
+    expect(screen.getAllByText('Context bytes: 128')).toHaveLength(2)
+    expect(screen.getAllByText('Governed decisions: 4')).toHaveLength(2)
+    expect(screen.getByText('Missing - unknown bytes - unknown chars')).toBeInTheDocument()
+    expect(screen.getByText('No provider adjustments recorded.')).toBeInTheDocument()
+    expect(screen.getByText('NoProviderDivergenceSignal')).toBeInTheDocument()
   })
 })

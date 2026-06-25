@@ -56,6 +56,7 @@ import {
   useExecutionDecisionInfluence,
   useExecutionContextPreview,
   useExecutionEvents,
+  useExecutionPromptManifest,
   useExecutionSession,
   useGitStatus,
   mergeExecutionEvents,
@@ -197,6 +198,11 @@ function App() {
     error: executionSessionError,
     refresh: refreshExecutionSessionStatus,
   } = useExecutionSession(selectedRepository?.repository.id ?? null, executionSessionId)
+  const {
+    data: executionPromptManifest,
+    isLoading: isExecutionPromptManifestLoading,
+    error: executionPromptManifestError,
+  } = useExecutionPromptManifest(executionSessionId)
   const {
     data: decisionInfluenceTrace,
     isLoading: isDecisionInfluenceLoading,
@@ -1953,6 +1959,9 @@ function App() {
 
               <ExecutionTab
                 execution={executionDisplay}
+                executionPromptManifest={executionPromptManifest}
+                isExecutionPromptManifestLoading={isExecutionPromptManifestLoading}
+                executionPromptManifestError={executionPromptManifestError}
                 executionContext={executionContextMatchesSelection ? executionContext : null}
                 decisionInfluenceTrace={decisionInfluenceTrace}
                 isDecisionInfluenceLoading={isDecisionInfluenceLoading}
