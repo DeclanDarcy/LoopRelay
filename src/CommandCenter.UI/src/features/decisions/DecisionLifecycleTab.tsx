@@ -501,9 +501,9 @@ export function DecisionLifecycleTab({
                     </select>
                   </div>
                   {selectedDecisionEligibility ? (
-                    <LifecycleEligibilityDetails
+                    <DecisionInteractionSummary
                       eligibility={selectedDecisionEligibility}
-                      label="Decision"
+                      replacementDecisionId={replacementDecisionId}
                     />
                   ) : null}
                   <div className="decision-lifecycle-form">
@@ -750,6 +750,49 @@ function ProposalInteractionSummary({
   )
 }
 
+function DecisionInteractionSummary({
+  eligibility,
+  replacementDecisionId,
+}: {
+  eligibility: DecisionLifecycleEntityEligibility
+  replacementDecisionId: string
+}) {
+  const subject = `Decision ${eligibility.entityId}: ${eligibility.currentState}`
+  const evidence = [
+    {
+      label: 'Current state',
+      detail: `${eligibility.entityKind} ${eligibility.entityId} is ${eligibility.currentState}.`,
+    },
+    ...eligibility.allowedNextStates.map((state) => ({
+      label: 'Allowed next state',
+      detail: state,
+    })),
+    ...eligibility.blockedNextStates.map((state) => ({
+      label: 'Blocked next state',
+      detail: `${state.state}: ${state.reason}`,
+    })),
+    ...(replacementDecisionId
+      ? [
+          {
+            label: 'Selected replacement decision',
+            detail: replacementDecisionId,
+          },
+        ]
+      : []),
+  ]
+
+  return (
+    <InteractionPatternView
+      actions={decisionLifecycleEligibilityToActions(eligibility)}
+      diagnostics={decisionDiagnosticsToExplanation(eligibility.diagnostics, 'Decision lifecycle diagnostic')}
+      evidence={evidence}
+      result="No decision lifecycle command result recorded."
+      subject={subject}
+      title="Decision interaction summary"
+    />
+  )
+}
+
 function getLastTransition(history: DecisionProposal['history'][number][]) {
   return [...history]
     .reverse()
@@ -823,43 +866,4 @@ function actionTitle(action: DecisionLifecycleActionEligibility | null) {
   return action.isAllowed
     ? `${action.displayName} allowed by ${action.governingRule}.`
     : action.reason ?? `${action.displayName} is blocked by ${action.governingRule}.`
-}
-
-function LifecycleEligibilityDetails({
-  eligibility,
-  label,
-}: {
-  eligibility: DecisionLifecycleEntityEligibility
-  label: string
-}) {
-  return (
-    <div className="decision-lifecycle-eligibility" aria-label={`${label} lifecycle eligibility`}>
-      <div>
-        <span>Allowed actions</span>
-        <strong>{eligibility.allowedActions.map((action) => action.displayName).join(', ') || 'None'}</strong>
-      </div>
-      <div>
-        <span>Allowed next states</span>
-        <strong>{eligibility.allowedNextStates.join(', ') || 'None'}</strong>
-      </div>
-      {eligibility.blockedActions.length > 0 ? (
-        <ul className="decision-lifecycle-reasons" aria-label={`${label} blocked action reasons`}>
-          {eligibility.blockedActions.map((action) => (
-            <li key={action.commandName}>
-              <strong>{action.displayName}</strong>
-              <span>{action.reason ?? 'Blocked by backend lifecycle rules.'}</span>
-              <small>{action.governingRule}</small>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {eligibility.diagnostics.length > 0 ? (
-        <ul className="decision-lifecycle-reasons" aria-label={`${label} eligibility diagnostics`}>
-          {eligibility.diagnostics.map((diagnostic) => (
-            <li key={diagnostic}>{diagnostic}</li>
-          ))}
-        </ul>
-      ) : null}
-    </div>
-  )
 }

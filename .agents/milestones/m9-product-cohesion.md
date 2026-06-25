@@ -21,6 +21,7 @@ Make the application feel unified, not merely smaller. Remove fragmentation so e
 - [x] Review frontend state and classify each state value as authoritative view state, derived display state, disposable UI state, or duplicate domain state.
 - [ ] Normalize interaction patterns for review, accept, reject, transfer, recover, generate, refine, commit, push, promote, archive, and supersede:
    - [x] Proposal review lifecycle actions normalized through a shared interaction summary covering action, eligibility, evidence, result, and diagnostics. See `./m9-interaction-normalization-proposal-review.md`.
+   - [x] Resolved decision supersede/archive actions normalized through the shared interaction summary. See `./m9-interaction-normalization-decision-actions.md`.
    - [ ] action
    - [ ] eligibility
    - [ ] evidence

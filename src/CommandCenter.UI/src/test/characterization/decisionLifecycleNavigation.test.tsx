@@ -478,11 +478,22 @@ describe('DecisionLifecycleTab navigation', () => {
     const decisionSelection = screen.getByLabelText('Resolved decision selection')
     const decisionSelects = decisionSelection.querySelectorAll('select')
 
-    expect(screen.getByLabelText('Decision lifecycle eligibility')).toHaveTextContent('Supersede')
-    expect(screen.getByLabelText('Decision lifecycle eligibility')).toHaveTextContent('Archive')
+    const interaction = screen.getByLabelText('Decision interaction summary')
+    expect(within(interaction).getByText('Action subject')).toBeInTheDocument()
+    expect(within(interaction).getByText('Decision DEC-0001: Resolved')).toBeInTheDocument()
+    expect(within(interaction).getByText('Result')).toBeInTheDocument()
+    expect(within(interaction).getByText('No decision lifecycle command result recorded.')).toBeInTheDocument()
+    expect(within(interaction).getByText('Action Eligibility')).toBeInTheDocument()
+    expect(within(interaction).getByText('Supersede')).toBeInTheDocument()
+    expect(within(interaction).getByText('Archive')).toBeInTheDocument()
+    expect(within(interaction).getByText('Interaction Evidence')).toBeInTheDocument()
+    expect(within(interaction).getByText('Current state')).toBeInTheDocument()
+    expect(within(interaction).getByText('Decision DEC-0001 is Resolved.')).toBeInTheDocument()
+    expect(within(interaction).getByText('Interaction Diagnostics')).toBeInTheDocument()
     fireEvent.change(decisionSelects[0], {
       target: { value: 'DEC-0003' },
     })
+    expect(screen.getByLabelText('Decision interaction summary')).toHaveTextContent('Decision DEC-0003: Archived')
     expect(screen.getByText('Archived decisions cannot transition.')).toBeInTheDocument()
     fireEvent.change(decisionSelects[0], {
       target: { value: 'DEC-0001' },
@@ -491,6 +502,8 @@ describe('DecisionLifecycleTab navigation', () => {
     fireEvent.change(decisionSelects[1], {
       target: { value: 'DEC-0002' },
     })
+    expect(screen.getByLabelText('Decision interaction summary')).toHaveTextContent('Selected replacement decision')
+    expect(screen.getByLabelText('Decision interaction summary')).toHaveTextContent('DEC-0002')
     fireEvent.change(screen.getByLabelText('Rationale'), {
       target: { value: 'DEC-0002 replaces the earlier architecture choice.' },
     })
