@@ -103,6 +103,7 @@ describe('operational context current panel rendering characterization', () => {
     const headings = screen.getAllByRole('heading', { level: 5 }).map((heading) => heading.textContent)
 
     expect(headings).toEqual([
+      'Current Context Evidence',
       'Current Model',
       'Stable Decisions',
       'Decision Rationale',
@@ -113,6 +114,7 @@ describe('operational context current panel rendering characterization', () => {
       'Active Risks',
       'Recent Changes',
       'Continuity Warnings',
+      'Continuity Warning Diagnostics',
     ])
 
     const currentModel = screen.getByRole('heading', { name: 'Current Model' }).closest('div')
@@ -127,7 +129,7 @@ describe('operational context current panel rendering characterization', () => {
       'Current model B',
     ])
     expect(within(stableDecisions as HTMLElement).getByText('Stable decision')).toBeInTheDocument()
-    expect(within(continuityWarnings as HTMLElement).getByText('Continuity warning')).toBeInTheDocument()
+    expect(within(continuityWarnings as HTMLElement).getAllByText('Continuity warning').length).toBeGreaterThan(0)
   })
 
   it('renders the existing empty section fallbacks', () => {

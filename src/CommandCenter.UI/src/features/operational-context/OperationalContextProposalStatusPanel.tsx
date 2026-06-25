@@ -1,5 +1,13 @@
 import { formatDateTime } from '../../lib'
-import { EmptyState, StatusBadge } from '../../components/design'
+import {
+  DiagnosticList,
+  EvidenceList,
+} from '../../components/explainability'
+import { StatusBadge } from '../../components/design'
+import {
+  operationalContextProposalLifecycleToDiagnostics,
+  operationalContextProposalLifecycleToEvidence,
+} from '../../lib/explainability'
 import {
   operationalContextProposalStatus,
   operationalContextReviewStatus,
@@ -17,6 +25,8 @@ export function OperationalContextProposalStatusPanel({
   isArtifactPathAvailable,
   onOpenArtifact,
 }: OperationalContextProposalStatusPanelProps) {
+  const diagnostics = operationalContextProposalLifecycleToDiagnostics(proposal)
+
   return (
     <>
       <div className="context-summary-grid">
@@ -56,18 +66,12 @@ export function OperationalContextProposalStatusPanel({
           onOpenArtifact={onOpenArtifact}
         />
       </div>
-      {proposal.review.staleReason ? (
-        <EmptyState className="empty-state">Review blocked: {proposal.review.staleReason}</EmptyState>
-      ) : null}
-      {proposal.promotion.archiveFailureReason ? (
-        <EmptyState className="empty-state">
-          Promotion archive failed: {proposal.promotion.archiveFailureReason}
-        </EmptyState>
-      ) : null}
-      {proposal.promotion.writeFailureReason ? (
-        <EmptyState className="empty-state">
-          Promotion write failed: {proposal.promotion.writeFailureReason}
-        </EmptyState>
+      <EvidenceList
+        title="Proposal Lifecycle Evidence"
+        evidence={operationalContextProposalLifecycleToEvidence(proposal)}
+      />
+      {diagnostics.length > 0 ? (
+        <DiagnosticList title="Proposal Lifecycle Diagnostics" diagnostics={diagnostics} />
       ) : null}
     </>
   )

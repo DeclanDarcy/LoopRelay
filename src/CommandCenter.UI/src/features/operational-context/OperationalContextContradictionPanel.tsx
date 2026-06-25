@@ -1,3 +1,11 @@
+import {
+  DiagnosticList,
+  EvidenceList,
+} from '../../components/explainability'
+import {
+  continuityDecisionContradictionToDiagnostics,
+  continuityDecisionContradictionToEvidence,
+} from '../../lib/explainability'
 import type { DecisionAssimilationProjection } from '../../types'
 
 type OperationalContextContradictionPanelProps = {
@@ -48,13 +56,14 @@ export function OperationalContextContradictionPanel({
                 <dd>{contradiction.resolutionGuidance}</dd>
               </div>
             </dl>
-            {contradiction.evidence.length > 0 ? (
-              <ul className="assimilation-detail-list" aria-label="Contradiction evidence">
-                {contradiction.evidence.map((evidence) => (
-                  <li key={evidence}>{evidence}</li>
-                ))}
-              </ul>
-            ) : null}
+            <EvidenceList
+              title="Contradiction Evidence"
+              evidence={continuityDecisionContradictionToEvidence(contradiction)}
+            />
+            <DiagnosticList
+              title="Contradiction Diagnostics"
+              diagnostics={continuityDecisionContradictionToDiagnostics(contradiction)}
+            />
           </li>
         ))}
       </ul>

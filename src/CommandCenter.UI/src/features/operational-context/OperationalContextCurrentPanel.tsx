@@ -1,5 +1,13 @@
 import { formatDateTime } from '../../lib'
 import { EmptyState } from '../../components/design'
+import {
+  DiagnosticList,
+  EvidenceList,
+} from '../../components/explainability'
+import {
+  continuityWarningsToDiagnostics,
+  operationalContextProjectionToEvidence,
+} from '../../lib/explainability'
 import type { OperationalContextProjection, OperationalContextProposalSummary } from '../../types'
 
 type OperationalContextCurrentPanelProps = {
@@ -69,6 +77,16 @@ export function OperationalContextCurrentPanel({
   const proposalStatus = proposalSummary.latestProposalId
     ? proposalSummary.status ?? 'Unknown'
     : 'None'
+  const projectionEvidence = operationalContextProjectionToEvidence(
+    operationalContext,
+    executionStatus,
+    reviewStatus,
+    proposalStatus,
+  )
+  const continuityDiagnostics = continuityWarningsToDiagnostics(
+    operationalContext.continuityWarnings,
+    'Continuity warning',
+  )
 
   if (!operationalContext.exists) {
     return (
@@ -104,6 +122,7 @@ export function OperationalContextCurrentPanel({
             )}
           </span>
         </div>
+        <EvidenceList title="Current Context Evidence" evidence={projectionEvidence} />
         <EmptyState className="empty-state">No current operational context exists.</EmptyState>
       </div>
     )
@@ -149,6 +168,7 @@ export function OperationalContextCurrentPanel({
           )}
         </span>
       </div>
+      <EvidenceList title="Current Context Evidence" evidence={projectionEvidence} />
 
       <div className="context-columns">
         <div>
@@ -217,6 +237,12 @@ export function OperationalContextCurrentPanel({
         />
         <div>
           <h5>Continuity Warnings</h5>
+          {continuityDiagnostics.length > 0 ? (
+            <DiagnosticList
+              title="Continuity Warning Diagnostics"
+              diagnostics={continuityDiagnostics}
+            />
+          ) : null}
           {operationalContext.continuityWarnings.length > 0 ? (
             <ul>
               {operationalContext.continuityWarnings.map((warning) => (

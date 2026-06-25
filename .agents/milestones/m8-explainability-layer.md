@@ -57,6 +57,7 @@ Each component must render:
    - [x] Execution prompt manifest, repository snapshot, governed conflict, artifact diagnostics, event consequences, session history/failure evidence, generated handoff review, git eligibility, recovery, monitoring, and handoff-processing adapter slice.
    - [x] Reasoning reconstruction confidence, missing evidence, scope, provenance, reachability, diagnostics, materialization review, and certification adapter slice.
    - [x] Continuity compression, semantic diff, operational evolution, grouped diagnostics, repeated signals, warning diagnostics, trend evidence, and report evidence adapter slice.
+   - [x] Operational-context proposal lifecycle, review/promotion diagnostics, current/proposal summary, decision assimilation, taxonomy basis, limits, consequences, and contradictions adapter slice.
 - [ ] Adapters may reorganize authoritative information, but they must not omit semantically relevant evidence, constraints, uncertainty, diagnostics, findings, or eligible actions.
 - [ ] Replace domain-specific explanation widgets in:
    - [ ] decisions
@@ -74,6 +75,7 @@ Each component must render:
       - [x] Reconstruction confidence rationale, missing evidence, reconstruction scope, reachability, grouped diagnostics, materialization review evidence/thresholds/risks, taxonomy findings, and certification findings now render through shared explainability components.
    - [ ] operational context
       - [x] Compression item outcomes, revision evidence, compressed-understanding diagnostics, semantic diff evidence, operational evolution timeline evidence, continuity compression observations, grouped diagnostics, repeated signals, warnings, and report evidence now render through shared explainability components.
+      - [x] Proposal lifecycle status evidence, review/promotion diagnostics, current/proposal summary evidence, decision assimilation status/evidence/constraints/open questions, taxonomy basis, assimilation limits, consequences, and contradictions now render through shared explainability components.
    - [ ] health
    - [ ] diagnostics
    - [ ] certification
@@ -91,6 +93,7 @@ Each component must render:
    - [x] Execution adapter preservation coverage for prompt manifest facts, repository snapshot paths, artifact diagnostics, event consequences, session history/failure evidence, generated handoff review actions, governed conflicts, git eligibility, recovery, monitoring, and handoff-processing diagnostics.
    - [x] Reasoning adapter preservation coverage for evidence, provenance, confidence rationale, reconstruction scope, diagnostics, uncertainty, reachability, materialization thresholds/risks, taxonomy findings, and certification findings.
    - [x] Continuity adapter preservation coverage for lifecycle facts, compression outcomes, semantic identity, evidence, grouped diagnostics, warning diagnostics, repeated signals, trend evidence, and continuity reports.
+   - [x] Continuity adapter preservation coverage for operational-context proposal lifecycle/review facts, promotion diagnostics, current/proposal summary facts, decision assimilation status, taxonomy basis, limits, consequences, contradictions, and open questions.
 - [ ] Adapter tests proving semantically relevant evidence and diagnostics are preserved when mapping into presentation concepts.
    - [x] Workflow health, certification, recovery, gates, continuation, and report evidence/diagnostic preservation coverage.
    - [x] Governance certification evidence/diagnostics, recovery evidence/diagnostics, health findings/evidence, and eligibility findings/action coverage.
@@ -99,6 +102,7 @@ Each component must render:
    - [x] Execution prompt context evidence, repository snapshot path evidence, artifact threshold evidence, event evidence, session history/failure evidence, generated handoff review constraints, governed conflict source evidence, git action constraints, and recovery/monitoring/handoff diagnostics preservation coverage.
    - [x] Reasoning reconstruction evidence/provenance, confidence uncertainty, scope reachability, diagnostic category evidence, materialization branch evidence, taxonomy evidence, and certification reference preservation coverage.
    - [x] Continuity compression evidence, semantic identity basis, operational evolution evidence, diagnostic category evidence, repeated signal diagnostics, warning diagnostics, and report reference preservation coverage.
+   - [x] Operational-context lifecycle hashes/paths/status, review stale reasons, promotion failure reasons, assimilation source evidence, taxonomy matched rules/evidence/diagnostics, limit counts/reason, consequence evidence, contradiction evidence, and resolution guidance preservation coverage.
 - [ ] UI characterization tests proving major domains use shared explainability components.
 
 ### Exit Criteria

@@ -1,3 +1,11 @@
+import {
+  ConstraintViewer,
+  EvidenceList,
+} from '../../components/explainability'
+import {
+  decisionAssimilationLimitToConstraints,
+  decisionAssimilationLimitToEvidence,
+} from '../../lib/explainability'
 import type { DecisionAssimilationProjection } from '../../types'
 
 type OperationalContextAssimilationLimitPanelProps = {
@@ -19,7 +27,14 @@ export function OperationalContextAssimilationLimitPanel({
         <span>Omitted: {decisionAssimilation.limit.omittedItemCount}</span>
         <span>Limit: {decisionAssimilation.limit.limit}</span>
       </div>
-      <p>{decisionAssimilation.limit.reason}</p>
+      <ConstraintViewer
+        title="Assimilation Limit Constraints"
+        constraints={decisionAssimilationLimitToConstraints(decisionAssimilation.limit)}
+      />
+      <EvidenceList
+        title="Assimilation Limit Evidence"
+        evidence={decisionAssimilationLimitToEvidence(decisionAssimilation.limit)}
+      />
       {omittedItems.length > 0 ? (
         <>
           <h6>Omitted Items</h6>

@@ -1,0 +1,56 @@
+# Decisions
+
+## Newly Authorized
+
+- Treat the Continuity / Operational Context explainability migration as the completion of the last major semantic-domain migration into the shared explainability layer for Milestone 8.
+- Continue treating Continuity adapters as presentation-only translation layers. They may reorganize backend projections for compression, semantic diff, operational evolution, diagnostics, repeated signals, warnings, reports, and operational-context facts, but must not derive continuity semantics.
+- Preserve backend semantic ownership for Continuity / Operational Context:
+  - compression outcomes,
+  - semantic identity,
+  - lifecycle interpretation,
+  - diagnostics,
+  - operational evolution,
+  - review state,
+  - promotion evidence,
+  - assimilation status,
+  - taxonomy classification,
+  - contradiction meaning,
+  - context quality,
+  - continuity risk.
+- Keep navigation-specific affordances, including inline warning buttons, separate from shared explainability primitives until the lifecycle/review migration has enough context to unify them safely.
+- Continue classifying the Vite large-chunk warning as a build/product optimization concern rather than a Milestone 8 architecture blocker.
+- Recognize the shared explainability layer as validated across every major semantic domain:
+  - Workflow,
+  - Governance,
+  - Decisions,
+  - Execution,
+  - Reasoning,
+  - Continuity / Operational Context.
+- Complete the remaining operational-context lifecycle and review explainability migration before performing the Milestone 8 audit.
+- Migrate the remaining operational-context surfaces in this order:
+  - proposal status,
+  - review,
+  - promotion evidence,
+  - decision assimilation,
+  - taxonomy basis,
+  - assimilation limits,
+  - consequences,
+  - contradictions,
+  - current/proposal summary panels.
+- Add preservation tests for the remaining operational-context migration proving React does not derive:
+  - review state,
+  - promotion eligibility,
+  - assimilation status,
+  - contradiction meaning,
+  - taxonomy classification,
+  - lifecycle outcome,
+  - context quality,
+  - continuity risk.
+- After those surfaces are migrated, run a dedicated Milestone 8 adapter audit before declaring the milestone complete.
+- The Milestone 8 adapter audit should verify:
+  - every explainability surface routes through shared presentation primitives,
+  - no adapter computes domain semantics,
+  - adapters preserve authoritative evidence, diagnostics, constraints, uncertainty, findings, and actions,
+  - no legacy domain-specific explainability component remains except where intentionally retained for Milestone 9 layout work,
+  - shared components have not accumulated hidden domain-specific behavior.
+- Use the completed audit as the transition point into Milestone 9 product cohesion work.

@@ -156,21 +156,25 @@ describe('operational context assimilation panel rendering characterization', ()
     const panel = screen.getByRole('heading', { name: 'Decision Assimilation' }).closest('div')
 
     expect(panel).not.toBeNull()
-    expect(within(panel as HTMLElement).getByText('Assimilated')).toBeInTheDocument()
-    expect(within(panel as HTMLElement).getByText('Excluded')).toBeInTheDocument()
-    expect(within(panel as HTMLElement).getByText('OmittedByLimit')).toBeInTheDocument()
-    expect(within(panel as HTMLElement).getAllByText('Qualifies')).toHaveLength(3)
-    expect(within(panel as HTMLElement).getAllByText('Operational statement')).toHaveLength(3)
+    expect(within(panel as HTMLElement).getAllByText('Assimilated').length).toBeGreaterThan(0)
+    expect(within(panel as HTMLElement).getAllByText('Excluded').length).toBeGreaterThan(0)
+    expect(within(panel as HTMLElement).getAllByText('OmittedByLimit').length).toBeGreaterThan(0)
+    expect(within(panel as HTMLElement).getAllByRole('heading', { name: 'Assimilation Evidence' }).length).toBeGreaterThan(0)
+    expect(within(panel as HTMLElement).getByRole('heading', { name: 'Assimilation Constraints' })).toBeInTheDocument()
+    expect(within(panel as HTMLElement).getAllByRole('heading', { name: 'Assimilation Diagnostics' }).length).toBeGreaterThan(0)
+    expect(within(panel as HTMLElement).getByRole('heading', { name: 'Assimilation Open Questions' })).toBeInTheDocument()
+    expect(within(panel as HTMLElement).getAllByText('Qualifies').length).toBeGreaterThanOrEqual(3)
+    expect(within(panel as HTMLElement).getAllByText('Operational statement').length).toBeGreaterThanOrEqual(3)
     expect(
-      within(panel as HTMLElement).getByText(
+      within(panel as HTMLElement).getAllByText(
         'Tactical decision signals are execution detail and are not assimilated as durable operational context.',
-      ),
-    ).toBeInTheDocument()
+      ).length,
+    ).toBeGreaterThan(0)
     expect(
-      within(panel as HTMLElement).getByText(
+      within(panel as HTMLElement).getAllByText(
         'Operational context proposal generation includes at most eight qualifying durable decision signals to keep the proposed context reviewable.',
-      ),
-    ).toBeInTheDocument()
+      ).length,
+    ).toBeGreaterThan(0)
     expect(within(panel as HTMLElement).queryByText('Recommended')).not.toBeInTheDocument()
   })
 
@@ -184,12 +188,14 @@ describe('operational context assimilation panel rendering characterization', ()
     expect(
       within(panel as HTMLElement).getByText('Matched architectural keyword: Backend continuity services own'),
     ).toBeInTheDocument()
-    expect(within(panel as HTMLElement).getByText('Heuristic fallback')).toBeInTheDocument()
+    expect(within(panel as HTMLElement).getAllByText('Heuristic fallback').length).toBeGreaterThan(0)
+    expect(within(panel as HTMLElement).getAllByRole('heading', { name: 'Taxonomy Evidence' }).length).toBeGreaterThan(0)
+    expect(within(panel as HTMLElement).getAllByRole('heading', { name: 'Taxonomy Diagnostics' }).length).toBeGreaterThan(0)
     expect(
-      within(panel as HTMLElement).getByText(
+      within(panel as HTMLElement).getAllByText(
         'No taxonomy rules matched; defaulted to tactical so unclassified text does not become durable operational context.',
-      ),
-    ).toBeInTheDocument()
+      ).length,
+    ).toBeGreaterThan(0)
     expect(within(panel as HTMLElement).getByText('No taxonomy rules matched.')).toBeInTheDocument()
     expect(within(panel as HTMLElement).queryByText('Durable by UI rule')).not.toBeInTheDocument()
   })
@@ -218,21 +224,21 @@ describe('operational context assimilation panel rendering characterization', ()
     const panel = screen.getByRole('heading', { name: 'Decision Consequences' }).closest('div')
 
     expect(panel).not.toBeNull()
-    expect(within(panel as HTMLElement).getByText('Operational context review')).toBeInTheDocument()
-    expect(within(panel as HTMLElement).getByText('DEC-0001')).toBeInTheDocument()
+    expect(within(panel as HTMLElement).getAllByText('Operational context review').length).toBeGreaterThan(0)
+    expect(within(panel as HTMLElement).getAllByText('DEC-0001').length).toBeGreaterThan(0)
     expect(
       within(panel as HTMLElement).getByText('Review surfaces must display backend promotion status.'),
     ).toBeInTheDocument()
     expect(
-      within(panel as HTMLElement).getByText(
+      within(panel as HTMLElement).getAllByText(
         'Backend continuity services own operational context promotion because hidden memory is not authoritative.',
-      ),
-    ).toBeInTheDocument()
+      ).length,
+    ).toBeGreaterThan(0)
     expect(
-      within(panel as HTMLElement).getByText(
+      within(panel as HTMLElement).getAllByText(
         'Review panels need to link consequence text to the originating decision.',
-      ),
-    ).toBeInTheDocument()
+      ).length,
+    ).toBeGreaterThan(0)
   })
 
   it('renders contradictions with backend-authored evidence and resolution guidance', () => {
@@ -241,24 +247,26 @@ describe('operational context assimilation panel rendering characterization', ()
     const panel = screen.getByRole('heading', { name: 'Decision Contradictions' }).closest('div')
 
     expect(panel).not.toBeNull()
-    expect(within(panel as HTMLElement).getByText('Critical')).toBeInTheDocument()
-    expect(within(panel as HTMLElement).getByText('DirectNegation')).toBeInTheDocument()
-    expect(within(panel as HTMLElement).getByText('contradiction-dec-1-dec-4')).toBeInTheDocument()
+    expect(within(panel as HTMLElement).getAllByText('Critical').length).toBeGreaterThan(0)
+    expect(within(panel as HTMLElement).getAllByText('DirectNegation').length).toBeGreaterThan(0)
+    expect(within(panel as HTMLElement).getAllByText('contradiction-dec-1-dec-4').length).toBeGreaterThan(0)
+    expect(within(panel as HTMLElement).getByRole('heading', { name: 'Contradiction Evidence' })).toBeInTheDocument()
+    expect(within(panel as HTMLElement).getByRole('heading', { name: 'Contradiction Diagnostics' })).toBeInTheDocument()
     expect(
-      within(panel as HTMLElement).getByText(
+      within(panel as HTMLElement).getAllByText(
         'DEC-0001: Backend continuity services own operational context promotion because hidden memory is not authoritative.',
-      ),
-    ).toBeInTheDocument()
+      ).length,
+    ).toBeGreaterThan(0)
     expect(
-      within(panel as HTMLElement).getByText(
+      within(panel as HTMLElement).getAllByText(
         'DEC-0004: React owns operational context promotion because it can render review status.',
-      ),
-    ).toBeInTheDocument()
+      ).length,
+    ).toBeGreaterThan(0)
     expect(
-      within(panel as HTMLElement).getByText(
+      within(panel as HTMLElement).getAllByText(
         'Resolve the authority conflict before assimilating either operational statement.',
-      ),
-    ).toBeInTheDocument()
+      ).length,
+    ).toBeGreaterThan(0)
     expect(
       within(panel as HTMLElement).getByText(
         'DEC-0001 assigns promotion authority to backend continuity services.',

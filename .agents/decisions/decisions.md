@@ -2,55 +2,46 @@
 
 ## Newly Authorized
 
-- Treat the Continuity / Operational Context explainability migration as the completion of the last major semantic-domain migration into the shared explainability layer for Milestone 8.
-- Continue treating Continuity adapters as presentation-only translation layers. They may reorganize backend projections for compression, semantic diff, operational evolution, diagnostics, repeated signals, warnings, reports, and operational-context facts, but must not derive continuity semantics.
-- Preserve backend semantic ownership for Continuity / Operational Context:
-  - compression outcomes,
-  - semantic identity,
-  - lifecycle interpretation,
-  - diagnostics,
-  - operational evolution,
-  - review state,
-  - promotion evidence,
-  - assimilation status,
-  - taxonomy classification,
-  - contradiction meaning,
-  - context quality,
-  - continuity risk.
-- Keep navigation-specific affordances, including inline warning buttons, separate from shared explainability primitives until the lifecycle/review migration has enough context to unify them safely.
-- Continue classifying the Vite large-chunk warning as a build/product optimization concern rather than a Milestone 8 architecture blocker.
-- Recognize the shared explainability layer as validated across every major semantic domain:
+- Stop Milestone 8 feature migration and shift the milestone into validation/audit.
+- Treat the shared explainability layer as propagated through the major application domains:
   - Workflow,
   - Governance,
   - Decisions,
   - Execution,
   - Reasoning,
   - Continuity / Operational Context.
-- Complete the remaining operational-context lifecycle and review explainability migration before performing the Milestone 8 audit.
-- Migrate the remaining operational-context surfaces in this order:
-  - proposal status,
-  - review,
-  - promotion evidence,
-  - decision assimilation,
-  - taxonomy basis,
-  - assimilation limits,
-  - consequences,
-  - contradictions,
-  - current/proposal summary panels.
-- Add preservation tests for the remaining operational-context migration proving React does not derive:
-  - review state,
-  - promotion eligibility,
-  - assimilation status,
-  - contradiction meaning,
-  - taxonomy classification,
-  - lifecycle outcome,
-  - context quality,
-  - continuity risk.
-- After those surfaces are migrated, run a dedicated Milestone 8 adapter audit before declaring the milestone complete.
-- The Milestone 8 adapter audit should verify:
-  - every explainability surface routes through shared presentation primitives,
-  - no adapter computes domain semantics,
-  - adapters preserve authoritative evidence, diagnostics, constraints, uncertainty, findings, and actions,
-  - no legacy domain-specific explainability component remains except where intentionally retained for Milestone 9 layout work,
-  - shared components have not accumulated hidden domain-specific behavior.
-- Use the completed audit as the transition point into Milestone 9 product cohesion work.
+- Treat the remaining Milestone 8 work as verification rather than further migration unless the audit finds non-intentional gaps.
+- Run the Milestone 8 audit around four questions:
+  - coverage audit,
+  - authority audit,
+  - preservation audit,
+  - UI audit.
+- During the coverage audit, identify remaining bespoke explainability components and classify each as:
+  - intentional,
+  - compatibility,
+  - retire.
+- During the authority audit, verify adapters are projection-only and do not compute:
+  - lifecycle,
+  - eligibility,
+  - confidence,
+  - quality,
+  - burden,
+  - taxonomy,
+  - certification,
+  - governance,
+  - continuity,
+  - execution outcomes.
+- During the preservation audit, verify adapters preserve:
+  - evidence,
+  - diagnostics,
+  - constraints,
+  - uncertainty,
+  - findings,
+  - actions,
+  - alternatives,
+  - provenance,
+  - review evidence.
+- During the UI audit, run the complete characterization suite, verify no remaining domain-specific rendering paths remain where shared components should be used, and update the Milestone 8 exit checklist with audit results.
+- Treat interaction-specific affordances, including inline continuity warning navigation, as intentional exceptions when they are product-navigation concerns deferred to Milestone 9.
+- If the audit finds only intentional exceptions, close Milestone 8 without another feature-migration round.
+- Let Milestone 9 shift emphasis from explanation rendering mechanics to product cohesion: information density, layout, navigation, terminology, and user experience while preserving Milestone 1-8 authority boundaries.

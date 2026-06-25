@@ -128,14 +128,18 @@ describe('operational context proposal status panel rendering characterization',
       />,
     )
 
-    expect(screen.getByText('Review blocked: Baseline context changed.')).toBeInTheDocument()
-    expect(screen.getByText('Promotion archive failed: Archive path already exists.')).toBeInTheDocument()
-    expect(screen.getByText('Promotion write failed: Current context is locked.')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Proposal Lifecycle Diagnostics' })).toBeInTheDocument()
+    expect(screen.getByText('Review blocked')).toBeInTheDocument()
+    expect(screen.getByText('Baseline context changed.')).toBeInTheDocument()
+    expect(screen.getByText('Promotion archive failed')).toBeInTheDocument()
+    expect(screen.getByText('Archive path already exists.')).toBeInTheDocument()
+    expect(screen.getByText('Promotion write failed')).toBeInTheDocument()
+    expect(screen.getByText('Current context is locked.')).toBeInTheDocument()
 
     rerender(<OperationalContextProposalStatusPanel proposal={createProposal()} />)
 
-    expect(screen.queryByText(/Review blocked:/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/Promotion archive failed:/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/Promotion write failed:/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Review blocked')).not.toBeInTheDocument()
+    expect(screen.queryByText('Promotion archive failed')).not.toBeInTheDocument()
+    expect(screen.queryByText('Promotion write failed')).not.toBeInTheDocument()
   })
 })

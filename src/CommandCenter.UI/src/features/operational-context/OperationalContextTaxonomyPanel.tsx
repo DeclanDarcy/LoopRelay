@@ -1,3 +1,11 @@
+import {
+  DiagnosticList,
+  EvidenceList,
+} from '../../components/explainability'
+import {
+  decisionTaxonomyBasisToDiagnostics,
+  decisionTaxonomyBasisToEvidence,
+} from '../../lib/explainability'
 import type { DecisionAssimilationProjection } from '../../types'
 
 type OperationalContextTaxonomyPanelProps = {
@@ -34,34 +42,18 @@ export function OperationalContextTaxonomyPanel({
             {decision.taxonomyBasis.fallbackReason ? (
               <p>{decision.taxonomyBasis.fallbackReason}</p>
             ) : null}
-            <TaxonomyList title="Matched rules" items={decision.taxonomyBasis.matchedRules} />
-            <TaxonomyList title="Matched evidence" items={decision.taxonomyBasis.matchedEvidence} />
-            <TaxonomyList title="Diagnostics" items={decision.taxonomyBasis.diagnostics} />
+            <EvidenceList
+              title="Taxonomy Evidence"
+              evidence={decisionTaxonomyBasisToEvidence(decision.decisionId, decision.taxonomyBasis)}
+            />
+            <DiagnosticList
+              title="Taxonomy Diagnostics"
+              diagnostics={decisionTaxonomyBasisToDiagnostics(decision.taxonomyBasis)}
+              emptyLabel="No taxonomy diagnostics projected."
+            />
           </li>
         ))}
       </ul>
     </div>
-  )
-}
-
-type TaxonomyListProps = {
-  title: string
-  items: string[]
-}
-
-function TaxonomyList({ title, items }: TaxonomyListProps) {
-  if (items.length === 0) {
-    return null
-  }
-
-  return (
-    <>
-      <h6>{title}</h6>
-      <ul className="assimilation-detail-list" aria-label={`Taxonomy ${title.toLowerCase()}`}>
-        {items.map((item) => (
-          <li key={item}>{item}</li>
-        ))}
-      </ul>
-    </>
   )
 }

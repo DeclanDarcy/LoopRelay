@@ -1,3 +1,5 @@
+import { EvidenceList } from '../../components/explainability'
+import { continuityDecisionConsequenceToEvidence } from '../../lib/explainability'
 import type { DecisionAssimilationProjection } from '../../types'
 
 type OperationalContextConsequencePanelProps = {
@@ -37,13 +39,10 @@ export function OperationalContextConsequencePanel({
                 <dd>{consequence.operationalImpact}</dd>
               </div>
             </dl>
-            {consequence.supportingEvidence.length > 0 ? (
-              <ul className="assimilation-detail-list" aria-label="Consequence evidence">
-                {consequence.supportingEvidence.map((evidence) => (
-                  <li key={evidence}>{evidence}</li>
-                ))}
-              </ul>
-            ) : null}
+            <EvidenceList
+              title="Consequence Evidence"
+              evidence={continuityDecisionConsequenceToEvidence(consequence)}
+            />
           </li>
         ))}
       </ul>
