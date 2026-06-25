@@ -1,8 +1,28 @@
+import type { OperationalContextSemanticChange } from './operationalContext'
+
 export type ContinuityTrend = {
   addedCount: number
+  modifiedCount: number
   removedCount: number
   resolvedCount: number
   lostCount: number
+}
+
+export type ContinuityDiagnosticGroup = {
+  category: string
+  title: string
+  diagnostics: string[]
+}
+
+export type OperationalEvolutionSummary = {
+  addedCount: number
+  modifiedCount: number
+  removedCount: number
+  preservedCount: number
+  lostCount: number
+  resolvedCount: number
+  semanticChanges: OperationalContextSemanticChange[]
+  diagnosticGroups: ContinuityDiagnosticGroup[]
 }
 
 export type CompressionTrend = {
@@ -24,6 +44,7 @@ export type ContinuityDiagnostics = {
   currentContextCharacterCount: number
   contextByteGrowth: number
   averageBytesPerRevision: number
+  operationalEvolution: OperationalEvolutionSummary
   architectureTrend: ContinuityTrend
   constraintTrend: ContinuityTrend
   decisionTrend: ContinuityTrend
@@ -35,6 +56,7 @@ export type ContinuityDiagnostics = {
   repeatedQuestionIndicators: string[]
   decisionReworkIndicators: string[]
   continuityWarnings: string[]
+  diagnosticGroups: ContinuityDiagnosticGroup[]
 }
 
 export type ContinuityReport = {

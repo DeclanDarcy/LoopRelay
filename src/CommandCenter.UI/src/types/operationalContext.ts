@@ -54,6 +54,11 @@ export type OperationalContextSemanticChange = {
   section: string
   description: string
   itemId: string | null
+  previousState: string | null
+  currentState: string | null
+  modificationReason: string | null
+  identityBasis: string | null
+  supportingEvidence: string[]
 }
 
 export type OperationalContextCompressionSummary = {

@@ -11,6 +11,7 @@ public sealed class ContinuityDiagnosticsService(
     IArtifactService artifactService,
     IArtifactStore artifactStore,
     IOperationalContextParser parser,
+    IUnderstandingDiffService diffService,
     IOperationalContextProposalStore proposalStore) : IContinuityDiagnosticsService
 {
     public async Task<ContinuityDiagnostics> GetDiagnosticsAsync(Guid repositoryId)
@@ -29,6 +30,8 @@ public sealed class ContinuityDiagnosticsService(
         var warnings = new List<string>();
         warnings.AddRange(proposals.SelectMany(proposal => proposal.CompressionSummary.Warnings));
         warnings.AddRange(proposals.SelectMany(proposal => proposal.CompressionSummary.StableUnderstandingRetentionWarnings));
+        OperationalEvolutionSummary operationalEvolution = BuildOperationalEvolution(revisions);
+        IReadOnlyList<ContinuityDiagnosticGroup> diagnosticGroups = BuildDiagnosticGroups(operationalEvolution, proposals);
 
         return new ContinuityDiagnostics
         {
@@ -41,12 +44,23 @@ public sealed class ContinuityDiagnosticsService(
             AverageBytesPerRevision = ledger.Revisions.Count == 0 ? 0 : ledger.Revisions.Average(revision => revision.ByteCount),
             RevisionFrequency = CalculateRevisionFrequency(ledger.Revisions),
             EvolutionLedger = ledger,
-            ArchitectureTrend = CompareItems(revisions, document => document.Architecture),
-            ConstraintTrend = CompareItems(revisions, document => document.Constraints),
-            DecisionTrend = CompareItems(revisions, document => document.StableDecisions),
-            RationaleTrend = CompareItems(revisions, document => document.DecisionRationale),
-            OpenQuestionTrend = CompareQuestions(revisions),
-            ActiveRiskTrend = CompareRisks(revisions),
+            OperationalEvolution = operationalEvolution,
+            ArchitectureTrend = BuildTrend(operationalEvolution.SemanticChanges, "Architecture"),
+            ConstraintTrend = BuildTrend(operationalEvolution.SemanticChanges, "Constraints"),
+            DecisionTrend = BuildTrend(operationalEvolution.SemanticChanges, "Stable Decisions"),
+            RationaleTrend = BuildTrend(operationalEvolution.SemanticChanges, "Decision Rationale"),
+            OpenQuestionTrend = BuildActiveTrend(
+                operationalEvolution.SemanticChanges,
+                revisions,
+                "Open Questions",
+                document => document.OpenQuestions,
+                "resolved question"),
+            ActiveRiskTrend = BuildActiveTrend(
+                operationalEvolution.SemanticChanges,
+                revisions,
+                "Active Risks",
+                document => document.ActiveRisks,
+                "retired risk"),
             CompressionTrend = BuildCompressionTrend(proposals),
             RepeatedInvestigationIndicators = FindRepeatedIndicators(
                 revisions,
@@ -61,7 +75,8 @@ public sealed class ContinuityDiagnosticsService(
                 .Where(warning => !string.IsNullOrWhiteSpace(warning))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Order(StringComparer.OrdinalIgnoreCase)
-                .ToArray()
+                .ToArray(),
+            DiagnosticGroups = diagnosticGroups
         };
     }
 
@@ -121,49 +136,69 @@ public sealed class ContinuityDiagnosticsService(
         return entries;
     }
 
-    private static ContinuityTrend CompareItems(
-        IReadOnlyList<RevisionEntry> revisions,
-        Func<OperationalContextDocument, IEnumerable<OperationalContextItem>> getItems)
+    private OperationalEvolutionSummary BuildOperationalEvolution(IReadOnlyList<RevisionEntry> revisions)
     {
         if (revisions.Count < 2)
         {
-            return new ContinuityTrend();
+            return new OperationalEvolutionSummary
+            {
+                DiagnosticGroups =
+                [
+                    new ContinuityDiagnosticGroup
+                    {
+                        Category = "evolution",
+                        Title = "Operational evolution",
+                        Diagnostics = ["At least two operational-context revisions are required to compare evolution."]
+                    }
+                ]
+            };
         }
 
-        HashSet<string> previous = ToNormalizedSet(getItems(revisions[^2].Document));
-        HashSet<string> current = ToNormalizedSet(getItems(revisions[^1].Document));
+        IReadOnlyList<OperationalContextSemanticChange> changes = diffService.Compare(revisions[^2].Document, revisions[^1].Document);
+        int resolvedCount = CountResolved(changes) + CountResolutionEvidence(revisions, "resolved question") + CountResolutionEvidence(revisions, "retired risk");
+        int removedCount = changes.Count(IsRemovedChange);
+        OperationalEvolutionSummary summary = new()
+        {
+            AddedCount = changes.Count(IsAddedChange),
+            ModifiedCount = changes.Count(IsModifiedChange),
+            RemovedCount = removedCount,
+            PreservedCount = CountPreservedItems(revisions[^2].Document, revisions[^1].Document),
+            LostCount = Math.Max(0, removedCount - resolvedCount),
+            ResolvedCount = resolvedCount,
+            SemanticChanges = changes,
+            DiagnosticGroups = BuildOperationalEvolutionDiagnosticGroups(changes, removedCount, resolvedCount)
+        };
+        return summary;
+    }
+
+    private static ContinuityTrend BuildTrend(
+        IReadOnlyList<OperationalContextSemanticChange> changes,
+        string section)
+    {
+        OperationalContextSemanticChange[] sectionChanges = changes
+            .Where(change => string.Equals(change.Section, section, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        int removedCount = sectionChanges.Count(IsRemovedChange);
         return new ContinuityTrend
         {
-            AddedCount = current.Except(previous, StringComparer.OrdinalIgnoreCase).Count(),
-            RemovedCount = previous.Except(current, StringComparer.OrdinalIgnoreCase).Count(),
-            LostCount = previous.Except(current, StringComparer.OrdinalIgnoreCase).Count()
+            AddedCount = sectionChanges.Count(IsAddedChange),
+            ModifiedCount = sectionChanges.Count(IsModifiedChange),
+            RemovedCount = removedCount,
+            LostCount = removedCount
         };
     }
 
-    private static ContinuityTrend CompareQuestions(IReadOnlyList<RevisionEntry> revisions)
-    {
-        return CompareActiveItemsWithResolutionEvidence(
-            revisions,
-            document => document.OpenQuestions,
-            "resolved question");
-    }
-
-    private static ContinuityTrend CompareRisks(IReadOnlyList<RevisionEntry> revisions)
-    {
-        return CompareActiveItemsWithResolutionEvidence(
-            revisions,
-            document => document.ActiveRisks,
-            "retired risk");
-    }
-
-    private static ContinuityTrend CompareActiveItemsWithResolutionEvidence(
+    private static ContinuityTrend BuildActiveTrend(
+        IReadOnlyList<OperationalContextSemanticChange> changes,
         IReadOnlyList<RevisionEntry> revisions,
+        string section,
         Func<OperationalContextDocument, IEnumerable<OperationalContextItem>> getItems,
         string resolutionPrefix)
     {
+        ContinuityTrend trend = BuildTrend(changes, section);
         if (revisions.Count < 2)
         {
-            return new ContinuityTrend();
+            return trend;
         }
 
         HashSet<string> previous = ToNormalizedSet(getItems(revisions[^2].Document));
@@ -174,10 +209,11 @@ public sealed class ContinuityDiagnosticsService(
         int resolved = removed.Count(item => resolutionEvidence.Any(evidence => evidence.Contains(item, StringComparison.OrdinalIgnoreCase)));
         return new ContinuityTrend
         {
-            AddedCount = current.Except(previous, StringComparer.OrdinalIgnoreCase).Count(),
-            RemovedCount = removed.Length,
+            AddedCount = trend.AddedCount,
+            ModifiedCount = trend.ModifiedCount,
+            RemovedCount = trend.RemovedCount,
             ResolvedCount = resolved,
-            LostCount = removed.Length - resolved
+            LostCount = Math.Max(0, trend.RemovedCount - resolved)
         };
     }
 
@@ -255,6 +291,148 @@ public sealed class ContinuityDiagnosticsService(
         }
 
         return string.Join(' ', normalized.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    private static IReadOnlyList<ContinuityDiagnosticGroup> BuildDiagnosticGroups(
+        OperationalEvolutionSummary operationalEvolution,
+        IReadOnlyList<OperationalContextProposal> proposals)
+    {
+        var groups = new List<ContinuityDiagnosticGroup>();
+        groups.AddRange(operationalEvolution.DiagnosticGroups);
+
+        string[] compressionDiagnostics =
+        [
+            $"Proposal count: {proposals.Count}.",
+            $"Compressed item count: {proposals.Sum(proposal => proposal.CompressionSummary.CompressedItemCount)}.",
+            $"Removed item count: {proposals.Sum(proposal => proposal.CompressionSummary.RemovedItemCount)}."
+        ];
+        groups.Add(new ContinuityDiagnosticGroup
+        {
+            Category = "compression",
+            Title = "Compression diagnostics",
+            Diagnostics = compressionDiagnostics
+        });
+
+        return groups;
+    }
+
+    private static IReadOnlyList<ContinuityDiagnosticGroup> BuildOperationalEvolutionDiagnosticGroups(
+        IReadOnlyList<OperationalContextSemanticChange> changes,
+        int removedCount,
+        int resolvedCount)
+    {
+        var groups = new List<ContinuityDiagnosticGroup>
+        {
+            new()
+            {
+                Category = "evolution",
+                Title = "Operational evolution",
+                Diagnostics =
+                [
+                    $"Added item count: {changes.Count(IsAddedChange)}.",
+                    $"Modified item count: {changes.Count(IsModifiedChange)}.",
+                    $"Removed item count: {removedCount}.",
+                    $"Resolved item count: {resolvedCount}."
+                ]
+            },
+            new()
+            {
+                Category = "diff",
+                Title = "Semantic diff",
+                Diagnostics = changes.Count == 0
+                    ? ["No semantic changes detected between the latest operational-context revisions."]
+                    : changes.Select(change => $"{change.Type} in {change.Section}: {change.Description}").ToArray()
+            }
+        };
+
+        foreach (OperationalContextSemanticChange change in changes.Where(IsModifiedChange))
+        {
+            var diagnostics = new List<string>
+            {
+                $"Section: {change.Section}.",
+                $"Item id: {change.ItemId}.",
+                $"Identity basis: {change.IdentityBasis}.",
+                $"Previous state: {change.PreviousState}.",
+                $"Current state: {change.CurrentState}.",
+                $"Modification reason: {change.ModificationReason}."
+            };
+            diagnostics.AddRange(change.SupportingEvidence.Select(evidence => $"Supporting evidence: {evidence}"));
+            groups.Add(new ContinuityDiagnosticGroup
+            {
+                Category = "evolution",
+                Title = "Modified operational-context item",
+                Diagnostics = diagnostics
+            });
+        }
+
+        return groups;
+    }
+
+    private static int CountResolutionEvidence(IReadOnlyList<RevisionEntry> revisions, string resolutionPrefix)
+    {
+        if (revisions.Count < 2)
+        {
+            return 0;
+        }
+
+        return revisions[^1].Document.RecentUnderstandingChanges.Count(item =>
+            item.Text.StartsWith(resolutionPrefix, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static int CountResolved(IReadOnlyList<OperationalContextSemanticChange> changes)
+    {
+        return changes.Count(change => change.Type == Primitives.OperationalContextSemanticChangeType.OpenDecisionResolved);
+    }
+
+    private static int CountPreservedItems(OperationalContextDocument previous, OperationalContextDocument current)
+    {
+        HashSet<string> previousItems = ToNormalizedSet(EnumerateKnownItems(previous));
+        HashSet<string> currentItems = ToNormalizedSet(EnumerateKnownItems(current));
+        return previousItems.Intersect(currentItems, StringComparer.OrdinalIgnoreCase).Count();
+    }
+
+    private static IEnumerable<OperationalContextItem> EnumerateKnownItems(OperationalContextDocument document)
+    {
+        return document.CurrentMentalModel
+            .Concat(document.Architecture)
+            .Concat(document.AuthorityBoundaries)
+            .Concat(document.Constraints)
+            .Concat(document.StableDecisions)
+            .Concat(document.DecisionRationale)
+            .Concat(document.OpenQuestions)
+            .Concat(document.ActiveRisks)
+            .Concat(document.RecentUnderstandingChanges);
+    }
+
+    private static bool IsAddedChange(OperationalContextSemanticChange change)
+    {
+        return change.Type is
+            Primitives.OperationalContextSemanticChangeType.ItemAdded or
+            Primitives.OperationalContextSemanticChangeType.ConstraintAdded or
+            Primitives.OperationalContextSemanticChangeType.QuestionAdded or
+            Primitives.OperationalContextSemanticChangeType.RiskAdded or
+            Primitives.OperationalContextSemanticChangeType.DecisionAdded or
+            Primitives.OperationalContextSemanticChangeType.ImportantDecisionIntroduced;
+    }
+
+    private static bool IsModifiedChange(OperationalContextSemanticChange change)
+    {
+        return change.Type is
+            Primitives.OperationalContextSemanticChangeType.ItemChanged or
+            Primitives.OperationalContextSemanticChangeType.SectionChanged;
+    }
+
+    private static bool IsRemovedChange(OperationalContextSemanticChange change)
+    {
+        return change.Type is
+            Primitives.OperationalContextSemanticChangeType.ItemRemoved or
+            Primitives.OperationalContextSemanticChangeType.ConstraintRemoved or
+            Primitives.OperationalContextSemanticChangeType.QuestionRemoved or
+            Primitives.OperationalContextSemanticChangeType.RiskRemoved or
+            Primitives.OperationalContextSemanticChangeType.DecisionRemoved or
+            Primitives.OperationalContextSemanticChangeType.DecisionRetired or
+            Primitives.OperationalContextSemanticChangeType.RationaleLostWarning or
+            Primitives.OperationalContextSemanticChangeType.OpenDecisionResolved;
     }
 
     private static TimeSpan? CalculateRevisionFrequency(IReadOnlyList<UnderstandingRevisionSnapshot> revisions)

@@ -4147,6 +4147,11 @@ function generateOperationalContextProposal(
         section: 'Constraints',
         description: 'Item added to Constraints: Generated proposals do not mutate current operational context.',
         itemId: 'mock-constraint',
+        previousState: null,
+        currentState: null,
+        modificationReason: null,
+        identityBasis: null,
+        supportingEvidence: [],
       },
     ],
     compressionSummary: {
@@ -4262,6 +4267,11 @@ function editOperationalContextProposal(
       section: 'Operational Context',
       description: 'Reviewer-edited proposal content.',
       itemId: null,
+      previousState: null,
+      currentState: null,
+      modificationReason: null,
+      identityBasis: null,
+      supportingEvidence: [],
     },
   ]
   proposal.compressionSummary = {
@@ -4375,6 +4385,7 @@ function promoteOperationalContextProposal(
 function zeroTrend(): ContinuityTrend {
   return {
     addedCount: 0,
+    modifiedCount: 0,
     removedCount: 0,
     resolvedCount: 0,
     lostCount: 0,
@@ -4402,12 +4413,23 @@ function getContinuityDiagnostics(state: MockState, repositoryId: string): Conti
     currentContextCharacterCount: content.length,
     contextByteGrowth: workspace.artifactInventory.historicalOperationalContexts.length > 0 ? 128 : 0,
     averageBytesPerRevision: content.length,
+    operationalEvolution: {
+      addedCount: 0,
+      modifiedCount: 0,
+      removedCount: 0,
+      preservedCount: 0,
+      lostCount: 0,
+      resolvedCount: 0,
+      semanticChanges: [],
+      diagnosticGroups: [],
+    },
     architectureTrend: zeroTrend(),
     constraintTrend: zeroTrend(),
     decisionTrend: zeroTrend(),
     rationaleTrend: zeroTrend(),
     openQuestionTrend: {
       addedCount: workspace.operationalContext.openQuestions.length,
+      modifiedCount: 0,
       removedCount: 0,
       resolvedCount: proposals.reduce(
         (count, proposal) => count + proposal.compressionSummary.resolvedQuestionCount,
@@ -4417,6 +4439,7 @@ function getContinuityDiagnostics(state: MockState, repositoryId: string): Conti
     },
     activeRiskTrend: {
       addedCount: workspace.operationalContext.activeRisks.length,
+      modifiedCount: 0,
       removedCount: 0,
       resolvedCount: proposals.reduce(
         (count, proposal) => count + proposal.compressionSummary.retiredRiskCount,
@@ -4452,6 +4475,7 @@ function getContinuityDiagnostics(state: MockState, repositoryId: string): Conti
     repeatedQuestionIndicators: [],
     decisionReworkIndicators: [],
     continuityWarnings: warnings,
+    diagnosticGroups: [],
   }
 }
 

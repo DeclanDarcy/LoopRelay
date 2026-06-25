@@ -20,39 +20,55 @@ function createDiagnostics(
     averageBytesPerRevision: 80.6,
     architectureTrend: {
       addedCount: 0,
+      modifiedCount: 0,
       removedCount: 0,
       resolvedCount: 0,
       lostCount: 1,
     },
     constraintTrend: {
       addedCount: 0,
+      modifiedCount: 0,
       removedCount: 0,
       resolvedCount: 0,
       lostCount: 2,
     },
     decisionTrend: {
       addedCount: 3,
+      modifiedCount: 0,
       removedCount: 4,
       resolvedCount: 0,
       lostCount: 5,
     },
     rationaleTrend: {
       addedCount: 0,
+      modifiedCount: 0,
       removedCount: 0,
       resolvedCount: 0,
       lostCount: 6,
     },
     openQuestionTrend: {
       addedCount: 15,
+      modifiedCount: 0,
       removedCount: 0,
       resolvedCount: 7,
       lostCount: 8,
     },
     activeRiskTrend: {
       addedCount: 16,
+      modifiedCount: 0,
       removedCount: 0,
       resolvedCount: 9,
       lostCount: 10,
+    },
+    operationalEvolution: {
+      addedCount: 0,
+      modifiedCount: 0,
+      removedCount: 0,
+      preservedCount: 0,
+      lostCount: 0,
+      resolvedCount: 0,
+      semanticChanges: [],
+      diagnosticGroups: [],
     },
     compressionTrend: {
       proposalCount: 11,
@@ -68,6 +84,7 @@ function createDiagnostics(
     repeatedQuestionIndicators: ['Question repeated'],
     decisionReworkIndicators: ['Decision reworked'],
     continuityWarnings: ['Decision rationale may be lost'],
+    diagnosticGroups: [],
     ...overrides,
   }
 }

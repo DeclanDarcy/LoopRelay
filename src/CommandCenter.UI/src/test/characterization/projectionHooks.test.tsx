@@ -403,6 +403,7 @@ function createGitStatus(branch = 'main'): RepositoryGitStatus {
 function createContinuityDiagnostics(repositoryId = 'repo-alpha'): ContinuityDiagnostics {
   const emptyTrend = {
     addedCount: 0,
+    modifiedCount: 0,
     removedCount: 0,
     resolvedCount: 0,
     lostCount: 0,
@@ -416,6 +417,16 @@ function createContinuityDiagnostics(repositoryId = 'repo-alpha'): ContinuityDia
     currentContextCharacterCount: 900,
     contextByteGrowth: 128,
     averageBytesPerRevision: 512,
+    operationalEvolution: {
+      addedCount: 0,
+      modifiedCount: 0,
+      removedCount: 0,
+      preservedCount: 0,
+      lostCount: 0,
+      resolvedCount: 0,
+      semanticChanges: [],
+      diagnosticGroups: [],
+    },
     architectureTrend: emptyTrend,
     constraintTrend: emptyTrend,
     decisionTrend: emptyTrend,
@@ -436,6 +447,7 @@ function createContinuityDiagnostics(repositoryId = 'repo-alpha'): ContinuityDia
     repeatedQuestionIndicators: [],
     decisionReworkIndicators: [],
     continuityWarnings: [],
+    diagnosticGroups: [],
   }
 }
 

@@ -2,6 +2,7 @@ using CommandCenter.Core.Artifacts;
 using CommandCenter.Core.Configuration;
 using CommandCenter.Continuity;
 using CommandCenter.Continuity.Models;
+using CommandCenter.Continuity.Primitives;
 using CommandCenter.Continuity.Services;
 using CommandCenter.Core.Repositories;
 
@@ -72,6 +73,51 @@ public sealed class ContinuityDiagnosticsServiceTests
         Assert.Equal(1, diagnostics.ConstraintTrend.LostCount);
         Assert.Equal(1, diagnostics.DecisionTrend.LostCount);
         Assert.Equal(1, diagnostics.RationaleTrend.LostCount);
+    }
+
+    [Fact]
+    public async Task IdentityAwareModificationsAreProjectedThroughEvolutionDiagnostics()
+    {
+        Harness harness = await CreateHarnessAsync();
+        await WriteAsync(harness.Repository, ".agents/operational_context.0001.md", """
+            # Operational Context
+
+            ## Constraints
+
+            - Backend workflow projection must own operational lifecycle status.
+            """);
+        await WriteAsync(harness.Repository, ".agents/operational_context.md", """
+            # Operational Context
+
+            ## Constraints
+
+            - Backend workflow projection must own operational lifecycle status, gate evidence, and recovery hints.
+            """);
+
+        ContinuityDiagnostics diagnostics = await harness.DiagnosticsService.GetDiagnosticsAsync(harness.Repository.Id);
+
+        Assert.Equal(1, diagnostics.OperationalEvolution.ModifiedCount);
+        Assert.Equal(1, diagnostics.ConstraintTrend.ModifiedCount);
+        Assert.Equal(0, diagnostics.ConstraintTrend.AddedCount);
+        Assert.Equal(0, diagnostics.ConstraintTrend.RemovedCount);
+        OperationalContextSemanticChange change = Assert.Single(
+            diagnostics.OperationalEvolution.SemanticChanges,
+            change => change.Type == OperationalContextSemanticChangeType.ItemChanged);
+        Assert.Equal("section-semantic-lineage", change.IdentityBasis);
+        Assert.Equal("Backend workflow projection must own operational lifecycle status.", change.PreviousState);
+        Assert.Equal("Backend workflow projection must own operational lifecycle status, gate evidence, and recovery hints.", change.CurrentState);
+        Assert.Contains(change.SupportingEvidence, evidence =>
+            evidence.Contains("Semantic lineage key", StringComparison.OrdinalIgnoreCase));
+        ContinuityDiagnosticGroup modificationGroup = Assert.Single(
+            diagnostics.DiagnosticGroups,
+            group => group.Title == "Modified operational-context item");
+        Assert.Contains("Identity basis: section-semantic-lineage.", modificationGroup.Diagnostics);
+        Assert.Contains(modificationGroup.Diagnostics, diagnostic =>
+            diagnostic.Contains("Previous state: Backend workflow projection must own operational lifecycle status.", StringComparison.Ordinal));
+        Assert.Contains(modificationGroup.Diagnostics, diagnostic =>
+            diagnostic.Contains("Current state: Backend workflow projection must own operational lifecycle status, gate evidence, and recovery hints.", StringComparison.Ordinal));
+        Assert.Contains(modificationGroup.Diagnostics, diagnostic =>
+            diagnostic.Contains("Supporting evidence: Semantic lineage key", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -222,6 +268,39 @@ public sealed class ContinuityDiagnosticsServiceTests
     }
 
     [Fact]
+    public async Task ReportGenerationPersistsStructuredModificationDiagnostics()
+    {
+        Harness harness = await CreateHarnessAsync();
+        await WriteAsync(harness.Repository, ".agents/operational_context.0001.md", """
+            # Operational Context
+
+            ## Constraints
+
+            - Backend workflow projection must own operational lifecycle status.
+            """);
+        await WriteAsync(harness.Repository, ".agents/operational_context.md", """
+            # Operational Context
+
+            ## Constraints
+
+            - Backend workflow projection must own operational lifecycle status and gate evidence.
+            """);
+
+        ContinuityReport report = await harness.ReportService.GenerateReportAsync(harness.Repository.Id);
+        IReadOnlyList<ContinuityReport> reports = await harness.ReportService.ListReportsAsync(harness.Repository.Id);
+
+        ContinuityReport listed = Assert.Single(reports);
+        Assert.Equal(report.ReportId, listed.ReportId);
+        Assert.Equal(1, listed.Diagnostics.OperationalEvolution.ModifiedCount);
+        Assert.Contains(listed.Diagnostics.DiagnosticGroups, group =>
+            group.Title == "Operational evolution" &&
+            group.Diagnostics.Contains("Modified item count: 1."));
+        Assert.Contains(listed.Diagnostics.DiagnosticGroups, group =>
+            group.Title == "Modified operational-context item" &&
+            group.Diagnostics.Any(diagnostic => diagnostic.Contains("Identity basis: section-semantic-lineage.", StringComparison.Ordinal)));
+    }
+
+    [Fact]
     public async Task ReportListingSkipsCorruptReportArtifacts()
     {
         Harness harness = await CreateHarnessAsync();
@@ -252,6 +331,7 @@ public sealed class ContinuityDiagnosticsServiceTests
             artifactService,
             artifactStore,
             parser,
+            new UnderstandingDiffService(),
             proposalStore);
         var reportService = new ContinuityReportService(
             repositoryService,

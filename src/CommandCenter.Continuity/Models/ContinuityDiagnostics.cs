@@ -20,6 +20,8 @@ public sealed class ContinuityDiagnostics
 
     public UnderstandingEvolutionLedger EvolutionLedger { get; init; } = new();
 
+    public OperationalEvolutionSummary OperationalEvolution { get; init; } = new();
+
     public ContinuityTrend ArchitectureTrend { get; init; } = new();
 
     public ContinuityTrend ConstraintTrend { get; init; } = new();
@@ -41,4 +43,6 @@ public sealed class ContinuityDiagnostics
     public IReadOnlyList<string> DecisionReworkIndicators { get; init; } = [];
 
     public IReadOnlyList<string> ContinuityWarnings { get; init; } = [];
+
+    public IReadOnlyList<ContinuityDiagnosticGroup> DiagnosticGroups { get; init; } = [];
 }
