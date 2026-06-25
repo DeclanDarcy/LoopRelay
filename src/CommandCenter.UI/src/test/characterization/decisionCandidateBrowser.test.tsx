@@ -102,7 +102,13 @@ describe('DecisionCandidateBrowser', () => {
       />,
     )
 
-    expect(screen.getByLabelText('Candidate lifecycle eligibility')).toHaveTextContent('Dismiss')
+    const interactionSummary = screen.getByLabelText('Candidate interaction summary')
+    expect(interactionSummary).toHaveTextContent('Action subject')
+    expect(interactionSummary).toHaveTextContent('Candidate CAND-0001: Promoted')
+    expect(interactionSummary).toHaveTextContent('Action Eligibility')
+    expect(interactionSummary).toHaveTextContent('Dismiss')
+    expect(interactionSummary).toHaveTextContent('Interaction Evidence')
+    expect(interactionSummary).toHaveTextContent('Current state')
     expect(screen.getByText('Transition from Promoted to Promoted is not currently allowed.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Promote Candidate' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Dismiss' })).toBeEnabled()

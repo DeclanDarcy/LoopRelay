@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Badge, EmptyState } from '../../components/design'
+import { InteractionPatternView } from '../../components/explainability'
 import type {
   DecisionCandidate,
   DecisionCandidateState,
   DecisionLifecycleActionEligibility,
   DecisionLifecycleEntityEligibility,
 } from '../../types'
+import {
+  decisionDiagnosticsToExplanation,
+  decisionEvidenceToEvidence,
+  decisionLifecycleEligibilityToActions,
+  decisionSourceReferencesToEvidence,
+} from '../../lib/explainability'
 
 const candidateStateFilters: DecisionCandidateState[] = [
   'Discovered',
@@ -199,7 +206,11 @@ export function DecisionCandidateBrowser({
                 </div>
               </dl>
               {selectedEligibility ? (
-                <LifecycleEligibilityDetails eligibility={selectedEligibility} />
+                <CandidateInteractionSummary
+                  candidate={selectedCandidate}
+                  duplicateOfCandidateId={duplicateOfCandidateId}
+                  eligibility={selectedEligibility}
+                />
               ) : actionsEnabled ? (
                 <div className="decision-lifecycle-notice" role="status">
                   Lifecycle eligibility has not loaded for this candidate.
@@ -324,31 +335,68 @@ function actionTitle(action: DecisionLifecycleActionEligibility | null) {
     : action.reason ?? `${action.displayName} is blocked by ${action.governingRule}.`
 }
 
-function LifecycleEligibilityDetails({ eligibility }: { eligibility: DecisionLifecycleEntityEligibility }) {
+function CandidateInteractionSummary({
+  candidate,
+  duplicateOfCandidateId,
+  eligibility,
+}: {
+  candidate: DecisionCandidate
+  duplicateOfCandidateId: string
+  eligibility: DecisionLifecycleEntityEligibility
+}) {
+  const lastTransition = candidate.history.at(-1)
+  const result = lastTransition
+    ? `${lastTransition.action}: ${lastTransition.fromState ?? 'None'} -> ${lastTransition.toState ?? 'None'}`
+    : 'No candidate lifecycle command result recorded.'
+  const evidence = [
+    {
+      label: 'Current state',
+      detail: `${eligibility.entityKind} ${eligibility.entityId} is ${eligibility.currentState}.`,
+    },
+    {
+      label: 'Candidate priority',
+      detail: candidate.priority,
+    },
+    {
+      label: 'Candidate classification',
+      detail: candidate.classification,
+    },
+    ...eligibility.allowedNextStates.map((state) => ({
+      label: 'Allowed next state',
+      detail: state,
+    })),
+    ...eligibility.blockedNextStates.map((state) => ({
+      label: 'Blocked next state',
+      detail: `${state.state}: ${state.reason}`,
+    })),
+    ...(duplicateOfCandidateId
+      ? [
+          {
+            label: 'Selected duplicate target',
+            detail: duplicateOfCandidateId,
+          },
+        ]
+      : []),
+    ...(lastTransition?.reason
+      ? [
+          {
+            label: 'Last transition reason',
+            detail: lastTransition.reason,
+          },
+        ]
+      : []),
+    ...decisionEvidenceToEvidence(candidate.evidence, 'Candidate evidence'),
+    ...decisionSourceReferencesToEvidence(candidate.sources),
+  ]
+
   return (
-    <div className="decision-lifecycle-eligibility" aria-label="Candidate lifecycle eligibility">
-      <div>
-        <span>Allowed actions</span>
-        <strong>{eligibility.allowedActions.map((action) => action.displayName).join(', ') || 'None'}</strong>
-      </div>
-      {eligibility.blockedActions.length > 0 ? (
-        <ul className="decision-lifecycle-reasons" aria-label="Candidate blocked action reasons">
-          {eligibility.blockedActions.map((action) => (
-            <li key={action.commandName}>
-              <strong>{action.displayName}</strong>
-              <span>{action.reason ?? 'Blocked by backend lifecycle rules.'}</span>
-              <small>{action.governingRule}</small>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {eligibility.diagnostics.length > 0 ? (
-        <ul className="decision-lifecycle-reasons" aria-label="Candidate eligibility diagnostics">
-          {eligibility.diagnostics.map((diagnostic) => (
-            <li key={diagnostic}>{diagnostic}</li>
-          ))}
-        </ul>
-      ) : null}
-    </div>
+    <InteractionPatternView
+      actions={decisionLifecycleEligibilityToActions(eligibility)}
+      diagnostics={decisionDiagnosticsToExplanation(eligibility.diagnostics, 'Candidate lifecycle diagnostic')}
+      evidence={evidence}
+      result={result}
+      subject={`Candidate ${candidate.id}: ${eligibility.currentState}`}
+      title="Candidate interaction summary"
+    />
   )
 }
