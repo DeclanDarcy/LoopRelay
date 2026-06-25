@@ -1,5 +1,10 @@
 import { useMemo } from 'react'
 import { EmptyState } from '../../components/design'
+import { DiagnosticList, EvidenceList } from '../../components/explainability'
+import {
+  decisionDiagnosticsToExplanation,
+  decisionQualitySignalsToDiagnostics,
+} from '../../lib/explainability'
 import { DecisionBurdenExplanation } from './DecisionBurdenExplanation'
 import { DecisionQualityExplanation } from './DecisionQualityExplanation'
 import type {
@@ -124,14 +129,13 @@ export function DecisionQualityPanel({
           ) : null}
 
           {currentReport.diagnostics.length > 0 || currentTrend?.diagnostics.length ? (
-            <div className="decision-warning-list" aria-label="Quality diagnostics">
-              {currentReport.diagnostics.map((diagnostic) => (
-                <span key={`report-${diagnostic}`}>{diagnostic}</span>
-              ))}
-              {currentTrend?.diagnostics.map((diagnostic) => (
-                <span key={`trend-${diagnostic}`}>{diagnostic}</span>
-              ))}
-            </div>
+            <DiagnosticList
+              title="Quality Diagnostics"
+              diagnostics={[
+                ...decisionDiagnosticsToExplanation(currentReport.diagnostics, 'Quality Report'),
+                ...decisionDiagnosticsToExplanation(currentTrend?.diagnostics ?? [], 'Quality Trend'),
+              ]}
+            />
           ) : null}
 
           <div className="decision-inspection-list" aria-label="Priority quality signals">
@@ -237,6 +241,8 @@ export function DecisionQualityPanel({
 }
 
 function QualitySignalCard({ signal }: { signal: DecisionQualitySignal }) {
+  const [diagnostic] = decisionQualitySignalsToDiagnostics([signal])
+
   return (
     <article className="decision-quality-signal">
       <div>
@@ -246,18 +252,7 @@ function QualitySignalCard({ signal }: { signal: DecisionQualitySignal }) {
         <strong>{signal.summary}</strong>
       </div>
       <p>{signal.detail}</p>
-      {signal.sources.length > 0 ? (
-        <ul className="decision-source-list">
-          {signal.sources.map((source, index) => (
-            <li key={`${signal.id}-${source.sourceKind}-${source.relativePath ?? 'none'}-${index}`}>
-              <strong>{source.sourceKind}</strong>
-              {source.relativePath ? <span>{source.relativePath}</span> : null}
-              {source.section ? <span>{source.section}</span> : null}
-              {source.excerpt ? <p>{source.excerpt}</p> : null}
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      <EvidenceList title="Quality Signal Evidence" evidence={diagnostic?.evidence ?? []} />
     </article>
   )
 }

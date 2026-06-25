@@ -3,16 +3,32 @@ import type {
 } from '../../components/explainability'
 import type {
   DecisionCertificationEvidence,
+  DecisionEvidence,
   DecisionEvidenceInspectionItem,
   DecisionGenerationCertificationFinding,
+  DecisionGenerationDiagnostics,
   DecisionGovernanceFinding,
+  DecisionInfluenceStatement,
   DecisionLifecycleEntityEligibility,
+  DecisionOption,
+  DecisionProjectionDecisionDiagnostic,
+  DecisionQualityAssessment,
+  DecisionQualitySignal,
+  DecisionQualitySignalContribution,
+  DecisionRecommendation,
+  HumanAuthoringBurdenExplanation,
+  HumanAuthoringBurdenSignal,
+  RefinementPlan,
   DecisionSourceAttribution,
   DecisionSourceReference,
+  Explanation,
+  ExplanationAlternative,
   ExplanationAction,
+  ExplanationConstraint,
   ExplanationDiagnostic,
   ExplanationEvidence,
   ExplanationTone,
+  ExplanationUncertainty,
 } from '../../types'
 
 function toneFromSeverity(severity: string): ExplanationTone {
@@ -77,6 +93,20 @@ export function decisionSourceAttributionsToEvidence(
     ].filter(Boolean).join(' | '),
     source: source.relativePath,
   }))
+}
+
+export function decisionEvidenceToEvidence(
+  evidence: DecisionEvidence[],
+  label = 'Decision Evidence',
+): ExplanationEvidence[] {
+  return evidence.flatMap((item, index) => [
+    {
+      id: `${label}-${index}`,
+      label,
+      detail: item.summary,
+    },
+    ...decisionSourceReferencesToEvidence(item.sources),
+  ])
 }
 
 export function decisionCertificationEvidenceToFindings(
@@ -144,6 +174,297 @@ export function decisionDiagnosticsToExplanation(
   }))
 }
 
+export function decisionQualitySignalsToDiagnostics(
+  signals: DecisionQualitySignal[],
+): ExplanationDiagnostic[] {
+  return signals.map((signal) => ({
+    label: `${signal.category} / ${signal.direction} / ${signal.severity}`,
+    detail: `${signal.summary}: ${signal.detail}`,
+    tone: toneFromSeverity(signal.severity),
+    evidence: decisionSourceReferencesToEvidence(signal.sources),
+  }))
+}
+
+export function decisionQualityContributionsToDiagnostics(
+  contributions: DecisionQualitySignalContribution[],
+): ExplanationDiagnostic[] {
+  return contributions.map((contribution) => ({
+    label: `${formatSignedNumber(contribution.scoreContribution)} score | ${contribution.signalId}`,
+    detail: contribution.summary,
+    tone: toneFromSeverity(contribution.severity),
+    evidence: [
+      {
+        label: `${contribution.category} / ${contribution.direction} / ${contribution.severity}`,
+        detail: 'Quality signal contribution',
+      },
+    ],
+  }))
+}
+
+export function decisionQualityAssessmentToExplanation(
+  assessment: DecisionQualityAssessment,
+): Explanation {
+  const explanation = assessment.qualityExplanation
+
+  return {
+    id: assessment.id,
+    domain: 'Decision Quality',
+    title: `${assessment.decisionId}: ${assessment.rating}`,
+    summary: `Score ${assessment.score}`,
+    why: explanation
+      ? `${explanation.threshold.reason}${explanation.overrideReason ? ` Override: ${explanation.overrideReason}` : ''}`
+      : 'No quality explanation is projected.',
+    evidence: [],
+    constraints: explanation
+      ? [
+          {
+            label: `Threshold: ${explanation.threshold.rating}`,
+            detail: `${explanation.threshold.minimumScore ?? 'none'}-${explanation.threshold.maximumScore ?? 'none'}`,
+            satisfied: true,
+          },
+          {
+            label: 'Base score',
+            detail: `${explanation.baseScore}`,
+            satisfied: true,
+          },
+          {
+            label: 'Raw score',
+            detail: `${explanation.rawScore}`,
+            satisfied: true,
+          },
+          {
+            label: 'Clamped score',
+            detail: `${explanation.clampedScore}`,
+            satisfied: true,
+          },
+        ]
+      : [],
+    diagnostics: [
+      ...(explanation ? decisionQualityContributionsToDiagnostics(explanation.signalContributions) : []),
+      ...decisionDiagnosticsToExplanation(explanation?.diagnostics ?? assessment.diagnostics, 'Quality Diagnostic'),
+    ],
+  }
+}
+
+export function humanAuthoringBurdenSignalToEvidence(
+  signal: HumanAuthoringBurdenSignal,
+): ExplanationEvidence[] {
+  return [
+    {
+      id: signal.id,
+      label: `${signal.burden} / ${signal.sourceKind}`,
+      detail: signal.summary,
+    },
+    ...decisionSourceReferencesToEvidence(signal.sources),
+  ]
+}
+
+export function humanAuthoringBurdenExplanationToDiagnostics(
+  explanation: HumanAuthoringBurdenExplanation,
+): ExplanationDiagnostic[] {
+  return [
+    {
+      label: 'Selection rule',
+      detail: explanation.selectionRule,
+      evidence: explanation.winningSignal ? humanAuthoringBurdenSignalToEvidence(explanation.winningSignal) : [],
+    },
+    {
+      label: 'Effective burden',
+      detail: `${explanation.effectiveBurden}${explanation.isUnknown ? ' | Unknown' : ' | Known'}${explanation.isInferred ? ' | Inferred' : ' | Signal-backed'}`,
+      evidence: explanation.winningSignal ? humanAuthoringBurdenSignalToEvidence(explanation.winningSignal) : [],
+    },
+    ...decisionDiagnosticsToExplanation(explanation.diagnostics, 'Burden Diagnostic'),
+  ]
+}
+
+export function decisionRecommendationToExplanation(
+  recommendation: DecisionRecommendation,
+): Explanation {
+  return {
+    domain: 'Decision Recommendation',
+    title: recommendation.optionId,
+    summary: recommendation.summary ?? recommendation.rationale,
+    why: recommendation.rationale,
+    evidence: [
+      ...decisionEvidenceToEvidence(recommendation.evidence, 'Recommendation Evidence'),
+      ...(recommendation.recommendationEvidence ?? []).flatMap((item) => [
+        {
+          id: `${item.type}-${item.optionId}-${item.summary}`,
+          label: `${item.type}: ${item.optionId}`,
+          detail: item.summary,
+        },
+        ...decisionEvidenceToEvidence(item.evidence, `${item.type} Evidence`),
+      ]),
+    ],
+    constraints: (recommendation.concerns ?? []).map((concern) => ({
+      label: 'Concern',
+      detail: concern,
+      satisfied: null,
+    })),
+    assumptions: (recommendation.assumptions ?? []).map((assumption) => ({
+      label: 'Recommendation assumption',
+      detail: assumption,
+    })),
+    alternatives: (recommendation.alternativeExplanations ?? []).map((alternative) => ({
+      label: 'Alternative explanation',
+      detail: alternative,
+    })),
+    recommendations: (recommendation.supportingFactors ?? []).map((factor) => ({
+      label: 'Supporting factor',
+      detail: factor,
+    })),
+    diagnostics: [
+      ...(recommendation.mode ? [{ label: 'Recommendation mode', detail: recommendation.mode }] : []),
+      ...(recommendation.supportingFactors ?? []).map((factor) => ({
+        label: 'Supporting factor',
+        detail: factor,
+      })),
+    ],
+  }
+}
+
+export function decisionOptionsToAlternatives(
+  options: DecisionOption[],
+  label: string,
+): ExplanationAlternative[] {
+  return options.map((option) => ({
+    label: `${label}: ${option.id}`,
+    detail: `${option.title}: ${option.description}`,
+    evidence: decisionEvidenceToEvidence(option.evidence, `${option.id} Evidence`),
+  }))
+}
+
+export function decisionGenerationDiagnosticsToRejectedOptionDiagnostics(
+  diagnostics: DecisionGenerationDiagnostics,
+): ExplanationDiagnostic[] {
+  return diagnostics.optionValidationResults
+    .filter((result) => !result.isValid)
+    .flatMap((result) =>
+      result.issues.map((issue) => ({
+        label: `Invalid option ${result.optionId}`,
+        detail: `${issue.type}: ${issue.message}`,
+        tone: 'warning' as const,
+      })),
+    )
+}
+
+export function refinementPlanToConstraints(plan: RefinementPlan): ExplanationConstraint[] {
+  return [
+    ...plan.appliedConstraints.map((constraint) => ({
+      label: 'Applied constraint',
+      detail: constraint,
+      satisfied: true,
+    })),
+    ...plan.directives.map((directive) => ({
+      label: `${directive.type}: ${directive.targetField ?? 'Proposal'}`,
+      detail: directive.instruction ?? directive.summary,
+      satisfied: true,
+      evidence: directive.sources ? decisionSourceReferencesToEvidence(directive.sources) : [],
+    })),
+  ]
+}
+
+export function refinementPlanToDiagnostics(plan: RefinementPlan): ExplanationDiagnostic[] {
+  const scope = [
+    plan.regenerateOptions ? 'Options' : null,
+    plan.reevaluateTradeoffs ? 'Tradeoffs' : null,
+    plan.reevaluateRecommendation ? 'Recommendation' : null,
+    plan.fullRegeneration ? 'Full regeneration' : null,
+  ].filter(Boolean)
+
+  return [
+    {
+      label: 'Plan scope',
+      detail: scope.length > 0 ? scope.join(', ') : 'No mutation scope detected',
+    },
+    ...decisionDiagnosticsToExplanation(plan.diagnostics, 'Refinement Diagnostic'),
+  ]
+}
+
+export function decisionProjectionDiagnosticsToExplanation(
+  decisions: DecisionProjectionDecisionDiagnostic[],
+  label: string,
+): ExplanationDiagnostic[] {
+  return decisions.map((decision) => ({
+    label: `${label}: ${decision.decisionId}`,
+    detail: decision.reason,
+    evidence: [
+      {
+        label: decision.title,
+        detail: `${decision.state} | ${decision.outcome ?? 'No outcome'} | ${decision.classification}`,
+      },
+      {
+        label: 'Projected statement count',
+        detail: `${decision.projectedStatementIds.length}`,
+      },
+      ...decision.projectedStatementIds.map((statementId) => ({
+        label: 'Projected statement',
+        detail: statementId,
+      })),
+    ],
+  }))
+}
+
+export function decisionInfluenceStatementsToEvidence(
+  statements: DecisionInfluenceStatement[],
+  label: string,
+): ExplanationEvidence[] {
+  return statements.flatMap((statement) => [
+    {
+      id: statement.statementId,
+      label: `${label}: ${statement.decisionId}`,
+      detail: statement.statement,
+    },
+    {
+      id: `${statement.statementId}-metadata`,
+      label: statement.title,
+      detail: `${statement.classification} | ${statement.projectionKind} | ${statement.promptSection}`,
+    },
+    ...(statement.priorityRank
+      ? [
+          {
+            id: `${statement.statementId}-rank`,
+            label: `Rank ${statement.priorityRank}`,
+            detail: 'Priority rank',
+          },
+        ]
+      : []),
+    ...decisionSourceReferencesToEvidence(statement.sources),
+  ])
+}
+
+export function decisionInfluenceStatementAdherenceToDiagnostics(
+  statements: DecisionInfluenceStatement[],
+): ExplanationDiagnostic[] {
+  return statements.flatMap((statement) =>
+    statement.adherenceObservations.map((observation) => ({
+      label: `Adherence: ${statement.statementId}`,
+      detail: `${observation.observer} at ${observation.observedAt}: ${observation.observation}`,
+      evidence: [
+        {
+          label: statement.decisionId,
+          detail: statement.title,
+        },
+      ],
+    })),
+  )
+}
+
+export function decisionInfluenceMissingStatementUncertainty(
+  statements: DecisionInfluenceStatement[],
+  label: string,
+): ExplanationUncertainty[] {
+  return statements.length > 0
+    ? []
+    : [
+        {
+          label,
+          detail: 'No projected statements were recorded for this category.',
+          severity: 'info',
+        },
+      ]
+}
+
 export function decisionGovernanceFindingsToDiagnostics(
   findings: DecisionGovernanceFinding[],
 ): ExplanationDiagnostic[] {
@@ -194,4 +515,8 @@ export function decisionLifecycleEligibilityToActions(
       })),
     ],
   }))
+}
+
+function formatSignedNumber(value: number) {
+  return value > 0 ? `+${value}` : `${value}`
 }

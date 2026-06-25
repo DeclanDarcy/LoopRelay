@@ -1,6 +1,11 @@
 import { EmptyState } from '../../components/design'
+import { AlternativeExplorer, DiagnosticList } from '../../components/explainability'
+import {
+  decisionDiagnosticsToExplanation,
+  decisionGenerationDiagnosticsToRejectedOptionDiagnostics,
+  decisionOptionsToAlternatives,
+} from '../../lib/explainability'
 import type { DecisionGenerationDiagnostics } from '../../types'
-import { DecisionEvidenceBlock } from './DecisionEvidenceFragments'
 
 export function DecisionRejectedOptionList({
   diagnostics,
@@ -22,23 +27,10 @@ export function DecisionRejectedOptionList({
       <OptionBucket title="Rejected options" options={rejectedOptions} />
       <OptionBucket title="Deduplicated options" options={deduplicatedOptions} />
       {invalidResults.length > 0 ? (
-        <div className="decision-inspection-list" aria-label="Invalid option validation results">
-          {invalidResults.map((result) => (
-            <article className="decision-inspection-card" key={result.optionId}>
-              <div>
-                <span>Invalid option</span>
-                <strong>{result.optionId}</strong>
-              </div>
-              <div className="decision-warning-list" aria-label={`Validation issues for ${result.optionId}`}>
-                {result.issues.map((issue) => (
-                  <span key={`${result.optionId}-${issue.type}-${issue.message}`}>
-                    {issue.type}: {issue.message}
-                  </span>
-                ))}
-              </div>
-            </article>
-          ))}
-        </div>
+        <DiagnosticList
+          title="Invalid Option Validation Results"
+          diagnostics={decisionGenerationDiagnosticsToRejectedOptionDiagnostics(diagnostics!)}
+        />
       ) : null}
     </section>
   )
@@ -57,23 +49,13 @@ function OptionBucket({
 
   return (
     <div className="decision-option-grid" aria-label={title}>
-      {options.map((option) => (
-        <article className="decision-inspection-card" key={`${title}-${option.id}`}>
-          <div>
-            <span>{option.id}</span>
-            <strong>{option.title}</strong>
-          </div>
-          <p>{option.description}</p>
-          {option.diagnostics?.length ? (
-            <div className="decision-warning-list" aria-label={`Diagnostics for ${option.id}`}>
-              {option.diagnostics.map((diagnostic) => (
-                <span key={diagnostic}>{diagnostic}</span>
-              ))}
-            </div>
-          ) : null}
-          <DecisionEvidenceBlock title={`${option.id} Evidence`} evidence={option.evidence} />
-        </article>
-      ))}
+      <AlternativeExplorer title={title} alternatives={decisionOptionsToAlternatives(options, title)} />
+      <DiagnosticList
+        title={`${title} Diagnostics`}
+        diagnostics={options.flatMap((option) =>
+          decisionDiagnosticsToExplanation(option.diagnostics ?? [], `Diagnostics for ${option.id}`),
+        )}
+      />
     </div>
   )
 }

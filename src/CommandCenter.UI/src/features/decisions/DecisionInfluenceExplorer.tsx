@@ -1,4 +1,6 @@
 import { EmptyState } from '../../components/design'
+import { DiagnosticList } from '../../components/explainability'
+import { decisionProjectionDiagnosticsToExplanation } from '../../lib/explainability'
 import type { DecisionProjectionDecisionDiagnostic } from '../../types'
 
 type DecisionInfluenceExplorerProps = {
@@ -75,23 +77,10 @@ function DecisionInfluenceGroup({
     <div className="execution-influence-section">
       <h5>{title}</h5>
       {decisions.length > 0 ? (
-        <div className="decision-influence-diagnostic-list">
-          {decisions.map((decision) => (
-            <article className="decision-influence-diagnostic" key={`${title}.${decision.decisionId}`}>
-              <div>
-                <strong>{decision.title}</strong>
-                <span>{decision.decisionId}</span>
-              </div>
-              <p>{decision.reason}</p>
-              <div className="execution-influence-meta">
-                <span>{decision.state}</span>
-                <span>{decision.outcome ?? 'No outcome'}</span>
-                <span>{decision.classification}</span>
-                <span>{decision.projectedStatementIds.length} projected statements</span>
-              </div>
-            </article>
-          ))}
-        </div>
+        <DiagnosticList
+          title={`${title} Diagnostics`}
+          diagnostics={decisionProjectionDiagnosticsToExplanation(decisions, title)}
+        />
       ) : (
         <EmptyState className="empty-state">{emptyLabel}</EmptyState>
       )}

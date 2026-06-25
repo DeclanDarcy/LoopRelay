@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Badge, EmptyState } from '../../components/design'
+import { DiagnosticList, EvidenceList } from '../../components/explainability'
 import { useDecisionResolution } from '../../hooks'
+import {
+  decisionDiagnosticsToExplanation,
+  decisionEvidenceToEvidence,
+  decisionSourceReferencesToEvidence,
+} from '../../lib/explainability'
 import type { FormEvent } from 'react'
 import type {
   Decision,
@@ -364,13 +370,17 @@ function AssimilationRecommendationCard({
         <span>Context {recommendation.contextFingerprint}</span>
         <span>Snapshot {recommendation.contextSnapshotId}</span>
       </div>
-      {recommendation.diagnostics.length > 0 ? (
-        <div className="decision-warning-list" aria-label="Assimilation diagnostics">
-          {recommendation.diagnostics.map((diagnostic) => (
-            <span key={diagnostic}>{diagnostic}</span>
-          ))}
-        </div>
-      ) : null}
+      <EvidenceList
+        title="Assimilation Evidence"
+        evidence={[
+          ...decisionEvidenceToEvidence(recommendation.evidence, 'Assimilation Evidence'),
+          ...decisionSourceReferencesToEvidence(recommendation.sources),
+        ]}
+      />
+      <DiagnosticList
+        title="Assimilation Diagnostics"
+        diagnostics={decisionDiagnosticsToExplanation(recommendation.diagnostics, 'Assimilation Diagnostic')}
+      />
       <small>
         Advisory only. This package does not mutate operational context or promote continuity policy.
       </small>

@@ -1,4 +1,8 @@
-import { DecisionSourceList } from './DecisionEvidenceFragments'
+import { DiagnosticList, EvidenceList } from '../../components/explainability'
+import {
+  humanAuthoringBurdenExplanationToDiagnostics,
+  humanAuthoringBurdenSignalToEvidence,
+} from '../../lib/explainability'
 import type { HumanAuthoringBurdenExplanation } from '../../types'
 
 export function DecisionBurdenExplanation({
@@ -17,7 +21,6 @@ export function DecisionBurdenExplanation({
         <span>{explanation.isInferred ? 'Inferred' : 'Signal-backed'}</span>
         {explanation.winningSignal ? <span>Winning signal: {explanation.winningSignal.id}</span> : null}
       </div>
-      <p>{explanation.selectionRule}</p>
       {explanation.winningSignal ? (
         <div className="decision-inspection-list" aria-label={`Winning burden signal for ${explanation.decisionId}`}>
           <h6>Winning Signal</h6>
@@ -28,17 +31,17 @@ export function DecisionBurdenExplanation({
               </span>
               <strong>{explanation.winningSignal.summary}</strong>
             </div>
-            <DecisionSourceList sources={explanation.winningSignal.sources} />
+            <EvidenceList
+              title="Winning Signal Evidence"
+              evidence={humanAuthoringBurdenSignalToEvidence(explanation.winningSignal)}
+            />
           </article>
         </div>
       ) : null}
-      {explanation.diagnostics.length > 0 ? (
-        <div className="decision-warning-list" aria-label={`Burden explanation diagnostics for ${explanation.decisionId}`}>
-          {explanation.diagnostics.map((diagnostic) => (
-            <span key={`${explanation.decisionId}-${diagnostic}`}>{diagnostic}</span>
-          ))}
-        </div>
-      ) : null}
+      <DiagnosticList
+        title="Burden Explanation Diagnostics"
+        diagnostics={humanAuthoringBurdenExplanationToDiagnostics(explanation)}
+      />
     </article>
   )
 }

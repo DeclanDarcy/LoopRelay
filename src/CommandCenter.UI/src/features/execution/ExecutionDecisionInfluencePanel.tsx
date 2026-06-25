@@ -1,5 +1,12 @@
 import { EmptyState, Panel, SectionHeader } from '../../components/design'
+import { DiagnosticList, EvidenceList, UncertaintyView } from '../../components/explainability'
 import { formatDateTime } from '../../lib'
+import {
+  decisionDiagnosticsToExplanation,
+  decisionInfluenceMissingStatementUncertainty,
+  decisionInfluenceStatementAdherenceToDiagnostics,
+  decisionInfluenceStatementsToEvidence,
+} from '../../lib/explainability'
 import type { DecisionInfluenceStatement, DecisionInfluenceTrace } from '../../types'
 import { DecisionInfluenceExplorer } from '../decisions/DecisionInfluenceExplorer'
 
@@ -82,12 +89,10 @@ export function ExecutionDecisionInfluencePanel({
 
           {trace.diagnostics.length > 0 ? (
             <div className="execution-influence-section">
-              <h5>Diagnostics</h5>
-              <ul className="execution-influence-diagnostics">
-                {trace.diagnostics.map((diagnostic) => (
-                  <li key={diagnostic}>{diagnostic}</li>
-                ))}
-              </ul>
+              <DiagnosticList
+                title="Diagnostics"
+                diagnostics={decisionDiagnosticsToExplanation(trace.diagnostics, 'Decision Influence')}
+              />
             </div>
           ) : null}
         </div>
@@ -107,25 +112,21 @@ function InfluenceStatementGroup({
     <div className="execution-influence-section">
       <h5>{title}</h5>
       {statements.length > 0 ? (
-        <div className="execution-influence-statement-list">
-          {statements.map((statement) => (
-            <article className="execution-influence-statement" key={statement.statementId}>
-              <div>
-                <strong>{statement.title}</strong>
-                <span>{statement.decisionId}</span>
-              </div>
-              <p>{statement.statement}</p>
-              <div className="execution-influence-meta">
-                <span>{statement.classification}</span>
-                <span>{statement.projectionKind}</span>
-                <span>{statement.promptSection}</span>
-                {statement.priorityRank ? <span>Rank {statement.priorityRank}</span> : null}
-              </div>
-            </article>
-          ))}
-        </div>
+        <>
+          <EvidenceList
+            title={`${title} Evidence`}
+            evidence={decisionInfluenceStatementsToEvidence(statements, title)}
+          />
+          <DiagnosticList
+            title={`${title} Adherence`}
+            diagnostics={decisionInfluenceStatementAdherenceToDiagnostics(statements)}
+          />
+        </>
       ) : (
-        <EmptyState className="empty-state">None projected.</EmptyState>
+        <UncertaintyView
+          title={`${title} Uncertainty`}
+          uncertainty={decisionInfluenceMissingStatementUncertainty(statements, title)}
+        />
       )}
     </div>
   )

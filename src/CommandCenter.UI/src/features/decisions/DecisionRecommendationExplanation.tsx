@@ -1,6 +1,7 @@
 import { EmptyState } from '../../components/design'
+import { DecisionBasis } from '../../components/explainability'
+import { decisionRecommendationToExplanation } from '../../lib/explainability'
 import type { DecisionRecommendation } from '../../types'
-import { DecisionEvidenceBlock } from './DecisionEvidenceFragments'
 
 export function DecisionRecommendationExplanation({
   recommendation,
@@ -30,40 +31,7 @@ export function DecisionRecommendationExplanation({
         {recommendation.summary ? <span>{recommendation.summary}</span> : null}
       </div>
       <p>{recommendation.rationale}</p>
-      <DecisionFactList title="Supporting factors" facts={recommendation.supportingFactors ?? []} />
-      <DecisionFactList title="Concerns" facts={recommendation.concerns ?? []} />
-      <DecisionFactList title="Recommendation assumptions" facts={recommendation.assumptions ?? []} />
-      <DecisionFactList title="Alternative explanations" facts={recommendation.alternativeExplanations ?? []} />
-      {recommendation.recommendationEvidence?.length ? (
-        <div className="decision-inspection-list" aria-label="Recommendation evidence categories">
-          <h6>Recommendation Evidence Categories</h6>
-          {recommendation.recommendationEvidence.map((item) => (
-            <article className="decision-tradeoff" key={`${item.type}-${item.optionId}-${item.summary}`}>
-              <div>
-                <span>{item.type}</span>
-                <strong>{item.optionId}</strong>
-              </div>
-              <p>{item.summary}</p>
-              <DecisionEvidenceBlock title={`${item.type} Evidence`} evidence={item.evidence} />
-            </article>
-          ))}
-        </div>
-      ) : null}
-      <DecisionEvidenceBlock title="Recommendation Evidence" evidence={recommendation.evidence} />
+      <DecisionBasis explanation={decisionRecommendationToExplanation(recommendation)} />
     </article>
-  )
-}
-
-function DecisionFactList({ title, facts }: { title: string; facts: string[] }) {
-  if (facts.length === 0) {
-    return null
-  }
-
-  return (
-    <div className="decision-warning-list" aria-label={title}>
-      {facts.map((fact) => (
-        <span key={fact}>{fact}</span>
-      ))}
-    </div>
   )
 }

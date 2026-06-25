@@ -19,8 +19,8 @@ export function EvidenceList({ evidence, emptyLabel = 'No evidence projected.', 
             <li key={`${item.id ?? item.label}-${index}`}>
               <strong>{item.label}</strong>
               {item.detail ? <span>{item.detail}</span> : null}
-              {item.source ? <small>Source: {item.source}</small> : null}
-              {item.fingerprint ? <small>Fingerprint: {item.fingerprint}</small> : null}
+              {item.source ? <small>Source: <span>{item.source}</span></small> : null}
+              {item.fingerprint ? <small>Fingerprint: <span>{item.fingerprint}</span></small> : null}
             </li>
           ))}
         </ul>

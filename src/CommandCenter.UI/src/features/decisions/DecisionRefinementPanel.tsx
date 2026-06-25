@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { EmptyState } from '../../components/design'
+import { ConstraintViewer, DiagnosticList, EvidenceList } from '../../components/explainability'
 import { useDecisionProposalRefinement } from '../../hooks'
+import {
+  decisionDiagnosticsToExplanation,
+  refinementPlanToConstraints,
+  refinementPlanToDiagnostics,
+} from '../../lib/explainability'
 import type { FormEvent } from 'react'
 import type {
   DecisionPackageRegenerationResult,
@@ -329,20 +335,8 @@ function RefinementPlanSummary({ plan }: { plan: RefinementPlan }) {
           </span>
         ))}
       </div>
-      {plan.appliedConstraints.length > 0 ? (
-        <div className="decision-warning-list" aria-label="Applied constraints">
-          {plan.appliedConstraints.map((constraint) => (
-            <span key={constraint}>{constraint}</span>
-          ))}
-        </div>
-      ) : null}
-      {plan.diagnostics.length > 0 ? (
-        <div className="decision-warning-list" aria-label="Refinement diagnostics">
-          {plan.diagnostics.map((diagnostic) => (
-            <span key={diagnostic}>{diagnostic}</span>
-          ))}
-        </div>
-      ) : null}
+      <ConstraintViewer title="Applied Constraints" constraints={refinementPlanToConstraints(plan)} />
+      <DiagnosticList title="Refinement Diagnostics" diagnostics={refinementPlanToDiagnostics(plan)} />
     </article>
   )
 }
@@ -382,19 +376,18 @@ function RegenerationResultSummary({ result }: { result: DecisionPackageRegenera
         </section>
       </div>
       {result.comparison.addedRisks.length > 0 || result.comparison.addedEvidence.length > 0 ? (
-        <div className="decision-warning-list" aria-label="Regeneration additions">
-          {[...result.comparison.addedRisks, ...result.comparison.addedEvidence].map((item) => (
-            <span key={item}>{item}</span>
-          ))}
-        </div>
+        <EvidenceList
+          title="Regeneration Additions"
+          evidence={[
+            ...result.comparison.addedRisks.map((item) => ({ label: 'Added risk', detail: item })),
+            ...result.comparison.addedEvidence.map((item) => ({ label: 'Added evidence', detail: item })),
+          ]}
+        />
       ) : null}
-      {result.diagnostics.length > 0 ? (
-        <div className="decision-warning-list" aria-label="Regeneration diagnostics">
-          {result.diagnostics.map((diagnostic) => (
-            <span key={diagnostic}>{diagnostic}</span>
-          ))}
-        </div>
-      ) : null}
+      <DiagnosticList
+        title="Regeneration Diagnostics"
+        diagnostics={decisionDiagnosticsToExplanation(result.diagnostics, 'Regeneration Diagnostic')}
+      />
     </article>
   )
 }

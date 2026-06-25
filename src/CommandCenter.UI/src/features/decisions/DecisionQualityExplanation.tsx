@@ -1,3 +1,7 @@
+import { ConstraintViewer, DiagnosticList } from '../../components/explainability'
+import {
+  decisionQualityAssessmentToExplanation,
+} from '../../lib/explainability'
 import type { DecisionQualityAssessment, DecisionQualityExplanation as QualityExplanation } from '../../types'
 
 export function DecisionQualityExplanation({
@@ -35,31 +39,14 @@ export function DecisionQualityExplanation({
       </div>
       <p>{explanation.threshold.reason}</p>
       {explanation.overrideReason ? <p>Override: {explanation.overrideReason}</p> : null}
-      {explanation.signalContributions.length > 0 ? (
-        <div className="decision-inspection-list" aria-label={`Quality signal contributions for ${assessment.decisionId}`}>
-          <h6>Signal Contributions</h6>
-          {explanation.signalContributions.map((contribution) => (
-            <article className="decision-quality-signal" key={`${assessment.id}-${contribution.signalId}`}>
-              <div>
-                <span>
-                  {contribution.category} / {contribution.direction} / {contribution.severity}
-                </span>
-                <strong>
-                  {formatSignedNumber(contribution.scoreContribution)} score | {contribution.signalId}
-                </strong>
-              </div>
-              <p>{contribution.summary}</p>
-            </article>
-          ))}
-        </div>
-      ) : null}
-      {explanation.diagnostics.length > 0 ? (
-        <div className="decision-warning-list" aria-label={`Quality explanation diagnostics for ${assessment.decisionId}`}>
-          {explanation.diagnostics.map((diagnostic) => (
-            <span key={`${assessment.id}-${diagnostic}`}>{diagnostic}</span>
-          ))}
-        </div>
-      ) : null}
+      <ConstraintViewer
+        title="Quality Score Basis"
+        constraints={decisionQualityAssessmentToExplanation(assessment).constraints ?? []}
+      />
+      <DiagnosticList
+        title="Signal Contributions"
+        diagnostics={decisionQualityAssessmentToExplanation(assessment).diagnostics ?? []}
+      />
     </article>
   )
 }
@@ -68,8 +55,4 @@ function formatThreshold(explanation: QualityExplanation) {
   const minimum = explanation.threshold.minimumScore ?? 'none'
   const maximum = explanation.threshold.maximumScore ?? 'none'
   return `Threshold: ${explanation.threshold.rating} (${minimum}-${maximum})`
-}
-
-function formatSignedNumber(value: number) {
-  return value > 0 ? `+${value}` : `${value}`
 }
