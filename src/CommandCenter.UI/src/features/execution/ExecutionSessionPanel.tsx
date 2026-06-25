@@ -7,6 +7,7 @@ import {
   executionSessionTransparencyToDiagnostics,
 } from '../../lib/explainability'
 import { executionSessionStatus, repositoryExecutionStatus } from '../../lib/status'
+import { ExecutionRecoveryInteractionSummary } from './ExecutionRecoveryInteractionSummary'
 import type {
   ExecutionPromptManifest,
   ExecutionPromptManifestArtifact,
@@ -138,16 +139,7 @@ function TransparencySection({ transparency, isLoading, error }: TransparencySec
       />
       <div className="execution-rail-list">
         <h5>Recovery</h5>
-        <div className="execution-rail-summary">
-          <span>Recovery ran: {formatNullableBoolean(recovery.recoveryRan)}</span>
-          <span>Trigger: {recovery.recoveryTrigger || 'Not recorded'}</span>
-          <span>Reattach attempted: {formatNullableBoolean(recovery.reattachAttempted)}</span>
-          <span>Reattach succeeded: {formatNullableBoolean(recovery.reattachSucceeded)}</span>
-          <span>Orphaned provider: {formatNullableBoolean(recovery.orphanedProviderState)}</span>
-          <span>Marked failed by recovery: {formatNullableBoolean(recovery.sessionMarkedFailedByRecovery)}</span>
-          <span>Recovery event: {formatDateTime(recovery.recoveryEventTimestamp)}</span>
-          <span>Message: {recovery.recoveryMessage || 'Not recorded'}</span>
-        </div>
+        <ExecutionRecoveryInteractionSummary recovery={recovery} sessionId={transparency.sessionId} />
       </div>
 
       <div className="execution-rail-list">

@@ -2,14 +2,13 @@
 
 ## Newly Authorized
 
-- Treat execution git interaction normalization as accepted Milestone 9 work because it demonstrates the shared interaction pattern applies beyond decision lifecycles and into operational workflows.
-- Keep `ExecutionGitInteractionSummary` as a thin execution-specific wrapper around `InteractionPatternView`.
-- Keep `InteractionPatternView` focused on subject, expected result, eligibility, evidence, and diagnostics.
-- Preserve execution-specific concepts such as commit scope editing, push metadata, and retry information outside the shared interaction component.
-- Preserve the authority boundary where backend `ExecutionGitActionEligibility` owns commit legality, push legality, retry eligibility, diagnostics, and evidence.
-- Keep React limited to presenting execution git projections through the shared interaction language.
-- Continue using characterization tests scoped to normalized presentation and application integration, without altering execution behavior.
-- Continue Milestone 9 interaction normalization with execution recovery actions next.
-- Normalize remaining action families in this order: recovery actions, retry actions if distinct from recovery, then decision-session transfer actions.
-- Use thin wrappers for execution recovery and decision-session transfer when domain-specific context is needed, without expanding the shared interaction component.
-- Complete the major operational action families before moving Milestone 9 into final cleanup and cohesion verification.
+- Treat execution recovery interaction normalization as accepted Milestone 9 work.
+- Keep execution recovery observational through backend recovery state and `ExecutionSessionTransparency`.
+- Do not introduce a UI-owned execution recovery workflow or React-owned recovery semantics.
+- Preserve the authority chain from execution service to recovery projection to `ExecutionRecoveryInteractionSummary` to `InteractionPatternView` to React presentation.
+- Keep `InteractionPatternView` stable around subject, expected result, eligibility, evidence, and diagnostics.
+- Continue using thin domain-specific wrappers to add execution or governance context without expanding the shared interaction component.
+- Treat the execution interaction family as complete for Milestone 9 interaction normalization, covering commit, push, push retry, and recovery.
+- Continue Milestone 9 interaction normalization with decision-session transfer actions next.
+- Compose transfer-specific context such as readiness, continuity artifacts, ownership context, blocked transfer reasons, and recovery guidance around `InteractionPatternView`.
+- After governance transfer normalization, shift Milestone 9 toward interaction consistency audit, information-density refinement, retirement of obsolete presentation, and final product cohesion verification.

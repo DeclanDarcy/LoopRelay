@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { ExecutionSessionPanel } from '../../features/execution/ExecutionSessionPanel'
 import type { ExecutionPromptManifest, ExecutionSessionSummary, ExecutionSessionTransparency } from '../../types'
@@ -208,11 +208,18 @@ describe('execution session panel rendering characterization', () => {
 
     expect(screen.getByLabelText('Execution transparency')).toBeInTheDocument()
     expect(screen.getByText('Recovery')).toBeInTheDocument()
-    expect(screen.getByText('Recovery ran: Yes')).toBeInTheDocument()
-    expect(screen.getByText('Trigger: StartupRecovery')).toBeInTheDocument()
-    expect(screen.getByText('Reattach attempted: Yes')).toBeInTheDocument()
-    expect(screen.getByText('Reattach succeeded: No')).toBeInTheDocument()
-    expect(screen.getByText('Orphaned provider: Yes')).toBeInTheDocument()
+    const recovery = screen.getByLabelText('Recovery Interaction Summary')
+    expect(within(recovery).getByText('Execution recovery')).toBeInTheDocument()
+    expect(
+      within(recovery).getByText('Recovery marked the session failed because provider state could not be reattached.'),
+    ).toBeInTheDocument()
+    expect(within(recovery).getByText('Automatic startup recovery')).toBeInTheDocument()
+    expect(within(recovery).getByText('Eligible')).toBeInTheDocument()
+    expect(within(recovery).getByText('Provider reattach')).toBeInTheDocument()
+    expect(within(recovery).getByText('attempted Yes | succeeded No')).toBeInTheDocument()
+    expect(within(recovery).getByText('Provider state')).toBeInTheDocument()
+    expect(within(recovery).getByText('orphaned Yes | failed by recovery Yes')).toBeInTheDocument()
+    expect(within(recovery).getByText('Session marked failed')).toBeInTheDocument()
     expect(screen.getByText('Provider process: Exited')).toBeInTheDocument()
     expect(screen.getByText('Exit code: 2')).toBeInTheDocument()
     expect(screen.getByText('Retained events: 3')).toBeInTheDocument()
