@@ -878,6 +878,35 @@ public sealed class DecisionGenerationServiceTests
         var relatedEvidence = new DecisionEvidence(
             "Plan requires a persistence decision.",
             [new DecisionSourceReference("Plan", ".agents/plan.md", CandidateId: candidate.Id)]);
+        var rejectedOption = new DecisionOption(
+            "option-3",
+            "Implement now",
+            "Resolve the candidate through a duplicate repository-evidence path.",
+            [relatedEvidence])
+        {
+            Type = DecisionOptionType.Adopt
+        };
+        var generationDiagnostics = new DecisionGenerationDiagnostics(
+            3,
+            2,
+            1,
+            1,
+            0,
+            [
+                new DecisionOptionValidationResult("option-1", true, []),
+                new DecisionOptionValidationResult("option-2", true, []),
+                new DecisionOptionValidationResult(
+                    "option-3",
+                    false,
+                    [new DecisionOptionValidationIssue(
+                        DecisionOptionValidationIssueType.Duplicate,
+                        "Option duplicates option-1 by normalized title, type, or overlapping evidence.")])
+            ],
+            ["Rejected option-3: Option duplicates option-1 by normalized title, type, or overlapping evidence."])
+        {
+            RejectedOptions = [rejectedOption],
+            DeduplicatedOptions = [rejectedOption]
+        };
         var optionGeneration = new RejectedDiagnosticOptionGenerationService(
             new DecisionOptionGenerationResult(
                 [
@@ -896,31 +925,24 @@ public sealed class DecisionGenerationServiceTests
                     }
                 ],
                 [],
-                new DecisionGenerationDiagnostics(
-                    3,
-                    2,
-                    1,
-                    1,
-                    0,
-                    [
-                        new DecisionOptionValidationResult("option-1", true, []),
-                        new DecisionOptionValidationResult("option-2", true, []),
-                        new DecisionOptionValidationResult(
-                            "option-3",
-                            false,
-                            [new DecisionOptionValidationIssue(
-                                DecisionOptionValidationIssueType.Duplicate,
-                                "Option duplicates option-1 by normalized title, type, or overlapping evidence.")])
-                    ],
-                    ["Rejected option-3: Option duplicates option-1 by normalized title, type, or overlapping evidence."])));
+                generationDiagnostics));
         var service = CreateGenerationService(repository, store, decisionRepository, optionGeneration);
 
         DecisionProposal proposal = await service.GenerateProposalAsync(repository.Id, candidate.Id);
         DecisionProposal reloaded = (await decisionRepository.GetProposalAsync(repository, proposal.Id))!;
+        DecisionPackageVersion packageVersion = Assert.Single(await decisionRepository.ListPackageVersionsAsync(repository, proposal.Id));
 
         Assert.NotNull(reloaded.GenerationDiagnostics);
         Assert.Equal(1, reloaded.GenerationDiagnostics.RejectedOptionCount);
         Assert.Equal(1, reloaded.GenerationDiagnostics.DeduplicatedOptionCount);
+        DecisionOption reloadedRejected = Assert.Single(reloaded.GenerationDiagnostics.RejectedOptions);
+        Assert.Equal("option-3", reloadedRejected.Id);
+        Assert.Equal("Implement now", reloadedRejected.Title);
+        DecisionOption reloadedDeduplicated = Assert.Single(reloaded.GenerationDiagnostics.DeduplicatedOptions);
+        Assert.Equal("option-3", reloadedDeduplicated.Id);
+        Assert.NotNull(packageVersion.Package.GenerationDiagnostics);
+        Assert.Equal("option-3", Assert.Single(packageVersion.Package.GenerationDiagnostics.RejectedOptions).Id);
+        Assert.Equal("option-3", Assert.Single(packageVersion.Package.GenerationDiagnostics.DeduplicatedOptions).Id);
         Assert.Contains(reloaded.GenerationDiagnostics.OptionValidationResults, result =>
             result.OptionId == "option-3" &&
             !result.IsValid &&
@@ -931,6 +953,32 @@ public sealed class DecisionGenerationServiceTests
         Assert.Contains("- Deduplicated options: 1", markdown);
         Assert.Contains("option-3: Invalid", markdown);
         Assert.Contains("Duplicate: Option duplicates option-1", markdown);
+        Assert.Contains("## Rejected Options", markdown);
+        Assert.Contains("option-3: Implement now - Resolve the candidate through a duplicate repository-evidence path.", markdown);
+        string packageMarkdown = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/versions/PKG-0001.md");
+        Assert.Contains("## Rejected Options", packageMarkdown);
+        Assert.Contains("option-3: Implement now - Resolve the candidate through a duplicate repository-evidence path.", packageMarkdown);
+    }
+
+    [Fact]
+    public void OptionGenerationDiagnosticsCarryRejectedAndDeduplicatedOptionPayloads()
+    {
+        DecisionCandidate candidate = CreateCandidate(Guid.NewGuid(), DecisionCandidateState.Promoted);
+        var validationService = new ForcedDuplicateValidationService("option-2");
+        var optionGenerationService = new OptionGenerationService(validationService);
+
+        DecisionOptionGenerationResult result = optionGenerationService.GenerateOptions(candidate, candidate.Evidence);
+
+        Assert.Equal(1, result.Diagnostics.RejectedOptionCount);
+        Assert.Equal(1, result.Diagnostics.DeduplicatedOptionCount);
+        DecisionOption rejected = Assert.Single(result.Diagnostics.RejectedOptions);
+        Assert.Equal("option-2", rejected.Id);
+        Assert.Equal(DecisionOptionType.Refactor, rejected.Type);
+        DecisionOption deduplicated = Assert.Single(result.Diagnostics.DeduplicatedOptions);
+        Assert.Equal(rejected.Id, deduplicated.Id);
+        Assert.Contains(result.Diagnostics.OptionValidationResults, validation =>
+            validation.OptionId == "option-2" &&
+            validation.Issues.Any(issue => issue.Type == DecisionOptionValidationIssueType.Duplicate));
     }
 
     [Fact]
@@ -2821,6 +2869,27 @@ public sealed class DecisionGenerationServiceTests
             IReadOnlyList<DecisionEvidence> evidence)
         {
             return result;
+        }
+    }
+
+    private sealed class ForcedDuplicateValidationService(string rejectedOptionId) : IOptionValidationService
+    {
+        public DecisionOptionValidationResult ValidateOption(
+            DecisionOption option,
+            DecisionCandidate candidate,
+            IReadOnlyList<DecisionOption> acceptedOptions)
+        {
+            if (string.Equals(option.Id, rejectedOptionId, StringComparison.Ordinal))
+            {
+                return new DecisionOptionValidationResult(
+                    option.Id,
+                    false,
+                    [new DecisionOptionValidationIssue(
+                        DecisionOptionValidationIssueType.Duplicate,
+                        $"Option duplicates {acceptedOptions.FirstOrDefault()?.Id ?? "an accepted option"} by test validation.")]);
+            }
+
+            return new DecisionOptionValidationResult(option.Id, true, []);
         }
     }
 

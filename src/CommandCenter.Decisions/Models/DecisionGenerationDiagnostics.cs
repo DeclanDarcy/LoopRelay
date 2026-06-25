@@ -7,4 +7,9 @@ public sealed record DecisionGenerationDiagnostics(
     int DeduplicatedOptionCount,
     int FallbackOptionCount,
     IReadOnlyList<DecisionOptionValidationResult> OptionValidationResults,
-    IReadOnlyList<string> Diagnostics);
+    IReadOnlyList<string> Diagnostics)
+{
+    public IReadOnlyList<DecisionOption> RejectedOptions { get; init; } = [];
+
+    public IReadOnlyList<DecisionOption> DeduplicatedOptions { get; init; } = [];
+}

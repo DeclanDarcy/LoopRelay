@@ -10,8 +10,8 @@ Expose why decisions, recommendations, options, quality ratings, governance find
 - [ ] Ensure `DecisionProposal` serialization includes all generated transparency data already produced by services:
    - [ ] generation diagnostics
    - [ ] option validation results
-   - [ ] rejected options
-   - [ ] deduplicated options
+   - [x] rejected options
+   - [x] deduplicated options
    - [ ] analyzed options
    - [ ] tradeoff comparisons
    - [ ] tradeoff analysis diagnostics

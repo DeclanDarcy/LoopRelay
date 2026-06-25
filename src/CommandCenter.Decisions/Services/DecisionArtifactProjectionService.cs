@@ -646,6 +646,7 @@ public sealed class DecisionArtifactProjectionService(
             }
 
             markdown.EmptyListIf(diagnostics.OptionValidationResults.Count == 0);
+            RenderGeneratedOptionPayloads(markdown, diagnostics);
             markdown.H3("Diagnostics");
             foreach (string diagnostic in diagnostics.Diagnostics.Order(StringComparer.Ordinal))
             {
@@ -875,6 +876,14 @@ public sealed class DecisionArtifactProjectionService(
         if (package.GenerationDiagnostics is not null)
         {
             markdown.H3("Generation");
+            DecisionGenerationDiagnostics diagnostics = package.GenerationDiagnostics;
+            markdown.Fields(
+                ("Generated options", diagnostics.GeneratedOptionCount.ToString()),
+                ("Accepted options", diagnostics.AcceptedOptionCount.ToString()),
+                ("Rejected options", diagnostics.RejectedOptionCount.ToString()),
+                ("Deduplicated options", diagnostics.DeduplicatedOptionCount.ToString()),
+                ("Fallback options", diagnostics.FallbackOptionCount.ToString()));
+            RenderGeneratedOptionPayloads(markdown, diagnostics);
             foreach (string diagnostic in package.GenerationDiagnostics.Diagnostics.Order(StringComparer.Ordinal))
             {
                 markdown.Bullet(diagnostic);
@@ -1482,6 +1491,28 @@ public sealed class DecisionArtifactProjectionService(
     private static string FormatCountRate(int count, double rate)
     {
         return $"{count} ({rate:P2})";
+    }
+
+    private static void RenderGeneratedOptionPayloads(
+        MarkdownProjectionBuilder markdown,
+        DecisionGenerationDiagnostics diagnostics)
+    {
+        markdown.H3("Rejected Options");
+        foreach (DecisionOption option in diagnostics.RejectedOptions.OrderBy(option => option.Id, StringComparer.Ordinal))
+        {
+            markdown.Bullet($"{option.Id}: {option.Title} - {option.Description}");
+            markdown.NestedEvidenceList(option.Evidence);
+        }
+
+        markdown.EmptyListIf(diagnostics.RejectedOptions.Count == 0);
+        markdown.H3("Deduplicated Options");
+        foreach (DecisionOption option in diagnostics.DeduplicatedOptions.OrderBy(option => option.Id, StringComparer.Ordinal))
+        {
+            markdown.Bullet($"{option.Id}: {option.Title} - {option.Description}");
+            markdown.NestedEvidenceList(option.Evidence);
+        }
+
+        markdown.EmptyListIf(diagnostics.DeduplicatedOptions.Count == 0);
     }
 
     private sealed class MarkdownProjectionBuilder

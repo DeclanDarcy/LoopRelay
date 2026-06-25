@@ -18,6 +18,8 @@ public sealed class OptionGenerationService(
         IReadOnlyList<OptionTemplate> templates = TemplatesFor(candidate);
         var options = new List<DecisionOption>();
         var rejected = new List<DecisionOptionValidationResult>();
+        var rejectedOptions = new List<DecisionOption>();
+        var deduplicatedOptions = new List<DecisionOption>();
         var acceptedValidation = new List<DecisionOptionValidationResult>();
         var diagnostics = new List<string>();
         int optionNumber = 1;
@@ -39,6 +41,12 @@ public sealed class OptionGenerationService(
             if (!validation.IsValid)
             {
                 rejected.Add(validation);
+                rejectedOptions.Add(option);
+                if (validation.Issues.Any(issue => issue.Type == DecisionOptionValidationIssueType.Duplicate))
+                {
+                    deduplicatedOptions.Add(option);
+                }
+
                 diagnostics.Add($"Rejected {option.Id}: {string.Join("; ", validation.Issues.Select(issue => issue.Message))}");
                 continue;
             }
@@ -55,6 +63,12 @@ public sealed class OptionGenerationService(
             if (!fallbackValidation.IsValid)
             {
                 rejected.Add(fallbackValidation);
+                rejectedOptions.Add(fallback);
+                if (fallbackValidation.Issues.Any(issue => issue.Type == DecisionOptionValidationIssueType.Duplicate))
+                {
+                    deduplicatedOptions.Add(fallback);
+                }
+
                 break;
             }
 
@@ -76,7 +90,11 @@ public sealed class OptionGenerationService(
             rejected.Count(result => result.Issues.Any(issue => issue.Type == DecisionOptionValidationIssueType.Duplicate)),
             fallbackCount,
             acceptedValidation.Concat(rejected).OrderBy(result => result.OptionId, StringComparer.Ordinal).ToArray(),
-            diagnostics.Order(StringComparer.Ordinal).ToArray());
+            diagnostics.Order(StringComparer.Ordinal).ToArray())
+        {
+            RejectedOptions = rejectedOptions.OrderBy(option => option.Id, StringComparer.Ordinal).ToArray(),
+            DeduplicatedOptions = deduplicatedOptions.OrderBy(option => option.Id, StringComparer.Ordinal).ToArray()
+        };
 
         return new DecisionOptionGenerationResult(options, relationships, generationDiagnostics);
     }

@@ -699,7 +699,11 @@ public sealed class DecisionPackageService(
                 $"Reevaluate tradeoffs: {plan.ReevaluateTradeoffs}.",
                 $"Reevaluate recommendation: {plan.ReevaluateRecommendation}.",
                 $"Full regeneration: {plan.FullRegeneration}."
-            ]);
+            ])
+        {
+            RejectedOptions = previous?.RejectedOptions ?? [],
+            DeduplicatedOptions = previous?.DeduplicatedOptions ?? []
+        };
     }
 
     private static DecisionTradeoffAnalysisDiagnostics? BuildTradeoffDiagnostics(
