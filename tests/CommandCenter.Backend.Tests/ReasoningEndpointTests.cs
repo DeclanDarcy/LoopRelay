@@ -247,6 +247,38 @@ public sealed class ReasoningEndpointTests
     }
 
     [Fact]
+    public async Task ReasoningEndpointsReturnStructuredBoundaryViolationForRelationshipConflicts()
+    {
+        Repository repository = CreateRepository();
+        await using WebApplication app = await CreateAppAsync(repository);
+        using var client = new HttpClient();
+        string root = app.Urls.Single();
+        ReasoningEvent source = (await (await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/reasoning/events",
+            EventCommand("Source"))).Content.ReadFromJsonAsync<ReasoningEvent>(JsonOptions))!;
+
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/reasoning/relationships",
+            new CreateReasoningRelationshipCommand(
+                ReasoningRelationshipType.Supports,
+                new ReasoningReference(ReasoningReferenceKind.ReasoningEvent, source.Id),
+                new ReasoningReference(ReasoningReferenceKind.ReasoningEvent, "EVT-9999"),
+                new ReasoningNarrative("Missing target."),
+                Provenance()));
+
+        JsonDocument document = (await response.Content.ReadFromJsonAsync<JsonDocument>(JsonOptions))!;
+        JsonElement boundaryViolation = document.RootElement.GetProperty("boundaryViolation");
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal("Reasoning relationships may only target existing reasoning-owned artifacts.", boundaryViolation.GetProperty("boundaryRule").GetString());
+        Assert.Equal("ReasoningEvent", boundaryViolation.GetProperty("owningDomain").GetString());
+        Assert.Equal("ReasoningEvent:EVT-9999", boundaryViolation.GetProperty("rejectedAssertion").GetString());
+        Assert.Contains("Create or recover the reasoning event", boundaryViolation.GetProperty("allowedAlternative").GetString());
+        Assert.Contains("unreconstructable reasoning edge", boundaryViolation.GetProperty("diagnosticDetail").GetString());
+        Assert.Equal("Blocking", boundaryViolation.GetProperty("severity").GetString());
+    }
+
+    [Fact]
     public async Task ManualCaptureTemplatesExposeUserSuppliedEventClassifications()
     {
         Repository repository = CreateRepository();

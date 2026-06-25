@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   archiveDecision,
+  createReasoningRelationship,
   discoverDecisions,
   dismissDecisionCandidate,
   discardDecisionProposal,
@@ -21,6 +22,8 @@ import {
   recoverDecisionSession,
   subscribeToExecutionEvents,
   supersedeDecision,
+  getBoundaryViolation,
+  TransportError,
 } from '../../api'
 import type {
   DecisionSessionLifecycleProjection,
@@ -338,6 +341,96 @@ describe('transport boundary characterization', () => {
     expect(invoke).toHaveBeenNthCalledWith(3, 'recover_decision_session', {
       repositoryId: 'repo-alpha',
     }, undefined)
+  })
+
+  it('preserves structured boundary violations from backend error payloads', async () => {
+    const boundaryViolation = {
+      boundaryRule: 'Reasoning relationships may only target existing reasoning-owned artifacts.',
+      owningDomain: 'ReasoningEvent',
+      rejectedAssertion: 'ReasoningEvent:EVT-9999',
+      allowedAlternative: 'Create or recover the reasoning event before linking it.',
+      diagnosticDetail: 'ReasoningEvent authority could not resolve EVT-9999.',
+      severity: 'Blocking',
+    }
+    const invoke = vi.fn().mockRejectedValue(JSON.stringify({
+      error: 'Reasoning event EVT-9999 was not found.',
+      boundaryViolation,
+    }))
+
+    window.__TAURI_INTERNALS__ = {
+      invoke,
+      transformCallback: vi.fn(),
+      unregisterCallback: vi.fn(),
+      callbacks: {},
+      convertFileSrc: vi.fn(),
+    }
+
+    await expect(createReasoningRelationship('repo-alpha', {
+      type: 'Supports',
+      source: {
+        kind: 'ReasoningEvent',
+        id: 'EVT-0001',
+        relativePath: null,
+        section: null,
+        excerpt: null,
+      },
+      target: {
+        kind: 'ReasoningEvent',
+        id: 'EVT-9999',
+        relativePath: null,
+        section: null,
+        excerpt: null,
+      },
+      narrative: {
+        summary: 'Missing target.',
+        details: '',
+      },
+      provenance: {
+        sourceKind: 'ManualCapture',
+        capturedBy: 'codex',
+        relativePath: null,
+        section: null,
+        excerpt: null,
+        fingerprint: null,
+      },
+    })).rejects.toMatchObject({
+      message: 'Reasoning event EVT-9999 was not found.',
+      boundaryViolation,
+    } satisfies Partial<TransportError>)
+
+    try {
+      await createReasoningRelationship('repo-alpha', {
+        type: 'Supports',
+        source: {
+          kind: 'ReasoningEvent',
+          id: 'EVT-0001',
+          relativePath: null,
+          section: null,
+          excerpt: null,
+        },
+        target: {
+          kind: 'ReasoningEvent',
+          id: 'EVT-9999',
+          relativePath: null,
+          section: null,
+          excerpt: null,
+        },
+        narrative: {
+          summary: 'Missing target.',
+          details: '',
+        },
+        provenance: {
+          sourceKind: 'ManualCapture',
+          capturedBy: 'codex',
+          relativePath: null,
+          section: null,
+          excerpt: null,
+          fingerprint: null,
+        },
+      })
+    } catch (error) {
+      expect(getBoundaryViolation(error)).toEqual(boundaryViolation)
+    }
   })
 
   it('preserves core decision lifecycle command request and response handling', async () => {

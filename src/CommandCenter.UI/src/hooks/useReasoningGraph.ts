@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   formatError,
+  getBoundaryViolation,
   getReasoningGraph,
   traceReasoningBackward,
   traceReasoningForward,
 } from '../api'
 import type {
+  BoundaryViolationProjection,
   ReasoningGraph,
   ReasoningReferenceKind,
   ReasoningTrace,
@@ -18,6 +20,7 @@ export function useReasoningGraph(repositoryId: string | null) {
   const [isLoading, setIsLoading] = useState(false)
   const [isTracing, setIsTracing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [boundaryViolation, setBoundaryViolation] = useState<BoundaryViolationProjection | null>(null)
 
   const refresh = useCallback(async () => {
     if (!repositoryId) {
@@ -30,6 +33,7 @@ export function useReasoningGraph(repositoryId: string | null) {
 
     setIsLoading(true)
     setError(null)
+    setBoundaryViolation(null)
     try {
       const graph = await getReasoningGraph(repositoryId)
       setData(graph)
@@ -40,6 +44,7 @@ export function useReasoningGraph(repositoryId: string | null) {
       setBackwardTrace(null)
       setForwardTrace(null)
       setError(message)
+      setBoundaryViolation(getBoundaryViolation(graphError))
       return null
     } finally {
       setIsLoading(false)
@@ -56,6 +61,7 @@ export function useReasoningGraph(repositoryId: string | null) {
 
       setIsTracing(true)
       setError(null)
+      setBoundaryViolation(null)
       try {
         const [backward, forward] = await Promise.all([
           traceReasoningBackward(repositoryId, kind, id),
@@ -69,6 +75,7 @@ export function useReasoningGraph(repositoryId: string | null) {
         setBackwardTrace(null)
         setForwardTrace(null)
         setError(message)
+        setBoundaryViolation(getBoundaryViolation(traceError))
         return null
       } finally {
         setIsTracing(false)
@@ -84,6 +91,7 @@ export function useReasoningGraph(repositoryId: string | null) {
         setBackwardTrace(null)
         setForwardTrace(null)
         setIsLoading(false)
+        setBoundaryViolation(null)
       }, 0)
 
       return () => window.clearTimeout(timeoutId)
@@ -103,6 +111,7 @@ export function useReasoningGraph(repositoryId: string | null) {
     isLoading,
     isTracing,
     error,
+    boundaryViolation,
     refresh,
     trace,
   }

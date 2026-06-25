@@ -177,6 +177,36 @@ public sealed class ReasoningRepositoryTests
                 Provenance())));
 
         Assert.Contains("EVT-9999", exception.Message);
+        Assert.NotNull(exception.BoundaryViolation);
+        Assert.Equal("ReasoningEvent", exception.BoundaryViolation.OwningDomain);
+        Assert.Equal("ReasoningEvent:EVT-9999", exception.BoundaryViolation.RejectedAssertion);
+        Assert.Equal("Blocking", exception.BoundaryViolation.Severity);
+        Assert.Contains("Create or recover the reasoning event", exception.BoundaryViolation.AllowedAlternative);
+        Assert.Contains("unreconstructable reasoning edge", exception.BoundaryViolation.DiagnosticDetail);
+    }
+
+    [Fact]
+    public async Task DuplicateReasoningRelationshipsExposeBoundaryViolation()
+    {
+        IReasoningRepository reasoningRepository = CreateReasoningRepository(new MemoryArtifactStore());
+        Repository repository = CreateRepository();
+        ReasoningEvent source = await reasoningRepository.CreateEventAsync(repository, EventCommand(title: "Source"));
+        ReasoningEvent target = await reasoningRepository.CreateEventAsync(repository, EventCommand(title: "Target"));
+        var command = new CreateReasoningRelationshipCommand(
+            ReasoningRelationshipType.Supports,
+            new ReasoningReference(ReasoningReferenceKind.ReasoningEvent, source.Id),
+            new ReasoningReference(ReasoningReferenceKind.ReasoningEvent, target.Id),
+            new ReasoningNarrative("Source supports target."),
+            Provenance());
+
+        await reasoningRepository.CreateRelationshipAsync(repository, command);
+        ReasoningConflictException exception = await Assert.ThrowsAsync<ReasoningConflictException>(() =>
+            reasoningRepository.CreateRelationshipAsync(repository, command));
+
+        Assert.NotNull(exception.BoundaryViolation);
+        Assert.Equal("ReasoningRelationship", exception.BoundaryViolation.OwningDomain);
+        Assert.Equal("Warning", exception.BoundaryViolation.Severity);
+        Assert.Contains("existing relationship", exception.BoundaryViolation.AllowedAlternative);
     }
 
     [Fact]

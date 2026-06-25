@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import { formatError, listReasoningManualCaptureTemplates } from '../api'
-import type { ManualReasoningCaptureTemplate } from '../types'
+import { formatError, getBoundaryViolation, listReasoningManualCaptureTemplates } from '../api'
+import type { BoundaryViolationProjection, ManualReasoningCaptureTemplate } from '../types'
 
 export function useReasoningManualCaptureTemplates(repositoryId: string | null) {
   const [data, setData] = useState<ManualReasoningCaptureTemplate[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [boundaryViolation, setBoundaryViolation] = useState<BoundaryViolationProjection | null>(null)
 
   const refresh = useCallback(async () => {
     if (!repositoryId) {
@@ -16,6 +17,7 @@ export function useReasoningManualCaptureTemplates(repositoryId: string | null) 
 
     setIsLoading(true)
     setError(null)
+    setBoundaryViolation(null)
     try {
       const templates = await listReasoningManualCaptureTemplates(repositoryId)
       setData(templates)
@@ -24,6 +26,7 @@ export function useReasoningManualCaptureTemplates(repositoryId: string | null) 
       const message = formatError(templateError)
       setData([])
       setError(message)
+      setBoundaryViolation(getBoundaryViolation(templateError))
       return []
     } finally {
       setIsLoading(false)
@@ -35,6 +38,7 @@ export function useReasoningManualCaptureTemplates(repositoryId: string | null) 
       const timeoutId = window.setTimeout(() => {
         setData([])
         setIsLoading(false)
+        setBoundaryViolation(null)
       }, 0)
 
       return () => window.clearTimeout(timeoutId)
@@ -47,5 +51,5 @@ export function useReasoningManualCaptureTemplates(repositoryId: string | null) 
     return () => window.clearTimeout(timeoutId)
   }, [refresh, repositoryId])
 
-  return { data, setData, isLoading, error, refresh, load: refresh }
+  return { data, setData, isLoading, error, boundaryViolation, refresh, load: refresh }
 }

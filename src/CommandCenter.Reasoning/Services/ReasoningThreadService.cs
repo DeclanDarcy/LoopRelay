@@ -31,7 +31,7 @@ public sealed class ReasoningThreadService(
         }
         catch (ReasoningValidationException exception) when (IsMissingReasoningReference(exception))
         {
-            throw new ReasoningConflictException(exception.Message);
+            throw new ReasoningConflictException(exception.Message, exception.BoundaryViolation);
         }
     }
 
@@ -44,7 +44,7 @@ public sealed class ReasoningThreadService(
         }
         catch (ReasoningValidationException exception) when (IsMissingReasoningReference(exception))
         {
-            throw new ReasoningConflictException(exception.Message);
+            throw new ReasoningConflictException(exception.Message, exception.BoundaryViolation);
         }
     }
 
@@ -58,6 +58,7 @@ public sealed class ReasoningThreadService(
     private static bool IsMissingReasoningReference(ReasoningValidationException exception)
     {
         return exception.Message.StartsWith("Reasoning event ", StringComparison.Ordinal) ||
-            exception.Message.StartsWith("Reasoning thread ", StringComparison.Ordinal);
+            exception.Message.StartsWith("Reasoning thread ", StringComparison.Ordinal) ||
+            exception.BoundaryViolation is not null;
     }
 }

@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import { formatError, getReasoningMaterializationReview, runReasoningMaterializationReview } from '../api'
+import {
+  formatError,
+  getBoundaryViolation,
+  getReasoningMaterializationReview,
+  runReasoningMaterializationReview,
+} from '../api'
 import type {
+  BoundaryViolationProjection,
   ReasoningMaterializationReviewReport,
   ReasoningMaterializationReviewRequest,
 } from '../types'
@@ -10,6 +16,7 @@ export function useReasoningMaterializationReview(repositoryId: string | null) {
   const [isLoading, setIsLoading] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [boundaryViolation, setBoundaryViolation] = useState<BoundaryViolationProjection | null>(null)
 
   const refresh = useCallback(async () => {
     if (!repositoryId) {
@@ -21,6 +28,7 @@ export function useReasoningMaterializationReview(repositoryId: string | null) {
 
     setIsLoading(true)
     setError(null)
+    setBoundaryViolation(null)
     try {
       const report = await getReasoningMaterializationReview(repositoryId)
       setData(report)
@@ -29,6 +37,7 @@ export function useReasoningMaterializationReview(repositoryId: string | null) {
       const message = formatError(reviewError)
       setData(null)
       setError(message)
+      setBoundaryViolation(getBoundaryViolation(reviewError))
       return null
     } finally {
       setIsLoading(false)
@@ -44,6 +53,7 @@ export function useReasoningMaterializationReview(repositoryId: string | null) {
 
       setIsRunning(true)
       setError(null)
+      setBoundaryViolation(null)
       try {
         const report = await runReasoningMaterializationReview(repositoryId, request)
         setData(report)
@@ -52,6 +62,7 @@ export function useReasoningMaterializationReview(repositoryId: string | null) {
         const message = formatError(reviewError)
         setData(null)
         setError(message)
+        setBoundaryViolation(getBoundaryViolation(reviewError))
         return null
       } finally {
         setIsRunning(false)
@@ -67,6 +78,7 @@ export function useReasoningMaterializationReview(repositoryId: string | null) {
         setIsLoading(false)
         setIsRunning(false)
         setError(null)
+        setBoundaryViolation(null)
       }, 0)
 
       return () => window.clearTimeout(timeoutId)
@@ -79,5 +91,5 @@ export function useReasoningMaterializationReview(repositoryId: string | null) {
     return () => window.clearTimeout(timeoutId)
   }, [refresh, repositoryId])
 
-  return { data, setData, isLoading, isRunning, error, refresh, run }
+  return { data, setData, isLoading, isRunning, error, boundaryViolation, refresh, run }
 }

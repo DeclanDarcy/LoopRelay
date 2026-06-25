@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import { formatError, reconstructReasoning } from '../api'
-import type { ReasoningQuery, ReasoningReconstruction } from '../types'
+import { formatError, getBoundaryViolation, reconstructReasoning } from '../api'
+import type { BoundaryViolationProjection, ReasoningQuery, ReasoningReconstruction } from '../types'
 
 export function useReasoningReconstruction(repositoryId: string | null) {
   const [data, setData] = useState<ReasoningReconstruction | null>(null)
   const [isRunning, setIsRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [boundaryViolation, setBoundaryViolation] = useState<BoundaryViolationProjection | null>(null)
 
   const run = useCallback(
     async (query: ReasoningQuery) => {
@@ -16,6 +17,7 @@ export function useReasoningReconstruction(repositoryId: string | null) {
 
       setIsRunning(true)
       setError(null)
+      setBoundaryViolation(null)
       try {
         const reconstruction = await reconstructReasoning(repositoryId, query)
         setData(reconstruction)
@@ -24,6 +26,7 @@ export function useReasoningReconstruction(repositoryId: string | null) {
         const message = formatError(reconstructionError)
         setData(null)
         setError(message)
+        setBoundaryViolation(getBoundaryViolation(reconstructionError))
         return null
       } finally {
         setIsRunning(false)
@@ -38,6 +41,7 @@ export function useReasoningReconstruction(repositoryId: string | null) {
         setData(null)
         setIsRunning(false)
         setError(null)
+        setBoundaryViolation(null)
       }, 0)
 
       return () => window.clearTimeout(timeoutId)
@@ -50,6 +54,7 @@ export function useReasoningReconstruction(repositoryId: string | null) {
     data,
     isRunning,
     error,
+    boundaryViolation,
     run,
   }
 }

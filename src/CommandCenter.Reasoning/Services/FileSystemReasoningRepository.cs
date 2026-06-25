@@ -177,7 +177,9 @@ public sealed class FileSystemReasoningRepository(
             relationship.Target.Kind == command.Target.Kind &&
             string.Equals(relationship.Target.Id, command.Target.Id, StringComparison.Ordinal)))
         {
-            throw new ReasoningConflictException("Reasoning relationship already exists.");
+            throw new ReasoningConflictException(
+                "Reasoning relationship already exists.",
+                DuplicateRelationshipBoundary(command));
         }
 
         string id = await AllocateIdAsync(repository, ReasoningArtifactPaths.RelationshipsRootPath(), "REL");
@@ -371,7 +373,9 @@ public sealed class FileSystemReasoningRepository(
         ReasoningArtifactPaths.ValidateEventId(eventId);
         if (await GetEventAsync(repository, eventId) is null)
         {
-            throw new ReasoningValidationException($"Reasoning event {eventId} was not found.");
+            throw new ReasoningValidationException(
+                $"Reasoning event {eventId} was not found.",
+                MissingReasoningReferenceBoundary(ReasoningReferenceKind.ReasoningEvent, eventId));
         }
     }
 
@@ -387,9 +391,40 @@ public sealed class FileSystemReasoningRepository(
             ReasoningArtifactPaths.ValidateThreadId(reference.Id);
             if (await GetThreadAsync(repository, reference.Id) is null)
             {
-                throw new ReasoningValidationException($"Reasoning thread {reference.Id} was not found.");
+                throw new ReasoningValidationException(
+                    $"Reasoning thread {reference.Id} was not found.",
+                    MissingReasoningReferenceBoundary(ReasoningReferenceKind.ReasoningThread, reference.Id));
             }
         }
+    }
+
+    private static ReasoningBoundaryViolation MissingReasoningReferenceBoundary(
+        ReasoningReferenceKind referenceKind,
+        string referenceId)
+    {
+        string owningDomain = referenceKind == ReasoningReferenceKind.ReasoningThread
+            ? "ReasoningThread"
+            : "ReasoningEvent";
+        return new ReasoningBoundaryViolation(
+            "Reasoning relationships may only target existing reasoning-owned artifacts.",
+            owningDomain,
+            $"{referenceKind}:{referenceId}",
+            referenceKind == ReasoningReferenceKind.ReasoningThread
+                ? "Create or recover the reasoning thread before linking it, or use a non-reasoning reference kind for external domain evidence."
+                : "Create or recover the reasoning event before linking it, or use a non-reasoning reference kind for external domain evidence.",
+            $"{owningDomain} authority could not resolve {referenceId}; accepting the relationship would create an unreconstructable reasoning edge.",
+            "Blocking");
+    }
+
+    private static ReasoningBoundaryViolation DuplicateRelationshipBoundary(CreateReasoningRelationshipCommand command)
+    {
+        return new ReasoningBoundaryViolation(
+            "Reasoning relationship identity is source, target, and relationship type.",
+            "ReasoningRelationship",
+            $"{command.Type}:{command.Source.Kind}:{command.Source.Id}->{command.Target.Kind}:{command.Target.Id}",
+            "Use the existing relationship as evidence, or create a distinct relationship type/source/target when the assertion is semantically different.",
+            "The requested relationship duplicates an existing reasoning edge and would not add new authoritative evidence.",
+            "Warning");
     }
 
     private static bool IsReferenceToThread(ReasoningReference reference, string threadId)

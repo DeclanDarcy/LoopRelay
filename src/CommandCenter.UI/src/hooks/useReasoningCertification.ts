@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   formatError,
+  getBoundaryViolation,
   getReasoningCertification,
   listReasoningCertificationReports,
   runReasoningCertification,
 } from '../api'
-import type { ReasoningCertificationReport } from '../types'
+import type { BoundaryViolationProjection, ReasoningCertificationReport } from '../types'
 
 export function useReasoningCertification(repositoryId: string | null) {
   const [currentReport, setCurrentReport] = useState<ReasoningCertificationReport | null>(null)
@@ -13,6 +14,7 @@ export function useReasoningCertification(repositoryId: string | null) {
   const [isLoading, setIsLoading] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [boundaryViolation, setBoundaryViolation] = useState<BoundaryViolationProjection | null>(null)
 
   const refresh = useCallback(async () => {
     if (!repositoryId) {
@@ -25,6 +27,7 @@ export function useReasoningCertification(repositoryId: string | null) {
 
     setIsLoading(true)
     setError(null)
+    setBoundaryViolation(null)
     try {
       const [current, history] = await Promise.all([
         getReasoningCertification(repositoryId),
@@ -38,6 +41,7 @@ export function useReasoningCertification(repositoryId: string | null) {
       setCurrentReport(null)
       setReports([])
       setError(message)
+      setBoundaryViolation(getBoundaryViolation(certificationError))
       return null
     } finally {
       setIsLoading(false)
@@ -51,6 +55,7 @@ export function useReasoningCertification(repositoryId: string | null) {
 
     setIsRunning(true)
     setError(null)
+    setBoundaryViolation(null)
     try {
       const report = await runReasoningCertification(repositoryId)
       const history = await listReasoningCertificationReports(repositoryId)
@@ -60,6 +65,7 @@ export function useReasoningCertification(repositoryId: string | null) {
     } catch (certificationError) {
       const message = formatError(certificationError)
       setError(message)
+      setBoundaryViolation(getBoundaryViolation(certificationError))
       return null
     } finally {
       setIsRunning(false)
@@ -74,6 +80,7 @@ export function useReasoningCertification(repositoryId: string | null) {
         setIsLoading(false)
         setIsRunning(false)
         setError(null)
+        setBoundaryViolation(null)
       }, 0)
 
       return () => window.clearTimeout(timeoutId)
@@ -92,6 +99,7 @@ export function useReasoningCertification(repositoryId: string | null) {
     isLoading,
     isRunning,
     error,
+    boundaryViolation,
     refresh,
     runCertification,
   }

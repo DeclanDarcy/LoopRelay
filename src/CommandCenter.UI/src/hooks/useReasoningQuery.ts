@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import { formatError, queryReasoning } from '../api'
-import type { ReasoningQuery, ReasoningQueryResult } from '../types'
+import { formatError, getBoundaryViolation, queryReasoning } from '../api'
+import type { BoundaryViolationProjection, ReasoningQuery, ReasoningQueryResult } from '../types'
 
 export function useReasoningQuery(repositoryId: string | null) {
   const [data, setData] = useState<ReasoningQueryResult | null>(null)
   const [isRunning, setIsRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [boundaryViolation, setBoundaryViolation] = useState<BoundaryViolationProjection | null>(null)
 
   const run = useCallback(
     async (query: ReasoningQuery) => {
@@ -16,6 +17,7 @@ export function useReasoningQuery(repositoryId: string | null) {
 
       setIsRunning(true)
       setError(null)
+      setBoundaryViolation(null)
       try {
         const result = await queryReasoning(repositoryId, query)
         setData(result)
@@ -24,6 +26,7 @@ export function useReasoningQuery(repositoryId: string | null) {
         const message = formatError(queryError)
         setData(null)
         setError(message)
+        setBoundaryViolation(getBoundaryViolation(queryError))
         return null
       } finally {
         setIsRunning(false)
@@ -38,6 +41,7 @@ export function useReasoningQuery(repositoryId: string | null) {
         setData(null)
         setIsRunning(false)
         setError(null)
+        setBoundaryViolation(null)
       }, 0)
 
       return () => window.clearTimeout(timeoutId)
@@ -50,6 +54,7 @@ export function useReasoningQuery(repositoryId: string | null) {
     data,
     isRunning,
     error,
+    boundaryViolation,
     run,
   }
 }

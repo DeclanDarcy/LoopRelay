@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import { formatError, listReasoningEvents } from '../api'
-import type { ReasoningEvent } from '../types'
+import { formatError, getBoundaryViolation, listReasoningEvents } from '../api'
+import type { BoundaryViolationProjection, ReasoningEvent } from '../types'
 
 export function useReasoningEvents(repositoryId: string | null) {
   const [data, setData] = useState<ReasoningEvent[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [boundaryViolation, setBoundaryViolation] = useState<BoundaryViolationProjection | null>(null)
 
   const refresh = useCallback(async () => {
     if (!repositoryId) {
@@ -16,6 +17,7 @@ export function useReasoningEvents(repositoryId: string | null) {
 
     setIsLoading(true)
     setError(null)
+    setBoundaryViolation(null)
     try {
       const events = await listReasoningEvents(repositoryId)
       setData(events)
@@ -24,6 +26,7 @@ export function useReasoningEvents(repositoryId: string | null) {
       const message = formatError(eventsError)
       setData([])
       setError(message)
+      setBoundaryViolation(getBoundaryViolation(eventsError))
       return []
     } finally {
       setIsLoading(false)
@@ -35,6 +38,7 @@ export function useReasoningEvents(repositoryId: string | null) {
       const timeoutId = window.setTimeout(() => {
         setData([])
         setIsLoading(false)
+        setBoundaryViolation(null)
       }, 0)
 
       return () => window.clearTimeout(timeoutId)
@@ -47,5 +51,5 @@ export function useReasoningEvents(repositoryId: string | null) {
     return () => window.clearTimeout(timeoutId)
   }, [refresh, repositoryId])
 
-  return { data, setData, isLoading, error, refresh, load: refresh }
+  return { data, setData, isLoading, error, boundaryViolation, refresh, load: refresh }
 }

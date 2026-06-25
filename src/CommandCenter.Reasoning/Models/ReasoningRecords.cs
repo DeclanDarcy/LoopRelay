@@ -30,6 +30,14 @@ public sealed record ReasoningCaptureProvenance(
     string? DuplicateSignal = null,
     ReasoningReference? ExistingEventReference = null);
 
+public sealed record ReasoningBoundaryViolation(
+    string BoundaryRule,
+    string OwningDomain,
+    string RejectedAssertion,
+    string AllowedAlternative,
+    string DiagnosticDetail,
+    string Severity);
+
 public sealed record ReasoningEvent(
     string Id,
     Guid RepositoryId,

@@ -528,6 +528,7 @@ function renderTab(overrides: Partial<Parameters<typeof ReasoningTrajectoryTab>[
     reconstructionError: null,
     materializationReviewError: null,
     certificationError: null,
+    boundaryViolations: [],
     onRefresh: vi.fn(),
     onTraceGraphNode: vi.fn(),
     onRunQuery: vi.fn().mockResolvedValue(undefined),
@@ -571,6 +572,38 @@ describe('reasoning trajectory tab', () => {
     expect(screen.getByText('No reasoning events recorded.')).toBeInTheDocument()
     expect(screen.getByText('No reasoning threads recorded.')).toBeInTheDocument()
     expect(screen.getByText('No reasoning relationships recorded.')).toBeInTheDocument()
+  })
+
+  it('renders structured authority-boundary notices verbatim', () => {
+    renderTab({
+      error: 'Reasoning event EVT-9999 was not found.',
+      boundaryViolations: [
+        {
+          boundaryRule: 'Reasoning relationships may only target existing reasoning-owned artifacts.',
+          owningDomain: 'ReasoningEvent',
+          rejectedAssertion: 'ReasoningEvent:EVT-9999',
+          allowedAlternative: 'Create or recover the reasoning event before linking it.',
+          diagnosticDetail: 'ReasoningEvent authority could not resolve EVT-9999.',
+          severity: 'Blocking',
+        },
+      ],
+    })
+
+    const notices = screen.getByRole('region', { name: 'Authority boundary notices' })
+    const notice = within(notices).getByRole('article', { name: 'Authority boundary notice' })
+
+    expect(within(notice).getByText('Boundary rule')).toBeInTheDocument()
+    expect(within(notice).getByText('Reasoning relationships may only target existing reasoning-owned artifacts.')).toBeInTheDocument()
+    expect(within(notice).getByText('Owning domain')).toBeInTheDocument()
+    expect(within(notice).getByText('ReasoningEvent')).toBeInTheDocument()
+    expect(within(notice).getByText('Rejected assertion')).toBeInTheDocument()
+    expect(within(notice).getByText('ReasoningEvent:EVT-9999')).toBeInTheDocument()
+    expect(within(notice).getByText('Allowed alternative')).toBeInTheDocument()
+    expect(within(notice).getByText('Create or recover the reasoning event before linking it.')).toBeInTheDocument()
+    expect(within(notice).getByText('Diagnostic detail')).toBeInTheDocument()
+    expect(within(notice).getByText('ReasoningEvent authority could not resolve EVT-9999.')).toBeInTheDocument()
+    expect(within(notice).getByText('Severity')).toBeInTheDocument()
+    expect(within(notice).getByText('Blocking')).toBeInTheDocument()
   })
 
   it('filters the event feed when a thread is selected', () => {

@@ -321,9 +321,11 @@ struct ExecutionAcceptanceRequest {
     decision_note: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 struct ErrorResponse {
     error: String,
+    #[serde(rename = "boundaryViolation", skip_serializing_if = "Option::is_none")]
+    boundary_violation: Option<Value>,
 }
 
 impl BackendProcess {
@@ -2686,10 +2688,14 @@ fn backend_post_json_value<T: Serialize>(
 
 fn response_error<T>(response: reqwest::blocking::Response, fallback: &str) -> Result<T, String> {
     let status = response.status();
-    let message = response
-        .json::<ErrorResponse>()
-        .map(|response| response.error)
-        .unwrap_or_else(|_| format!("{fallback} with status {status}"));
+    let message = match response.json::<ErrorResponse>() {
+        Ok(error_response) if error_response.boundary_violation.is_some() => {
+            serde_json::to_string(&error_response)
+                .unwrap_or_else(|_| error_response.error)
+        }
+        Ok(error_response) => error_response.error,
+        Err(_) => format!("{fallback} with status {status}"),
+    };
 
     Err(message)
 }

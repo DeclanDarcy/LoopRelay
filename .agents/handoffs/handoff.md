@@ -2,28 +2,31 @@
 
 ## New State This Slice
 
-- Continued Milestone 6 with skipped and deduplicated inferred reasoning capture transparency.
-- Rotated previous handoff to `.agents/handoffs/handoff.0044.md`.
-- Added `ReasoningCaptureAttemptOutcome` and `ReasoningCaptureAttemptResult` in `src/CommandCenter.Backend/Services/ReasoningCaptureAttemptResult.cs`.
-- `IDecisionReasoningCaptureService` now returns capture-attempt results for inferred capture operations instead of only performing side effects.
-- `DecisionReasoningCaptureService` now reports captured, skipped, and duplicate inferred capture outcomes with attempted mode, source transition, source artifact, source timestamp, capture reason, skip reason, duplicate fingerprint signal, existing event reference, captured event reference, and diagnostics.
-- Duplicate inferred capture paths now return an existing `ReasoningEvent` reference without creating a new event.
-- Skipped operational-context semantic changes, non-contradiction governance findings, workflow-only execution handoffs, missing handoff artifacts, and empty handoff content now return skipped attempt results without creating reasoning events.
-- Updated `DecisionReasoningCaptureServiceTests` to assert captured, duplicate, and skipped attempt semantics.
-- Marked the Milestone 6 skipped/deduplicated capture checklist item complete.
+- Continued Milestone 6 with UI authority-boundary notices.
+- Rotated previous decisions to `.agents/decisions/decisions.0046.md` and recorded only this slice's newly authorized UI-boundary decisions in `.agents/decisions/decisions.md`.
+- Rotated previous handoff to `.agents/handoffs/handoff.0046.md`.
+- `src/CommandCenter.Shell/src/main.rs` now preserves backend error payloads containing `boundaryViolation` by forwarding the serialized backend error JSON through the Tauri error channel.
+- Added generic `BoundaryViolationProjection` in `src/CommandCenter.UI/src/types/boundary.ts`.
+- `src/CommandCenter.UI/src/api/tauri.ts` now parses structured transport errors into `TransportError`, preserving `boundaryViolation` while keeping existing formatted error messages stable.
+- Reasoning hooks now expose optional `boundaryViolation` state alongside existing string errors.
+- Added presentation-only `BoundaryNotice` in `src/CommandCenter.UI/src/components/BoundaryNotice.tsx`.
+- `ReasoningTrajectoryTab` now renders authority-boundary notices from supplied backend projections without interpreting or classifying them.
+- Marked the Milestone 6 UI authority-boundary notice item complete.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~DecisionReasoningCaptureServiceTests` passed: 11 tests.
+- `npm run test -- src/test/characterization/transport.test.ts src/test/characterization/reasoningTrajectory.test.tsx` passed: 19 tests.
+- `npm run build` passed.
 - `dotnet build CommandCenter.slnx` passed.
+- `cargo check` in `src/CommandCenter.Shell` passed.
 
 ## Residual Risk
 
-- Endpoint response payloads intentionally remain unchanged for compatibility; capture-attempt results are observable at the service boundary but are not yet surfaced in UI workflows.
-- Capture attempts are not durable artifacts. This matches the current authorization that skipped attempts must not be treated as durable reasoning events, but it means callers must inspect the immediate result if they need skipped/duplicate details.
-- Structured authority-boundary errors and grouped reasoning diagnostics remain open Milestone 6 work.
+- Boundary notices are wired for reasoning UI surfaces, but grouped reasoning diagnostics remain open.
+- Manual-capture failures still surface through the existing global App error path; the reusable notice is available, but the form-level capture path has not been given a dedicated local notice state.
+- `BoundaryViolationProjection` remains a UI transport/presentation type, not a shared semantic authority.
 
 ## Recommended Next Slice
 
-- Continue Milestone 6 with structured authority-boundary error responses.
-- Highest leverage path: replace plain reasoning boundary exceptions with a structured response containing boundary rule, owning domain, rejected assertion, allowed alternative, and diagnostic detail, then add backend tests for the rejected paths.
+- Continue Milestone 6 with grouped reasoning diagnostics.
+- Highest leverage path: introduce a backend-owned grouped diagnostic projection for evidence, confidence, materialization, reconstruction, capture, authority boundary, lifecycle risk, and validation, then render it with a reusable grouped diagnostics component.

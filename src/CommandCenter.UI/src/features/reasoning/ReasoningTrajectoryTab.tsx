@@ -1,6 +1,8 @@
 import { useMemo, useState, type FormEvent } from 'react'
+import { BoundaryNotice } from '../../components/BoundaryNotice'
 import { EmptyState, Panel, SectionHeader } from '../../components/design'
 import type {
+  BoundaryViolationProjection,
   ManualReasoningCaptureCommand,
   ManualReasoningCaptureTemplate,
   ReasoningEvent,
@@ -52,6 +54,7 @@ type ReasoningTrajectoryTabProps = {
   reconstructionError: string | null
   materializationReviewError: string | null
   certificationError: string | null
+  boundaryViolations?: BoundaryViolationProjection[]
   onRefresh: () => void
   onTraceGraphNode: (node: ReasoningGraphNode) => void
   onRunQuery: (query: ReasoningQuery) => Promise<unknown>
@@ -87,6 +90,7 @@ export function ReasoningTrajectoryTab({
   reconstructionError,
   materializationReviewError,
   certificationError,
+  boundaryViolations = [],
   onRefresh,
   onTraceGraphNode,
   onRunQuery,
@@ -202,6 +206,16 @@ export function ReasoningTrajectoryTab({
           </div>
 
           {error ? <p className="notice error">{error}</p> : null}
+          {boundaryViolations.length > 0 ? (
+            <section className="boundary-notice-list" aria-label="Authority boundary notices">
+              {boundaryViolations.map((violation, index) => (
+                <BoundaryNotice
+                  violation={violation}
+                  key={`${violation.owningDomain}:${violation.rejectedAssertion}:${index}`}
+                />
+              ))}
+            </section>
+          ) : null}
 
           <section className="reasoning-panel reasoning-capture-panel" aria-label="Record reasoning event">
             <div className="decision-panel-heading">

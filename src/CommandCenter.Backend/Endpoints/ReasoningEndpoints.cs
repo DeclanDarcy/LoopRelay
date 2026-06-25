@@ -159,12 +159,21 @@ public static class ReasoningEndpoints
         }
         catch (ReasoningConflictException exception)
         {
-            return Results.Conflict(new { error = exception.Message });
+            return Results.Conflict(CreateErrorResponse(exception));
         }
         catch (ReasoningValidationException exception)
         {
-            return Results.BadRequest(new { error = exception.Message });
+            return Results.BadRequest(CreateErrorResponse(exception));
         }
+    }
+
+    private static object CreateErrorResponse(ReasoningValidationException exception)
+    {
+        return new
+        {
+            error = exception.Message,
+            boundaryViolation = exception.BoundaryViolation
+        };
     }
 
     private static ReasoningReference CreateTraceTarget(string kind, string id)

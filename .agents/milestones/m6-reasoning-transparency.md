@@ -41,12 +41,12 @@ Make reasoning conclusions explain their provenance, confidence, thresholds, rec
    - [x] Inferred
 - [x] For inferred capture, expose source transition, source artifact, capture reason, captured by, and source timestamp.
 - [x] For skipped or deduplicated capture, expose skip reason, existing event id, and duplicate signal where relevant.
-- [ ] Replace plain boundary errors with structured boundary error responses:
-   - [ ] boundary rule
-   - [ ] owning domain
-   - [ ] rejected assertion
-   - [ ] allowed alternative
-   - [ ] diagnostic detail
+- [x] Replace plain boundary errors with structured boundary error responses:
+   - [x] boundary rule
+   - [x] owning domain
+   - [x] rejected assertion
+   - [x] allowed alternative
+   - [x] diagnostic detail
 - [ ] Extend taxonomy lifecycle risk findings with:
    - [x] family
    - [x] event type count
@@ -70,7 +70,7 @@ Make reasoning conclusions explain their provenance, confidence, thresholds, rec
 - [x] Update `ReasoningMaterializationReviewPanel` to render literal recommendations and threshold basis.
 - [ ] Update `ReasoningReconstructionPanel`, `ReasoningQueryPanel`, and trace panels to show confidence rationale, evidence branches, missing evidence, direction, scope, and historical cutoff.
 - [x] Update `ReasoningEventFeed` with capture provenance badges and inferred capture details.
-- [ ] Add authority boundary notices that identify the owning domain and allowed alternative.
+- [x] Add authority boundary notices that identify the owning domain and allowed alternative.
 - [x] Update taxonomy and materialization review rendering to show lifecycle-risk rules and thresholds.
 - [ ] Add a grouped reasoning diagnostics component.
 
@@ -80,7 +80,7 @@ Make reasoning conclusions explain their provenance, confidence, thresholds, rec
 - [x] Backend tests for confidence rationale branches.
 - [x] Backend tests for forward/backward reconstruction scope.
 - [x] Backend tests for manual, assisted, and inferred capture.
-- [ ] Backend tests for boundary violation explanations.
+- [x] Backend tests for boundary violation explanations.
 - [x] Backend tests for lifecycle risk thresholds.
 - [ ] UI tests for rendering each explanation branch.
 
@@ -90,6 +90,6 @@ Make reasoning conclusions explain their provenance, confidence, thresholds, rec
 - [ ] Confidence labels explain their evidence and missing evidence.
 - [ ] Reconstruction scope and direction are explicit.
 - [ ] Authored, assisted, and inferred reasoning are distinguishable.
-- [ ] Boundary violations explain the owning rule and allowed alternative.
+- [x] Boundary violations explain the owning rule and allowed alternative.
 - [x] Lifecycle risk findings show their rule basis.
 - [ ] Reasoning diagnostics are semantically grouped and actionable.

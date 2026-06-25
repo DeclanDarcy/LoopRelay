@@ -323,6 +323,49 @@ button:focus-visible {
   background: var(--status-danger-subtle);
 }
 
+.boundary-notice-list {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.boundary-notice {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--status-danger-muted);
+  border-radius: var(--radius-6);
+  background: var(--status-danger-subtle);
+}
+
+.boundary-notice div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.boundary-notice span {
+  color: var(--status-danger-fg);
+  font-size: 0.76rem;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.boundary-notice strong,
+.boundary-notice p {
+  min-width: 0;
+  margin: 0;
+  color: var(--fg-default);
+  overflow-wrap: anywhere;
+}
+
+.boundary-notice p {
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
 .notice.success {
   border: 1px solid var(--status-success-muted);
   color: var(--accent-emphasis);

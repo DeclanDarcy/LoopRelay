@@ -301,24 +301,28 @@ function App() {
     data: reasoningEvents,
     isLoading: isReasoningEventsLoading,
     error: reasoningEventsError,
+    boundaryViolation: reasoningEventsBoundaryViolation,
     refresh: refreshReasoningEvents,
   } = useReasoningEvents(selectedRepository?.repository.id ?? null)
   const {
     data: reasoningManualCaptureTemplates,
     isLoading: isReasoningManualCaptureTemplatesLoading,
     error: reasoningManualCaptureTemplatesError,
+    boundaryViolation: reasoningManualCaptureTemplatesBoundaryViolation,
     refresh: refreshReasoningManualCaptureTemplates,
   } = useReasoningManualCaptureTemplates(selectedRepository?.repository.id ?? null)
   const {
     data: reasoningThreads,
     isLoading: isReasoningThreadsLoading,
     error: reasoningThreadsError,
+    boundaryViolation: reasoningThreadsBoundaryViolation,
     refresh: refreshReasoningThreads,
   } = useReasoningThreads(selectedRepository?.repository.id ?? null)
   const {
     data: reasoningRelationships,
     isLoading: isReasoningRelationshipsLoading,
     error: reasoningRelationshipsError,
+    boundaryViolation: reasoningRelationshipsBoundaryViolation,
     refresh: refreshReasoningRelationships,
   } = useReasoningRelationships(selectedRepository?.repository.id ?? null)
   const {
@@ -328,6 +332,7 @@ function App() {
     isLoading: isReasoningGraphLoading,
     isTracing: isReasoningGraphTracing,
     error: reasoningGraphError,
+    boundaryViolation: reasoningGraphBoundaryViolation,
     refresh: refreshReasoningGraph,
     trace: traceReasoningGraph,
   } = useReasoningGraph(selectedRepository?.repository.id ?? null)
@@ -335,12 +340,14 @@ function App() {
     data: reasoningQueryResult,
     isRunning: isReasoningQueryRunning,
     error: reasoningQueryError,
+    boundaryViolation: reasoningQueryBoundaryViolation,
     run: runReasoningQuery,
   } = useReasoningQuery(selectedRepository?.repository.id ?? null)
   const {
     data: reasoningReconstruction,
     isRunning: isReasoningReconstructionRunning,
     error: reasoningReconstructionError,
+    boundaryViolation: reasoningReconstructionBoundaryViolation,
     run: runReasoningReconstruction,
   } = useReasoningReconstruction(selectedRepository?.repository.id ?? null)
   const {
@@ -348,6 +355,7 @@ function App() {
     isLoading: isReasoningMaterializationReviewLoading,
     isRunning: isReasoningMaterializationReviewRunning,
     error: reasoningMaterializationReviewError,
+    boundaryViolation: reasoningMaterializationReviewBoundaryViolation,
     refresh: refreshReasoningMaterializationReview,
     run: runReasoningMaterializationReview,
   } = useReasoningMaterializationReview(selectedRepository?.repository.id ?? null)
@@ -357,6 +365,7 @@ function App() {
     isLoading: isReasoningCertificationLoading,
     isRunning: isReasoningCertificationRunning,
     error: reasoningCertificationError,
+    boundaryViolation: reasoningCertificationBoundaryViolation,
     refresh: refreshReasoningCertification,
     runCertification: runReasoningCertification,
   } = useReasoningCertification(selectedRepository?.repository.id ?? null)
@@ -2016,6 +2025,17 @@ function App() {
                 reconstructionError={reasoningReconstructionError}
                 materializationReviewError={reasoningMaterializationReviewError}
                 certificationError={reasoningCertificationError}
+                boundaryViolations={[
+                  reasoningEventsBoundaryViolation,
+                  reasoningManualCaptureTemplatesBoundaryViolation,
+                  reasoningThreadsBoundaryViolation,
+                  reasoningRelationshipsBoundaryViolation,
+                  reasoningGraphBoundaryViolation,
+                  reasoningQueryBoundaryViolation,
+                  reasoningReconstructionBoundaryViolation,
+                  reasoningMaterializationReviewBoundaryViolation,
+                  reasoningCertificationBoundaryViolation,
+                ].filter((violation) => violation !== null)}
                 onRefresh={() => void refreshReasoning()}
                 onTraceGraphNode={(node) => void traceReasoningGraph(node.kind, node.referenceId)}
                 onRunQuery={queryReasoningTrajectory}

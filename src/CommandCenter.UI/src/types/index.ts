@@ -1,4 +1,5 @@
 export type * from './artifacts'
+export type * from './boundary'
 export type * from './continuity'
 export type * from './decisions'
 export type * from './decisionSessions'
