@@ -223,7 +223,7 @@ public sealed class UnderstandingCompressionService : IUnderstandingCompressionS
         if (ContainsEquivalent(resolvedQuestions, item))
         {
             return CreateOutcome(
-                "Removed",
+                "ResolvedQuestion",
                 item,
                 "explicit-question-resolution",
                 "Open questions are removed only when recent understanding contains explicit resolution evidence with matching meaningful tokens.",
@@ -234,7 +234,7 @@ public sealed class UnderstandingCompressionService : IUnderstandingCompressionS
         if (ContainsEquivalent(retiredRisks, item))
         {
             return CreateOutcome(
-                "Removed",
+                "RetiredRisk",
                 item,
                 "explicit-risk-retirement",
                 "Active risks are removed only when recent understanding contains explicit retirement evidence with matching meaningful tokens.",

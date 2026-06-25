@@ -10,6 +10,7 @@ import { OperationalContextAssimilationLimitPanel } from './OperationalContextAs
 import { OperationalContextAssimilationPanel } from './OperationalContextAssimilationPanel'
 import { OperationalContextConsequencePanel } from './OperationalContextConsequencePanel'
 import { OperationalContextContradictionPanel } from './OperationalContextContradictionPanel'
+import { OperationalContextCompressionExplanation } from './OperationalContextCompressionExplanation'
 import { OperationalContextCurrentPanel } from './OperationalContextCurrentPanel'
 import { OperationalContextProposalComparison } from './OperationalContextProposalComparison'
 import { OperationalContextProposalStatusPanel } from './OperationalContextProposalStatusPanel'
@@ -288,6 +289,9 @@ export function OperationalContextTab({
               compressionSummary={proposal.compressionSummary}
               onOpenContinuityCompression={onOpenContinuityCompression}
               onOpenContinuityDecisionRetention={onOpenContinuityDecisionRetention}
+            />
+            <OperationalContextCompressionExplanation
+              itemOutcomes={proposal.compressionSummary.itemOutcomes}
             />
             <OperationalContextProposalComparison
               currentContent={currentContent}

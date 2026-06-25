@@ -2,12 +2,12 @@
 
 ## Newly Authorized
 
-- Treat the typed semantic-change slice as an architectural improvement because it moves semantic evolution away from compatibility projections and toward explicit backend-owned domain concepts.
-- Preserve `UnderstandingDiffService` as the single authority for deterministic modification identity and typed semantic change mapping.
-- Keep React presentation-only for semantic evolution: it may group backend-provided semantic values directly and may retain compatibility fallback grouping for legacy data, but must not infer semantic authority.
-- Continue Milestone 7 with compression explanation work before expanding the evolution UI.
-- Use `compressionSummary.itemOutcomes` as the authoritative source for compression outcome, reason category, governing rule, threshold, rationale, and supporting evidence.
-- Build `OperationalContextCompressionExplanation` as a pure renderer of backend-projected compression outcome fields.
-- Add backend tests proving compression outcome categories are emitted correctly for retained, compressed, removed, duplicate removed, transient removed, resolved question, and retired risk.
-- Add UI characterization tests proving React renders backend compression reason categories and evidence verbatim without synthesizing severity, classifications, or outcome interpretation.
-- After compression explanation work, proceed to Milestone 7 projection-gap reconciliation and formal exit audit before starting Milestone 8 shared explainability work.
+- Treat explicit compression outcomes such as `ResolvedQuestion` and `RetiredRisk` as backend-owned continuity semantics because they explain why information changed, not just that it changed.
+- Keep `OperationalContextCompressionSummaryPanel` focused on aggregate counts, warnings, and overview facts.
+- Keep `OperationalContextCompressionExplanation` focused on per-item outcome, governing rule, threshold, rationale, and supporting evidence.
+- Preserve the authority boundary where the backend determines compression outcome, rule, threshold, rationale, and evidence, while React renders those fields without synthesizing meaning.
+- Prioritize Milestone 7 projection-gap reconciliation and exit audit next.
+- During the exit audit, verify every backend continuity projection has a corresponding UI consumer and that compatibility-string surfaces are not the primary representation where typed projections exist.
+- Reconcile the existing grouped diagnostics implementation with the Milestone 7 checklist before marking grouped diagnostics complete.
+- Complete compression taxonomy only where the backend truly distinguishes operations; add `Merged`, `NoiseRemoved`, or equivalents only when they correspond to distinct backend semantics.
+- Build `OperationalContextEvolutionTimeline` after the semantic change taxonomy is complete enough for the timeline to consume typed backend events rather than reconstructing meaning from strings.

@@ -1162,6 +1162,83 @@ public sealed class OperationalContextGenerationTests
     }
 
     [Fact]
+    public void CompressionEmitsItemOutcomeCategoriesWithRulesThresholdsAndEvidence()
+    {
+        var parser = new MarkdownOperationalContextParser();
+        var compression = new UnderstandingCompressionService();
+        OperationalContextDocument current = parser.Parse("""
+                                                          # Operational Context
+
+                                                          ## Constraints
+
+                                                          - Human review is mandatory before promotion.
+
+                                                          ## Stable Decisions
+
+                                                          - Legacy workspace state remains pending.
+
+                                                          ## Open Questions
+
+                                                          - Should diagnostics include growth trends?
+
+                                                          ## Active Risks
+
+                                                          - Context growth can hide important constraints.
+                                                          """);
+        OperationalContextDocument proposed = parser.Parse("""
+                                                           # Operational Context
+
+                                                           ## Architecture
+
+                                                           - Backend projections expose compression explanations.
+
+                                                           ## Constraints
+
+                                                           - Human review is mandatory before promotion.
+
+                                                           ## Open Questions
+
+                                                           - Should diagnostics include growth trends?
+
+                                                           ## Active Risks
+
+                                                           - Context growth can hide important constraints.
+
+                                                           ## Recent Understanding Changes
+
+                                                           - Old transient detail one.
+                                                           - Old transient detail two.
+                                                           - Repeated investigation detail.
+                                                           - Repeated investigation detail.
+                                                           - Recent execution for `.agents/milestones/m7.md` is recorded with state `Completed`.
+                                                           - Durable recent change 1.
+                                                           - Durable recent change 2.
+                                                           - Durable recent change 3.
+                                                           - Durable recent change 4.
+                                                           - Durable recent change 5.
+                                                           - Durable recent change 6.
+                                                           - Durable recent change 7.
+                                                           - Durable recent change 8.
+                                                           - Durable recent change 9.
+                                                           - Durable recent change 10.
+                                                           - Resolved question: diagnostics include growth trends.
+                                                           - Retired risk: context growth can hide important constraints.
+                                                           """);
+
+        OperationalContextCompressionResult result = compression.Compress(current, proposed);
+        OperationalContextCompressionOutcome[] outcomes = result.Summary.ItemOutcomes.ToArray();
+
+        AssertCompressionOutcome(outcomes, "Retained", "Constraint", "normalized-text-retention");
+        AssertCompressionOutcome(outcomes, "Added", "Architecture", "proposal-addition");
+        AssertCompressionOutcome(outcomes, "Removed", "StableDecision", "retention-warning-check");
+        AssertCompressionOutcome(outcomes, "Compressed", "RecentChange", "recent-change-window-limit");
+        AssertCompressionOutcome(outcomes, "DuplicateRemoved", "RecentChange", "recent-change-duplicate-removal");
+        AssertCompressionOutcome(outcomes, "TransientRemoved", "RecentChange", "transient-execution-noise-removal");
+        AssertCompressionOutcome(outcomes, "ResolvedQuestion", "OpenQuestion", "explicit-question-resolution");
+        AssertCompressionOutcome(outcomes, "RetiredRisk", "ActiveRisk", "explicit-risk-retirement");
+    }
+
+    [Fact]
     public void ResolvedQuestionsCompressOnlyWithExplicitResolutionEvidence()
     {
         var parser = new MarkdownOperationalContextParser();
@@ -1200,7 +1277,7 @@ public sealed class OperationalContextGenerationTests
         Assert.Empty(resolvedWithEvidence.Document.OpenQuestions);
         Assert.Equal(1, resolvedWithEvidence.Summary.ResolvedQuestionCount);
         Assert.Contains(resolvedWithEvidence.Summary.ItemOutcomes, outcome =>
-            outcome.Outcome == "Removed" &&
+            outcome.Outcome == "ResolvedQuestion" &&
             outcome.ItemKind == "OpenQuestion" &&
             outcome.Rule == "explicit-question-resolution" &&
             outcome.Rationale.Contains("explicitly resolved", StringComparison.OrdinalIgnoreCase) &&
@@ -1250,7 +1327,7 @@ public sealed class OperationalContextGenerationTests
         Assert.Empty(retiredWithEvidence.Document.ActiveRisks);
         Assert.Equal(1, retiredWithEvidence.Summary.RetiredRiskCount);
         Assert.Contains(retiredWithEvidence.Summary.ItemOutcomes, outcome =>
-            outcome.Outcome == "Removed" &&
+            outcome.Outcome == "RetiredRisk" &&
             outcome.ItemKind == "ActiveRisk" &&
             outcome.Rule == "explicit-risk-retirement" &&
             outcome.Rationale.Contains("explicitly retired", StringComparison.OrdinalIgnoreCase) &&
@@ -1702,6 +1779,22 @@ public sealed class OperationalContextGenerationTests
             item.Text.Contains("build passed", StringComparison.OrdinalIgnoreCase) ||
             item.Text.Contains("Stage and commit", StringComparison.OrdinalIgnoreCase) ||
             item.Text.Contains("Old milestone investigation", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static void AssertCompressionOutcome(
+        IReadOnlyList<OperationalContextCompressionOutcome> outcomes,
+        string outcome,
+        string itemKind,
+        string rule)
+    {
+        OperationalContextCompressionOutcome match = outcomes.FirstOrDefault(candidate =>
+            candidate.Outcome == outcome &&
+            candidate.ItemKind == itemKind &&
+            candidate.Rule == rule) ?? throw new Xunit.Sdk.XunitException(
+            $"Expected compression outcome '{outcome}' for item kind '{itemKind}' with rule '{rule}'.");
+        Assert.False(string.IsNullOrWhiteSpace(match.Threshold));
+        Assert.False(string.IsNullOrWhiteSpace(match.Rationale));
+        Assert.NotEmpty(match.Evidence);
     }
 
     private static async Task<Harness> CreateHarnessAsync(
