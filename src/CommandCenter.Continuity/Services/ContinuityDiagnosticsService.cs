@@ -1,6 +1,7 @@
 using System.Text;
 using CommandCenter.Continuity.Abstractions;
 using CommandCenter.Continuity.Models;
+using CommandCenter.Continuity.Primitives;
 using CommandCenter.Core.Artifacts;
 using CommandCenter.Core.Repositories;
 
@@ -298,13 +299,19 @@ public sealed class ContinuityDiagnosticsService(
         IReadOnlyList<OperationalContextProposal> proposals)
     {
         var groups = new List<ContinuityDiagnosticGroup>();
+        groups.Add(BuildAssimilationDiagnosticGroup(proposals));
+        groups.Add(BuildClassificationDiagnosticGroup(proposals));
+        groups.Add(BuildContradictionDiagnosticGroup(proposals));
         groups.AddRange(operationalEvolution.DiagnosticGroups);
+        groups.Add(BuildLostUnderstandingDiagnosticGroup(operationalEvolution.SemanticChanges, operationalEvolution.LostCount));
+        groups.Add(BuildResolvedUnderstandingDiagnosticGroup(operationalEvolution.SemanticChanges, operationalEvolution.ResolvedCount));
 
         string[] compressionDiagnostics =
         [
             $"Proposal count: {proposals.Count}.",
             $"Compressed item count: {proposals.Sum(proposal => proposal.CompressionSummary.CompressedItemCount)}.",
-            $"Removed item count: {proposals.Sum(proposal => proposal.CompressionSummary.RemovedItemCount)}."
+            $"Removed item count: {proposals.Sum(proposal => proposal.CompressionSummary.RemovedItemCount)}.",
+            $"Noise removed indicator count: {proposals.Sum(proposal => proposal.CompressionSummary.NoiseRemovedIndicators.Count)}."
         ];
         groups.Add(new ContinuityDiagnosticGroup
         {
@@ -312,8 +319,144 @@ public sealed class ContinuityDiagnosticsService(
             Title = "Compression diagnostics",
             Diagnostics = compressionDiagnostics
         });
+        groups.Add(BuildRecoveryDiagnosticGroup(proposals));
 
         return groups;
+    }
+
+    private static ContinuityDiagnosticGroup BuildAssimilationDiagnosticGroup(IReadOnlyList<OperationalContextProposal> proposals)
+    {
+        int totalAnalyzed = proposals.Sum(proposal => proposal.DecisionAssimilation.Limit.TotalAnalyzedItemCount);
+        int totalQualifying = proposals.Sum(proposal => proposal.DecisionAssimilation.Limit.TotalQualifyingItemCount);
+        int totalAssimilated = proposals.Sum(proposal => proposal.DecisionAssimilation.Limit.AssimilatedItemCount);
+        int totalOmitted = proposals.Sum(proposal => proposal.DecisionAssimilation.Limit.OmittedItemCount);
+        var diagnostics = new List<string>
+        {
+            $"Proposal count: {proposals.Count}.",
+            $"Analyzed decision count: {totalAnalyzed}.",
+            $"Qualifying decision count: {totalQualifying}.",
+            $"Assimilated decision count: {totalAssimilated}.",
+            $"Omitted decision count: {totalOmitted}."
+        };
+        diagnostics.AddRange(proposals
+            .SelectMany(proposal => proposal.DecisionAssimilation.Decisions)
+            .Select(record =>
+            {
+                string reason = record.IsOmittedByLimit
+                    ? record.OmissionReason ?? "omitted by limit"
+                    : record.ExclusionReason ?? record.Rationale ?? "no exclusion or omission reason recorded";
+                return $"{record.DecisionId}: {record.Status}; assimilated={record.IsAssimilated}; durable={record.IsDurable}; reason={reason}.";
+            }));
+
+        return new ContinuityDiagnosticGroup
+        {
+            Category = "assimilation",
+            Title = "Decision assimilation",
+            Diagnostics = diagnostics
+        };
+    }
+
+    private static ContinuityDiagnosticGroup BuildClassificationDiagnosticGroup(IReadOnlyList<OperationalContextProposal> proposals)
+    {
+        DecisionAssimilationRecord[] records = proposals
+            .SelectMany(proposal => proposal.DecisionAssimilation.Decisions)
+            .ToArray();
+        string[] diagnostics = records.Length == 0
+            ? ["No decision taxonomy classifications recorded."]
+            : records.Select(record =>
+                $"{record.DecisionId}: taxonomy={record.TaxonomyBasis.Taxonomy}; rules={record.TaxonomyBasis.MatchedRules.Count}; evidence={record.TaxonomyBasis.MatchedEvidence.Count}; heuristic={record.TaxonomyBasis.IsHeuristicFallback}; diagnostics={record.TaxonomyBasis.Diagnostics.Count}.")
+                .ToArray();
+
+        return new ContinuityDiagnosticGroup
+        {
+            Category = "classification",
+            Title = "Taxonomy classification",
+            Diagnostics = diagnostics
+        };
+    }
+
+    private static ContinuityDiagnosticGroup BuildContradictionDiagnosticGroup(IReadOnlyList<OperationalContextProposal> proposals)
+    {
+        ContinuityDecisionContradiction[] contradictions = proposals
+            .SelectMany(proposal => proposal.DecisionAssimilation.Contradictions)
+            .ToArray();
+        string[] diagnostics = contradictions.Length == 0
+            ? ["No decision contradictions recorded."]
+            : contradictions.Select(contradiction =>
+                $"{contradiction.ContradictionId}: {contradiction.ConflictType}; severity={contradiction.Severity}; evidence={contradiction.ConflictEvidence.Count}; guidance={contradiction.ResolutionGuidance}.")
+                .ToArray();
+
+        return new ContinuityDiagnosticGroup
+        {
+            Category = "contradictions",
+            Title = "Decision contradictions",
+            Diagnostics = diagnostics
+        };
+    }
+
+    private static ContinuityDiagnosticGroup BuildRecoveryDiagnosticGroup(IReadOnlyList<OperationalContextProposal> proposals)
+    {
+        string[] diagnostics = proposals
+            .Where(proposal =>
+                proposal.Status is OperationalContextProposalStatus.Rejected or OperationalContextProposalStatus.Superseded ||
+                !string.IsNullOrWhiteSpace(proposal.Review.StaleReason) ||
+                !string.IsNullOrWhiteSpace(proposal.Promotion.ArchiveFailureReason) ||
+                !string.IsNullOrWhiteSpace(proposal.Promotion.WriteFailureReason))
+            .Select(proposal =>
+            {
+                string?[] reasons =
+                [
+                    proposal.Review.StaleReason,
+                    proposal.Promotion.ArchiveFailureReason,
+                    proposal.Promotion.WriteFailureReason
+                ];
+                string reason = reasons.FirstOrDefault(reason => !string.IsNullOrWhiteSpace(reason)) ?? "proposal lifecycle status requires attention";
+                return $"{proposal.ProposalId}: status={proposal.Status}; reason={reason}.";
+            })
+            .ToArray();
+
+        return new ContinuityDiagnosticGroup
+        {
+            Category = "recovery",
+            Title = "Continuity recovery",
+            Diagnostics = diagnostics.Length == 0 ? ["No continuity recovery issues recorded."] : diagnostics
+        };
+    }
+
+    private static ContinuityDiagnosticGroup BuildLostUnderstandingDiagnosticGroup(
+        IReadOnlyList<OperationalContextSemanticChange> changes,
+        int lostCount)
+    {
+        string[] diagnostics = changes
+            .Where(change => change.Type is OperationalContextSemanticChangeType.LostUnderstanding or
+                OperationalContextSemanticChangeType.RationaleLostWarning)
+            .Select(change => $"{change.Type} in {change.Section}: {change.Description}")
+            .ToArray();
+
+        return new ContinuityDiagnosticGroup
+        {
+            Category = "lost understanding",
+            Title = "Lost understanding",
+            Diagnostics = diagnostics.Length == 0 ? [$"Lost item count: {lostCount}."] : diagnostics
+        };
+    }
+
+    private static ContinuityDiagnosticGroup BuildResolvedUnderstandingDiagnosticGroup(
+        IReadOnlyList<OperationalContextSemanticChange> changes,
+        int resolvedCount)
+    {
+        string[] diagnostics = changes
+            .Where(change => change.Type is OperationalContextSemanticChangeType.ResolvedUnderstanding or
+                OperationalContextSemanticChangeType.OpenDecisionResolved)
+            .Select(change => $"{change.Type} in {change.Section}: {change.Description}")
+            .ToArray();
+
+        return new ContinuityDiagnosticGroup
+        {
+            Category = "resolved understanding",
+            Title = "Resolved understanding",
+            Diagnostics = diagnostics.Length == 0 ? [$"Resolved item count: {resolvedCount}."] : diagnostics
+        };
     }
 
     private static IReadOnlyList<ContinuityDiagnosticGroup> BuildOperationalEvolutionDiagnosticGroups(

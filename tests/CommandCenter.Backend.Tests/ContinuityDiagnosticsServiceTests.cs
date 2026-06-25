@@ -208,6 +208,135 @@ public sealed class ContinuityDiagnosticsServiceTests
     }
 
     [Fact]
+    public async Task DiagnosticGroupsAreNormalizedByContinuityCategory()
+    {
+        Harness harness = await CreateHarnessAsync();
+        await WriteAsync(harness.Repository, ".agents/operational_context.0001.md", """
+            # Operational Context
+
+            ## Constraints
+
+            - Backend diagnostics may infer continuity status in React.
+
+            ## Open Questions
+
+            - Should continuity diagnostics be grouped?
+            """);
+        await WriteAsync(harness.Repository, ".agents/operational_context.md", """
+            # Operational Context
+
+            ## Constraints
+
+            - Backend diagnostics must project grouped continuity status for React.
+
+            ## Recent Understanding Changes
+
+            - Resolved question: Should continuity diagnostics be grouped?
+            """);
+        await harness.ProposalStore.SaveAsync(harness.Repository, new OperationalContextProposal
+        {
+            ProposalId = "proposal-1",
+            RepositoryId = harness.Repository.Id,
+            GeneratedAt = DateTimeOffset.UtcNow,
+            Status = OperationalContextProposalStatus.Rejected,
+            BaselineCurrentContextHash = "baseline",
+            GeneratedContentHash = "generated",
+            DecisionAssimilation = new DecisionAssimilationProjection
+            {
+                Decisions =
+                [
+                    new DecisionAssimilationRecord
+                    {
+                        DecisionId = "decision-1",
+                        Statement = "Backend owns continuity grouping.",
+                        Taxonomy = DecisionTaxonomy.ArchitecturalDecision,
+                        TaxonomyBasis = new DecisionTaxonomyBasis
+                        {
+                            Taxonomy = DecisionTaxonomy.ArchitecturalDecision,
+                            MatchedRules = ["architecture-rule"],
+                            MatchedEvidence = ["Backend owns continuity grouping."],
+                            Diagnostics = ["Matched architecture ownership."]
+                        },
+                        Status = DecisionAssimilationStatus.Assimilated,
+                        IsDurable = true,
+                        QualifiesForAssimilation = true,
+                        IsAssimilated = true,
+                        OperationalStatement = "Continuity grouping remains backend-owned.",
+                        SourceEvidence = ["Decision evidence."]
+                    }
+                ],
+                Limit = new DecisionAssimilationLimit
+                {
+                    Limit = 1,
+                    Reason = "Keep context compact.",
+                    TotalAnalyzedItemCount = 1,
+                    TotalQualifyingItemCount = 1,
+                    AssimilatedItemCount = 1
+                },
+                Contradictions =
+                [
+                    new ContinuityDecisionContradiction
+                    {
+                        ContradictionId = "contradiction-1",
+                        DecisionA = new ContinuityDecisionReference
+                        {
+                            DecisionId = "decision-a",
+                            Statement = "React owns continuity grouping.",
+                            Taxonomy = DecisionTaxonomy.TacticalDecision
+                        },
+                        DecisionB = new ContinuityDecisionReference
+                        {
+                            DecisionId = "decision-b",
+                            Statement = "Backend owns continuity grouping.",
+                            Taxonomy = DecisionTaxonomy.ArchitecturalDecision
+                        },
+                        ConflictType = DecisionContradictionConflictType.DirectNegation,
+                        ConflictEvidence = ["Ownership conflict."],
+                        Severity = DecisionContradictionSeverity.High,
+                        ResolutionGuidance = "Use backend projection."
+                    }
+                ]
+            },
+            CompressionSummary = new OperationalContextCompressionSummary
+            {
+                CompressedItemCount = 1,
+                RemovedItemCount = 1,
+                NoiseRemovedIndicators = ["Repeated diagnostic wording removed."]
+            },
+            Review = new OperationalContextReview
+            {
+                ProposalId = "proposal-1",
+                StaleReason = "Baseline changed before promotion."
+            }
+        }, "# Operational Context");
+
+        ContinuityDiagnostics diagnostics = await harness.DiagnosticsService.GetDiagnosticsAsync(harness.Repository.Id);
+
+        string[] categories = diagnostics.DiagnosticGroups.Select(group => group.Category).ToArray();
+        Assert.Contains("assimilation", categories);
+        Assert.Contains("compression", categories);
+        Assert.Contains("evolution", categories);
+        Assert.Contains("diff", categories);
+        Assert.Contains("recovery", categories);
+        Assert.Contains("classification", categories);
+        Assert.Contains("contradictions", categories);
+        Assert.Contains("lost understanding", categories);
+        Assert.Contains("resolved understanding", categories);
+        Assert.Contains(diagnostics.DiagnosticGroups, group =>
+            group.Category == "assimilation" &&
+            group.Diagnostics.Any(diagnostic => diagnostic.Contains("decision-1", StringComparison.Ordinal)));
+        Assert.Contains(diagnostics.DiagnosticGroups, group =>
+            group.Category == "classification" &&
+            group.Diagnostics.Any(diagnostic => diagnostic.Contains("rules=1", StringComparison.Ordinal)));
+        Assert.Contains(diagnostics.DiagnosticGroups, group =>
+            group.Category == "contradictions" &&
+            group.Diagnostics.Any(diagnostic => diagnostic.Contains("contradiction-1", StringComparison.Ordinal)));
+        Assert.Contains(diagnostics.DiagnosticGroups, group =>
+            group.Category == "recovery" &&
+            group.Diagnostics.Any(diagnostic => diagnostic.Contains("Baseline changed before promotion.", StringComparison.Ordinal)));
+    }
+
+    [Fact]
     public async Task RepeatedInvestigationQuestionAndDecisionReworkIndicatorsCanBeObserved()
     {
         Harness harness = await CreateHarnessAsync();

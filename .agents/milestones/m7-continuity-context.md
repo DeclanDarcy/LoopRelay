@@ -50,16 +50,16 @@ Make operational context explain why information was retained, removed, compress
    - [x] threshold
 - [x] Improve `UnderstandingDiffService` to detect modifications rather than remove/add pairs when item identity, source reference, section, or stable lineage indicates continuity.
 - [x] Add or update semantic change types for modified architecture, modified constraint, modified workflow, modified decision, modified understanding, lost understanding, resolved understanding, duplicate removed, and transient removed.
-- [ ] Normalize continuity diagnostics by category:
-    - [ ] assimilation
-    - [ ] compression
-    - [ ] evolution
-    - [ ] diff
-    - [ ] recovery
-    - [ ] classification
-    - [ ] contradictions
-    - [ ] lost understanding
-    - [ ] resolved understanding
+- [x] Normalize continuity diagnostics by category:
+    - [x] assimilation
+    - [x] compression
+    - [x] evolution
+    - [x] diff
+    - [x] recovery
+    - [x] classification
+    - [x] contradictions
+    - [x] lost understanding
+    - [x] resolved understanding
 
 ### UI
 
@@ -72,7 +72,7 @@ Make operational context explain why information was retained, removed, compress
    - [x] `OperationalContextContradictionPanel`
    - [ ] `OperationalContextEvolutionTimeline`
    - [x] `OperationalContextCompressionExplanation`
-   - [ ] `ContinuityDiagnosticsGroupedPanel`
+   - [x] `ContinuityDiagnosticsGroupedPanel`
 - [ ] Update `OperationalContextProposalComparison` and `OperationalContextSemanticChangeList` to display modifications as modifications, not separate remove/add entries.
 - [x] Show omitted assimilation items and silent truncation as visible facts.
 - [x] Show compression warnings with specific item reasons and evidence.
