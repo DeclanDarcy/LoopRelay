@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { EmptyState, Panel, SectionHeader } from '../../components/design'
+import { InteractionPatternView } from '../../components/explainability'
 import type {
   Decision,
   DecisionCandidate,
@@ -11,6 +12,7 @@ import type {
   DecisionProposal,
   DecisionProposalBrowserItem,
   DecisionProposalState,
+  DecisionReviewWorkspace,
 } from '../../types'
 import {
   useDecisionCertification,
@@ -36,6 +38,10 @@ import { DecisionQualityPanel } from './DecisionQualityPanel'
 import { DecisionRefinementPanel } from './DecisionRefinementPanel'
 import { DecisionResolutionPanel } from './DecisionResolutionPanel'
 import { DecisionRevisionHistory } from './DecisionRevisionHistory'
+import {
+  decisionDiagnosticsToExplanation,
+  decisionLifecycleEligibilityToActions,
+} from '../../lib/explainability'
 
 type DecisionLifecycleTabProps = {
   context: DecisionContextSnapshot | null
@@ -311,9 +317,10 @@ export function DecisionLifecycleTab({
                 </div>
               ) : null}
               {selectedProposalEligibility ? (
-                <LifecycleEligibilityDetails
+                <ProposalInteractionSummary
                   eligibility={selectedProposalEligibility}
-                  label="Proposal"
+                  selectedProposalId={selectedProposalId}
+                  workspace={proposalReviewWorkspace}
                 />
               ) : selectedProposalId ? (
                 <div className="decision-lifecycle-notice" role="status">
@@ -682,6 +689,71 @@ export function DecisionLifecycleTab({
       )}
     </Panel>
   )
+}
+
+function ProposalInteractionSummary({
+  eligibility,
+  selectedProposalId,
+  workspace,
+}: {
+  eligibility: DecisionLifecycleEntityEligibility
+  selectedProposalId: string | null
+  workspace: DecisionReviewWorkspace | null
+}) {
+  const lastTransition = workspace ? getLastTransition(workspace.proposal.history) : null
+  const subject = selectedProposalId
+    ? `Proposal ${selectedProposalId}: ${eligibility.currentState}`
+    : `Proposal: ${eligibility.currentState}`
+  const result = lastTransition
+    ? `${lastTransition.action}: ${lastTransition.fromState ?? 'None'} -> ${lastTransition.toState ?? 'None'}`
+    : workspace?.review.reason ?? 'No proposal lifecycle command result recorded.'
+  const evidence = [
+    {
+      label: 'Current state',
+      detail: `${eligibility.entityKind} ${eligibility.entityId} is ${eligibility.currentState}.`,
+    },
+    ...eligibility.allowedNextStates.map((state) => ({
+      label: 'Allowed next state',
+      detail: state,
+    })),
+    ...eligibility.blockedNextStates.map((state) => ({
+      label: 'Blocked next state',
+      detail: `${state.state}: ${state.reason}`,
+    })),
+    ...(lastTransition
+      ? [
+          {
+            label: 'Last transition reason',
+            detail: lastTransition.reason ?? 'No transition reason recorded.',
+          },
+        ]
+      : []),
+    ...(workspace?.review.reason
+      ? [
+          {
+            label: 'Review reason',
+            detail: workspace.review.reason,
+          },
+        ]
+      : []),
+  ]
+
+  return (
+    <InteractionPatternView
+      actions={decisionLifecycleEligibilityToActions(eligibility)}
+      diagnostics={decisionDiagnosticsToExplanation(eligibility.diagnostics, 'Proposal lifecycle diagnostic')}
+      evidence={evidence}
+      result={result}
+      subject={subject}
+      title="Proposal interaction summary"
+    />
+  )
+}
+
+function getLastTransition(history: DecisionProposal['history'][number][]) {
+  return [...history]
+    .reverse()
+    .find((entry) => entry.fromState !== entry.toState && (entry.fromState || entry.toState))
 }
 
 function DecisionProposalGenerationResult({ proposal }: { proposal: DecisionProposal | null }) {

@@ -247,9 +247,19 @@ describe('DecisionLifecycleTab navigation', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Proposal lifecycle eligibility')).toHaveTextContent('Mark viewed')
+      expect(screen.getByLabelText('Proposal interaction summary')).toHaveTextContent('Mark viewed')
     })
 
+    const interaction = screen.getByLabelText('Proposal interaction summary')
+    expect(within(interaction).getByText('Action subject')).toBeInTheDocument()
+    expect(within(interaction).getByText('Proposal PROP-0001: Generated')).toBeInTheDocument()
+    expect(within(interaction).getByText('Result')).toBeInTheDocument()
+    expect(within(interaction).getByText('No proposal lifecycle command result recorded.')).toBeInTheDocument()
+    expect(within(interaction).getByText('Action Eligibility')).toBeInTheDocument()
+    expect(within(interaction).getByText('Interaction Evidence')).toBeInTheDocument()
+    expect(within(interaction).getByText('Current state')).toBeInTheDocument()
+    expect(within(interaction).getByText('Proposal PROP-0001 is Generated.')).toBeInTheDocument()
+    expect(within(interaction).getByText('Interaction Diagnostics')).toBeInTheDocument()
     expect(
       within(screen.getByLabelText('Proposal lifecycle actions')).getByText(
         'Generated proposals must be viewed before refinement.',

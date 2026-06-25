@@ -2,22 +2,32 @@
 
 ## Newly Authorized
 
-- Treat the health and certification summary consolidation slice as accepted Milestone 9 work:
-  - repository summaries serve operational awareness, not detailed health or certification analysis,
-  - governance health may be summarized with counts and latest assessment time,
-  - reasoning certification may be summarized with result and latest run time,
-  - detailed health dimensions, findings, diagnostics, evidence, certification reports, and reasoning certification diagnostics remain in their primary domain workspaces.
-- Continue Milestone 9 with interaction normalization as the next phase.
-- Start interaction normalization by inventorying lifecycle actions and grouping them into common patterns:
-  - generate,
-  - review,
-  - approve,
-  - reject,
-  - recovery,
-  - execution.
-- For each interaction pattern, normalize action placement, button hierarchy, eligibility presentation, blocked-action messaging, evidence presentation, confirmation behavior, post-action refresh, and navigation after completion.
-- Continue the remaining Milestone 9 trajectory in this order after interaction normalization:
+- Treat the proposal review `InteractionPatternView` slice as accepted Milestone 9 work because it begins normalizing interaction language, not just consolidating information.
+- Preserve `InteractionPatternView` as a presentation abstraction for recurring lifecycle interactions, with a normalized structure of:
+  - action subject,
+  - expected result,
+  - eligibility,
+  - supporting evidence,
+  - diagnostics.
+- Preserve the authority boundary:
+  - backend owns lifecycle transitions, eligibility, and transition legality,
+  - React owns consistent presentation of authoritative projections only.
+- Keep characterization tests focused on normalized interaction presentation rather than duplicating lifecycle-rule validation.
+- Continue applying `InteractionPatternView` to remaining decision lifecycle actions in this order:
+  - resolved decision supersede and archive,
+  - candidate promote, dismiss, expire, and generate proposal.
+- Preserve the interaction contract as the pattern is reused:
+  - subject is what the action applies to,
+  - eligibility is backend-provided only,
+  - evidence is backend-provided only,
+  - diagnostics are backend-provided only,
+  - result is backend-described expected outcome.
+- `InteractionPatternView` must not infer blocked reasons, alternative actions, or lifecycle consequences.
+- Continue Milestone 9 through three complementary streams:
+  - navigation cohesion,
+  - presentation cohesion,
+  - interaction cohesion.
+- After interaction normalization is consistently applied across major lifecycle workflows, continue with:
   - information-density refinement,
-  - obsolete compatibility presentation removal,
-  - endpoint/projection/component cleanup where replacements have been validated,
-  - final product cohesion audit.
+  - obsolete duplicate presentation removal,
+  - final cohesion audit confirming one primary presentation per capability, one interaction language, consistent navigation, no duplicated semantic detail, and no erosion of backend authority.

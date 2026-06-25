@@ -1016,6 +1016,43 @@ button:focus-visible {
   font-weight: 700;
 }
 
+.interaction-pattern-view {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--bg-inset);
+}
+
+.interaction-pattern-summary {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+
+.interaction-pattern-summary > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.interaction-pattern-summary span {
+  color: var(--fg-muted);
+  font-size: 0.76rem;
+  font-weight: 750;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.interaction-pattern-summary strong {
+  color: var(--fg-default);
+  font-size: 0.84rem;
+  overflow-wrap: anywhere;
+}
+
 .execution-context-panel,
 .workspace-milestones-panel,
 .execution-session-panel,
