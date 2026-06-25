@@ -47,6 +47,7 @@ Make the application feel unified, not merely smaller. Remove fragmentation so e
 - [ ] Delete obsolete UI components, old workflow derivation, duplicate panels, temporary views, deprecated widgets, obsolete summaries, and unused client functions after replacements are tested.
   - [x] Duplicate execution artifact diagnostics renderer removed in favor of the shared explainability diagnostics renderer. See `./m9-obsolete-ui-cleanup-artifact-diagnostics.md`.
   - [x] Duplicate decision quality priority signal renderer removed in favor of the shared explainability diagnostics renderer. See `./m9-obsolete-ui-cleanup-decision-quality-signals.md`.
+  - [x] Duplicate decision option comparison evidence renderer removed in favor of shared decision evidence fragments and `EvidenceList`. See `./m9-obsolete-ui-cleanup-decision-option-evidence.md`.
 - [ ] Align terminology across statuses, health, diagnostics, recovery, certification, governance, execution, and explainability.
 
 ### Likely Cleanup Targets
@@ -55,6 +56,7 @@ Make the application feel unified, not merely smaller. Remove fragmentation so e
 - [ ] Any rail or status component that still consumes `RepositoryExecutionState` as a workflow source.
 - [ ] Duplicate decision recommendation, quality, governance, and influence summaries replaced by explainability components.
   - [x] Decision quality priority signals now render through shared diagnostics.
+  - [x] Decision option comparison evidence now renders through shared evidence components.
 - [ ] Duplicate health renderers replaced by shared `HealthView`.
 - [ ] Duplicate diagnostics renderers replaced by shared `DiagnosticList`.
   - [x] Execution artifact diagnostics list local renderer removed; `DiagnosticList` is now the only visible artifact diagnostics renderer.

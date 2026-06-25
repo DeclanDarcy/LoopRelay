@@ -1,5 +1,6 @@
 import { Badge, EmptyState } from '../../components/design'
-import type { DecisionEvidence, DecisionOptionComparison as DecisionOptionComparisonModel } from '../../types'
+import type { DecisionOptionComparison as DecisionOptionComparisonModel } from '../../types'
+import { DecisionEvidenceBlock } from './DecisionEvidenceFragments'
 
 type DecisionOptionComparisonProps = {
   comparison: DecisionOptionComparisonModel | null
@@ -40,7 +41,7 @@ export function DecisionOptionComparison({ comparison, isLoading }: DecisionOpti
             ) : null}
             <DecisionList title="Benefits" items={option.benefits} />
             <DecisionList title="Costs" items={option.costs} />
-            <EvidenceSummaries title="Comparison Evidence" evidence={option.evidence} />
+            <DecisionEvidenceBlock title="Comparison Evidence" evidence={option.evidence} />
           </article>
         ))}
       </div>
@@ -63,23 +64,6 @@ function DecisionList({ title, items }: { title: string; items: string[] }) {
           </li>
         ))}
       </ul>
-    </div>
-  )
-}
-
-function EvidenceSummaries({ title, evidence }: { title: string; evidence: DecisionEvidence[] }) {
-  if (evidence.length === 0) {
-    return null
-  }
-
-  return (
-    <div className="decision-evidence-block" aria-label={title}>
-      <span>{title}</span>
-      {evidence.map((item) => (
-        <article key={`${title}-${item.summary}`}>
-          <p>{item.summary}</p>
-        </article>
-      ))}
     </div>
   )
 }
