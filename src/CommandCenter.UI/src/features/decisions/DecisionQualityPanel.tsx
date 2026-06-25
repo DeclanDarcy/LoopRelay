@@ -1,5 +1,7 @@
 import { useMemo } from 'react'
 import { EmptyState } from '../../components/design'
+import { DecisionBurdenExplanation } from './DecisionBurdenExplanation'
+import { DecisionQualityExplanation } from './DecisionQualityExplanation'
 import type {
   DecisionQualityAssessment,
   DecisionQualityReport,
@@ -140,6 +142,28 @@ export function DecisionQualityPanel({
               ))
             ) : (
               <EmptyState className="empty-state">No priority quality signals are available.</EmptyState>
+            )}
+          </div>
+
+          <div className="decision-inspection-list" aria-label="Quality explanations">
+            <h6>Quality Explanations</h6>
+            {currentReport.assessments.length > 0 ? (
+              currentReport.assessments.map((assessment) => (
+                <DecisionQualityExplanation assessment={assessment} key={`quality-${assessment.id}`} />
+              ))
+            ) : (
+              <EmptyState className="empty-state">No quality explanations are available.</EmptyState>
+            )}
+          </div>
+
+          <div className="decision-inspection-list" aria-label="Human authoring burden explanations">
+            <h6>Human Authoring Burden</h6>
+            {currentReport.humanAuthoringBurdenExplanations?.length ? (
+              currentReport.humanAuthoringBurdenExplanations.map((explanation) => (
+                <DecisionBurdenExplanation explanation={explanation} key={`burden-${explanation.decisionId}`} />
+              ))
+            ) : (
+              <EmptyState className="empty-state">No burden explanations are available.</EmptyState>
             )}
           </div>
 

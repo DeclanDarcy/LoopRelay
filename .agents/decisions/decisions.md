@@ -2,24 +2,21 @@
 
 ## Newly Authorized
 
-- Accept the Milestone 4 proposal transparency UI slice as architecturally correct.
-- Treat the new proposal transparency components as decision-local renderers, not shared explainability abstractions:
-  - `DecisionRecommendationExplanation`
-  - `DecisionOptionEvaluationTable`
-  - `DecisionRejectedOptionList`
-  - `DecisionEvidenceFragments`
-- Preserve the proposal transparency authority chain as:
-  - decision services
-  - `DecisionProposal`
-  - TypeScript contract
-  - decision-local renderer
-  - `DecisionProposalViewer`
-- Keep option evaluations attached to their options and render backend evaluation granularity instead of collapsing evaluations into a synthesized UI explanation.
-- Keep rejected and deduplicated option semantics backend-owned; React may render rejected options, reasons, diagnostics, deduplicated options, and diagnostics but must not invent rejection categories.
-- Do not invent or infer recommendation confidence in React. Confidence may be rendered only after it becomes an explicit backend-owned projection field.
-- Do not create UI-only validation categories such as insufficient evidence or duplicate unless the backend exposes those categories explicitly. Continue rendering validation issues and deduplicated diagnostics as backend-provided facts.
-- Proceed next with quality transparency, then burden transparency, then governance transparency.
-- Keep `DecisionQualityExplanation` and `DecisionBurdenExplanation` narrowly focused on explanation fields rather than broad status-panel summaries.
-- For quality transparency, render backend-owned score contribution, thresholds, overrides, unknown/default status, diagnostics, and related reasoning without interpretation.
-- For burden transparency, render backend-owned effective burden, winning signal, selection rule, reasoning, and diagnostics without interpretation.
-- For governance transparency, reuse existing governance reports where possible and extend backend projections only when a concrete semantic gap appears during integration.
+- Accept the Milestone 4 quality, burden, and governance explanation UI slice as architecturally correct.
+- Preserve the quality transparency authority chain as:
+  - backend computes quality
+  - backend explains quality
+  - TypeScript contract mirrors backend explanation fields
+  - decision-local renderer displays the explanation
+  - `DecisionQualityPanel` composes the renderer
+- Keep `DecisionQualityExplanation` narrowly focused on backend-owned score contribution, thresholds, overrides, unknown/default status, and diagnostics.
+- Preserve the burden transparency authority chain as backend-owned effective burden, winning signal, selection rule, and burden reasoning rendered by a decision-local component.
+- Keep `DecisionBurdenExplanation` render-only; it must not infer burden, choose a winning signal, or reinterpret burden severity in React.
+- Continue governance transparency by composing existing authoritative projections rather than inventing a new governance explanation object.
+- Treat the governance composition sources as:
+  - governance reports
+  - lifecycle eligibility
+  - proposal review workspace
+- Extend backend models only if a concrete user-visible governance explanation cannot be expressed from those existing authoritative sources.
+- Proceed next with governance transparency composition and characterization for resolution authority, authority freshness, recommendation divergence, lifecycle state, allowed actions, blocked actions, and transition reasons.
+- Characterization should verify that the UI displays backend authority freshness, recommendation divergence, allowed actions, blocked reasons, and transition reasons without computing those concepts in React.

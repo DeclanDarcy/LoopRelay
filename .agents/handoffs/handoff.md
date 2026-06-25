@@ -2,28 +2,33 @@
 
 ## New State This Slice
 
-- Continued Milestone 4: Decision Transparency proposal UI composition.
-- Added decision-local proposal transparency renderers:
-  - `DecisionRecommendationExplanation`
-  - `DecisionOptionEvaluationTable`
-  - `DecisionRejectedOptionList`
-  - shared `DecisionEvidenceFragments`
-- Wired `DecisionProposalViewer` to render backend-provided recommendation mode, summary, rationale, supporting factors, concerns, assumptions, alternative explanations, recommendation evidence, and option evaluations.
-- Wired option cards to render backend-provided option type, dependencies, assumptions, diagnostics, validation status, validation issues as required human action, analyzed benefits/costs/risks/dependencies/consequences, tradeoff comparison strengths/weaknesses/advantages/risks, and disqualifying constraints.
-- Added visible rejected/hidden option rendering for rejected options, deduplicated options, and invalid option validation results.
-- Expanded `decisionProposalViewer.test.tsx` characterization coverage for recommendation explanation, option score/rank/explanation, analyzed option details, invalid validation issues, rejected options, and deduplicated options.
-- Updated Milestone 4 notes to mark the new proposal transparency renderers and option-view transparency work complete, with confidence and explicit insufficient-evidence/duplicate category separation still deferred pending backend-owned fields.
-- Rotated prior handoff to `.agents/handoffs/handoff.0025.md`.
+- Continued Milestone 4: Decision Transparency quality, burden, and governance UI composition.
+- Added TypeScript contract coverage for backend-owned quality transparency fields:
+  - `DecisionQualityExplanation`
+  - `DecisionQualitySignalContribution`
+  - `DecisionQualityThresholdExplanation`
+  - `HumanAuthoringBurdenExplanation`
+  - `DecisionQualityAssessment.qualityExplanation`
+  - `DecisionQualityAssessment.humanAuthoringBurdenExplanation`
+  - `DecisionQualityReport.humanAuthoringBurdenExplanations`
+- Added decision-local renderers:
+  - `DecisionQualityExplanation`
+  - `DecisionBurdenExplanation`
+  - `DecisionGovernanceExplanation`
+- Wired `DecisionQualityPanel` to render backend-provided base/raw/clamped score, threshold bounds/reason, override reason, signal score contributions, explanation diagnostics, effective burden, unknown/inferred status, selection rule, winning burden signal, and burden diagnostics.
+- Extracted governance finding rendering into `DecisionGovernanceExplanation`; it renders existing report findings by severity/category with blocking status, related entities, source attribution, and proposal navigation.
+- Updated Milestone 4 notes to mark the quality and burden panel work complete and to record remaining governance gaps that require composing existing review workspace and lifecycle eligibility projections.
+- Rotated prior handoff to `.agents/handoffs/handoff.0026.md`.
 
 ## Verification
 
-- `npm test -- decisionProposalViewer.test.tsx --run` in `src/CommandCenter.UI` passed: 6/6.
+- `npm test -- decisionQualityPanel.test.tsx decisionGovernancePanel.test.tsx --run` in `src/CommandCenter.UI` passed: 4/4.
 - `npm run build` in `src/CommandCenter.UI` passed.
 
 ## Remaining Work
 
-- Continue Milestone 4 with quality, burden, and governance transparency:
-  - add decision-local renderers for quality explanation, burden explanation, and governance explanation
-  - update `DecisionQualityPanel` to expose score contribution, thresholds, signal contribution, overrides, warnings, unknowns, and burden reasoning
-  - update governance panels for resolution authority, stale authority, recommendation divergence, lifecycle state, allowed/blocked transitions, transition reasons, governance findings, and authority violations
-- Keep all remaining Milestone 4 UI render-only. Do not synthesize quality, burden, governance, confidence, category classification, scoring, or ranking in React.
+- Continue Milestone 4 governance transparency:
+  - compose review workspace authority and decision lifecycle eligibility into governance-facing UI
+  - show resolution authority, stale authority, recommendation divergence, lifecycle state, allowed transitions, blocked transitions, and transition reasons
+  - add characterization tests for those governance authority and transition facts
+- Keep remaining work render-only unless a concrete backend-owned projection gap appears.

@@ -29,9 +29,16 @@ describe('DecisionQualityPanel', () => {
     )
 
     expect(screen.getByText('Review only: 1')).toBeInTheDocument()
-    expect(screen.getByText('RecommendationStability / Positive / Info')).toBeInTheDocument()
+    expect(screen.getAllByText('RecommendationStability / Positive / Info').length).toBeGreaterThan(0)
     expect(screen.getByText('TradeoffQuality / Positive / Info')).toBeInTheDocument()
-    expect(screen.getByText('ConstraintQuality / Neutral / Info')).toBeInTheDocument()
+    expect(screen.getAllByText('ConstraintQuality / Neutral / Info').length).toBeGreaterThan(0)
+    expect(screen.getByText('Base score: 50')).toBeInTheDocument()
+    expect(screen.getByText('Raw score: 82')).toBeInTheDocument()
+    expect(screen.getByText('Threshold: Good (65-84)')).toBeInTheDocument()
+    expect(screen.getByText('+12 score | QS-RecommendationStability')).toBeInTheDocument()
+    expect(screen.getByText('Effective burden: ReviewOnly')).toBeInTheDocument()
+    expect(screen.getByText('Select the highest-weight human-authoring burden signal.')).toBeInTheDocument()
+    expect(screen.getByText('Winning signal: HAB-0001')).toBeInTheDocument()
     expect(screen.getAllByText('.agents/decisions/records/DEC-0001/decision.json').length).toBeGreaterThan(0)
     expect(screen.getByText('quality.202606231200000000001')).toBeInTheDocument()
     expect(screen.getByText('trend.202606231200000000001')).toBeInTheDocument()
@@ -92,6 +99,54 @@ function createAssessment(): DecisionQualityAssessment {
         sources: [source()],
       },
     ],
+    qualityExplanation: {
+      baseScore: 50,
+      rawScore: 82,
+      clampedScore: 82,
+      threshold: {
+        rating: 'Good',
+        minimumScore: 65,
+        maximumScore: 84,
+        reason: 'Good threshold crossed by backend score contribution.',
+      },
+      overrideReason: null,
+      signalContributions: [
+        {
+          signalId: 'QS-RecommendationStability',
+          category: 'RecommendationStability',
+          direction: 'Positive',
+          severity: 'Info',
+          scoreContribution: 12,
+          summary: 'Recommendation remained stable.',
+        },
+        {
+          signalId: 'QS-ConstraintQuality',
+          category: 'ConstraintQuality',
+          direction: 'Neutral',
+          severity: 'Info',
+          scoreContribution: 0,
+          summary: 'Constraint evidence is present.',
+        },
+      ],
+      diagnostics: ['Quality explanation is backend-owned.'],
+    },
+    humanAuthoringBurdenExplanation: {
+      decisionId: 'DEC-0001',
+      selectionRule: 'Select the highest-weight human-authoring burden signal.',
+      effectiveBurden: 'ReviewOnly',
+      winningSignal: {
+        id: 'HAB-0001',
+        repositoryId: 'repo-alpha',
+        decisionId: 'DEC-0001',
+        burden: 'ReviewOnly',
+        sourceKind: 'ResolutionSnapshot',
+        summary: 'Human reviewed generated content only.',
+        sources: [source()],
+      },
+      isUnknown: false,
+      isInferred: false,
+      diagnostics: ['Signal HAB-0001 selected effective burden ReviewOnly.'],
+    },
     signals: [
       signal('HumanAuthoringBurden', 'Positive', 'Info'),
       signal('RecommendationStability', 'Positive', 'Info'),
@@ -135,6 +190,7 @@ function createReport(id = 'quality.current'): DecisionQualityReport {
     rating: 'Good',
     assessments: [assessment],
     diagnostics: ['Report is advisory.'],
+    humanAuthoringBurdenExplanations: [assessment.humanAuthoringBurdenExplanation!],
   }
 }
 

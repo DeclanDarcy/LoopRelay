@@ -42,9 +42,9 @@ Expose why decisions, recommendations, options, quality ratings, governance find
    - [x] `DecisionRecommendationExplanation`
    - [x] `DecisionOptionEvaluationTable`
    - [x] `DecisionRejectedOptionList`
-   - [ ] `DecisionQualityExplanation`
-   - [ ] `DecisionBurdenExplanation`
-   - [ ] `DecisionGovernanceExplanation`
+   - [x] `DecisionQualityExplanation`
+   - [x] `DecisionBurdenExplanation`
+   - [x] `DecisionGovernanceExplanation`
    - [x] `DecisionInfluenceExplorer`
 - [ ] Update `DecisionProposalViewer` to display recommendation mode, rationale, confidence when available, supporting factors, concerns, assumptions, alternative explanations, recommendation evidence, and option evaluations.
    - [x] Recommendation mode, summary, rationale, supporting factors, concerns, assumptions, alternative explanations, recommendation evidence, and option evaluations render from backend fields.
@@ -53,8 +53,10 @@ Expose why decisions, recommendations, options, quality ratings, governance find
 - [ ] Display rejected, disqualified, deduplicated, invalid, insufficient-evidence, and duplicate options in a visible section rather than hiding them behind diagnostics.
    - [x] Rejected options, deduplicated options, invalid option validation issues, disqualifying constraints, and required human action render visibly from backend fields.
    - [ ] Insufficient-evidence and duplicate categories need explicit backend classification if they should be separated beyond validation issue text and deduplicated option diagnostics.
-- [ ] Update `DecisionQualityPanel` to show score, rating, signal contribution, thresholds, overrides, warnings, unknowns, and burden reasoning.
+- [x] Update `DecisionQualityPanel` to show score, rating, signal contribution, thresholds, overrides, warnings, unknowns, and burden reasoning.
 - [ ] Update governance panels to show resolution authority, stale authority, recommendation divergence, lifecycle state, allowed transitions, blocked transitions, transition reasons, governance findings, and authority violations.
+   - [x] Governance report findings, severities, categories, execution-blocking status, related entities, diagnostics, and source attribution render through `DecisionGovernanceExplanation`.
+   - [ ] Resolution authority, stale authority, recommendation divergence, lifecycle state, allowed/blocked transitions, and transition reasons still need composition from review workspace and lifecycle eligibility projections.
 - [ ] Update execution influence panels to show why decisions were included, excluded, superseded, conflicted, ignored, or converted into constraints/directives/priorities/rules.
 - [ ] Keep all calculations in backend projections. UI components render fields and group them for comprehension only.
 - [ ] Avoid building generic explanation abstractions in this milestone. If a component would be useful across domains, keep it local and migrate it during Milestone 8.
@@ -64,6 +66,7 @@ Expose why decisions, recommendations, options, quality ratings, governance find
 - [ ] Backend serialization and projection tests for transparency fields.
 - [ ] UI characterization tests for recommendation explanation, option scoring, rejected options, quality contribution, burden reasoning, governance state, and influence exclusion/conflict reasons.
    - [x] Proposal viewer characterization covers recommendation explanation, option scoring/rank/explanation, analyzed option details, invalid validation issues, rejected options, and deduplicated options.
+   - [x] Quality panel characterization covers backend score basis, threshold reason, signal contribution, effective burden, burden selection rule, winning signal, and governance finding grouping.
 - [ ] Regression tests proving no UI-side scoring, ranking, quality, burden, or governance calculation helpers exist.
 
 ### Exit Criteria

@@ -1120,6 +1120,32 @@ export type DecisionQualitySignal = {
   sources: DecisionSourceReference[]
 }
 
+export type DecisionQualitySignalContribution = {
+  signalId: string
+  category: string
+  direction: QualitySignalDirection
+  severity: QualitySignalSeverity
+  scoreContribution: number
+  summary: string
+}
+
+export type DecisionQualityThresholdExplanation = {
+  rating: DecisionQualityRating
+  minimumScore: number | null
+  maximumScore: number | null
+  reason: string
+}
+
+export type DecisionQualityExplanation = {
+  baseScore: number
+  rawScore: number
+  clampedScore: number
+  threshold: DecisionQualityThresholdExplanation
+  overrideReason: string | null
+  signalContributions: DecisionQualitySignalContribution[]
+  diagnostics: string[]
+}
+
 export type HumanAuthoringBurdenSignal = {
   id: string
   repositoryId: string
@@ -1128,6 +1154,16 @@ export type HumanAuthoringBurdenSignal = {
   sourceKind: string
   summary: string
   sources: DecisionSourceReference[]
+}
+
+export type HumanAuthoringBurdenExplanation = {
+  decisionId: string
+  selectionRule: string
+  effectiveBurden: HumanAuthoringBurden
+  winningSignal: HumanAuthoringBurdenSignal | null
+  isUnknown: boolean
+  isInferred: boolean
+  diagnostics: string[]
 }
 
 export type DecisionQualityAssessment = {
@@ -1140,6 +1176,8 @@ export type DecisionQualityAssessment = {
   signals: DecisionQualitySignal[]
   humanAuthoringBurdenSignals: HumanAuthoringBurdenSignal[]
   diagnostics: string[]
+  qualityExplanation?: DecisionQualityExplanation | null
+  humanAuthoringBurdenExplanation?: HumanAuthoringBurdenExplanation | null
 }
 
 export type DecisionQualityReport = {
@@ -1173,6 +1211,7 @@ export type DecisionQualityReport = {
   rating: DecisionQualityRating
   assessments: DecisionQualityAssessment[]
   diagnostics: string[]
+  humanAuthoringBurdenExplanations?: HumanAuthoringBurdenExplanation[] | null
 }
 
 export type DecisionQualityTrend = {
