@@ -48,6 +48,7 @@ Make the application feel unified, not merely smaller. Remove fragmentation so e
   - [x] Duplicate execution artifact diagnostics renderer removed in favor of the shared explainability diagnostics renderer. See `./m9-obsolete-ui-cleanup-artifact-diagnostics.md`.
   - [x] Duplicate decision quality priority signal renderer removed in favor of the shared explainability diagnostics renderer. See `./m9-obsolete-ui-cleanup-decision-quality-signals.md`.
   - [x] Duplicate decision option comparison evidence renderer removed in favor of shared decision evidence fragments and `EvidenceList`. See `./m9-obsolete-ui-cleanup-decision-option-evidence.md`.
+  - [x] Duplicate decision recommendation and burden explanation renderers removed in favor of shared `DecisionBasis`, `EvidenceList`, and `DiagnosticList`. See `./m9-obsolete-ui-cleanup-decision-explanations.md`.
 - [ ] Align terminology across statuses, health, diagnostics, recovery, certification, governance, execution, and explainability.
 
 ### Likely Cleanup Targets
@@ -57,6 +58,7 @@ Make the application feel unified, not merely smaller. Remove fragmentation so e
 - [ ] Duplicate decision recommendation, quality, governance, and influence summaries replaced by explainability components.
   - [x] Decision quality priority signals now render through shared diagnostics.
   - [x] Decision option comparison evidence now renders through shared evidence components.
+  - [x] Decision recommendation and burden explanation details now render through shared decision-basis components; governance explanation remains a navigation/grouping wrapper over shared diagnostics.
 - [ ] Duplicate health renderers replaced by shared `HealthView`.
 - [ ] Duplicate diagnostics renderers replaced by shared `DiagnosticList`.
   - [x] Execution artifact diagnostics list local renderer removed; `DiagnosticList` is now the only visible artifact diagnostics renderer.

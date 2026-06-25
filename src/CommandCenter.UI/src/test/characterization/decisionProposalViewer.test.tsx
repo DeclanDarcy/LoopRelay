@@ -15,7 +15,7 @@ describe('DecisionProposalViewer', () => {
     expect(screen.getByText('Proposal context from backend read model.')).toBeInTheDocument()
     expect(screen.getByText('Render a read-only backend workspace')).toBeInTheDocument()
     expect(screen.getByText('Reviewers can inspect the proposal before mutation controls exist.')).toBeInTheDocument()
-    expect(screen.getByText('Use the backend review workspace as the source of truth.')).toBeInTheDocument()
+    expect(screen.getByText(/Use the backend review workspace as the source of truth\./)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /resolve/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /refine/i })).not.toBeInTheDocument()
   })
@@ -38,7 +38,8 @@ describe('DecisionProposalViewer', () => {
     render(<DecisionProposalViewer workspace={createWorkspace()} isLoading={false} />)
 
     const recommendation = screen.getByLabelText('Decision recommendation')
-    expect(within(recommendation).getByText('Mode PreferredOption')).toBeInTheDocument()
+    expect(within(recommendation).getByText('Recommendation mode')).toBeInTheDocument()
+    expect(within(recommendation).getByText('PreferredOption')).toBeInTheDocument()
     expect(within(recommendation).getAllByText('Backend read models are already available.').length).toBeGreaterThan(0)
     expect(within(recommendation).getByText('UI must not infer recommendation confidence.')).toBeInTheDocument()
     expect(within(recommendation).getByText('Assume review workspace remains authoritative.')).toBeInTheDocument()

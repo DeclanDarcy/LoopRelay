@@ -277,6 +277,48 @@ export function humanAuthoringBurdenExplanationToDiagnostics(
   ]
 }
 
+export function humanAuthoringBurdenExplanationToExplanation(
+  explanation: HumanAuthoringBurdenExplanation,
+): Explanation {
+  const winningSignalEvidence = explanation.winningSignal
+    ? humanAuthoringBurdenSignalToEvidence(explanation.winningSignal)
+    : []
+
+  return {
+    domain: 'Human Authoring Burden',
+    title: explanation.decisionId,
+    summary: `Effective burden: ${explanation.effectiveBurden}`,
+    why: explanation.selectionRule,
+    evidence: explanation.winningSignal
+      ? [
+          {
+            id: `${explanation.winningSignal.id}-winning-signal`,
+            label: `Winning signal: ${explanation.winningSignal.id}`,
+            detail: explanation.winningSignal.summary,
+          },
+          ...winningSignalEvidence,
+        ]
+      : [],
+    constraints: [
+      {
+        label: explanation.isUnknown ? 'Unknown burden' : 'Known burden',
+        detail: explanation.isUnknown
+          ? 'No authoritative burden signal was projected.'
+          : 'An authoritative burden classification was projected.',
+        satisfied: !explanation.isUnknown,
+      },
+      {
+        label: explanation.isInferred ? 'Inferred' : 'Signal-backed',
+        detail: explanation.isInferred
+          ? 'The burden was inferred from available quality evidence.'
+          : 'The burden was selected from projected burden signals.',
+        satisfied: !explanation.isInferred,
+      },
+    ],
+    diagnostics: humanAuthoringBurdenExplanationToDiagnostics(explanation),
+  }
+}
+
 export function decisionRecommendationToExplanation(
   recommendation: DecisionRecommendation,
 ): Explanation {

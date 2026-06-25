@@ -26,11 +26,6 @@ export function DecisionRecommendationExplanation({
         <span>Recommendation</span>
         <strong>{recommendation.optionId}</strong>
       </div>
-      <div className="decision-diagnostics-grid" aria-label="Recommendation metadata">
-        <span>Mode {recommendation.mode ?? 'Unspecified'}</span>
-        {recommendation.summary ? <span>{recommendation.summary}</span> : null}
-      </div>
-      <p>{recommendation.rationale}</p>
       <DecisionBasis explanation={decisionRecommendationToExplanation(recommendation)} />
     </article>
   )

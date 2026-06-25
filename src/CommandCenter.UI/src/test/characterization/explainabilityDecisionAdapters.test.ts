@@ -16,6 +16,7 @@ import {
   decisionRecommendationToExplanation,
   decisionSourceAttributionsToEvidence,
   decisionSourceReferencesToEvidence,
+  humanAuthoringBurdenExplanationToExplanation,
   humanAuthoringBurdenExplanationToDiagnostics,
   refinementPlanToConstraints,
   refinementPlanToDiagnostics,
@@ -350,6 +351,43 @@ describe('decision explainability adapters', () => {
       { label: 'Effective burden', detail: 'ReviewOnly | Known | Signal-backed' },
       { label: 'Burden Diagnostic', detail: 'Signal HAB-0001 selected effective burden ReviewOnly.' },
     ])
+
+    expect(humanAuthoringBurdenExplanationToExplanation(burden)).toMatchObject({
+      domain: 'Human Authoring Burden',
+      title: 'DEC-0001',
+      summary: 'Effective burden: ReviewOnly',
+      why: 'Select the highest-weight human-authoring burden signal.',
+      evidence: [
+        {
+          id: 'HAB-0001-winning-signal',
+          label: 'Winning signal: HAB-0001',
+          detail: 'Human reviewed generated content only.',
+        },
+        {
+          id: 'HAB-0001',
+          label: 'ReviewOnly / ResolutionSnapshot',
+          detail: 'Human reviewed generated content only.',
+        },
+        {
+          id: 'DecisionProposal-.agents/decisions/proposals/PROP-0001/proposal.json-source-1',
+          label: 'DecisionProposal',
+          detail: 'Recommendation | Proposal evidence remains source-linked. | Item source-1 | Proposal PROP-0001 | Candidate CAND-0001',
+          source: '.agents/decisions/proposals/PROP-0001/proposal.json',
+        },
+      ],
+      constraints: [
+        {
+          label: 'Known burden',
+          detail: 'An authoritative burden classification was projected.',
+          satisfied: true,
+        },
+        {
+          label: 'Signal-backed',
+          detail: 'The burden was selected from projected burden signals.',
+          satisfied: true,
+        },
+      ],
+    })
   })
 
   it('preserves refinement constraints, rejected-option diagnostics, and rejected alternatives', () => {
