@@ -33,7 +33,8 @@ public sealed class FileSystemReasoningRepository(
     {
         ReasoningArtifactPaths.ValidateEventId(eventId);
         string path = ReasoningArtifactPaths.Resolve(repository, ReasoningArtifactPaths.EventJson(eventId));
-        return await ReadPayloadAsync<ReasoningEvent>(repository, path);
+        ReasoningEvent? reasoningEvent = await ReadPayloadAsync<ReasoningEvent>(repository, path);
+        return reasoningEvent is null ? null : EnrichCaptureProvenance(reasoningEvent);
     }
 
     public async Task<ReasoningEvent> CreateEventAsync(Repository repository, CreateReasoningEventCommand command)
@@ -64,6 +65,7 @@ public sealed class FileSystemReasoningRepository(
             command.Provenance,
             Normalize(command.ThreadIds),
             Normalize(command.Tags));
+        reasoningEvent = EnrichCaptureProvenance(reasoningEvent);
 
         await WriteDocumentAsync(repository, ReasoningArtifactPaths.EventJson(id), reasoningEvent, now, null);
         await artifactStore.WriteAsync(
@@ -422,6 +424,87 @@ public sealed class FileSystemReasoningRepository(
     private static void ValidateNarrative(ReasoningNarrative narrative)
     {
         RequireText(narrative.Summary, "Reasoning narrative summary is required.");
+    }
+
+    private static ReasoningEvent EnrichCaptureProvenance(ReasoningEvent reasoningEvent)
+    {
+        if (reasoningEvent.CaptureProvenance is not null)
+        {
+            return reasoningEvent;
+        }
+
+        ReasoningCaptureMode mode = ResolveCaptureMode(reasoningEvent.Provenance.SourceKind, reasoningEvent.Tags);
+        string? sourceTransition = mode == ReasoningCaptureMode.Inferred
+            ? ResolveSourceTransition(reasoningEvent.Provenance.SourceKind, reasoningEvent.Provenance.Section)
+            : null;
+        string captureReason = ResolveCaptureReason(mode, reasoningEvent.Provenance);
+        string? duplicateSignal = string.IsNullOrWhiteSpace(reasoningEvent.Provenance.Fingerprint)
+            ? null
+            : $"Fingerprint {reasoningEvent.Provenance.Fingerprint}";
+
+        return reasoningEvent with
+        {
+            CaptureProvenance = new ReasoningCaptureProvenance(
+                mode,
+                reasoningEvent.Provenance.SourceKind,
+                reasoningEvent.Provenance.CapturedBy,
+                captureReason,
+                sourceTransition,
+                reasoningEvent.Provenance.RelativePath,
+                mode == ReasoningCaptureMode.Inferred ? reasoningEvent.CreatedAt : null,
+                null,
+                duplicateSignal,
+                null)
+        };
+    }
+
+    private static ReasoningCaptureMode ResolveCaptureMode(string sourceKind, IReadOnlyList<string> tags)
+    {
+        if (sourceKind.StartsWith("Inferred", StringComparison.Ordinal) ||
+            tags.Contains("inferred-capture", StringComparer.Ordinal))
+        {
+            return ReasoningCaptureMode.Inferred;
+        }
+
+        if (sourceKind.StartsWith("Assisted", StringComparison.Ordinal) ||
+            tags.Contains("assisted-capture", StringComparer.Ordinal))
+        {
+            return ReasoningCaptureMode.Assisted;
+        }
+
+        return ReasoningCaptureMode.Manual;
+    }
+
+    private static string ResolveSourceTransition(string sourceKind, string? section)
+    {
+        return sourceKind switch
+        {
+            "InferredProposalResolution" => "ProposalResolved",
+            "InferredDecisionSupersession" => "DecisionSuperseded",
+            "InferredDecisionArchive" => "DecisionArchived",
+            "InferredGovernanceContradiction" => "GovernanceContradictionObserved",
+            "InferredOperationalContextPromotion" => "OperationalContextPromotionReasoningObserved",
+            "InferredExecutionHandoffAcceptance" => "ExecutionHandoffAcceptedReasoningObserved",
+            "InferredExecutionHandoffRejection" => "ExecutionHandoffRejectedReasoningObserved",
+            _ when !string.IsNullOrWhiteSpace(section) => section,
+            _ => sourceKind
+        };
+    }
+
+    private static string ResolveCaptureReason(ReasoningCaptureMode mode, ReasoningProvenance provenance)
+    {
+        if (!string.IsNullOrWhiteSpace(provenance.Excerpt))
+        {
+            return provenance.Excerpt;
+        }
+
+        return mode switch
+        {
+            ReasoningCaptureMode.Manual => "Captured from explicit user-supplied reasoning.",
+            ReasoningCaptureMode.Assisted => "Captured from an assisted reasoning workflow.",
+            ReasoningCaptureMode.Inferred => "Captured from an authoritative lifecycle transition.",
+            _ => "Captured from reasoning provenance."
+        };
     }
 
     private static string RequireText(string value, string message)

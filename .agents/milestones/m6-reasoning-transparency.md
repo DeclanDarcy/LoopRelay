@@ -36,10 +36,10 @@ Make reasoning conclusions explain their provenance, confidence, thresholds, rec
    - [x] historical cutoff
    - [x] reachable and unreachable evidence where known
 - [ ] Extend reasoning event or projection models to distinguish capture modes:
-   - [ ] Manual
-   - [ ] Assisted
-   - [ ] Inferred
-- [ ] For inferred capture, expose source transition, source artifact, capture reason, captured by, and source timestamp.
+   - [x] Manual
+   - [x] Assisted
+   - [x] Inferred
+- [x] For inferred capture, expose source transition, source artifact, capture reason, captured by, and source timestamp.
 - [ ] For skipped or deduplicated capture, expose skip reason, existing event id, and duplicate signal where relevant.
 - [ ] Replace plain boundary errors with structured boundary error responses:
    - [ ] boundary rule
@@ -69,7 +69,7 @@ Make reasoning conclusions explain their provenance, confidence, thresholds, rec
 - [x] Update reasoning TypeScript types and API responses.
 - [x] Update `ReasoningMaterializationReviewPanel` to render literal recommendations and threshold basis.
 - [ ] Update `ReasoningReconstructionPanel`, `ReasoningQueryPanel`, and trace panels to show confidence rationale, evidence branches, missing evidence, direction, scope, and historical cutoff.
-- [ ] Update `ReasoningEventFeed` with capture provenance badges and inferred capture details.
+- [x] Update `ReasoningEventFeed` with capture provenance badges and inferred capture details.
 - [ ] Add authority boundary notices that identify the owning domain and allowed alternative.
 - [x] Update taxonomy and materialization review rendering to show lifecycle-risk rules and thresholds.
 - [ ] Add a grouped reasoning diagnostics component.
@@ -79,7 +79,7 @@ Make reasoning conclusions explain their provenance, confidence, thresholds, rec
 - [x] Backend tests for materialization threshold branches.
 - [x] Backend tests for confidence rationale branches.
 - [x] Backend tests for forward/backward reconstruction scope.
-- [ ] Backend tests for manual, assisted, and inferred capture.
+- [x] Backend tests for manual, assisted, and inferred capture.
 - [ ] Backend tests for boundary violation explanations.
 - [x] Backend tests for lifecycle risk thresholds.
 - [ ] UI tests for rendering each explanation branch.

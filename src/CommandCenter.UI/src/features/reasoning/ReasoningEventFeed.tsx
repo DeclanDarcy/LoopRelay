@@ -41,18 +41,53 @@ export function ReasoningEventFeed({
                 <span>{event.family}</span>
                 <span>{event.type}</span>
                 <span>{formatDate(event.createdAt)}</span>
+                <span>{event.captureProvenance.mode}</span>
               </div>
               <p>{event.narrative.summary}</p>
               {event.narrative.details ? <small>{event.narrative.details}</small> : null}
-              <dl className="reasoning-provenance">
+              <dl className="reasoning-provenance" aria-label={`${event.id} capture provenance`}>
                 <div>
-                  <dt>Provenance</dt>
-                  <dd>{event.provenance.sourceKind} by {event.provenance.capturedBy}</dd>
+                  <dt>Capture</dt>
+                  <dd>{event.captureProvenance.sourceKind} by {event.captureProvenance.capturedBy}</dd>
                 </div>
-                {event.provenance.relativePath ? (
+                <div>
+                  <dt>Reason</dt>
+                  <dd>{event.captureProvenance.captureReason}</dd>
+                </div>
+                {event.captureProvenance.sourceTransition ? (
+                  <div>
+                    <dt>Transition</dt>
+                    <dd>{event.captureProvenance.sourceTransition}</dd>
+                  </div>
+                ) : null}
+                {event.captureProvenance.sourceArtifact ? (
                   <div>
                     <dt>Source</dt>
-                    <dd>{event.provenance.relativePath}</dd>
+                    <dd>{event.captureProvenance.sourceArtifact}</dd>
+                  </div>
+                ) : null}
+                {event.captureProvenance.sourceTimestamp ? (
+                  <div>
+                    <dt>Source Time</dt>
+                    <dd>{formatDate(event.captureProvenance.sourceTimestamp)}</dd>
+                  </div>
+                ) : null}
+                {event.captureProvenance.duplicateSignal ? (
+                  <div>
+                    <dt>Duplicate Signal</dt>
+                    <dd>{event.captureProvenance.duplicateSignal}</dd>
+                  </div>
+                ) : null}
+                {event.captureProvenance.skipReason ? (
+                  <div>
+                    <dt>Skipped</dt>
+                    <dd>{event.captureProvenance.skipReason}</dd>
+                  </div>
+                ) : null}
+                {event.captureProvenance.existingEventReference ? (
+                  <div>
+                    <dt>Existing Event</dt>
+                    <dd>{event.captureProvenance.existingEventReference.id}</dd>
                   </div>
                 ) : null}
               </dl>

@@ -18,6 +18,18 @@ public sealed record ReasoningProvenance(
     string? Excerpt = null,
     string? Fingerprint = null);
 
+public sealed record ReasoningCaptureProvenance(
+    ReasoningCaptureMode Mode,
+    string SourceKind,
+    string CapturedBy,
+    string CaptureReason,
+    string? SourceTransition = null,
+    string? SourceArtifact = null,
+    DateTimeOffset? SourceTimestamp = null,
+    string? SkipReason = null,
+    string? DuplicateSignal = null,
+    ReasoningReference? ExistingEventReference = null);
+
 public sealed record ReasoningEvent(
     string Id,
     Guid RepositoryId,
@@ -29,7 +41,8 @@ public sealed record ReasoningEvent(
     IReadOnlyList<ReasoningReference> References,
     ReasoningProvenance Provenance,
     IReadOnlyList<string> ThreadIds,
-    IReadOnlyList<string> Tags);
+    IReadOnlyList<string> Tags,
+    ReasoningCaptureProvenance? CaptureProvenance = null);
 
 public sealed record ReasoningThread(
     string Id,

@@ -169,6 +169,11 @@ public sealed class DecisionReasoningCaptureServiceTests
         Assert.Equal(ReasoningEventFamily.Direction, reasoningEvent.Family);
         Assert.Equal(ReasoningEventType.DirectionShifted, reasoningEvent.Type);
         Assert.Equal("InferredExecutionHandoffAcceptance", reasoningEvent.Provenance.SourceKind);
+        Assert.Equal(ReasoningCaptureMode.Inferred, reasoningEvent.CaptureProvenance?.Mode);
+        Assert.Equal("ExecutionHandoffAcceptedReasoningObserved", reasoningEvent.CaptureProvenance?.SourceTransition);
+        Assert.Equal(".agents/handoffs/handoff.md", reasoningEvent.CaptureProvenance?.SourceArtifact);
+        Assert.Equal(reasoningEvent.CreatedAt, reasoningEvent.CaptureProvenance?.SourceTimestamp);
+        Assert.Contains("Fingerprint ", reasoningEvent.CaptureProvenance?.DuplicateSignal);
         Assert.Contains("Execution remains workflow authority", reasoningEvent.Narrative.Details);
         Assert.Contains(reasoningEvent.References, reference =>
             reference.Kind == ReasoningReferenceKind.Handoff &&

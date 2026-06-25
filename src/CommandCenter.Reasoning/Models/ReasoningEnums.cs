@@ -134,6 +134,13 @@ public enum ReasoningManualCaptureKind
     EvidenceAdded
 }
 
+public enum ReasoningCaptureMode
+{
+    Manual,
+    Assisted,
+    Inferred
+}
+
 public enum ReasoningTraceDirection
 {
     Backward,

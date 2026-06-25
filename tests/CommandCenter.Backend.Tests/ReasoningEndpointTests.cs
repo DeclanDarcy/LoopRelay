@@ -356,7 +356,39 @@ public sealed class ReasoningEndpointTests
         Assert.Equal(ReasoningEventFamily.Contradiction, identified.Family);
         Assert.Equal(ReasoningEventType.ContradictionResolved, resolved.Type);
         Assert.Equal("UserSupplied", resolved.Provenance.SourceKind);
+        Assert.Equal(ReasoningCaptureMode.Manual, resolved.CaptureProvenance?.Mode);
+        Assert.Equal("UserSupplied", resolved.CaptureProvenance?.SourceKind);
+        Assert.Equal("Captured from explicit user-supplied reasoning.", resolved.CaptureProvenance?.CaptureReason);
         Assert.Equal([identified.Id, resolved.Id], reloadedThread.EventIds);
+    }
+
+    [Fact]
+    public async Task ReasoningEventsExposeAssistedCaptureProvenance()
+    {
+        Repository repository = CreateRepository();
+        await using WebApplication app = await CreateAppAsync(repository);
+        using var client = new HttpClient();
+        string root = app.Urls.Single();
+
+        ReasoningEvent created = (await (await client.PostAsJsonAsync(
+            $"{root}/api/repositories/{repository.Id}/reasoning/events",
+            EventCommand(
+                "Assisted event",
+                new ReasoningProvenance(
+                    "AssistedReviewCapture",
+                    "review-workflow",
+                    ".agents/handoffs/handoff.md",
+                    "Review",
+                    "Reviewer accepted the assisted explanation.",
+                    "assisted-fingerprint"),
+                ["assisted-capture"]))).Content.ReadFromJsonAsync<ReasoningEvent>(JsonOptions))!;
+
+        Assert.Equal(ReasoningCaptureMode.Assisted, created.CaptureProvenance?.Mode);
+        Assert.Equal("AssistedReviewCapture", created.CaptureProvenance?.SourceKind);
+        Assert.Equal("Reviewer accepted the assisted explanation.", created.CaptureProvenance?.CaptureReason);
+        Assert.Equal(".agents/handoffs/handoff.md", created.CaptureProvenance?.SourceArtifact);
+        Assert.Equal("Fingerprint assisted-fingerprint", created.CaptureProvenance?.DuplicateSignal);
+        Assert.Null(created.CaptureProvenance?.SourceTransition);
     }
 
     [Fact]
@@ -412,7 +444,10 @@ public sealed class ReasoningEndpointTests
         return app;
     }
 
-    private static CreateReasoningEventCommand EventCommand(string title)
+    private static CreateReasoningEventCommand EventCommand(
+        string title,
+        ReasoningProvenance? provenance = null,
+        IReadOnlyList<string>? tags = null)
     {
         return new CreateReasoningEventCommand(
             ReasoningEventFamily.Hypothesis,
@@ -420,9 +455,9 @@ public sealed class ReasoningEndpointTests
             title,
             new ReasoningNarrative("A hypothesis was raised."),
             [],
-            Provenance(),
+            provenance ?? Provenance(),
             [],
-            []);
+            tags ?? []);
     }
 
     private static ReasoningProvenance Provenance()

@@ -120,6 +120,8 @@ export type ReasoningManualCaptureKind =
   | 'ConstraintRetired'
   | 'EvidenceAdded'
 
+export type ReasoningCaptureMode = 'Manual' | 'Assisted' | 'Inferred'
+
 export type ReasoningNarrative = {
   summary: string
   details: string
@@ -143,6 +145,19 @@ export type ReasoningProvenance = {
   fingerprint: string | null
 }
 
+export type ReasoningCaptureProvenance = {
+  mode: ReasoningCaptureMode
+  sourceKind: string
+  capturedBy: string
+  captureReason: string
+  sourceTransition: string | null
+  sourceArtifact: string | null
+  sourceTimestamp: string | null
+  skipReason: string | null
+  duplicateSignal: string | null
+  existingEventReference: ReasoningReference | null
+}
+
 export type ReasoningEvent = {
   id: string
   repositoryId: string
@@ -155,6 +170,7 @@ export type ReasoningEvent = {
   provenance: ReasoningProvenance
   threadIds: string[]
   tags: string[]
+  captureProvenance: ReasoningCaptureProvenance
 }
 
 export type ReasoningThread = {

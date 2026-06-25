@@ -2807,7 +2807,7 @@ function dashboardEntry(workspace: Workspace): DashboardEntry {
 
 function createReasoningEvents(repositoryId: string): ReasoningEvent[] {
   return [
-    {
+    withReasoningCaptureProvenance({
       id: 'EVT-0001',
       repositoryId,
       createdAt: '2026-06-22T16:00:00.0000000Z',
@@ -2837,8 +2837,8 @@ function createReasoningEvents(repositoryId: string): ReasoningEvent[] {
       },
       threadIds: ['THR-0001'],
       tags: ['milestone-1'],
-    },
-    {
+    }),
+    withReasoningCaptureProvenance({
       id: 'EVT-0002',
       repositoryId,
       createdAt: '2026-06-22T16:05:00.0000000Z',
@@ -2860,8 +2860,61 @@ function createReasoningEvents(repositoryId: string): ReasoningEvent[] {
       },
       threadIds: ['THR-0001'],
       tags: ['derived-only'],
-    },
+    }),
   ]
+}
+
+function withReasoningCaptureProvenance(event: Omit<ReasoningEvent, 'captureProvenance'>): ReasoningEvent {
+  const mode = event.provenance.sourceKind.startsWith('Inferred') || event.tags.includes('inferred-capture')
+    ? 'Inferred'
+    : event.provenance.sourceKind.startsWith('Assisted') || event.tags.includes('assisted-capture')
+      ? 'Assisted'
+      : 'Manual'
+
+  return {
+    ...event,
+    captureProvenance: {
+      mode,
+      sourceKind: event.provenance.sourceKind,
+      capturedBy: event.provenance.capturedBy,
+      captureReason: event.provenance.excerpt ?? (
+        mode === 'Inferred'
+          ? 'Captured from an authoritative lifecycle transition.'
+          : mode === 'Assisted'
+            ? 'Captured from an assisted reasoning workflow.'
+            : 'Captured from explicit user-supplied reasoning.'
+      ),
+      sourceTransition: mode === 'Inferred'
+        ? reasoningSourceTransition(event.provenance.sourceKind, event.provenance.section)
+        : null,
+      sourceArtifact: event.provenance.relativePath,
+      sourceTimestamp: mode === 'Inferred' ? event.createdAt : null,
+      skipReason: null,
+      duplicateSignal: event.provenance.fingerprint ? `Fingerprint ${event.provenance.fingerprint}` : null,
+      existingEventReference: null,
+    },
+  }
+}
+
+function reasoningSourceTransition(sourceKind: string, section: string | null) {
+  switch (sourceKind) {
+    case 'InferredProposalResolution':
+      return 'ProposalResolved'
+    case 'InferredDecisionSupersession':
+      return 'DecisionSuperseded'
+    case 'InferredDecisionArchive':
+      return 'DecisionArchived'
+    case 'InferredGovernanceContradiction':
+      return 'GovernanceContradictionObserved'
+    case 'InferredOperationalContextPromotion':
+      return 'OperationalContextPromotionReasoningObserved'
+    case 'InferredExecutionHandoffAcceptance':
+      return 'ExecutionHandoffAcceptedReasoningObserved'
+    case 'InferredExecutionHandoffRejection':
+      return 'ExecutionHandoffRejectedReasoningObserved'
+    default:
+      return section ?? sourceKind
+  }
 }
 
 function createManualReasoningCaptureTemplates(): ManualReasoningCaptureTemplate[] {
@@ -4725,7 +4778,7 @@ export function installDevTauriMock() {
           const repositoryId = getStringArg(args, 'repositoryId')
           const command = args?.command as Partial<ReasoningEvent>
           const events = state.reasoningEvents[repositoryId] ?? []
-          const event: ReasoningEvent = {
+          const event: ReasoningEvent = withReasoningCaptureProvenance({
             id: `EVT-${String(events.length + 1).padStart(4, '0')}`,
             repositoryId,
             createdAt: new Date().toISOString(),
@@ -4744,7 +4797,7 @@ export function installDevTauriMock() {
             },
             threadIds: command.threadIds ?? [],
             tags: command.tags ?? [],
-          }
+          })
           state.reasoningEvents[repositoryId] = [...events, event]
           refreshReasoningSummary(state, repositoryId)
           return clone(event)
@@ -4762,7 +4815,7 @@ export function installDevTauriMock() {
           }
 
           const events = state.reasoningEvents[repositoryId] ?? []
-          const event: ReasoningEvent = {
+          const event: ReasoningEvent = withReasoningCaptureProvenance({
             id: `EVT-${String(events.length + 1).padStart(4, '0')}`,
             repositoryId,
             createdAt: new Date().toISOString(),
@@ -4774,7 +4827,7 @@ export function installDevTauriMock() {
             provenance: command.provenance,
             threadIds: command.threadIds ?? [],
             tags: command.tags ?? [],
-          }
+          })
           state.reasoningEvents[repositoryId] = [...events, event]
           for (const threadId of command.threadIds ?? []) {
             state.reasoningThreads[repositoryId] = (state.reasoningThreads[repositoryId] ?? []).map(

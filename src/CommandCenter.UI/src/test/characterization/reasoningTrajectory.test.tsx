@@ -35,6 +35,18 @@ const events: ReasoningEvent[] = [
       excerpt: 'Preserve events first.',
       fingerprint: 'fingerprint-1',
     },
+    captureProvenance: {
+      mode: 'Manual',
+      sourceKind: 'ManualCapture',
+      capturedBy: 'codex',
+      captureReason: 'Preserve events first.',
+      sourceTransition: null,
+      sourceArtifact: '.agents/plan.md',
+      sourceTimestamp: null,
+      skipReason: null,
+      duplicateSignal: 'Fingerprint fingerprint-1',
+      existingEventReference: null,
+    },
     threadIds: ['THR-0001'],
     tags: ['milestone-1'],
   },
@@ -51,12 +63,24 @@ const events: ReasoningEvent[] = [
     },
     references: [],
     provenance: {
-      sourceKind: 'ManualCapture',
-      capturedBy: 'codex',
+      sourceKind: 'InferredOperationalContextPromotion',
+      capturedBy: 'operational-context-lifecycle-service',
       relativePath: '.agents/decisions/decisions.md',
       section: 'Newly Authorized',
       excerpt: 'Do not add specialized endpoints.',
       fingerprint: 'fingerprint-2',
+    },
+    captureProvenance: {
+      mode: 'Inferred',
+      sourceKind: 'InferredOperationalContextPromotion',
+      capturedBy: 'operational-context-lifecycle-service',
+      captureReason: 'Do not add specialized endpoints.',
+      sourceTransition: 'OperationalContextPromotionReasoningObserved',
+      sourceArtifact: '.agents/decisions/decisions.md',
+      sourceTimestamp: '2026-06-22T16:05:00.0000000Z',
+      skipReason: null,
+      duplicateSignal: 'Fingerprint fingerprint-2',
+      existingEventReference: null,
     },
     threadIds: [],
     tags: ['derived-only'],
@@ -527,8 +551,11 @@ describe('reasoning trajectory tab', () => {
     expect(screen.getByRole('heading', { name: 'Trajectory' })).toBeInTheDocument()
     const feed = screen.getByRole('region', { name: 'Reasoning event feed' })
     expect(within(feed).getByText('Event substrate can stay narrow')).toBeInTheDocument()
-    expect(within(feed).getAllByText('ManualCapture by codex')).toHaveLength(2)
+    expect(within(feed).getByText('ManualCapture by codex')).toBeInTheDocument()
+    expect(within(feed).getByText('InferredOperationalContextPromotion by operational-context-lifecycle-service')).toBeInTheDocument()
+    expect(within(feed).getByText('OperationalContextPromotionReasoningObserved')).toBeInTheDocument()
     expect(within(feed).getByText('.agents/plan.md')).toBeInTheDocument()
+    expect(within(feed).getByText('Fingerprint fingerprint-1')).toBeInTheDocument()
     expect(screen.getByLabelText('Derived reasoning status')).toHaveTextContent(
       'Derived display only',
     )
