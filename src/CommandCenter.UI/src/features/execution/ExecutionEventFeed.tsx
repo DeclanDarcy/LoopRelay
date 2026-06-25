@@ -17,6 +17,8 @@ export function ExecutionEventFeed({
   ariaLabel = 'Execution output',
   eyebrow = 'Execution Output',
 }: ExecutionEventFeedProps) {
+  const groupedEvents = groupExecutionEvents(events)
+
   return (
     <Panel className="execution-output-panel" aria-label={ariaLabel}>
       <SectionHeader eyebrow={eyebrow} title={`${events.length} events`} headingLevel={4} />
@@ -24,31 +26,72 @@ export function ExecutionEventFeed({
         {events.length === 0 ? (
           <EmptyState className="empty-state">No execution events recorded.</EmptyState>
         ) : (
-          events.map((executionEvent) => (
-            <div
-              className="execution-event-row"
-              data-event-sequence={executionEvent.sequence}
-              data-event-type={executionEvent.type}
-              data-event-timestamp={executionEvent.timestamp}
-              key={executionEvent.sequence}
+          groupedEvents.map((group) => (
+            <section
+              className="execution-event-group"
+              aria-label={`${group.category} execution events`}
+              key={group.category}
             >
-              <span className="execution-event-sequence">#{executionEvent.sequence}</span>
-              <span className="execution-event-time">{formatDateTime(executionEvent.timestamp)}</span>
-              <span className="execution-event-type">{executionEvent.type}</span>
-              <span className="execution-event-provider">
-                {session?.providerName || 'Provider not recorded'}
-              </span>
-              <span className="execution-event-status">
-                {session ? <StatusBadge status={executionSessionStatus[session.state]} /> : 'Status not recorded'}
-              </span>
-              <span className="execution-event-session">
-                {session?.sessionId ?? 'Session not recorded'}
-              </span>
-              <pre>{executionEvent.message}</pre>
-            </div>
+              <div className="execution-event-group-header">
+                <span>{group.category}</span>
+                <span>{group.events.length} event{group.events.length === 1 ? '' : 's'}</span>
+              </div>
+              {group.events.map((executionEvent) => (
+                <div
+                  className="execution-event-row"
+                  data-event-sequence={executionEvent.sequence}
+                  data-event-type={executionEvent.type}
+                  data-event-category={eventCategory(executionEvent)}
+                  data-event-timestamp={executionEvent.timestamp}
+                  key={executionEvent.sequence}
+                >
+                  <span className="execution-event-sequence">#{executionEvent.sequence}</span>
+                  <span className="execution-event-time">{formatDateTime(executionEvent.timestamp)}</span>
+                  <span className="execution-event-type">{executionEvent.type}</span>
+                  <span className="execution-event-provider">
+                    {session?.providerName || 'Provider not recorded'}
+                  </span>
+                  <span className="execution-event-status">
+                    {session ? <StatusBadge status={executionSessionStatus[session.state]} /> : 'Status not recorded'}
+                  </span>
+                  <span className="execution-event-session">
+                    {session?.sessionId ?? 'Session not recorded'}
+                  </span>
+                  <p className="execution-event-consequence">{eventConsequence(executionEvent)}</p>
+                  <pre>{executionEvent.message}</pre>
+                </div>
+              ))}
+            </section>
           ))
         )}
       </div>
     </Panel>
   )
+}
+
+type ExecutionEventGroup = {
+  category: string
+  events: ExecutionEvent[]
+}
+
+function groupExecutionEvents(events: ExecutionEvent[]): ExecutionEventGroup[] {
+  return events.reduce<ExecutionEventGroup[]>((groups, executionEvent) => {
+    const category = eventCategory(executionEvent)
+    const existing = groups.find((group) => group.category === category)
+    if (existing) {
+      existing.events.push(executionEvent)
+      return groups
+    }
+
+    groups.push({ category, events: [executionEvent] })
+    return groups
+  }, [])
+}
+
+function eventCategory(executionEvent: ExecutionEvent) {
+  return executionEvent.category?.trim() || 'Monitoring'
+}
+
+function eventConsequence(executionEvent: ExecutionEvent) {
+  return executionEvent.consequence?.trim() || 'Execution monitoring recorded activity.'
 }

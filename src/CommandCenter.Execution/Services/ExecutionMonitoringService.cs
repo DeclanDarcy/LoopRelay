@@ -95,7 +95,7 @@ public sealed class ExecutionMonitoringService : IExecutionMonitoringService
     public async Task<IReadOnlyList<ExecutionEvent>> GetEventsAsync(Guid sessionId)
     {
         ExecutionSession? session = (await sessionStore.LoadAsync()).FirstOrDefault(session => session.Id == sessionId);
-        return session?.Events ?? [];
+        return session is null ? [] : session.Events.Select(EnrichEventSemantics).ToArray();
     }
 
     public async IAsyncEnumerable<ExecutionEvent> StreamEventsAsync(
@@ -113,7 +113,7 @@ public sealed class ExecutionMonitoringService : IExecutionMonitoringService
                 yield break;
             }
 
-            retainedEvents = session.Events;
+            retainedEvents = session.Events.Select(EnrichEventSemantics).ToArray();
             channel = Channel.CreateUnbounded<ExecutionEvent>(new UnboundedChannelOptions
             {
                 SingleReader = true,
@@ -259,6 +259,8 @@ public sealed class ExecutionMonitoringService : IExecutionMonitoringService
                 Sequence = nextSequence,
                 Timestamp = activityAt ?? DateTimeOffset.UtcNow,
                 Type = eventType,
+                Category = CategoryFor(eventType),
+                Consequence = ConsequenceFor(eventType, message),
                 Message = message
             };
             IReadOnlyList<ExecutionEvent> events = ApplyRetention([.. session.Events, executionEvent]);
@@ -296,6 +298,8 @@ public sealed class ExecutionMonitoringService : IExecutionMonitoringService
             sizeof(long) +
             32 +
             executionEvent.Type.ToString().Length +
+            executionEvent.Category.Length * sizeof(char) +
+            executionEvent.Consequence.Length * sizeof(char) +
             executionEvent.Message.Length * sizeof(char));
     }
 
@@ -333,7 +337,83 @@ public sealed class ExecutionMonitoringService : IExecutionMonitoringService
             HandoffPath = session.HandoffPath,
             FailureReason = session.FailureReason,
             RecentEvents = session.Events
+                .Select(EnrichEventSemantics)
+                .ToArray()
         };
+    }
+
+    private static ExecutionEvent EnrichEventSemantics(ExecutionEvent executionEvent)
+    {
+        string category = string.IsNullOrWhiteSpace(executionEvent.Category)
+            ? CategoryFor(executionEvent.Type)
+            : executionEvent.Category;
+        string consequence = string.IsNullOrWhiteSpace(executionEvent.Consequence)
+            ? ConsequenceFor(executionEvent.Type, executionEvent.Message)
+            : executionEvent.Consequence;
+
+        if (string.Equals(category, executionEvent.Category, StringComparison.Ordinal) &&
+            string.Equals(consequence, executionEvent.Consequence, StringComparison.Ordinal))
+        {
+            return executionEvent;
+        }
+
+        return new ExecutionEvent
+        {
+            Sequence = executionEvent.Sequence,
+            Timestamp = executionEvent.Timestamp,
+            Type = executionEvent.Type,
+            Category = category,
+            Consequence = consequence,
+            Message = executionEvent.Message
+        };
+    }
+
+    private static string CategoryFor(ExecutionEventType eventType)
+    {
+        return eventType switch
+        {
+            ExecutionEventType.ProviderStarted => "Launch",
+            ExecutionEventType.ProviderExited or
+            ExecutionEventType.StdOut or
+            ExecutionEventType.StdErr => "Provider",
+            ExecutionEventType.Recovery => "Recovery",
+            ExecutionEventType.HandoffValidated => "Handoff",
+            ExecutionEventType.Failure or
+            ExecutionEventType.Cancellation => "Failure",
+            ExecutionEventType.Info => "Monitoring",
+            _ => "Monitoring"
+        };
+    }
+
+    private static string ConsequenceFor(ExecutionEventType eventType, string message)
+    {
+        return eventType switch
+        {
+            ExecutionEventType.ProviderStarted => "Provider execution began.",
+            ExecutionEventType.StdOut => "Provider emitted standard output.",
+            ExecutionEventType.StdErr => "Provider emitted standard error output.",
+            ExecutionEventType.ProviderExited when MessageIndicatesSuccessfulProviderExit(message) =>
+                "Provider completed successfully; handoff processing may proceed.",
+            ExecutionEventType.ProviderExited =>
+                "Provider exited; session state reflects the observed exit result.",
+            ExecutionEventType.HandoffValidated =>
+                "Handoff passed validation and the repository is awaiting acceptance.",
+            ExecutionEventType.Failure =>
+                "Execution is failed or requires recovery before normal progression can continue.",
+            ExecutionEventType.Cancellation =>
+                "Execution was cancelled and repository execution state was stopped.",
+            ExecutionEventType.Recovery =>
+                "Startup recovery recorded or reconciled provider/session state.",
+            ExecutionEventType.Info =>
+                "Execution monitoring recorded informational activity.",
+            _ => "Execution monitoring recorded activity."
+        };
+    }
+
+    private static bool MessageIndicatesSuccessfulProviderExit(string message)
+    {
+        return message.Contains("code 0", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message, "Provider process exited.", StringComparison.Ordinal);
     }
 
     private static ExecutionSession CopySession(

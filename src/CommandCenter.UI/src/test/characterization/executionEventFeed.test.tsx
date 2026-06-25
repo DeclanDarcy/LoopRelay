@@ -22,12 +22,16 @@ describe('execution event feed rendering characterization', () => {
         sequence: 2,
         timestamp: '2026-06-21T16:15:00.000Z',
         type: 'stderr',
+        category: 'Provider',
+        consequence: 'Provider emitted standard error output.',
         message: 'Second event',
       },
       {
         sequence: 7,
         timestamp: '2026-06-21T16:16:00.000Z',
         type: 'stdout',
+        category: 'Provider',
+        consequence: 'Provider emitted standard output.',
         message: 'Seventh event',
       },
     ]
@@ -42,7 +46,77 @@ describe('execution event feed rendering characterization', () => {
     ])
     expect(screen.getByText('stderr')).toBeInTheDocument()
     expect(screen.getByText('stdout')).toBeInTheDocument()
+    expect(screen.getByLabelText('Provider execution events')).toBeInTheDocument()
+    expect(within(screen.getByLabelText('Provider execution events')).getByText('2 events')).toBeInTheDocument()
+    expect(screen.getByText('Provider emitted standard error output.')).toBeInTheDocument()
+    expect(screen.getByText('Provider emitted standard output.')).toBeInTheDocument()
     expect(screen.getByText('Second event').tagName).toBe('PRE')
     expect(screen.getByText('Seventh event').tagName).toBe('PRE')
+  })
+
+  it('groups events by backend semantic category in first-seen order', () => {
+    const events: ExecutionEvent[] = [
+      {
+        sequence: 1,
+        timestamp: '2026-06-21T16:15:00.000Z',
+        type: 'ProviderStarted',
+        category: 'Launch',
+        consequence: 'Provider execution began.',
+        message: 'Provider process started.',
+      },
+      {
+        sequence: 2,
+        timestamp: '2026-06-21T16:16:00.000Z',
+        type: 'Failure',
+        category: 'Failure',
+        consequence: 'Execution is failed or requires recovery before normal progression can continue.',
+        message: 'Provider process exited with code 2.',
+      },
+      {
+        sequence: 3,
+        timestamp: '2026-06-21T16:17:00.000Z',
+        type: 'HandoffValidated',
+        category: 'Handoff',
+        consequence: 'Handoff passed validation and the repository is awaiting acceptance.',
+        message: 'Current handoff validated for review.',
+      },
+    ]
+
+    render(<ExecutionEventFeed events={events} />)
+
+    expect(screen.getByLabelText('Launch execution events')).toBeInTheDocument()
+    expect(screen.getByLabelText('Failure execution events')).toBeInTheDocument()
+    expect(screen.getByLabelText('Handoff execution events')).toBeInTheDocument()
+    expect(screen.getByText('Provider execution began.')).toHaveClass('execution-event-consequence')
+    expect(screen.getByText('Execution is failed or requires recovery before normal progression can continue.')).toHaveClass(
+      'execution-event-consequence',
+    )
+    expect(screen.getByText('Handoff passed validation and the repository is awaiting acceptance.')).toHaveClass(
+      'execution-event-consequence',
+    )
+    expect(Array.from(document.querySelectorAll('.execution-event-row')).map((row) => row.getAttribute('data-event-category'))).toEqual([
+      'Launch',
+      'Failure',
+      'Handoff',
+    ])
+  })
+
+  it('keeps older events visible when semantic fields are absent', () => {
+    render(
+      <ExecutionEventFeed
+        events={[
+          {
+            sequence: 9,
+            timestamp: '2026-06-21T16:18:00.000Z',
+            type: 'Info',
+            message: 'Older event',
+          },
+        ]}
+      />,
+    )
+
+    expect(screen.getByLabelText('Monitoring execution events')).toBeInTheDocument()
+    expect(screen.getByText('Execution monitoring recorded activity.')).toBeInTheDocument()
+    expect(screen.getByText('Older event')).toBeInTheDocument()
   })
 })

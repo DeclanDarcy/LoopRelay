@@ -2,12 +2,18 @@
 
 ## Newly Authorized
 
-- Accept the completed Milestone 5 handoff processing transparency slice as architecturally correct.
-- Preserve the authority boundary: Execution owns handoff processing facts, Workflow observes them, and UI renders them.
-- Treat `NoHandoffProcessingRecord` as the correct compatibility state for older sessions without recorded handoff processing evidence.
-- Continue Milestone 5 next with semantic execution event categories and consequence text.
-- Semantic execution events should cover launch, provider, monitoring, recovery, handoff, git, failure, and related state change or consequence.
-- After semantic execution event transparency, continue with execution-generated versus pre-existing git change classification.
-- Git change-origin classification must be backend-owned and must not be inferred in UI from path names or timestamps.
-- Add UI bulk actions to select execution-generated changes and deselect pre-existing changes once backend-owned classification is available.
-- After event semantics and git change-origin classification, proceed to Milestone 5 exit audit and closure.
+- Accept the completed Milestone 5 semantic execution event slice as architecturally correct.
+- Preserve the semantic event authority chain: Execution service -> semantic event projection -> transport -> React grouping/rendering.
+- Keep execution event `category` and `consequence` as distinct backend-authored fields.
+- Continue Milestone 5 with execution-generated versus pre-existing Git change classification.
+- Git change classification must be execution-owned and deterministic.
+- Project per-path Git change classification as `ExecutionGenerated` versus `PreExisting`.
+- Include classification basis where applicable.
+- Include eligibility for execution-focused bulk actions in the backend-owned projection.
+- Update `GitPathBucket` and `GitWorkflowEvidence` to consume backend classification directly.
+- Add backend-driven bulk actions to select execution-generated changes and deselect pre-existing changes.
+- Do not rely on UI path heuristics, timestamps, or client inference for Git change classification.
+- Git operations should emit execution events only when they represent execution lifecycle transitions.
+- Appropriate Git execution events include commit preparation created, commit preparation invalidated, commit succeeded, push attempted, push succeeded, push failed, retry state established, and retry completed.
+- Do not emit execution events that merely restate static repository state, such as modified file counts or selected file counts.
+- Keep static Git state in projections such as Git eligibility or Git workflow evidence, not in the execution event stream.

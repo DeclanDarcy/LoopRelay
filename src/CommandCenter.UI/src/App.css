@@ -2664,6 +2664,24 @@ button:focus-visible {
   background: var(--bg-inset);
 }
 
+.execution-event-group {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.execution-event-group-header {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--fg-muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
 .execution-event-row {
   min-width: 0;
   display: grid;
@@ -2691,6 +2709,16 @@ button:focus-visible {
 
 .execution-event-type {
   color: var(--status-info-fg);
+}
+
+.execution-event-consequence {
+  min-width: 0;
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--fg-subtle);
+  font-size: 0.82rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .execution-event-row pre {

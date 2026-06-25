@@ -48,6 +48,12 @@ public sealed class ExecutionMonitoringEndpointTests
         Assert.Equal(
             [ExecutionEventType.StdOut, ExecutionEventType.StdErr, ExecutionEventType.ProviderExited],
             status.RecentEvents.Select(executionEvent => executionEvent.Type).ToArray());
+        Assert.Equal(
+            ["Provider", "Provider", "Provider"],
+            status.RecentEvents.Select(executionEvent => executionEvent.Category).ToArray());
+        Assert.Contains(
+            "Provider completed successfully; handoff processing may proceed.",
+            status.RecentEvents.Select(executionEvent => executionEvent.Consequence));
         Assert.Equal([1, 2, 3], status.RecentEvents.Select(executionEvent => executionEvent.Sequence).ToArray());
     }
 
@@ -211,6 +217,10 @@ public sealed class ExecutionMonitoringEndpointTests
         ExecutionEvent cancellationEvent = Assert.Single(await ReadSseEventsAsync(reader, 1, cancellationTokenSource.Token));
 
         Assert.Equal(ExecutionEventType.Cancellation, cancellationEvent.Type);
+        Assert.Equal("Failure", cancellationEvent.Category);
+        Assert.Equal(
+            "Execution was cancelled and repository execution state was stopped.",
+            cancellationEvent.Consequence);
         Assert.Equal("Provider cancellation was requested.", cancellationEvent.Message);
     }
 

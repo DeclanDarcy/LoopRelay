@@ -74,13 +74,15 @@ Make execution explainable: what was launched, what context was included, what r
    - [x] validation failure
    - [x] resulting session state
 - [ ] Add semantic categories and consequence text to execution events:
-   - [ ] launch
-   - [ ] provider
-   - [ ] monitoring
-   - [ ] recovery
-   - [ ] handoff
+   - [x] launch
+   - [x] provider
+   - [x] monitoring
+   - [x] recovery
+   - [x] handoff
    - [ ] git
-   - [ ] failure
+   - [x] failure
+   - [x] Current execution event projection normalizes older retained events that lack persisted category/consequence fields.
+   - [ ] Git-specific event semantics remain open until the execution git workflow emits git events or a git event projection is added.
 
 ### UI
 
@@ -89,6 +91,7 @@ Make execution explainable: what was launched, what context was included, what r
    - [x] Added execution transparency TypeScript types for prompt metadata, recovery, and monitoring health.
    - [x] Added structured governed conflict diagnostic TypeScript types.
    - [x] Added handoff processing transparency TypeScript types.
+   - [x] Added semantic event category and consequence TypeScript fields.
 - [x] Add `getExecutionPromptManifest`, `getExecutionTransparency`, and git eligibility client functions.
    - [x] Added `getExecutionPromptManifest`.
    - [x] Added `getExecutionTransparency`.
@@ -102,7 +105,7 @@ Make execution explainable: what was launched, what context was included, what r
 - [x] Update handoff panels to show post-processing state, archive diagnostics, validation diagnostics, and whether provider failure differs from handoff processing failure.
 - [x] Replace placeholder monitoring text with real monitoring health fields.
 - [x] Update execution validation list to render governed decision conflicts as governance blockers with decision id, conflicting excerpt, conflict reason, affected prompt/context, and resolution path.
-- [ ] Group execution events by semantic category and display event consequence plus related state change.
+- [x] Group execution events by semantic category and display event consequence plus related state change.
 
 ### Tests
 
@@ -122,6 +125,7 @@ Make execution explainable: what was launched, what context was included, what r
    - [x] Git eligibility rendering and hook coverage prove backend-owned disabled reasons and shell loading.
    - [x] Governed conflict rendering covers governance blocker details and preserves backend validation strings.
    - [x] Handoff processing rendering covers produced/missing state, archive path and sequence, validation outcome, resulting state, provider-vs-handoff failure distinction, diagnostics, and hook shape.
+   - [x] Event grouping rendering covers semantic categories, consequences, backend category data attributes, and compatibility fallback for older events.
 
 ### Exit Criteria
 

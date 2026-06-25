@@ -3758,6 +3758,8 @@ function createMockExecutionEvents(session: ExecutionSession): ExecutionEvent[] 
       sequence: events.length + 1,
       timestamp: startedAt,
       type: 'ProviderStarted',
+      category: 'Launch',
+      consequence: 'Provider execution began.',
       message: 'Provider process started.',
     })
   }
@@ -3767,6 +3769,8 @@ function createMockExecutionEvents(session: ExecutionSession): ExecutionEvent[] 
       sequence: events.length + 1,
       timestamp: session.completedAt ?? session.lastActivityAt ?? new Date().toISOString(),
       type: 'Recovery',
+      category: 'Recovery',
+      consequence: 'Startup recovery recorded or reconciled provider/session state.',
       message: session.failureReason,
     })
   }
@@ -3776,6 +3780,8 @@ function createMockExecutionEvents(session: ExecutionSession): ExecutionEvent[] 
       sequence: events.length + 1,
       timestamp: session.completedAt,
       type: 'ProviderExited',
+      category: 'Provider',
+      consequence: 'Provider completed successfully; handoff processing may proceed.',
       message: 'Provider process exited with code 0.',
     })
   }

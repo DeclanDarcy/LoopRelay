@@ -195,6 +195,8 @@ export type ExecutionEvent = {
   sequence: number
   timestamp: string
   type: string
+  category?: string
+  consequence?: string
   message: string
 }
 

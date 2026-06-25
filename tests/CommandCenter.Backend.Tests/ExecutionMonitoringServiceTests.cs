@@ -27,12 +27,16 @@ public sealed class ExecutionMonitoringServiceTests
             {
                 Assert.Equal(1, executionEvent.Sequence);
                 Assert.Equal(ExecutionEventType.StdOut, executionEvent.Type);
+                Assert.Equal("Provider", executionEvent.Category);
+                Assert.Equal("Provider emitted standard output.", executionEvent.Consequence);
                 Assert.Equal("first", executionEvent.Message);
             },
             executionEvent =>
             {
                 Assert.Equal(2, executionEvent.Sequence);
                 Assert.Equal(ExecutionEventType.StdErr, executionEvent.Type);
+                Assert.Equal("Provider", executionEvent.Category);
+                Assert.Equal("Provider emitted standard error output.", executionEvent.Consequence);
                 Assert.Equal("second", executionEvent.Message);
             });
     }
@@ -71,7 +75,40 @@ public sealed class ExecutionMonitoringServiceTests
         Assert.Contains("2", status.FailureReason);
         ExecutionEvent providerExitEvent = Assert.Single(events);
         Assert.Equal(ExecutionEventType.ProviderExited, providerExitEvent.Type);
+        Assert.Equal("Provider", providerExitEvent.Category);
+        Assert.Equal(
+            "Provider exited; session state reflects the observed exit result.",
+            providerExitEvent.Consequence);
         Assert.Contains("2", providerExitEvent.Message);
+    }
+
+    [Fact]
+    public async Task EventsWithoutPersistedSemanticsAreProjectedWithCategoriesAndConsequences()
+    {
+        FileSystemExecutionSessionStore store = await CreateStoreWithSessionAsync();
+        ExecutionSession session = (await store.LoadAsync()).Single();
+        await store.SaveAsync(
+            [
+                CopySessionWithEvents(
+                    session,
+                    [
+                        new ExecutionEvent
+                        {
+                            Sequence = 1,
+                            Timestamp = DateTimeOffset.UtcNow,
+                            Type = ExecutionEventType.HandoffValidated,
+                            Message = "Current handoff validated for review."
+                        }
+                    ])
+            ]);
+        var monitoringService = new ExecutionMonitoringService(store);
+
+        ExecutionEvent executionEvent = Assert.Single(await monitoringService.GetEventsAsync(session.Id));
+
+        Assert.Equal("Handoff", executionEvent.Category);
+        Assert.Equal(
+            "Handoff passed validation and the repository is awaiting acceptance.",
+            executionEvent.Consequence);
     }
 
     [Fact]
@@ -183,6 +220,25 @@ public sealed class ExecutionMonitoringServiceTests
                 }
             ]);
         return store;
+    }
+
+    private static ExecutionSession CopySessionWithEvents(
+        ExecutionSession session,
+        IReadOnlyList<ExecutionEvent> events)
+    {
+        return new ExecutionSession
+        {
+            Id = session.Id,
+            RepositoryId = session.RepositoryId,
+            RepositoryPath = session.RepositoryPath,
+            MilestonePath = session.MilestonePath,
+            StartedAt = session.StartedAt,
+            LastActivityAt = session.LastActivityAt,
+            State = session.State,
+            RepositoryState = session.RepositoryState,
+            ProviderName = session.ProviderName,
+            Events = events
+        };
     }
 
     private static string CreateTemporaryDirectory()
