@@ -2,12 +2,11 @@
 
 ## Newly Authorized
 
-- Accept Milestone 4 as complete and closed.
-- Treat the Milestone 4 exit audit and closure documentation as accepted.
-- Preserve the Milestone 4 authority boundary: decision reasoning remains backend-owned and React remains render-only.
-- Keep recommendation confidence, confidence rationale, and confidence evidence deferred until backend-owned semantic fields exist.
-- Keep standalone insufficient-evidence and duplicate-option categories deferred until backend projections expose them as first-class semantic classifications.
-- Keep shared explainability abstractions deferred to Milestone 8.
-- Begin Milestone 5 next, after committing and pushing the accepted Milestone 4 closure.
-- Sequence Milestone 5 backend-first: execution prompt metadata, prompt manifest, retryable push context, structured governed conflicts, and execution transparency projections before shell, TypeScript, hooks, or UI composition.
-- After completing this post-acceptance stage, commit, and push process, stop executing before starting Milestone 5 implementation.
+- Accept the Milestone 5 opening slice as correct.
+- Treat the execution prompt manifest backend foundation as architecturally accepted.
+- Keep the execution prompt manifest persisted with the execution session.
+- Keep the execution prompt manifest exposed through an opt-in detail endpoint rather than adding it to session summaries.
+- Preserve `NoProviderDivergenceSignal` to distinguish missing provider delivery signals from confirmed exact delivery.
+- Continue Milestone 5 with shell command, TypeScript type/API wrapper, hook/client access, execution UI rendering, and characterization coverage for requested vs delivered context and `NoProviderDivergenceSignal`.
+- After that prompt-manifest UI slice, move to recovery and git eligibility transparency.
+- For this response-triggered stage, rotate decisions, create the new decisions file, stage, commit, push, and stop executing.

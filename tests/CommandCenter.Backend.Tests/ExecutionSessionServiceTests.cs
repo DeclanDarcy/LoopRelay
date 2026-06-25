@@ -652,6 +652,47 @@ public sealed class ExecutionSessionServiceTests
     }
 
     [Fact]
+    public async Task PromptManifestPersistsRequestedAndDeliveredLaunchContext()
+    {
+        Harness harness = await CreateHarnessAsync();
+        await WriteReadyArtifactsAsync(harness.Repository);
+        await WriteAsync(harness.Repository, ".agents/operational_context.md", "operational context");
+
+        ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
+            harness.Repository.Id,
+            new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
+
+        IReadOnlyList<ExecutionSession> sessions = await new FileSystemExecutionSessionStore(harness.StorePath).LoadAsync();
+        ExecutionSession session = sessions.Single(session => session.Id == summary.SessionId);
+        ExecutionPromptManifest manifest = session.PromptManifest!;
+
+        Assert.NotNull(manifest);
+        Assert.Equal(summary.SessionId, manifest.SessionId);
+        Assert.Contains("## Context Artifacts", manifest.PromptText);
+        Assert.Equal("DeliveredAsRequested", manifest.ProviderDeliveryStatus);
+        Assert.Empty(manifest.ProviderAdjustments);
+        Assert.Null(manifest.DivergenceReason);
+        Assert.Contains(ExecutionPromptManifest.NoProviderDivergenceSignalDiagnostic, manifest.Diagnostics);
+        Assert.Equal(manifest.RequestedContextBytes, manifest.DeliveredContextBytes);
+        Assert.Equal(manifest.RequestedContextCharacters, manifest.DeliveredContextCharacters);
+        Assert.Equal(".agents/operational_context.md", manifest.OperationalContextSourceDelivered);
+        Assert.Null(manifest.HandoffSourceDelivered);
+        Assert.Equal(".agents/milestones/m2.md", manifest.MilestoneSourceDelivered);
+
+        Assert.Contains(manifest.RequestedArtifacts, artifact =>
+            artifact.Role == "CurrentHandoff" &&
+            artifact.RelativePath == ".agents/handoffs/handoff.md" &&
+            !artifact.Delivered);
+        Assert.DoesNotContain(manifest.DeliveredArtifacts, artifact => artifact.Role == "CurrentHandoff");
+        Assert.Contains(manifest.DeliveredArtifacts, artifact =>
+            artifact.Role == "OperationalContext" &&
+            artifact.RelativePath == ".agents/operational_context.md" &&
+            artifact.Delivered &&
+            artifact.ByteCount > 0 &&
+            artifact.CharacterCount > 0);
+    }
+
+    [Fact]
     public async Task AcceptFromAwaitingAcceptanceWithChangedFilesTransitionsToAwaitingCommit()
     {
         var dirtyState = new RepositoryDirtyState
@@ -1145,6 +1186,19 @@ public sealed class ExecutionSessionServiceTests
             });
             Assert.NotNull(summary);
             Assert.Equal(ExecutionSessionState.Executing, summary.State);
+
+            HttpResponseMessage promptResponse = await client.GetAsync(
+                app.Urls.Single() + $"/api/execution-sessions/{summary.SessionId}/prompt");
+
+            Assert.Equal(HttpStatusCode.OK, promptResponse.StatusCode);
+            var manifest = await promptResponse.Content.ReadFromJsonAsync<ExecutionPromptManifest>(new JsonSerializerOptions(JsonSerializerDefaults.Web)
+            {
+                Converters = { new JsonStringEnumConverter() }
+            });
+            Assert.NotNull(manifest);
+            Assert.Equal(summary.SessionId, manifest.SessionId);
+            Assert.Equal("DeliveredAsRequested", manifest.ProviderDeliveryStatus);
+            Assert.Contains(ExecutionPromptManifest.NoProviderDivergenceSignalDiagnostic, manifest.Diagnostics);
         }
         finally
         {

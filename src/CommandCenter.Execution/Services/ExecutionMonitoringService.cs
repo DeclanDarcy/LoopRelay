@@ -364,6 +364,7 @@ public sealed class ExecutionMonitoringService : IExecutionMonitoringService
             ProviderProcessId = session.ProviderProcessId,
             ProviderStartedAt = session.ProviderStartedAt,
             PromptMetadata = session.PromptMetadata,
+            PromptManifest = session.PromptManifest,
             RepositorySnapshot = session.RepositorySnapshot,
             PreviousHandoffContent = session.PreviousHandoffContent,
             PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,

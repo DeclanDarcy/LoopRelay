@@ -6,32 +6,32 @@ Make execution explainable: what was launched, what context was included, what r
 
 ### Backend
 
-- [ ] Add an `ExecutionPromptManifest` model that captures requested context and delivered context for each launched session:
-   - [ ] session id
-   - [ ] generated at
-   - [ ] full prompt text or persisted prompt artifact reference
-   - [ ] requested artifact paths
-   - [ ] requested artifact roles
-   - [ ] requested context bytes
-   - [ ] requested context characters
-   - [ ] delivered artifact paths
-   - [ ] delivered artifact roles
-   - [ ] delivered context bytes
-   - [ ] delivered context characters
-   - [ ] dirty repository flag at request time
-   - [ ] dirty repository flag at delivery time when known
-   - [ ] governed decision count requested
-   - [ ] governed decision count delivered
-   - [ ] operational context source requested and delivered
-   - [ ] handoff source requested and delivered
-   - [ ] milestone source requested and delivered
-   - [ ] provider delivery status
-   - [ ] provider adjustments, including truncation, refusal, provider-added wrapper, or provider cache reference when present
-   - [ ] divergence reason when delivered context differs from requested context
-   - [ ] diagnostics
-- [ ] Persist the launched prompt manifest with the execution session. The manifest is app execution metadata, not repository authority.
-- [ ] If the provider abstraction cannot yet report delivered-context divergence or adjustments, record delivered context as equal to requested context, provider adjustments as empty, and include an explicit `NoProviderDivergenceSignal` diagnostic. Keep the model ready for future provider limits, refusals, wrappers, cache references, or delivery failures.
-- [ ] Add `GET /api/execution-sessions/{sessionId}/prompt` to return the launched manifest.
+- [x] Add an `ExecutionPromptManifest` model that captures requested context and delivered context for each launched session:
+   - [x] session id
+   - [x] generated at
+   - [x] full prompt text or persisted prompt artifact reference
+   - [x] requested artifact paths
+   - [x] requested artifact roles
+   - [x] requested context bytes
+   - [x] requested context characters
+   - [x] delivered artifact paths
+   - [x] delivered artifact roles
+   - [x] delivered context bytes
+   - [x] delivered context characters
+   - [x] dirty repository flag at request time
+   - [x] dirty repository flag at delivery time when known
+   - [x] governed decision count requested
+   - [x] governed decision count delivered
+   - [x] operational context source requested and delivered
+   - [x] handoff source requested and delivered
+   - [x] milestone source requested and delivered
+   - [x] provider delivery status
+   - [x] provider adjustments, including truncation, refusal, provider-added wrapper, or provider cache reference when present
+   - [x] divergence reason when delivered context differs from requested context
+   - [x] diagnostics
+- [x] Persist the launched prompt manifest with the execution session. The manifest is app execution metadata, not repository authority.
+- [x] If the provider abstraction cannot yet report delivered-context divergence or adjustments, record delivered context as equal to requested context, provider adjustments as empty, and include an explicit `NoProviderDivergenceSignal` diagnostic. Keep the model ready for future provider limits, refusals, wrappers, cache references, or delivery failures.
+- [x] Add `GET /api/execution-sessions/{sessionId}/prompt` to return the launched manifest.
 - [ ] Extend `ExecutionSessionSummary` or add a `ExecutionSessionTransparency` endpoint for:
    - [ ] prompt metadata
    - [ ] recovery ran
@@ -98,6 +98,8 @@ Make execution explainable: what was launched, what context was included, what r
 ### Tests
 
 - [ ] Backend tests proving prompt manifest is persisted, distinguishes requested and delivered context, records provider adjustments, and differs from preview when appropriate.
+   - [x] Prompt manifest persistence covers requested vs delivered artifacts and the explicit no-provider-divergence diagnostic.
+   - [ ] Preview-vs-launched prompt differences still need coverage when preview and launch surfaces are wired together.
 - [ ] Backend tests for push conflict response containing updated retry state.
 - [ ] Backend tests for git eligibility branches and structured governed conflicts.
 - [ ] UI tests for prompt manifest, provider adjustments, recovery banner, push retry, disabled commit/push reasons, handoff processing diagnostics, pre-existing change warnings, and event grouping.

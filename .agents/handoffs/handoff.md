@@ -2,21 +2,26 @@
 
 ## New State This Slice
 
-- Continued Milestone 4 by performing the planned exit audit and closure documentation.
-- Added `.agents/milestones/m4-exit-audit.md`.
-- Updated `.agents/milestones/m4-decision-transparency.md` to close Milestone 4 checklist and exit criteria against current authoritative backend fields.
-- Reclassified recommendation confidence and standalone insufficient-evidence/duplicate option categories as explicit backend-owned deferrals, not unfinished React work.
-- Preserved the Milestone 8 boundary for shared explainability abstractions.
-- Rotated prior handoff to `.agents/handoffs/handoff.0030.md`.
+- Began Milestone 5: Execution Transparency.
+- Added execution-owned prompt manifest models:
+  - `ExecutionPromptManifest`
+  - `ExecutionPromptManifestArtifact`
+- Persisted `ExecutionSession.PromptManifest` for launched sessions.
+- Added manifest composition from the authoritative `ExecutionContext` and built `ExecutionPrompt`.
+- Recorded requested artifacts separately from delivered artifacts, including missing optional context such as current handoff/decisions.
+- Recorded requested and delivered context byte/character counts, dirty repository flags, governed decision counts, operational context source, handoff source, milestone source, provider delivery status, provider adjustments, divergence reason, diagnostics, and full prompt text.
+- Since providers cannot yet report delivered-context divergence, manifests currently record delivered context equal to requested context, empty provider adjustments, and `NoProviderDivergenceSignal`.
+- Preserved prompt manifest across session mutation/copy paths in execution monitoring, handoff processing, and git lifecycle mutations.
+- Added `GET /api/execution-sessions/{sessionId}/prompt`.
+- Updated `.agents/milestones/m5-execution-transparency.md` for completed prompt-manifest backend items.
+- Rotated prior handoff to `.agents/handoffs/handoff.0031.md`.
 
 ## Verification
 
-- `npm test -- decisionProposalViewer.test.tsx decisionQualityPanel.test.tsx decisionGovernancePanel.test.tsx executionDecisionInfluencePanel.test.tsx decisionTransparencyAuthority.test.ts --run` in `src/CommandCenter.UI` passed: 5 files, 17 tests.
-- `npm run build` in `src/CommandCenter.UI` passed.
-- Build still reports the existing Vite chunk-size warning for the main bundle over 500 kB.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter ExecutionSessionServiceTests` passed: 38 tests.
 
 ## Remaining Work
 
-- Milestone 4 is closed for the currently authoritative decision transparency surface.
-- Next slice should begin Milestone 5: Execution Transparency.
-- Keep Milestone 5 backend-authoritative: expose execution prompt metadata, retryable push failure context, and structured governed conflict visibility from execution-owned projections before adding UI renderers.
+- Continue Milestone 5 backend-first.
+- Next high-leverage backend item: add execution transparency/read model fields for recovery and monitoring state, or continue adjacent prompt-manifest integration by adding shell and TypeScript client access to `/api/execution-sessions/{sessionId}/prompt`.
+- Keep UI render-only; do not infer prompt delivery, provider adjustments, recovery semantics, git eligibility, or governed conflicts in React.

@@ -173,6 +173,7 @@ public sealed class HandoffService(
             ProviderProcessId = session.ProviderProcessId,
             ProviderStartedAt = session.ProviderStartedAt,
             PromptMetadata = session.PromptMetadata,
+            PromptManifest = session.PromptManifest,
             RepositorySnapshot = session.RepositorySnapshot,
             PreviousHandoffContent = session.PreviousHandoffContent,
             PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,

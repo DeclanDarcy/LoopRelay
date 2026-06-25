@@ -40,6 +40,8 @@ public sealed class ExecutionSession
 
     public ExecutionPromptMetadata? PromptMetadata { get; init; }
 
+    public ExecutionPromptManifest? PromptManifest { get; init; }
+
     public ExecutionRepositorySnapshot? RepositorySnapshot { get; init; }
 
     public CommitPreparation? CommitPreparation { get; init; }

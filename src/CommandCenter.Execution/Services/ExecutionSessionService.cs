@@ -1,5 +1,6 @@
 using CommandCenter.Core.Repositories;
 using CommandCenter.Decisions.Abstractions;
+using CommandCenter.Decisions.Models;
 using CommandCenter.Execution.Abstractions;
 using CommandCenter.Execution.Models;
 using CommandCenter.Execution.Primitives;
@@ -187,6 +188,7 @@ public sealed class ExecutionSessionService(
             await sessionStore.SaveAsync(sessions);
 
             ExecutionPrompt prompt = promptBuilder.Build(context);
+            ExecutionPromptManifest promptManifest = BuildPromptManifest(session.Id, context, prompt);
             if (context.DecisionProjection is not null && decisionInfluenceService is not null)
             {
                 await decisionInfluenceService.RecordExecutionInfluenceAsync(
@@ -224,7 +226,8 @@ public sealed class ExecutionSessionService(
                 providerExecutablePath: startResult.ExecutablePath,
                 providerProcessId: startResult.ProcessId,
                 providerStartedAt: providerStartedAt,
-                promptMetadata: prompt.Metadata);
+                promptMetadata: prompt.Metadata,
+                promptManifest: promptManifest);
             await ReplaceSessionAsync(sessions, executingSession);
             await monitoringService.RecordProviderStartedAsync(session.Id, providerStartedAt);
             return executingSession.ToSummary();
@@ -487,6 +490,112 @@ public sealed class ExecutionSessionService(
         return string.IsNullOrWhiteSpace(note) ? null : note.Trim();
     }
 
+    private static ExecutionPromptManifest BuildPromptManifest(
+        Guid sessionId,
+        ExecutionContext context,
+        ExecutionPrompt prompt)
+    {
+        bool dirtyRepository = context.RepositorySnapshot?.DirtyState.IsClean == false;
+        ExecutionPromptManifestArtifact[] deliveredArtifacts = context.Artifacts
+            .Select(artifact => new ExecutionPromptManifestArtifact
+            {
+                Role = artifact.Role,
+                RelativePath = artifact.RelativePath,
+                ByteCount = artifact.ByteCount,
+                CharacterCount = artifact.CharacterCount,
+                Delivered = true
+            })
+            .OrderBy(artifact => artifact.Role, StringComparer.Ordinal)
+            .ThenBy(artifact => artifact.RelativePath, StringComparer.Ordinal)
+            .ToArray();
+        ExecutionPromptManifestArtifact[] requestedArtifacts = BuildRequestedArtifacts(context, deliveredArtifacts);
+        int governedDecisionCount = CountGovernedDecisions(context.DecisionProjection);
+
+        return new ExecutionPromptManifest
+        {
+            SessionId = sessionId,
+            GeneratedAt = prompt.Metadata.GeneratedAt,
+            PromptText = prompt.Text,
+            RequestedArtifacts = requestedArtifacts,
+            RequestedContextBytes = context.Diagnostics.TotalBytes,
+            RequestedContextCharacters = context.Diagnostics.TotalCharacters,
+            DeliveredArtifacts = deliveredArtifacts,
+            DeliveredContextBytes = context.Diagnostics.TotalBytes,
+            DeliveredContextCharacters = context.Diagnostics.TotalCharacters,
+            DirtyRepositoryAtRequestTime = dirtyRepository,
+            DirtyRepositoryAtDeliveryTime = dirtyRepository,
+            GovernedDecisionCountRequested = governedDecisionCount,
+            GovernedDecisionCountDelivered = governedDecisionCount,
+            OperationalContextSourceRequested = ".agents/operational_context.md",
+            OperationalContextSourceDelivered = FindDeliveredPath(context, "OperationalContext"),
+            HandoffSourceRequested = ".agents/handoffs/handoff.md",
+            HandoffSourceDelivered = FindDeliveredPath(context, "CurrentHandoff"),
+            MilestoneSourceRequested = context.MilestonePath,
+            MilestoneSourceDelivered = FindDeliveredPath(context, "Milestone"),
+            ProviderDeliveryStatus = "DeliveredAsRequested",
+            ProviderAdjustments = [],
+            Diagnostics = [ExecutionPromptManifest.NoProviderDivergenceSignalDiagnostic]
+        };
+    }
+
+    private static ExecutionPromptManifestArtifact[] BuildRequestedArtifacts(
+        ExecutionContext context,
+        IReadOnlyList<ExecutionPromptManifestArtifact> deliveredArtifacts)
+    {
+        Dictionary<string, ExecutionPromptManifestArtifact> deliveredByPath = deliveredArtifacts
+            .ToDictionary(artifact => artifact.RelativePath, StringComparer.OrdinalIgnoreCase);
+
+        return ExpectedArtifacts(context.MilestonePath)
+            .Select(expected =>
+            {
+                if (deliveredByPath.TryGetValue(expected.RelativePath, out ExecutionPromptManifestArtifact? delivered))
+                {
+                    return delivered;
+                }
+
+                return new ExecutionPromptManifestArtifact
+                {
+                    Role = expected.Role,
+                    RelativePath = expected.RelativePath,
+                    Delivered = false
+                };
+            })
+            .ToArray();
+    }
+
+    private static IReadOnlyList<(string Role, string RelativePath)> ExpectedArtifacts(string milestonePath) =>
+    [
+        ("Plan", ".agents/plan.md"),
+        ("Milestone", milestonePath),
+        ("OperationalContext", ".agents/operational_context.md"),
+        ("CurrentHandoff", ".agents/handoffs/handoff.md"),
+        ("CurrentDecisions", ".agents/decisions/decisions.md")
+    ];
+
+    private static string? FindDeliveredPath(ExecutionContext context, string role)
+    {
+        return context.Artifacts.SingleOrDefault(artifact => artifact.Role == role)?.RelativePath;
+    }
+
+    private static int CountGovernedDecisions(ExecutionDecisionProjection? projection)
+    {
+        if (projection is null)
+        {
+            return 0;
+        }
+
+        return projection.IncludedDecisions
+            .Concat(projection.ExcludedDecisions)
+            .Concat(projection.SupersededDecisions)
+            .Concat(projection.ConflictingDecisions)
+            .Concat(projection.IgnoredDecisions)
+            .Concat(projection.BlockedDecisions)
+            .Select(diagnostic => diagnostic.DecisionId)
+            .Where(decisionId => !string.IsNullOrWhiteSpace(decisionId))
+            .Distinct(StringComparer.Ordinal)
+            .Count();
+    }
+
     private static IReadOnlyList<string> NormalizeSelectedPaths(
         IEnumerable<string>? selectedPaths,
         string repositoryPath)
@@ -535,7 +644,8 @@ file static class ExecutionSessionMutation
         string? providerExecutablePath = null,
         int? providerProcessId = null,
         DateTimeOffset? providerStartedAt = null,
-        ExecutionPromptMetadata? promptMetadata = null)
+        ExecutionPromptMetadata? promptMetadata = null,
+        ExecutionPromptManifest? promptManifest = null)
     {
         return new ExecutionSession
         {
@@ -556,6 +666,7 @@ file static class ExecutionSessionMutation
             ProviderProcessId = providerProcessId ?? session.ProviderProcessId,
             ProviderStartedAt = providerStartedAt ?? session.ProviderStartedAt,
             PromptMetadata = promptMetadata ?? session.PromptMetadata,
+            PromptManifest = promptManifest ?? session.PromptManifest,
             RepositorySnapshot = session.RepositorySnapshot,
             CommitPreparation = session.CommitPreparation,
             CommitSha = session.CommitSha,
@@ -603,6 +714,7 @@ file static class ExecutionSessionMutation
             ProviderProcessId = session.ProviderProcessId,
             ProviderStartedAt = session.ProviderStartedAt,
             PromptMetadata = session.PromptMetadata,
+            PromptManifest = session.PromptManifest,
             RepositorySnapshot = repositorySnapshot ?? session.RepositorySnapshot,
             CommitPreparation = session.CommitPreparation,
             CommitSha = session.CommitSha,
@@ -646,6 +758,7 @@ file static class ExecutionSessionMutation
             ProviderProcessId = session.ProviderProcessId,
             ProviderStartedAt = session.ProviderStartedAt,
             PromptMetadata = session.PromptMetadata,
+            PromptManifest = session.PromptManifest,
             RepositorySnapshot = session.RepositorySnapshot,
             CommitPreparation = commitPreparation,
             CommitSha = session.CommitSha,
@@ -689,6 +802,7 @@ file static class ExecutionSessionMutation
             ProviderProcessId = session.ProviderProcessId,
             ProviderStartedAt = session.ProviderStartedAt,
             PromptMetadata = session.PromptMetadata,
+            PromptManifest = session.PromptManifest,
             RepositorySnapshot = session.RepositorySnapshot,
             CommitPreparation = session.CommitPreparation,
             CommitSha = commitResult.CommitSha,
@@ -733,6 +847,7 @@ file static class ExecutionSessionMutation
             ProviderProcessId = session.ProviderProcessId,
             ProviderStartedAt = session.ProviderStartedAt,
             PromptMetadata = session.PromptMetadata,
+            PromptManifest = session.PromptManifest,
             RepositorySnapshot = repositorySnapshot,
             CommitPreparation = session.CommitPreparation,
             CommitSha = session.CommitSha,
@@ -776,6 +891,7 @@ file static class ExecutionSessionMutation
             ProviderProcessId = session.ProviderProcessId,
             ProviderStartedAt = session.ProviderStartedAt,
             PromptMetadata = session.PromptMetadata,
+            PromptManifest = session.PromptManifest,
             RepositorySnapshot = session.RepositorySnapshot,
             CommitPreparation = session.CommitPreparation,
             CommitSha = session.CommitSha,

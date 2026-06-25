@@ -12,6 +12,7 @@ public static class ExecutionSessionsEndpoints
     public static IEndpointRouteBuilder MapExecutionSessionsEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGetSession();
+        app.MapGetSessionPrompt();
         app.MapGetSessionStatus();
         app.MapGetSessionEvents();
         app.MapStreamSessionEvents();
@@ -27,6 +28,22 @@ public static class ExecutionSessionsEndpoints
         {
             ExecutionSession? session = await executionSessionService.GetSessionAsync(sessionId);
             return session is null ? Results.NotFound(new { error = "Execution session was not found." }) : Results.Ok(session);
+        });
+
+    private static void MapGetSessionPrompt(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/execution-sessions/{sessionId:guid}/prompt", async (
+            Guid sessionId,
+            IExecutionSessionService executionSessionService) =>
+        {
+            ExecutionSession? session = await executionSessionService.GetSessionAsync(sessionId);
+            if (session is null)
+            {
+                return Results.NotFound(new { error = "Execution session was not found." });
+            }
+
+            return session.PromptManifest is null
+                ? Results.NotFound(new { error = "Execution prompt manifest was not found." })
+                : Results.Ok(session.PromptManifest);
         });
 
     private static void MapGetSessionStatus(this IEndpointRouteBuilder app) =>
