@@ -1,6 +1,7 @@
 import { EmptyState, Panel, SectionHeader } from '../../components/design'
 import { formatDateTime } from '../../lib'
 import type { DecisionInfluenceStatement, DecisionInfluenceTrace } from '../../types'
+import { DecisionInfluenceExplorer } from '../decisions/DecisionInfluenceExplorer'
 
 type ExecutionDecisionInfluencePanelProps = {
   trace: DecisionInfluenceTrace | null
@@ -69,6 +70,15 @@ export function ExecutionDecisionInfluencePanel({
               statements={trace.statements.filter((statement) => statement.statementType === group.type)}
             />
           ))}
+
+          <DecisionInfluenceExplorer
+            includedDecisions={trace.includedDecisions}
+            excludedDecisions={trace.excludedDecisions}
+            supersededDecisions={trace.supersededDecisions}
+            conflictingDecisions={trace.conflictingDecisions}
+            ignoredDecisions={trace.ignoredDecisions}
+            blockedDecisions={trace.blockedDecisions}
+          />
 
           {trace.diagnostics.length > 0 ? (
             <div className="execution-influence-section">

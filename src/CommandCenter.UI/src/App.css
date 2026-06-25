@@ -2404,7 +2404,9 @@ button:focus-visible {
 
 .execution-decision-influence,
 .execution-influence-section,
-.execution-influence-statement-list {
+.execution-influence-statement-list,
+.decision-influence-explorer,
+.decision-influence-diagnostic-list {
   min-width: 0;
   display: grid;
   gap: 10px;
@@ -2439,7 +2441,8 @@ button:focus-visible {
   overflow-wrap: anywhere;
 }
 
-.execution-influence-statement {
+.execution-influence-statement,
+.decision-influence-diagnostic {
   min-width: 0;
   display: grid;
   gap: 8px;
@@ -2450,24 +2453,30 @@ button:focus-visible {
 }
 
 .execution-influence-statement div,
-.execution-influence-statement p {
+.execution-influence-statement p,
+.decision-influence-diagnostic div,
+.decision-influence-diagnostic p {
   min-width: 0;
   margin: 0;
   overflow-wrap: anywhere;
 }
 
-.execution-influence-statement div:first-child {
+.execution-influence-statement div:first-child,
+.decision-influence-diagnostic div:first-child {
   display: grid;
   gap: 3px;
 }
 
-.execution-influence-statement strong {
+.execution-influence-statement strong,
+.decision-influence-diagnostic strong {
   color: var(--fg-default);
   font-size: 0.84rem;
 }
 
 .execution-influence-statement p,
-.execution-influence-statement span {
+.execution-influence-statement span,
+.decision-influence-diagnostic p,
+.decision-influence-diagnostic span {
   color: var(--fg-subtle);
   font-size: 0.8rem;
 }

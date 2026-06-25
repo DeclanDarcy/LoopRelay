@@ -2,32 +2,23 @@
 
 ## New State This Slice
 
-- Continued Milestone 4: Decision Transparency.
-- Added decision-owned execution projection reason categories to `ExecutionDecisionProjection`:
-  - included decisions
-  - excluded decisions
-  - superseded decisions
-  - conflicting decisions
-  - ignored decisions
-  - blocked decisions
-  - projected statements
-- Expanded persisted `DecisionProjectionDiagnostics` artifacts and markdown rendering with conflicting, ignored, and blocked decision sections.
-- Expanded persisted `DecisionInfluenceTrace` JSON and markdown so execution influence traces preserve the same decision reason categories from the projection.
-- Added conflict-to-decision diagnostics so projected statement conflicts expose decision-level reasons for both sides when the conflicting excerpt references another decision id.
-- Updated frontend decision types and the dev Tauri mock to match the expanded projection and influence trace contracts.
-- Updated Milestone 4 notes to mark the backend/API influence reason-category exposure complete while leaving UI rendering open.
-- Rotated prior handoff to `.agents/handoffs/handoff.0023.md`.
+- Continued Milestone 4: Decision Transparency UI composition.
+- Added `DecisionInfluenceExplorer` under `src/CommandCenter.UI/src/features/decisions/` as a render-only decision influence reason-category component.
+- Wired `ExecutionDecisionInfluencePanel` to display backend-provided included, excluded, superseded, conflicting, ignored, and blocked decision diagnostics from persisted `DecisionInfluenceTrace`.
+- Added CSS for the new influence diagnostic rows using the existing execution influence panel styling.
+- Expanded execution influence characterization tests to prove all six backend-provided reason categories and reason strings render, and that empty backend categories remain visible instead of being inferred from statement IDs.
+- Updated Milestone 4 notes to mark `DecisionInfluenceExplorer` and execution influence reason-category rendering complete.
+- Rotated prior handoff to `.agents/handoffs/handoff.0024.md`.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "DecisionProjectionServiceTests|ExecutionSessionServiceTests"` passed: 50/50.
+- `npm test -- executionDecisionInfluencePanel.test.tsx --run` in `src/CommandCenter.UI` passed: 4/4.
 - `npm run build` in `src/CommandCenter.UI` passed.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 738/738.
 
 ## Remaining Work
 
 - Continue Milestone 4 UI composition:
-  - render execution influence reason categories for included, excluded, superseded, conflicting, ignored, and blocked decisions
-  - add decision-specific UI components for governance/influence explanation without calculating reasons in React
-  - add characterization tests proving the UI displays backend-provided reasons and does not derive scoring, ranking, quality, burden, governance, or influence state
-- Keep `DecisionGovernanceReport` findings as governance authority unless a specific missing governance reason is discovered during UI integration.
+  - update `DecisionProposalViewer` to expose recommendation mode, rationale, confidence, supporting factors, concerns, assumptions, alternative explanations, recommendation evidence, and option evaluations
+  - add decision-local renderers for recommendation, option evaluation, rejected options, quality, burden, and governance explanations
+  - add characterization tests for proposal explanations, option scoring/rejections, quality/burden reasoning, and governance state
+- Keep influence and governance UI render-only. Do not synthesize scoring, ranking, quality, burden, governance, or influence explanations in React.

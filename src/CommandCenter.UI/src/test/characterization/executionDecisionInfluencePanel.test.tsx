@@ -1,7 +1,7 @@
 import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { ExecutionDecisionInfluencePanel } from '../../features/execution/ExecutionDecisionInfluencePanel'
-import type { DecisionInfluenceTrace } from '../../types'
+import type { DecisionInfluenceTrace, DecisionProjectionDecisionDiagnostic } from '../../types'
 
 afterEach(() => {
   cleanup()
@@ -80,6 +80,24 @@ function trace(overrides: Partial<DecisionInfluenceTrace> = {}): DecisionInfluen
   }
 }
 
+function diagnostic(
+  decisionId: string,
+  title: string,
+  reason: string,
+  overrides: Partial<DecisionProjectionDecisionDiagnostic> = {},
+): DecisionProjectionDecisionDiagnostic {
+  return {
+    decisionId,
+    title,
+    state: 'Resolved',
+    outcome: 'Accepted',
+    classification: 'Tactical',
+    reason,
+    projectedStatementIds: [],
+    ...overrides,
+  }
+}
+
 describe('execution decision influence panel characterization', () => {
   it('renders persisted execution influence grouped by projected statement type', () => {
     render(<ExecutionDecisionInfluencePanel trace={trace()} />)
@@ -103,6 +121,68 @@ describe('execution decision influence panel characterization', () => {
     expect(screen.getByRole('heading', { level: 5, name: 'Architecture Rules' })).toBeInTheDocument()
     expect(screen.getByText('Decision services own lifecycle authority.')).toBeInTheDocument()
     expect(screen.getByText('No projection conflicts were recorded.')).toBeInTheDocument()
+  })
+
+  it('renders backend-provided influence reason categories without deriving categories from statements', () => {
+    render(
+      <ExecutionDecisionInfluencePanel
+        trace={trace({
+          includedDecisions: [
+            diagnostic('DEC-0001', 'Preserve governance boundary', 'Included because it is accepted and resolved.'),
+          ],
+          excludedDecisions: [
+            diagnostic('DEC-0003', 'Skip draft automation', 'Excluded because the decision remains under review.', {
+              state: 'UnderReview',
+              outcome: null,
+            }),
+          ],
+          supersededDecisions: [
+            diagnostic('DEC-0004', 'Use legacy projection', 'Superseded by DEC-0002 before prompt projection.', {
+              state: 'Superseded',
+            }),
+          ],
+          conflictingDecisions: [
+            diagnostic('DEC-0005', 'Contradict persisted trace', 'Conflicts with DEC-0001 projected statement ECON-0001.'),
+          ],
+          ignoredDecisions: [
+            diagnostic('DEC-0006', 'Ignore local draft', 'Ignored because it does not contribute executable statements.', {
+              outcome: 'Deferred',
+            }),
+          ],
+          blockedDecisions: [
+            diagnostic('DEC-0007', 'Block unsafe launch', 'Blocked by governance finding GOV-0001.', {
+              classification: 'Operational',
+            }),
+          ],
+        })}
+      />,
+    )
+
+    const categories = screen.getByLabelText('Decision influence reason categories')
+    expect(within(categories).getByText('Included Decisions')).toBeInTheDocument()
+    expect(within(categories).getByText('Included because it is accepted and resolved.')).toBeInTheDocument()
+    expect(within(categories).getByText('Excluded Decisions')).toBeInTheDocument()
+    expect(within(categories).getByText('Excluded because the decision remains under review.')).toBeInTheDocument()
+    expect(within(categories).getByText('Superseded Decisions')).toBeInTheDocument()
+    expect(within(categories).getByText('Superseded by DEC-0002 before prompt projection.')).toBeInTheDocument()
+    expect(within(categories).getByText('Conflicting Decisions')).toBeInTheDocument()
+    expect(within(categories).getByText('Conflicts with DEC-0001 projected statement ECON-0001.')).toBeInTheDocument()
+    expect(within(categories).getByText('Ignored Decisions')).toBeInTheDocument()
+    expect(within(categories).getByText('Ignored because it does not contribute executable statements.')).toBeInTheDocument()
+    expect(within(categories).getByText('Blocked Decisions')).toBeInTheDocument()
+    expect(within(categories).getByText('Blocked by governance finding GOV-0001.')).toBeInTheDocument()
+  })
+
+  it('keeps backend influence categories visible when only statement-derived decision ids exist', () => {
+    render(<ExecutionDecisionInfluencePanel trace={trace()} />)
+
+    const categories = screen.getByLabelText('Decision influence reason categories')
+    expect(within(categories).getByText('No included decisions were projected.')).toBeInTheDocument()
+    expect(within(categories).getByText('No excluded decisions were projected.')).toBeInTheDocument()
+    expect(within(categories).getByText('No superseded decisions were projected.')).toBeInTheDocument()
+    expect(within(categories).getByText('No conflicting decisions were projected.')).toBeInTheDocument()
+    expect(within(categories).getByText('No ignored decisions were projected.')).toBeInTheDocument()
+    expect(within(categories).getByText('No blocked decisions were projected.')).toBeInTheDocument()
   })
 
   it('renders loading, error, and missing-trace states without stale content', () => {

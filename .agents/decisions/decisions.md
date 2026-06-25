@@ -2,20 +2,18 @@
 
 ## Newly Authorized
 
-- Accept the Milestone 4 backend execution influence transparency slice as architecturally correct and complete for its backend objective.
-- Treat backend execution influence transparency as structurally complete when execution projections and persisted traces expose included, excluded, superseded, conflicting, ignored, and blocked decisions with backend-owned reasons.
-- Preserve the authority flow for this area as:
+- Accept the `DecisionInfluenceExplorer` UI slice as architecturally correct.
+- Treat `DecisionInfluenceExplorer` as the correct decision-local renderer for execution influence reason categories during Milestone 4.
+- Preserve the execution influence authority chain as:
   - decision services
   - `ExecutionDecisionProjection`
-  - `DecisionProjectionDiagnostics`
   - `DecisionInfluenceTrace`
-  - API
-  - TypeScript contracts
-  - UI rendering
-- Keep historical execution influence inspection consistent with current projection inspection by preserving the same reason categories in `DecisionInfluenceTrace`.
-- Continue treating `DecisionGovernanceReport` findings as the governance explanation source unless UI integration exposes a concrete missing semantic reason.
-- Move the next Milestone 4 work from additional backend semantics into UI composition.
-- Build `DecisionInfluenceExplorer` next as a decision-local renderer for included, excluded, superseded, conflicting, ignored, and blocked decision reason categories.
-- Keep the next UI work render-only: display backend fields and do not synthesize or calculate influence explanations in React.
-- Add characterization tests proving each influence reason category renders and guarding against client-side category derivation.
-- Delay shared/generic explainability abstractions until Milestone 8.
+  - `DecisionInfluenceExplorer`
+- Keep influence categories backend-owned. React must render included, excluded, superseded, conflicting, ignored, and blocked categories from backend projections or persisted traces, not infer them from statement presence.
+- Continue rendering persisted `DecisionInfluenceTrace` for historical execution explanations so historical execution influence remains consistent with current projection inspection.
+- Keep characterization tests focused on backend category rendering, backend reason rendering, and backend diagnostics rendering rather than CSS or implementation details.
+- Proceed next with proposal transparency renderers for recommendation explanation, option evaluation, rejected options, deduplicated options, recommendation evidence, supporting factors, concerns, assumptions, and alternative explanations.
+- Keep proposal transparency render-only: display persisted or generated fields and do not recompute recommendation logic in React.
+- Keep option evaluations attached to their options instead of flattening them into one overall recommendation explanation.
+- Render rejected options with rejected option content, rejection reason, and diagnostics rather than only listing them as discarded items.
+- Keep proposal transparency components decision-local until Milestone 8.
