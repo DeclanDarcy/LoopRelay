@@ -2,31 +2,31 @@
 
 ## New State This Slice
 
-- Completed the Milestone 8 validation/audit slice and marked `.agents/milestones/m8-explainability-layer.md` exit criteria complete.
-- Rotated previous handoff to `.agents/handoffs/handoff.0077.md`.
-- Migrated remaining audited UI presentation gaps to shared explainability primitives:
-  - `DecisionBasis.tsx` now renders projected assumptions and recommendations.
-  - `DecisionEvidenceFragments.tsx` now renders decision evidence/source attribution through `EvidenceList`.
-  - `DecisionProposalViewer.tsx` now renders proposal lifecycle actions and diagnostics through `ActionEligibilityView`/`DiagnosticList`.
-  - `ExecutionContextValidationList.tsx` now renders validation errors through shared diagnostics.
-- Updated characterization tests to assert shared explainability rendering where evidence/event/source facts are intentionally duplicated by shared components.
+- Started Milestone 9 product cohesion with the planned audit/classification slice.
+- Added `.agents/milestones/m9-product-cohesion-audit.md` with:
+  - primary homes and contextual links for repository, workflow, execution, operational context, governance, decisions, reasoning, continuity, health, diagnostics, and certification,
+  - navigation cleanup candidates,
+  - endpoint disposition,
+  - projection classification,
+  - frontend state classification,
+  - duplicate presentation candidates,
+  - baseline interaction pattern.
+- Updated `.agents/milestones/m9-product-cohesion.md` to mark the completed audit/classification items done.
+- Rotated previous handoff to `.agents/handoffs/handoff.0078.md`.
 
 ## Verification
 
-- `npm test -- --run src/test/characterization/decisionProposalViewer.test.tsx src/test/characterization/executionContextValidationList.test.tsx src/test/characterization/explainabilityComponents.test.tsx src/test/characterization/explainabilityDecisionAdapters.test.ts src/test/characterization/explainabilityExecutionAdapters.test.ts`
-- `npm test -- --run src/test/characterization/workspaceInspectorRail.test.tsx src/test/characterization/workspaceLiveActivityPanel.test.tsx`
-- `npm test -- --run src/test/characterization/app.smoke.test.tsx -t "keeps commit preparation and commit execution behind explicit workflow actions"`
-- `npm test -- --run src/test/characterization`
-- `npm run build`
+- Documentation and planning artifact change only; no application tests were run.
 
 ## Residual Risk
 
-- `npm run build` still reports the known Vite large-chunk warning; keep it as a Milestone 9/product optimization concern.
-- The full characterization suite initially exposed a smoke timing failure, but the failing test passed in isolation and the full suite passed on rerun.
+- Endpoint and projection classifications are audit-level dispositions, not removals or redirects.
+- No code cleanup has been implemented yet, so disabled global navigation and duplicated tab metadata still exist.
 
 ## Recommended Next Slice
 
-- Start Milestone 9 product cohesion:
-  - use the now-unified explanation layer as fixed infrastructure,
-  - improve information density, layout, navigation, and terminology across major workspaces,
-  - preserve the Milestone 1-8 authority boundaries and avoid new UI-side lifecycle or scoring logic.
+- Implement the first Milestone 9 cohesion slice:
+  - centralize workspace tab metadata and static section ids into one navigation registry,
+  - remove or implement disabled global navigation entries,
+  - add navigation characterization coverage proving every major capability remains reachable through one primary tab and selected contextual command-palette links,
+  - then start collapsing execution history/live-activity duplication without changing execution semantics.

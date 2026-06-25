@@ -6,12 +6,12 @@ Make the application feel unified, not merely smaller. Remove fragmentation so e
 
 ### Implementation
 
-- [ ] Audit navigation for workflow, decision sessions, decisions, execution, reasoning, operational context, repository, health, diagnostics, and certification.
-- [ ] Define one primary home and allowed contextual links for each capability.
+- [x] Audit navigation for workflow, decision sessions, decisions, execution, reasoning, operational context, repository, health, diagnostics, and certification.
+- [x] Define one primary home and allowed contextual links for each capability.
 - [ ] Consolidate duplicate workflow displays, governance summaries, execution monitoring views, reasoning confidence displays, continuity evolution summaries, health widgets, and certification summaries.
-- [ ] Review backend endpoints and classify each as `Keep`, `Redirect`, `Internal`, or `Remove`.
-- [ ] Review projections and classify each as authoritative, derived consumer, compatibility, or retire.
-- [ ] Review frontend state and classify each state value as authoritative view state, derived display state, disposable UI state, or duplicate domain state.
+- [x] Review backend endpoints and classify each as `Keep`, `Redirect`, `Internal`, or `Remove`.
+- [x] Review projections and classify each as authoritative, derived consumer, compatibility, or retire.
+- [x] Review frontend state and classify each state value as authoritative view state, derived display state, disposable UI state, or duplicate domain state.
 - [ ] Normalize interaction patterns for review, accept, reject, transfer, recover, generate, refine, commit, push, promote, archive, and supersede:
    - [ ] action
    - [ ] eligibility
