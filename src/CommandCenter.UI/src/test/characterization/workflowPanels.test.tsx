@@ -116,7 +116,7 @@ describe('workflow panel rendering characterization', () => {
     render(<WorkflowCertificationPanel certification={certification} />)
 
     const panel = screen.getByLabelText('Workflow certification')
-    expect(within(panel).getByText('Findings')).toBeInTheDocument()
+    expect(within(panel).getAllByText('Findings')).toHaveLength(2)
     expect(within(panel).getByText('Failed')).toBeInTheDocument()
     expect(within(panel).getAllByText('Commit gate lacks approval')).toHaveLength(2)
     expect(

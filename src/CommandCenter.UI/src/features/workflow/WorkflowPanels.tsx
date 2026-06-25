@@ -1,5 +1,11 @@
-import { Button, EmptyState, Panel, SectionHeader, StatusBadge } from '../../components/design'
+import { Button, EmptyState, Panel, SectionHeader } from '../../components/design'
+import { CertificationFindingsView, DiagnosticList, HealthView } from '../../components/explainability'
 import { formatDateTime } from '../../lib'
+import {
+  workflowCertificationFindingsToExplanation,
+  workflowDiagnosticsToExplanation,
+  workflowHealthDimensionsToExplanation,
+} from '../../lib/explainability'
 import {
   useWorkflowCertification,
   useWorkflowContinuation,
@@ -42,10 +48,6 @@ function listItems(values: string[], emptyLabel: string) {
   }
 
   return values.map((value) => <li key={value}>{value}</li>)
-}
-
-function status(label: string, tone: 'neutral' | 'success' | 'danger') {
-  return { label, tone, className: `status-${tone}` }
 }
 
 type WorkflowOverviewPanelProps = WorkflowPanelStateProps & {
@@ -157,27 +159,12 @@ export function WorkflowHealthPanel({
             <span>Conflicts: {health.influenceTrace.conflicts.length}</span>
             <span>Evidence paths: {health.influenceTrace.evidencePaths.length}</span>
           </div>
-          {health.dimensions.map((dimension) => (
-            <article className="workflow-dimension-card" key={dimension.name}>
-              <div className="workflow-dimension-card-header">
-                <strong>{dimension.name}</strong>
-                <StatusBadge status={status(dimension.status, 'neutral')} />
-              </div>
-              <p>{dimension.reason}</p>
-              <div className="workflow-panel-list">
-                <h5>Evidence</h5>
-                <ul>{listItems(dimension.evidence, 'No evidence projected.')}</ul>
-              </div>
-              <div className="workflow-panel-list">
-                <h5>Diagnostics</h5>
-                <ul>{listItems(dimension.diagnostics, 'No diagnostics projected.')}</ul>
-              </div>
-            </article>
-          ))}
-          <div className="workflow-panel-list">
-            <h5>Assessment Diagnostics</h5>
-            <ul>{listItems(health.diagnostics, 'No assessment diagnostics projected.')}</ul>
-          </div>
+          <HealthView dimensions={workflowHealthDimensionsToExplanation(health)} />
+          <DiagnosticList
+            title="Assessment Diagnostics"
+            diagnostics={workflowDiagnosticsToExplanation(health.diagnostics)}
+            emptyLabel="No assessment diagnostics projected."
+          />
         </div>
       ) : (
         state ?? <EmptyState className="empty-state">No workflow health assessment is projected.</EmptyState>
@@ -223,33 +210,16 @@ export function WorkflowCertificationPanel({
             <span>Stage: {certification.currentStage}</span>
             <span>Gate: {certification.blockingGate}</span>
           </div>
-          {certification.findings.map((finding) => (
-            <article className="workflow-dimension-card" key={finding.id}>
-              <div className="workflow-dimension-card-header">
-                <strong>{finding.summary}</strong>
-                <StatusBadge
-                  status={status(finding.passed ? 'Passed' : 'Failed', finding.passed ? 'success' : 'danger')}
-                />
-              </div>
-              <p>{finding.detail}</p>
-              <div className="workflow-panel-list">
-                <h5>Evidence</h5>
-                <ul>{listItems(finding.evidence, 'No finding evidence projected.')}</ul>
-              </div>
-              <div className="workflow-panel-list">
-                <h5>Diagnostics</h5>
-                <ul>{listItems(finding.diagnostics, 'No finding diagnostics projected.')}</ul>
-              </div>
-            </article>
-          ))}
+          <CertificationFindingsView findings={workflowCertificationFindingsToExplanation(certification)} />
           <div className="workflow-panel-list">
             <h5>Failures</h5>
             <ul>{listItems(certification.failures, 'No certification failures projected.')}</ul>
           </div>
-          <div className="workflow-panel-list">
-            <h5>Certification Diagnostics</h5>
-            <ul>{listItems(certification.diagnostics, 'No certification diagnostics projected.')}</ul>
-          </div>
+          <DiagnosticList
+            title="Certification Diagnostics"
+            diagnostics={workflowDiagnosticsToExplanation(certification.diagnostics)}
+            emptyLabel="No certification diagnostics projected."
+          />
         </div>
       ) : (
         state ?? <EmptyState className="empty-state">No workflow certification result is projected.</EmptyState>

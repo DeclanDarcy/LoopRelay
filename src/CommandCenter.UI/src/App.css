@@ -948,6 +948,74 @@ button:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.explainability-basis,
+.explainability-list,
+.explainability-list > ul,
+.explainability-list > ul > li {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.explainability-list h5 {
+  margin: 0;
+  color: var(--fg-default);
+  font-size: 0.8rem;
+  letter-spacing: 0;
+}
+
+.explainability-list > ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.explainability-list > ul > li {
+  padding: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--bg-inset);
+}
+
+.explainability-row-header {
+  min-width: 0;
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.explainability-row-header strong,
+.explainability-list strong,
+.explainability-list span,
+.explainability-list small,
+.explainability-summary,
+.explainability-why {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.explainability-row-header strong,
+.explainability-list strong {
+  color: var(--fg-default);
+  font-size: 0.86rem;
+}
+
+.explainability-list span,
+.explainability-summary,
+.explainability-why {
+  margin: 0;
+  color: var(--fg-subtle);
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.explainability-list small {
+  color: var(--fg-subtle);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
 .execution-context-panel,
 .workspace-milestones-panel,
 .execution-session-panel,

@@ -8,16 +8,16 @@ Create one shared rendering language for explanations across workflow, decision 
 
 Add `src/CommandCenter.UI/src/types/explainability.ts` with presentation-only concepts:
 
-- [ ] `Explanation`
-- [ ] `ExplanationEvidence`
-- [ ] `ExplanationConstraint`
-- [ ] `ExplanationAlternative`
-- [ ] `ExplanationAssumption`
-- [ ] `ExplanationDiagnostic`
-- [ ] `ExplanationUncertainty`
-- [ ] `ExplanationRecommendation`
-- [ ] `ExplanationAction`
-- [ ] `ExplanationHealthDimension`
+- [x] `Explanation`
+- [x] `ExplanationEvidence`
+- [x] `ExplanationConstraint`
+- [x] `ExplanationAlternative`
+- [x] `ExplanationAssumption`
+- [x] `ExplanationDiagnostic`
+- [x] `ExplanationUncertainty`
+- [x] `ExplanationRecommendation`
+- [x] `ExplanationAction`
+- [x] `ExplanationHealthDimension`
 
 These types organize already-authoritative domain projection data. They do not normalize backend domains into one generic authority.
 
@@ -27,15 +27,15 @@ Milestone 4 and related transparency milestones own domain explanation projectio
 
 Add shared components under `src/CommandCenter.UI/src/components/explainability/`:
 
-- [ ] `EvidenceList`
-- [ ] `DecisionBasis`
-- [ ] `ConstraintViewer`
-- [ ] `AlternativeExplorer`
-- [ ] `UncertaintyView`
-- [ ] `HealthView`
-- [ ] `DiagnosticList`
-- [ ] `ActionEligibilityView`
-- [ ] `CertificationFindingsView`
+- [x] `EvidenceList`
+- [x] `DecisionBasis`
+- [x] `ConstraintViewer`
+- [x] `AlternativeExplorer`
+- [x] `UncertaintyView`
+- [x] `HealthView`
+- [x] `DiagnosticList`
+- [x] `ActionEligibilityView`
+- [x] `CertificationFindingsView`
 
 Each component must render:
 
@@ -50,10 +50,12 @@ Each component must render:
 ### Integration
 
 - [ ] Add adapter functions under `src/CommandCenter.UI/src/lib/explainability/` for each domain. Adapters map authoritative domain fields into presentation concepts without computing domain outcomes.
+   - [x] Workflow health and certification adapter slice.
 - [ ] Adapters may reorganize authoritative information, but they must not omit semantically relevant evidence, constraints, uncertainty, diagnostics, findings, or eligible actions.
 - [ ] Replace domain-specific explanation widgets in:
    - [ ] decisions
    - [ ] workflow
+      - [x] Workflow health dimensions and certification findings now render through shared explainability components.
    - [ ] decision sessions
    - [ ] execution
    - [ ] reasoning
@@ -66,9 +68,11 @@ Each component must render:
 
 ### Tests
 
-- [ ] Component tests for all shared explainability components.
+- [x] Component tests for all shared explainability components.
 - [ ] Adapter tests proving adapters do not compute domain scores, decisions, lifecycle state, or eligibility.
+   - [x] Workflow adapter preservation coverage for health and certification.
 - [ ] Adapter tests proving semantically relevant evidence and diagnostics are preserved when mapping into presentation concepts.
+   - [x] Workflow health and certification evidence/diagnostic preservation coverage.
 - [ ] UI characterization tests proving major domains use shared explainability components.
 
 ### Exit Criteria
