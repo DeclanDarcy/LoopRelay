@@ -1666,6 +1666,11 @@ function App() {
     setSectionTarget('governance-workspace')
   }
 
+  const openDecisionLifecycle = () => {
+    setActivePrimaryTab('decisions')
+    setSectionTarget('decision-lifecycle')
+  }
+
   const openHandoffArtifact = (handoffPath: string) => {
     if (selectedRepository) {
       selectArtifact(selectedRepository.repository.id, handoffPath)
@@ -1915,6 +1920,9 @@ function App() {
                 lifecycleEligibility={decisionLifecycleEligibility}
                 isLifecycleEligibilityLoading={isDecisionLifecycleEligibilityLoading}
                 lifecycleEligibilityError={decisionLifecycleEligibilityError}
+                decisionInfluenceTrace={decisionInfluenceTrace}
+                isDecisionInfluenceLoading={isDecisionInfluenceLoading}
+                decisionInfluenceError={decisionInfluenceError}
                 isLoading={
                   isDecisionContextLoading ||
                   isDecisionCandidatesLoading ||
@@ -2139,6 +2147,7 @@ function App() {
                   setSectionTarget('workspace-execution-context')
                 }}
                 onOpenWorkspaceWorkflow={openWorkspaceWorkflow}
+                onOpenDecisions={openDecisionLifecycle}
                 onOpenHandoffArtifact={openHandoffArtifact}
                 onOpenWorkspaceGit={openWorkspaceGit}
               />

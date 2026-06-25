@@ -12,6 +12,7 @@ Make the application feel unified, not merely smaller. Remove fragmentation so e
   - [x] Execution monitoring/history workspace duplicates converted to contextual summaries. See `./m9-execution-consolidation.md`.
   - [x] Execution workflow display converted to contextual summary linking to primary workflow operations. See `./m9-workflow-consolidation.md`.
   - [x] Selected repository governance summary converted to contextual summary linking to primary Governance workspace. See `./m9-governance-summary-consolidation.md`.
+  - [x] Execution decision influence display converted to contextual summary linking to primary Decisions workspace. See `./m9-decision-influence-consolidation.md`.
 - [x] Review backend endpoints and classify each as `Keep`, `Redirect`, `Internal`, or `Remove`.
 - [x] Review projections and classify each as authoritative, derived consumer, compatibility, or retire.
 - [x] Review frontend state and classify each state value as authoritative view state, derived display state, disposable UI state, or duplicate domain state.

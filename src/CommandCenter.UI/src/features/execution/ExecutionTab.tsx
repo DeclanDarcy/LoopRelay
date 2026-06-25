@@ -47,6 +47,7 @@ type ExecutionTabProps = {
   onOpenWorkspaceMilestone: (milestonePath: string) => void
   onOpenWorkspaceExecutionContext: () => void
   onOpenWorkspaceWorkflow: () => void
+  onOpenDecisions: () => void
   onOpenHandoffArtifact: (handoffPath: string) => void
   onOpenWorkspaceGit: () => void
 }
@@ -77,6 +78,7 @@ export function ExecutionTab({
   onOpenWorkspaceMilestone,
   onOpenWorkspaceExecutionContext,
   onOpenWorkspaceWorkflow,
+  onOpenDecisions,
   onOpenHandoffArtifact,
   onOpenWorkspaceGit,
 }: ExecutionTabProps) {
@@ -162,6 +164,7 @@ export function ExecutionTab({
             trace={decisionInfluenceTrace}
             isLoading={isDecisionInfluenceLoading}
             error={decisionInfluenceError}
+            onOpenDecisions={onOpenDecisions}
           />
 
           <LaunchReadinessPanel

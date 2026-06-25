@@ -7,6 +7,7 @@ import type {
   DecisionLifecycleActionEligibility,
   DecisionLifecycleEligibilityProjection,
   DecisionLifecycleEntityEligibility,
+  DecisionInfluenceTrace,
   DecisionProposal,
   DecisionProposalBrowserItem,
   DecisionProposalState,
@@ -27,6 +28,7 @@ import { DecisionCertificationPanel } from './DecisionCertificationPanel'
 import { DecisionEvidenceSourcePanel } from './DecisionEvidenceSourcePanel'
 import { DecisionGenerationCertificationPanel } from './DecisionGenerationCertificationPanel'
 import { DecisionGovernancePanel } from './DecisionGovernancePanel'
+import { DecisionInfluenceTracePanel } from './DecisionInfluenceTracePanel'
 import { DecisionOptionComparison } from './DecisionOptionComparison'
 import { DecisionProposalBrowser } from './DecisionProposalBrowser'
 import { DecisionProposalViewer } from './DecisionProposalViewer'
@@ -46,6 +48,9 @@ type DecisionLifecycleTabProps = {
   lifecycleEligibility?: DecisionLifecycleEligibilityProjection | null
   isLifecycleEligibilityLoading?: boolean
   lifecycleEligibilityError?: string | null
+  decisionInfluenceTrace?: DecisionInfluenceTrace | null
+  isDecisionInfluenceLoading?: boolean
+  decisionInfluenceError?: string | null
   repositoryId: string | null
   onSelectedProposalStatesChange: (states: DecisionProposalState[]) => void
   onRefresh: () => void
@@ -78,6 +83,9 @@ export function DecisionLifecycleTab({
   lifecycleEligibility,
   isLifecycleEligibilityLoading = false,
   lifecycleEligibilityError,
+  decisionInfluenceTrace = null,
+  isDecisionInfluenceLoading = false,
+  decisionInfluenceError = null,
   repositoryId,
   onSelectedProposalStatesChange,
   onRefresh,
@@ -635,6 +643,12 @@ export function DecisionLifecycleTab({
               await refreshQuality()
               onRefresh()
             }}
+          />
+
+          <DecisionInfluenceTracePanel
+            trace={decisionInfluenceTrace}
+            isLoading={isDecisionInfluenceLoading}
+            error={decisionInfluenceError}
           />
 
           <DecisionCertificationPanel

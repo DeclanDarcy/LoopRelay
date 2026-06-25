@@ -1,5 +1,6 @@
-import { cleanup, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { DecisionInfluenceTracePanel } from '../../features/decisions/DecisionInfluenceTracePanel'
 import { ExecutionDecisionInfluencePanel } from '../../features/execution/ExecutionDecisionInfluencePanel'
 import type { DecisionInfluenceTrace, DecisionProjectionDecisionDiagnostic } from '../../types'
 
@@ -98,12 +99,38 @@ function diagnostic(
   }
 }
 
-describe('execution decision influence panel characterization', () => {
-  it('renders persisted execution influence grouped by projected statement type', () => {
-    render(<ExecutionDecisionInfluencePanel trace={trace()} />)
+describe('decision influence consolidation characterization', () => {
+  it('keeps execution decision influence as a contextual summary with navigation to Decisions', () => {
+    const onOpenDecisions = vi.fn()
+
+    render(<ExecutionDecisionInfluencePanel trace={trace()} onOpenDecisions={onOpenDecisions} />)
 
     expect(screen.getByRole('region', { name: 'Decision influence' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 4, name: '2 influencing decisions' })).toBeInTheDocument()
+    expect(screen.getByText('Session: session-alpha')).toBeInTheDocument()
+    expect(screen.getByText('Projection fingerprint: fingerprint-alpha')).toBeInTheDocument()
+    expect(screen.getByText('Projected statements: 4')).toBeInTheDocument()
+    expect(screen.getByText('Decision categories with findings: 0')).toBeInTheDocument()
+    expect(screen.getByText('Diagnostics: 1')).toBeInTheDocument()
+
+    const summary = screen.getByLabelText('Influencing decision summary')
+    expect(within(summary).getByText('DEC-0001')).toBeInTheDocument()
+    expect(within(summary).getByText('DEC-0002')).toBeInTheDocument()
+
+    expect(screen.queryByText('Projected Constraints')).not.toBeInTheDocument()
+    expect(screen.queryByText('Execution consumes only accepted resolved decisions.')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Decision influence reason categories')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open in Decisions' }))
+    expect(onOpenDecisions).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders full persisted execution influence in the Decisions workspace', () => {
+    render(<DecisionInfluenceTracePanel trace={trace()} />)
+
+    expect(screen.getByRole('region', { name: 'Decision influence trace' })).toBeInTheDocument()
+    expect(screen.getByText('Execution Influence Trace')).toBeInTheDocument()
+    expect(screen.getByText('2 influencing decisions')).toBeInTheDocument()
     expect(screen.getByText('Session: session-alpha')).toBeInTheDocument()
     expect(screen.getByText('Projection fingerprint: fingerprint-alpha')).toBeInTheDocument()
 
@@ -123,9 +150,9 @@ describe('execution decision influence panel characterization', () => {
     expect(screen.getByText('No projection conflicts were recorded.')).toBeInTheDocument()
   })
 
-  it('renders backend-provided influence reason categories without deriving categories from statements', () => {
+  it('renders backend-provided influence reason categories in Decisions without deriving categories from statements', () => {
     render(
-      <ExecutionDecisionInfluencePanel
+      <DecisionInfluenceTracePanel
         trace={trace({
           includedDecisions: [
             diagnostic('DEC-0001', 'Preserve governance boundary', 'Included because it is accepted and resolved.'),
@@ -173,8 +200,8 @@ describe('execution decision influence panel characterization', () => {
     expect(within(categories).getByText('Blocked by governance finding GOV-0001.')).toBeInTheDocument()
   })
 
-  it('keeps backend influence categories visible when only statement-derived decision ids exist', () => {
-    render(<ExecutionDecisionInfluencePanel trace={trace()} />)
+  it('keeps backend influence categories visible in Decisions when only statement-derived decision ids exist', () => {
+    render(<DecisionInfluenceTracePanel trace={trace()} />)
 
     const categories = screen.getByLabelText('Decision influence reason categories')
     expect(within(categories).getByText('No included decisions were projected.')).toBeInTheDocument()
