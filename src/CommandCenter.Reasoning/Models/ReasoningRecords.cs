@@ -38,6 +38,11 @@ public sealed record ReasoningBoundaryViolation(
     string DiagnosticDetail,
     string Severity);
 
+public sealed record ReasoningDiagnosticGroup(
+    string Category,
+    string? Title,
+    IReadOnlyList<string> Diagnostics);
+
 public sealed record ReasoningEvent(
     string Id,
     Guid RepositoryId,
@@ -119,7 +124,8 @@ public sealed record ReasoningGraph(
     DateTimeOffset GeneratedAt,
     IReadOnlyList<ReasoningGraphNode> Nodes,
     IReadOnlyList<ReasoningGraphRelationship> Relationships,
-    IReadOnlyList<string> Diagnostics);
+    IReadOnlyList<string> Diagnostics,
+    IReadOnlyList<ReasoningDiagnosticGroup> DiagnosticGroups = null!);
 
 public sealed record ReasoningGraphNode(
     string Id,
@@ -144,7 +150,8 @@ public sealed record ReasoningTrace(
     ReasoningReference Target,
     IReadOnlyList<ReasoningGraphNode> Nodes,
     IReadOnlyList<ReasoningGraphRelationship> Relationships,
-    IReadOnlyList<string> Diagnostics);
+    IReadOnlyList<string> Diagnostics,
+    IReadOnlyList<ReasoningDiagnosticGroup> DiagnosticGroups = null!);
 
 public sealed record ReasoningQuery(
     ReasoningQueryCategory Category,
@@ -158,7 +165,8 @@ public sealed record ReasoningQueryResult(
     DateTimeOffset GeneratedAt,
     ReasoningQuery Query,
     ReasoningReconstruction Reconstruction,
-    IReadOnlyList<string> Diagnostics);
+    IReadOnlyList<string> Diagnostics,
+    IReadOnlyList<ReasoningDiagnosticGroup> DiagnosticGroups = null!);
 
 public sealed record ReasoningReconstruction(
     Guid RepositoryId,
@@ -170,7 +178,8 @@ public sealed record ReasoningReconstruction(
     ReasoningReconstructionScope Scope,
     ReasoningTrace Trace,
     IReadOnlyList<ReasoningReconstructionEvidence> Evidence,
-    IReadOnlyList<string> Diagnostics);
+    IReadOnlyList<string> Diagnostics,
+    IReadOnlyList<ReasoningDiagnosticGroup> DiagnosticGroups = null!);
 
 public sealed record ReasoningReconstructionConfidence(
     string Level,
@@ -219,7 +228,8 @@ public sealed record ReasoningMaterializationReviewReport(
     DateTimeOffset GeneratedAt,
     IReadOnlyList<ReasoningConceptMaterializationReview> Concepts,
     IReadOnlyList<ReasoningTaxonomyMaterializationFinding> TaxonomyFindings,
-    IReadOnlyList<string> Diagnostics);
+    IReadOnlyList<string> Diagnostics,
+    IReadOnlyList<ReasoningDiagnosticGroup> DiagnosticGroups = null!);
 
 public sealed record ReasoningConceptMaterializationReview(
     ReasoningMaterializationConcept Concept,

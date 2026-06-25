@@ -7,6 +7,7 @@ import type {
   ReasoningReferenceKind,
   ReasoningTraceDirection,
 } from '../../types'
+import { ReasoningDiagnosticGroups } from './ReasoningDiagnosticGroups'
 
 type ReasoningQueryPanelProps = {
   graph: ReasoningGraph | null
@@ -245,7 +246,13 @@ export function ReasoningQueryPanel({
               </div>
             ) : null}
           </div>
-          {queryResult.diagnostics.length > 0 ? (
+          <ReasoningDiagnosticGroups
+            groups={queryResult.diagnosticGroups ?? queryResult.reconstruction.diagnosticGroups}
+            label="Grouped query diagnostics"
+          />
+
+          {(!(queryResult.diagnosticGroups?.length || queryResult.reconstruction.diagnosticGroups?.length) &&
+            queryResult.diagnostics.length > 0) ? (
             <div className="reasoning-diagnostics">
               {queryResult.diagnostics.map((diagnostic) => (
                 <p key={diagnostic}>{diagnostic}</p>

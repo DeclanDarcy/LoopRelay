@@ -3,6 +3,7 @@ import type {
   ReasoningMaterializationReviewReport,
   ReasoningMaterializationOutcome,
 } from '../../types'
+import { ReasoningDiagnosticGroups } from './ReasoningDiagnosticGroups'
 
 type ReasoningMaterializationReviewPanelProps = {
   review: ReasoningMaterializationReviewReport | null
@@ -71,7 +72,12 @@ export function ReasoningMaterializationReviewPanel({
             </div>
           ) : null}
 
-          {review.diagnostics.length > 0 ? (
+          <ReasoningDiagnosticGroups
+            groups={review.diagnosticGroups}
+            label="Grouped materialization diagnostics"
+          />
+
+          {(!review.diagnosticGroups?.length && review.diagnostics.length > 0) ? (
             <div className="reasoning-diagnostics" aria-label="Materialization diagnostics">
               {review.diagnostics.map((diagnostic) => (
                 <p key={diagnostic}>{diagnostic}</p>

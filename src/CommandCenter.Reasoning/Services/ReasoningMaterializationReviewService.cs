@@ -49,7 +49,61 @@ public sealed class ReasoningMaterializationReviewService(
             DateTimeOffset.UtcNow,
             conceptReviews,
             taxonomyFindings,
-            diagnostics.Order(StringComparer.Ordinal).ToArray());
+            diagnostics.Order(StringComparer.Ordinal).ToArray(),
+            BuildDiagnosticGroups(conceptReviews, taxonomyFindings, diagnostics));
+    }
+
+    private static IReadOnlyList<ReasoningDiagnosticGroup> BuildDiagnosticGroups(
+        IReadOnlyList<ReasoningConceptMaterializationReview> conceptReviews,
+        IReadOnlyList<ReasoningTaxonomyMaterializationFinding> taxonomyFindings,
+        IReadOnlyList<string> diagnostics)
+    {
+        var groups = new List<ReasoningDiagnosticGroup>();
+        groups.Add(new ReasoningDiagnosticGroup(
+            "materialization",
+            "Materialization review",
+            conceptReviews
+                .Select(review => $"{review.Concept}: {review.BranchReason}")
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .ToArray()));
+
+        string[] authorityBoundaryDiagnostics = conceptReviews
+            .SelectMany(review => review.Risks)
+            .Concat(conceptReviews.SelectMany(review => review.ElevatedRiskSignals)
+                .Where(signal => signal.Contains("authority", StringComparison.OrdinalIgnoreCase)))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        if (authorityBoundaryDiagnostics.Length > 0)
+        {
+            groups.Add(new ReasoningDiagnosticGroup(
+                "authority boundary",
+                "Authority boundary",
+                authorityBoundaryDiagnostics));
+        }
+
+        if (taxonomyFindings.Count > 0)
+        {
+            groups.Add(new ReasoningDiagnosticGroup(
+                "lifecycle risk",
+                "Taxonomy lifecycle risk",
+                taxonomyFindings
+                    .Select(finding => $"{finding.Family}: {finding.RiskReason}")
+                    .Distinct(StringComparer.Ordinal)
+                    .Order(StringComparer.Ordinal)
+                    .ToArray()));
+        }
+
+        if (diagnostics.Count > 0)
+        {
+            groups.Add(new ReasoningDiagnosticGroup(
+                "validation",
+                "Review diagnostics",
+                diagnostics.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()));
+        }
+
+        return groups;
     }
 
     private static ReasoningConceptMaterializationReview ReviewEventFamilyConcept(

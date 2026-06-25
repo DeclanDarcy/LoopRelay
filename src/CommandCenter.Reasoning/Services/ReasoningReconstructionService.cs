@@ -43,6 +43,14 @@ public sealed class ReasoningReconstructionService(
 
         ReasoningReconstructionConfidence confidenceRationale = BuildConfidenceRationale(context, trace);
         ReasoningReconstructionScope scope = BuildScope(query, context, events);
+        IReadOnlyList<string> distinctDiagnostics = diagnostics.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        IReadOnlyList<ReasoningDiagnosticGroup> diagnosticGroups = BuildDiagnosticGroups(
+            query,
+            context,
+            confidenceRationale,
+            scope,
+            trace,
+            distinctDiagnostics);
 
         return new ReasoningReconstruction(
             repositoryId,
@@ -54,7 +62,8 @@ public sealed class ReasoningReconstructionService(
             scope,
             trace,
             context.Evidence,
-            diagnostics.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray());
+            distinctDiagnostics,
+            diagnosticGroups);
     }
 
     public async Task<ReasoningReconstructionReport> RunReconstructionAsync(Guid repositoryId, ReasoningQuery query)
@@ -325,6 +334,69 @@ public sealed class ReasoningReconstructionService(
             query.HistoricalAt,
             context.Evidence,
             unreachableEvidence);
+    }
+
+    private static IReadOnlyList<ReasoningDiagnosticGroup> BuildDiagnosticGroups(
+        ReasoningQuery query,
+        EvidenceContext context,
+        ReasoningReconstructionConfidence confidence,
+        ReasoningReconstructionScope scope,
+        ReasoningTrace trace,
+        IReadOnlyList<string> diagnostics)
+    {
+        var groups = new List<ReasoningDiagnosticGroup>();
+        var evidenceDiagnostics = new List<string>
+        {
+            $"{context.Evidence.Count} evidence item(s) were cited.",
+            $"{context.EventEvidence.Count} event evidence item(s) were reachable.",
+            $"{context.RelationshipEvidence.Count} relationship evidence item(s) were reachable.",
+            $"{context.ReferenceEvidence.Count} external reference evidence item(s) were reachable.",
+            $"{context.ThreadEvidence.Count} thread evidence item(s) were reachable."
+        };
+        evidenceDiagnostics.AddRange(confidence.MissingEvidence);
+        groups.Add(new ReasoningDiagnosticGroup(
+            "evidence",
+            "Reconstruction evidence",
+            evidenceDiagnostics.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()));
+
+        var confidenceDiagnostics = new List<string>
+        {
+            confidence.Rationale
+        };
+        confidenceDiagnostics.AddRange(confidence.WhyNotHigher);
+        groups.Add(new ReasoningDiagnosticGroup(
+            "confidence",
+            "Confidence rationale",
+            confidenceDiagnostics.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()));
+
+        var reconstructionDiagnostics = new List<string>
+        {
+            $"Trace direction: {query.Direction}.",
+            $"Target reference: {query.Target.Kind} {query.Target.Id}.",
+            scope.Source is null
+                ? "Source reference was not reported."
+                : $"Source reference: {scope.Source.Kind} {scope.Source.Id}.",
+            scope.HistoricalCutoff is null
+                ? "Current graph was used; no historical cutoff was applied."
+                : $"Historical cutoff: {scope.HistoricalCutoff:O}.",
+            $"{scope.ReachableEvidence.Count} scoped evidence item(s) were reachable.",
+            $"{scope.UnreachableEvidence.Count} scoped evidence item(s) were known but unreachable."
+        };
+        reconstructionDiagnostics.AddRange(diagnostics);
+        groups.Add(new ReasoningDiagnosticGroup(
+            "reconstruction",
+            "Reconstruction scope",
+            reconstructionDiagnostics.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()));
+
+        if (trace.Diagnostics.Count > 0)
+        {
+            groups.Add(new ReasoningDiagnosticGroup(
+                "validation",
+                "Trace validation",
+                trace.Diagnostics.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()));
+        }
+
+        return groups;
     }
 
     private static IReadOnlyList<ReasoningReconstructionEvidence> BuildHistoricalUnreachableEvidence(

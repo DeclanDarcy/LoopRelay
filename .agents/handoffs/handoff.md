@@ -2,31 +2,31 @@
 
 ## New State This Slice
 
-- Continued Milestone 6 with UI authority-boundary notices.
-- Rotated previous decisions to `.agents/decisions/decisions.0046.md` and recorded only this slice's newly authorized UI-boundary decisions in `.agents/decisions/decisions.md`.
-- Rotated previous handoff to `.agents/handoffs/handoff.0046.md`.
-- `src/CommandCenter.Shell/src/main.rs` now preserves backend error payloads containing `boundaryViolation` by forwarding the serialized backend error JSON through the Tauri error channel.
-- Added generic `BoundaryViolationProjection` in `src/CommandCenter.UI/src/types/boundary.ts`.
-- `src/CommandCenter.UI/src/api/tauri.ts` now parses structured transport errors into `TransportError`, preserving `boundaryViolation` while keeping existing formatted error messages stable.
-- Reasoning hooks now expose optional `boundaryViolation` state alongside existing string errors.
-- Added presentation-only `BoundaryNotice` in `src/CommandCenter.UI/src/components/BoundaryNotice.tsx`.
-- `ReasoningTrajectoryTab` now renders authority-boundary notices from supplied backend projections without interpreting or classifying them.
-- Marked the Milestone 6 UI authority-boundary notice item complete.
+- Continued Milestone 6 with backend-owned grouped reasoning diagnostics.
+- Rotated previous handoff to `.agents/handoffs/handoff.0047.md`.
+- Added `ReasoningDiagnosticGroup` to reasoning API models and exposed additive `DiagnosticGroups` on graph, trace, query result, reconstruction, and materialization review responses while preserving existing flat `Diagnostics`.
+- `ReasoningGraphService` now emits validation diagnostic groups for graph and trace unresolved-reference diagnostics.
+- `ReasoningReconstructionService` now emits evidence, confidence, reconstruction, and validation diagnostic groups from backend-owned reconstruction facts.
+- `ReasoningQueryService` forwards reconstruction diagnostic groups on query results.
+- `ReasoningMaterializationReviewService` now emits materialization, authority boundary, lifecycle risk, and validation diagnostic groups from review and taxonomy facts.
+- Added optional `diagnosticGroups` TypeScript types and reusable `ReasoningDiagnosticGroups` renderer.
+- Reasoning graph, query, reconstruction, and materialization panels now prefer backend grouped diagnostics and keep flat diagnostic fallback for older responses.
+- Updated Milestone 6 checklist for grouped diagnostics category normalization and grouped diagnostics UI completion; capture diagnostics remain open.
 
 ## Verification
 
-- `npm run test -- src/test/characterization/transport.test.ts src/test/characterization/reasoningTrajectory.test.tsx` passed: 19 tests.
-- `npm run build` passed.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "FullyQualifiedName~ReasoningReconstructionServiceTests|FullyQualifiedName~ReasoningMaterializationReviewServiceTests|FullyQualifiedName~ReasoningEndpointTests"` passed: 25 tests.
+- `npm run test -- src/test/characterization/reasoningTrajectory.test.tsx` passed: 12 tests.
 - `dotnet build CommandCenter.slnx` passed.
+- `npm run build` passed; Vite still reports the existing >500 kB chunk warning.
 - `cargo check` in `src/CommandCenter.Shell` passed.
 
 ## Residual Risk
 
-- Boundary notices are wired for reasoning UI surfaces, but grouped reasoning diagnostics remain open.
-- Manual-capture failures still surface through the existing global App error path; the reusable notice is available, but the form-level capture path has not been given a dedicated local notice state.
-- `BoundaryViolationProjection` remains a UI transport/presentation type, not a shared semantic authority.
+- Capture-specific diagnostic grouping is still open in Milestone 6.
+- Grouped diagnostics are currently additive and optional in TypeScript to tolerate older/dev responses.
+- Certification diagnostics still use their existing flat rendering; this slice only grouped graph, trace, query, reconstruction, and materialization diagnostics.
 
 ## Recommended Next Slice
 
-- Continue Milestone 6 with grouped reasoning diagnostics.
-- Highest leverage path: introduce a backend-owned grouped diagnostic projection for evidence, confidence, materialization, reconstruction, capture, authority boundary, lifecycle risk, and validation, then render it with a reusable grouped diagnostics component.
+- Continue Milestone 6 by adding backend-owned capture diagnostic groups for manual, assisted, inferred, skipped, and deduplicated capture paths, then render those groups in the capture/event feed surfaces.

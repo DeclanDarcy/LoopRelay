@@ -158,6 +158,12 @@ export type ReasoningCaptureProvenance = {
   existingEventReference: ReasoningReference | null
 }
 
+export type ReasoningDiagnosticGroup = {
+  category: string
+  title: string | null
+  diagnostics: string[]
+}
+
 export type ReasoningEvent = {
   id: string
   repositoryId: string
@@ -246,6 +252,7 @@ export type ReasoningGraph = {
   nodes: ReasoningGraphNode[]
   relationships: ReasoningGraphRelationship[]
   diagnostics: string[]
+  diagnosticGroups?: ReasoningDiagnosticGroup[] | null
 }
 
 export type ReasoningTrace = {
@@ -255,6 +262,7 @@ export type ReasoningTrace = {
   nodes: ReasoningGraphNode[]
   relationships: ReasoningGraphRelationship[]
   diagnostics: string[]
+  diagnosticGroups?: ReasoningDiagnosticGroup[] | null
 }
 
 export type ReasoningQuery = {
@@ -304,6 +312,7 @@ export type ReasoningReconstruction = {
   trace: ReasoningTrace
   evidence: ReasoningReconstructionEvidence[]
   diagnostics: string[]
+  diagnosticGroups?: ReasoningDiagnosticGroup[] | null
 }
 
 export type ReasoningReconstructionReport = {
@@ -320,6 +329,7 @@ export type ReasoningQueryResult = {
   query: ReasoningQuery
   reconstruction: ReasoningReconstruction
   diagnostics: string[]
+  diagnosticGroups?: ReasoningDiagnosticGroup[] | null
 }
 
 export type ReasoningMaterializationScenario = {
@@ -366,6 +376,7 @@ export type ReasoningMaterializationReviewReport = {
   concepts: ReasoningConceptMaterializationReview[]
   taxonomyFindings: ReasoningTaxonomyMaterializationFinding[]
   diagnostics: string[]
+  diagnosticGroups?: ReasoningDiagnosticGroup[] | null
 }
 
 export type ReasoningCertificationResultKind = 'Passed' | 'Failed'

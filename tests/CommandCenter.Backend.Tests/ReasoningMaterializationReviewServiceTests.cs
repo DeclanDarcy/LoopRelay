@@ -184,6 +184,9 @@ public sealed class ReasoningMaterializationReviewServiceTests
         Assert.Contains(ReasoningEventType.ContradictionResolved, finding.TerminalEventTypes);
         Assert.Contains("threshold 4", finding.RiskReason, StringComparison.Ordinal);
         Assert.Contains(report.Diagnostics, diagnostic => diagnostic.Contains("lifecycle-like growth", StringComparison.Ordinal));
+        Assert.Contains(report.DiagnosticGroups, group => group.Category == "materialization" && group.Diagnostics.Any(diagnostic => diagnostic.Contains("Hypothesis", StringComparison.Ordinal)));
+        Assert.Contains(report.DiagnosticGroups, group => group.Category == "lifecycle risk" && group.Diagnostics.Any(diagnostic => diagnostic.Contains("threshold 4", StringComparison.Ordinal)));
+        Assert.Contains(report.DiagnosticGroups, group => group.Category == "authority boundary" && group.Diagnostics.Any(diagnostic => diagnostic.Contains("authority", StringComparison.OrdinalIgnoreCase)));
     }
 
     private static ReasoningConceptMaterializationReview ReviewFor(

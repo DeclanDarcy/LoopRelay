@@ -7,6 +7,7 @@ import type {
   ReasoningReferenceKind,
   ReasoningTrace,
 } from '../../types'
+import { ReasoningDiagnosticGroups } from './ReasoningDiagnosticGroups'
 
 type ReasoningGraphPanelProps = {
   graph: ReasoningGraph | null
@@ -169,7 +170,9 @@ export function ReasoningGraphPanel({
         <ReasoningTraceList title="Forward Trace" trace={forwardTrace} />
       </div>
 
-      {graph?.diagnostics.length ? (
+      <ReasoningDiagnosticGroups groups={graph?.diagnosticGroups} label="Grouped graph diagnostics" />
+
+      {graph?.diagnostics.length && !graph.diagnosticGroups?.length ? (
         <div className="reasoning-diagnostics" aria-label="Reasoning graph diagnostics">
           <h5>Diagnostics</h5>
           {graph.diagnostics.map((diagnostic) => (
@@ -239,7 +242,9 @@ function ReasoningTraceList({
           ) : (
             <EmptyState className="empty-state">No trace relationships found.</EmptyState>
           )}
-          {trace.diagnostics.length ? (
+          <ReasoningDiagnosticGroups groups={trace.diagnosticGroups} label={`${title} grouped diagnostics`} />
+
+          {trace.diagnostics.length && !trace.diagnosticGroups?.length ? (
             <div className="reasoning-diagnostics">
               {trace.diagnostics.map((diagnostic) => (
                 <p key={diagnostic}>{diagnostic}</p>

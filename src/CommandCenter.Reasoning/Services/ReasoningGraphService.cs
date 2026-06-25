@@ -72,7 +72,8 @@ public sealed class ReasoningGraphService(
             target,
             graph.Nodes.Where(node => visitedNodes.Contains(node.Id)).OrderBy(node => node.Id, StringComparer.Ordinal).ToArray(),
             graph.Relationships.Where(relationship => visitedRelationships.Contains(relationship.Id)).OrderBy(relationship => relationship.Id, StringComparer.Ordinal).ToArray(),
-            graph.Diagnostics);
+            graph.Diagnostics,
+            BuildGraphDiagnosticGroups(graph.Diagnostics, "Trace validation"));
     }
 
     private async Task<ReasoningGraph> BuildGraphAsync(Repository repository)
@@ -181,7 +182,27 @@ public sealed class ReasoningGraphService(
             DateTimeOffset.UtcNow,
             nodes.Values.OrderBy(node => node.Id, StringComparer.Ordinal).ToArray(),
             graphRelationships.Values.OrderBy(relationship => relationship.Id, StringComparer.Ordinal).ToArray(),
-            diagnostics.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray());
+            diagnostics.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
+            BuildGraphDiagnosticGroups(diagnostics, "Graph validation"));
+    }
+
+    private static IReadOnlyList<ReasoningDiagnosticGroup> BuildGraphDiagnosticGroups(
+        IReadOnlyList<string> diagnostics,
+        string title)
+    {
+        string[] validationDiagnostics = diagnostics.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        if (validationDiagnostics.Length == 0)
+        {
+            return [];
+        }
+
+        return
+        [
+            new ReasoningDiagnosticGroup(
+                "validation",
+                title,
+                validationDiagnostics)
+        ];
     }
 
     private static void AddThreadMembership(

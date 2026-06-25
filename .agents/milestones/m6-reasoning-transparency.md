@@ -54,15 +54,15 @@ Make reasoning conclusions explain their provenance, confidence, thresholds, rec
    - [x] terminal event type present
    - [x] terminal event types
    - [x] reason risk was or was not flagged
-- [ ] Normalize reasoning diagnostics by category:
-   - [ ] evidence
-   - [ ] confidence
-   - [ ] materialization
-   - [ ] reconstruction
+- [x] Normalize reasoning diagnostics by category:
+   - [x] evidence
+   - [x] confidence
+   - [x] materialization
+   - [x] reconstruction
    - [ ] capture
-   - [ ] authority boundary
-   - [ ] lifecycle risk
-   - [ ] validation
+   - [x] authority boundary
+   - [x] lifecycle risk
+   - [x] validation
 
 ### UI
 
@@ -72,7 +72,7 @@ Make reasoning conclusions explain their provenance, confidence, thresholds, rec
 - [x] Update `ReasoningEventFeed` with capture provenance badges and inferred capture details.
 - [x] Add authority boundary notices that identify the owning domain and allowed alternative.
 - [x] Update taxonomy and materialization review rendering to show lifecycle-risk rules and thresholds.
-- [ ] Add a grouped reasoning diagnostics component.
+- [x] Add a grouped reasoning diagnostics component.
 
 ### Tests
 
@@ -83,6 +83,7 @@ Make reasoning conclusions explain their provenance, confidence, thresholds, rec
 - [x] Backend tests for boundary violation explanations.
 - [x] Backend tests for lifecycle risk thresholds.
 - [ ] UI tests for rendering each explanation branch.
+   - [x] Grouped reasoning diagnostics rendering.
 
 ### Exit Criteria
 

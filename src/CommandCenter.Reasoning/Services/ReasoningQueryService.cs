@@ -15,7 +15,8 @@ public sealed class ReasoningQueryService(IReasoningReconstructionService recons
             reconstruction.GeneratedAt,
             query,
             reconstruction,
-            reconstruction.Diagnostics);
+            reconstruction.Diagnostics,
+            reconstruction.DiagnosticGroups);
     }
 
     private static void ValidateQuery(ReasoningQuery query)

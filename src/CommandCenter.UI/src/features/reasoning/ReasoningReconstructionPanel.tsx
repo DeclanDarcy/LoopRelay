@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { ReasoningReconstruction, ReasoningReconstructionEvidence, ReasoningReference } from '../../types'
+import { ReasoningDiagnosticGroups } from './ReasoningDiagnosticGroups'
 
 type ReasoningReconstructionPanelProps = {
   reconstruction: ReasoningReconstruction | null
@@ -195,7 +196,12 @@ export function ReasoningReconstructionPanel({
             ))}
           </div>
 
-          {reconstruction.diagnostics.length > 0 ? (
+          <ReasoningDiagnosticGroups
+            groups={reconstruction.diagnosticGroups}
+            label="Grouped reconstruction diagnostics"
+          />
+
+          {(!reconstruction.diagnosticGroups?.length && reconstruction.diagnostics.length > 0) ? (
             <div className="reasoning-diagnostics">
               {reconstruction.diagnostics.map((diagnostic) => (
                 <p key={diagnostic}>{diagnostic}</p>

@@ -181,6 +181,13 @@ const graph: ReasoningGraph = {
     },
   ],
   diagnostics: ['Artifact reference could not be resolved: .agents/missing.md'],
+  diagnosticGroups: [
+    {
+      category: 'validation',
+      title: 'Graph validation',
+      diagnostics: ['Artifact reference could not be resolved: .agents/missing.md'],
+    },
+  ],
 }
 
 const backwardTrace: ReasoningTrace = {
@@ -196,6 +203,7 @@ const backwardTrace: ReasoningTrace = {
   nodes: graph.nodes,
   relationships: graph.relationships,
   diagnostics: [],
+  diagnosticGroups: [],
 }
 
 const templates: ManualReasoningCaptureTemplate[] = [
@@ -308,6 +316,23 @@ const reconstruction: ReasoningReconstruction = {
     },
   ],
   diagnostics: [],
+  diagnosticGroups: [
+    {
+      category: 'evidence',
+      title: 'Reconstruction evidence',
+      diagnostics: ['1 event evidence item(s) were reachable.', '1 relationship evidence item(s) were reachable.'],
+    },
+    {
+      category: 'confidence',
+      title: 'Confidence rationale',
+      diagnostics: ['Event evidence and relationship evidence were both reachable, and the trace reported no diagnostics.'],
+    },
+    {
+      category: 'reconstruction',
+      title: 'Reconstruction scope',
+      diagnostics: ['Trace direction: Backward.', 'Current graph was used; no historical cutoff was applied.'],
+    },
+  ],
 }
 
 const limitedReconstruction: ReasoningReconstruction = {
@@ -348,8 +373,32 @@ const limitedReconstruction: ReasoningReconstruction = {
     ...backwardTrace,
     direction: 'Forward',
     diagnostics: ['Historical cutoff excluded one future event.'],
+    diagnosticGroups: [
+      {
+        category: 'validation',
+        title: 'Trace validation',
+        diagnostics: ['Historical cutoff excluded one future event.'],
+      },
+    ],
   },
   diagnostics: ['Historical cutoff excluded one future event.'],
+  diagnosticGroups: [
+    {
+      category: 'evidence',
+      title: 'Reconstruction evidence',
+      diagnostics: ['No relationship evidence was reachable for this query.'],
+    },
+    {
+      category: 'confidence',
+      title: 'Confidence rationale',
+      diagnostics: ['Trace diagnostics were present.', 'Historical cutoff excluded later evidence.'],
+    },
+    {
+      category: 'reconstruction',
+      title: 'Reconstruction scope',
+      diagnostics: ['Historical cutoff excluded one future event.'],
+    },
+  ],
 }
 
 const queryResult: ReasoningQueryResult = {
@@ -358,6 +407,7 @@ const queryResult: ReasoningQueryResult = {
   query: reconstruction.query,
   reconstruction,
   diagnostics: [],
+  diagnosticGroups: reconstruction.diagnosticGroups,
 }
 
 const limitedQueryResult: ReasoningQueryResult = {
@@ -424,6 +474,23 @@ const materializationReview: ReasoningMaterializationReviewReport = {
     },
   ],
   diagnostics: [],
+  diagnosticGroups: [
+    {
+      category: 'materialization',
+      title: 'Materialization review',
+      diagnostics: ['Hypothesis branch: no materialization threshold was met.'],
+    },
+    {
+      category: 'authority boundary',
+      title: 'Authority boundary',
+      diagnostics: ['Direction materialization would cross strategic authority boundaries.'],
+    },
+    {
+      category: 'lifecycle risk',
+      title: 'Taxonomy lifecycle risk',
+      diagnostics: ['Hypothesis lifecycle risk remains below threshold 4.'],
+    },
+  ],
 }
 
 const certificationReport: ReasoningCertificationReport = {
@@ -640,6 +707,8 @@ describe('reasoning trajectory tab', () => {
       'Event substrate can stay narrow',
     )
     expect(within(graphRegion).getByText('Artifact reference could not be resolved: .agents/missing.md')).toBeInTheDocument()
+    expect(within(graphRegion).getByLabelText('Grouped graph diagnostics')).toHaveTextContent('Graph validation')
+    expect(within(graphRegion).getByLabelText('Grouped graph diagnostics')).toHaveTextContent('validation')
 
     fireEvent.click(within(graphRegion).getByRole('button', { name: 'Trace Node' }))
     expect(onTraceGraphNode).toHaveBeenCalledWith(graph.nodes[0])
@@ -757,6 +826,15 @@ describe('reasoning trajectory tab', () => {
     expect(within(groupedDetails).getByText('Threads')).toBeInTheDocument()
     expect(groupedDetails).toHaveTextContent('Event substrate can stay narrow')
     expect(groupedDetails).toHaveTextContent('Milestone 1 ontology boundary')
+    expect(within(reconstructionRegion).getByLabelText('Grouped reconstruction diagnostics')).toHaveTextContent(
+      'Reconstruction evidence',
+    )
+    expect(within(reconstructionRegion).getByLabelText('Grouped reconstruction diagnostics')).toHaveTextContent(
+      'Confidence rationale',
+    )
+    expect(within(reconstructionRegion).getByLabelText('Grouped reconstruction diagnostics')).toHaveTextContent(
+      'Trace direction: Backward.',
+    )
 
     fireEvent.change(within(queryRegion).getByLabelText('Question'), {
       target: { value: 'Why did the event substrate remain narrow?' },
@@ -827,6 +905,9 @@ describe('reasoning trajectory tab', () => {
       within(reconstructionRegion).getByLabelText('Known unreachable reconstruction evidence'),
     ).toHaveTextContent('AlternativeRejected: Specialized entity storage deferred')
     expect(reconstructionRegion).toHaveTextContent('Historical cutoff excluded one future event.')
+    expect(within(reconstructionRegion).getByLabelText('Grouped reconstruction diagnostics')).toHaveTextContent(
+      'Reconstruction scope',
+    )
   })
 
   it('shows materialization review findings as advisory architecture review', () => {
@@ -863,6 +944,15 @@ describe('reasoning trajectory tab', () => {
     )
     expect(within(reviewRegion).getByLabelText('Materialization taxonomy findings')).toHaveTextContent(
       'threshold 4',
+    )
+    expect(within(reviewRegion).getByLabelText('Grouped materialization diagnostics')).toHaveTextContent(
+      'Materialization review',
+    )
+    expect(within(reviewRegion).getByLabelText('Grouped materialization diagnostics')).toHaveTextContent(
+      'Authority boundary',
+    )
+    expect(within(reviewRegion).getByLabelText('Grouped materialization diagnostics')).toHaveTextContent(
+      'Taxonomy lifecycle risk',
     )
     expect(within(reviewRegion).queryByText('Approved')).toBeNull()
     expect(within(reviewRegion).queryByText('Rejected')).toBeNull()

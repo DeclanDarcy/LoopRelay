@@ -55,6 +55,9 @@ public sealed class ReasoningReconstructionServiceTests
         Assert.Equal("DEC-0001", reconstruction.Scope.Target.Id);
         Assert.Equal(supersession.Id, reconstruction.Scope.Source?.Id);
         Assert.Empty(reconstruction.Scope.UnreachableEvidence);
+        Assert.Contains(reconstruction.DiagnosticGroups, group => group.Category == "evidence" && group.Diagnostics.Any(diagnostic => diagnostic.Contains("event evidence", StringComparison.Ordinal)));
+        Assert.Contains(reconstruction.DiagnosticGroups, group => group.Category == "confidence" && group.Diagnostics.Contains(reconstruction.ConfidenceRationale.Rationale));
+        Assert.Contains(reconstruction.DiagnosticGroups, group => group.Category == "reconstruction" && group.Diagnostics.Any(diagnostic => diagnostic.Contains("Trace direction", StringComparison.Ordinal)));
         Assert.False(Directory.Exists(Path.Combine(repository.Path, ".agents", "reasoning", "hypotheses")));
         Assert.False(Directory.Exists(Path.Combine(repository.Path, ".agents", "reasoning", "alternatives")));
         Assert.False(Directory.Exists(Path.Combine(repository.Path, ".agents", "reasoning", "contradictions")));
