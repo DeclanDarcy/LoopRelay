@@ -6,7 +6,7 @@ Make reasoning conclusions explain their provenance, confidence, thresholds, rec
 
 ### Backend
 
-- [ ] Build a reasoning transparency inventory for:
+- [x] Build a reasoning transparency inventory for:
    - [x] materialization recommendations
    - [x] reconstruction confidence
    - [x] reconstruction direction
@@ -16,7 +16,7 @@ Make reasoning conclusions explain their provenance, confidence, thresholds, rec
    - [x] authority-boundary blocks
    - [x] taxonomy lifecycle risk
    - [x] diagnostics
-- [ ] Extend materialization review models to include:
+- [x] Extend materialization review models to include:
    - [x] literal recommendation enum
    - [x] failed scenario count
    - [x] repeated workflow count
@@ -24,7 +24,7 @@ Make reasoning conclusions explain their provenance, confidence, thresholds, rec
    - [x] elevated risk signals
    - [x] branch reason
    - [x] diagnostics
-- [ ] Extend reconstruction models to include:
+- [x] Extend reconstruction models to include:
    - [x] confidence rationale
    - [x] event evidence present
    - [x] relationship evidence present
@@ -35,7 +35,7 @@ Make reasoning conclusions explain their provenance, confidence, thresholds, rec
    - [x] target and source reference
    - [x] historical cutoff
    - [x] reachable and unreachable evidence where known
-- [ ] Extend reasoning event or projection models to distinguish capture modes:
+- [x] Extend reasoning event or projection models to distinguish capture modes:
    - [x] Manual
    - [x] Assisted
    - [x] Inferred
@@ -47,7 +47,7 @@ Make reasoning conclusions explain their provenance, confidence, thresholds, rec
    - [x] rejected assertion
    - [x] allowed alternative
    - [x] diagnostic detail
-- [ ] Extend taxonomy lifecycle risk findings with:
+- [x] Extend taxonomy lifecycle risk findings with:
    - [x] family
    - [x] event type count
    - [x] event type threshold
