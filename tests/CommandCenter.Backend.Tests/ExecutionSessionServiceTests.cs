@@ -438,6 +438,59 @@ public sealed class ExecutionSessionServiceTests
             ],
             [],
             [],
+            [
+                new DecisionProjectionDecisionDiagnostic(
+                    "DEC-0001",
+                    "Use repository artifacts",
+                    DecisionState.Resolved,
+                    DecisionOutcome.Accepted,
+                    DecisionClassification.Architectural,
+                    "Accepted resolved decision projected into execution context.",
+                    ["ECON-0001", "EARC-0001"])
+            ],
+            [
+                new DecisionProjectionDecisionDiagnostic(
+                    "DEC-0003",
+                    "Rejected decision",
+                    DecisionState.Resolved,
+                    DecisionOutcome.Rejected,
+                    DecisionClassification.Tactical,
+                    "Resolution outcome is Rejected.",
+                    [])
+            ],
+            [],
+            [],
+            [
+                new DecisionProjectionDecisionDiagnostic(
+                    "DEC-0003",
+                    "Rejected decision",
+                    DecisionState.Resolved,
+                    DecisionOutcome.Rejected,
+                    DecisionClassification.Tactical,
+                    "Resolution outcome is Rejected.",
+                    [])
+            ],
+            [],
+            [
+                new DecisionProjectedStatement(
+                    "ECON-0001",
+                    "DEC-0001",
+                    "Use repository artifacts",
+                    "Use repository artifacts as authority.",
+                    DecisionClassification.Architectural,
+                    ExecutionProjectionKind.RepositoryConvention,
+                    "Constraint",
+                    []),
+                new DecisionProjectedStatement(
+                    "EARC-0001",
+                    "DEC-0001",
+                    "Use repository artifacts",
+                    "Use repository artifacts as authority.",
+                    DecisionClassification.Architectural,
+                    ExecutionProjectionKind.RepositoryConvention,
+                    "ArchitectureRule",
+                    [])
+            ],
             new ExecutionDecisionContext([], [], [], [], [], []),
             "projection-fingerprint");
         Harness harness = await CreateHarnessAsync(decisionProjection: projection);
@@ -463,6 +516,12 @@ public sealed class ExecutionSessionServiceTests
 
         Assert.Equal(summary.SessionId, trace.ExecutionSessionId);
         Assert.Equal("projection-fingerprint", trace.ProjectionFingerprint);
+        Assert.Equal("DEC-0001", Assert.Single(trace.IncludedDecisions).DecisionId);
+        Assert.Equal("DEC-0003", Assert.Single(trace.ExcludedDecisions).DecisionId);
+        Assert.Empty(trace.SupersededDecisions);
+        Assert.Empty(trace.ConflictingDecisions);
+        Assert.Equal("DEC-0003", Assert.Single(trace.IgnoredDecisions).DecisionId);
+        Assert.Empty(trace.BlockedDecisions);
         Assert.Contains(trace.Statements, statement =>
             statement.StatementId == "ECON-0001" &&
             statement.DecisionId == "DEC-0001" &&

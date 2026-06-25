@@ -1238,6 +1238,27 @@ export type ExecutionDecisionConflict = {
   sources: DecisionSourceReference[]
 }
 
+export type DecisionProjectionDecisionDiagnostic = {
+  decisionId: string
+  title: string
+  state: DecisionState
+  outcome: DecisionOutcome | null
+  classification: DecisionClassification
+  reason: string
+  projectedStatementIds: string[]
+}
+
+export type DecisionProjectedStatement = {
+  id: string
+  decisionId: string
+  title: string
+  statement: string
+  classification: DecisionClassification
+  projectionKind: ExecutionProjectionKind
+  projectionCategory: string
+  sources: DecisionSourceReference[]
+}
+
 export type ExecutionDecisionContext = {
   constraints: ExecutionConstraint[]
   directives: ExecutionDirective[]
@@ -1257,6 +1278,14 @@ export type ExecutionDecisionProjection = {
   conflicts: ExecutionDecisionConflict[]
   diagnostics: string[]
   context: ExecutionDecisionContext
+  includedDecisions: DecisionProjectionDecisionDiagnostic[]
+  excludedDecisions: DecisionProjectionDecisionDiagnostic[]
+  supersededDecisions: DecisionProjectionDecisionDiagnostic[]
+  conflictingDecisions: DecisionProjectionDecisionDiagnostic[]
+  ignoredDecisions: DecisionProjectionDecisionDiagnostic[]
+  blockedDecisions: DecisionProjectionDecisionDiagnostic[]
+  projectedStatements: DecisionProjectedStatement[]
+  projectionFingerprint: string
 }
 
 export type DecisionAdherenceObservation = {
@@ -1287,5 +1316,11 @@ export type DecisionInfluenceTrace = {
   projectionGeneratedAt: string
   projectionFingerprint: string
   statements: DecisionInfluenceStatement[]
+  includedDecisions: DecisionProjectionDecisionDiagnostic[]
+  excludedDecisions: DecisionProjectionDecisionDiagnostic[]
+  supersededDecisions: DecisionProjectionDecisionDiagnostic[]
+  conflictingDecisions: DecisionProjectionDecisionDiagnostic[]
+  ignoredDecisions: DecisionProjectionDecisionDiagnostic[]
+  blockedDecisions: DecisionProjectionDecisionDiagnostic[]
   diagnostics: string[]
 }

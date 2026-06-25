@@ -31,6 +31,12 @@ public sealed class DecisionInfluenceService(
             projection.GeneratedAt,
             projectionFingerprint,
             BuildStatements(projection),
+            projection.IncludedDecisions,
+            projection.ExcludedDecisions,
+            projection.SupersededDecisions,
+            projection.ConflictingDecisions,
+            projection.IgnoredDecisions,
+            projection.BlockedDecisions,
             BuildDiagnostics(projection));
 
         var document = new DecisionArtifactDocument<DecisionInfluenceTrace>(
@@ -210,7 +216,14 @@ public sealed class DecisionInfluenceService(
             projection.Priorities,
             projection.ArchitectureRules,
             projection.Conflicts,
-            projection.Diagnostics
+            projection.Diagnostics,
+            projection.IncludedDecisions,
+            projection.ExcludedDecisions,
+            projection.SupersededDecisions,
+            projection.ConflictingDecisions,
+            projection.IgnoredDecisions,
+            projection.BlockedDecisions,
+            projection.ProjectedStatements
         };
         string json = JsonSerializer.Serialize(payload, DecisionJson.Options);
         byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(json));
@@ -228,7 +241,20 @@ public sealed class DecisionInfluenceService(
         AppendLine($"- Projection generated: {trace.ProjectionGeneratedAt.ToUniversalTime():O}");
         AppendLine($"- Projection fingerprint: {trace.ProjectionFingerprint}");
         AppendLine($"- Statements: {trace.Statements.Count}");
+        AppendLine($"- Included decisions: {trace.IncludedDecisions.Count}");
+        AppendLine($"- Excluded decisions: {trace.ExcludedDecisions.Count}");
+        AppendLine($"- Superseded decisions: {trace.SupersededDecisions.Count}");
+        AppendLine($"- Conflicting decisions: {trace.ConflictingDecisions.Count}");
+        AppendLine($"- Ignored decisions: {trace.IgnoredDecisions.Count}");
+        AppendLine($"- Blocked decisions: {trace.BlockedDecisions.Count}");
         AppendLine();
+        AppendDecisionSection("Included Decisions", trace.IncludedDecisions);
+        AppendDecisionSection("Excluded Decisions", trace.ExcludedDecisions);
+        AppendDecisionSection("Superseded Decisions", trace.SupersededDecisions);
+        AppendDecisionSection("Conflicting Decisions", trace.ConflictingDecisions);
+        AppendDecisionSection("Ignored Decisions", trace.IgnoredDecisions);
+        AppendDecisionSection("Blocked Decisions", trace.BlockedDecisions);
+
         AppendLine("## Statements");
         AppendLine();
         foreach (DecisionInfluenceStatement statement in trace.Statements.OrderBy(statement => statement.StatementId, StringComparer.Ordinal))
@@ -247,6 +273,21 @@ public sealed class DecisionInfluenceService(
 
         AppendEmptyIf(trace.Diagnostics.Count == 0);
         return builder.ToString();
+
+        void AppendDecisionSection(string title, IReadOnlyList<DecisionProjectionDecisionDiagnostic> decisions)
+        {
+            AppendLine($"## {title}");
+            AppendLine();
+            foreach (DecisionProjectionDecisionDiagnostic decision in decisions.OrderBy(decision => decision.DecisionId, StringComparer.Ordinal))
+            {
+                string statementIds = decision.ProjectedStatementIds.Count == 0
+                    ? "none"
+                    : string.Join(", ", decision.ProjectedStatementIds);
+                AppendLine($"- {decision.DecisionId} | {decision.State} | {decision.Outcome?.ToString() ?? "None"} | {decision.Classification} | {decision.Reason} | statements: {statementIds}");
+            }
+
+            AppendEmptyIf(decisions.Count == 0);
+        }
 
         void AppendEmptyIf(bool condition)
         {

@@ -10,6 +10,12 @@ public sealed record DecisionInfluenceTrace(
     DateTimeOffset ProjectionGeneratedAt,
     string ProjectionFingerprint,
     IReadOnlyList<DecisionInfluenceStatement> Statements,
+    IReadOnlyList<DecisionProjectionDecisionDiagnostic> IncludedDecisions,
+    IReadOnlyList<DecisionProjectionDecisionDiagnostic> ExcludedDecisions,
+    IReadOnlyList<DecisionProjectionDecisionDiagnostic> SupersededDecisions,
+    IReadOnlyList<DecisionProjectionDecisionDiagnostic> ConflictingDecisions,
+    IReadOnlyList<DecisionProjectionDecisionDiagnostic> IgnoredDecisions,
+    IReadOnlyList<DecisionProjectionDecisionDiagnostic> BlockedDecisions,
     IReadOnlyList<string> Diagnostics);
 
 public sealed record DecisionInfluenceStatement(

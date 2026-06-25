@@ -2232,6 +2232,12 @@ function createExecutionDecisionProjection(
   }
 
   const conflicts: ExecutionDecisionProjection['conflicts'] = []
+  const projectedStatements: ExecutionDecisionProjection['projectedStatements'] = [
+    ...constraints.map((constraint) => ({ ...constraint, projectionCategory: 'Constraint' })),
+    ...directives.map((directive) => ({ ...directive, projectionCategory: 'Directive' })),
+    ...priorities.map((priority) => ({ ...priority, projectionCategory: 'Priority' })),
+    ...architectureRules.map((rule) => ({ ...rule, projectionCategory: 'ArchitectureRule' })),
+  ]
   const context: ExecutionDecisionProjection['context'] = {
     constraints,
     directives,
@@ -2251,6 +2257,14 @@ function createExecutionDecisionProjection(
     conflicts,
     diagnostics,
     context,
+    includedDecisions: [],
+    excludedDecisions: [],
+    supersededDecisions: [],
+    conflictingDecisions: [],
+    ignoredDecisions: [],
+    blockedDecisions: [],
+    projectedStatements,
+    projectionFingerprint: `mock-${repositoryId}-${projectedStatements.length}`,
   }
 }
 
@@ -2321,8 +2335,14 @@ function createDecisionInfluenceTrace(
     executionSessionId,
     recordedAt: projection.generatedAt,
     projectionGeneratedAt: projection.generatedAt,
-    projectionFingerprint: `mock-${repositoryId}-${statements.length}`,
+    projectionFingerprint: projection.projectionFingerprint,
     statements,
+    includedDecisions: projection.includedDecisions,
+    excludedDecisions: projection.excludedDecisions,
+    supersededDecisions: projection.supersededDecisions,
+    conflictingDecisions: projection.conflictingDecisions,
+    ignoredDecisions: projection.ignoredDecisions,
+    blockedDecisions: projection.blockedDecisions,
     diagnostics: projection.diagnostics,
   }
 }

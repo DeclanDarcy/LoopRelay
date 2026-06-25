@@ -69,6 +69,12 @@ function trace(overrides: Partial<DecisionInfluenceTrace> = {}): DecisionInfluen
         adherenceObservations: [],
       },
     ],
+    includedDecisions: [],
+    excludedDecisions: [],
+    supersededDecisions: [],
+    conflictingDecisions: [],
+    ignoredDecisions: [],
+    blockedDecisions: [],
     diagnostics: ['No projection conflicts were recorded.'],
     ...overrides,
   }

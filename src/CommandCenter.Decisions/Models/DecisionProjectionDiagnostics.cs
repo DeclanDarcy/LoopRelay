@@ -10,6 +10,9 @@ public sealed record DecisionProjectionDiagnostics(
     IReadOnlyList<DecisionProjectionDecisionDiagnostic> IncludedDecisions,
     IReadOnlyList<DecisionProjectionDecisionDiagnostic> ExcludedDecisions,
     IReadOnlyList<DecisionProjectionDecisionDiagnostic> SupersededDecisions,
+    IReadOnlyList<DecisionProjectionDecisionDiagnostic> ConflictingDecisions,
+    IReadOnlyList<DecisionProjectionDecisionDiagnostic> IgnoredDecisions,
+    IReadOnlyList<DecisionProjectionDecisionDiagnostic> BlockedDecisions,
     IReadOnlyList<DecisionProjectedStatement> ProjectedStatements,
     IReadOnlyList<ExecutionDecisionConflict> Conflicts,
     IReadOnlyList<string> Diagnostics);

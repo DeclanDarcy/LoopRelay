@@ -125,6 +125,8 @@ public sealed class DecisionProjectionService(
         var includedDecisions = new List<DecisionProjectionDecisionDiagnostic>();
         var excludedDecisions = new List<DecisionProjectionDecisionDiagnostic>();
         var supersededDecisions = new List<DecisionProjectionDecisionDiagnostic>();
+        var ignoredDecisions = new List<DecisionProjectionDecisionDiagnostic>();
+        var blockedDecisions = new List<DecisionProjectionDecisionDiagnostic>();
         var projectedStatements = new List<DecisionProjectedStatement>();
 
         foreach (Decision decision in decisions.OrderBy(decision => decision.Id.Value, StringComparer.Ordinal))
@@ -170,6 +172,10 @@ public sealed class DecisionProjectionService(
                 {
                     supersededDecisions.Add(excludedDecision);
                 }
+                else
+                {
+                    ignoredDecisions.Add(excludedDecision);
+                }
 
                 continue;
             }
@@ -177,14 +183,16 @@ public sealed class DecisionProjectionService(
             if (blockedDecisionIds.Contains(decision.Id.Value))
             {
                 const string reason = "Blocking governance finding prevents execution projection.";
-                excludedDecisions.Add(new DecisionProjectionDecisionDiagnostic(
+                var blockedDecision = new DecisionProjectionDecisionDiagnostic(
                     decision.Id.Value,
                     decision.Title,
                     decision.State,
                     decision.Resolution?.Outcome,
                     decision.Classification,
                     reason,
-                    []));
+                    []);
+                excludedDecisions.Add(blockedDecision);
+                blockedDecisions.Add(blockedDecision);
                 diagnostics.Add($"Excluded {decision.Id.Value}: {reason}");
                 continue;
             }
@@ -291,6 +299,7 @@ public sealed class DecisionProjectionService(
             architectureRules,
             executionRequest,
             milestoneContent);
+        DecisionProjectionDecisionDiagnostic[] conflictingDecisions = BuildConflictingDecisionDiagnostics(decisions, conflicts);
 
         string[] orderedDiagnostics = diagnostics.Order(StringComparer.Ordinal).ToArray();
         var context = new ExecutionDecisionContext(
@@ -308,6 +317,9 @@ public sealed class DecisionProjectionService(
             includedDecisions,
             excludedDecisions,
             supersededDecisions,
+            conflictingDecisions,
+            ignoredDecisions,
+            blockedDecisions,
             projectedStatements,
             conflicts,
             orderedDiagnostics);
@@ -322,6 +334,13 @@ public sealed class DecisionProjectionService(
             architectureRules,
             conflicts,
             orderedDiagnostics,
+            projectionDiagnostics.IncludedDecisions,
+            projectionDiagnostics.ExcludedDecisions,
+            projectionDiagnostics.SupersededDecisions,
+            projectionDiagnostics.ConflictingDecisions,
+            projectionDiagnostics.IgnoredDecisions,
+            projectionDiagnostics.BlockedDecisions,
+            projectionDiagnostics.ProjectedStatements,
             context,
             projectionDiagnostics.ProjectionFingerprint);
     }
@@ -488,6 +507,9 @@ public sealed class DecisionProjectionService(
         IReadOnlyList<DecisionProjectionDecisionDiagnostic> includedDecisions,
         IReadOnlyList<DecisionProjectionDecisionDiagnostic> excludedDecisions,
         IReadOnlyList<DecisionProjectionDecisionDiagnostic> supersededDecisions,
+        IReadOnlyList<DecisionProjectionDecisionDiagnostic> conflictingDecisions,
+        IReadOnlyList<DecisionProjectionDecisionDiagnostic> ignoredDecisions,
+        IReadOnlyList<DecisionProjectionDecisionDiagnostic> blockedDecisions,
         IReadOnlyList<DecisionProjectedStatement> projectedStatements,
         IReadOnlyList<ExecutionDecisionConflict> conflicts,
         IReadOnlyList<string> diagnostics)
@@ -498,6 +520,9 @@ public sealed class DecisionProjectionService(
             includedDecisions,
             excludedDecisions,
             supersededDecisions,
+            conflictingDecisions,
+            ignoredDecisions,
+            blockedDecisions,
             projectedStatements,
             conflicts,
             diagnostics);
@@ -509,6 +534,9 @@ public sealed class DecisionProjectionService(
             includedDecisions.OrderBy(decision => decision.DecisionId, StringComparer.Ordinal).ToArray(),
             excludedDecisions.OrderBy(decision => decision.DecisionId, StringComparer.Ordinal).ToArray(),
             supersededDecisions.OrderBy(decision => decision.DecisionId, StringComparer.Ordinal).ToArray(),
+            conflictingDecisions.OrderBy(decision => decision.DecisionId, StringComparer.Ordinal).ToArray(),
+            ignoredDecisions.OrderBy(decision => decision.DecisionId, StringComparer.Ordinal).ToArray(),
+            blockedDecisions.OrderBy(decision => decision.DecisionId, StringComparer.Ordinal).ToArray(),
             projectedStatements.OrderBy(statement => statement.Id, StringComparer.Ordinal).ToArray(),
             conflicts.OrderBy(conflict => conflict.Id, StringComparer.Ordinal).ToArray(),
             diagnostics.Order(StringComparer.Ordinal).ToArray());
@@ -542,6 +570,9 @@ public sealed class DecisionProjectionService(
         IReadOnlyList<DecisionProjectionDecisionDiagnostic> includedDecisions,
         IReadOnlyList<DecisionProjectionDecisionDiagnostic> excludedDecisions,
         IReadOnlyList<DecisionProjectionDecisionDiagnostic> supersededDecisions,
+        IReadOnlyList<DecisionProjectionDecisionDiagnostic> conflictingDecisions,
+        IReadOnlyList<DecisionProjectionDecisionDiagnostic> ignoredDecisions,
+        IReadOnlyList<DecisionProjectionDecisionDiagnostic> blockedDecisions,
         IReadOnlyList<DecisionProjectedStatement> projectedStatements,
         IReadOnlyList<ExecutionDecisionConflict> conflicts,
         IReadOnlyList<string> diagnostics)
@@ -552,6 +583,9 @@ public sealed class DecisionProjectionService(
             IncludedDecisions = includedDecisions.OrderBy(decision => decision.DecisionId, StringComparer.Ordinal),
             ExcludedDecisions = excludedDecisions.OrderBy(decision => decision.DecisionId, StringComparer.Ordinal),
             SupersededDecisions = supersededDecisions.OrderBy(decision => decision.DecisionId, StringComparer.Ordinal),
+            ConflictingDecisions = conflictingDecisions.OrderBy(decision => decision.DecisionId, StringComparer.Ordinal),
+            IgnoredDecisions = ignoredDecisions.OrderBy(decision => decision.DecisionId, StringComparer.Ordinal),
+            BlockedDecisions = blockedDecisions.OrderBy(decision => decision.DecisionId, StringComparer.Ordinal),
             ProjectedStatements = projectedStatements.OrderBy(statement => statement.Id, StringComparer.Ordinal),
             Conflicts = conflicts.OrderBy(conflict => conflict.Id, StringComparer.Ordinal),
             Diagnostics = diagnostics.Order(StringComparer.Ordinal)
@@ -573,12 +607,18 @@ public sealed class DecisionProjectionService(
             ("Included decisions", diagnostics.IncludedDecisions.Count.ToString()),
             ("Excluded decisions", diagnostics.ExcludedDecisions.Count.ToString()),
             ("Superseded decisions", diagnostics.SupersededDecisions.Count.ToString()),
+            ("Conflicting decisions", diagnostics.ConflictingDecisions.Count.ToString()),
+            ("Ignored decisions", diagnostics.IgnoredDecisions.Count.ToString()),
+            ("Blocked decisions", diagnostics.BlockedDecisions.Count.ToString()),
             ("Projected statements", diagnostics.ProjectedStatements.Count.ToString()),
             ("Conflicts", diagnostics.Conflicts.Count.ToString()));
 
         AppendDecisionSection("Included Decisions", diagnostics.IncludedDecisions);
         AppendDecisionSection("Excluded Decisions", diagnostics.ExcludedDecisions);
         AppendDecisionSection("Superseded Decisions", diagnostics.SupersededDecisions);
+        AppendDecisionSection("Conflicting Decisions", diagnostics.ConflictingDecisions);
+        AppendDecisionSection("Ignored Decisions", diagnostics.IgnoredDecisions);
+        AppendDecisionSection("Blocked Decisions", diagnostics.BlockedDecisions);
 
         AppendLine("## Projected Statements");
         AppendLine();
@@ -695,6 +735,58 @@ public sealed class DecisionProjectionService(
         }
 
         return conflicts.ToArray();
+    }
+
+    private static DecisionProjectionDecisionDiagnostic[] BuildConflictingDecisionDiagnostics(
+        IReadOnlyList<Decision> decisions,
+        IReadOnlyList<ExecutionDecisionConflict> conflicts)
+    {
+        Dictionary<string, Decision> byId = decisions.ToDictionary(decision => decision.Id.Value, StringComparer.Ordinal);
+        Dictionary<string, List<string>> conflictReasons = new(StringComparer.Ordinal);
+        foreach (ExecutionDecisionConflict conflict in conflicts)
+        {
+            AddReason(
+                conflict.DecisionId,
+                $"Projected statement conflicts with {conflict.ConflictingExcerpt}.");
+            foreach (string referencedDecisionId in ExtractDecisionIds(conflict.ConflictingExcerpt))
+            {
+                AddReason(
+                    referencedDecisionId,
+                    $"Projected statement conflicts with {conflict.DecisionId}: {conflict.Statement}.");
+            }
+        }
+
+        return conflictReasons
+            .OrderBy(entry => entry.Key, StringComparer.Ordinal)
+            .Select(entry => byId.TryGetValue(entry.Key, out Decision? decision)
+                ? new DecisionProjectionDecisionDiagnostic(
+                    decision.Id.Value,
+                    decision.Title,
+                    decision.State,
+                    decision.Resolution?.Outcome,
+                    decision.Classification,
+                    string.Join(" ", entry.Value.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)),
+                    [])
+                : null)
+            .OfType<DecisionProjectionDecisionDiagnostic>()
+            .ToArray();
+
+        void AddReason(string decisionId, string reason)
+        {
+            if (!conflictReasons.TryGetValue(decisionId, out List<string>? reasons))
+            {
+                reasons = [];
+                conflictReasons[decisionId] = reasons;
+            }
+
+            reasons.Add(reason);
+        }
+    }
+
+    private static IEnumerable<string> ExtractDecisionIds(string value)
+    {
+        string[] tokens = value.Split([' ', ':', ',', ';', '.', ')', '('], StringSplitOptions.RemoveEmptyEntries);
+        return tokens.Where(token => token.StartsWith("DEC-", StringComparison.Ordinal));
     }
 
     private static void DetectProjectedStatementConflicts(

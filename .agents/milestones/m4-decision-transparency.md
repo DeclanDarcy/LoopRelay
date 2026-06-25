@@ -32,6 +32,8 @@ Expose why decisions, recommendations, options, quality ratings, governance find
    - [x] burden winning signal
    - [x] unknown vs inferred status
 - [ ] Extend governance and influence projections where needed to expose included, excluded, superseded, conflicting, ignored, and blocked decisions with reasons.
+   - [x] Decision execution projection and persisted influence traces expose included, excluded, superseded, conflicting, ignored, and blocked decision reason categories.
+   - [ ] Render those decision-owned reason categories in decision/execution UI panels.
 - [ ] Keep these outputs as decision-owned projections. They are the semantic inputs that later shared explainability components will render.
 
 ### UI

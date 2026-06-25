@@ -57,6 +57,10 @@ public sealed class DecisionProjectionServiceTests
 
         Assert.Empty(projection.Constraints);
         Assert.Empty(projection.Directives);
+        DecisionProjectionDecisionDiagnostic blockedDecision = Assert.Single(projection.BlockedDecisions);
+        Assert.Equal("DEC-0001", blockedDecision.DecisionId);
+        Assert.Contains("Blocking governance finding", blockedDecision.Reason, StringComparison.Ordinal);
+        Assert.Contains(projection.ExcludedDecisions, decision => decision.DecisionId == "DEC-0001");
         Assert.Contains(projection.Diagnostics, diagnostic => diagnostic.Contains("DEC-0001", StringComparison.Ordinal));
     }
 
@@ -188,6 +192,9 @@ public sealed class DecisionProjectionServiceTests
 
         ExecutionConstraint constraint = Assert.Single(projection.Constraints);
         Assert.Equal("DEC-0002", constraint.DecisionId);
+        DecisionProjectionDecisionDiagnostic supersededDecision = Assert.Single(projection.SupersededDecisions);
+        Assert.Equal("DEC-0001", supersededDecision.DecisionId);
+        Assert.Contains("DEC-0002", supersededDecision.Reason, StringComparison.Ordinal);
         Assert.Contains(projection.Diagnostics, diagnostic => diagnostic.Contains("DEC-0001", StringComparison.Ordinal));
     }
 
@@ -219,6 +226,12 @@ public sealed class DecisionProjectionServiceTests
         ExecutionDecisionConflict conflict = Assert.Single(projection.Conflicts);
         Assert.Equal("DEC-0001", conflict.DecisionId);
         Assert.Contains("DEC-0002", conflict.ConflictingExcerpt, StringComparison.Ordinal);
+        Assert.Contains(projection.ConflictingDecisions, decision =>
+            decision.DecisionId == "DEC-0001" &&
+            decision.Reason.Contains("DEC-0002", StringComparison.Ordinal));
+        Assert.Contains(projection.ConflictingDecisions, decision =>
+            decision.DecisionId == "DEC-0002" &&
+            decision.Reason.Contains("DEC-0001", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -373,6 +386,9 @@ public sealed class DecisionProjectionServiceTests
         Assert.Contains(diagnostics.ExcludedDecisions, decision => decision.DecisionId == "DEC-0002");
         Assert.Contains(diagnostics.ExcludedDecisions, decision => decision.DecisionId == "DEC-0003");
         Assert.Equal("DEC-0002", Assert.Single(diagnostics.SupersededDecisions).DecisionId);
+        Assert.Equal("DEC-0003", Assert.Single(diagnostics.IgnoredDecisions).DecisionId);
+        Assert.Empty(diagnostics.BlockedDecisions);
+        Assert.Empty(diagnostics.ConflictingDecisions);
         Assert.Contains(diagnostics.ProjectedStatements, statement => statement.ProjectionCategory == "Constraint");
         Assert.Contains(diagnostics.ProjectedStatements, statement => statement.ProjectionCategory == "ArchitectureRule");
         Assert.False(string.IsNullOrWhiteSpace(diagnostics.ProjectionFingerprint));
