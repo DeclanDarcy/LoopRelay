@@ -4174,6 +4174,28 @@ function generateOperationalContextProposal(
       ],
       noiseRemovedIndicators: ['Repeated mock execution status was compressed.'],
       stableUnderstandingRetentionWarnings: [],
+      itemOutcomes: [
+        {
+          outcome: 'Added',
+          itemKind: 'Constraint',
+          itemText: 'Generated proposals do not mutate current operational context.',
+          rule: 'proposal-addition',
+          threshold: 'Normalized item text is compared across current and compressed proposed operational context.',
+          rationale: 'Item is present in the compressed proposal and was not in current context.',
+          evidence: [
+            'Normalized text: generated proposals do not mutate current operational context.',
+          ],
+        },
+        {
+          outcome: 'Compressed',
+          itemKind: 'RecentChange',
+          itemText: 'Repeated mock execution status was compressed.',
+          rule: 'recent-change-window-limit',
+          threshold: 'Recent understanding changes retain at most 12 item(s).',
+          rationale: 'Older recent-change detail was compressed to keep operational context reviewable.',
+          evidence: ['Recent-change count before limit: 13'],
+        },
+      ],
     },
     review: {
       proposalId,

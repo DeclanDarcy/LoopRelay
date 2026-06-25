@@ -455,7 +455,8 @@ public sealed class OperationalContextGenerationService(
             Warnings = warnings,
             RevisionSummary = revisionSummary,
             NoiseRemovedIndicators = summary.NoiseRemovedIndicators,
-            StableUnderstandingRetentionWarnings = stableWarnings
+            StableUnderstandingRetentionWarnings = stableWarnings,
+            ItemOutcomes = summary.ItemOutcomes
         };
     }
 

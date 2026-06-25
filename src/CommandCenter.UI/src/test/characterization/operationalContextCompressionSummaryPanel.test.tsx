@@ -27,6 +27,26 @@ function createCompressionSummary(
     revisionSummary: ['Revision one', 'Revision two'],
     noiseRemovedIndicators: ['Noise one', 'Noise two'],
     stableUnderstandingRetentionWarnings: ['Retention one', 'Retention two'],
+    itemOutcomes: [
+      {
+        outcome: 'Retained',
+        itemKind: 'Constraint',
+        itemText: 'Backend continuity services own compression.',
+        rule: 'normalized-text-retention',
+        threshold: 'Normalized item text is compared across current and compressed proposed operational context.',
+        rationale: 'Item remains present after compression.',
+        evidence: ['Normalized text: backend continuity services own compression.'],
+      },
+      {
+        outcome: 'TransientRemoved',
+        itemKind: 'RecentChange',
+        itemText: 'Recent execution for milestone is recorded with state Completed.',
+        rule: 'transient-execution-noise-removal',
+        threshold: 'Transient execution detail is removed after 6 retained recent-change item(s).',
+        rationale: 'Transient execution status is historical noise after enough recent context is retained.',
+        evidence: ['Retained recent-change count before removal: 6'],
+      },
+    ],
     ...overrides,
   }
 }
@@ -65,6 +85,7 @@ describe('operational context compression summary panel rendering characterizati
       'Revision Summary',
       'Retention Warnings',
       'Compressed Understanding',
+      'Compression Outcomes',
     ])
 
     const compressionWarnings = screen.getByRole('heading', { name: 'Compression Warnings' }).closest('div')
@@ -93,6 +114,31 @@ describe('operational context compression summary panel rendering characterizati
     ])
   })
 
+  it('renders backend-authored item outcomes without synthetic classifications', () => {
+    renderPanel()
+
+    const outcomes = screen.getByRole('heading', { name: 'Compression Outcomes' }).closest('div')
+
+    expect(outcomes).not.toBeNull()
+    expect(within(outcomes as HTMLElement).getByText('Retained')).toBeInTheDocument()
+    expect(within(outcomes as HTMLElement).getByText('Constraint')).toBeInTheDocument()
+    expect(within(outcomes as HTMLElement).getByText('Backend continuity services own compression.')).toBeInTheDocument()
+    expect(within(outcomes as HTMLElement).getByText('normalized-text-retention')).toBeInTheDocument()
+    expect(
+      within(outcomes as HTMLElement).getByText(
+        'Normalized item text is compared across current and compressed proposed operational context.',
+      ),
+    ).toBeInTheDocument()
+    expect(within(outcomes as HTMLElement).getByText('Item remains present after compression.')).toBeInTheDocument()
+    expect(
+      within(outcomes as HTMLElement).getByText('Normalized text: backend continuity services own compression.'),
+    ).toBeInTheDocument()
+    expect(within(outcomes as HTMLElement).getByText('TransientRemoved')).toBeInTheDocument()
+    expect(within(outcomes as HTMLElement).getByText('transient-execution-noise-removal')).toBeInTheDocument()
+    expect(within(outcomes as HTMLElement).queryByText('Critical')).not.toBeInTheDocument()
+    expect(within(outcomes as HTMLElement).queryByText('High')).not.toBeInTheDocument()
+  })
+
   it('omits optional detail sections when backend lists are empty', () => {
     renderPanel(
       createCompressionSummary({
@@ -100,6 +146,7 @@ describe('operational context compression summary panel rendering characterizati
         warnings: [],
         stableUnderstandingRetentionWarnings: [],
         noiseRemovedIndicators: [],
+        itemOutcomes: [],
       }),
     )
 
@@ -107,5 +154,6 @@ describe('operational context compression summary panel rendering characterizati
     expect(screen.queryByRole('heading', { name: 'Revision Summary' })).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Retention Warnings' })).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Compressed Understanding' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Compression Outcomes' })).not.toBeInTheDocument()
   })
 })

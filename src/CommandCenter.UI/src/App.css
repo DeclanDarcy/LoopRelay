@@ -2472,6 +2472,94 @@ button:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.compression-outcome-list {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--bg-inset);
+}
+
+.compression-outcome-list > ul,
+.compression-outcome-evidence {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.compression-outcome-list > ul > li {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--surface-1);
+}
+
+.compression-outcome-header {
+  min-width: 0;
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.compression-outcome-header strong,
+.compression-outcome-header span,
+.compression-outcome-list p,
+.compression-outcome-metadata dt,
+.compression-outcome-metadata dd,
+.compression-outcome-evidence li {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.compression-outcome-header strong {
+  color: var(--fg-default);
+  font-size: 0.86rem;
+}
+
+.compression-outcome-header span,
+.compression-outcome-metadata dt {
+  color: var(--fg-subtle);
+  font-size: 0.72rem;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.compression-outcome-list p,
+.compression-outcome-metadata dd,
+.compression-outcome-evidence li {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 0.84rem;
+}
+
+.compression-outcome-metadata {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.compression-outcome-metadata div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.compression-outcome-evidence {
+  padding-left: 18px;
+  list-style: disc;
+}
+
 .proposal-revision-summary {
   background: var(--status-info-subtle);
 }
@@ -3198,6 +3286,7 @@ button:focus-visible {
 
   .context-summary,
   .context-columns,
+  .compression-outcome-metadata,
   .semantic-change-metadata,
   .diagnostic-list,
   .reasoning-grid,

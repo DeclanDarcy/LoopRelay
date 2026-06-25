@@ -78,6 +78,17 @@ export type OperationalContextCompressionSummary = {
   revisionSummary: string[]
   noiseRemovedIndicators: string[]
   stableUnderstandingRetentionWarnings: string[]
+  itemOutcomes: OperationalContextCompressionOutcome[]
+}
+
+export type OperationalContextCompressionOutcome = {
+  outcome: string
+  itemKind: string
+  itemText: string
+  rule: string
+  threshold: string
+  rationale: string
+  evidence: string[]
 }
 
 export type OperationalContextProposal = {

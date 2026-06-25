@@ -754,6 +754,12 @@ public sealed class OperationalContextGenerationTests
             warning.Contains("Open question disappeared", StringComparison.Ordinal));
         Assert.Contains(result.Summary.StableUnderstandingRetentionWarnings, warning =>
             warning.Contains("Active risk disappeared", StringComparison.Ordinal));
+        Assert.Contains(result.Summary.ItemOutcomes, outcome =>
+            outcome.Outcome == "Removed" &&
+            outcome.ItemKind == "Architecture" &&
+            outcome.Rule == "retention-warning-check" &&
+            outcome.Threshold.Contains("explicit resolution evidence", StringComparison.OrdinalIgnoreCase) &&
+            outcome.Evidence.Any(evidence => evidence.Contains("Backend services own workflow authority", StringComparison.OrdinalIgnoreCase)));
     }
 
     [Fact]
@@ -777,6 +783,11 @@ public sealed class OperationalContextGenerationTests
         Assert.True(generated.RecentUnderstandingChanges.Count <= 12);
         Assert.True(proposal.CompressionSummary.CompressedItemCount > 0);
         Assert.NotEmpty(proposal.CompressionSummary.NoiseRemovedIndicators);
+        Assert.Contains(proposal.CompressionSummary.ItemOutcomes, outcome =>
+            outcome.Outcome == "TransientRemoved" &&
+            outcome.Rule == "transient-execution-noise-removal" &&
+            outcome.Threshold.Contains("6 retained", StringComparison.OrdinalIgnoreCase) &&
+            outcome.Evidence.Any(evidence => evidence.Contains("Retained recent-change count", StringComparison.OrdinalIgnoreCase)));
     }
 
     [Fact]
@@ -1188,6 +1199,12 @@ public sealed class OperationalContextGenerationTests
             warning.Contains("Open question disappeared", StringComparison.Ordinal));
         Assert.Empty(resolvedWithEvidence.Document.OpenQuestions);
         Assert.Equal(1, resolvedWithEvidence.Summary.ResolvedQuestionCount);
+        Assert.Contains(resolvedWithEvidence.Summary.ItemOutcomes, outcome =>
+            outcome.Outcome == "Removed" &&
+            outcome.ItemKind == "OpenQuestion" &&
+            outcome.Rule == "explicit-question-resolution" &&
+            outcome.Rationale.Contains("explicitly resolved", StringComparison.OrdinalIgnoreCase) &&
+            outcome.Evidence.Any(evidence => evidence.Contains("Should diagnostics include growth trends", StringComparison.OrdinalIgnoreCase)));
         Assert.DoesNotContain(resolvedWithEvidence.Summary.StableUnderstandingRetentionWarnings, warning =>
             warning.Contains("Open question disappeared", StringComparison.Ordinal));
         Assert.Contains(resolvedWithEvidence.Summary.RevisionSummary, summary =>
@@ -1232,6 +1249,12 @@ public sealed class OperationalContextGenerationTests
             warning.Contains("Active risk disappeared", StringComparison.Ordinal));
         Assert.Empty(retiredWithEvidence.Document.ActiveRisks);
         Assert.Equal(1, retiredWithEvidence.Summary.RetiredRiskCount);
+        Assert.Contains(retiredWithEvidence.Summary.ItemOutcomes, outcome =>
+            outcome.Outcome == "Removed" &&
+            outcome.ItemKind == "ActiveRisk" &&
+            outcome.Rule == "explicit-risk-retirement" &&
+            outcome.Rationale.Contains("explicitly retired", StringComparison.OrdinalIgnoreCase) &&
+            outcome.Evidence.Any(evidence => evidence.Contains("Context growth can hide important constraints", StringComparison.OrdinalIgnoreCase)));
         Assert.DoesNotContain(retiredWithEvidence.Summary.StableUnderstandingRetentionWarnings, warning =>
             warning.Contains("Active risk disappeared", StringComparison.Ordinal));
         Assert.Contains(retiredWithEvidence.Summary.RevisionSummary, summary =>

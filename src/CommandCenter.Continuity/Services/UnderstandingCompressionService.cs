@@ -13,7 +13,11 @@ public sealed class UnderstandingCompressionService : IUnderstandingCompressionS
         OperationalContextDocument proposed)
     {
         var noiseRemovedIndicators = new List<string>();
-        IReadOnlyList<OperationalContextItem> compressedRecentChanges = CompressRecentChanges(proposed.RecentUnderstandingChanges, noiseRemovedIndicators);
+        var compressionOutcomes = new List<OperationalContextCompressionOutcome>();
+        IReadOnlyList<OperationalContextItem> compressedRecentChanges = CompressRecentChanges(
+            proposed.RecentUnderstandingChanges,
+            noiseRemovedIndicators,
+            compressionOutcomes);
         OperationalContextItem[] resolvedQuestions = SelectItemsWithExplicitOutcome(
             proposed.OpenQuestions,
             compressedRecentChanges,
@@ -64,6 +68,7 @@ public sealed class UnderstandingCompressionService : IUnderstandingCompressionS
         HashSet<string> proposedTexts = AllItems(compressedDocument)
             .Select(item => Normalize(item.Text))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        compressionOutcomes.AddRange(BuildItemOutcomes(current, compressedDocument, resolvedQuestions, retiredRisks));
         int compressedNoiseCount = proposed.RecentUnderstandingChanges.Count - compressedDocument.RecentUnderstandingChanges.Count;
         string[] revisionSummary = BuildRevisionSummary(
             compressedDocument,
@@ -90,7 +95,8 @@ public sealed class UnderstandingCompressionService : IUnderstandingCompressionS
             Warnings = warnings,
             RevisionSummary = revisionSummary,
             NoiseRemovedIndicators = noiseRemovedIndicators,
-            StableUnderstandingRetentionWarnings = stableWarnings
+            StableUnderstandingRetentionWarnings = stableWarnings,
+            ItemOutcomes = compressionOutcomes
         };
 
         return new OperationalContextCompressionResult
@@ -102,7 +108,8 @@ public sealed class UnderstandingCompressionService : IUnderstandingCompressionS
 
     private static IReadOnlyList<OperationalContextItem> CompressRecentChanges(
         IReadOnlyList<OperationalContextItem> recentChanges,
-        List<string> noiseRemovedIndicators)
+        List<string> noiseRemovedIndicators,
+        List<OperationalContextCompressionOutcome> compressionOutcomes)
     {
         var retained = new List<OperationalContextItem>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -113,12 +120,26 @@ public sealed class UnderstandingCompressionService : IUnderstandingCompressionS
             if (!seen.Add(normalized))
             {
                 noiseRemovedIndicators.Add($"Repeated recent-change detail removed: {item.Text}");
+                compressionOutcomes.Add(CreateOutcome(
+                    "DuplicateRemoved",
+                    item,
+                    "recent-change-duplicate-removal",
+                    "Normalized recent-change text must be unique within the retained proposal window.",
+                    "Repeated recent-change detail was removed.",
+                    [$"Normalized text: {normalized}"]));
                 continue;
             }
 
             if (IsTransientExecutionNoise(item.Text) && retained.Count >= RecentUnderstandingChangeLimit / 2)
             {
                 noiseRemovedIndicators.Add($"Transient execution detail compressed: {item.Text}");
+                compressionOutcomes.Add(CreateOutcome(
+                    "TransientRemoved",
+                    item,
+                    "transient-execution-noise-removal",
+                    $"Transient execution detail is removed after {RecentUnderstandingChangeLimit / 2} retained recent-change item(s).",
+                    "Transient execution status is historical noise after enough recent context is retained.",
+                    [$"Retained recent-change count before removal: {retained.Count}"]));
                 continue;
             }
 
@@ -134,11 +155,114 @@ public sealed class UnderstandingCompressionService : IUnderstandingCompressionS
         foreach (OperationalContextItem removed in retained.Take(retained.Count - RecentUnderstandingChangeLimit))
         {
             noiseRemovedIndicators.Add($"Older recent-change detail compressed: {removed.Text}");
+            compressionOutcomes.Add(CreateOutcome(
+                "Compressed",
+                removed,
+                "recent-change-window-limit",
+                $"Recent understanding changes retain at most {RecentUnderstandingChangeLimit} item(s).",
+                "Older recent-change detail was compressed to keep operational context reviewable.",
+                [$"Recent-change count before limit: {retained.Count}"]));
         }
 
         return retained
             .Skip(retained.Count - RecentUnderstandingChangeLimit)
             .ToArray();
+    }
+
+    private static IEnumerable<OperationalContextCompressionOutcome> BuildItemOutcomes(
+        OperationalContextDocument current,
+        OperationalContextDocument compressedDocument,
+        IReadOnlyList<OperationalContextItem> resolvedQuestions,
+        IReadOnlyList<OperationalContextItem> retiredRisks)
+    {
+        HashSet<string> currentTexts = AllItems(current)
+            .Select(item => Normalize(item.Text))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> compressedTexts = AllItems(compressedDocument)
+            .Select(item => Normalize(item.Text))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (OperationalContextItem item in AllItems(compressedDocument))
+        {
+            bool retained = currentTexts.Contains(Normalize(item.Text));
+            yield return CreateOutcome(
+                retained ? "Retained" : "Added",
+                item,
+                retained ? "normalized-text-retention" : "proposal-addition",
+                "Normalized item text is compared across current and compressed proposed operational context.",
+                retained
+                    ? "Item remains present after compression."
+                    : "Item is present in the compressed proposal and was not in current context.",
+                [$"Normalized text: {Normalize(item.Text)}"]);
+        }
+
+        foreach (OperationalContextItem item in AllItems(current).Where(item => !compressedTexts.Contains(Normalize(item.Text))))
+        {
+            OperationalContextCompressionOutcome? explicitOutcome = BuildExplicitRemovalOutcome(item, resolvedQuestions, retiredRisks);
+            if (explicitOutcome is not null)
+            {
+                yield return explicitOutcome;
+                continue;
+            }
+
+            yield return CreateOutcome(
+                "Removed",
+                item,
+                "retention-warning-check",
+                "Current stable or active understanding should remain unless the proposal contains matching text or explicit resolution evidence.",
+                "Item from current context is absent from compressed proposal.",
+                [$"Current normalized text: {Normalize(item.Text)}"]);
+        }
+    }
+
+    private static OperationalContextCompressionOutcome? BuildExplicitRemovalOutcome(
+        OperationalContextItem item,
+        IReadOnlyList<OperationalContextItem> resolvedQuestions,
+        IReadOnlyList<OperationalContextItem> retiredRisks)
+    {
+        if (ContainsEquivalent(resolvedQuestions, item))
+        {
+            return CreateOutcome(
+                "Removed",
+                item,
+                "explicit-question-resolution",
+                "Open questions are removed only when recent understanding contains explicit resolution evidence with matching meaningful tokens.",
+                "Open question was explicitly resolved by proposal evidence.",
+                [$"Resolved question: {item.Text}"]);
+        }
+
+        if (ContainsEquivalent(retiredRisks, item))
+        {
+            return CreateOutcome(
+                "Removed",
+                item,
+                "explicit-risk-retirement",
+                "Active risks are removed only when recent understanding contains explicit retirement evidence with matching meaningful tokens.",
+                "Active risk was explicitly retired by proposal evidence.",
+                [$"Retired risk: {item.Text}"]);
+        }
+
+        return null;
+    }
+
+    private static OperationalContextCompressionOutcome CreateOutcome(
+        string outcome,
+        OperationalContextItem item,
+        string rule,
+        string threshold,
+        string rationale,
+        IReadOnlyList<string> evidence)
+    {
+        return new OperationalContextCompressionOutcome
+        {
+            Outcome = outcome,
+            ItemKind = item.Kind.ToString(),
+            ItemText = item.Text,
+            Rule = rule,
+            Threshold = threshold,
+            Rationale = rationale,
+            Evidence = evidence
+        };
     }
 
     private static bool IsTransientExecutionNoise(string text)

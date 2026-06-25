@@ -33,4 +33,6 @@ public sealed class OperationalContextCompressionSummary
     public IReadOnlyList<string> NoiseRemovedIndicators { get; init; } = [];
 
     public IReadOnlyList<string> StableUnderstandingRetentionWarnings { get; init; } = [];
+
+    public IReadOnlyList<OperationalContextCompressionOutcome> ItemOutcomes { get; init; } = [];
 }

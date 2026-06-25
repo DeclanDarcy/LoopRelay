@@ -34,6 +34,7 @@ function createProposal(overrides: Partial<OperationalContextProposal> = {}): Op
       revisionSummary: [],
       noiseRemovedIndicators: [],
       stableUnderstandingRetentionWarnings: [],
+      itemOutcomes: [],
     },
     review: {
       proposalId: 'proposal-42',
