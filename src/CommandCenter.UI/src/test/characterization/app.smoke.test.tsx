@@ -475,7 +475,7 @@ describe('workspace certification mock', () => {
     expect(invokeSpy.mock.calls.some(([command]) => command === 'prepare_commit')).toBe(false)
     expect(invokeSpy.mock.calls.some(([command]) => command === 'commit_execution')).toBe(false)
 
-    const commitWorkflowPanel = screen.getByText('Git Workflow').closest('section')
+    const commitWorkflowPanel = screen.getByText('Git Evidence').closest('section')
     expect(commitWorkflowPanel).not.toBeNull()
     if (!commitWorkflowPanel) {
       return
@@ -592,7 +592,7 @@ describe('workspace certification mock', () => {
     await new Promise((resolve) => window.setTimeout(resolve, 0))
     expect(invokeSpy.mock.calls.some(([command]) => command === 'push_execution')).toBe(false)
 
-    const pushWorkflowPanel = screen.getByText('Git Workflow').closest('section')
+    const pushWorkflowPanel = screen.getByText('Git Evidence').closest('section')
     expect(pushWorkflowPanel).not.toBeNull()
     if (!pushWorkflowPanel) {
       return
@@ -1027,20 +1027,21 @@ describe('workspace certification mock', () => {
       screen.getByRole('button', { name: 'Which warning categories should be shown first?' }),
     )
     fireEvent.click(screen.getByRole('button', { name: 'Projection drift could confuse review state.' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Continuity warning preserves questions.' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Continuity warning preserves questions\./ }))
 
     await waitFor(() => expect(screen.getByLabelText('Continuity diagnostics')).toBeInTheDocument())
     expect(workflowCallCounts()).toEqual(beforeNavigation)
 
     fireEvent.click(screen.getByRole('button', { name: 'Operational Context' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Compression warning preserves reviewer context.' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Load Latest' }))
+    await screen.findByText('Compression warning preserves reviewer context.')
+    fireEvent.click(screen.getByRole('button', { name: 'Open compression diagnostics' }))
     await waitFor(() => expect(scrollIntoView).toHaveBeenCalled())
     expect(workflowCallCounts()).toEqual(beforeNavigation)
 
     fireEvent.click(screen.getByRole('button', { name: 'Operational Context' }))
-    fireEvent.click(
-      screen.getAllByRole('button', { name: 'Decision retention warning preserves backend authority.' })[0],
-    )
+    await screen.findAllByText('Decision retention warning preserves backend authority.')
+    fireEvent.click(screen.getAllByRole('button', { name: 'Open decision retention' })[0])
     await waitFor(() => expect(scrollIntoView).toHaveBeenCalled())
     expect(workflowCallCounts()).toEqual(beforeNavigation)
 

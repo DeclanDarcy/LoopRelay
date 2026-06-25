@@ -129,7 +129,7 @@ export const navigationSectionTargets: NavigationSectionTargetDefinition[] = [
     id: 'section-git-workflow',
     kind: 'section',
     group: 'Inspector Sections',
-    label: 'Git Workflow',
+    label: 'Git Evidence',
     description: 'Open commit and push evidence.',
     classification: 'contextual',
     tab: 'execution',

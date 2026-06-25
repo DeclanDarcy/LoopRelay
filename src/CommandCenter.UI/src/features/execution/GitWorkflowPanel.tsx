@@ -87,7 +87,7 @@ export function GitWorkflowPanel({
     <Panel id="git-workflow" className="git-status-panel" aria-label="Git status">
       <SectionHeader
         className="git-status-header"
-        eyebrow="Git Workflow"
+        eyebrow="Git Evidence"
         title={repositoryExecutionStatus[currentExecutionState].label}
         headingLevel={4}
         actions={

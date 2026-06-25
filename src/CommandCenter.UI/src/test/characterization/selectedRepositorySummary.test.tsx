@@ -332,11 +332,14 @@ describe('selected repository summary rendering characterization', () => {
 
     const details = detailsList()
     const repository = dashboardSection('Repository')
+    const workflow = dashboardSection('Workflow')
     const operationalContext = dashboardSection('Operational context')
     expect(details.getByText('Readiness').nextElementSibling).toHaveTextContent(
       'Missing milestones',
     )
     expect(details.getByText('Execution').nextElementSibling).toHaveTextContent('Awaiting commit')
+    expectFact(workflow, 'Stage', 'Not loaded')
+    expectFact(workflow, 'Gate', 'Not loaded')
     expect(details.getByText('Milestones').nextElementSibling).toHaveTextContent('5')
     expectFact(repository, 'Plan', 'Present')
     expectFact(operationalContext, 'Current context', 'Present')

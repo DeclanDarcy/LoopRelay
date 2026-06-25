@@ -54,6 +54,7 @@ Make the application feel unified, not merely smaller. Remove fragmentation so e
   - [x] Duplicate reasoning graph fallback diagnostics and operational-context warning lists removed in favor of shared `DiagnosticList`. See `./m9-obsolete-ui-cleanup-continuity-reasoning-diagnostics.md`.
   - [x] Duplicate decision lifecycle/revision diagnostics, revision source attribution, and execution conflict evidence renderers removed in favor of shared `DiagnosticList` and `EvidenceList`. See `./m9-obsolete-ui-cleanup-decision-execution-diagnostics-evidence.md`.
   - [x] Duplicate decision option evaluation evidence, option diagnostics, analyzed-option diagnostics, and operational-context modification supporting-evidence renderers removed in favor of shared `EvidenceList` and `DiagnosticList`. See `./m9-obsolete-ui-cleanup-decision-continuity-explainability.md`.
+  - [x] Execution git commit/push surface terminology aligned so it no longer presents a competing workflow authority label. See `./m9-obsolete-ui-cleanup-execution-git-workflow-terminology.md`.
 - [ ] Align terminology across statuses, health, diagnostics, recovery, certification, governance, execution, and explainability.
 
 ### Likely Cleanup Targets
