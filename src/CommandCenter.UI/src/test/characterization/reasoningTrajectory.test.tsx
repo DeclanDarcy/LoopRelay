@@ -350,6 +350,12 @@ const materializationReview: ReasoningMaterializationReviewReport = {
       concept: 'Hypothesis',
       recommendation: 'RemainDerived',
       summary: 'Hypothesis remains reconstructable from reasoning events and trace evidence.',
+      failedScenarioCount: 0,
+      repeatedWorkflowCount: 0,
+      failedScenarioThreshold: 2,
+      repeatedWorkflowThreshold: 3,
+      branchReason: 'No threshold was met: 0/2 failed scenarios and 0/3 repeated workflow signals.',
+      elevatedRiskSignals: [],
       evidence: ['1 hypothesis event', '0 failed reconstruction scenarios'],
       risks: ['Promoting hypotheses would imply lifecycle authority.'],
     },
@@ -357,6 +363,12 @@ const materializationReview: ReasoningMaterializationReviewReport = {
       concept: 'Direction',
       recommendation: 'RemainDerived',
       summary: 'Direction remains derived because direction events alone do not justify stronger persistence.',
+      failedScenarioCount: 0,
+      repeatedWorkflowCount: 0,
+      failedScenarioThreshold: 2,
+      repeatedWorkflowThreshold: 3,
+      branchReason: 'No threshold was met: 0/2 failed scenarios and 0/3 repeated workflow signals.',
+      elevatedRiskSignals: ['Direction materialization can imply strategic authority.'],
       evidence: ['0 direction events'],
       risks: ['Direction persistence could imply strategic authority.'],
     },
@@ -364,6 +376,12 @@ const materializationReview: ReasoningMaterializationReviewReport = {
       concept: 'Thread',
       recommendation: 'RemainDerived',
       summary: 'Thread identity remains a grouping aid and not an authoritative artifact family.',
+      failedScenarioCount: 0,
+      repeatedWorkflowCount: 0,
+      failedScenarioThreshold: 2,
+      repeatedWorkflowThreshold: 3,
+      branchReason: 'No threshold was met: 0/2 failed scenarios and 0/3 repeated workflow signals.',
+      elevatedRiskSignals: [],
       evidence: ['1 thread'],
       risks: ['Thread persistence must stay subject to future materialization review.'],
     },
@@ -372,7 +390,11 @@ const materializationReview: ReasoningMaterializationReviewReport = {
     {
       family: 'Hypothesis',
       eventTypeCount: 1,
+      eventTypeThreshold: 4,
       lifecycleRisk: false,
+      terminalEventTypePresent: false,
+      terminalEventTypes: [],
+      riskReason: 'Lifecycle risk is not flagged because the family has 1 event type(s) against threshold 4 and terminal event presence is false.',
       summary: 'Hypothesis remains classification vocabulary.',
       evidence: ['1 event types observed'],
     },
@@ -757,8 +779,30 @@ describe('reasoning trajectory tab', () => {
     )
     expect(within(reviewRegion).getByText('Hypothesis')).toBeInTheDocument()
     expect(within(reviewRegion).getAllByText('Derived remains sufficient')).toHaveLength(3)
+    expect(within(reviewRegion).getByLabelText('Hypothesis materialization threshold basis')).toHaveTextContent(
+      'RemainDerived',
+    )
+    expect(within(reviewRegion).getByLabelText('Hypothesis materialization threshold basis')).toHaveTextContent(
+      'No threshold was met',
+    )
+    expect(within(reviewRegion).getByLabelText('Direction materialization threshold basis')).toHaveTextContent(
+      'Failed scenarios 0/2',
+    )
+    expect(within(reviewRegion).getByLabelText('Direction materialization threshold basis')).toHaveTextContent(
+      'Repeated workflow 0/3',
+    )
+    expect(within(reviewRegion).getByText('Direction materialization can imply strategic authority.')).toBeInTheDocument()
     expect(within(reviewRegion).getByLabelText('Materialization taxonomy findings')).toHaveTextContent(
       'Hypothesis remains classification vocabulary.',
+    )
+    expect(within(reviewRegion).getByLabelText('Materialization taxonomy findings')).toHaveTextContent(
+      '1/4 event types',
+    )
+    expect(within(reviewRegion).getByLabelText('Materialization taxonomy findings')).toHaveTextContent(
+      'terminal event types absent',
+    )
+    expect(within(reviewRegion).getByLabelText('Materialization taxonomy findings')).toHaveTextContent(
+      'threshold 4',
     )
     expect(within(reviewRegion).queryByText('Approved')).toBeNull()
     expect(within(reviewRegion).queryByText('Rejected')).toBeNull()

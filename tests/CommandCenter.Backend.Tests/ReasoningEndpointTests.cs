@@ -202,6 +202,12 @@ public sealed class ReasoningEndpointTests
         Assert.Contains(report.Concepts, review =>
             review.Concept == ReasoningMaterializationConcept.Direction &&
             review.Recommendation == ReasoningMaterializationOutcome.RemainDerived);
+        ReasoningConceptMaterializationReview direction = Assert.Single(
+            report.Concepts,
+            review => review.Concept == ReasoningMaterializationConcept.Direction);
+        Assert.Equal(2, direction.FailedScenarioThreshold);
+        Assert.Equal(3, direction.RepeatedWorkflowThreshold);
+        Assert.Contains("No threshold was met", direction.BranchReason, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -62,7 +62,10 @@ export function ReasoningMaterializationReviewPanel({
               <strong>Taxonomy findings</strong>
               {review.taxonomyFindings.map((finding) => (
                 <p key={finding.family}>
-                  {finding.family}: {finding.summary} ({finding.eventTypeCount} event types)
+                  {finding.family}: {finding.summary} ({finding.eventTypeCount}/
+                  {finding.eventTypeThreshold} event types; terminal event types{' '}
+                  {finding.terminalEventTypePresent ? finding.terminalEventTypes.join(', ') : 'absent'}
+                  ). {finding.riskReason}
                 </p>
               ))}
             </div>
@@ -93,7 +96,25 @@ function ConceptReviewCard({ concept }: { concept: ReasoningConceptMaterializati
         <span>{formatOutcome(concept.recommendation)}</span>
       </div>
       <p>{concept.summary}</p>
+      <div className="reasoning-derived-status" aria-label={`${concept.concept} materialization threshold basis`}>
+        <strong>{concept.recommendation}</strong>
+        <span>{concept.branchReason}</span>
+        <span>
+          Failed scenarios {concept.failedScenarioCount}/{concept.failedScenarioThreshold}
+        </span>
+        <span>
+          Repeated workflow {concept.repeatedWorkflowCount}/{concept.repeatedWorkflowThreshold}
+        </span>
+      </div>
       <dl className="reasoning-provenance">
+        <div>
+          <dt>Signals</dt>
+          <dd>
+            {concept.elevatedRiskSignals.length > 0
+              ? concept.elevatedRiskSignals.join(' / ')
+              : 'No elevated risk signals'}
+          </dd>
+        </div>
         <div>
           <dt>Evidence</dt>
           <dd>{concept.evidence.length > 0 ? concept.evidence.join(' / ') : 'Evidence insufficient'}</dd>

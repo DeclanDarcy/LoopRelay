@@ -322,6 +322,12 @@ export type ReasoningConceptMaterializationReview = {
   concept: ReasoningMaterializationConcept
   recommendation: ReasoningMaterializationOutcome
   summary: string
+  failedScenarioCount: number
+  repeatedWorkflowCount: number
+  failedScenarioThreshold: number
+  repeatedWorkflowThreshold: number
+  branchReason: string
+  elevatedRiskSignals: string[]
   evidence: string[]
   risks: string[]
 }
@@ -329,7 +335,11 @@ export type ReasoningConceptMaterializationReview = {
 export type ReasoningTaxonomyMaterializationFinding = {
   family: ReasoningEventFamily
   eventTypeCount: number
+  eventTypeThreshold: number
   lifecycleRisk: boolean
+  terminalEventTypePresent: boolean
+  terminalEventTypes: ReasoningEventType[]
+  riskReason: string
   summary: string
   evidence: string[]
 }

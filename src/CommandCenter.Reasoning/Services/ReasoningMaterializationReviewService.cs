@@ -9,6 +9,10 @@ public sealed class ReasoningMaterializationReviewService(
     IReasoningRepository reasoningRepository)
     : IReasoningMaterializationReviewService
 {
+    private const int FailedScenarioThreshold = 2;
+    private const int RepeatedWorkflowThreshold = 3;
+    private const int LifecycleEventTypeThreshold = 4;
+
     public async Task<ReasoningMaterializationReviewReport> RunReviewAsync(
         Guid repositoryId,
         ReasoningMaterializationReviewRequest? request = null)
@@ -69,6 +73,7 @@ public sealed class ReasoningMaterializationReviewService(
         int failedScenarioCount = conceptScenarios.Count(scenario => scenario.ReconstructionFailed);
         int repeatedWorkflowCount = conceptScenarios.Sum(scenario => Math.Max(0, scenario.RepeatedWorkflowCount));
         ReasoningMaterializationOutcome outcome = SelectOutcome(concept, failedScenarioCount, repeatedWorkflowCount);
+        string branchReason = BuildBranchReason(outcome, failedScenarioCount, repeatedWorkflowCount);
         var evidence = new List<string>
         {
             $"{familyEvents.Length} {family} event(s) exist.",
@@ -92,10 +97,22 @@ public sealed class ReasoningMaterializationReviewService(
             risks.Add("Failed reconstruction evidence should be addressed through query, trace, or report improvements before adding persistence.");
         }
 
+        IReadOnlyList<string> elevatedRiskSignals = BuildElevatedRiskSignals(
+            concept,
+            failedScenarioCount,
+            repeatedWorkflowCount,
+            outcome);
+
         return new ReasoningConceptMaterializationReview(
             concept,
             outcome,
             BuildConceptSummary(concept, outcome, failedScenarioCount, repeatedWorkflowCount),
+            failedScenarioCount,
+            repeatedWorkflowCount,
+            FailedScenarioThreshold,
+            RepeatedWorkflowThreshold,
+            branchReason,
+            elevatedRiskSignals,
             evidence,
             risks);
     }
@@ -109,9 +126,10 @@ public sealed class ReasoningMaterializationReviewService(
         ReasoningMaterializationScenario[] threadScenarios = ScenariosFor(scenarios, ReasoningMaterializationConcept.Thread);
         int failedScenarioCount = threadScenarios.Count(scenario => scenario.ReconstructionFailed);
         int repeatedWorkflowCount = threadScenarios.Sum(scenario => Math.Max(0, scenario.RepeatedWorkflowCount));
-        ReasoningMaterializationOutcome outcome = failedScenarioCount >= 2 || repeatedWorkflowCount >= 3
+        ReasoningMaterializationOutcome outcome = failedScenarioCount >= FailedScenarioThreshold || repeatedWorkflowCount >= RepeatedWorkflowThreshold
             ? ReasoningMaterializationOutcome.AddReadModelReport
             : ReasoningMaterializationOutcome.RemainDerived;
+        string branchReason = BuildBranchReason(outcome, failedScenarioCount, repeatedWorkflowCount);
         int eventsInThreads = threads.SelectMany(thread => thread.EventIds).Distinct(StringComparer.Ordinal).Count();
         int relationshipCount = relationships.Count(relationship =>
             relationship.Source.Kind == ReasoningReferenceKind.ReasoningThread ||
@@ -131,6 +149,12 @@ public sealed class ReasoningMaterializationReviewService(
             outcome == ReasoningMaterializationOutcome.RemainDerived
                 ? "Thread identity remains a reviewable grouping mechanism; no stronger thread authority is justified."
                 : "Thread usage shows repeated reconstruction pressure; prefer a read-model review report before changing persistence.",
+            failedScenarioCount,
+            repeatedWorkflowCount,
+            FailedScenarioThreshold,
+            RepeatedWorkflowThreshold,
+            branchReason,
+            BuildElevatedRiskSignals(ReasoningMaterializationConcept.Thread, failedScenarioCount, repeatedWorkflowCount, outcome),
             evidence,
             [
                 "Persisted threads can become too authoritative if treated as decisions, sessions, or current strategy.",
@@ -143,12 +167,12 @@ public sealed class ReasoningMaterializationReviewService(
         int failedScenarioCount,
         int repeatedWorkflowCount)
     {
-        if (failedScenarioCount >= 2)
+        if (failedScenarioCount >= FailedScenarioThreshold)
         {
             return ReasoningMaterializationOutcome.AddReadModelReport;
         }
 
-        if (repeatedWorkflowCount >= 3)
+        if (repeatedWorkflowCount >= RepeatedWorkflowThreshold)
         {
             return ReasoningMaterializationOutcome.AddDerivedCache;
         }
@@ -179,11 +203,20 @@ public sealed class ReasoningMaterializationReviewService(
             .Select(group =>
             {
                 ReasoningEventType[] eventTypes = group.Select(reasoningEvent => reasoningEvent.Type).Distinct().ToArray();
-                bool lifecycleRisk = eventTypes.Length >= 4 && eventTypes.Any(IsLifecycleTerminalType);
+                ReasoningEventType[] terminalEventTypes = eventTypes.Where(IsLifecycleTerminalType).ToArray();
+                bool terminalEventTypePresent = terminalEventTypes.Length > 0;
+                bool lifecycleRisk = eventTypes.Length >= LifecycleEventTypeThreshold && terminalEventTypePresent;
+                string riskReason = lifecycleRisk
+                    ? $"Lifecycle risk is flagged because {eventTypes.Length} event type(s) meet or exceed threshold {LifecycleEventTypeThreshold} and terminal event types are present."
+                    : $"Lifecycle risk is not flagged because the family has {eventTypes.Length} event type(s) against threshold {LifecycleEventTypeThreshold} and terminal event presence is {terminalEventTypePresent}.";
                 return new ReasoningTaxonomyMaterializationFinding(
                     group.Key,
                     eventTypes.Length,
+                    LifecycleEventTypeThreshold,
                     lifecycleRisk,
+                    terminalEventTypePresent,
+                    terminalEventTypes.OrderBy(type => type.ToString(), StringComparer.Ordinal).ToArray(),
+                    riskReason,
                     lifecycleRisk
                         ? $"{group.Key} has enough event-type variety to resemble a hidden lifecycle; keep it explicitly derived or simplify the taxonomy."
                         : $"{group.Key} remains classification vocabulary.",
@@ -191,6 +224,58 @@ public sealed class ReasoningMaterializationReviewService(
             })
             .OrderBy(finding => finding.Family.ToString(), StringComparer.Ordinal)
             .ToArray();
+    }
+
+    private static string BuildBranchReason(
+        ReasoningMaterializationOutcome outcome,
+        int failedScenarioCount,
+        int repeatedWorkflowCount)
+    {
+        return outcome switch
+        {
+            ReasoningMaterializationOutcome.AddReadModelReport =>
+                failedScenarioCount >= FailedScenarioThreshold
+                    ? $"Failed scenario count {failedScenarioCount} met threshold {FailedScenarioThreshold}; recommendation is a report, not a new authority."
+                    : $"Repeated workflow count {repeatedWorkflowCount} met threshold {RepeatedWorkflowThreshold}; recommendation is a report for review.",
+            ReasoningMaterializationOutcome.AddDerivedCache =>
+                $"Repeated workflow count {repeatedWorkflowCount} met threshold {RepeatedWorkflowThreshold}; recommendation is derived cache pressure only.",
+            ReasoningMaterializationOutcome.PromoteToFirstClassEntity =>
+                "Promotion is advisory and still requires a separate authority-owning slice.",
+            ReasoningMaterializationOutcome.RejectConcept =>
+                "Concept was rejected because submitted evidence was insufficient.",
+            _ =>
+                $"No threshold was met: {failedScenarioCount}/{FailedScenarioThreshold} failed scenarios and {repeatedWorkflowCount}/{RepeatedWorkflowThreshold} repeated workflow signals."
+        };
+    }
+
+    private static IReadOnlyList<string> BuildElevatedRiskSignals(
+        ReasoningMaterializationConcept concept,
+        int failedScenarioCount,
+        int repeatedWorkflowCount,
+        ReasoningMaterializationOutcome outcome)
+    {
+        var signals = new List<string>();
+        if (failedScenarioCount > 0)
+        {
+            signals.Add($"{failedScenarioCount} failed reconstruction scenario(s) require explanation before persistence changes.");
+        }
+
+        if (repeatedWorkflowCount > 0)
+        {
+            signals.Add($"{repeatedWorkflowCount} repeated workflow signal(s) indicate operational friction.");
+        }
+
+        if (concept == ReasoningMaterializationConcept.Direction)
+        {
+            signals.Add("Direction materialization can imply strategic authority.");
+        }
+
+        if (outcome != ReasoningMaterializationOutcome.RemainDerived)
+        {
+            signals.Add($"{outcome} remains advisory and does not grant artifact authority.");
+        }
+
+        return signals.Order(StringComparer.Ordinal).ToArray();
     }
 
     private static bool IsLifecycleTerminalType(ReasoningEventType type)

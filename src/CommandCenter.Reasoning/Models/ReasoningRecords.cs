@@ -204,13 +204,23 @@ public sealed record ReasoningConceptMaterializationReview(
     ReasoningMaterializationConcept Concept,
     ReasoningMaterializationOutcome Recommendation,
     string Summary,
+    int FailedScenarioCount,
+    int RepeatedWorkflowCount,
+    int FailedScenarioThreshold,
+    int RepeatedWorkflowThreshold,
+    string BranchReason,
+    IReadOnlyList<string> ElevatedRiskSignals,
     IReadOnlyList<string> Evidence,
     IReadOnlyList<string> Risks);
 
 public sealed record ReasoningTaxonomyMaterializationFinding(
     ReasoningEventFamily Family,
     int EventTypeCount,
+    int EventTypeThreshold,
     bool LifecycleRisk,
+    bool TerminalEventTypePresent,
+    IReadOnlyList<ReasoningEventType> TerminalEventTypes,
+    string RiskReason,
     string Summary,
     IReadOnlyList<string> Evidence);
 

@@ -2,11 +2,11 @@
 
 ## Newly Authorized
 
-- Treat the first Milestone 6 reconstruction transparency vertical slice as complete because backend projection, transport, TypeScript contracts, UI rendering, query transparency, and characterization coverage are all wired.
-- Preserve the authority pattern where reasoning semantics remain backend-owned and the frontend renders structured reasoning facts without deriving confidence explanations from secondary UI signals.
-- Preserve confidence rationale as distinct from confidence so later explainability components can consume confidence level, rationale, and why-confidence-was-not-higher as separate structured facts.
-- Preserve reconstruction scope as a first-class transparency boundary, including direction, source, target, historical cutoff, reachable evidence, and known unreachable evidence.
-- Preserve missing evidence and known unreachable evidence as separate semantic concepts because missing evidence describes absent strengthening evidence while unreachable evidence describes evidence outside accessible reconstruction scope.
-- Continue Milestone 6 by broadening the backend-first audit beyond reconstruction to remaining reasoning surfaces that still present opaque conclusions.
-- Prioritize materialization review, reasoning event history, reasoning reports/history, authority boundary violations, and lifecycle risk as the next reasoning transparency inventory candidates.
-- As Milestone 6 expands, organize new projections around reusable semantic concepts such as conclusion, rationale, evidence, missing evidence, scope, diagnostics, limitations, authority boundary, and provenance rather than panel-specific presentation models.
+- Treat Milestone 6 reconstruction transparency and materialization transparency as complete vertical slices that follow the backend-authority to structured-projection to typed-client to render-only-UI pattern.
+- Continue Milestone 6 with capture provenance transparency as the next slice.
+- Model capture provenance as a distinct semantic concept rather than a loose collection of optional fields.
+- Every reasoning event should expose structured provenance that answers how the reasoning was captured, where it came from, and why it exists.
+- Represent manual, assisted, and inferred capture modes explicitly, with subtype-specific details attached beneath the shared capture provenance concept.
+- For inferred capture, expose source transition, source artifact, capture reason, captured by, and source timestamp.
+- For skipped or deduplicated capture, expose skip reason, duplicate signal, and existing event reference.
+- Preserve the established pattern where reasoning projections expose backend-owned semantics and the UI renders those facts without inventing explanations or lifecycle authority.

@@ -44,6 +44,11 @@ public sealed class ReasoningMaterializationReviewServiceTests
 
         ReasoningConceptMaterializationReview hypothesis = ReviewFor(report, ReasoningMaterializationConcept.Hypothesis);
         Assert.Equal(ReasoningMaterializationOutcome.RemainDerived, hypothesis.Recommendation);
+        Assert.Equal(0, hypothesis.FailedScenarioCount);
+        Assert.Equal(2, hypothesis.FailedScenarioThreshold);
+        Assert.Equal(3, hypothesis.RepeatedWorkflowThreshold);
+        Assert.Contains("No threshold was met", hypothesis.BranchReason, StringComparison.Ordinal);
+        Assert.Empty(hypothesis.ElevatedRiskSignals);
         Assert.Contains("classification evidence", hypothesis.Summary, StringComparison.Ordinal);
         Assert.False(Directory.Exists(Path.Combine(repository.Path, ".agents", "reasoning", "hypotheses")));
     }
@@ -73,6 +78,7 @@ public sealed class ReasoningMaterializationReviewServiceTests
         ReasoningConceptMaterializationReview direction = ReviewFor(report, ReasoningMaterializationConcept.Direction);
         Assert.Equal(ReasoningMaterializationOutcome.RemainDerived, direction.Recommendation);
         Assert.Contains(direction.Risks, risk => risk.Contains("strategy authority", StringComparison.Ordinal));
+        Assert.Contains(direction.ElevatedRiskSignals, risk => risk.Contains("strategic authority", StringComparison.Ordinal));
         Assert.False(Directory.Exists(Path.Combine(repository.Path, ".agents", "reasoning", "directions")));
     }
 
@@ -103,6 +109,11 @@ public sealed class ReasoningMaterializationReviewServiceTests
         ReasoningConceptMaterializationReview alternative = ReviewFor(report, ReasoningMaterializationConcept.Alternative);
         ReasoningConceptMaterializationReview contradiction = ReviewFor(report, ReasoningMaterializationConcept.Contradiction);
         Assert.Equal(ReasoningMaterializationOutcome.AddReadModelReport, alternative.Recommendation);
+        Assert.Equal(2, alternative.FailedScenarioCount);
+        Assert.Equal(0, alternative.RepeatedWorkflowCount);
+        Assert.Contains("met threshold 2", alternative.BranchReason, StringComparison.Ordinal);
+        Assert.Contains(alternative.ElevatedRiskSignals, signal => signal.Contains("failed reconstruction", StringComparison.Ordinal));
+        Assert.Contains(alternative.ElevatedRiskSignals, signal => signal.Contains("advisory", StringComparison.Ordinal));
         Assert.Equal(ReasoningMaterializationOutcome.RemainDerived, contradiction.Recommendation);
         Assert.False(Directory.Exists(Path.Combine(repository.Path, ".agents", "reasoning", "alternatives")));
     }
@@ -167,6 +178,11 @@ public sealed class ReasoningMaterializationReviewServiceTests
             report.TaxonomyFindings,
             item => item.Family == ReasoningEventFamily.Contradiction);
         Assert.True(finding.LifecycleRisk);
+        Assert.Equal(5, finding.EventTypeCount);
+        Assert.Equal(4, finding.EventTypeThreshold);
+        Assert.True(finding.TerminalEventTypePresent);
+        Assert.Contains(ReasoningEventType.ContradictionResolved, finding.TerminalEventTypes);
+        Assert.Contains("threshold 4", finding.RiskReason, StringComparison.Ordinal);
         Assert.Contains(report.Diagnostics, diagnostic => diagnostic.Contains("lifecycle-like growth", StringComparison.Ordinal));
     }
 
