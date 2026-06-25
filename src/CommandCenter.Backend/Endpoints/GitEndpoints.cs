@@ -10,6 +10,7 @@ public static class GitEndpoints
     public static IEndpointRouteBuilder MapGitEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGetGitStatus();
+        app.MapGitEligibility();
         app.MapPrepareCommit();
         app.MapCommit();
         app.MapPush();
@@ -34,6 +35,26 @@ public static class GitEndpoints
             catch (InvalidOperationException exception)
             {
                 return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+
+    private static void MapGitEligibility(this IEndpointRouteBuilder app) =>
+        app.MapPost("/api/execution-sessions/{sessionId:guid}/git/eligibility", async (
+            Guid sessionId,
+            ExecutionGitActionEligibilityRequest request,
+            IExecutionGitEligibilityService eligibilityService) =>
+        {
+            try
+            {
+                return Results.Ok(await eligibilityService.GetEligibilityAsync(sessionId, request));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
             }
         });
 
@@ -84,7 +105,8 @@ public static class GitEndpoints
         {
             try
             {
-                return Results.Ok(await executionSessionService.PushAsync(sessionId, request));
+                ExecutionSessionSummary summary = await executionSessionService.PushAsync(sessionId, request);
+                return Results.Ok(PushAttemptResult.Success(summary));
             }
             catch (KeyNotFoundException exception)
             {
@@ -92,7 +114,10 @@ public static class GitEndpoints
             }
             catch (InvalidOperationException exception)
             {
-                return Results.Conflict(new { error = exception.Message });
+                ExecutionSession? session = await executionSessionService.GetSessionAsync(sessionId);
+                return Results.Conflict(PushAttemptResult.Failure(
+                    exception.Message,
+                    session?.ToSummary()));
             }
         });
 }

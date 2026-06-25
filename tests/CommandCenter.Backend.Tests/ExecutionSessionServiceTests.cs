@@ -1147,6 +1147,198 @@ public sealed class ExecutionSessionServiceTests
     }
 
     [Fact]
+    public async Task PushEndpointConflictReturnsPersistedRetryState()
+    {
+        string storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");
+        var store = new FileSystemExecutionSessionStore(storePath);
+        var repository = new Repository
+        {
+            Id = Guid.NewGuid(),
+            Name = "repo",
+            Path = CreateGitRepositoryDirectory()
+        };
+        var session = new ExecutionSession
+        {
+            Id = Guid.NewGuid(),
+            RepositoryId = repository.Id,
+            RepositoryPath = repository.Path,
+            MilestonePath = ".agents/milestones/m5.md",
+            StartedAt = DateTimeOffset.UtcNow.AddMinutes(-5),
+            CompletedAt = DateTimeOffset.UtcNow.AddMinutes(-4),
+            AcceptedAt = DateTimeOffset.UtcNow.AddMinutes(-3),
+            LastActivityAt = DateTimeOffset.UtcNow.AddMinutes(-2),
+            State = ExecutionSessionState.Completed,
+            RepositoryState = RepositoryExecutionState.AwaitingPush,
+            ProviderName = "fake",
+            CommitSha = "commit-sha",
+            CommittedAt = DateTimeOffset.UtcNow.AddMinutes(-2),
+            CommitMessage = "Reviewed commit",
+            PreparationSnapshotId = "snapshot"
+        };
+        await store.SaveAsync([session]);
+
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services =>
+            {
+                services.AddSingleton<IGitService>(new FakeGitService(new RepositoryDirtyState { IsClean = true }, null)
+                {
+                    PushFailure = "git push failed"
+                });
+                services.AddSingleton<IExecutionProvider>(new FakeExecutionProvider());
+                services.AddSingleton<IExecutionSessionStore>(new FileSystemExecutionSessionStore(storePath));
+            });
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+
+        using var client = new HttpClient();
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            app.Urls.Single() + $"/api/execution-sessions/{session.Id}/git/push",
+            new PushRequest());
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var result = await response.Content.ReadFromJsonAsync<PushAttemptResult>(new JsonSerializerOptions(JsonSerializerDefaults.Web)
+        {
+            Converters = { new JsonStringEnumConverter() }
+        });
+
+        Assert.NotNull(result);
+        Assert.False(result.Succeeded);
+        Assert.True(result.Retryable);
+        Assert.Equal("git push failed", result.Error);
+        Assert.NotNull(result.AttemptedAt);
+        Assert.NotNull(result.Session);
+        Assert.Equal(session.Id, result.Session.SessionId);
+        Assert.Equal(RepositoryExecutionState.AwaitingPush, result.Session.RepositoryState);
+        Assert.NotNull(result.Session.PushAttemptedAt);
+        Assert.Contains("git push failed", result.Session.FailureReason, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Contains("can be retried", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task GitEligibilityProjectsCommitPreconditionsAndStalePreparation()
+    {
+        var gitService = new FakeGitService(new RepositoryDirtyState { IsClean = false }, null)
+        {
+            CurrentSnapshotId = "new-snapshot"
+        };
+        Harness harness = await CreateHarnessAsync(gitService: gitService);
+        ExecutionSession session = await StoreAwaitingCommitSessionWithPreparationAsync(harness);
+        var eligibilityService = new ExecutionGitEligibilityService(harness.Store, gitService);
+
+        ExecutionGitActionEligibility eligibility = await eligibilityService.GetEligibilityAsync(
+            session.Id,
+            new ExecutionGitActionEligibilityRequest
+            {
+                CommitMessage = "",
+                SelectedPaths = ["src/changed.cs", "unknown.cs"]
+            });
+
+        Assert.True(eligibility.SessionExists);
+        Assert.Equal(RepositoryExecutionState.AwaitingCommit, eligibility.RepositoryState);
+        Assert.True(eligibility.CommitPreparationLoaded);
+        Assert.False(eligibility.CommitPreparationCurrent);
+        Assert.Equal("snapshot", eligibility.PreparedStatusSnapshotId);
+        Assert.Equal("new-snapshot", eligibility.CurrentStatusSnapshotId);
+        Assert.Equal(2, eligibility.SelectedPathCount);
+        Assert.Contains("unknown.cs", eligibility.UnknownSelectedPaths);
+        Assert.False(eligibility.CommitMessagePresent);
+        Assert.False(eligibility.CanCommit);
+        Assert.Contains("Commit preparation is stale.", eligibility.CommitDisabledReasons);
+        Assert.Contains("Commit message is required.", eligibility.CommitDisabledReasons);
+        Assert.Contains("Selected paths include entries outside the prepared commit scope.", eligibility.CommitDisabledReasons);
+    }
+
+    [Fact]
+    public async Task GitEligibilityProjectsPushPreconditionsAndRemoteState()
+    {
+        var gitService = new FakeGitService(new RepositoryDirtyState { IsClean = true }, null)
+        {
+            StatusAheadCount = 1,
+            StatusBehindCount = 1
+        };
+        Harness harness = await CreateHarnessAsync(gitService: gitService);
+        ExecutionSession session = await StoreAwaitingPushSessionAsync(harness);
+        DateTimeOffset attemptedAt = DateTimeOffset.UtcNow;
+        await harness.Store.SaveAsync([CreatePushFailedSession(session, attemptedAt, "git push failed")]);
+        var eligibilityService = new ExecutionGitEligibilityService(harness.Store, gitService);
+
+        ExecutionGitActionEligibility eligibility = await eligibilityService.GetEligibilityAsync(
+            session.Id,
+            new ExecutionGitActionEligibilityRequest());
+
+        Assert.True(eligibility.AwaitingPush);
+        Assert.True(eligibility.CommitShaExists);
+        Assert.Equal("commit-sha", eligibility.CommitSha);
+        Assert.Equal("git push failed", eligibility.PreviousPushFailure);
+        Assert.Equal(attemptedAt, eligibility.PreviousPushAttemptedAt);
+        Assert.NotNull(eligibility.RemoteBranchState);
+        Assert.Equal(1, eligibility.RemoteBranchState.AheadCount);
+        Assert.Equal(1, eligibility.RemoteBranchState.BehindCount);
+        Assert.True(eligibility.RemoteBranchState.HasUnpushedChanges);
+        Assert.True(eligibility.RemoteBranchState.HasRemoteDivergence);
+        Assert.False(eligibility.CanPush);
+        Assert.Contains("Remote branch has new commits; review branch state before pushing.", eligibility.PushDisabledReasons);
+    }
+
+    [Fact]
+    public async Task GitEligibilityEndpointReturnsProjection()
+    {
+        string storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");
+        var store = new FileSystemExecutionSessionStore(storePath);
+        var repository = new Repository
+        {
+            Id = Guid.NewGuid(),
+            Name = "repo",
+            Path = CreateGitRepositoryDirectory()
+        };
+        var session = new ExecutionSession
+        {
+            Id = Guid.NewGuid(),
+            RepositoryId = repository.Id,
+            RepositoryPath = repository.Path,
+            MilestonePath = ".agents/milestones/m5.md",
+            StartedAt = DateTimeOffset.UtcNow.AddMinutes(-5),
+            LastActivityAt = DateTimeOffset.UtcNow.AddMinutes(-2),
+            State = ExecutionSessionState.Completed,
+            RepositoryState = RepositoryExecutionState.AwaitingPush,
+            ProviderName = "fake",
+            CommitSha = "commit-sha",
+            CommittedAt = DateTimeOffset.UtcNow.AddMinutes(-2),
+            CommitMessage = "Reviewed commit"
+        };
+        await store.SaveAsync([session]);
+
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services =>
+            {
+                services.AddSingleton<IGitService>(new FakeGitService(new RepositoryDirtyState { IsClean = true }, null));
+                services.AddSingleton<IExecutionProvider>(new FakeExecutionProvider());
+                services.AddSingleton<IExecutionSessionStore>(new FileSystemExecutionSessionStore(storePath));
+            });
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+
+        using var client = new HttpClient();
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            app.Urls.Single() + $"/api/execution-sessions/{session.Id}/git/eligibility",
+            new ExecutionGitActionEligibilityRequest());
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var eligibility = await response.Content.ReadFromJsonAsync<ExecutionGitActionEligibility>(new JsonSerializerOptions(JsonSerializerDefaults.Web)
+        {
+            Converters = { new JsonStringEnumConverter() }
+        });
+
+        Assert.NotNull(eligibility);
+        Assert.Equal(session.Id, eligibility.SessionId);
+        Assert.True(eligibility.CanPush);
+        Assert.NotNull(eligibility.RemoteBranchState);
+        Assert.Equal("main", eligibility.RemoteBranchState.Branch);
+    }
+
+    [Fact]
     public async Task LaunchEndpointReturnsSessionMetadata()
     {
         string configurationPath = Path.Combine(CreateTemporaryDirectory(), "configuration.json");
@@ -1520,6 +1712,50 @@ public sealed class ExecutionSessionServiceTests
         return session;
     }
 
+    private static ExecutionSession CreatePushFailedSession(
+        ExecutionSession session,
+        DateTimeOffset attemptedAt,
+        string failureReason)
+    {
+        return new ExecutionSession
+        {
+            Id = session.Id,
+            RepositoryId = session.RepositoryId,
+            RepositoryPath = session.RepositoryPath,
+            MilestonePath = session.MilestonePath,
+            StartedAt = session.StartedAt,
+            CompletedAt = session.CompletedAt,
+            AcceptedAt = session.AcceptedAt,
+            RejectedAt = session.RejectedAt,
+            DecisionNote = session.DecisionNote,
+            LastActivityAt = attemptedAt,
+            State = session.State,
+            RepositoryState = RepositoryExecutionState.AwaitingPush,
+            ProviderName = session.ProviderName,
+            ProviderExecutablePath = session.ProviderExecutablePath,
+            ProviderProcessId = session.ProviderProcessId,
+            ProviderStartedAt = session.ProviderStartedAt,
+            PromptMetadata = session.PromptMetadata,
+            PromptManifest = session.PromptManifest,
+            RepositorySnapshot = session.RepositorySnapshot,
+            CommitPreparation = session.CommitPreparation,
+            CommitSha = session.CommitSha,
+            CommittedAt = session.CommittedAt,
+            CommitMessage = session.CommitMessage,
+            PreparationSnapshotId = session.PreparationSnapshotId,
+            PushAttemptedAt = attemptedAt,
+            PushedAt = session.PushedAt,
+            PushedCommitSha = session.PushedCommitSha,
+            PushRemoteName = session.PushRemoteName,
+            PushBranchName = session.PushBranchName,
+            PreviousHandoffContent = session.PreviousHandoffContent,
+            PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,
+            HandoffPath = session.HandoffPath,
+            FailureReason = failureReason,
+            Events = session.Events
+        };
+    }
+
     private static ExecutionSession CreateAwaitingAcceptanceSession(Repository repository, string milestonePath)
     {
         var sessionId = Guid.NewGuid();
@@ -1612,6 +1848,10 @@ public sealed class ExecutionSessionServiceTests
 
         public string? PushFailure { get; init; }
 
+        public int StatusAheadCount { get; init; }
+
+        public int StatusBehindCount { get; init; }
+
         public IReadOnlyList<string> LastCommittedPaths { get; private set; } = [];
 
         public string? LastPushedCommitSha { get; private set; }
@@ -1641,6 +1881,8 @@ public sealed class ExecutionSessionServiceTests
             return Task.FromResult(new RepositoryGitStatus
             {
                 Branch = "main",
+                AheadCount = StatusAheadCount,
+                BehindCount = StatusBehindCount,
                 DirtyState = dirtyState ?? new RepositoryDirtyState(),
                 CapturedAt = DateTimeOffset.UtcNow
             });

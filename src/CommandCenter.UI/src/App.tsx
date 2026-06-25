@@ -56,6 +56,7 @@ import {
   useExecutionDecisionInfluence,
   useExecutionContextPreview,
   useExecutionEvents,
+  useExecutionGitEligibility,
   useExecutionPromptManifest,
   useExecutionSession,
   useExecutionTransparency,
@@ -145,6 +146,8 @@ function App() {
   const [isCommitPreparationLoading, setIsCommitPreparationLoading] = useState(false)
   const [isCommitting, setIsCommitting] = useState(false)
   const [isPushing, setIsPushing] = useState(false)
+  const [latestPushAttemptSession, setLatestPushAttemptSession] =
+    useState<ExecutionSessionSummary | null>(null)
   const [isAdding, setIsAdding] = useState(false)
   const [removingRepositoryId, setRemovingRepositoryId] = useState<string | null>(null)
   const {
@@ -218,6 +221,10 @@ function App() {
     data: streamedExecutionEvents,
     error: executionEventsError,
   } = useExecutionEvents(executionSessionId)
+
+  useEffect(() => {
+    setLatestPushAttemptSession(null)
+  }, [executionSessionId])
   const {
     data: artifactContent,
     setData: setArtifactContent,
@@ -429,35 +436,39 @@ function App() {
     executionContext?.diagnostics.validationErrors.length === 0 &&
     !activeExecutionSummary &&
     !isStartingExecution
-  const executionDisplay = executionSummary
+  const pushedExecutionSummary =
+    latestPushAttemptSession?.sessionId === executionSummary?.sessionId
+      ? latestPushAttemptSession
+      : executionSummary
+  const executionDisplay = pushedExecutionSummary
     ? {
-        sessionId: executionSummary.sessionId,
-        milestonePath: executionSummary.milestonePath,
-        state: selectedExecutionStatus?.state ?? executionSummary.state,
-        repositoryState: selectedExecutionStatus?.repositoryState ?? executionSummary.repositoryState,
-        startedAt: selectedExecutionStatus?.startedAt ?? executionSummary.startedAt,
-        completedAt: selectedExecutionStatus?.completedAt ?? executionSummary.completedAt,
-        duration: selectedExecutionStatus?.duration ?? executionSummary.duration,
-        acceptedAt: selectedExecutionStatus?.acceptedAt ?? executionSummary.acceptedAt,
-        rejectedAt: selectedExecutionStatus?.rejectedAt ?? executionSummary.rejectedAt,
-        decisionNote: selectedExecutionStatus?.decisionNote ?? executionSummary.decisionNote,
-        lastActivityAt: selectedExecutionStatus?.lastActivityAt ?? executionSummary.lastActivityAt,
-        providerName: selectedExecutionStatus?.providerName ?? executionSummary.providerName,
+        sessionId: pushedExecutionSummary.sessionId,
+        milestonePath: pushedExecutionSummary.milestonePath,
+        state: selectedExecutionStatus?.state ?? pushedExecutionSummary.state,
+        repositoryState: selectedExecutionStatus?.repositoryState ?? pushedExecutionSummary.repositoryState,
+        startedAt: selectedExecutionStatus?.startedAt ?? pushedExecutionSummary.startedAt,
+        completedAt: selectedExecutionStatus?.completedAt ?? pushedExecutionSummary.completedAt,
+        duration: selectedExecutionStatus?.duration ?? pushedExecutionSummary.duration,
+        acceptedAt: selectedExecutionStatus?.acceptedAt ?? pushedExecutionSummary.acceptedAt,
+        rejectedAt: selectedExecutionStatus?.rejectedAt ?? pushedExecutionSummary.rejectedAt,
+        decisionNote: selectedExecutionStatus?.decisionNote ?? pushedExecutionSummary.decisionNote,
+        lastActivityAt: selectedExecutionStatus?.lastActivityAt ?? pushedExecutionSummary.lastActivityAt,
+        providerName: selectedExecutionStatus?.providerName ?? pushedExecutionSummary.providerName,
         providerExecutablePath:
-          selectedExecutionStatus?.providerExecutablePath ?? executionSummary.providerExecutablePath,
-        providerProcessId: selectedExecutionStatus?.providerProcessId ?? executionSummary.providerProcessId,
-        providerStartedAt: selectedExecutionStatus?.providerStartedAt ?? executionSummary.providerStartedAt,
-        handoffPath: selectedExecutionStatus?.handoffPath ?? executionSummary.handoffPath,
-        commitSha: executionSummary.commitSha,
-        committedAt: executionSummary.committedAt,
-        commitMessage: executionSummary.commitMessage,
-        preparationSnapshotId: executionSummary.preparationSnapshotId,
-        pushAttemptedAt: executionSummary.pushAttemptedAt,
-        pushedAt: executionSummary.pushedAt,
-        pushedCommitSha: executionSummary.pushedCommitSha,
-        pushRemoteName: executionSummary.pushRemoteName,
-        pushBranchName: executionSummary.pushBranchName,
-        failureReason: selectedExecutionStatus?.failureReason ?? executionSummary.failureReason,
+          selectedExecutionStatus?.providerExecutablePath ?? pushedExecutionSummary.providerExecutablePath,
+        providerProcessId: selectedExecutionStatus?.providerProcessId ?? pushedExecutionSummary.providerProcessId,
+        providerStartedAt: selectedExecutionStatus?.providerStartedAt ?? pushedExecutionSummary.providerStartedAt,
+        handoffPath: selectedExecutionStatus?.handoffPath ?? pushedExecutionSummary.handoffPath,
+        commitSha: pushedExecutionSummary.commitSha,
+        committedAt: pushedExecutionSummary.committedAt,
+        commitMessage: pushedExecutionSummary.commitMessage,
+        preparationSnapshotId: pushedExecutionSummary.preparationSnapshotId,
+        pushAttemptedAt: pushedExecutionSummary.pushAttemptedAt,
+        pushedAt: pushedExecutionSummary.pushedAt,
+        pushedCommitSha: pushedExecutionSummary.pushedCommitSha,
+        pushRemoteName: pushedExecutionSummary.pushRemoteName,
+        pushBranchName: pushedExecutionSummary.pushBranchName,
+        failureReason: selectedExecutionStatus?.failureReason ?? pushedExecutionSummary.failureReason,
       }
     : null
   const canReviewGeneratedHandoff =
@@ -480,22 +491,32 @@ function App() {
       : null,
   )
   const gitStatusPathCount = countDirtyPaths(gitStatus?.dirtyState ?? null)
+  const selectedCommitPathList = useMemo(
+    () => [...selectedCommitPaths].sort((left, right) => left.localeCompare(right)),
+    [selectedCommitPaths],
+  )
   const selectedCommitScopeItems =
     commitPreparation?.scopeItems.filter((item) => selectedCommitPaths.has(item.path)) ?? []
   const commitPreparationSessionId = commitPreparation?.sessionId ?? null
   const isCommitPreparationCurrent =
     commitPreparationSessionId === executionSessionId &&
     currentExecutionState === 'AwaitingCommit'
-  const canCommitPreparedScope =
-    Boolean(isCommitPreparationCurrent && commitPreparation) &&
-    selectedCommitScopeItems.length > 0 &&
-    commitMessage.trim().length > 0 &&
-    !isCommitting
-  const canPushExecution =
-    Boolean(executionSessionId) &&
-    currentExecutionState === 'AwaitingPush' &&
-    Boolean(executionDisplay?.commitSha) &&
-    !isPushing
+  const {
+    data: gitEligibility,
+    isLoading: isGitEligibilityLoading,
+    error: gitEligibilityError,
+    refresh: refreshGitEligibility,
+  } = useExecutionGitEligibility({
+    sessionId:
+      executionSessionId &&
+      (currentExecutionState === 'AwaitingCommit' || currentExecutionState === 'AwaitingPush')
+        ? executionSessionId
+        : null,
+    commitMessage,
+    selectedPaths: selectedCommitPathList,
+  })
+  const canCommitPreparedScope = Boolean(gitEligibility?.canCommit) && !isCommitting
+  const canPushExecution = Boolean(gitEligibility?.canPush) && !isPushing
   const executionContextSizeStatus = !executionContext
     ? 'Not available'
     : executionContext.diagnostics.hardLimitExceeded
@@ -657,6 +678,7 @@ function App() {
             .map((item) => item.path),
         ),
       )
+      await refreshGitEligibility()
     } catch (prepareError) {
       setCommitPreparation(null)
       setSelectedCommitPaths(new Set())
@@ -665,7 +687,7 @@ function App() {
     } finally {
       setIsCommitPreparationLoading(false)
     }
-  }, [])
+  }, [refreshGitEligibility])
 
   function setCommitPathSelection(path: string, isSelected: boolean) {
     setSelectedCommitPaths((currentPaths) => {
@@ -731,9 +753,25 @@ function App() {
     setError(null)
     setMessage(null)
     try {
-      const summary = await pushExecutionCommand(executionSessionId)
+      const result = await pushExecutionCommand(executionSessionId)
+      if (result.session) {
+        setLatestPushAttemptSession(result.session)
+      }
+
+      if (!result.succeeded) {
+        setError(result.error ?? 'Push failed.')
+        if (selectedRepository) {
+          const nextWorkspace = await refreshRepositoryWorkspace(selectedRepository.repository.id)
+          setWorkspace(nextWorkspace)
+          await refreshGitStatus()
+          await refreshWorkflowProjection()
+        }
+        return
+      }
+
+      const summary = result.session
       setMessage(
-        summary.pushedCommitSha
+        summary?.pushedCommitSha
           ? `Pushed ${summary.pushedCommitSha}. Repository is ready.`
           : 'Push completed. Repository is ready.',
       )
@@ -2002,13 +2040,21 @@ function App() {
                     isCommitPreparationLoading={isCommitPreparationLoading}
                     isCommitting={isCommitting}
                     isPushing={isPushing}
-                    onRefresh={() =>
-                      currentExecutionState === 'AwaitingCommit' && executionSessionId
-                        ? void loadCommitPreparation(executionSessionId)
-                        : selectedRepository
-                          ? void refreshGitStatus()
-                          : undefined
-                    }
+                    gitEligibility={gitEligibility}
+                    isGitEligibilityLoading={isGitEligibilityLoading}
+                    gitEligibilityError={gitEligibilityError}
+                    onRefresh={() => {
+                      if (currentExecutionState === 'AwaitingCommit' && executionSessionId) {
+                        void loadCommitPreparation(executionSessionId)
+                        void refreshGitEligibility()
+                        return
+                      }
+
+                      if (selectedRepository) {
+                        void refreshGitStatus()
+                        void refreshGitEligibility()
+                      }
+                    }}
                     onCommitMessageChange={setCommitMessage}
                     onSelectAllCommitPaths={selectAllCommitPaths}
                     onSelectNoCommitPaths={selectNoCommitPaths}

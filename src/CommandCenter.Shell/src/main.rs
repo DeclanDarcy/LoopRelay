@@ -174,6 +174,24 @@ struct CommitRequest {
 #[serde(rename_all = "camelCase")]
 struct PushRequest {}
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ExecutionGitActionEligibilityRequest {
+    commit_message: Option<String>,
+    selected_paths: Vec<String>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PushAttemptResult {
+    succeeded: bool,
+    retryable: bool,
+    error: Option<String>,
+    attempted_at: Option<String>,
+    session: Option<ExecutionSessionSummary>,
+    diagnostics: Vec<String>,
+}
+
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Artifact {
@@ -2411,6 +2429,22 @@ fn prepare_commit(session_id: String) -> Result<CommitPreparation, String> {
 }
 
 #[tauri::command]
+fn get_execution_git_eligibility(
+    session_id: String,
+    commit_message: Option<String>,
+    selected_paths: Vec<String>,
+) -> Result<Value, String> {
+    backend_post_json_value(
+        &format!("/api/execution-sessions/{session_id}/git/eligibility"),
+        &ExecutionGitActionEligibilityRequest {
+            commit_message,
+            selected_paths,
+        },
+        "execution git eligibility lookup failed",
+    )
+}
+
+#[tauri::command]
 fn commit_execution(
     session_id: String,
     message: String,
@@ -2438,7 +2472,7 @@ fn commit_execution(
 }
 
 #[tauri::command]
-fn push_execution(session_id: String) -> Result<ExecutionSessionSummary, String> {
+fn push_execution(session_id: String) -> Result<PushAttemptResult, String> {
     let client = reqwest::blocking::Client::new();
     let response = client
         .post(format!(
@@ -2448,11 +2482,23 @@ fn push_execution(session_id: String) -> Result<ExecutionSessionSummary, String>
         .send()
         .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
+    let status = response.status();
+    let body = response.text().map_err(|error| error.to_string())?;
+    if status.is_success() {
+        return serde_json::from_str(&body).map_err(|error| error.to_string());
     }
 
-    response_error(response, "push failed")
+    if status == reqwest::StatusCode::CONFLICT {
+        if let Ok(result) = serde_json::from_str::<PushAttemptResult>(&body) {
+            return Ok(result);
+        }
+    }
+
+    let message = serde_json::from_str::<ErrorResponse>(&body)
+        .map(|response| response.error)
+        .unwrap_or_else(|_| format!("push failed with status {status}"));
+
+    Err(message)
 }
 
 #[tauri::command]
@@ -2912,6 +2958,7 @@ fn main() {
             start_execution,
             get_active_execution,
             get_git_status,
+            get_execution_git_eligibility,
             prepare_commit,
             commit_execution,
             push_execution,

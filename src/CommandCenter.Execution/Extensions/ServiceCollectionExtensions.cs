@@ -14,6 +14,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IExecutionPromptBuilder, ExecutionPromptBuilder>();
         services.AddSingleton<IExecutionSessionStore, FileSystemExecutionSessionStore>();
         services.AddSingleton<IExecutionSessionService, ExecutionSessionService>();
+        services.AddSingleton<IExecutionGitEligibilityService, ExecutionGitEligibilityService>();
         services.AddHostedService<ExecutionSessionRecoveryHostedService>();
         services.AddSingleton<ExecutionEventRetentionPolicy>();
         services.AddSingleton<IExecutionMonitoringService, ExecutionMonitoringService>();

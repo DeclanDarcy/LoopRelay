@@ -49,6 +49,56 @@ export type ExecutionSession = ExecutionSessionSummary & {
   repositoryPath: string
 }
 
+export type PushAttemptResult = {
+  succeeded: boolean
+  retryable: boolean
+  error: string | null
+  attemptedAt: string | null
+  session: ExecutionSessionSummary | null
+  diagnostics: string[]
+}
+
+export type ExecutionGitActionEligibilityRequest = {
+  commitMessage?: string | null
+  selectedPaths?: string[]
+}
+
+export type ExecutionGitRemoteBranchState = {
+  branch: string
+  aheadCount: number
+  behindCount: number
+  hasUnpushedChanges: boolean
+  hasRemoteDivergence: boolean
+  capturedAt: string
+}
+
+export type ExecutionGitActionEligibility = {
+  sessionId: string
+  sessionExists: boolean
+  repositoryState: RepositoryExecutionState
+  commitPreparationLoaded: boolean
+  commitPreparationCurrent: boolean
+  commitPreparationId: string | null
+  preparedStatusSnapshotId: string | null
+  currentStatusSnapshotId: string | null
+  selectedPathCount: number
+  preparedPathCount: number
+  unknownSelectedPaths: string[]
+  commitMessagePresent: boolean
+  repositoryAllowsCommit: boolean
+  awaitingPush: boolean
+  commitShaExists: boolean
+  commitSha: string | null
+  previousPushAttemptedAt: string | null
+  previousPushFailure: string | null
+  remoteBranchState: ExecutionGitRemoteBranchState | null
+  canCommit: boolean
+  canPush: boolean
+  commitDisabledReasons: string[]
+  pushDisabledReasons: string[]
+  diagnostics: string[]
+}
+
 export type ExecutionPromptManifestArtifact = {
   role: string
   relativePath: string

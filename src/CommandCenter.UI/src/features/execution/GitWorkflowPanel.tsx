@@ -3,6 +3,7 @@ import { repositoryExecutionStatus } from '../../lib/status'
 import type {
   CommitPreparation,
   CommitScopeItem,
+  ExecutionGitActionEligibility,
   ExecutionSessionSummary,
   RepositoryExecutionState,
   RepositoryGitStatus,
@@ -11,6 +12,7 @@ import {
   CommitPreparationSummary,
   GitStatusDetails,
   PushReviewSummary,
+  GitEligibilitySummary,
 } from './GitWorkflowEvidence'
 
 type GitWorkflowPanelProps = {
@@ -26,6 +28,9 @@ type GitWorkflowPanelProps = {
   commitMessage: string
   canCommitPreparedScope: boolean
   canPushExecution: boolean
+  gitEligibility: ExecutionGitActionEligibility | null
+  isGitEligibilityLoading: boolean
+  gitEligibilityError: string | null
   hasRefreshTarget: boolean
   isGitStatusLoading: boolean
   isCommitPreparationLoading: boolean
@@ -53,6 +58,9 @@ export function GitWorkflowPanel({
   commitMessage,
   canCommitPreparedScope,
   canPushExecution,
+  gitEligibility,
+  isGitEligibilityLoading,
+  gitEligibilityError,
   hasRefreshTarget,
   isGitStatusLoading,
   isCommitPreparationLoading,
@@ -94,6 +102,12 @@ export function GitWorkflowPanel({
             <CommitPreparationSummary
               preparation={commitPreparation}
               selectedPathCount={selectedCommitScopeItems.length}
+            />
+            <GitEligibilitySummary
+              eligibility={gitEligibility}
+              mode="commit"
+              isLoading={isGitEligibilityLoading}
+              error={gitEligibilityError}
             />
             <label className="commit-message-editor">
               <span>Commit message</span>
@@ -160,6 +174,12 @@ export function GitWorkflowPanel({
       ) : currentExecutionState === 'AwaitingPush' && execution?.commitSha ? (
         <div className="commit-review-panel">
           <PushReviewSummary execution={execution} gitStatus={gitStatus} />
+          <GitEligibilitySummary
+            eligibility={gitEligibility}
+            mode="push"
+            isLoading={isGitEligibilityLoading}
+            error={gitEligibilityError}
+          />
           <div className="commit-scope-toolbar">
             <button
               type="button"

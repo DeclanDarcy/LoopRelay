@@ -1,10 +1,12 @@
 import type {
   CommitPreparation,
   ExecutionContextPreview,
+  ExecutionGitActionEligibility,
   ExecutionPromptManifest,
   ExecutionSessionSummary,
   ExecutionSessionTransparency,
   ExecutionStatus,
+  PushAttemptResult,
 } from '../types'
 import { invokeCommand } from './tauri'
 
@@ -63,6 +65,18 @@ export function prepareCommit(sessionId: string) {
   return invokeCommand<CommitPreparation>('prepare_commit', { sessionId })
 }
 
+export function getExecutionGitEligibility(
+  sessionId: string,
+  commitMessage: string | null,
+  selectedPaths: string[],
+) {
+  return invokeCommand<ExecutionGitActionEligibility>('get_execution_git_eligibility', {
+    sessionId,
+    commitMessage,
+    selectedPaths,
+  })
+}
+
 export function commitExecution(
   sessionId: string,
   message: string,
@@ -78,5 +92,5 @@ export function commitExecution(
 }
 
 export function pushExecution(sessionId: string) {
-  return invokeCommand<ExecutionSessionSummary>('push_execution', { sessionId })
+  return invokeCommand<PushAttemptResult>('push_execution', { sessionId })
 }

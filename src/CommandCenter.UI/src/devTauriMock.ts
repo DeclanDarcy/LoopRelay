@@ -37,11 +37,13 @@ import type {
   ExecutionDecisionProjection,
   ExecutionContextPreview,
   ExecutionEvent,
+  ExecutionGitActionEligibility,
   ExecutionPromptManifest,
   ExecutionSessionState,
   ExecutionSession,
   ExecutionSessionSummary,
   ExecutionSessionTransparency,
+  PushAttemptResult,
   ManualReasoningCaptureCommand,
   ManualReasoningCaptureTemplate,
   OperationalContextItem,
@@ -3482,6 +3484,88 @@ function createCommitPreparation(state: MockState, sessionId: string): CommitPre
   }
 }
 
+function createExecutionGitEligibility(
+  state: MockState,
+  args: InvokeArgs,
+): ExecutionGitActionEligibility {
+  const sessionId = getStringArg(args, 'sessionId')
+  const session = state.sessions[sessionId]
+  if (!session) {
+    throw new Error('Execution session was not found.')
+  }
+
+  const selectedPaths = getStringArrayArg(args, 'selectedPaths')
+  const commitMessage = typeof args?.commitMessage === 'string' ? args.commitMessage : ''
+  const preparation =
+    session.repositoryState === 'AwaitingCommit' ? createCommitPreparation(state, sessionId) : null
+  const preparedPaths = new Set(preparation?.scopeItems.map((item) => item.path) ?? [])
+  const unknownSelectedPaths = selectedPaths.filter((path) => !preparedPaths.has(path))
+  const status = createGitStatus(state, session.repositoryId)
+  const commitDisabledReasons: string[] = []
+  const pushDisabledReasons: string[] = []
+  const repositoryAllowsCommit = session.repositoryState === 'AwaitingCommit'
+  const commitPreparationLoaded = preparation !== null
+  const commitPreparationCurrent = repositoryAllowsCommit && commitPreparationLoaded
+  const commitMessagePresent = commitMessage.trim().length > 0
+  const awaitingPush = session.repositoryState === 'AwaitingPush'
+  const commitShaExists = Boolean(session.commitSha)
+
+  if (!repositoryAllowsCommit) {
+    commitDisabledReasons.push('Repository is not awaiting commit.')
+  }
+  if (!commitPreparationLoaded) {
+    commitDisabledReasons.push('Commit preparation is not loaded.')
+  }
+  if (selectedPaths.length === 0) {
+    commitDisabledReasons.push('At least one path must be selected for commit.')
+  }
+  if (unknownSelectedPaths.length > 0) {
+    commitDisabledReasons.push('Selected paths include entries outside the prepared commit scope.')
+  }
+  if (!commitMessagePresent) {
+    commitDisabledReasons.push('Commit message is required.')
+  }
+  if (!awaitingPush) {
+    pushDisabledReasons.push('Repository is not awaiting push.')
+  }
+  if (!commitShaExists) {
+    pushDisabledReasons.push('Committed execution SHA is not recorded.')
+  }
+  return {
+    sessionId,
+    sessionExists: true,
+    repositoryState: session.repositoryState,
+    commitPreparationLoaded,
+    commitPreparationCurrent,
+    commitPreparationId: preparation?.id ?? null,
+    preparedStatusSnapshotId: preparation?.statusSnapshot.id ?? null,
+    currentStatusSnapshotId: preparation?.statusSnapshot.id ?? null,
+    selectedPathCount: selectedPaths.length,
+    preparedPathCount: preparation?.scopeItems.length ?? 0,
+    unknownSelectedPaths,
+    commitMessagePresent,
+    repositoryAllowsCommit,
+    awaitingPush,
+    commitShaExists,
+    commitSha: session.commitSha,
+    previousPushAttemptedAt: session.pushAttemptedAt,
+    previousPushFailure: session.failureReason,
+    remoteBranchState: {
+      branch: status.branch,
+      aheadCount: status.aheadCount,
+      behindCount: status.behindCount,
+      hasUnpushedChanges: status.aheadCount > 0,
+      hasRemoteDivergence: status.behindCount > 0,
+      capturedAt: status.capturedAt,
+    },
+    canCommit: commitDisabledReasons.length === 0,
+    canPush: pushDisabledReasons.length === 0,
+    commitDisabledReasons,
+    pushDisabledReasons,
+    diagnostics: [],
+  }
+}
+
 function clone<T>(value: T): T {
   return structuredClone(value)
 }
@@ -3808,7 +3892,7 @@ function commitExecution(state: MockState, args: InvokeArgs): ExecutionSessionSu
   return summary
 }
 
-function pushExecution(state: MockState, args: InvokeArgs): ExecutionSessionSummary {
+function pushExecution(state: MockState, args: InvokeArgs): PushAttemptResult {
   const sessionId = getStringArg(args, 'sessionId')
   const session = state.sessions[sessionId]
   if (!session) {
@@ -3844,7 +3928,14 @@ function pushExecution(state: MockState, args: InvokeArgs): ExecutionSessionSumm
     summary,
     ...workspace.executionHistory.filter((session) => session.sessionId !== sessionId),
   ]
-  return summary
+  return {
+    succeeded: true,
+    retryable: false,
+    error: null,
+    attemptedAt: timestamp,
+    session: summary,
+    diagnostics: [],
+  }
 }
 
 function generateOperationalContextProposal(
@@ -4749,6 +4840,8 @@ export function installDevTauriMock() {
           return clone(createGitStatus(state, getStringArg(args, 'repositoryId')))
         case 'prepare_commit':
           return clone(createCommitPreparation(state, getStringArg(args, 'sessionId')))
+        case 'get_execution_git_eligibility':
+          return clone(createExecutionGitEligibility(state, args))
         case 'commit_execution':
           return clone(commitExecution(state, args))
         case 'push_execution':

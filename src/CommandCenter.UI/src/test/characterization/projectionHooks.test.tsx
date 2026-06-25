@@ -7,6 +7,7 @@ import {
   useContinuityReports,
   useExecutionContextPreview,
   useExecutionEvents,
+  useExecutionGitEligibility,
   useExecutionPromptManifest,
   useExecutionSession,
   useExecutionTransparency,
@@ -16,6 +17,7 @@ import {
 } from '../../hooks'
 import type {
   ExecutionContextPreview,
+  ExecutionGitActionEligibility,
   ExecutionPromptManifest,
   ExecutionSessionTransparency,
   ExecutionStatus,
@@ -321,6 +323,35 @@ function createExecutionTransparency(sessionId = 'session-alpha'): ExecutionSess
       eventRetentionTrimmingDetected: false,
       monitoringWarnings: [],
     },
+  }
+}
+
+function createExecutionGitEligibility(sessionId = 'session-alpha'): ExecutionGitActionEligibility {
+  return {
+    sessionId,
+    sessionExists: true,
+    repositoryState: 'AwaitingCommit',
+    commitPreparationLoaded: true,
+    commitPreparationCurrent: true,
+    commitPreparationId: 'prep-alpha',
+    preparedStatusSnapshotId: 'snapshot-alpha',
+    currentStatusSnapshotId: 'snapshot-alpha',
+    selectedPathCount: 1,
+    preparedPathCount: 2,
+    unknownSelectedPaths: [],
+    commitMessagePresent: true,
+    repositoryAllowsCommit: true,
+    awaitingPush: false,
+    commitShaExists: false,
+    commitSha: null,
+    previousPushAttemptedAt: null,
+    previousPushFailure: null,
+    remoteBranchState: null,
+    canCommit: true,
+    canPush: false,
+    commitDisabledReasons: [],
+    pushDisabledReasons: ['Repository is not awaiting push.'],
+    diagnostics: [],
   }
 }
 
@@ -669,6 +700,27 @@ describe('projection hook characterization', () => {
     await waitFor(() => expect(result.current.data).toBe(transparency))
     expect(invoke).toHaveBeenCalledWith('get_execution_transparency', {
       sessionId: 'session-alpha',
+    }, undefined)
+  })
+
+  it('loads execution git eligibility through the shell detail command', async () => {
+    const eligibility = createExecutionGitEligibility('session-alpha')
+    const invoke = vi.fn().mockResolvedValue(eligibility)
+    installInvokeMock(invoke)
+
+    const { result } = renderHook(() =>
+      useExecutionGitEligibility({
+        sessionId: 'session-alpha',
+        commitMessage: 'Commit message',
+        selectedPaths: ['src/App.tsx'],
+      }),
+    )
+
+    await waitFor(() => expect(result.current.data).toBe(eligibility))
+    expect(invoke).toHaveBeenCalledWith('get_execution_git_eligibility', {
+      sessionId: 'session-alpha',
+      commitMessage: 'Commit message',
+      selectedPaths: ['src/App.tsx'],
     }, undefined)
   })
 

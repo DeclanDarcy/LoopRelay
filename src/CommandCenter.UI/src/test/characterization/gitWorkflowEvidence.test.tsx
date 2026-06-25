@@ -2,10 +2,16 @@ import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   CommitPreparationSummary,
+  GitEligibilitySummary,
   GitStatusDetails,
   PushReviewSummary,
 } from '../../features/execution/GitWorkflowEvidence'
-import type { CommitPreparation, ExecutionSessionSummary, RepositoryGitStatus } from '../../types'
+import type {
+  CommitPreparation,
+  ExecutionGitActionEligibility,
+  ExecutionSessionSummary,
+  RepositoryGitStatus,
+} from '../../types'
 
 afterEach(() => {
   cleanup()
@@ -86,6 +92,40 @@ const executionSummary: ExecutionSessionSummary = {
   failureReason: null,
 }
 
+const gitEligibility: ExecutionGitActionEligibility = {
+  sessionId: 'session-1',
+  sessionExists: true,
+  repositoryState: 'AwaitingPush',
+  commitPreparationLoaded: true,
+  commitPreparationCurrent: false,
+  commitPreparationId: 'prep-1',
+  preparedStatusSnapshotId: 'snapshot-1',
+  currentStatusSnapshotId: 'snapshot-2',
+  selectedPathCount: 1,
+  preparedPathCount: 2,
+  unknownSelectedPaths: ['unknown.ts'],
+  commitMessagePresent: false,
+  repositoryAllowsCommit: false,
+  awaitingPush: true,
+  commitShaExists: true,
+  commitSha: 'abc123',
+  previousPushAttemptedAt: '2026-06-21T16:30:00.000Z',
+  previousPushFailure: 'git push failed: rejected by remote',
+  remoteBranchState: {
+    branch: 'main',
+    aheadCount: 1,
+    behindCount: 1,
+    hasUnpushedChanges: true,
+    hasRemoteDivergence: true,
+    capturedAt: '2026-06-21T16:31:00.000Z',
+  },
+  canCommit: false,
+  canPush: false,
+  commitDisabledReasons: ['Commit preparation is stale.', 'Commit message is required.'],
+  pushDisabledReasons: ['Remote branch has new commits; review branch state before pushing.'],
+  diagnostics: ['Commit status snapshot unavailable: git status failed'],
+}
+
 describe('git workflow evidence rendering characterization', () => {
   it('renders commit preparation metadata with current labels and fallbacks', () => {
     render(<CommitPreparationSummary preparation={commitPreparation} selectedPathCount={1} />)
@@ -108,7 +148,41 @@ describe('git workflow evidence rendering characterization', () => {
     expect(screen.getByText('Branch: main')).toBeInTheDocument()
     expect(screen.getByText('Ahead: 2')).toBeInTheDocument()
     expect(screen.getByText('State: Awaiting push')).toBeInTheDocument()
+    expect(screen.getByText('Last push attempt: Not recorded')).toBeInTheDocument()
+    expect(screen.getByText('Previous push failure: None recorded')).toBeInTheDocument()
     expect(screen.getByText(/^Committed:/)).toBeInTheDocument()
+  })
+
+  it('renders previous push failure and retry timestamp', () => {
+    render(
+      <PushReviewSummary
+        execution={{
+          ...executionSummary,
+          lastActivityAt: '2026-06-21T16:30:00.000Z',
+          pushAttemptedAt: '2026-06-21T16:30:00.000Z',
+          failureReason: 'git push failed: rejected by remote',
+        }}
+        gitStatus={dirtyGitStatus}
+      />,
+    )
+
+    expect(screen.getByText(/^Last push attempt:/)).toBeInTheDocument()
+    expect(screen.getByText('Previous push failure: git push failed: rejected by remote')).toBeInTheDocument()
+  })
+
+  it('renders backend-owned git eligibility and disabled reasons', () => {
+    render(<GitEligibilitySummary eligibility={gitEligibility} mode="push" />)
+
+    expect(screen.getByLabelText('Git eligibility')).toBeInTheDocument()
+    expect(screen.getByText('Eligibility: Blocked')).toBeInTheDocument()
+    expect(screen.getByText('Preparation current: No')).toBeInTheDocument()
+    expect(screen.getByText('Commit message: Missing')).toBeInTheDocument()
+    expect(screen.getByText('Previous push failure: git push failed: rejected by remote')).toBeInTheDocument()
+    expect(screen.getByText('Remote branch: main')).toBeInTheDocument()
+    expect(screen.getByText('Remote behind: 1')).toBeInTheDocument()
+    expect(screen.getByText('Remote branch has new commits; review branch state before pushing.')).toBeInTheDocument()
+    expect(screen.getByText('unknown.ts')).toBeInTheDocument()
+    expect(screen.getByText('Commit status snapshot unavailable: git status failed')).toBeInTheDocument()
   })
 
   it('renders push review branch and ahead fallbacks when git status is missing', () => {
