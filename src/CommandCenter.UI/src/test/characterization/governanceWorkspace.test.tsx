@@ -366,7 +366,7 @@ describe('governance workspace characterization', () => {
 
     const health = screen.getByLabelText('Governance health')
     expect(within(health).getByText('Lifecycle')).toBeInTheDocument()
-    expect(within(health).getByText('Transfer pressure is elevated.')).toBeInTheDocument()
+    expect(within(health).getAllByText('Transfer pressure is elevated.').length).toBeGreaterThan(0)
 
     const certification = screen.getByLabelText('Governance certification')
     expect(

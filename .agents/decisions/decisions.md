@@ -2,19 +2,15 @@
 
 ## Newly Authorized
 
-- Proceed next with Milestone 8 governance migration before decision migration.
-- Governance migration order:
-  - Certification
-  - Recovery
-  - Health/findings
-  - Eligible actions
-- Decision migration order:
-  - Certification
+- Proceed next with Milestone 8 decision-domain migration.
+- Keep the decision migration order:
+  - Decision certification
   - Governance explanation
   - Evidence
   - Diagnostics
   - Constraints
   - Eligible actions
-- Continue the established Milestone 8 discipline: adapters reorganize only, shared components render only, and backend projections remain authoritative.
-- Add adapter preservation tests for migrated domains that verify evidence, diagnostics, uncertainty, constraints, findings, and eligible actions are preserved.
-- Add adapter tests proving migrated adapters do not derive lifecycle state, certification result, recommendation score, health, governance outcome, or eligibility.
+- Continue treating shared explainability adapters as projection reshapers only.
+- Decision adapters must preserve authoritative evidence, diagnostics, constraints, uncertainty, certification findings, and eligible actions.
+- Decision adapters must not compute recommendation ranking, recommendation scores, quality, burden, governance outcome, execution influence, lifecycle legality, or certification result.
+- If backend certification findings later gain explicit per-finding result states, adapters should forward those authoritative values rather than inventing presentation semantics.

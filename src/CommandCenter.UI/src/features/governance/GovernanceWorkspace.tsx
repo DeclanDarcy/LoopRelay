@@ -1,5 +1,20 @@
 import { Button, EmptyState, Panel, SectionHeader, StatusBadge } from '../../components/design'
+import {
+  ActionEligibilityView,
+  CertificationFindingsView,
+  DiagnosticList,
+  HealthView,
+} from '../../components/explainability'
 import { formatDateTime } from '../../lib'
+import {
+  governanceCertificationDiagnosticsToExplanation,
+  governanceCertificationFindingsToExplanation,
+  governanceEligibilityFindingsToDiagnostics,
+  governanceEligibilityToActions,
+  governanceHealthDimensionsToExplanation,
+  governanceRecoveryDiagnosticsToExplanation,
+  governanceRecoveryFindingsToDiagnostics,
+} from '../../lib/explainability'
 import type {
   DecisionSessionCertificationReport,
   DecisionSessionCoherence,
@@ -284,6 +299,8 @@ export function DecisionSessionEligibilityPanel({
 }) {
   const recommended = transferRecommended(eligibility?.policyEvaluation ?? null)
   const executable = transferCanExecute(eligibility)
+  const actions = eligibility ? governanceEligibilityToActions(eligibility) : []
+  const findings = eligibility ? governanceEligibilityFindingsToDiagnostics(eligibility) : []
 
   return (
     <Panel className="governance-panel governance-eligibility-panel" aria-label="Governance transfer eligibility">
@@ -303,18 +320,16 @@ export function DecisionSessionEligibilityPanel({
             <span>Workflow gate: {workflow?.blockingGate ?? 'Not loaded'}</span>
             <span>Required action: {workflow?.requiredHumanAction || (workflow ? 'None' : 'Not loaded')}</span>
           </div>
-          <div className="governance-panel-list">
-            <h5>Findings</h5>
-            <ul>
-              {eligibility.findings.length === 0
-                ? listItems([], 'No eligibility findings projected.')
-                : eligibility.findings.map((finding) => (
-                    <li key={`${finding.code}-${finding.message}`}>
-                      {finding.severity}: {finding.message}
-                    </li>
-                  ))}
-            </ul>
-          </div>
+          <DiagnosticList
+            diagnostics={findings}
+            emptyLabel="No eligibility findings projected."
+            title="Findings"
+          />
+          <ActionEligibilityView
+            actions={actions}
+            emptyLabel="No transfer actions projected."
+            title="Eligible Actions"
+          />
         </div>
       ) : (
         <PanelState isLoading={isLoading} error={error} emptyLabel="No transfer eligibility projection is available." />
@@ -424,6 +439,8 @@ export function DecisionSessionRecoveryPanel({
   error?: string | null
 }) {
   const requiresIntervention = Boolean(recovery?.findings.some((finding) => finding.severity.toLowerCase() === 'error'))
+  const findings = governanceRecoveryFindingsToDiagnostics(recovery)
+  const recoveryDiagnostics = governanceRecoveryDiagnosticsToExplanation(diagnostics, recovery)
 
   return (
     <Panel className="governance-panel governance-recovery-panel" aria-label="Governance recovery">
@@ -450,18 +467,16 @@ export function DecisionSessionRecoveryPanel({
             <span>Discarded snapshots: {recovery?.findings.filter((finding) => finding.code.toLowerCase().includes('discard')).length ?? 0}</span>
             <span>Rebuilt snapshots: {recovery?.events.filter((event) => event.eventType.toLowerCase().includes('rebuilt')).length ?? 0}</span>
           </div>
-          <div className="governance-panel-list">
-            <h5>Findings</h5>
-            <ul>
-              {recovery?.findings.length
-                ? recovery.findings.map((finding) => (
-                    <li key={`${finding.code}-${finding.message}`}>
-                      {finding.severity}: {finding.message}
-                    </li>
-                  ))
-                : listItems([], 'No recovery findings projected.')}
-            </ul>
-          </div>
+          <DiagnosticList
+            diagnostics={findings}
+            emptyLabel="No recovery findings projected."
+            title="Findings"
+          />
+          <DiagnosticList
+            diagnostics={recoveryDiagnostics}
+            emptyLabel="No recovery diagnostics projected."
+            title="Diagnostics"
+          />
         </div>
       ) : (
         <PanelState isLoading={isLoading} error={error} emptyLabel="No recovery projection is available." />
@@ -482,24 +497,17 @@ export function DecisionSessionHealthPanel({
   error?: string | null
 }) {
   const dimensions = snapshot.health?.dimensions ?? summary?.healthDimensions ?? []
+  const healthDimensions = governanceHealthDimensionsToExplanation(dimensions)
 
   return (
     <Panel className="governance-panel governance-health-panel" aria-label="Governance health">
       <SectionHeader eyebrow="Health" title={`${dimensions.length} dimensions`} headingLevel={4} />
       {dimensions.length > 0 ? (
         <div className="governance-panel-stack">
-          {dimensions.map((dimension) => (
-            <article className="governance-dimension-card" key={dimension.name}>
-              <div className="governance-dimension-card-header">
-                <strong>{dimension.name}</strong>
-                <StatusBadge status={badge(dimension.status)} />
-              </div>
-              <div className="governance-panel-list">
-                <h5>Findings</h5>
-                <ul>{listItems(dimension.findings, 'No health findings projected.')}</ul>
-              </div>
-            </article>
-          ))}
+          <HealthView
+            dimensions={healthDimensions}
+            emptyLabel="No governance health dimensions are projected."
+          />
         </div>
       ) : (
         <PanelState isLoading={isLoading} error={error} emptyLabel="No governance health dimensions are projected." />
@@ -521,6 +529,9 @@ export function DecisionSessionCertificationPanel({
   isLoading?: boolean
   error?: string | null
 }) {
+  const findings = certification ? governanceCertificationFindingsToExplanation(certification) : []
+  const diagnostics = certification ? governanceCertificationDiagnosticsToExplanation(certification) : []
+
   return (
     <Panel className="governance-panel governance-certification-panel" aria-label="Governance certification">
       <SectionHeader
@@ -542,18 +553,14 @@ export function DecisionSessionCertificationPanel({
             <span>Findings: {certification.result.findings.length}</span>
             <span>Diagnostics: {certification.result.diagnostics.length}</span>
           </div>
-          <div className="governance-panel-list">
-            <h5>Findings</h5>
-            <ul>
-              {certification.result.findings.length === 0
-                ? listItems([], 'No certification findings projected.')
-                : certification.result.findings.map((finding) => (
-                    <li key={finding.id}>
-                      {finding.severity}: {finding.message}
-                    </li>
-                  ))}
-            </ul>
-          </div>
+          <CertificationFindingsView
+            findings={findings}
+            emptyLabel="No certification findings projected."
+          />
+          <DiagnosticList
+            diagnostics={diagnostics}
+            emptyLabel="No certification diagnostics projected."
+          />
         </div>
       ) : (
         <PanelState isLoading={isLoading} error={error} emptyLabel="No governance certification report is projected." />
