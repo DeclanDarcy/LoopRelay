@@ -45,6 +45,7 @@ Make the application feel unified, not merely smaller. Remove fragmentation so e
    - [x] diagnostics
    - [x] Unified selected-repository operational dashboard completed. See `./m9-operational-dashboard.md`.
 - [ ] Delete obsolete UI components, old workflow derivation, duplicate panels, temporary views, deprecated widgets, obsolete summaries, and unused client functions after replacements are tested.
+  - [x] Duplicate execution artifact diagnostics renderer removed in favor of the shared explainability diagnostics renderer. See `./m9-obsolete-ui-cleanup-artifact-diagnostics.md`.
 - [ ] Align terminology across statuses, health, diagnostics, recovery, certification, governance, execution, and explainability.
 
 ### Likely Cleanup Targets
@@ -54,6 +55,7 @@ Make the application feel unified, not merely smaller. Remove fragmentation so e
 - [ ] Duplicate decision recommendation, quality, governance, and influence summaries replaced by explainability components.
 - [ ] Duplicate health renderers replaced by shared `HealthView`.
 - [ ] Duplicate diagnostics renderers replaced by shared `DiagnosticList`.
+  - [x] Execution artifact diagnostics list local renderer removed; `DiagnosticList` is now the only visible artifact diagnostics renderer.
 
 ### Tests
 

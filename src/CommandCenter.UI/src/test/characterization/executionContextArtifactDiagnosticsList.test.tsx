@@ -24,7 +24,7 @@ function diagnostic(
 }
 
 describe('execution context artifact diagnostics rendering characterization', () => {
-  it('renders backend-provided paths and byte counts in provided order', () => {
+  it('renders backend-provided paths and byte counts through shared diagnostics in provided order', () => {
     render(
       <ExecutionContextArtifactDiagnosticsList
         diagnostics={[
@@ -40,18 +40,20 @@ describe('execution context artifact diagnostics rendering characterization', ()
       />,
     )
 
-    const diagnostics = document.querySelectorAll('.diagnostic-item span')
+    const diagnostics = document.querySelectorAll('.explainability-diagnostic-list > ul > li')
 
     expect(diagnostics).toHaveLength(2)
     expect(diagnostics[0]).toHaveTextContent(
-      '.agents/milestones/m0-frontend-foundations.md: 2048 bytes',
+      'Plan: .agents/milestones/m0-frontend-foundations.md',
     )
-    expect(diagnostics[1]).toHaveTextContent('.agents/operational_context.md: 512 bytes')
+    expect(diagnostics[0]).toHaveTextContent('2048 bytes')
+    expect(diagnostics[1]).toHaveTextContent('Plan: .agents/operational_context.md')
+    expect(diagnostics[1]).toHaveTextContent('512 bytes')
     expect(screen.getByText('Artifact Diagnostics')).toBeInTheDocument()
     expect(screen.getByText('Plan: .agents/milestones/m0-frontend-foundations.md')).toBeInTheDocument()
   })
 
-  it('preserves the warning and hard-limit suffix labels', () => {
+  it('preserves warning and hard-limit tones from the shared diagnostic adapter', () => {
     render(
       <ExecutionContextArtifactDiagnosticsList
         diagnostics={[
@@ -68,8 +70,10 @@ describe('execution context artifact diagnostics rendering characterization', ()
       />,
     )
 
-    expect(screen.getByText('.agents/warning.md: 128 bytes / warning')).toBeInTheDocument()
-    expect(screen.getByText('.agents/hard-limit.md: 128 bytes / hard limit')).toBeInTheDocument()
+    expect(screen.getByText('Plan: .agents/warning.md')).toBeInTheDocument()
+    expect(screen.getByText('warning')).toBeInTheDocument()
+    expect(screen.getByText('Plan: .agents/hard-limit.md')).toBeInTheDocument()
+    expect(screen.getByText('danger')).toBeInTheDocument()
   })
 
   it('renders an empty diagnostic list without adding fallback interpretation', () => {

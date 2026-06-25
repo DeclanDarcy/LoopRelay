@@ -16,25 +16,6 @@ export function ExecutionContextArtifactDiagnosticsList({
         title="Artifact Diagnostics"
         emptyLabel="No artifact diagnostics recorded."
       />
-      {diagnostics.map((diagnostic) => {
-        const sizeStatus = diagnostic.hardLimitExceeded
-          ? ' / hard limit'
-          : diagnostic.warningThresholdExceeded
-            ? ' / warning'
-            : ''
-
-        return (
-          <div className="diagnostic-item" key={diagnostic.relativePath}>
-            <span>
-              {diagnostic.relativePath}: {diagnostic.byteCount} bytes{sizeStatus}
-            </span>
-            <small>
-              {diagnostic.characterCount} characters / warning{' '}
-              {diagnostic.warningThresholdBytes} bytes / hard {diagnostic.hardLimitBytes} bytes
-            </small>
-          </div>
-        )
-      })}
     </div>
   )
 }
