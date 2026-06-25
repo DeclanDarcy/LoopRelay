@@ -2,9 +2,9 @@
 
 ## Newly Authorized
 
-- Begin the Milestone 7 UI phase now that backend operational evolution projection is stable.
-- Render backend-owned operational evolution directly in continuity and operational-context UI surfaces.
-- Show modified count, identity basis, previous state, current state, modification reason, and supporting evidence from backend projections.
-- Structure continuity UI presentation around semantic outcome groups: modified, added, removed, resolved, lost, and preserved.
-- Keep modification identity authority centralized in `IUnderstandingDiffService`; UI, diagnostics, and certification must consume identity basis and evidence without reinterpreting identity.
-- Do not introduce frontend ownership of continuity semantics or premature shared explainability abstractions during this UI slice.
+- Continue Milestone 7 with grouped continuity diagnostics as the next highest-leverage UI work.
+- Render grouped continuity diagnostics directly from backend diagnostic categories.
+- Surface compression diagnostics and operational evolution diagnostics without synthesizing new meaning in the UI.
+- Keep diagnostic grouping, severity, categorization, and interpretation backend-authored.
+- Add characterization tests proving the UI renders backend diagnostic structures verbatim and does not infer grouping, compression classifications, or evolution semantics.
+- Continue deferring shared explainability abstractions until Milestone 8.

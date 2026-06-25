@@ -2250,6 +2250,87 @@ button:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.semantic-change-groups {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.semantic-change-groups h6 {
+  margin: 0;
+  color: var(--fg-default);
+  font-size: 0.86rem;
+  letter-spacing: 0;
+}
+
+.semantic-change-groups ul {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.semantic-change-item {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--bg-inset);
+  color: var(--fg-muted);
+  font-size: 0.84rem;
+  overflow-wrap: anywhere;
+}
+
+.semantic-change-item strong {
+  color: var(--fg-default);
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.semantic-change-metadata {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+}
+
+.semantic-change-metadata div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.semantic-change-metadata dt,
+.semantic-change-metadata dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.semantic-change-metadata dt {
+  color: var(--fg-subtle);
+  font-size: 0.72rem;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.semantic-change-metadata dd {
+  color: var(--fg-muted);
+}
+
+.semantic-change-evidence {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+}
+
 .commit-review-panel,
 .commit-message-editor,
 .proposal-editor,
@@ -3043,6 +3124,7 @@ button:focus-visible {
 
   .context-summary,
   .context-columns,
+  .semantic-change-metadata,
   .diagnostic-list,
   .reasoning-grid,
   .reasoning-graph-filters,

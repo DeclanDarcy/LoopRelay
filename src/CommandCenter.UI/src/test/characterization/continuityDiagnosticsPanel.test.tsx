@@ -20,7 +20,7 @@ function createDiagnostics(
     averageBytesPerRevision: 80.6,
     architectureTrend: {
       addedCount: 0,
-      modifiedCount: 0,
+      modifiedCount: 2,
       removedCount: 0,
       resolvedCount: 0,
       lostCount: 1,
@@ -34,7 +34,7 @@ function createDiagnostics(
     },
     decisionTrend: {
       addedCount: 3,
-      modifiedCount: 0,
+      modifiedCount: 19,
       removedCount: 4,
       resolvedCount: 0,
       lostCount: 5,
@@ -48,7 +48,7 @@ function createDiagnostics(
     },
     openQuestionTrend: {
       addedCount: 15,
-      modifiedCount: 0,
+      modifiedCount: 20,
       removedCount: 0,
       resolvedCount: 7,
       lostCount: 8,
@@ -61,12 +61,12 @@ function createDiagnostics(
       lostCount: 10,
     },
     operationalEvolution: {
-      addedCount: 0,
-      modifiedCount: 0,
-      removedCount: 0,
-      preservedCount: 0,
-      lostCount: 0,
-      resolvedCount: 0,
+      addedCount: 21,
+      modifiedCount: 22,
+      removedCount: 23,
+      preservedCount: 24,
+      lostCount: 25,
+      resolvedCount: 26,
       semanticChanges: [],
       diagnosticGroups: [],
     },
@@ -119,6 +119,8 @@ describe('continuity diagnostics panel rendering characterization', () => {
     expect(within(summary as HTMLElement).getByText('Risks lost: 10')).toBeInTheDocument()
     expect(within(summary as HTMLElement).getByText('Decisions lost: 5')).toBeInTheDocument()
     expect(within(summary as HTMLElement).getByText('Rationale lost: 6')).toBeInTheDocument()
+    expect(within(summary as HTMLElement).getByText('Modified: 22')).toBeInTheDocument()
+    expect(within(summary as HTMLElement).getByText('Preserved: 24')).toBeInTheDocument()
   })
 
   it('renders preservation and compression rows with existing labels', () => {
@@ -149,10 +151,64 @@ describe('continuity diagnostics panel rendering characterization', () => {
     const table = screen.getByRole('table', { name: 'Understanding evolution' })
 
     expect(within(table).getByRole('columnheader', { name: 'Section' })).toBeInTheDocument()
-    expect(within(table).getByRole('row', { name: 'Architecture 0 0 0 1' })).toBeInTheDocument()
-    expect(within(table).getByRole('row', { name: 'Stable decisions 3 4 0 5' })).toBeInTheDocument()
-    expect(within(table).getByRole('row', { name: 'Open questions 15 0 7 8' })).toBeInTheDocument()
-    expect(within(table).getByRole('row', { name: 'Active risks 16 0 9 10' })).toBeInTheDocument()
+    expect(within(table).getByRole('columnheader', { name: 'Modified' })).toBeInTheDocument()
+    expect(within(table).getByRole('row', { name: 'Architecture 0 2 0 0 1' })).toBeInTheDocument()
+    expect(within(table).getByRole('row', { name: 'Stable decisions 3 19 4 0 5' })).toBeInTheDocument()
+    expect(within(table).getByRole('row', { name: 'Open questions 15 20 0 7 8' })).toBeInTheDocument()
+    expect(within(table).getByRole('row', { name: 'Active risks 16 0 0 9 10' })).toBeInTheDocument()
+  })
+
+  it('renders backend-owned operational evolution counts and modification evidence', () => {
+    render(
+      <ContinuityDiagnosticsPanel
+        diagnostics={createDiagnostics({
+          operationalEvolution: {
+            addedCount: 1,
+            modifiedCount: 2,
+            removedCount: 3,
+            resolvedCount: 4,
+            lostCount: 5,
+            preservedCount: 6,
+            semanticChanges: [
+              {
+                type: 'ItemChanged',
+                section: 'Architecture',
+                description: 'Updated the service ownership statement.',
+                itemId: 'architecture-1',
+                previousState: 'UI owns service state.',
+                currentState: 'Backend owns service state.',
+                modificationReason: 'Matched authoritative ownership.',
+                identityBasis: 'kind+source',
+                supportingEvidence: ['.agents/operational_context.md#architecture'],
+              },
+            ],
+            diagnosticGroups: [],
+          },
+        })}
+      />,
+    )
+
+    const evolution = screen.getByRole('heading', { name: 'Operational Evolution' }).closest('div')
+
+    expect(evolution).not.toBeNull()
+    expect(within(evolution as HTMLElement).getByText('Added: 1')).toBeInTheDocument()
+    expect(within(evolution as HTMLElement).getByText('Modified: 2')).toBeInTheDocument()
+    expect(within(evolution as HTMLElement).getByText('Removed: 3')).toBeInTheDocument()
+    expect(within(evolution as HTMLElement).getByText('Resolved: 4')).toBeInTheDocument()
+    expect(within(evolution as HTMLElement).getByText('Lost: 5')).toBeInTheDocument()
+    expect(within(evolution as HTMLElement).getByText('Preserved: 6')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Operational Evolution Changes' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Modified' })).toBeInTheDocument()
+    expect(screen.getByText('ItemChanged: Updated the service ownership statement.')).toBeInTheDocument()
+    expect(screen.getByText('Identity basis')).toBeInTheDocument()
+    expect(screen.getByText('kind+source')).toBeInTheDocument()
+    expect(screen.getByText('Previous')).toBeInTheDocument()
+    expect(screen.getByText('UI owns service state.')).toBeInTheDocument()
+    expect(screen.getByText('Current')).toBeInTheDocument()
+    expect(screen.getByText('Backend owns service state.')).toBeInTheDocument()
+    expect(screen.getByText('Reason')).toBeInTheDocument()
+    expect(screen.getByText('Matched authoritative ownership.')).toBeInTheDocument()
+    expect(screen.getByText('.agents/operational_context.md#architecture')).toBeInTheDocument()
   })
 
   it('preserves repeated-signal ordering across indicator groups', () => {

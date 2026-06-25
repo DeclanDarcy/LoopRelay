@@ -2,6 +2,7 @@ import { StatusBadge, Table } from '../../components/design'
 import { formatDateTime } from '../../lib'
 import { continuityWarningStatus } from '../../lib/status'
 import type { ContinuityDiagnostics, ContinuityReport, ContinuityTrend } from '../../types'
+import { OperationalContextSemanticChangeList } from '../operational-context/OperationalContextSemanticChangeList'
 
 type ContinuityDiagnosticsPanelProps = {
   diagnostics: ContinuityDiagnostics
@@ -35,6 +36,8 @@ export function ContinuityDiagnosticsPanel({
         <span>Risks lost: {diagnostics.activeRiskTrend.lostCount}</span>
         <span>Decisions lost: {diagnostics.decisionTrend.lostCount}</span>
         <span>Rationale lost: {diagnostics.rationaleTrend.lostCount}</span>
+        <span>Modified: {diagnostics.operationalEvolution.modifiedCount}</span>
+        <span>Preserved: {diagnostics.operationalEvolution.preservedCount}</span>
         <span>
           Continuity: <StatusBadge status={continuityWarningStatus(diagnostics)} />
         </span>
@@ -47,6 +50,7 @@ export function ContinuityDiagnosticsPanel({
             <tr>
               <th>Section</th>
               <th>Added</th>
+              <th>Modified</th>
               <th>Removed</th>
               <th>Resolved</th>
               <th>Lost</th>
@@ -98,6 +102,17 @@ export function ContinuityDiagnosticsPanel({
       </div>
 
       <div className="context-columns">
+        <div id="continuity-operational-evolution">
+          <h5>Operational Evolution</h5>
+          <ul>
+            <li>Added: {diagnostics.operationalEvolution.addedCount}</li>
+            <li>Modified: {diagnostics.operationalEvolution.modifiedCount}</li>
+            <li>Removed: {diagnostics.operationalEvolution.removedCount}</li>
+            <li>Resolved: {diagnostics.operationalEvolution.resolvedCount}</li>
+            <li>Lost: {diagnostics.operationalEvolution.lostCount}</li>
+            <li>Preserved: {diagnostics.operationalEvolution.preservedCount}</li>
+          </ul>
+        </div>
         <div id="continuity-decision-retention">
           <h5>Preservation</h5>
           <ul>
@@ -197,6 +212,12 @@ export function ContinuityDiagnosticsPanel({
           )}
         </div>
       </div>
+      <OperationalContextSemanticChangeList
+        semanticChanges={diagnostics.operationalEvolution.semanticChanges}
+        grouping="outcome"
+        title="Operational Evolution Changes"
+        emptyText="No operational evolution changes recorded."
+      />
     </div>
   )
 }
@@ -227,9 +248,10 @@ function ContinuityEvolutionRow({
           </button>
         ) : (
           label
-        )}
+      )}
       </th>
       <td>{trend.addedCount}</td>
+      <td>{trend.modifiedCount}</td>
       <td>{trend.removedCount}</td>
       <td>{trend.resolvedCount}</td>
       <td>{trend.lostCount}</td>

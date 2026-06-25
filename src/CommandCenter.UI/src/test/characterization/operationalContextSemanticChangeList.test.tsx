@@ -62,4 +62,31 @@ describe('operational context semantic change list rendering characterization', 
       'RiskRetired: Retired the flaky certification risk.',
     ])
   })
+
+  it('renders identity-aware modification facts without interpreting them', () => {
+    renderList([
+      {
+        type: 'ItemChanged',
+        section: 'Constraints',
+        description: 'Updated the deployment constraint.',
+        itemId: 'constraint-1',
+        previousState: 'Deployments are manual.',
+        currentState: 'Deployments are automated after review.',
+        modificationReason: 'Current context records the automation boundary.',
+        identityBasis: 'normalized-kind-and-source',
+        supportingEvidence: ['.agents/operational_context.md#constraints'],
+      },
+    ])
+
+    expect(screen.getByText('ItemChanged: Updated the deployment constraint.')).toBeInTheDocument()
+    expect(screen.getByText('Identity basis')).toBeInTheDocument()
+    expect(screen.getByText('normalized-kind-and-source')).toBeInTheDocument()
+    expect(screen.getByText('Previous')).toBeInTheDocument()
+    expect(screen.getByText('Deployments are manual.')).toBeInTheDocument()
+    expect(screen.getByText('Current')).toBeInTheDocument()
+    expect(screen.getByText('Deployments are automated after review.')).toBeInTheDocument()
+    expect(screen.getByText('Reason')).toBeInTheDocument()
+    expect(screen.getByText('Current context records the automation boundary.')).toBeInTheDocument()
+    expect(screen.getByText('.agents/operational_context.md#constraints')).toBeInTheDocument()
+  })
 })
