@@ -2,11 +2,10 @@
 
 ## Newly Authorized
 
-- Treat the generation certification cleanup as valid because it preserves generation-certification framing and status while delegating backend-produced evidence and blocking conditions to shared explainability presentation.
-- Continue using the projection-to-adapter-to-shared-component presentation path for generation certification evidence and diagnostics.
-- Keep thin wrappers when they contribute domain structure, including grouping, navigation, status summaries, domain-specific metrics, and workflow framing.
-- Retire local wrappers when they only duplicate evidence lists, diagnostic lists, finding cards, health summaries, or certification detail renderers.
-- Continue validating cleanup through adapter characterization, affected panel characterization, and build verification.
-- Continue Milestone 9 with a health and certification audit using this disposition: health dimensions use `HealthView` when equivalent; certification findings use `CertificationFindingsView` when equivalent; evidence blocks use `EvidenceList`; diagnostic blocks use `DiagnosticList`; domain framing and grouping are retained as thin wrappers.
-- Retain a local renderer only when it contributes information or interaction that shared components intentionally do not provide.
-- Treat Milestone 9 as being in final cleanup: finish the finite audit of bespoke renderers, then perform final cohesion verification before transitioning to Milestone 10.
+- Treat the governance cleanup architecture as correct: backend projection to governance explainability adapter to shared `EvidenceList` or `DiagnosticList` to `GovernanceWorkspace`.
+- Continue assigning shared explainability components ownership of evidence rendering, diagnostic rendering, findings, health presentation, and certification presentation.
+- Continue assigning thin governance and domain wrappers ownership of lifecycle grouping, timeline context, transfer context, navigation, and status summaries.
+- Preserve lineage and artifact summary lists when they communicate compact domain-specific governance state rather than duplicating generic evidence or diagnostic rendering.
+- Continue the remaining Milestone 9 cleanup using this disposition: replace local evidence, diagnostics, certification, and health renderers when duplicated by shared components; keep timeline, evolution, semantic diff, provenance, graph visualization, domain grouping, and navigation.
+- Use the question "Does this renderer present unique domain semantics, or is it only another way of rendering facts the shared layer already knows how to display?" as the criterion for retiring remaining renderers.
+- Treat Milestone 9 as final cleanup: retire remaining duplicate renderers, preserve domain-specific composition, complete the cohesion audit, then prepare for Milestone 10.

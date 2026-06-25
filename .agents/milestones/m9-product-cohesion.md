@@ -50,6 +50,7 @@ Make the application feel unified, not merely smaller. Remove fragmentation so e
   - [x] Duplicate decision option comparison evidence renderer removed in favor of shared decision evidence fragments and `EvidenceList`. See `./m9-obsolete-ui-cleanup-decision-option-evidence.md`.
   - [x] Duplicate decision recommendation and burden explanation renderers removed in favor of shared `DecisionBasis`, `EvidenceList`, and `DiagnosticList`. See `./m9-obsolete-ui-cleanup-decision-explanations.md`.
   - [x] Duplicate generation certification executive-readiness evidence and blocking-gap renderers removed in favor of shared `EvidenceList` and `DiagnosticList`. See `./m9-obsolete-ui-cleanup-generation-certification.md`.
+  - [x] Duplicate governance lifecycle factor and analysis warning renderers removed in favor of shared `EvidenceList` and `DiagnosticList`. See `./m9-obsolete-ui-cleanup-governance-signals.md`.
 - [ ] Align terminology across statuses, health, diagnostics, recovery, certification, governance, execution, and explainability.
 
 ### Likely Cleanup Targets

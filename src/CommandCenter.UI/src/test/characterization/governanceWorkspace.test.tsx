@@ -380,6 +380,12 @@ describe('governance workspace characterization', () => {
     expect(
       within(lifecycle).getByText('Transfer is recommended because reuse value is low.'),
     ).toBeInTheDocument()
+    expect(within(lifecycle).getByRole('heading', { name: 'Contributing Factors' })).toBeInTheDocument()
+    expect(within(lifecycle).getAllByText('Lifecycle contributing factor')).toHaveLength(2)
+
+    const analysis = screen.getByLabelText('Governance analysis')
+    expect(within(analysis).getByRole('heading', { name: 'Analysis Diagnostics' })).toBeInTheDocument()
+    expect(within(analysis).getByText('Analysis Warning')).toBeInTheDocument()
 
     const eligibility = screen.getByLabelText('Governance transfer eligibility')
     expect(within(eligibility).getByText('Transfer recommended: Yes')).toBeInTheDocument()

@@ -3,16 +3,19 @@ import {
   ActionEligibilityView,
   CertificationFindingsView,
   DiagnosticList,
+  EvidenceList,
   HealthView,
   InteractionPatternView,
 } from '../../components/explainability'
 import { formatDateTime } from '../../lib'
 import {
+  governanceAnalysisWarningsToDiagnostics,
   governanceCertificationDiagnosticsToExplanation,
   governanceCertificationFindingsToExplanation,
   governanceEligibilityFindingsToDiagnostics,
   governanceEligibilityToActions,
   governanceHealthDimensionsToExplanation,
+  governancePolicyFactorsToEvidence,
   governanceRecoveryDiagnosticsToExplanation,
   governanceRecoveryFindingsToDiagnostics,
   governanceRecoveryResult,
@@ -250,10 +253,11 @@ export function DecisionSessionLifecyclePanel({
             <span>Growth: {formatNumber(summary?.estimatedTokenCount)}</span>
           </div>
           <p className="governance-explanation">{policy?.reason ?? 'Lifecycle reason is not projected.'}</p>
-          <div className="governance-panel-list">
-            <h5>Contributing Factors</h5>
-            <ul>{listItems(policy?.contributingFactors, 'No contributing factors projected.')}</ul>
-          </div>
+          <EvidenceList
+            title="Contributing Factors"
+            evidence={governancePolicyFactorsToEvidence(policy?.contributingFactors ?? [])}
+            emptyLabel="No contributing factors projected."
+          />
           <div className="governance-workflow-link">
             <span>Workflow gate: {workflow?.blockingGate ?? 'Not loaded'}</span>
             <span>Required action: {workflow?.requiredHumanAction || (workflow ? 'None' : 'Not loaded')}</span>
@@ -288,10 +292,11 @@ export function DecisionSessionAnalysisPanel({
         <span>Reuse value: {formatScore(economics?.estimatedReuseValue)}</span>
         <span>Density: {formatScore(coherence?.densityScore)}</span>
       </div>
-      <div className="governance-panel-list">
-        <h5>Diagnostics</h5>
-        <ul>{listItems(diagnostics, 'No analysis diagnostics projected.')}</ul>
-      </div>
+      <DiagnosticList
+        title="Analysis Diagnostics"
+        diagnostics={governanceAnalysisWarningsToDiagnostics(diagnostics)}
+        emptyLabel="No analysis diagnostics projected."
+      />
     </Panel>
   )
 }

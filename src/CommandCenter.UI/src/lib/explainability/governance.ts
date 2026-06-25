@@ -82,6 +82,14 @@ export function governanceCertificationDiagnosticsToExplanation(
   return diagnosticsFromStrings(certification.result.diagnostics, 'Certification')
 }
 
+export function governancePolicyFactorsToEvidence(values: string[]): ExplanationEvidence[] {
+  return evidenceFromStrings(values, 'Lifecycle contributing factor')
+}
+
+export function governanceAnalysisWarningsToDiagnostics(values: string[]): ExplanationDiagnostic[] {
+  return diagnosticsFromStrings(values, 'Analysis Warning')
+}
+
 export function governanceRecoveryFindingsToDiagnostics(
   recovery: DecisionSessionRecoveryResult | null,
 ): ExplanationDiagnostic[] {

@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  governanceAnalysisWarningsToDiagnostics,
   governanceCertificationDiagnosticsToExplanation,
   governanceCertificationFindingsToExplanation,
   governanceEligibilityFindingsToDiagnostics,
   governanceEligibilityToActions,
   governanceHealthDimensionsToExplanation,
+  governancePolicyFactorsToEvidence,
   governanceRecoveryDiagnosticsToExplanation,
   governanceRecoveryFindingsToDiagnostics,
   governanceRecoveryResult,
@@ -26,6 +28,15 @@ import type {
 } from '../../types'
 
 describe('governance explainability adapters', () => {
+  it('preserves lifecycle factors and analysis warnings through shared explainability models', () => {
+    expect(governancePolicyFactorsToEvidence(['Cache risk exceeds target.'])).toEqual([
+      { label: 'Cache risk exceeds target.', detail: 'Lifecycle contributing factor' },
+    ])
+    expect(governanceAnalysisWarningsToDiagnostics(['Cache risk exceeds target.'])).toEqual([
+      { label: 'Analysis Warning', detail: 'Cache risk exceeds target.' },
+    ])
+  })
+
   it('preserves certification findings, evidence, and diagnostics without changing report result', () => {
     const certification: DecisionSessionCertificationReport = {
       reportId: 'cert-1',

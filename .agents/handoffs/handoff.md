@@ -2,24 +2,25 @@
 
 ## New State This Slice
 
-- Continued Milestone 9 obsolete UI cleanup for generation certification presentation.
-- Added `.agents/milestones/m9-obsolete-ui-cleanup-generation-certification.md` as cleanup evidence.
-- Updated `.agents/milestones/m9-product-cohesion.md` to record generation certification executive-readiness cleanup.
-- Added `decisionGenerationExecutiveReportToEvidence` and `decisionGenerationExecutiveReportToDiagnostics`.
-- Changed `DecisionGenerationCertificationPanel` executive readiness to render evidence through shared `EvidenceList` and blocking gaps/diagnostics through shared `DiagnosticList`.
-- Preserved `ExecutiveReadinessSummary` as a thin domain wrapper for readiness status and rates.
-- Rotated previous handoff to `.agents/handoffs/handoff.0100.md`.
+- Continued Milestone 9 obsolete UI cleanup for governance lifecycle and analysis presentation.
+- Added `.agents/milestones/m9-obsolete-ui-cleanup-governance-signals.md` as cleanup evidence.
+- Updated `.agents/milestones/m9-product-cohesion.md` to record governance signal cleanup.
+- Added `governancePolicyFactorsToEvidence` and `governanceAnalysisWarningsToDiagnostics`.
+- Changed `DecisionSessionLifecyclePanel` contributing factors to render through shared `EvidenceList`.
+- Changed `DecisionSessionAnalysisPanel` warnings to render through shared `DiagnosticList`.
+- Preserved transfer lineage and continuity artifact lists as domain summaries because they are not duplicate explainability renderers.
+- Rotated previous handoff to `.agents/handoffs/handoff.0101.md`.
 
 ## Verification
 
-- `npm test -- explainabilityDecisionAdapters.test.ts decisionGenerationCertificationPanel.test.tsx`
+- `npm test -- governanceWorkspace.test.tsx explainabilityGovernanceAdapters.test.ts`
 - `npm run build`
 
 ## Residual Risk
 
 - `npm run build` still reports the existing Vite chunk-size warning for the main bundle.
-- Milestone 9 obsolete UI cleanup remains partial; this slice retired only generation certification executive-readiness duplicate evidence/gap rendering.
+- Milestone 9 obsolete UI cleanup remains partial; this slice retired only governance lifecycle factor and analysis warning duplicate rendering.
 
 ## Recommended Next Slice
 
-- Continue Milestone 9 obsolete UI cleanup by auditing remaining health and certification surfaces for any local evidence, diagnostic, finding, or health renderers that duplicate `EvidenceList`, `DiagnosticList`, `CertificationFindingsView`, or `HealthView`, while preserving thin domain wrappers for grouping, navigation, status summaries, and domain-specific metrics.
+- Continue Milestone 9 obsolete UI cleanup by auditing continuity and reasoning surfaces that still hand-render diagnostics, evidence, findings, or health summaries, replacing only renderers that duplicate `EvidenceList`, `DiagnosticList`, `CertificationFindingsView`, or `HealthView` while retaining thin domain wrappers for grouping, navigation, timeline context, and artifact/status summaries.
