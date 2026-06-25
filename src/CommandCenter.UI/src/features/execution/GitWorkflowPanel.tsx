@@ -11,9 +11,9 @@ import type {
 import {
   CommitPreparationSummary,
   CommitPreparationChangeBuckets,
+  ExecutionGitInteractionSummary,
   GitStatusDetails,
   PushReviewSummary,
-  GitEligibilitySummary,
 } from './GitWorkflowEvidence'
 
 type GitWorkflowPanelProps = {
@@ -108,11 +108,16 @@ export function GitWorkflowPanel({
               preparation={commitPreparation}
               selectedPathCount={selectedCommitScopeItems.length}
             />
-            <GitEligibilitySummary
+            <ExecutionGitInteractionSummary
+              commitMessage={commitMessage}
               eligibility={gitEligibility}
-              mode="commit"
-              isLoading={isGitEligibilityLoading}
               error={gitEligibilityError}
+              execution={execution}
+              gitStatus={gitStatus}
+              isLoading={isGitEligibilityLoading}
+              mode="commit"
+              preparation={commitPreparation}
+              selectedPathCount={selectedCommitScopeItems.length}
             />
             <label className="commit-message-editor">
               <span>Commit message</span>
@@ -199,11 +204,13 @@ export function GitWorkflowPanel({
       ) : currentExecutionState === 'AwaitingPush' && execution?.commitSha ? (
         <div className="commit-review-panel">
           <PushReviewSummary execution={execution} gitStatus={gitStatus} />
-          <GitEligibilitySummary
+          <ExecutionGitInteractionSummary
             eligibility={gitEligibility}
-            mode="push"
-            isLoading={isGitEligibilityLoading}
             error={gitEligibilityError}
+            execution={execution}
+            gitStatus={gitStatus}
+            isLoading={isGitEligibilityLoading}
+            mode="push"
           />
           <div className="commit-scope-toolbar">
             <button

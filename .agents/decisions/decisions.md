@@ -2,12 +2,14 @@
 
 ## Newly Authorized
 
-- Treat the refinement and resolution interaction normalization as accepted Milestone 9 work because it proves the shared interaction language can support richer lifecycle phases without over-generalizing the base component.
-- Keep `InteractionPatternView` as the common presentation shell for subject, result, eligibility, evidence, and diagnostics.
-- Continue using thin phase-specific wrappers for rich lifecycle surfaces such as refinement and resolution instead of expanding `InteractionPatternView`.
-- Preserve the boundary where backend projections own lifecycle legality and eligibility, while React coordinates and renders the selected authoritative projection.
-- Keep characterization coverage focused on normalized presentation, not backend lifecycle rule validation.
-- Treat the Decisions domain interaction normalization as coherently spanning proposal review, candidate actions, resolved decision actions, refinement, and resolution.
-- Continue Milestone 9 interaction normalization with execution commit/push actions next.
-- Normalize execution interaction actions in this order: commit preparation, commit execution, push, push retry, then recovery actions.
-- Execution interaction wrappers should present subject, expected result, backend-owned eligibility, evidence, and diagnostics while adding retry history or failure context only where execution-specific transparency requires it.
+- Treat execution git interaction normalization as accepted Milestone 9 work because it demonstrates the shared interaction pattern applies beyond decision lifecycles and into operational workflows.
+- Keep `ExecutionGitInteractionSummary` as a thin execution-specific wrapper around `InteractionPatternView`.
+- Keep `InteractionPatternView` focused on subject, expected result, eligibility, evidence, and diagnostics.
+- Preserve execution-specific concepts such as commit scope editing, push metadata, and retry information outside the shared interaction component.
+- Preserve the authority boundary where backend `ExecutionGitActionEligibility` owns commit legality, push legality, retry eligibility, diagnostics, and evidence.
+- Keep React limited to presenting execution git projections through the shared interaction language.
+- Continue using characterization tests scoped to normalized presentation and application integration, without altering execution behavior.
+- Continue Milestone 9 interaction normalization with execution recovery actions next.
+- Normalize remaining action families in this order: recovery actions, retry actions if distinct from recovery, then decision-session transfer actions.
+- Use thin wrappers for execution recovery and decision-session transfer when domain-specific context is needed, without expanding the shared interaction component.
+- Complete the major operational action families before moving Milestone 9 into final cleanup and cohesion verification.

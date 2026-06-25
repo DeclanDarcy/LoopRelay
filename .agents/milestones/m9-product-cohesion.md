@@ -24,6 +24,7 @@ Make the application feel unified, not merely smaller. Remove fragmentation so e
    - [x] Resolved decision supersede/archive actions normalized through the shared interaction summary. See `./m9-interaction-normalization-decision-actions.md`.
    - [x] Candidate promote/dismiss/expire/duplicate and proposal generation actions normalized through the shared interaction summary. See `./m9-interaction-normalization-candidate-actions.md`.
    - [x] Refinement and resolution panels normalized through thin phase-specific wrappers around the shared interaction summary. See `./m9-interaction-normalization-refinement-resolution.md`.
+   - [x] Execution commit and push/retry actions normalized through a thin execution-specific wrapper around the shared interaction summary. See `./m9-interaction-normalization-execution-git.md`.
    - [ ] action
    - [ ] eligibility
    - [ ] evidence

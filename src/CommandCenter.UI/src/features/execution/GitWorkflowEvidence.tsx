@@ -3,11 +3,13 @@ import type {
   CommitPreparation,
   CommitScopeItem,
   ExecutionGitActionEligibility,
+  ExplanationDiagnostic,
+  ExplanationEvidence,
   RepositoryGitStatus,
   ExecutionSessionSummary,
 } from '../../types'
 import { formatDateTime } from '../../lib'
-import { ActionEligibilityView, DiagnosticList } from '../../components/explainability'
+import { ActionEligibilityView, DiagnosticList, InteractionPatternView } from '../../components/explainability'
 import {
   executionGitEligibilityToActions,
   executionGitEligibilityToDiagnostics,
@@ -103,6 +105,60 @@ export function PushReviewSummary({ execution, gitStatus }: PushReviewSummaryPro
   )
 }
 
+type ExecutionGitInteractionSummaryProps = {
+  commitMessage?: string
+  eligibility: ExecutionGitActionEligibility | null
+  error?: string | null
+  execution: ExecutionSessionSummary | null
+  gitStatus: RepositoryGitStatus | null
+  isLoading?: boolean
+  mode: 'commit' | 'push'
+  preparation?: CommitPreparation | null
+  selectedPathCount?: number
+}
+
+export function ExecutionGitInteractionSummary({
+  commitMessage = '',
+  eligibility,
+  error = null,
+  execution,
+  gitStatus,
+  isLoading = false,
+  mode,
+  preparation = null,
+  selectedPathCount = 0,
+}: ExecutionGitInteractionSummaryProps) {
+  const actions = eligibility
+    ? executionGitEligibilityToActions(eligibility).filter((action) =>
+        mode === 'commit' ? action.command === 'executionCommit' : action.command === 'executionPush',
+      )
+    : []
+  const diagnostics = eligibility ? executionGitEligibilityToDiagnostics(eligibility) : []
+  const interactionDiagnostics = [
+    ...diagnostics,
+    ...gitInteractionDiagnostics(eligibility, error, isLoading, mode),
+  ]
+
+  return (
+    <InteractionPatternView
+      actions={actions}
+      diagnostics={interactionDiagnostics}
+      evidence={gitInteractionEvidence({
+        commitMessage,
+        eligibility,
+        execution,
+        gitStatus,
+        mode,
+        preparation,
+        selectedPathCount,
+      })}
+      result={gitInteractionResult(eligibility, execution, mode)}
+      subject={mode === 'commit' ? 'Execution commit' : 'Execution push'}
+      title={mode === 'commit' ? 'Commit Interaction Summary' : 'Push Interaction Summary'}
+    />
+  )
+}
+
 type GitEligibilitySummaryProps = {
   eligibility: ExecutionGitActionEligibility | null
   mode: 'commit' | 'push'
@@ -161,6 +217,169 @@ export function GitEligibilitySummary({
       />
     </div>
   )
+}
+
+type GitInteractionEvidenceArgs = {
+  commitMessage: string
+  eligibility: ExecutionGitActionEligibility | null
+  execution: ExecutionSessionSummary | null
+  gitStatus: RepositoryGitStatus | null
+  mode: 'commit' | 'push'
+  preparation: CommitPreparation | null
+  selectedPathCount: number
+}
+
+function gitInteractionEvidence({
+  commitMessage,
+  eligibility,
+  execution,
+  gitStatus,
+  mode,
+  preparation,
+  selectedPathCount,
+}: GitInteractionEvidenceArgs): ExplanationEvidence[] {
+  const evidence: ExplanationEvidence[] = []
+
+  if (execution) {
+    evidence.push({
+      id: `${execution.sessionId}-${mode}-session`,
+      label: 'Execution session',
+      detail: `${execution.state} | ${execution.repositoryState}`,
+      source: execution.milestonePath,
+    })
+  }
+
+  if (preparation) {
+    evidence.push(
+      {
+        id: `${preparation.id}-preparation`,
+        label: 'Commit preparation',
+        detail: `${preparation.scopeItems.length} prepared paths | ${selectedPathCount} selected`,
+        source: preparation.repositoryPath,
+      },
+      {
+        id: `${preparation.id}-snapshot`,
+        label: 'Prepared snapshot',
+        detail: `${preparation.statusSnapshot.id} | ${preparation.statusSnapshot.branch || '(detached)'}`,
+      },
+    )
+  }
+
+  if (mode === 'commit') {
+    evidence.push({
+      label: 'Commit message',
+      detail: commitMessage.trim() || 'Commit message is empty.',
+    })
+  }
+
+  if (eligibility) {
+    evidence.push(
+      {
+        id: `${eligibility.sessionId}-${mode}-eligibility`,
+        label: 'Backend git eligibility',
+        detail: mode === 'commit'
+          ? eligibility.canCommit ? 'Commit allowed' : 'Commit blocked'
+          : eligibility.canPush ? 'Push allowed' : 'Push blocked',
+      },
+      {
+        label: 'Selected scope',
+        detail: `${eligibility.selectedPathCount} selected | ${eligibility.preparedPathCount} prepared`,
+      },
+      {
+        label: 'Commit SHA',
+        detail: eligibility.commitSha ?? 'No commit SHA recorded.',
+        fingerprint: eligibility.commitSha ?? undefined,
+      },
+    )
+  }
+
+  if (gitStatus) {
+    evidence.push({
+      label: 'Current git status',
+      detail: `${gitStatus.branch || '(detached)'} | ahead ${gitStatus.aheadCount} | behind ${gitStatus.behindCount}`,
+    })
+  }
+
+  if (eligibility?.remoteBranchState) {
+    evidence.push({
+      label: 'Remote branch state',
+      detail: `${eligibility.remoteBranchState.branch || '(unknown)'} | ahead ${eligibility.remoteBranchState.aheadCount} | behind ${eligibility.remoteBranchState.behindCount}`,
+    })
+  }
+
+  if (execution?.pushAttemptedAt || eligibility?.previousPushAttemptedAt) {
+    evidence.push({
+      label: 'Push attempt',
+      detail: formatDateTime(execution?.pushAttemptedAt ?? eligibility?.previousPushAttemptedAt ?? null),
+    })
+  }
+
+  if (execution?.failureReason || eligibility?.previousPushFailure) {
+    evidence.push({
+      label: 'Push failure context',
+      detail: execution?.failureReason ?? eligibility?.previousPushFailure ?? 'No push failure recorded.',
+    })
+  }
+
+  return evidence
+}
+
+function gitInteractionDiagnostics(
+  eligibility: ExecutionGitActionEligibility | null,
+  error: string | null,
+  isLoading: boolean,
+  mode: 'commit' | 'push',
+): ExplanationDiagnostic[] {
+  if (eligibility) {
+    return []
+  }
+
+  if (error) {
+    return [
+      {
+        label: 'Git eligibility',
+        detail: error,
+        tone: 'warning',
+      },
+    ]
+  }
+
+  return [
+    {
+      label: 'Git eligibility',
+      detail: isLoading
+        ? `${mode === 'commit' ? 'Commit' : 'Push'} eligibility is loading.`
+        : `${mode === 'commit' ? 'Commit' : 'Push'} eligibility has not been loaded.`,
+      tone: 'info',
+    },
+  ]
+}
+
+function gitInteractionResult(
+  eligibility: ExecutionGitActionEligibility | null,
+  execution: ExecutionSessionSummary | null,
+  mode: 'commit' | 'push',
+) {
+  if (mode === 'commit') {
+    if (execution?.commitSha) {
+      return `Committed ${execution.commitSha}.`
+    }
+
+    return eligibility?.canCommit
+      ? 'Commit can run for the prepared selected scope.'
+      : 'Commit has not been recorded.'
+  }
+
+  if (execution?.pushedAt) {
+    return `Pushed ${execution.pushedCommitSha ?? execution.commitSha ?? 'recorded commit'}.`
+  }
+
+  const failure = execution?.failureReason ?? eligibility?.previousPushFailure
+  if (failure) {
+    return `Previous push failed: ${failure}`
+  }
+
+  return eligibility?.canPush ? 'Push can run for the recorded commit.' : 'Push has not been recorded.'
 }
 
 type GitStatusDetailsProps = {

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   CommitPreparationSummary,
   CommitPreparationChangeBuckets,
+  ExecutionGitInteractionSummary,
   GitEligibilitySummary,
   GitStatusDetails,
   PushReviewSummary,
@@ -212,6 +213,67 @@ describe('git workflow evidence rendering characterization', () => {
     expect(screen.getByText('Commit status snapshot unavailable: git status failed')).toBeInTheDocument()
     expect(screen.getByText('Push Eligibility')).toBeInTheDocument()
     expect(screen.getByText('Git Eligibility Diagnostics')).toBeInTheDocument()
+  })
+
+  it('normalizes commit interaction through shared subject result eligibility evidence and diagnostics', () => {
+    render(
+      <ExecutionGitInteractionSummary
+        commitMessage="Update execution artifacts"
+        eligibility={{
+          ...gitEligibility,
+          repositoryState: 'AwaitingCommit',
+          canCommit: false,
+          commitDisabledReasons: ['Commit preparation is stale.'],
+        }}
+        execution={{ ...executionSummary, commitSha: null, repositoryState: 'AwaitingCommit' }}
+        gitStatus={dirtyGitStatus}
+        mode="commit"
+        preparation={commitPreparation}
+        selectedPathCount={1}
+      />,
+    )
+
+    const summary = screen.getByLabelText('Commit Interaction Summary')
+    expect(within(summary).getByText('Action subject')).toBeInTheDocument()
+    expect(within(summary).getByText('Execution commit')).toBeInTheDocument()
+    expect(within(summary).getByText('Commit has not been recorded.')).toBeInTheDocument()
+    expect(within(summary).getByText('Commit execution changes')).toBeInTheDocument()
+    expect(within(summary).getByText('Backend git eligibility')).toBeInTheDocument()
+    expect(within(summary).getByText('Commit blocked')).toBeInTheDocument()
+    expect(within(summary).getByText('Commit preparation')).toBeInTheDocument()
+    expect(within(summary).getByText('2 prepared paths | 1 selected')).toBeInTheDocument()
+    expect(within(summary).getAllByText('Commit preparation is stale.').length).toBeGreaterThan(0)
+  })
+
+  it('normalizes push retry context through shared interaction presentation', () => {
+    render(
+      <ExecutionGitInteractionSummary
+        eligibility={gitEligibility}
+        execution={{
+          ...executionSummary,
+          pushAttemptedAt: '2026-06-21T16:30:00.000Z',
+          failureReason: 'git push failed: rejected by remote',
+        }}
+        gitStatus={dirtyGitStatus}
+        mode="push"
+      />,
+    )
+
+    const summary = screen.getByLabelText('Push Interaction Summary')
+    expect(within(summary).getByText('Execution push')).toBeInTheDocument()
+    expect(
+      within(summary).getByText('Previous push failed: git push failed: rejected by remote'),
+    ).toBeInTheDocument()
+    expect(within(summary).getByText('Push execution commit')).toBeInTheDocument()
+    expect(within(summary).getByText('Push failure context')).toBeInTheDocument()
+    expect(within(summary).getAllByText('git push failed: rejected by remote').length).toBeGreaterThan(0)
+    expect(within(summary).getByText('Remote branch state')).toBeInTheDocument()
+    expect(within(summary).getByText('main | ahead 1 | behind 1')).toBeInTheDocument()
+    expect(
+      within(summary).getAllByText(
+        'Remote branch has new commits; review branch state before pushing.',
+      ).length,
+    ).toBeGreaterThan(0)
   })
 
   it('renders push review branch and ahead fallbacks when git status is missing', () => {
