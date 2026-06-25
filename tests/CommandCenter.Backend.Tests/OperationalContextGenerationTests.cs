@@ -189,6 +189,153 @@ public sealed class OperationalContextGenerationTests
     }
 
     [Fact]
+    public void DiffReportsPersistentItemIdModificationInsteadOfRemoveAdd()
+    {
+        var diff = new UnderstandingDiffService();
+        OperationalContextDocument current = new()
+        {
+            Constraints =
+            [
+                new OperationalContextItem
+                {
+                    Id = "constraint-stable-lineage",
+                    Kind = OperationalContextItemKind.Constraint,
+                    Text = "Backend continuity services must own operational context review."
+                }
+            ]
+        };
+        OperationalContextDocument proposed = new()
+        {
+            Constraints =
+            [
+                new OperationalContextItem
+                {
+                    Id = "constraint-stable-lineage",
+                    Kind = OperationalContextItemKind.Constraint,
+                    Text = "Backend continuity services must own operational context review and promotion."
+                }
+            ]
+        };
+
+        IReadOnlyList<OperationalContextSemanticChange> changes = diff.Compare(current, proposed);
+
+        OperationalContextSemanticChange change = Assert.Single(changes, change =>
+            change.Type == OperationalContextSemanticChangeType.ItemChanged);
+        Assert.Equal("persistent-item-id", change.IdentityBasis);
+        Assert.Equal("Backend continuity services must own operational context review.", change.PreviousState);
+        Assert.Equal("Backend continuity services must own operational context review and promotion.", change.CurrentState);
+        Assert.Contains("same backend item id", change.ModificationReason!, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(change.SupportingEvidence, evidence =>
+            evidence.Contains("Previous item id: constraint-stable-lineage", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(changes, change =>
+            change.Type is OperationalContextSemanticChangeType.ConstraintAdded or OperationalContextSemanticChangeType.ConstraintRemoved);
+    }
+
+    [Fact]
+    public void DiffReportsSourceReferenceModificationInsteadOfRemoveAdd()
+    {
+        var diff = new UnderstandingDiffService();
+        OperationalContextDocument current = new()
+        {
+            StableDecisions =
+            [
+                new OperationalContextItem
+                {
+                    Id = "stable-decision-old",
+                    Kind = OperationalContextItemKind.StableDecision,
+                    Text = "Decision: Workflow projection owns lifecycle status.",
+                    SourceRelativePath = ".agents/decisions/decisions.md"
+                }
+            ]
+        };
+        OperationalContextDocument proposed = new()
+        {
+            StableDecisions =
+            [
+                new OperationalContextItem
+                {
+                    Id = "stable-decision-new",
+                    Kind = OperationalContextItemKind.StableDecision,
+                    Text = "Decision: Workflow projection owns lifecycle status and gate evidence.",
+                    SourceRelativePath = ".agents/decisions/decisions.md"
+                }
+            ]
+        };
+
+        IReadOnlyList<OperationalContextSemanticChange> changes = diff.Compare(current, proposed);
+
+        OperationalContextSemanticChange change = Assert.Single(changes, change =>
+            change.Type == OperationalContextSemanticChangeType.ItemChanged);
+        Assert.Equal("source-reference", change.IdentityBasis);
+        Assert.Contains(change.SupportingEvidence, evidence =>
+            evidence.Contains(".agents/decisions/decisions.md", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(changes, change =>
+            change.Type is OperationalContextSemanticChangeType.ImportantDecisionIntroduced or OperationalContextSemanticChangeType.DecisionRetired);
+    }
+
+    [Fact]
+    public void DiffReportsSemanticLineageModificationInsteadOfRemoveAdd()
+    {
+        var parser = new MarkdownOperationalContextParser();
+        var diff = new UnderstandingDiffService();
+        OperationalContextDocument current = parser.Parse("""
+                                                          # Operational Context
+
+                                                          ## Constraints
+
+                                                          - Backend workflow projection must own operational lifecycle status.
+                                                          """);
+        OperationalContextDocument proposed = parser.Parse("""
+                                                           # Operational Context
+
+                                                           ## Constraints
+
+                                                           - Backend workflow projection must own operational lifecycle status, gate evidence, and recovery hints.
+                                                           """);
+
+        IReadOnlyList<OperationalContextSemanticChange> changes = diff.Compare(current, proposed);
+
+        OperationalContextSemanticChange change = Assert.Single(changes, change =>
+            change.Type == OperationalContextSemanticChangeType.ItemChanged);
+        Assert.Equal("section-semantic-lineage", change.IdentityBasis);
+        Assert.Contains(change.SupportingEvidence, evidence =>
+            evidence.Contains("Semantic lineage key", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(changes, change =>
+            change.Type is OperationalContextSemanticChangeType.ConstraintAdded or OperationalContextSemanticChangeType.ConstraintRemoved);
+    }
+
+    [Fact]
+    public void DiffKeepsGenuineAdditionsAndRemovalsWhenIdentityDoesNotMatch()
+    {
+        var parser = new MarkdownOperationalContextParser();
+        var diff = new UnderstandingDiffService();
+        OperationalContextDocument current = parser.Parse("""
+                                                          # Operational Context
+
+                                                          ## Constraints
+
+                                                          - Backend workflow projection must own operational lifecycle status.
+                                                          """);
+        OperationalContextDocument proposed = parser.Parse("""
+                                                           # Operational Context
+
+                                                           ## Constraints
+
+                                                           - UI affordances should render workflow gate evidence.
+                                                           """);
+
+        IReadOnlyList<OperationalContextSemanticChange> changes = diff.Compare(current, proposed);
+
+        Assert.Contains(changes, change =>
+            change.Type == OperationalContextSemanticChangeType.ConstraintRemoved &&
+            change.Description.Contains("Backend workflow projection", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(changes, change =>
+            change.Type == OperationalContextSemanticChangeType.ConstraintAdded &&
+            change.Description.Contains("UI affordances", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(changes, change => change.Type == OperationalContextSemanticChangeType.ItemChanged);
+    }
+
+    [Fact]
     public async Task GenerationSucceedsWithoutExistingOperationalContext()
     {
         Harness harness = await CreateHarnessAsync();

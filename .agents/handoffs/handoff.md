@@ -2,17 +2,24 @@
 
 ## New State This Slice
 
-- Continued Milestone 7 with backend-only structured consequence and contradiction transparency.
-- Rotated previous handoff to `.agents/handoffs/handoff.0053.md`.
-- Added stable continuity decision references with decision id, source path, statement, and taxonomy.
-- `DecisionSignal` now carries a stable `DecisionId`.
-- `DecisionAnalysisResult` now exposes structured decision consequences and contradictions alongside compatibility warnings.
-- `DecisionAssimilationProjection` now exposes `Consequences` and `Contradictions` next to assimilation decisions and limits.
-- `DecisionAssimilationRecord` now carries `ConsequencesIntroduced`.
-- Consequence records include originating decision, operational statement, affected area, supporting evidence, and operational impact.
-- Contradiction records include decision A, decision B, conflict type, conflict evidence, severity, resolution guidance, and the generated compatibility warning.
-- Contradiction warning strings are now generated from structured contradiction records and still flow into compression warning surfaces.
-- Backend regression tests now cover consequence projection, contradiction detection, multiple contradictions, severity, symmetric decision references, and compatibility warning generation.
+- Continued Milestone 7 with backend-only identity-aware operational evolution and semantic diff.
+- Rotated previous handoff to `.agents/handoffs/handoff.0054.md`.
+- `OperationalContextSemanticChange` now exposes structured modification transparency:
+  - `PreviousState`
+  - `CurrentState`
+  - `ModificationReason`
+  - `IdentityBasis`
+  - `SupportingEvidence`
+- `UnderstandingDiffService` now emits `ItemChanged` instead of paired add/remove records when identity signals prove the same evolving operational-context item.
+- Modification identity matching is deterministic and ordered by:
+  - `persistent-item-id`
+  - `source-reference`
+  - `section-semantic-lineage`
+- Source-reference matching is constrained to unique same-kind unmatched items so one source artifact cannot ambiguously collapse multiple changes.
+- Semantic lineage matching remains backend-owned and conservative, using same item kind plus rationale keys, known operational prefixes, rationale suffix stripping, and stable subject markers.
+- Genuine additions and removals are still emitted when no supported identity relationship exists.
+- Duplicate normalized text no longer crashes diff comparison because section item maps now keep the first item per normalized text.
+- Backend regression tests now cover persistent item id modifications, source-reference modifications, semantic-lineage modifications, and genuine add/remove behavior.
 
 ## Verification
 
@@ -21,10 +28,10 @@
 
 ## Residual Risk
 
-- Consequence affected-area and operational-impact text remain deterministic heuristics over decision statements; no separate reasoning graph evidence is attached yet.
-- Contradiction detection still covers direct normalized negation only.
-- UI and TypeScript clients remain deferred until backend continuity semantics stabilize.
+- Semantic lineage is intentionally conservative but still heuristic; ambiguous same-section edits without persistent item ids or unique source references may still surface as add/remove.
+- Additional-section content diffing still only reports section-level added/removed headings, not item-level modifications inside unknown sections.
+- UI and TypeScript rendering of structured modification fields remain deferred until the backend operational evolution projection is complete.
 
 ## Recommended Next Slice
 
-- Continue Milestone 7 by extending operational evolution reporting and `UnderstandingDiffService` so modified understanding is detected as modified rather than remove/add pairs when identity, source reference, section, or stable lineage indicates continuity.
+- Continue Milestone 7 by projecting these structured semantic modifications through operational evolution reporting and any diagnostics/certification surfaces that currently consume semantic changes, keeping UI work deferred until the backend projection is stable.
