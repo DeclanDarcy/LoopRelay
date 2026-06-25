@@ -1,5 +1,7 @@
 import type { ExecutionRepositorySnapshot } from '../../types'
 import { Panel, SectionHeader } from '../../components/design'
+import { EvidenceList } from '../../components/explainability'
+import { executionRepositorySnapshotToEvidence } from '../../lib/explainability'
 import { GitPathBucket } from './GitPathBucket'
 
 type ExecutionRepositorySnapshotPanelProps = {
@@ -29,6 +31,10 @@ export function ExecutionRepositorySnapshotPanel({
         <GitPathBucket label="Renamed" paths={repositorySnapshot.dirtyState.renamedPaths} />
         <GitPathBucket label="Untracked" paths={repositorySnapshot.dirtyState.untrackedPaths} />
       </div>
+      <EvidenceList
+        evidence={executionRepositorySnapshotToEvidence(repositorySnapshot)}
+        title="Repository Snapshot Evidence"
+      />
     </Panel>
   )
 }

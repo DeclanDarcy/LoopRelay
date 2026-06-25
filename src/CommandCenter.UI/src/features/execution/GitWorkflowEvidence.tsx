@@ -7,6 +7,11 @@ import type {
   ExecutionSessionSummary,
 } from '../../types'
 import { formatDateTime } from '../../lib'
+import { ActionEligibilityView, DiagnosticList } from '../../components/explainability'
+import {
+  executionGitEligibilityToActions,
+  executionGitEligibilityToDiagnostics,
+} from '../../lib/explainability'
 import { GitPathBucket } from './GitPathBucket'
 
 type CommitPreparationSummaryProps = {
@@ -123,9 +128,11 @@ export function GitEligibilitySummary({
     )
   }
 
-  const disabledReasons =
-    mode === 'commit' ? eligibility.commitDisabledReasons : eligibility.pushDisabledReasons
   const canRun = mode === 'commit' ? eligibility.canCommit : eligibility.canPush
+  const actions = executionGitEligibilityToActions(eligibility).filter((action) =>
+    mode === 'commit' ? action.command === 'executionCommit' : action.command === 'executionPush',
+  )
+  const diagnostics = executionGitEligibilityToDiagnostics(eligibility)
 
   return (
     <div className="git-eligibility" aria-label="Git eligibility">
@@ -143,27 +150,15 @@ export function GitEligibilitySummary({
         <span>Remote ahead: {eligibility.remoteBranchState?.aheadCount ?? 'Not loaded'}</span>
         <span>Remote behind: {eligibility.remoteBranchState?.behindCount ?? 'Not loaded'}</span>
       </div>
-      {disabledReasons.length > 0 ? (
-        <ul className="diagnostic-list" aria-label={`${mode} disabled reasons`}>
-          {disabledReasons.map((reason) => (
-            <li key={reason}>{reason}</li>
-          ))}
-        </ul>
-      ) : null}
-      {eligibility.unknownSelectedPaths.length > 0 ? (
-        <ul className="diagnostic-list" aria-label="Unknown selected paths">
-          {eligibility.unknownSelectedPaths.map((path) => (
-            <li key={path}>{path}</li>
-          ))}
-        </ul>
-      ) : null}
-      {eligibility.diagnostics.length > 0 ? (
-        <ul className="diagnostic-list" aria-label="Git eligibility diagnostics">
-          {eligibility.diagnostics.map((diagnostic) => (
-            <li key={diagnostic}>{diagnostic}</li>
-          ))}
-        </ul>
-      ) : null}
+      <ActionEligibilityView
+        actions={actions}
+        title={mode === 'commit' ? 'Commit Eligibility' : 'Push Eligibility'}
+      />
+      <DiagnosticList
+        diagnostics={diagnostics}
+        title="Git Eligibility Diagnostics"
+        emptyLabel="No git eligibility diagnostics recorded."
+      />
     </div>
   )
 }

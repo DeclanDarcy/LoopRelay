@@ -54,6 +54,7 @@ Each component must render:
    - [x] Governance certification, recovery, health, and transfer eligibility adapter slice.
    - [x] Decision certification, generation certification, governance findings, evidence sources, diagnostics, and lifecycle eligible actions adapter slice.
    - [x] Decision recommendation, quality, burden, refinement, rejected-option, resolution assimilation, and influence/adherence adapter slice.
+   - [x] Execution prompt manifest, repository snapshot, governed conflict, git eligibility, recovery, monitoring, and handoff-processing adapter slice.
 - [ ] Adapters may reorganize authoritative information, but they must not omit semantically relevant evidence, constraints, uncertainty, diagnostics, findings, or eligible actions.
 - [ ] Replace domain-specific explanation widgets in:
    - [ ] decisions
@@ -65,6 +66,7 @@ Each component must render:
    - [ ] decision sessions
       - [x] Governance certification findings/diagnostics, recovery findings/diagnostics, health dimensions, transfer eligibility findings, and eligible transfer action now render through shared explainability components.
    - [ ] execution
+      - [x] Prompt manifest evidence/diagnostics, execution transparency diagnostics, repository snapshot evidence, governed conflict diagnostics, and git commit/push eligibility diagnostics now render through shared explainability components.
    - [ ] reasoning
    - [ ] operational context
    - [ ] health
@@ -81,11 +83,13 @@ Each component must render:
    - [x] Governance adapter preservation coverage for certification, recovery, health, and transfer eligibility.
    - [x] Decision adapter preservation coverage for certification evidence, generation certification findings, governance findings, evidence source attributions, diagnostics, and lifecycle eligibility.
    - [x] Decision adapter preservation coverage for recommendation explanation, quality score contribution, burden selection, refinement constraints, rejected-option rationale, and influence/adherence diagnostics.
+   - [x] Execution adapter preservation coverage for prompt manifest facts, repository snapshot paths, governed conflicts, git eligibility, recovery, monitoring, and handoff-processing diagnostics.
 - [ ] Adapter tests proving semantically relevant evidence and diagnostics are preserved when mapping into presentation concepts.
    - [x] Workflow health, certification, recovery, gates, continuation, and report evidence/diagnostic preservation coverage.
    - [x] Governance certification evidence/diagnostics, recovery evidence/diagnostics, health findings/evidence, and eligibility findings/action coverage.
    - [x] Decision certification evidence/sources, generation certification sources, governance finding evidence, evidence source attributions, and lifecycle rule/input preservation coverage.
    - [x] Decision recommendation evidence, quality contribution metadata, burden signal sources, refinement directive sources, rejected-option evidence, and influence projection/adherence evidence preservation coverage.
+   - [x] Execution prompt context evidence, repository snapshot path evidence, governed conflict source evidence, git action constraints, and recovery/monitoring/handoff diagnostics preservation coverage.
 - [ ] UI characterization tests proving major domains use shared explainability components.
 
 ### Exit Criteria

@@ -2,41 +2,41 @@
 
 ## New State This Slice
 
-- Continued Milestone 8 unified explainability layer by completing the remaining authorized decision-domain explanation slice.
-- Rotated previous handoff to `.agents/handoffs/handoff.0071.md`.
-- Extended `src/CommandCenter.UI/src/lib/explainability/decisions.ts` with presentation-only adapters for:
-  - decision recommendation evidence, concerns, assumptions, alternatives, supporting factors, and recommendation mode,
-  - decision quality score basis, signal contributions, signal source evidence, and report/trend diagnostics,
-  - human-authoring burden selection facts, winning signal evidence, and burden diagnostics,
-  - refinement plan constraints, directives, scope, diagnostics, and regeneration additions,
-  - rejected/deduplicated option alternatives and invalid-option diagnostics,
-  - resolution assimilation evidence/sources/diagnostics,
-  - decision influence projected statements, priority rank, adherence observations, projection category diagnostics, and empty-category uncertainty.
-- Updated shared `EvidenceList` to render source and fingerprint values as separate child spans so exact source paths remain inspectable while retaining the shared evidence label.
-- Migrated the remaining decision-related panels to shared explainability components:
-  - `DecisionRecommendationExplanation.tsx`
-  - `DecisionQualityExplanation.tsx`
-  - `DecisionBurdenExplanation.tsx`
-  - `DecisionQualityPanel.tsx`
-  - `DecisionRefinementPanel.tsx`
-  - `DecisionRejectedOptionList.tsx`
-  - `DecisionResolutionPanel.tsx`
-  - `DecisionInfluenceExplorer.tsx`
-  - `ExecutionDecisionInfluencePanel.tsx`
-- Added adapter preservation coverage for recommendation, quality, burden, refinement, rejected-option, and influence/adherence mappings in `explainabilityDecisionAdapters.test.ts`.
-- Updated `.agents/milestones/m8-explainability-layer.md` with the completed decision slice.
+- Continued Milestone 8 unified explainability layer with the first execution-domain migration slice.
+- Rotated previous handoff to `.agents/handoffs/handoff.0072.md`.
+- Added `src/CommandCenter.UI/src/lib/explainability/execution.ts` and exported it from the explainability adapter barrel.
+- Added presentation-only execution adapters for:
+  - launched prompt manifest evidence and diagnostics,
+  - execution repository snapshot evidence,
+  - execution context artifact diagnostics,
+  - governed decision conflict diagnostics and source evidence,
+  - validation error diagnostics,
+  - git commit/push action eligibility, constraints, and diagnostics,
+  - execution recovery, monitoring, and handoff-processing diagnostics.
+- Migrated execution UI surfaces to shared explainability components:
+  - `ExecutionSessionPanel.tsx` now renders prompt manifest evidence/diagnostics and execution transparency diagnostics through shared components.
+  - `ExecutionRepositorySnapshotPanel.tsx` now renders repository snapshot evidence through shared `EvidenceList`.
+  - `ExecutionContextValidationList.tsx` now renders governed conflict diagnostics through shared `DiagnosticList`.
+  - `GitWorkflowEvidence.tsx` now renders commit/push eligibility and diagnostics through shared `ActionEligibilityView` and `DiagnosticList`.
+- Added `explainabilityExecutionAdapters.test.ts` coverage for preservation of prompt manifest facts, repository snapshot path evidence, governed conflict evidence, git eligibility actions/constraints/diagnostics, and recovery/monitoring/handoff diagnostics.
+- Updated `gitWorkflowEvidence.test.tsx` to characterize shared git eligibility rendering.
+- Updated `.agents/milestones/m8-explainability-layer.md` with completed execution adapter/test progress.
 
 ## Verification
 
-- `npm test -- --run src/test/characterization/explainabilityDecisionAdapters.test.ts src/test/characterization/decisionQualityPanel.test.tsx src/test/characterization/decisionRefinementPanel.test.tsx src/test/characterization/decisionResolutionPanel.test.tsx src/test/characterization/executionDecisionInfluencePanel.test.tsx`
+- `npm test -- --run src/test/characterization/explainabilityExecutionAdapters.test.ts src/test/characterization/executionSessionPanel.test.tsx src/test/characterization/executionRepositorySnapshotPanel.test.tsx src/test/characterization/executionContextValidationList.test.tsx src/test/characterization/gitWorkflowEvidence.test.tsx`
 - `npm run build`
 
 ## Residual Risk
 
-- This slice intentionally did not start execution transparency, reasoning transparency, continuity/operational-context, health, diagnostics, or certification-wide migrations.
-- `DecisionBasis` still has no dedicated shared rendering for `ExplanationRecommendation` or `ExplanationAssumption`; recommendation assumptions and supporting factors are preserved through existing shared component paths used by the migrated panel.
-- Decision influence rendering now uses shared evidence/diagnostics; older custom per-statement card layout has been replaced, so visual density should be checked in-browser in a later cohesion pass.
+- This slice did not migrate `ExecutionEventFeed`, `ExecutionHistoryPanel`, `ExecutionContextArtifactDiagnosticsList`, or generated handoff review surfaces.
+- Some execution panels intentionally keep domain-specific summaries beside shared explainability components for scanability; Milestone 9 can revisit density and duplication.
+- `executionArtifactDiagnosticsToExplanation` and `executionValidationErrorsToDiagnostics` are adapter-ready but are not yet wired into their artifact/validation surfaces beyond governed conflicts.
 
 ## Recommended Next Slice
 
-- Continue Milestone 8 with the execution transparency surfaces: execution session prompt metadata/manifest, repository snapshots, commit/push retry evidence, structured conflict visibility, execution diagnostics, and recovery findings through the shared explainability components.
+- Continue Milestone 8 with the remaining execution surfaces before moving to reasoning:
+  - artifact diagnostics and context size threshold findings,
+  - execution event feed consequences and monitoring diagnostics,
+  - execution history/session failure evidence,
+  - generated handoff validation/review evidence.

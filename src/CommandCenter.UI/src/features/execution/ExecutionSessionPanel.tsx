@@ -1,5 +1,11 @@
 import { formatDateTime, formatDuration } from '../../lib'
 import { Button, EmptyState, Panel, SectionHeader, StatusBadge } from '../../components/design'
+import { DiagnosticList, EvidenceList } from '../../components/explainability'
+import {
+  executionPromptManifestToDiagnostics,
+  executionPromptManifestToEvidence,
+  executionSessionTransparencyToDiagnostics,
+} from '../../lib/explainability'
 import { executionSessionStatus, repositoryExecutionStatus } from '../../lib/status'
 import type {
   ExecutionPromptManifest,
@@ -121,9 +127,15 @@ function TransparencySection({ transparency, isLoading, error }: TransparencySec
   }
 
   const { recovery, monitoring, promptMetadata, handoffProcessing } = transparency
+  const transparencyDiagnostics = executionSessionTransparencyToDiagnostics(transparency)
 
   return (
     <div className="execution-transparency" aria-label="Execution transparency">
+      <DiagnosticList
+        diagnostics={transparencyDiagnostics}
+        title="Execution Transparency Diagnostics"
+        emptyLabel="No execution transparency diagnostics recorded."
+      />
       <div className="execution-rail-list">
         <h5>Recovery</h5>
         <div className="execution-rail-summary">
@@ -150,11 +162,6 @@ function TransparencySection({ transparency, isLoading, error }: TransparencySec
           <span>Last event: {monitoring.lastRetainedEventSequence ?? 'Not recorded'}</span>
           <span>Retention trimmed: {formatNullableBoolean(monitoring.eventRetentionTrimmingDetected)}</span>
         </div>
-        <PromptStringList
-          title="Monitoring Warnings"
-          values={monitoring.monitoringWarnings}
-          empty="No monitoring warnings recorded."
-        />
       </div>
 
       <div className="execution-rail-list">
@@ -178,11 +185,6 @@ function TransparencySection({ transparency, isLoading, error }: TransparencySec
           <span>Provider failure: {handoffProcessing.providerFailureReason || 'Not recorded'}</span>
           <span>Handoff failure: {handoffProcessing.handoffFailureReason || 'Not recorded'}</span>
         </div>
-        <PromptStringList
-          title="Handoff Diagnostics"
-          values={handoffProcessing.diagnostics}
-          empty="No handoff processing diagnostics recorded."
-        />
       </div>
 
       {promptMetadata ? (
@@ -220,6 +222,15 @@ function PromptManifestSection({ manifest, isLoading, error }: PromptManifestSec
 
   return (
     <div className="execution-prompt-manifest" aria-label="Launched prompt manifest">
+      <EvidenceList
+        evidence={executionPromptManifestToEvidence(manifest)}
+        title="Prompt Manifest Evidence"
+      />
+      <DiagnosticList
+        diagnostics={executionPromptManifestToDiagnostics(manifest)}
+        title="Prompt Manifest Diagnostics"
+        emptyLabel="No prompt diagnostics recorded."
+      />
       <div className="execution-rail-list">
         <h5>Launched Prompt</h5>
         <div className="execution-rail-summary">
@@ -256,7 +267,6 @@ function PromptManifestSection({ manifest, isLoading, error }: PromptManifestSec
       </div>
 
       <PromptStringList title="Provider Adjustments" values={manifest.providerAdjustments} empty="No provider adjustments recorded." />
-      <PromptStringList title="Diagnostics" values={manifest.diagnostics} empty="No prompt diagnostics recorded." />
     </div>
   )
 }

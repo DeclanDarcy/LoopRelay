@@ -1,4 +1,6 @@
 import type { ExecutionGovernedConflictDiagnostic } from '../../types'
+import { DiagnosticList } from '../../components/explainability'
+import { executionGovernedConflictsToDiagnostics } from '../../lib/explainability'
 
 type ExecutionContextValidationListProps = {
   validationErrors: string[]
@@ -17,6 +19,10 @@ export function ExecutionContextValidationList({
     <div className="execution-validation-list">
       {governedConflicts.length > 0 ? (
         <div className="execution-governed-conflicts" aria-label="Governed decision conflict diagnostics">
+          <DiagnosticList
+            diagnostics={executionGovernedConflictsToDiagnostics(governedConflicts)}
+            title="Governed Conflict Diagnostics"
+          />
           {governedConflicts.map((conflict) => (
             <article key={conflict.id} className="execution-governed-conflict">
               <div className="execution-governed-conflict-heading">

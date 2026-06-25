@@ -207,9 +207,11 @@ describe('git workflow evidence rendering characterization', () => {
     expect(screen.getByText('Previous push failure: git push failed: rejected by remote')).toBeInTheDocument()
     expect(screen.getByText('Remote branch: main')).toBeInTheDocument()
     expect(screen.getByText('Remote behind: 1')).toBeInTheDocument()
-    expect(screen.getByText('Remote branch has new commits; review branch state before pushing.')).toBeInTheDocument()
-    expect(screen.getByText('unknown.ts')).toBeInTheDocument()
+    expect(screen.getAllByText('Remote branch has new commits; review branch state before pushing.')).toHaveLength(2)
+    expect(screen.getAllByText('unknown.ts')).toHaveLength(3)
     expect(screen.getByText('Commit status snapshot unavailable: git status failed')).toBeInTheDocument()
+    expect(screen.getByText('Push Eligibility')).toBeInTheDocument()
+    expect(screen.getByText('Git Eligibility Diagnostics')).toBeInTheDocument()
   })
 
   it('renders push review branch and ahead fallbacks when git status is missing', () => {

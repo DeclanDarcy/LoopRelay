@@ -2,21 +2,33 @@
 
 ## Newly Authorized
 
-- Treat the completed decision-domain explainability migration as an important Milestone 8 checkpoint.
-- Preserve the Milestone 8 contract for subsequent slices:
+- Treat the core Execution explainability migration as a solid Milestone 8 increment that preserves Milestone 5 authority boundaries.
+- Continue using the established Milestone 8 migration pattern for Execution:
   - adapters remain presentation-only,
-  - adapters forward backend facts, scores, rules, reasons, evidence, findings, diagnostics, constraints, uncertainty, and actions,
-  - adapters must not derive recommendation, lifecycle, governance, certification, prompt composition, recovery state, git eligibility, retry decisions, conflict resolution, or execution outcome.
-- Defer product cohesion and visual density optimization to Milestone 9 after the shared presentation abstraction is fully migrated.
-- Continue Milestone 8 with the remaining domains after this checkpoint:
-  - Execution,
-  - Reasoning,
-  - Continuity.
-- Execute the next slice against Execution transparency surfaces in this order:
-  - prompt metadata and manifest explanation,
-  - repository snapshot and execution context evidence,
-  - commit/push retry evidence,
-  - structured conflict diagnostics,
-  - recovery findings,
-  - execution diagnostics and monitoring.
-- Continue adapter preservation tests and domain panel tests for each migrated Execution surface.
+  - backend execution projections remain authoritative,
+  - shared explainability components provide a common rendering vocabulary only.
+- Recognize Milestone 8 as now exercised across four major domains:
+  - Workflow,
+  - Governance,
+  - Decisions,
+  - Core Execution.
+- Continue the remaining Execution migration before beginning Reasoning, in this order:
+  - artifact diagnostics and context-threshold explanations,
+  - execution event consequences,
+  - execution history and session-failure evidence,
+  - generated handoff validation and review evidence.
+- Continue extending Execution adapter preservation tests to verify forwarding of:
+  - evidence,
+  - diagnostics,
+  - validation findings,
+  - consequences,
+  - generated review artifacts,
+  - actions.
+- Continue prohibiting Execution adapters from deriving:
+  - execution success or failure,
+  - retry decisions,
+  - recovery state,
+  - repository validity,
+  - prompt composition,
+  - conflict resolution.
+- After remaining Execution surfaces are complete, move to Reasoning as the next major proving ground for evidence, uncertainty, provenance, reachability, and diagnostics while keeping the shared layer presentation-only.
