@@ -3,29 +3,34 @@
 ## New State This Slice
 
 - Continued Milestone 4: Decision Transparency.
-- Added rejected and deduplicated option payload preservation to `DecisionGenerationDiagnostics`:
-  - `RejectedOptions`
-  - `DeduplicatedOptions`
-- `OptionGenerationService` now records rejected generated option objects and separately records duplicate rejected option objects.
-- `DecisionPackageService` preserves rejected/deduplicated option payloads when carrying generation diagnostics into regenerated package diagnostics.
-- `DecisionArtifactProjectionService` now renders rejected/deduplicated option payload sections for proposal markdown and package-version markdown.
-- Extended decision generation tests to prove:
-  - option generation diagnostics carry rejected and deduplicated option payloads
-  - proposal JSON reload preserves rejected/deduplicated payloads
-  - package-version diagnostics preserve rejected/deduplicated payloads
-  - proposal and package markdown projections show rejected option payloads
-- Updated `.agents/milestones/m4-decision-transparency.md` to mark rejected and deduplicated option serialization complete.
-- Rotated prior handoff to `.agents/handoffs/handoff.0021.md`.
+- Expanded decision package markdown projection so package versions now render:
+  - tradeoff comparisons
+  - recommendation supporting factors, concerns, assumptions, and alternative explanations
+  - option evaluations with score, rank, score explanation, strengths, weaknesses, risks, and constraints
+  - tradeoff analysis diagnostic counts, context fingerprint, unknowns, validation warnings, and diagnostics
+- Updated frontend decision types to match backend transparency payloads already emitted by decision services:
+  - `DecisionOptionType`
+  - `DecisionOptionRelationship`
+  - option `type`, `assumptions`, `dependencies`, and `diagnostics`
+  - generation diagnostic `rejectedOptions` and `deduplicatedOptions`
+  - package metadata provenance fields
+  - package context, relationships, analyzed options, tradeoff comparisons, generation diagnostics, and tradeoff diagnostics
+- Updated the dev Tauri mock package metadata fixture to match backend package metadata.
+- Extended decision generation tests to prove package markdown projects the new transparency sections.
+- Updated `.agents/milestones/m4-decision-transparency.md` to mark `DecisionProposal` transparency serialization/projection complete.
+- Rotated prior handoff to `.agents/handoffs/handoff.0022.md`.
 
 ## Verification
 
 - `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter DecisionGenerationServiceTests` passed: 69/69.
+- `npm run build` in `src/CommandCenter.UI` passed.
 - `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 738/738.
+- `git diff --check` reported no whitespace errors; only existing line-ending warnings were emitted.
 
 ## Remaining Work
 
 - Continue Milestone 4 backend-first:
-  - finish remaining `DecisionProposal` transparency serialization checklist items, especially analyzed options, tradeoff comparisons, recommendation evidence, option evaluations, supporting factors, concerns, assumptions, and alternative explanations
+  - extend governance and influence projections to expose included, excluded, superseded, conflicting, ignored, and blocked decisions with reasons
   - expose decision execution projection diagnostics through decision-owned API/type surfaces for influence explanations
-  - extend governance/influence projections where included, excluded, superseded, conflicting, ignored, and blocked decisions still lack direct UI-ready reasons
-- Defer UI composition until backend projection gaps are closed.
+  - then begin UI composition for recommendation explanation, option evaluation, rejected options, quality/burden explanation, governance explanation, and influence exploration
+- Keep UI logic render-only; do not calculate scoring, ranking, quality, burden, governance, or influence reasons in React.

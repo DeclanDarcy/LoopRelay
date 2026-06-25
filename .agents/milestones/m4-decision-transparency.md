@@ -7,22 +7,22 @@ Expose why decisions, recommendations, options, quality ratings, governance find
 ### Backend
 
 - [x] Inventory existing recommendation, option, diagnostic, governance, influence, quality, and burden semantic facts before adding projection fields. Evidence: `.agents/milestones/m4-transparency-inventory.md`.
-- [ ] Ensure `DecisionProposal` serialization includes all generated transparency data already produced by services:
-   - [ ] generation diagnostics
-   - [ ] option validation results
+- [x] Ensure `DecisionProposal` serialization includes all generated transparency data already produced by services:
+   - [x] generation diagnostics
+   - [x] option validation results
    - [x] rejected options
    - [x] deduplicated options
-   - [ ] analyzed options
-   - [ ] tradeoff comparisons
-   - [ ] tradeoff analysis diagnostics
-   - [ ] recommendation mode
-   - [ ] recommendation evidence
-   - [ ] option evaluations
-   - [ ] supporting factors
-   - [ ] concerns
-   - [ ] assumptions
-   - [ ] alternative explanations
-- [ ] If any of these are computed but not persisted or projected, add them to the owning model and repository serialization.
+   - [x] analyzed options
+   - [x] tradeoff comparisons
+   - [x] tradeoff analysis diagnostics
+   - [x] recommendation mode
+   - [x] recommendation evidence
+   - [x] option evaluations
+   - [x] supporting factors
+   - [x] concerns
+   - [x] assumptions
+   - [x] alternative explanations
+- [x] If any of these are computed but not persisted or projected, add them to the owning model and repository serialization.
 - [x] Add read-only projection fields where quality and burden currently expose labels without basis:
    - [x] quality score contribution
    - [x] threshold crossed

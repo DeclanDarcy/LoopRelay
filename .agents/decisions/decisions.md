@@ -2,12 +2,20 @@
 
 ## Newly Authorized
 
-- Accept the Milestone 4 rejected/deduplicated option payload implementation as architecturally correct.
-- Treat rejected and deduplicated generated options as durable backend-owned transparency artifacts, not transient generation metadata or counts only.
-- Keep `DecisionGenerationDiagnostics` as the canonical record of option generation behavior, including rejected and deduplicated payloads.
-- Preserve rejected/deduplicated option diagnostics through proposal persistence, package-version persistence, package regeneration, serialization, and markdown projection.
-- Keep markdown projections as consumers of authoritative diagnostics rather than separate explanation paths.
-- Continue the next Milestone 4 backend slice in this order:
-  - complete remaining `DecisionProposal` transparency fields, especially recommendation evidence, option evaluations, supporting factors, concerns, assumptions, alternative explanations, analyzed options, tradeoff comparisons, and tradeoff diagnostics
-  - then expose influence and governance reasoning for included, excluded, superseded, conflicting, and ignored decisions with governing reasons and execution influence diagnostics
-- Defer significant UI composition until the backend transparency model is coherent and complete.
+- Accept the Milestone 4 proposal transparency serialization/projection slice as complete.
+- Treat the expanded package markdown projection and TypeScript contract updates as architecturally correct backend-transparency completion work.
+- Keep the transparency authority flow as:
+  - decision services
+  - authoritative diagnostics/projections
+  - markdown and TypeScript contracts
+  - later UI rendering
+- Keep markdown projections and React/TypeScript surfaces as consumers of backend-owned explanation data, not as explanation logic owners.
+- Before building UI explainers, close the remaining backend governance/influence reason gap by exposing reasons and diagnostics for:
+  - included decisions
+  - excluded decisions
+  - superseded decisions
+  - conflicting decisions
+  - ignored decisions
+  - blocked decisions
+- After backend governance/influence reasons are exposed, wire those fields into TypeScript types and tests.
+- Keep React as a consumer only for the next governance/influence transparency work.

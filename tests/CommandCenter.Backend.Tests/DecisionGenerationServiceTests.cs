@@ -958,6 +958,12 @@ public sealed class DecisionGenerationServiceTests
         string packageMarkdown = await ReadAsync(repository, ".agents/decisions/proposals/PROP-0001/versions/PKG-0001.md");
         Assert.Contains("## Rejected Options", packageMarkdown);
         Assert.Contains("option-3: Implement now - Resolve the candidate through a duplicate repository-evidence path.", packageMarkdown);
+        Assert.Contains("## Tradeoff Comparisons", packageMarkdown);
+        Assert.Contains("### Supporting Factors", packageMarkdown);
+        Assert.Contains("### Option Evaluations", packageMarkdown);
+        Assert.Contains("- Score explanation:", packageMarkdown);
+        Assert.Contains("#### Unknowns", packageMarkdown);
+        Assert.Contains("#### Validation Warnings", packageMarkdown);
     }
 
     [Fact]

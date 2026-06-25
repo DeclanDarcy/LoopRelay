@@ -68,6 +68,19 @@ export type TradeoffSeverity = 'Info' | 'Low' | 'Medium' | 'High' | 'Blocking'
 
 export type RecommendationMode = 'PreferredOption' | 'PreferredPlusAlternative' | 'NoRecommendation'
 
+export type DecisionOptionType =
+  | 'Adopt'
+  | 'Preserve'
+  | 'Refactor'
+  | 'Replace'
+  | 'Delay'
+  | 'Remove'
+  | 'Expand'
+  | 'Constrain'
+  | 'Investigate'
+
+export type DecisionOptionRelationshipType = 'AlternativeTo' | 'ConflictsWith' | 'DependsOn'
+
 export type HumanAuthoringBurden =
   | 'Unknown'
   | 'ReviewOnly'
@@ -207,6 +220,18 @@ export type DecisionOption = {
   title: string
   description: string
   evidence: DecisionEvidence[]
+  type?: DecisionOptionType
+  assumptions?: string[]
+  dependencies?: string[]
+  diagnostics?: string[]
+}
+
+export type DecisionOptionRelationship = {
+  sourceOptionId: string
+  targetOptionId: string
+  type: DecisionOptionRelationshipType
+  rationale: string
+  evidence: DecisionEvidence[]
 }
 
 export type DecisionTradeoff = {
@@ -294,6 +319,8 @@ export type DecisionGenerationDiagnostics = {
   fallbackOptionCount: number
   optionValidationResults: DecisionOptionValidationResult[]
   diagnostics: string[]
+  rejectedOptions?: DecisionOption[]
+  deduplicatedOptions?: DecisionOption[]
 }
 
 export type RecommendationEvidence = {
@@ -426,9 +453,32 @@ export type DecisionPackageRegenerationRequest = {
 
 export type DecisionPackageMetadata = {
   contextFingerprint: string
-  proposalFingerprint: string
   generatorVersion: string
-  schemaVersion: string
+  candidateId: string
+  repositoryStateFingerprint: string
+  milestoneId: string
+  milestonePath: string
+  sourceProposalId: string
+  sourceProposalFingerprint: string
+}
+
+export type DecisionGenerationContextEntry = {
+  id: string
+  statement: string
+  evidence: DecisionEvidence[]
+}
+
+export type DecisionGenerationContext = {
+  repositoryId: string
+  fingerprint: string
+  goals: DecisionGenerationContextEntry[]
+  constraints: DecisionGenerationContextEntry[]
+  risks: DecisionGenerationContextEntry[]
+  questions: DecisionGenerationContextEntry[]
+  priorDecisions: DecisionGenerationContextEntry[]
+  repositoryState: DecisionGenerationContextEntry[]
+  dependencies: DecisionGenerationContextEntry[]
+  handoffState: DecisionGenerationContextEntry[]
   diagnostics: string[]
 }
 
@@ -439,13 +489,20 @@ export type DecisionPackage = {
   candidateId: string
   title: string
   decisionSummary: string
+  candidate?: DecisionCandidate
+  contextSummary?: DecisionGenerationContext
   options: DecisionOption[]
+  optionRelationships?: DecisionOptionRelationship[]
+  analyzedOptions?: AnalyzedDecisionOption[]
   tradeoffs: DecisionTradeoff[]
+  tradeoffComparisons?: DecisionTradeoffComparison[]
   recommendation: DecisionRecommendation | null
   assumptions: DecisionAssumption[]
   openConcerns: string[]
   evidence: DecisionEvidence[]
   metadata: DecisionPackageMetadata
+  generationDiagnostics?: DecisionGenerationDiagnostics | null
+  tradeoffAnalysisDiagnostics?: DecisionTradeoffAnalysisDiagnostics | null
   generatedAt: string
 }
 
@@ -524,6 +581,7 @@ export type DecisionProposal = {
   assumptions: DecisionAssumption[]
   evidence: DecisionEvidence[]
   history: DecisionHistoryEntry[]
+  optionRelationships?: DecisionOptionRelationship[]
   analyzedOptions?: AnalyzedDecisionOption[]
   tradeoffComparisons?: DecisionTradeoffComparison[]
   tradeoffAnalysisDiagnostics?: DecisionTradeoffAnalysisDiagnostics | null

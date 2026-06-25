@@ -820,6 +820,51 @@ public sealed class DecisionArtifactProjectionService(
         }
 
         markdown.EmptyListIf(package.AnalyzedOptions.Count == 0);
+        markdown.H2("Tradeoff Comparisons");
+        foreach (DecisionTradeoffComparison comparison in package.TradeoffComparisons
+            .OrderBy(comparison => comparison.OptionId, StringComparer.Ordinal))
+        {
+            markdown.H3(comparison.OptionId);
+            markdown.H4("Relative Strengths");
+            foreach (string strength in comparison.RelativeStrengths.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(strength);
+            }
+
+            markdown.EmptyListIf(comparison.RelativeStrengths.Count == 0);
+            markdown.H4("Relative Weaknesses");
+            foreach (string weakness in comparison.RelativeWeaknesses.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(weakness);
+            }
+
+            markdown.EmptyListIf(comparison.RelativeWeaknesses.Count == 0);
+            markdown.H4("Unique Advantages");
+            foreach (string advantage in comparison.UniqueAdvantages.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(advantage);
+            }
+
+            markdown.EmptyListIf(comparison.UniqueAdvantages.Count == 0);
+            markdown.H4("Unique Risks");
+            foreach (string risk in comparison.UniqueRisks.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(risk);
+            }
+
+            markdown.EmptyListIf(comparison.UniqueRisks.Count == 0);
+            markdown.H4("Disqualifying Constraints");
+            foreach (string constraint in comparison.DisqualifyingConstraints.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(constraint);
+            }
+
+            markdown.EmptyListIf(comparison.DisqualifyingConstraints.Count == 0);
+            markdown.H4("Evidence");
+            markdown.EvidenceList(comparison.Evidence);
+        }
+
+        markdown.EmptyListIf(package.TradeoffComparisons.Count == 0);
         markdown.H2("Recommendation");
         if (package.Recommendation is null)
         {
@@ -836,6 +881,68 @@ public sealed class DecisionArtifactProjectionService(
                     ? "None."
                     : package.Recommendation.Summary));
             markdown.Paragraph(package.Recommendation.Rationale);
+            markdown.H3("Supporting Factors");
+            foreach (string factor in package.Recommendation.SupportingFactors.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(factor);
+            }
+
+            markdown.EmptyListIf(package.Recommendation.SupportingFactors.Count == 0);
+            markdown.H3("Concerns");
+            foreach (string concern in package.Recommendation.Concerns.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(concern);
+            }
+
+            markdown.EmptyListIf(package.Recommendation.Concerns.Count == 0);
+            markdown.H3("Assumptions");
+            foreach (string assumption in package.Recommendation.Assumptions.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(assumption);
+            }
+
+            markdown.EmptyListIf(package.Recommendation.Assumptions.Count == 0);
+            markdown.H3("Option Evaluations");
+            foreach (OptionEvaluation evaluation in package.Recommendation.OptionEvaluations
+                .OrderBy(evaluation => evaluation.Rank)
+                .ThenBy(evaluation => evaluation.OptionId, StringComparer.Ordinal))
+            {
+                markdown.H4($"{evaluation.Rank}. {evaluation.OptionId}");
+                markdown.Fields(
+                    ("Score", evaluation.Score.ToString()),
+                    ("Summary", evaluation.Summary),
+                    ("Score explanation", evaluation.ScoreExplanation));
+                markdown.H4("Strengths");
+                foreach (string strength in evaluation.Strengths.Order(StringComparer.Ordinal))
+                {
+                    markdown.Bullet(strength);
+                }
+
+                markdown.EmptyListIf(evaluation.Strengths.Count == 0);
+                markdown.H4("Weaknesses");
+                foreach (string weakness in evaluation.Weaknesses.Order(StringComparer.Ordinal))
+                {
+                    markdown.Bullet(weakness);
+                }
+
+                markdown.EmptyListIf(evaluation.Weaknesses.Count == 0);
+                markdown.H4("Risks");
+                foreach (string risk in evaluation.Risks.Order(StringComparer.Ordinal))
+                {
+                    markdown.Bullet(risk);
+                }
+
+                markdown.EmptyListIf(evaluation.Risks.Count == 0);
+                markdown.H4("Constraints");
+                foreach (string constraint in evaluation.Constraints.Order(StringComparer.Ordinal))
+                {
+                    markdown.Bullet(constraint);
+                }
+
+                markdown.EmptyListIf(evaluation.Constraints.Count == 0);
+            }
+
+            markdown.EmptyListIf(package.Recommendation.OptionEvaluations.Count == 0);
             markdown.H3("Recommendation Evidence");
             foreach (RecommendationEvidence evidence in package.Recommendation.RecommendationEvidence
                 .OrderBy(evidence => evidence.Type.ToString(), StringComparer.Ordinal)
@@ -895,6 +1002,24 @@ public sealed class DecisionArtifactProjectionService(
         if (package.TradeoffAnalysisDiagnostics is not null)
         {
             markdown.H3("Tradeoff Analysis");
+            markdown.Fields(
+                ("Analyzed options", package.TradeoffAnalysisDiagnostics.AnalyzedOptionCount.ToString()),
+                ("Context fingerprint", package.TradeoffAnalysisDiagnostics.ContextFingerprint));
+            markdown.H4("Unknowns");
+            foreach (string unknown in package.TradeoffAnalysisDiagnostics.Unknowns.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(unknown);
+            }
+
+            markdown.EmptyListIf(package.TradeoffAnalysisDiagnostics.Unknowns.Count == 0);
+            markdown.H4("Validation Warnings");
+            foreach (string warning in package.TradeoffAnalysisDiagnostics.ValidationWarnings.Order(StringComparer.Ordinal))
+            {
+                markdown.Bullet(warning);
+            }
+
+            markdown.EmptyListIf(package.TradeoffAnalysisDiagnostics.ValidationWarnings.Count == 0);
+            markdown.H4("Diagnostics");
             foreach (string diagnostic in package.TradeoffAnalysisDiagnostics.Diagnostics.Order(StringComparer.Ordinal))
             {
                 markdown.Bullet(diagnostic);
