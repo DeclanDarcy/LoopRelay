@@ -1,4 +1,5 @@
-import { ExecutionEventFeed } from '../execution/ExecutionEventFeed'
+import { Button, EmptyState, Panel, SectionHeader } from '../../components/design'
+import { formatDateTime } from '../../lib'
 import type { ExecutionEvent } from '../../types'
 
 type WorkspaceLiveActivityPanelProps = {
@@ -10,22 +11,41 @@ export function WorkspaceLiveActivityPanel({
   events,
   onOpenExecutionActivity,
 }: WorkspaceLiveActivityPanelProps) {
+  const latestEvent = events.at(-1) ?? null
+  const categories = Array.from(
+    new Set(events.map((event) => event.category?.trim() || 'Monitoring')),
+  )
+
   return (
-    <div className="workspace-cross-link-panel">
-      <ExecutionEventFeed
-        ariaLabel="Workspace live activity"
+    <Panel className="workspace-cross-link-panel workspace-live-activity-summary" aria-label="Workspace live activity">
+      <SectionHeader
         eyebrow="Live Activity"
-        events={events}
+        title={`${events.length} events`}
+        headingLevel={4}
+        actions={
+          onOpenExecutionActivity ? (
+            <Button
+              type="button"
+              variant="secondary"
+              className="secondary-action"
+              onClick={onOpenExecutionActivity}
+            >
+              Open in Execution
+            </Button>
+          ) : null
+        }
       />
-      {onOpenExecutionActivity ? (
-        <button
-          type="button"
-          className="workspace-cross-link secondary-action"
-          onClick={onOpenExecutionActivity}
-        >
-          Open in Execution
-        </button>
+      {latestEvent ? (
+        <div className="workspace-inspector-summary">
+          <span>Latest: {latestEvent.type}</span>
+          <span>Recorded: {formatDateTime(latestEvent.timestamp)}</span>
+          <span>Categories: {categories.join(', ')}</span>
+          <span>Consequence: {latestEvent.consequence?.trim() || 'Execution monitoring recorded activity.'}</span>
+        </div>
       ) : null}
-    </div>
+      {events.length === 0 ? (
+        <EmptyState className="empty-state">No execution events recorded.</EmptyState>
+      ) : null}
+    </Panel>
   )
 }

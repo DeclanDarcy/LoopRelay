@@ -9,6 +9,7 @@ Make the application feel unified, not merely smaller. Remove fragmentation so e
 - [x] Audit navigation for workflow, decision sessions, decisions, execution, reasoning, operational context, repository, health, diagnostics, and certification.
 - [x] Define one primary home and allowed contextual links for each capability.
 - [ ] Consolidate duplicate workflow displays, governance summaries, execution monitoring views, reasoning confidence displays, continuity evolution summaries, health widgets, and certification summaries.
+  - [x] Execution monitoring/history workspace duplicates converted to contextual summaries. See `./m9-execution-consolidation.md`.
 - [x] Review backend endpoints and classify each as `Keep`, `Redirect`, `Internal`, or `Remove`.
 - [x] Review projections and classify each as authoritative, derived consumer, compatibility, or retire.
 - [x] Review frontend state and classify each state value as authoritative view state, derived display state, disposable UI state, or duplicate domain state.

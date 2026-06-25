@@ -9,7 +9,6 @@ import type {
   RepositoryExecutionState,
   RepositoryGitStatus,
 } from '../../types'
-import { ExecutionHistoryPanel } from '../execution/ExecutionHistoryPanel'
 
 type OperationalContextSectionId =
   | 'operational-current'
@@ -123,11 +122,58 @@ export function WorkspaceInspectorRail({
         </div>
       </Panel>
 
-      <ExecutionHistoryPanel
+      <ExecutionHistorySummaryPanel
         sessions={executionHistory}
         onOpenSession={onOpenExecutionSession}
       />
     </>
+  )
+}
+
+type ExecutionHistorySummaryPanelProps = {
+  sessions: ExecutionSessionSummary[]
+  onOpenSession?: (session: ExecutionSessionSummary) => void
+}
+
+function ExecutionHistorySummaryPanel({
+  sessions,
+  onOpenSession,
+}: ExecutionHistorySummaryPanelProps) {
+  if (sessions.length === 0) {
+    return null
+  }
+
+  const latestSession = sessions[0]
+  const completedCount = sessions.filter((session) => session.state === 'Completed').length
+  const failedCount = sessions.filter((session) => session.state === 'Failed').length
+
+  return (
+    <Panel className="workspace-inspector-panel" aria-label="Execution history summary">
+      <SectionHeader
+        eyebrow="Execution Sessions"
+        title={`${sessions.length} recent sessions`}
+        headingLevel={4}
+        actions={
+          onOpenSession ? (
+            <Button
+              type="button"
+              variant="secondary"
+              className="secondary-action"
+              onClick={() => onOpenSession(latestSession)}
+            >
+              Open in Execution
+            </Button>
+          ) : null
+        }
+      />
+      <div className="workspace-inspector-summary">
+        <span>Latest milestone: {latestSession.milestonePath ?? 'Milestone not recorded'}</span>
+        <span>Latest state: {repositoryExecutionStatus[latestSession.repositoryState].label}</span>
+        <span>Last activity: {formatDateTime(latestSession.lastActivityAt)}</span>
+        <span>Completed: {completedCount}</span>
+        <span>Failed: {failedCount}</span>
+      </div>
+    </Panel>
   )
 }
 

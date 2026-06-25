@@ -2,16 +2,15 @@
 
 ## Newly Authorized
 
-- Treat the navigation registry slice as the correct first implementation slice for Milestone 9.
-- Keep `NavigationTarget.classification` as the concrete policy mechanism for primary versus contextual navigation destinations.
-- Continue Milestone 9 with execution history/live activity consolidation as the next highest-leverage slice.
-- For the execution consolidation slice:
-  - identify the single primary execution workspace,
-  - classify every other execution surface as contextual summary, contextual link, compatibility surface, or retire candidate,
-  - move duplicated execution presentation into the primary workspace while leaving lightweight summaries elsewhere,
-  - ensure contextual links navigate into the primary execution view instead of reproducing the same information.
-- Continue applying the navigation-registry pattern across Milestone 9 cohesion work:
-  - one registry,
-  - one primary presentation,
-  - contextual references instead of duplicated implementations,
-  - characterization tests protecting reachability.
+- Treat the execution consolidation slice as aligned with Milestone 9 cohesion principles because it keeps execution semantics unchanged while establishing one primary execution presentation.
+- Keep `ExecutionTab` as the sole primary home for full execution event streams, complete session history, and detailed execution transparency.
+- Treat workspace execution surfaces as contextual overview/dashboard surfaces that may show concise summaries and navigation affordances but must not duplicate detailed execution UI.
+- Preserve the regression-test pattern that asserts contextual workspace surfaces do not render primary execution detail rows such as `.execution-event-row` and `.execution-history-row`.
+- Continue Milestone 9 with workflow presentation consolidation as the next slice.
+- For workflow consolidation:
+  - inventory every workflow display,
+  - classify each workflow surface as primary, contextual, compatibility, or retire candidate,
+  - remove remaining duplicated derivation from `RepositoryExecutionState` where authoritative workflow projection exists,
+  - preserve contextual workflow summaries for current stage, blocking gates, health summary, and required action,
+  - navigate contextual workflow references into the primary Workflow workspace or owning tab section for the complete experience.
+- After workflow consolidation, expect similar Milestone 9 consolidation opportunities in governance summaries, decision summaries, reasoning summaries, and continuity summaries before broader density and terminology work.

@@ -183,7 +183,7 @@ function renderRail(
 }
 
 describe('WorkspaceInspectorRail', () => {
-  it('renders git status, operational context counts, and execution history summaries', () => {
+  it('renders git status, operational context counts, and a contextual execution history summary', () => {
     renderRail()
 
     expect(screen.getByText('Branch: main')).toBeInTheDocument()
@@ -196,7 +196,11 @@ describe('WorkspaceInspectorRail', () => {
     expect(screen.getByText((_, element) => element?.textContent === 'Open questions: 1')).toBeInTheDocument()
     expect(screen.getByText((_, element) => element?.textContent === 'Active risks: 1')).toBeInTheDocument()
     expect(screen.getByText((_, element) => element?.textContent === 'Pending proposal: Present')).toBeInTheDocument()
-    expect(screen.getAllByText('.agents/milestones/m3.md').length).toBeGreaterThan(0)
+    expect(screen.getByRole('region', { name: 'Execution history summary' })).toBeInTheDocument()
+    expect(screen.getByText('Latest milestone: .agents/milestones/m3.md')).toBeInTheDocument()
+    expect(screen.getByText('Latest state: Awaiting push')).toBeInTheDocument()
+    expect(screen.getByText('Completed: 1')).toBeInTheDocument()
+    expect(document.querySelectorAll('.execution-history-row')).toHaveLength(0)
   })
 
   it('renders current commit preparation without exposing commit actions', () => {
@@ -244,7 +248,7 @@ describe('WorkspaceInspectorRail', () => {
     expect(onOpenOperationalContext).toHaveBeenNthCalledWith(5, 'proposal-review')
   })
 
-  it('uses navigation callbacks for continuity warning snippets and execution history', () => {
+  it('uses navigation callbacks for continuity warning snippets and execution history summaries', () => {
     const { onOpenContinuityWarnings, onOpenExecutionSession } = renderRail({
       operationalContext: {
         ...operationalContext,
@@ -253,7 +257,7 @@ describe('WorkspaceInspectorRail', () => {
     })
 
     fireEvent.click(screen.getByRole('button', { name: 'Decision continuity warning' }))
-    fireEvent.click(screen.getByRole('button', { name: /m3\.md/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open in Execution' }))
 
     expect(onOpenContinuityWarnings).toHaveBeenCalledTimes(1)
     expect(onOpenExecutionSession).toHaveBeenCalledWith(executionSummary)
