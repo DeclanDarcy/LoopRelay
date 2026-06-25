@@ -41,7 +41,7 @@ Make the application feel unified, not merely smaller. Remove fragmentation so e
 
 ### Tests
 
-- [ ] Navigation characterization tests.
+- [x] Navigation characterization tests.
 - [ ] UI tests proving primary surfaces remain reachable.
 - [ ] Static or unit tests for removed duplicate helpers where practical.
 - [ ] Backend endpoint disposition tests for retained routes.

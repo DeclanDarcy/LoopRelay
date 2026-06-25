@@ -1,6 +1,7 @@
 import type {
   ContinuityDiagnostics,
   ExecutionSessionSummary,
+  NavigationDestinationClassification,
   NavigationTarget,
   OperationalContextItem,
   RepositoryDashboardProjection,
@@ -8,26 +9,49 @@ import type {
 } from '../types'
 import type { PrimaryWorkspaceTab } from '../state/shellState'
 
-const workspaceTabs: { id: PrimaryWorkspaceTab; label: string }[] = [
-  { id: 'workspace', label: 'Workspace' },
-  { id: 'execution', label: 'Execution' },
-  { id: 'operational-context', label: 'Operational Context' },
-  { id: 'governance', label: 'Governance' },
-  { id: 'decisions', label: 'Decisions' },
-  { id: 'reasoning', label: 'Reasoning' },
-  { id: 'continuity', label: 'Continuity' },
+export type WorkspaceTabDefinition = {
+  id: PrimaryWorkspaceTab
+  label: string
+  classification: NavigationDestinationClassification
+}
+
+export type NavigationSectionTargetDefinition = Pick<
+  NavigationTarget,
+  'id' | 'kind' | 'group' | 'label' | 'description' | 'classification' | 'tab' | 'sectionId'
+>
+
+export type GlobalNavigationItemDefinition = {
+  id: string
+  label: string
+  classification: NavigationDestinationClassification
+}
+
+export const workspaceTabDefinitions: WorkspaceTabDefinition[] = [
+  { id: 'workspace', label: 'Workspace', classification: 'primary' },
+  { id: 'execution', label: 'Execution', classification: 'primary' },
+  { id: 'operational-context', label: 'Operational Context', classification: 'primary' },
+  { id: 'governance', label: 'Governance', classification: 'primary' },
+  { id: 'decisions', label: 'Decisions', classification: 'primary' },
+  { id: 'reasoning', label: 'Reasoning', classification: 'primary' },
+  { id: 'continuity', label: 'Continuity', classification: 'primary' },
 ]
 
-const staticSectionTargets: Pick<
-  NavigationTarget,
-  'id' | 'kind' | 'group' | 'label' | 'description' | 'tab' | 'sectionId'
->[] = [
+export const globalNavigationItems: GlobalNavigationItemDefinition[] = [
+  {
+    id: 'repositories',
+    label: 'Repositories',
+    classification: 'primary',
+  },
+]
+
+export const navigationSectionTargets: NavigationSectionTargetDefinition[] = [
   {
     id: 'section-artifacts',
     kind: 'section',
     group: 'Inspector Sections',
     label: 'Repository Artifacts',
     description: 'Open the artifact explorer and editor.',
+    classification: 'contextual',
     tab: 'workspace',
     sectionId: 'artifact-workspace',
   },
@@ -37,6 +61,7 @@ const staticSectionTargets: Pick<
     group: 'Inspector Sections',
     label: 'Workspace Execution Context',
     description: 'Open the workspace execution context panel.',
+    classification: 'contextual',
     tab: 'workspace',
     sectionId: 'workspace-execution-context',
   },
@@ -46,6 +71,7 @@ const staticSectionTargets: Pick<
     group: 'Inspector Sections',
     label: 'Workspace Milestones',
     description: 'Open the milestone selector.',
+    classification: 'contextual',
     tab: 'workspace',
     sectionId: 'workspace-milestones',
   },
@@ -55,6 +81,7 @@ const staticSectionTargets: Pick<
     group: 'Inspector Sections',
     label: 'Workspace Inspector',
     description: 'Open the repository inspector rail.',
+    classification: 'contextual',
     tab: 'workspace',
     sectionId: 'workspace-inspector',
   },
@@ -64,6 +91,7 @@ const staticSectionTargets: Pick<
     group: 'Inspector Sections',
     label: 'Execution Stream',
     description: 'Open the full execution event stream.',
+    classification: 'contextual',
     tab: 'execution',
     sectionId: 'execution-events',
   },
@@ -73,6 +101,7 @@ const staticSectionTargets: Pick<
     group: 'Inspector Sections',
     label: 'Execution Context Diagnostics',
     description: 'Open the execution workspace context diagnostics.',
+    classification: 'contextual',
     tab: 'execution',
     sectionId: 'execution-context',
   },
@@ -82,6 +111,7 @@ const staticSectionTargets: Pick<
     group: 'Inspector Sections',
     label: 'Generated Handoff Review',
     description: 'Open the handoff review panel when available.',
+    classification: 'contextual',
     tab: 'execution',
     sectionId: 'generated-handoff-review',
   },
@@ -91,6 +121,7 @@ const staticSectionTargets: Pick<
     group: 'Inspector Sections',
     label: 'Git Workflow',
     description: 'Open commit and push evidence.',
+    classification: 'contextual',
     tab: 'execution',
     sectionId: 'git-workflow',
   },
@@ -100,6 +131,7 @@ const staticSectionTargets: Pick<
     group: 'Inspector Sections',
     label: 'Current Understanding',
     description: 'Open the operational context summary.',
+    classification: 'contextual',
     tab: 'operational-context',
     sectionId: 'operational-current',
   },
@@ -109,6 +141,7 @@ const staticSectionTargets: Pick<
     group: 'Inspector Sections',
     label: 'Proposal Review',
     description: 'Open operational-context proposal review.',
+    classification: 'contextual',
     tab: 'operational-context',
     sectionId: 'proposal-review',
   },
@@ -118,6 +151,7 @@ const staticSectionTargets: Pick<
     group: 'Inspector Sections',
     label: 'Open Questions',
     description: 'Open operational-context open questions.',
+    classification: 'contextual',
     tab: 'operational-context',
     sectionId: 'operational-open-questions',
   },
@@ -127,6 +161,7 @@ const staticSectionTargets: Pick<
     group: 'Inspector Sections',
     label: 'Architecture',
     description: 'Open operational-context architecture.',
+    classification: 'contextual',
     tab: 'operational-context',
     sectionId: 'operational-architecture',
   },
@@ -136,6 +171,7 @@ const staticSectionTargets: Pick<
     group: 'Inspector Sections',
     label: 'Constraints',
     description: 'Open operational-context constraints.',
+    classification: 'contextual',
     tab: 'operational-context',
     sectionId: 'operational-constraints',
   },
@@ -145,6 +181,7 @@ const staticSectionTargets: Pick<
     group: 'Inspector Sections',
     label: 'Active Risks',
     description: 'Open operational-context active risks.',
+    classification: 'contextual',
     tab: 'operational-context',
     sectionId: 'operational-active-risks',
   },
@@ -154,6 +191,7 @@ const staticSectionTargets: Pick<
     group: 'Inspector Sections',
     label: 'Decision Rationale',
     description: 'Open operational-context decision rationale.',
+    classification: 'contextual',
     tab: 'operational-context',
     sectionId: 'operational-decision-rationale',
   },
@@ -163,6 +201,7 @@ const staticSectionTargets: Pick<
     group: 'Inspector Sections',
     label: 'Stable Decisions',
     description: 'Open operational-context stable decisions.',
+    classification: 'contextual',
     tab: 'operational-context',
     sectionId: 'operational-stable-decisions',
   },
@@ -172,6 +211,7 @@ const staticSectionTargets: Pick<
     group: 'Inspector Sections',
     label: 'Governance Lifecycle',
     description: 'Open governance lifecycle, eligibility, and recovery.',
+    classification: 'contextual',
     tab: 'governance',
     sectionId: 'governance-workspace',
   },
@@ -181,6 +221,7 @@ const staticSectionTargets: Pick<
     group: 'Inspector Sections',
     label: 'Decision Lifecycle',
     description: 'Open the decision review workspace.',
+    classification: 'contextual',
     tab: 'decisions',
     sectionId: 'decision-lifecycle',
   },
@@ -190,6 +231,7 @@ const staticSectionTargets: Pick<
     group: 'Inspector Sections',
     label: 'Reasoning Trajectory',
     description: 'Open reasoning trajectory history.',
+    classification: 'contextual',
     tab: 'reasoning',
     sectionId: 'reasoning-trajectory',
   },
@@ -199,6 +241,7 @@ const staticSectionTargets: Pick<
     group: 'Inspector Sections',
     label: 'Reasoning Event Feed',
     description: 'Open immutable reasoning events.',
+    classification: 'contextual',
     tab: 'reasoning',
     sectionId: 'reasoning-event-feed',
   },
@@ -208,6 +251,7 @@ const staticSectionTargets: Pick<
     group: 'Inspector Sections',
     label: 'Reasoning Threads',
     description: 'Open reasoning thread navigation.',
+    classification: 'contextual',
     tab: 'reasoning',
     sectionId: 'reasoning-thread-view',
   },
@@ -217,6 +261,7 @@ const staticSectionTargets: Pick<
     group: 'Inspector Sections',
     label: 'Reasoning Materialization Review',
     description: 'Open reasoning materialization review.',
+    classification: 'contextual',
     tab: 'reasoning',
     sectionId: 'reasoning-materialization-review',
   },
@@ -226,6 +271,7 @@ const staticSectionTargets: Pick<
     group: 'Inspector Sections',
     label: 'Continuity Diagnostics',
     description: 'Open continuity diagnostics.',
+    classification: 'contextual',
     tab: 'continuity',
     sectionId: 'continuity-diagnostics',
   },
@@ -235,6 +281,7 @@ const staticSectionTargets: Pick<
     group: 'Inspector Sections',
     label: 'Continuity Warnings',
     description: 'Open continuity warnings.',
+    classification: 'contextual',
     tab: 'continuity',
     sectionId: 'continuity-warnings',
   },
@@ -244,6 +291,7 @@ const staticSectionTargets: Pick<
     group: 'Inspector Sections',
     label: 'Compression Trend',
     description: 'Open continuity compression trend.',
+    classification: 'contextual',
     tab: 'continuity',
     sectionId: 'continuity-compression',
   },
@@ -253,6 +301,7 @@ const staticSectionTargets: Pick<
     group: 'Inspector Sections',
     label: 'Decision Retention',
     description: 'Open continuity decision retention.',
+    classification: 'contextual',
     tab: 'continuity',
     sectionId: 'continuity-decision-retention',
   },
@@ -272,6 +321,7 @@ type NavigationTargetInput = {
   group: string
   label: string
   description: string
+  classification?: NavigationDestinationClassification
   repositoryId?: string | null
   tab?: PrimaryWorkspaceTab | null
   sectionId?: string | null
@@ -280,7 +330,7 @@ type NavigationTargetInput = {
 }
 
 export function getTabForSection(sectionId: string): PrimaryWorkspaceTab {
-  return staticSectionTargets.find((target) => target.sectionId === sectionId)?.tab ?? 'workspace'
+  return navigationSectionTargets.find((target) => target.sectionId === sectionId)?.tab ?? 'workspace'
 }
 
 export function buildNavigationTargets({
@@ -302,11 +352,12 @@ export function buildNavigationTargets({
         group: 'Repositories',
         label: entry.repository.name,
         description: entry.repository.path,
+        classification: 'primary',
         repositoryId: entry.repository.id,
       }),
     )
 
-    workspaceTabs.forEach((tab) => {
+    workspaceTabDefinitions.forEach((tab) => {
       targets.push(
         createTarget({
           id: `repository-${entry.repository.id}-${tab.id}`,
@@ -314,6 +365,7 @@ export function buildNavigationTargets({
           group: 'Repository Workspaces',
           label: `${entry.repository.name} ${tab.label}`,
           description: `Open ${tab.label} for ${entry.repository.name}.`,
+          classification: tab.classification,
           repositoryId: entry.repository.id,
           tab: tab.id,
         }),
@@ -325,7 +377,7 @@ export function buildNavigationTargets({
     return targets
   }
 
-  workspaceTabs.forEach((tab) => {
+  workspaceTabDefinitions.forEach((tab) => {
     targets.push(
       createTarget({
         id: `current-repository-${tab.id}`,
@@ -333,13 +385,14 @@ export function buildNavigationTargets({
         group: 'Current Repository Workspaces',
         label: `${tab.label} tab`,
         description: `Open ${tab.label} for ${workspace.repository.name}.`,
+        classification: tab.classification,
         repositoryId: workspace.repository.id,
         tab: tab.id,
       }),
     )
   })
 
-  staticSectionTargets.forEach((target) => {
+  navigationSectionTargets.forEach((target) => {
     targets.push(
       createTarget({
         ...target,
@@ -497,6 +550,7 @@ function addContextItemTargets(
 
 function createTarget(target: NavigationTargetInput): NavigationTarget {
   const nextTarget = {
+    classification: 'contextual' as NavigationDestinationClassification,
     repositoryId: null,
     tab: null,
     sectionId: null,

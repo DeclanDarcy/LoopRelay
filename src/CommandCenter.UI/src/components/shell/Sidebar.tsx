@@ -1,4 +1,5 @@
 import { Button, StatusBadge } from '../design'
+import { globalNavigationItems } from '../../lib'
 import { repositoryExecutionStatus } from '../../lib/status'
 import type { NavigationTarget, RepositoryDashboardProjection } from '../../types'
 
@@ -11,8 +12,6 @@ type SidebarProps = {
   onSelectRepository: (repositoryId: string) => void
   onSelectNavigationTarget: (target: NavigationTarget) => void
 }
-
-const globalNavigationItems = ['Overview', 'Repositories', 'Executions', 'Insights']
 
 export function Sidebar({
   repositories,
@@ -47,11 +46,10 @@ export function Sidebar({
         {globalNavigationItems.map((item) => (
           <button
             type="button"
-            key={item}
-            className={`global-nav-item${item === 'Repositories' ? ' selected' : ''}`}
-            disabled={item !== 'Repositories'}
+            key={item.id}
+            className="global-nav-item selected"
           >
-            {item}
+            {item.label}
           </button>
         ))}
       </nav>

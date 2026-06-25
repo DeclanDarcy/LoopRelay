@@ -2,31 +2,34 @@
 
 ## New State This Slice
 
-- Started Milestone 9 product cohesion with the planned audit/classification slice.
-- Added `.agents/milestones/m9-product-cohesion-audit.md` with:
-  - primary homes and contextual links for repository, workflow, execution, operational context, governance, decisions, reasoning, continuity, health, diagnostics, and certification,
-  - navigation cleanup candidates,
-  - endpoint disposition,
-  - projection classification,
-  - frontend state classification,
-  - duplicate presentation candidates,
-  - baseline interaction pattern.
-- Updated `.agents/milestones/m9-product-cohesion.md` to mark the completed audit/classification items done.
-- Rotated previous handoff to `.agents/handoffs/handoff.0078.md`.
+- Continued Milestone 9 with the first implementation slice: navigation registry and reachability guardrails.
+- Added `.agents/milestones/m9-navigation-registry.md` as the evidence artifact for this slice.
+- Updated `.agents/milestones/m9-product-cohesion.md` to mark navigation characterization tests complete.
+- Promoted `src/CommandCenter.UI/src/lib/navigation.ts` into the shared registry for workspace tab metadata, global sidebar entries, static section anchors, and destination classifications.
+- Added `NavigationDestinationClassification` and `NavigationTarget.classification` to carry `primary`, `contextual`, `deprecated`, or `hidden` destination semantics through generated navigation targets.
+- Updated `WorkspaceTabs` to consume `workspaceTabDefinitions`.
+- Updated `Sidebar` to consume `globalNavigationItems` and removed the disabled global navigation entries (`Overview`, `Executions`, `Insights`) by leaving only the implemented `Repositories` entry.
+- Added/updated characterization coverage:
+  - registry primary capability and contextual section-anchor invariants in `navigation.test.ts`,
+  - rendered sidebar global-nav enabled-entry invariant in `sidebarNavigation.test.tsx`,
+  - command-palette target fixtures now include classification.
+- Rotated previous handoff to `.agents/handoffs/handoff.0079.md`.
 
 ## Verification
 
-- Documentation and planning artifact change only; no application tests were run.
+- `npm test -- navigation.test.ts sidebarNavigation.test.tsx commandPalette.test.tsx`
+- `npm run build`
 
 ## Residual Risk
 
-- Endpoint and projection classifications are audit-level dispositions, not removals or redirects.
-- No code cleanup has been implemented yet, so disabled global navigation and duplicated tab metadata still exist.
+- The registry now guards primary tab and contextual anchor metadata, but full rendered app reachability coverage remains deferred.
+- Execution history/live activity duplication still exists and is the next visible Milestone 9 fragmentation target.
+- Global nav is intentionally minimal until additional global destinations are implemented rather than disabled.
 
 ## Recommended Next Slice
 
-- Implement the first Milestone 9 cohesion slice:
-  - centralize workspace tab metadata and static section ids into one navigation registry,
-  - remove or implement disabled global navigation entries,
-  - add navigation characterization coverage proving every major capability remains reachable through one primary tab and selected contextual command-palette links,
-  - then start collapsing execution history/live-activity duplication without changing execution semantics.
+- Collapse execution history/live activity duplication:
+  - choose one primary presentation for execution session history and live events,
+  - keep contextual links from workspace/dashboard surfaces into the execution tab,
+  - preserve execution authority in backend projections and hooks,
+  - add characterization coverage proving workspace execution summaries navigate to the primary execution presentation without duplicating lifecycle semantics.

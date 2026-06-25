@@ -9,12 +9,19 @@ export type NavigationTargetKind =
   | 'artifact'
   | 'discovery'
 
+export type NavigationDestinationClassification =
+  | 'primary'
+  | 'contextual'
+  | 'deprecated'
+  | 'hidden'
+
 export type NavigationTarget = {
   id: string
   kind: NavigationTargetKind
   group: string
   label: string
   description: string
+  classification: NavigationDestinationClassification
   repositoryId: string | null
   tab: PrimaryWorkspaceTab | null
   sectionId: string | null

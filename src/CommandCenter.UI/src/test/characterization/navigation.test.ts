@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { buildNavigationTargets, getTabForSection } from '../../lib'
+import {
+  buildNavigationTargets,
+  getTabForSection,
+  globalNavigationItems,
+  navigationSectionTargets,
+  workspaceTabDefinitions,
+} from '../../lib'
 import type { RepositoryDashboardProjection, RepositoryWorkspaceProjection } from '../../types'
 
 const executionSummary = {
@@ -255,5 +261,47 @@ describe('navigation targets', () => {
     expect(getTabForSection('continuity-warnings')).toBe('continuity')
     expect(getTabForSection('reasoning-thread-view')).toBe('reasoning')
     expect(getTabForSection('workspace-milestones')).toBe('workspace')
+  })
+
+  it('keeps one primary workspace destination per major capability', () => {
+    expect(workspaceTabDefinitions.map((tab) => tab.id)).toEqual([
+      'workspace',
+      'execution',
+      'operational-context',
+      'governance',
+      'decisions',
+      'reasoning',
+      'continuity',
+    ])
+
+    const primaryTabs = workspaceTabDefinitions.filter((tab) => tab.classification === 'primary')
+    expect(primaryTabs).toHaveLength(workspaceTabDefinitions.length)
+    expect(new Set(primaryTabs.map((tab) => tab.id)).size).toBe(primaryTabs.length)
+  })
+
+  it('keeps deep-link sections contextual and uniquely anchored', () => {
+    expect(navigationSectionTargets.every((target) => target.classification === 'contextual')).toBe(true)
+    expect(
+      new Set(navigationSectionTargets.map((target) => target.sectionId)).size,
+    ).toBe(navigationSectionTargets.length)
+
+    expect(navigationSectionTargets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sectionId: 'governance-workspace', tab: 'governance' }),
+        expect.objectContaining({ sectionId: 'decision-lifecycle', tab: 'decisions' }),
+        expect.objectContaining({ sectionId: 'reasoning-trajectory', tab: 'reasoning' }),
+        expect.objectContaining({ sectionId: 'continuity-diagnostics', tab: 'continuity' }),
+      ]),
+    )
+  })
+
+  it('only exposes implemented global navigation entries', () => {
+    expect(globalNavigationItems).toEqual([
+      {
+        id: 'repositories',
+        label: 'Repositories',
+        classification: 'primary',
+      },
+    ])
   })
 })

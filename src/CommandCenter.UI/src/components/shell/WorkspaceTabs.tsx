@@ -1,4 +1,5 @@
 import { TabButton, Tabs } from '../design'
+import { workspaceTabDefinitions } from '../../lib'
 import type { PrimaryWorkspaceTab } from '../../state/shellState'
 
 type WorkspaceTabsProps = {
@@ -6,20 +7,10 @@ type WorkspaceTabsProps = {
   onSelectTab: (tab: PrimaryWorkspaceTab) => void
 }
 
-const workspaceTabs: { id: PrimaryWorkspaceTab; label: string }[] = [
-  { id: 'workspace', label: 'Workspace' },
-  { id: 'execution', label: 'Execution' },
-  { id: 'operational-context', label: 'Operational Context' },
-  { id: 'governance', label: 'Governance' },
-  { id: 'decisions', label: 'Decisions' },
-  { id: 'reasoning', label: 'Reasoning' },
-  { id: 'continuity', label: 'Continuity' },
-]
-
 export function WorkspaceTabs({ activeTab, onSelectTab }: WorkspaceTabsProps) {
   return (
     <Tabs className="workspace-tabs">
-      {workspaceTabs.map((tab) => (
+      {workspaceTabDefinitions.map((tab) => (
         <TabButton
           type="button"
           key={tab.id}
