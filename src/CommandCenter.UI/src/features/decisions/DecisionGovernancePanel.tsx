@@ -1,5 +1,10 @@
 import { EmptyState } from '../../components/design'
+import { ActionEligibilityView, DiagnosticList } from '../../components/explainability'
 import { DecisionGovernanceExplanation } from './DecisionGovernanceExplanation'
+import {
+  decisionDiagnosticsToExplanation,
+  decisionLifecycleEligibilityToActions,
+} from '../../lib/explainability'
 import type {
   Decision,
   DecisionGovernanceReport,
@@ -68,13 +73,11 @@ export function DecisionGovernancePanel({
             <span>Fingerprint: {currentReport.inputFingerprint}</span>
           </div>
 
-          {currentReport.diagnostics.length > 0 ? (
-            <div className="decision-warning-list" aria-label="Governance diagnostics">
-              {currentReport.diagnostics.map((diagnostic) => (
-                <span key={diagnostic}>{diagnostic}</span>
-              ))}
-            </div>
-          ) : null}
+          <DiagnosticList
+            diagnostics={decisionDiagnosticsToExplanation(currentReport.diagnostics, 'Governance')}
+            emptyLabel="No governance diagnostics projected."
+            title="Governance Diagnostics"
+          />
 
           <DecisionGovernanceExplanation report={currentReport} onSelectProposal={onSelectProposal} />
 
@@ -209,24 +212,16 @@ function LifecycleAuthorityCard({
         <span>Allowed actions: {eligibility.allowedActions.map((action) => action.displayName).join(', ') || 'None'}</span>
         <span>Allowed transitions: {eligibility.allowedNextStates.join(', ') || 'None'}</span>
       </div>
-      {eligibility.blockedActions.length > 0 ? (
-        <ul className="decision-lifecycle-reasons" aria-label={`${label} governance blocked transitions`}>
-          {eligibility.blockedActions.map((action) => (
-            <li key={action.commandName}>
-              <strong>{action.displayName}</strong>
-              <span>{action.reason ?? 'Blocked by backend lifecycle rules.'}</span>
-              <small>{action.governingRule}</small>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {eligibility.diagnostics.length > 0 ? (
-        <ul className="decision-lifecycle-reasons" aria-label={`${label} governance transition diagnostics`}>
-          {eligibility.diagnostics.map((diagnostic) => (
-            <li key={diagnostic}>{diagnostic}</li>
-          ))}
-        </ul>
-      ) : null}
+      <ActionEligibilityView
+        actions={decisionLifecycleEligibilityToActions(eligibility)}
+        emptyLabel="No lifecycle actions projected."
+        title={`${label} Lifecycle Actions`}
+      />
+      <DiagnosticList
+        diagnostics={decisionDiagnosticsToExplanation(eligibility.diagnostics, `${label} Lifecycle`)}
+        emptyLabel="No lifecycle diagnostics projected."
+        title={`${label} Lifecycle Diagnostics`}
+      />
     </article>
   )
 }

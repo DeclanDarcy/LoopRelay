@@ -1,3 +1,5 @@
+import { DiagnosticList } from '../../components/explainability'
+import { decisionGovernanceFindingsToDiagnostics } from '../../lib/explainability'
 import type {
   DecisionGovernanceCategory,
   DecisionGovernanceFinding,
@@ -60,25 +62,12 @@ function GovernanceFindingCard({
   finding: DecisionGovernanceFinding
   onSelectProposal: (proposalId: string) => void
 }) {
-  const related = [
-    ...finding.relatedDecisionIds.map((id) => `Decision ${id}`),
-    ...finding.relatedCandidateIds.map((id) => `Candidate ${id}`),
-    ...finding.relatedProposalIds.map((id) => `Proposal ${id}`),
-  ]
-
   return (
     <article className="decision-governance-finding">
-      <div>
-        <span>{finding.id}</span>
-        <strong>{finding.title}</strong>
-      </div>
-      <p>{finding.detail}</p>
-      <div className="decision-badge-row">
-        <span>{finding.blocksExecutionProjection ? 'Blocks execution projection' : 'Advisory'}</span>
-        {related.map((item) => (
-          <span key={item}>{item}</span>
-        ))}
-      </div>
+      <DiagnosticList
+        diagnostics={decisionGovernanceFindingsToDiagnostics([finding])}
+        title={finding.id}
+      />
       {finding.relatedProposalIds.length > 0 ? (
         <div className="decision-governance-actions" aria-label="Finding navigation">
           {finding.relatedProposalIds.map((proposalId) => (
@@ -92,18 +81,6 @@ function GovernanceFindingCard({
             </button>
           ))}
         </div>
-      ) : null}
-      {finding.sources.length > 0 ? (
-        <ul className="decision-source-list">
-          {finding.sources.map((source, index) => (
-            <li key={`${finding.id}-${source.sourceKind}-${source.relativePath ?? 'none'}-${index}`}>
-              <strong>{source.sourceKind}</strong>
-              {source.relativePath ? <span>{source.relativePath}</span> : null}
-              {source.section ? <span>{source.section}</span> : null}
-              {source.excerpt ? <p>{source.excerpt}</p> : null}
-            </li>
-          ))}
-        </ul>
       ) : null}
     </article>
   )

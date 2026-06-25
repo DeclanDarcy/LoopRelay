@@ -1,10 +1,12 @@
-import { useMemo } from 'react'
 import { EmptyState } from '../../components/design'
+import { CertificationFindingsView, DiagnosticList } from '../../components/explainability'
+import {
+  decisionDiagnosticsToExplanation,
+  decisionGenerationCertificationFindingsToExplanation,
+} from '../../lib/explainability'
 import type {
-  DecisionGenerationCertificationFinding,
   DecisionGenerationCertificationReport,
   DecisionQualityAssessment,
-  DecisionSourceReference,
   HumanAuthoringBurdenReport,
 } from '../../types'
 
@@ -25,15 +27,6 @@ export function DecisionGenerationCertificationPanel({
   error,
   onRunCertification,
 }: DecisionGenerationCertificationPanelProps) {
-  const failedFindings = useMemo(
-    () => currentReport?.result.findings.filter((finding) => !finding.passed) ?? [],
-    [currentReport?.result.findings],
-  )
-  const passedFindings = useMemo(
-    () => currentReport?.result.findings.filter((finding) => finding.passed) ?? [],
-    [currentReport?.result.findings],
-  )
-
   return (
     <section
       className="decision-lifecycle-panel decision-generation-certification-panel"
@@ -80,50 +73,32 @@ export function DecisionGenerationCertificationPanel({
             <span>Fingerprint: {currentReport.inputFingerprint}</span>
           </div>
 
-          {currentReport.result.failures.length > 0 ? (
-            <div className="decision-warning-list" aria-label="Generation certification failures">
-              {currentReport.result.failures.map((failure) => (
-                <span key={failure}>{failure}</span>
-              ))}
-            </div>
-          ) : (
-            <div className="decision-success-list">
-              <span>No generation certification failures were reported.</span>
-            </div>
-          )}
+          <DiagnosticList
+            diagnostics={decisionDiagnosticsToExplanation(
+              currentReport.result.failures,
+              'Generation Certification Failure',
+            )}
+            emptyLabel="No generation certification failures were reported."
+            title="Generation Certification Failures"
+          />
 
-          {currentReport.diagnostics.length > 0 ? (
-            <div className="decision-warning-list" aria-label="Generation certification diagnostics">
-              {currentReport.diagnostics.map((diagnostic) => (
-                <span key={diagnostic}>{diagnostic}</span>
-              ))}
-            </div>
-          ) : null}
+          <DiagnosticList
+            diagnostics={decisionDiagnosticsToExplanation(
+              currentReport.diagnostics,
+              'Generation Certification',
+            )}
+            emptyLabel="No generation certification diagnostics projected."
+            title="Generation Certification Diagnostics"
+          />
 
           <ExecutiveReadinessSummary report={currentReport} />
           <HumanAuthoringBurdenSummary report={currentReport.humanAuthoringBurden} />
 
-          <div className="decision-inspection-list" aria-label="Generation certification findings">
-            <h6>Findings</h6>
-            {failedFindings.length > 0 ? (
-              <div className="decision-certification-group">
-                <h6>Failed</h6>
-                {failedFindings.map((finding) => (
-                  <GenerationCertificationFindingCard finding={finding} key={finding.id} />
-                ))}
-              </div>
-            ) : null}
-            {passedFindings.length > 0 ? (
-              <div className="decision-certification-group">
-                <h6>Passed</h6>
-                {passedFindings.map((finding) => (
-                  <GenerationCertificationFindingCard finding={finding} key={finding.id} />
-                ))}
-              </div>
-            ) : (
-              <EmptyState className="empty-state">No generation certification findings are available.</EmptyState>
-            )}
-          </div>
+          <CertificationFindingsView
+            findings={decisionGenerationCertificationFindingsToExplanation(currentReport.result.findings)}
+            emptyLabel="No generation certification findings are available."
+            title="Findings"
+          />
 
           <QualityEvidenceSummary assessments={currentReport.qualityAssessments} />
 
@@ -252,54 +227,6 @@ function QualityEvidenceSummary({ assessments }: { assessments: DecisionQualityA
         <EmptyState className="empty-state">No quality assessments are attached to this report.</EmptyState>
       )}
     </div>
-  )
-}
-
-function GenerationCertificationFindingCard({
-  finding,
-}: {
-  finding: DecisionGenerationCertificationFinding
-}) {
-  const related = [
-    ...finding.relatedDecisionIds.map((id) => `Decision ${id}`),
-    ...finding.relatedCandidateIds.map((id) => `Candidate ${id}`),
-    ...finding.relatedProposalIds.map((id) => `Proposal ${id}`),
-  ]
-
-  return (
-    <article className="decision-certification-evidence">
-      <div>
-        <span>{finding.category}</span>
-        <strong>{finding.summary}</strong>
-      </div>
-      <p>{finding.detail}</p>
-      <div className="decision-badge-row">
-        <span>{finding.passed ? 'Passed' : 'Failed'}</span>
-        {related.map((item) => (
-          <span key={item}>{item}</span>
-        ))}
-      </div>
-      <SourceList sources={finding.sources} id={finding.id} />
-    </article>
-  )
-}
-
-function SourceList({ sources, id }: { sources: DecisionSourceReference[]; id: string }) {
-  if (sources.length === 0) {
-    return null
-  }
-
-  return (
-    <ul className="decision-source-list">
-      {sources.map((source, index) => (
-        <li key={`${id}-${source.sourceKind}-${source.relativePath ?? 'none'}-${index}`}>
-          <strong>{source.sourceKind}</strong>
-          {source.relativePath ? <span>{source.relativePath}</span> : null}
-          {source.section ? <span>{source.section}</span> : null}
-          {source.excerpt ? <p>{source.excerpt}</p> : null}
-        </li>
-      ))}
-    </ul>
   )
 }
 

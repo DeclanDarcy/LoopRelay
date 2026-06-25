@@ -23,9 +23,9 @@ describe('DecisionEvidenceSourcePanel', () => {
       ),
     ).toBeInTheDocument()
     const selectedSource = screen.getByLabelText('Selected evidence source')
-    expect(within(selectedSource).getByText('.agents/plan.md')).toBeInTheDocument()
-    expect(within(selectedSource).getByText('Milestone 4')).toBeInTheDocument()
-    expect(within(selectedSource).getByText('Provide full proposal inspection.')).toBeInTheDocument()
+    expect(within(selectedSource).getByText(/\.agents\/plan\.md/)).toBeInTheDocument()
+    expect(within(selectedSource).getByText(/Milestone 4/)).toBeInTheDocument()
+    expect(within(selectedSource).getByText(/Provide full proposal inspection\./)).toBeInTheDocument()
   })
 
   it('selects another evidence item using local presentation state', () => {
@@ -42,7 +42,7 @@ describe('DecisionEvidenceSourcePanel', () => {
     const selectedSource = screen.getByLabelText('Selected evidence source')
     expect(within(selectedSource).getByText('Recommendation')).toBeInTheDocument()
     expect(within(selectedSource).getByText('OPT-A')).toBeInTheDocument()
-    expect(within(selectedSource).getByText('.agents/decisions/proposals/PROP-0001/proposal.json')).toBeInTheDocument()
+    expect(within(selectedSource).getByText(/\.agents\/decisions\/proposals\/PROP-0001\/proposal\.json/)).toBeInTheDocument()
   })
 
   it('does not expose evidence mutation controls', () => {

@@ -23,11 +23,11 @@ describe('DecisionCertificationPanel', () => {
     )
 
     expect(screen.getByText('Result: Failed')).toBeInTheDocument()
-    expect(screen.getByText('Context')).toBeInTheDocument()
-    expect(screen.getByText('Authority')).toBeInTheDocument()
-    expect(screen.getByText('authority-boundaries')).toBeInTheDocument()
+    expect(screen.getByText('Category: Context')).toBeInTheDocument()
+    expect(screen.getByText('Category: Authority')).toBeInTheDocument()
+    expect(screen.getByText('Authority: authority-boundaries')).toBeInTheDocument()
     expect(screen.getByText('Blocks execution projection')).toBeInTheDocument()
-    expect(screen.getByText('.agents/decisions/records/DEC-0001/decision.json')).toBeInTheDocument()
+    expect(screen.getByText(/\.agents\/decisions\/records\/DEC-0001\/decision\.json/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /resolve|accept|reject|promote|repair/i })).not.toBeInTheDocument()
 
     fireEvent.click(within(screen.getByLabelText('Decision certification')).getByRole('button', {

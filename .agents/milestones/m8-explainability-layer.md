@@ -52,9 +52,11 @@ Each component must render:
 - [ ] Add adapter functions under `src/CommandCenter.UI/src/lib/explainability/` for each domain. Adapters map authoritative domain fields into presentation concepts without computing domain outcomes.
    - [x] Workflow health, certification, recovery, gates, continuation, and reports adapter slice.
    - [x] Governance certification, recovery, health, and transfer eligibility adapter slice.
+   - [x] Decision certification, generation certification, governance findings, evidence sources, diagnostics, and lifecycle eligible actions adapter slice.
 - [ ] Adapters may reorganize authoritative information, but they must not omit semantically relevant evidence, constraints, uncertainty, diagnostics, findings, or eligible actions.
 - [ ] Replace domain-specific explanation widgets in:
    - [ ] decisions
+      - [x] Decision certification evidence/findings, generation certification findings/failures/diagnostics, governance findings/diagnostics, evidence source attributions, and lifecycle eligible actions now render through shared explainability components.
    - [ ] workflow
       - [x] Workflow health dimensions and certification findings now render through shared explainability components.
       - [x] Workflow recovery diagnostics/artifacts, gate action eligibility/diagnostics, continuation action eligibility/diagnostics, and workflow reports now render through shared explainability components.
@@ -75,9 +77,11 @@ Each component must render:
 - [ ] Adapter tests proving adapters do not compute domain scores, decisions, lifecycle state, or eligibility.
    - [x] Workflow adapter preservation coverage for health, certification, recovery, gates, continuation, and reports.
    - [x] Governance adapter preservation coverage for certification, recovery, health, and transfer eligibility.
+   - [x] Decision adapter preservation coverage for certification evidence, generation certification findings, governance findings, evidence source attributions, diagnostics, and lifecycle eligibility.
 - [ ] Adapter tests proving semantically relevant evidence and diagnostics are preserved when mapping into presentation concepts.
    - [x] Workflow health, certification, recovery, gates, continuation, and report evidence/diagnostic preservation coverage.
    - [x] Governance certification evidence/diagnostics, recovery evidence/diagnostics, health findings/evidence, and eligibility findings/action coverage.
+   - [x] Decision certification evidence/sources, generation certification sources, governance finding evidence, evidence source attributions, and lifecycle rule/input preservation coverage.
 - [ ] UI characterization tests proving major domains use shared explainability components.
 
 ### Exit Criteria

@@ -34,7 +34,7 @@ describe('DecisionGovernancePanel', () => {
     expect(screen.getByText('ExecutionProjectionReadiness')).toBeInTheDocument()
     expect(screen.getByText('DecisionCoverage')).toBeInTheDocument()
     expect(screen.getByText('Blocks execution projection')).toBeInTheDocument()
-    expect(screen.getByText('.agents/decisions/proposals/PROP-0001/proposal.json')).toBeInTheDocument()
+    expect(screen.getByText(/\.agents\/decisions\/proposals\/PROP-0001\/proposal\.json/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /repair|fix|resolve|correct/i })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'View PROP-0001' }))

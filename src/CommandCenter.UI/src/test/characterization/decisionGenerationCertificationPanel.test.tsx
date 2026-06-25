@@ -29,7 +29,7 @@ describe('DecisionGenerationCertificationPanel', () => {
     expect(screen.getByText('System generation has not yet replaced primary human decision production for the certified evidence set.')).toBeInTheDocument()
     expect(screen.getByText('Execution influence coverage: 0%.')).toBeInTheDocument()
     expect(screen.getByText('ReviewOnly')).toBeInTheDocument()
-    expect(screen.getByText('.agents/decisions/proposals/PROP-0001/proposal.json')).toBeInTheDocument()
+    expect(screen.getByText(/\.agents\/decisions\/proposals\/PROP-0001\/proposal\.json/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /resolve|accept|reject|promote|approve/i })).not.toBeInTheDocument()
 
     fireEvent.click(within(screen.getByLabelText('Decision generation certification')).getByRole('button', {

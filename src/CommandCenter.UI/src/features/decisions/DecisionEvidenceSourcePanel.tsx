@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { EmptyState } from '../../components/design'
+import { EvidenceList } from '../../components/explainability'
+import { decisionSourceAttributionsToEvidence } from '../../lib/explainability'
 import type {
   DecisionEvidenceInspection,
   DecisionEvidenceInspectionItem,
@@ -78,7 +80,11 @@ export function DecisionEvidenceSourcePanel({
               <strong>{selectedItem.itemId ?? 'Proposal'}</strong>
             </div>
             <p>{selectedItem.summary}</p>
-            <SourceAttributionList sources={selectedItem.sources} />
+            <EvidenceList
+              evidence={decisionSourceAttributionsToEvidence(selectedItem.sources)}
+              emptyLabel="No source attribution recorded."
+              title="Source Attribution"
+            />
           </aside>
         ) : (
           <EmptyState className="empty-state">No evidence items recorded.</EmptyState>
@@ -88,30 +94,14 @@ export function DecisionEvidenceSourcePanel({
       {attributions.length > 0 ? (
         <div className="decision-inspection-list" aria-label="All source attributions">
           <h6>All Sources</h6>
-          <SourceAttributionList sources={attributions} />
+          <EvidenceList
+            evidence={decisionSourceAttributionsToEvidence(attributions)}
+            emptyLabel="No source attribution recorded."
+            title="All Source Attributions"
+          />
         </div>
       ) : null}
     </section>
-  )
-}
-
-function SourceAttributionList({ sources }: { sources: DecisionSourceAttribution[] }) {
-  if (sources.length === 0) {
-    return <EmptyState className="empty-state">No source attribution recorded.</EmptyState>
-  }
-
-  return (
-    <ul className="decision-source-list">
-      {sources.map((source, index) => (
-        <li key={`${source.appliesToKind}-${source.relativePath ?? 'none'}-${source.itemId ?? 'none'}-${index}`}>
-          <strong>{source.sourceKind}</strong>
-          {source.relativePath ? <span>{source.relativePath}</span> : null}
-          {source.section ? <span>{source.section}</span> : null}
-          <span>{source.appliesToKind}{source.itemId ? ` | ${source.itemId}` : ''}</span>
-          {source.excerpt ? <p>{source.excerpt}</p> : null}
-        </li>
-      ))}
-    </ul>
   )
 }
 

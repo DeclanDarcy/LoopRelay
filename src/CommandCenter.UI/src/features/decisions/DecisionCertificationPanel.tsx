@@ -1,9 +1,12 @@
-import { useMemo } from 'react'
 import { EmptyState } from '../../components/design'
+import { CertificationFindingsView, DiagnosticList } from '../../components/explainability'
+import {
+  decisionCertificationEvidenceToFindings,
+  decisionDiagnosticsToExplanation,
+  decisionGovernanceFindingsToCertificationFindings,
+} from '../../lib/explainability'
 import type {
-  DecisionCertificationEvidence,
   DecisionCertificationReport,
-  DecisionGovernanceFinding,
 } from '../../types'
 
 type DecisionCertificationPanelProps = {
@@ -23,15 +26,6 @@ export function DecisionCertificationPanel({
   error,
   onRunCertification,
 }: DecisionCertificationPanelProps) {
-  const failedEvidence = useMemo(
-    () => currentReport?.evidence.filter((item) => !item.passed) ?? [],
-    [currentReport?.evidence],
-  )
-  const passedEvidence = useMemo(
-    () => currentReport?.evidence.filter((item) => item.passed) ?? [],
-    [currentReport?.evidence],
-  )
-
   return (
     <section
       className="decision-lifecycle-panel decision-certification-panel"
@@ -69,48 +63,23 @@ export function DecisionCertificationPanel({
             <span>Fingerprint: {currentReport.inputFingerprint}</span>
           </div>
 
-          {currentReport.diagnostics.length > 0 ? (
-            <div className="decision-warning-list" aria-label="Certification diagnostics">
-              {currentReport.diagnostics.map((diagnostic) => (
-                <span key={diagnostic}>{diagnostic}</span>
-              ))}
-            </div>
-          ) : null}
+          <DiagnosticList
+            diagnostics={decisionDiagnosticsToExplanation(currentReport.diagnostics, 'Certification')}
+            emptyLabel="No certification diagnostics projected."
+            title="Certification Diagnostics"
+          />
 
-          <div className="decision-inspection-list" aria-label="Certification evidence">
-            <h6>Evidence</h6>
-            {failedEvidence.length > 0 ? (
-              <div className="decision-certification-group">
-                <h6>Failed</h6>
-                {failedEvidence.map((evidence) => (
-                  <CertificationEvidenceCard evidence={evidence} key={evidence.id} />
-                ))}
-              </div>
-            ) : null}
-            {passedEvidence.length > 0 ? (
-              <div className="decision-certification-group">
-                <h6>Passed</h6>
-                {passedEvidence.map((evidence) => (
-                  <CertificationEvidenceCard evidence={evidence} key={evidence.id} />
-                ))}
-              </div>
-            ) : (
-              <EmptyState className="empty-state">No certification evidence is available.</EmptyState>
-            )}
-          </div>
+          <CertificationFindingsView
+            findings={decisionCertificationEvidenceToFindings(currentReport.evidence)}
+            emptyLabel="No certification evidence is available."
+            title="Evidence"
+          />
 
-          {currentReport.findings.length > 0 ? (
-            <div className="decision-inspection-list" aria-label="Certification governance findings">
-              <h6>Governance Findings</h6>
-              {currentReport.findings.map((finding) => (
-                <CertificationFindingCard finding={finding} key={finding.id} />
-              ))}
-            </div>
-          ) : (
-            <div className="decision-success-list">
-              <span>No governance findings were reported by certification.</span>
-            </div>
-          )}
+          <CertificationFindingsView
+            findings={decisionGovernanceFindingsToCertificationFindings(currentReport.findings)}
+            emptyLabel="No governance findings were reported by certification."
+            title="Governance Findings"
+          />
 
           <div className="decision-inspection-list" aria-label="Generated certification report history">
             <h6>Generated Reports</h6>
@@ -138,68 +107,6 @@ export function DecisionCertificationPanel({
         </EmptyState>
       )}
     </section>
-  )
-}
-
-function CertificationEvidenceCard({ evidence }: { evidence: DecisionCertificationEvidence }) {
-  const related = [
-    ...evidence.relatedDecisionIds.map((id) => `Decision ${id}`),
-    ...evidence.relatedCandidateIds.map((id) => `Candidate ${id}`),
-    ...evidence.relatedProposalIds.map((id) => `Proposal ${id}`),
-  ]
-
-  return (
-    <article className="decision-certification-evidence">
-      <div>
-        <span>{evidence.area}</span>
-        <strong>{evidence.id}</strong>
-      </div>
-      <p>{evidence.detail}</p>
-      <div className="decision-badge-row">
-        <span>{evidence.passed ? 'Passed' : 'Failed'}</span>
-        {related.map((item) => (
-          <span key={item}>{item}</span>
-        ))}
-      </div>
-      {evidence.sources.length > 0 ? (
-        <ul className="decision-source-list">
-          {evidence.sources.map((source, index) => (
-            <li key={`${evidence.id}-${source.sourceKind}-${source.relativePath ?? 'none'}-${index}`}>
-              <strong>{source.sourceKind}</strong>
-              {source.relativePath ? <span>{source.relativePath}</span> : null}
-              {source.section ? <span>{source.section}</span> : null}
-              {source.excerpt ? <p>{source.excerpt}</p> : null}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </article>
-  )
-}
-
-function CertificationFindingCard({ finding }: { finding: DecisionGovernanceFinding }) {
-  return (
-    <article className="decision-governance-finding">
-      <div>
-        <span>
-          {finding.severity} / {finding.category}
-        </span>
-        <strong>{finding.title}</strong>
-      </div>
-      <p>{finding.detail}</p>
-      <div className="decision-badge-row">
-        <span>{finding.blocksExecutionProjection ? 'Blocks execution projection' : 'Advisory'}</span>
-        {finding.relatedDecisionIds.map((id) => (
-          <span key={`decision-${id}`}>Decision {id}</span>
-        ))}
-        {finding.relatedCandidateIds.map((id) => (
-          <span key={`candidate-${id}`}>Candidate {id}</span>
-        ))}
-        {finding.relatedProposalIds.map((id) => (
-          <span key={`proposal-${id}`}>Proposal {id}</span>
-        ))}
-      </div>
-    </article>
   )
 }
 
