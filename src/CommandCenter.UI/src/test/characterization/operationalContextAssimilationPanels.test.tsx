@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { OperationalContextAssimilationLimitPanel } from '../../features/operational-context/OperationalContextAssimilationLimitPanel'
 import { OperationalContextAssimilationPanel } from '../../features/operational-context/OperationalContextAssimilationPanel'
 import { OperationalContextConsequencePanel } from '../../features/operational-context/OperationalContextConsequencePanel'
+import { OperationalContextContradictionPanel } from '../../features/operational-context/OperationalContextContradictionPanel'
 import { OperationalContextTaxonomyPanel } from '../../features/operational-context/OperationalContextTaxonomyPanel'
 import type { DecisionAssimilationProjection } from '../../types'
 
@@ -113,7 +114,30 @@ function createAssimilationProjection(): DecisionAssimilationProjection {
         operationalImpact: 'Review panels need to link consequence text to the originating decision.',
       },
     ],
-    contradictions: [],
+    contradictions: [
+      {
+        contradictionId: 'contradiction-dec-1-dec-4',
+        firstDecision: {
+          decisionId: 'DEC-0001',
+          sourceRelativePath: '.agents/decisions/decisions.md',
+          statement: 'Backend continuity services own operational context promotion because hidden memory is not authoritative.',
+          taxonomy: 'ArchitecturalDecision',
+        },
+        secondDecision: {
+          decisionId: 'DEC-0004',
+          sourceRelativePath: '.agents/decisions/decisions.0001.md',
+          statement: 'React owns operational context promotion because it can render review status.',
+          taxonomy: 'ArchitecturalDecision',
+        },
+        conflictType: 'DirectNegation',
+        severity: 'Critical',
+        evidence: [
+          'DEC-0001 assigns promotion authority to backend continuity services.',
+          'DEC-0004 assigns promotion authority to React.',
+        ],
+        resolutionGuidance: 'Resolve the authority conflict before assimilating either operational statement.',
+      },
+    ],
     limit: {
       limit: 8,
       reason: 'Operational context proposal generation includes at most eight qualifying durable decision signals to keep the proposed context reviewable.',
@@ -209,5 +233,37 @@ describe('operational context assimilation panel rendering characterization', ()
         'Review panels need to link consequence text to the originating decision.',
       ),
     ).toBeInTheDocument()
+  })
+
+  it('renders contradictions with backend-authored evidence and resolution guidance', () => {
+    render(<OperationalContextContradictionPanel decisionAssimilation={createAssimilationProjection()} />)
+
+    const panel = screen.getByRole('heading', { name: 'Decision Contradictions' }).closest('div')
+
+    expect(panel).not.toBeNull()
+    expect(within(panel as HTMLElement).getByText('Critical')).toBeInTheDocument()
+    expect(within(panel as HTMLElement).getByText('DirectNegation')).toBeInTheDocument()
+    expect(within(panel as HTMLElement).getByText('contradiction-dec-1-dec-4')).toBeInTheDocument()
+    expect(
+      within(panel as HTMLElement).getByText(
+        'DEC-0001: Backend continuity services own operational context promotion because hidden memory is not authoritative.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      within(panel as HTMLElement).getByText(
+        'DEC-0004: React owns operational context promotion because it can render review status.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      within(panel as HTMLElement).getByText(
+        'Resolve the authority conflict before assimilating either operational statement.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      within(panel as HTMLElement).getByText(
+        'DEC-0001 assigns promotion authority to backend continuity services.',
+      ),
+    ).toBeInTheDocument()
+    expect(within(panel as HTMLElement).queryByText('UI-inferred conflict')).not.toBeInTheDocument()
   })
 })

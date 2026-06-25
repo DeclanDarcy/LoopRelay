@@ -2,28 +2,29 @@
 
 ## New State This Slice
 
-- Continued Milestone 7 decision assimilation transparency work.
-- Rotated previous handoff to `.agents/handoffs/handoff.0059.md`.
-- Extended `OperationalContextProposal` TypeScript contracts with backend-owned `decisionAssimilation`, taxonomy basis, assimilation limits, consequences, contradictions, and decision references.
-- Added `OperationalContextAssimilationPanel`, `OperationalContextTaxonomyPanel`, `OperationalContextAssimilationLimitPanel`, and `OperationalContextConsequencePanel`.
-- Wired the new panels into proposal review so assimilation status, exclusion/omission reasons, taxonomy rules/evidence/fallback diagnostics, omitted-by-limit items, and consequence links render from backend projection fields.
-- Updated the dev Tauri mock to include representative decision assimilation and consequence payloads for generated operational-context proposals.
-- Updated Milestone 7 checklist items for completed assimilation, taxonomy, limit, consequence, type, panel, omitted-item, and focused test coverage.
+- Continued Milestone 7 contradiction transparency work.
+- Rotated previous handoff to `.agents/handoffs/handoff.0060.md`.
+- Added `OperationalContextContradictionPanel` to render backend-projected contradiction id, severity, conflict type, both decision references, evidence, source paths, and resolution guidance.
+- Wired the contradiction panel into operational-context proposal review after decision consequences.
+- Extended the dev Tauri operational-context proposal mock with representative structured contradiction data.
+- Added focused UI characterization coverage for contradiction rendering without React-derived conflict classification.
+- Updated Milestone 7 checklist items for contradiction projection, panel coverage, backend contradiction tests, and explorable contradictions.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter OperationalContextGenerationTests`
-- `npm test -- operationalContextAssimilationPanels.test.tsx operationalContextProposalStatusPanel.test.tsx`
+- `npm test -- operationalContextAssimilationPanels.test.tsx`
 - `npm test -- operationalContextAssimilationPanels.test.tsx operationalContextCompressionSummaryPanel.test.tsx operationalContextProposalStatusPanel.test.tsx operationalContextProposalSummaryPanel.test.tsx operationalContextSemanticChangeList.test.tsx operationalContext.test.ts`
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter OperationalContextGenerationTests`
 - `npm run build` in `src/CommandCenter.UI`
 - `npm run lint` in `src/CommandCenter.UI`
 
 ## Residual Risk
 
-- Contradictions already exist in the backend assimilation projection but still need a dedicated UI panel.
-- The assimilation panels render string-valued backend enums; this matches existing client contract style but will need updating if generated clients or enum unions are introduced.
-- Evolution timeline, grouped continuity diagnostics, and exit audit remain open before Milestone 8.
+- Milestone 7 still has open evolution/compression/diagnostic work: dedicated evolution timeline, dedicated compression explanation, identity-aware semantic-diff modifications, richer semantic change types, and normalized diagnostic categories.
+- Existing continuity diagnostics already render grouped diagnostic payloads inside `ContinuityDiagnosticsPanel`, but the milestone's explicit `ContinuityDiagnosticsGroupedPanel` item remains unchecked because it is currently an internal component rather than a named/shared panel.
+- Compression item outcomes are projected and rendered in proposal compression summary, but the milestone still calls for broader compression reason category tests and warning coverage.
 
 ## Recommended Next Slice
 
-- Continue Milestone 7 by adding `OperationalContextContradictionPanel`, then do a projection-gap/exit audit for continuity diagnostics, evolution timeline, and semantic diff modification coverage before starting Milestone 8.
+- Continue the Milestone 7 exit audit by reconciling open checklist items against existing `ContinuityDiagnosticsPanel`, `OperationalContextSemanticChangeList`, `UnderstandingDiffService`, and compression outcome projections.
+- If continuing implementation, prioritize identity-aware semantic diff modification detection and semantic change type expansion before building `OperationalContextEvolutionTimeline`; the timeline should consume typed modification/loss/resolution facts rather than compatibility strings.

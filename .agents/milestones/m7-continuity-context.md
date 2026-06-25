@@ -25,7 +25,7 @@ Make operational context explain why information was retained, removed, compress
    - [x] limit
    - [x] reason
 - [x] Expose consequences with originating decision, reasoning, and operational impact.
-- [ ] Surface every detected contradiction with decision A, decision B, conflict type, evidence, severity, and resolution guidance.
+- [x] Surface every detected contradiction with decision A, decision B, conflict type, evidence, severity, and resolution guidance.
 - [ ] Extend operational evolution reporting:
    - [ ] added
    - [ ] modified
@@ -69,7 +69,7 @@ Make operational context explain why information was retained, removed, compress
    - [x] `OperationalContextTaxonomyPanel`
    - [x] `OperationalContextAssimilationLimitPanel`
    - [x] `OperationalContextConsequencePanel`
-   - [ ] `OperationalContextContradictionPanel`
+   - [x] `OperationalContextContradictionPanel`
    - [ ] `OperationalContextEvolutionTimeline`
    - [ ] `OperationalContextCompressionExplanation`
    - [ ] `ContinuityDiagnosticsGroupedPanel`
@@ -82,7 +82,7 @@ Make operational context explain why information was retained, removed, compress
 - [x] Backend tests for assimilation inclusion/exclusion reasons.
 - [x] Backend tests for taxonomy basis and heuristic fallback.
 - [x] Backend tests for assimilation limits and omitted items.
-- [ ] Backend tests for all contradiction detection.
+- [x] Backend tests for all contradiction detection.
 - [ ] Backend tests for identity-aware semantic diff modifications.
 - [ ] Backend tests for compression reason categories.
 - [x] UI tests for the new panels and modification rendering.
@@ -93,7 +93,7 @@ Make operational context explain why information was retained, removed, compress
 - [ ] Taxonomy classifications expose their basis.
 - [ ] Assimilation limits and omitted items are visible.
 - [ ] Consequences stay linked to originating decisions.
-- [ ] All contradictions are explorable.
+- [x] All contradictions are explorable.
 - [ ] Operational evolution distinguishes added, modified, removed, preserved, lost, and resolved understanding.
 - [ ] Compression explains item-level outcomes.
 - [ ] Semantic diff preserves identity and lineage for modifications.

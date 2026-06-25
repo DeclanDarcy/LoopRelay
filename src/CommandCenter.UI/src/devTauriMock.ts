@@ -4202,7 +4202,30 @@ function generateOperationalContextProposal(
           operationalImpact: 'Proposal review must display backend persistence facts.',
         },
       ],
-      contradictions: [],
+      contradictions: [
+        {
+          contradictionId: 'mock-contradiction-1',
+          firstDecision: {
+            decisionId: 'DEC-MOCK-0001',
+            sourceRelativePath: '.agents/decisions/decisions.md',
+            statement: 'Backend services own proposal generation and persistence because review state must be authoritative.',
+            taxonomy: 'ArchitecturalDecision',
+          },
+          secondDecision: {
+            decisionId: 'DEC-MOCK-0002',
+            sourceRelativePath: '.agents/decisions/decisions.0001.md',
+            statement: 'The UI may persist proposal review state directly when rendering status.',
+            taxonomy: 'ArchitecturalDecision',
+          },
+          conflictType: 'DirectNegation',
+          severity: 'High',
+          evidence: [
+            'DEC-MOCK-0001 assigns proposal persistence to backend services.',
+            'DEC-MOCK-0002 assigns proposal review persistence to the UI.',
+          ],
+          resolutionGuidance: 'Resolve persistence authority before assimilating the conflicting operational statements.',
+        },
+      ],
       limit: {
         limit: 8,
         reason: 'Operational context proposal generation includes at most eight qualifying durable decision signals to keep the proposed context reviewable.',
