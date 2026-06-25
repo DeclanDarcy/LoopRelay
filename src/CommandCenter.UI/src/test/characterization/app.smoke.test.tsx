@@ -531,6 +531,7 @@ describe('workspace certification mock', () => {
       commitCallCount,
     )
 
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Commit Selected' })).not.toBeDisabled())
     fireEvent.click(screen.getByRole('button', { name: 'Commit Selected' }))
 
     await waitFor(() =>

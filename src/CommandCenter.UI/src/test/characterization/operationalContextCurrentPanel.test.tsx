@@ -194,7 +194,7 @@ describe('operational context current panel rendering characterization', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Included (120 bytes)' }))
     fireEvent.click(screen.getByRole('button', { name: 'Edited' }))
     fireEvent.click(screen.getByRole('button', { name: 'Decision rationale' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Continuity warning' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open continuity warnings' }))
 
     expect(onOpenExecutionContext).toHaveBeenCalledTimes(1)
     expect(onOpenProposalReview).toHaveBeenCalledTimes(1)

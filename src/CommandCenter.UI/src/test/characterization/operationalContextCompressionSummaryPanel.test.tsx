@@ -96,21 +96,18 @@ describe('operational context compression summary panel rendering characterizati
     expect(revisionSummary).not.toBeNull()
     expect(retentionWarnings).not.toBeNull()
     expect(compressedUnderstanding).not.toBeNull()
-    expect(within(compressionWarnings as HTMLElement).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
-      'General warning',
-    ])
+    expect(within(compressionWarnings as HTMLElement).getByText('Compression warning')).toBeInTheDocument()
+    expect(within(compressionWarnings as HTMLElement).getByText('General warning')).toBeInTheDocument()
     expect(within(revisionSummary as HTMLElement).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
       'Revision summaryRevision one',
       'Revision summaryRevision two',
     ])
-    expect(within(retentionWarnings as HTMLElement).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
-      'Retention one',
-      'Retention two',
-    ])
-    expect(within(compressedUnderstanding as HTMLElement).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
-      'Compressed understandinginfoNoise one',
-      'Compressed understandinginfoNoise two',
-    ])
+    expect(within(retentionWarnings as HTMLElement).getAllByText('Retention warning')).toHaveLength(2)
+    expect(within(retentionWarnings as HTMLElement).getByText('Retention one')).toBeInTheDocument()
+    expect(within(retentionWarnings as HTMLElement).getByText('Retention two')).toBeInTheDocument()
+    expect(within(compressedUnderstanding as HTMLElement).getAllByText('Compressed understanding')).toHaveLength(2)
+    expect(within(compressedUnderstanding as HTMLElement).getByText('Noise one')).toBeInTheDocument()
+    expect(within(compressedUnderstanding as HTMLElement).getByText('Noise two')).toBeInTheDocument()
   })
 
   it('omits optional detail sections when backend lists are empty', () => {

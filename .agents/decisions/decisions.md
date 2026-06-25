@@ -2,19 +2,11 @@
 
 ## Newly Authorized
 
-- Treat endpoint disposition becoming an executable architectural contract as the key Milestone 9 outcome of the backend disposition slice.
-- Keep backend route classification protected by tests rather than relying only on milestone documentation.
-- Keep `Internal` endpoint disposition precisely bounded to decision-session analysis diagnostics.
-- Keep `Compatibility` endpoint disposition precisely bounded to ping and planning readiness.
-- Treat the absence of registered `Remove` and `Redirect` routes as evidence that the backend API surface is stable enough for MVP release readiness, assuming the disposition audit remains comprehensive.
-- Treat final Milestone 9 cohesion validation as the release gate before Milestone 10.
-- Do not begin Milestone 10 until final Milestone 9 cohesion validation is complete.
-- Verify no remaining workflow-derived UI helpers reconstruct backend state.
-- Verify no duplicate frontend lifecycle derivation remains.
-- Verify no duplicate explainability renderers remain where shared components are intended.
-- Verify every major capability still has exactly one primary workspace.
-- Verify no obsolete navigation paths remain.
-- Verify no React-owned semantic state has crept back in during cleanup.
-- Produce the final Milestone 9 evidence package before declaring Product Cohesion complete.
-- Run one focused backend and frontend verification pass before declaring Product Cohesion complete.
-- Treat Milestone 10 as release readiness and certification, not additional architectural cleanup.
+- Milestone 9 is complete.
+- Treat the remaining Milestone 9 work as validation-oriented rather than architecture-oriented.
+- Treat the documented Vite chunk-size warning as a known non-blocking issue for Milestone 9 completion.
+- Transition the Command Center effort from architectural integration into release certification.
+- Milestone 10 must not introduce new architecture.
+- Milestone 10 should answer whether the MVP can honestly be certified as complete and releasable under the architecture already established.
+- Milestone 10 should focus on release-readiness audits, authority verification, semantic transparency verification, integration verification, certification evidence, architectural drift review, and final cleanup of genuine release blockers only.
+- If Milestone 10 uncovers missing functionality or authority violations, treat them as release blockers to resolve rather than as scope expansion.
