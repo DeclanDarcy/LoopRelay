@@ -19,6 +19,7 @@ public sealed class ExecutionHandoffServiceTests
 
         await monitoringService.CreateProviderObserver(session.Id).OnProviderExitedAsync(0);
         ExecutionStatus? status = await monitoringService.GetStatusAsync(session.Id);
+        ExecutionSession reloadedSession = (await store.LoadAsync()).Single();
 
         Assert.NotNull(status);
         Assert.Equal(ExecutionSessionState.Completed, status.State);
@@ -26,6 +27,12 @@ public sealed class ExecutionHandoffServiceTests
         Assert.Equal(HandoffService.CurrentHandoffPath, status.HandoffPath);
         Assert.NotNull(status.CompletedAt);
         Assert.Equal(status.CompletedAt.Value - session.StartedAt, status.Duration);
+        Assert.NotNull(reloadedSession.HandoffProcessing);
+        Assert.True(reloadedSession.HandoffProcessing.HandoffProduced);
+        Assert.False(reloadedSession.HandoffProcessing.HandoffMissing);
+        Assert.True(reloadedSession.HandoffProcessing.HandoffValidated);
+        Assert.Equal(ExecutionSessionState.Completed, reloadedSession.HandoffProcessing.ResultingSessionState);
+        Assert.Equal(RepositoryExecutionState.AwaitingAcceptance, reloadedSession.HandoffProcessing.ResultingRepositoryState);
     }
 
     [Fact]
@@ -38,6 +45,7 @@ public sealed class ExecutionHandoffServiceTests
 
         await monitoringService.CreateProviderObserver(session.Id).OnProviderExitedAsync(0);
         ExecutionStatus? status = await monitoringService.GetStatusAsync(session.Id);
+        ExecutionSession reloadedSession = (await store.LoadAsync()).Single();
 
         Assert.NotNull(status);
         Assert.Equal(ExecutionSessionState.Failed, status.State);
@@ -45,6 +53,11 @@ public sealed class ExecutionHandoffServiceTests
         Assert.Equal(HandoffService.MissingCurrentHandoffFailureReason, status.FailureReason);
         Assert.Null(status.HandoffPath);
         Assert.NotNull(status.Duration);
+        Assert.NotNull(reloadedSession.HandoffProcessing);
+        Assert.False(reloadedSession.HandoffProcessing.HandoffProduced);
+        Assert.True(reloadedSession.HandoffProcessing.HandoffMissing);
+        Assert.False(reloadedSession.HandoffProcessing.HandoffValidated);
+        Assert.Equal(HandoffService.MissingCurrentHandoffFailureReason, reloadedSession.HandoffProcessing.ValidationFailure);
     }
 
     [Fact]
@@ -111,6 +124,10 @@ public sealed class ExecutionHandoffServiceTests
         Assert.Equal(RepositoryExecutionState.AwaitingAcceptance, status.RepositoryState);
         Assert.Equal("previous handoff", await ReadAsync(repositoryPath, ".agents/handoffs/handoff.0005.md"));
         Assert.Equal("generated handoff", await ReadAsync(repositoryPath, ".agents/handoffs/handoff.md"));
+        ExecutionHandoffProcessing processing = (await store.LoadAsync()).Single().HandoffProcessing!;
+        Assert.True(processing.HandoffArchived);
+        Assert.Equal(".agents/handoffs/handoff.0005.md", processing.ArchivePath);
+        Assert.Equal(5, processing.ArchiveSequence);
     }
 
     [Fact]
@@ -175,6 +192,13 @@ public sealed class ExecutionHandoffServiceTests
         Assert.Equal(HandoffService.ArchivePreviousHandoffFailureReason, status.FailureReason);
         Assert.NotEqual(RepositoryExecutionState.AwaitingAcceptance, status.RepositoryState);
         Assert.Equal("generated handoff", await ReadAsync(repositoryPath, ".agents/handoffs/handoff.md"));
+        ExecutionHandoffProcessing processing = (await store.LoadAsync()).Single().HandoffProcessing!;
+        Assert.True(processing.HandoffProduced);
+        Assert.True(processing.ArchiveFailed);
+        Assert.Equal(".agents/handoffs/handoff.0001.md", processing.ArchivePath);
+        Assert.Equal(1, processing.ArchiveSequence);
+        Assert.False(processing.HandoffValidated);
+        Assert.Equal(HandoffService.ArchivePreviousHandoffFailureReason, processing.ValidationFailure);
     }
 
     private static ExecutionMonitoringService CreateMonitoringService(

@@ -3829,6 +3829,25 @@ function createExecutionTransparency(state: MockState, sessionId: string): Execu
       eventRetentionTrimmingDetected: false,
       monitoringWarnings: session.failureReason ? [session.failureReason] : [],
     },
+    handoffProcessing: {
+      handoffProduced: Boolean(session.handoffPath),
+      handoffMissing: !session.handoffPath,
+      handoffArchived: false,
+      archivePath: null,
+      archiveSequence: null,
+      archiveFailed: false,
+      handoffValidated: session.repositoryState === 'AwaitingAcceptance',
+      validationFailure: session.state === 'Failed' ? session.failureReason : null,
+      resultingSessionState: session.state,
+      resultingRepositoryState: session.repositoryState,
+      processedAt: session.completedAt,
+      providerFailureDistinctFromHandoffFailure:
+        providerExitedEvent?.message.includes('code 0') === false && Boolean(session.failureReason),
+      providerFailureReason:
+        providerExitedEvent?.message.includes('code 0') === false ? session.failureReason : null,
+      handoffFailureReason: null,
+      diagnostics: [],
+    },
   }
 }
 

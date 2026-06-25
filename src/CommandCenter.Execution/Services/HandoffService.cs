@@ -45,6 +45,20 @@ public sealed class HandoffService(
             string? currentHandoff = await artifactStore.ReadAsync(handoffPath);
             if (currentHandoff is null)
             {
+                var processing = new ExecutionHandoffProcessing
+                {
+                    HandoffProduced = false,
+                    HandoffMissing = true,
+                    HandoffArchived = false,
+                    ArchiveFailed = false,
+                    HandoffValidated = false,
+                    ValidationFailure = MissingCurrentHandoffFailureReason,
+                    ResultingSessionState = ExecutionSessionState.Failed,
+                    ResultingRepositoryState = RepositoryExecutionState.Failed,
+                    ProcessedAt = processedAt,
+                    ProviderFailureDistinctFromHandoffFailure = false,
+                    HandoffFailureReason = MissingCurrentHandoffFailureReason
+                };
                 sessions[index] = CopySession(
                     session,
                     state: ExecutionSessionState.Failed,
@@ -52,6 +66,7 @@ public sealed class HandoffService(
                     completedAt: session.CompletedAt ?? processedAt,
                     lastActivityAt: processedAt,
                     handoffPath: session.HandoffPath,
+                    handoffProcessing: processing,
                     failureReason: MissingCurrentHandoffFailureReason);
 
                 await sessionStore.SaveAsync(sessions);
@@ -59,11 +74,14 @@ public sealed class HandoffService(
             }
 
             bool archiveFailure = false;
+            string? archivePath = null;
+            int? archiveSequence = null;
             if (ShouldArchivePreviousHandoff(session, currentHandoff))
             {
+                (archivePath, archiveSequence) = await GetNextHistoricalHandoffTargetAsync(session);
                 try
                 {
-                    await ArchivePreviousHandoffAsync(session);
+                    await ArchivePreviousHandoffAsync(session, archivePath);
                 }
                 catch
                 {
@@ -71,15 +89,36 @@ public sealed class HandoffService(
                 }
             }
 
+            ExecutionSessionState resultingSessionState = archiveFailure
+                ? ExecutionSessionState.Failed
+                : ExecutionSessionState.Completed;
+            RepositoryExecutionState resultingRepositoryState = archiveFailure
+                ? RepositoryExecutionState.Failed
+                : RepositoryExecutionState.AwaitingAcceptance;
+            var successfulProcessing = new ExecutionHandoffProcessing
+            {
+                HandoffProduced = true,
+                HandoffMissing = false,
+                HandoffArchived = archivePath is not null && !archiveFailure,
+                ArchivePath = archivePath,
+                ArchiveSequence = archiveSequence,
+                ArchiveFailed = archiveFailure,
+                HandoffValidated = !archiveFailure,
+                ValidationFailure = archiveFailure ? ArchivePreviousHandoffFailureReason : null,
+                ResultingSessionState = resultingSessionState,
+                ResultingRepositoryState = resultingRepositoryState,
+                ProcessedAt = processedAt,
+                ProviderFailureDistinctFromHandoffFailure = false,
+                HandoffFailureReason = archiveFailure ? ArchivePreviousHandoffFailureReason : null
+            };
             sessions[index] = CopySession(
                 session,
-                state: archiveFailure ? ExecutionSessionState.Failed : ExecutionSessionState.Completed,
-                repositoryState: archiveFailure
-                    ? RepositoryExecutionState.Failed
-                    : RepositoryExecutionState.AwaitingAcceptance,
+                state: resultingSessionState,
+                repositoryState: resultingRepositoryState,
                 completedAt: session.CompletedAt ?? processedAt,
                 lastActivityAt: processedAt,
                 handoffPath: CurrentHandoffPath,
+                handoffProcessing: successfulProcessing,
                 failureReason: archiveFailure
                     ? ArchivePreviousHandoffFailureReason
                     : session.FailureReason);
@@ -92,7 +131,7 @@ public sealed class HandoffService(
         }
     }
 
-    private async Task ArchivePreviousHandoffAsync(ExecutionSession session)
+    private async Task<(string RelativePath, int Sequence)> GetNextHistoricalHandoffTargetAsync(ExecutionSession session)
     {
         string directory = Path.Combine(session.RepositoryPath, ".agents", "handoffs");
         IReadOnlyList<string> files = await artifactStore.ListAsync(directory, "*.md");
@@ -111,6 +150,15 @@ public sealed class HandoffService(
         {
             throw new IOException($"Historical handoff already exists: {targetRelativePath}");
         }
+
+        return (targetRelativePath, nextSequence);
+    }
+
+    private async Task ArchivePreviousHandoffAsync(ExecutionSession session, string targetRelativePath)
+    {
+        string targetPath = Path.Combine(
+            session.RepositoryPath,
+            targetRelativePath.Replace('/', Path.DirectorySeparatorChar));
 
         await artifactStore.WriteAsync(targetPath, session.PreviousHandoffContent!);
     }
@@ -152,6 +200,7 @@ public sealed class HandoffService(
         DateTimeOffset completedAt,
         DateTimeOffset lastActivityAt,
         string? handoffPath,
+        ExecutionHandoffProcessing? handoffProcessing,
         string? failureReason)
     {
         return new ExecutionSession
@@ -178,6 +227,7 @@ public sealed class HandoffService(
             PreviousHandoffContent = session.PreviousHandoffContent,
             PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,
             HandoffPath = handoffPath,
+            HandoffProcessing = handoffProcessing ?? session.HandoffProcessing,
             FailureReason = failureReason,
             Events = session.Events
         };

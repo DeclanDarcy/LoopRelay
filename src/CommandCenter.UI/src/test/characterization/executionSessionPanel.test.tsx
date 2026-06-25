@@ -121,6 +121,23 @@ function transparency(): ExecutionSessionTransparency {
       eventRetentionTrimmingDetected: false,
       monitoringWarnings: ['Provider exited with non-zero code 2.'],
     },
+    handoffProcessing: {
+      handoffProduced: true,
+      handoffMissing: false,
+      handoffArchived: true,
+      archivePath: '.agents/handoffs/handoff.0005.md',
+      archiveSequence: 5,
+      archiveFailed: false,
+      handoffValidated: true,
+      validationFailure: null,
+      resultingSessionState: 'Completed',
+      resultingRepositoryState: 'AwaitingAcceptance',
+      processedAt: '2026-06-21T16:13:30.000Z',
+      providerFailureDistinctFromHandoffFailure: false,
+      providerFailureReason: null,
+      handoffFailureReason: null,
+      diagnostics: ['PreviousHandoffArchived:.agents/handoffs/handoff.0005.md'],
+    },
   }
 }
 
@@ -200,6 +217,15 @@ describe('execution session panel rendering characterization', () => {
     expect(screen.getByText('Exit code: 2')).toBeInTheDocument()
     expect(screen.getByText('Retained events: 3')).toBeInTheDocument()
     expect(screen.getByText('Provider exited with non-zero code 2.')).toBeInTheDocument()
+    expect(screen.getByText('Handoff Processing')).toBeInTheDocument()
+    expect(screen.getByText('Produced: Yes')).toBeInTheDocument()
+    expect(screen.getByText('Archive path: .agents/handoffs/handoff.0005.md')).toBeInTheDocument()
+    expect(screen.getByText('Archive sequence: 5')).toBeInTheDocument()
+    expect(screen.getByText('Validated: Yes')).toBeInTheDocument()
+    expect(screen.getByText('Resulting session: Completed')).toBeInTheDocument()
+    expect(screen.getByText('Resulting repository: Awaiting acceptance')).toBeInTheDocument()
+    expect(screen.getByText('Provider failure differs: No')).toBeInTheDocument()
+    expect(screen.getByText('PreviousHandoffArchived:.agents/handoffs/handoff.0005.md')).toBeInTheDocument()
     expect(screen.getByText('Prompt Metadata')).toBeInTheDocument()
   })
 })

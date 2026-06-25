@@ -681,6 +681,7 @@ file static class ExecutionSessionMutation
             PreviousHandoffContent = session.PreviousHandoffContent,
             PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,
             HandoffPath = session.HandoffPath,
+            HandoffProcessing = session.HandoffProcessing,
             FailureReason = failureReason ?? session.FailureReason,
             Events = session.Events
         };
@@ -729,6 +730,7 @@ file static class ExecutionSessionMutation
             PreviousHandoffContent = session.PreviousHandoffContent,
             PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,
             HandoffPath = session.HandoffPath,
+            HandoffProcessing = session.HandoffProcessing,
             FailureReason = session.FailureReason,
             Events = session.Events
         };
@@ -773,6 +775,7 @@ file static class ExecutionSessionMutation
             PreviousHandoffContent = session.PreviousHandoffContent,
             PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,
             HandoffPath = session.HandoffPath,
+            HandoffProcessing = session.HandoffProcessing,
             FailureReason = session.FailureReason,
             Events = session.Events
         };
@@ -817,6 +820,7 @@ file static class ExecutionSessionMutation
             PreviousHandoffContent = session.PreviousHandoffContent,
             PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,
             HandoffPath = session.HandoffPath,
+            HandoffProcessing = session.HandoffProcessing,
             FailureReason = session.FailureReason,
             Events = session.Events
         };
@@ -862,6 +866,7 @@ file static class ExecutionSessionMutation
             PreviousHandoffContent = session.PreviousHandoffContent,
             PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,
             HandoffPath = session.HandoffPath,
+            HandoffProcessing = session.HandoffProcessing,
             FailureReason = null,
             Events = session.Events
         };
@@ -906,6 +911,7 @@ file static class ExecutionSessionMutation
             PreviousHandoffContent = session.PreviousHandoffContent,
             PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,
             HandoffPath = session.HandoffPath,
+            HandoffProcessing = session.HandoffProcessing,
             FailureReason = failureReason,
             Events = session.Events
         };

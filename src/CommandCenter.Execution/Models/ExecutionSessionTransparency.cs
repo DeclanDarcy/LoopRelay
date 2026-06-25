@@ -16,6 +16,8 @@ public sealed class ExecutionSessionTransparency
 
     public ExecutionMonitoringTransparency Monitoring { get; init; } = new();
 
+    public ExecutionHandoffProcessingTransparency HandoffProcessing { get; init; } = new();
+
     public static ExecutionSessionTransparency FromSession(ExecutionSession session)
     {
         ExecutionEvent[] recoveryEvents = session.Events
@@ -75,7 +77,8 @@ public sealed class ExecutionSessionTransparency
                 LastRetainedEventSequence = lastRetainedSequence,
                 EventRetentionTrimmingDetected = firstRetainedSequence > 1,
                 MonitoringWarnings = monitoringWarnings
-            }
+            },
+            HandoffProcessing = ExecutionHandoffProcessingTransparency.FromSession(session, providerExitCode)
         };
     }
 
@@ -184,4 +187,124 @@ public sealed class ExecutionMonitoringTransparency
     public bool EventRetentionTrimmingDetected { get; init; }
 
     public IReadOnlyList<string> MonitoringWarnings { get; init; } = [];
+}
+
+public sealed class ExecutionHandoffProcessingTransparency
+{
+    public bool HandoffProduced { get; init; }
+
+    public bool HandoffMissing { get; init; }
+
+    public bool HandoffArchived { get; init; }
+
+    public string? ArchivePath { get; init; }
+
+    public int? ArchiveSequence { get; init; }
+
+    public bool ArchiveFailed { get; init; }
+
+    public bool HandoffValidated { get; init; }
+
+    public string? ValidationFailure { get; init; }
+
+    public ExecutionSessionState ResultingSessionState { get; init; } = ExecutionSessionState.Created;
+
+    public RepositoryExecutionState ResultingRepositoryState { get; init; } = RepositoryExecutionState.Ready;
+
+    public DateTimeOffset? ProcessedAt { get; init; }
+
+    public bool ProviderFailureDistinctFromHandoffFailure { get; init; }
+
+    public string? ProviderFailureReason { get; init; }
+
+    public string? HandoffFailureReason { get; init; }
+
+    public IReadOnlyList<string> Diagnostics { get; init; } = [];
+
+    public static ExecutionHandoffProcessingTransparency FromSession(ExecutionSession session, int? providerExitCode)
+    {
+        if (session.HandoffProcessing is not ExecutionHandoffProcessing processing)
+        {
+            bool providerFailure = providerExitCode is not null and not 0;
+            return new ExecutionHandoffProcessingTransparency
+            {
+                HandoffProduced = !string.IsNullOrWhiteSpace(session.HandoffPath),
+                HandoffMissing = string.IsNullOrWhiteSpace(session.HandoffPath),
+                HandoffArchived = false,
+                ArchiveFailed = false,
+                HandoffValidated = session.RepositoryState == RepositoryExecutionState.AwaitingAcceptance,
+                ValidationFailure = session.State == ExecutionSessionState.Failed ? session.FailureReason : null,
+                ResultingSessionState = session.State,
+                ResultingRepositoryState = session.RepositoryState,
+                ProviderFailureDistinctFromHandoffFailure = providerFailure &&
+                    !IsKnownHandoffFailure(session.FailureReason),
+                ProviderFailureReason = providerFailure ? session.FailureReason : null,
+                HandoffFailureReason = IsKnownHandoffFailure(session.FailureReason) ? session.FailureReason : null,
+                Diagnostics = ["NoHandoffProcessingRecord"]
+            };
+        }
+
+        return new ExecutionHandoffProcessingTransparency
+        {
+            HandoffProduced = processing.HandoffProduced,
+            HandoffMissing = processing.HandoffMissing,
+            HandoffArchived = processing.HandoffArchived,
+            ArchivePath = processing.ArchivePath,
+            ArchiveSequence = processing.ArchiveSequence,
+            ArchiveFailed = processing.ArchiveFailed,
+            HandoffValidated = processing.HandoffValidated,
+            ValidationFailure = processing.ValidationFailure,
+            ResultingSessionState = processing.ResultingSessionState,
+            ResultingRepositoryState = processing.ResultingRepositoryState,
+            ProcessedAt = processing.ProcessedAt,
+            ProviderFailureDistinctFromHandoffFailure = processing.ProviderFailureDistinctFromHandoffFailure,
+            ProviderFailureReason = processing.ProviderFailureReason,
+            HandoffFailureReason = processing.HandoffFailureReason,
+            Diagnostics = BuildDiagnostics(processing)
+        };
+    }
+
+    private static bool IsKnownHandoffFailure(string? failureReason)
+    {
+        return string.Equals(
+                failureReason,
+                HandoffService.MissingCurrentHandoffFailureReason,
+                StringComparison.Ordinal) ||
+            string.Equals(
+                failureReason,
+                HandoffService.ArchivePreviousHandoffFailureReason,
+                StringComparison.Ordinal);
+    }
+
+    private static IReadOnlyList<string> BuildDiagnostics(ExecutionHandoffProcessing processing)
+    {
+        List<string> diagnostics = [];
+
+        if (processing.HandoffMissing)
+        {
+            diagnostics.Add("HandoffMissing");
+        }
+
+        if (processing.ArchiveFailed)
+        {
+            diagnostics.Add("HandoffArchiveFailed");
+        }
+
+        if (processing.HandoffArchived && processing.ArchivePath is not null)
+        {
+            diagnostics.Add($"PreviousHandoffArchived:{processing.ArchivePath}");
+        }
+
+        if (!processing.HandoffValidated && !string.IsNullOrWhiteSpace(processing.ValidationFailure))
+        {
+            diagnostics.Add($"HandoffValidationFailed:{processing.ValidationFailure}");
+        }
+
+        if (processing.ProviderFailureDistinctFromHandoffFailure)
+        {
+            diagnostics.Add("ProviderFailureDistinctFromHandoffFailure");
+        }
+
+        return diagnostics;
+    }
 }

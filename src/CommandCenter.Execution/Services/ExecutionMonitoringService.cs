@@ -369,6 +369,7 @@ public sealed class ExecutionMonitoringService : IExecutionMonitoringService
             PreviousHandoffContent = session.PreviousHandoffContent,
             PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,
             HandoffPath = session.HandoffPath,
+            HandoffProcessing = session.HandoffProcessing,
             FailureReason = failureReason ?? session.FailureReason,
             Events = events ?? session.Events
         };

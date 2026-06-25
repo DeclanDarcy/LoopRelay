@@ -165,11 +165,30 @@ export type ExecutionMonitoringTransparency = {
   monitoringWarnings: string[]
 }
 
+export type ExecutionHandoffProcessingTransparency = {
+  handoffProduced: boolean
+  handoffMissing: boolean
+  handoffArchived: boolean
+  archivePath: string | null
+  archiveSequence: number | null
+  archiveFailed: boolean
+  handoffValidated: boolean
+  validationFailure: string | null
+  resultingSessionState: ExecutionSessionState
+  resultingRepositoryState: RepositoryExecutionState
+  processedAt: string | null
+  providerFailureDistinctFromHandoffFailure: boolean
+  providerFailureReason: string | null
+  handoffFailureReason: string | null
+  diagnostics: string[]
+}
+
 export type ExecutionSessionTransparency = {
   sessionId: string
   promptMetadata: ExecutionPromptMetadata | null
   recovery: ExecutionRecoveryTransparency
   monitoring: ExecutionMonitoringTransparency
+  handoffProcessing: ExecutionHandoffProcessingTransparency
 }
 
 export type ExecutionEvent = {

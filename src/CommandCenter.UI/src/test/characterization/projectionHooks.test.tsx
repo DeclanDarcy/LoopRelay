@@ -324,6 +324,23 @@ function createExecutionTransparency(sessionId = 'session-alpha'): ExecutionSess
       eventRetentionTrimmingDetected: false,
       monitoringWarnings: [],
     },
+    handoffProcessing: {
+      handoffProduced: true,
+      handoffMissing: false,
+      handoffArchived: false,
+      archivePath: null,
+      archiveSequence: null,
+      archiveFailed: false,
+      handoffValidated: true,
+      validationFailure: null,
+      resultingSessionState: 'Completed',
+      resultingRepositoryState: 'AwaitingAcceptance',
+      processedAt: '2026-01-01T00:01:05Z',
+      providerFailureDistinctFromHandoffFailure: false,
+      providerFailureReason: null,
+      handoffFailureReason: null,
+      diagnostics: [],
+    },
   }
 }
 

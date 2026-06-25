@@ -64,15 +64,15 @@ Make execution explainable: what was launched, what context was included, what r
    - [x] previous push failure
    - [x] disabled reasons
 - [x] Add structured governed decision conflict details to execution context diagnostics instead of only flattened validation strings.
-- [ ] Add handoff processing transparency fields:
-   - [ ] handoff produced
-   - [ ] handoff missing
-   - [ ] handoff archived
-   - [ ] archive path or sequence
-   - [ ] archive failed
-   - [ ] handoff validated
-   - [ ] validation failure
-   - [ ] resulting session state
+- [x] Add handoff processing transparency fields:
+   - [x] handoff produced
+   - [x] handoff missing
+   - [x] handoff archived
+   - [x] archive path or sequence
+   - [x] archive failed
+   - [x] handoff validated
+   - [x] validation failure
+   - [x] resulting session state
 - [ ] Add semantic categories and consequence text to execution events:
    - [ ] launch
    - [ ] provider
@@ -88,6 +88,7 @@ Make execution explainable: what was launched, what context was included, what r
    - [x] Added prompt manifest TypeScript types.
    - [x] Added execution transparency TypeScript types for prompt metadata, recovery, and monitoring health.
    - [x] Added structured governed conflict diagnostic TypeScript types.
+   - [x] Added handoff processing transparency TypeScript types.
 - [x] Add `getExecutionPromptManifest`, `getExecutionTransparency`, and git eligibility client functions.
    - [x] Added `getExecutionPromptManifest`.
    - [x] Added `getExecutionTransparency`.
@@ -98,7 +99,7 @@ Make execution explainable: what was launched, what context was included, what r
    - [x] Previous push failure and last push attempt timestamp now render from the execution summary.
    - [x] Commit/push eligibility, disabled reasons, stale preparation, selected path state, remote branch state, and previous push failure now render from the backend eligibility projection.
 - [ ] Update `GitPathBucket` and `GitWorkflowEvidence` to distinguish execution-generated changes from pre-existing repository changes and provide bulk actions to select only execution-generated changes or deselect pre-existing changes.
-- [ ] Update handoff panels to show post-processing state, archive diagnostics, validation diagnostics, and whether provider failure differs from handoff processing failure.
+- [x] Update handoff panels to show post-processing state, archive diagnostics, validation diagnostics, and whether provider failure differs from handoff processing failure.
 - [x] Replace placeholder monitoring text with real monitoring health fields.
 - [x] Update execution validation list to render governed decision conflicts as governance blockers with decision id, conflicting excerpt, conflict reason, affected prompt/context, and resolution path.
 - [ ] Group execution events by semantic category and display event consequence plus related state change.
@@ -120,6 +121,7 @@ Make execution explainable: what was launched, what context was included, what r
    - [x] Push retry rendering covers previous push failure and last push attempt evidence.
    - [x] Git eligibility rendering and hook coverage prove backend-owned disabled reasons and shell loading.
    - [x] Governed conflict rendering covers governance blocker details and preserves backend validation strings.
+   - [x] Handoff processing rendering covers produced/missing state, archive path and sequence, validation outcome, resulting state, provider-vs-handoff failure distinction, diagnostics, and hook shape.
 
 ### Exit Criteria
 
@@ -128,7 +130,7 @@ Make execution explainable: what was launched, what context was included, what r
 - [x] Recovery behavior is distinct from normal execution failure.
 - [x] Push failures leave an understandable retryable state.
 - [x] Commit and push controls explain blocked preconditions.
-- [ ] Handoff post-processing is visible and distinguishable from provider failure.
+- [x] Handoff post-processing is visible and distinguishable from provider failure.
 - [x] Monitoring diagnostics are real.
 - [x] Governed decision conflicts are distinct from generic validation errors.
 - [ ] Pre-existing changes are separated from execution-generated changes.

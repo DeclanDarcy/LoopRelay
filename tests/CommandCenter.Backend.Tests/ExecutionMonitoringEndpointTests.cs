@@ -153,6 +153,11 @@ public sealed class ExecutionMonitoringEndpointTests
         Assert.Equal(2, transparency.Monitoring.ExitCode);
         Assert.True(transparency.Monitoring.RetainedEventCount >= 2);
         Assert.Contains("Provider exited with non-zero code 2.", transparency.Monitoring.MonitoringWarnings);
+        Assert.False(transparency.HandoffProcessing.HandoffProduced);
+        Assert.True(transparency.HandoffProcessing.HandoffMissing);
+        Assert.True(transparency.HandoffProcessing.ProviderFailureDistinctFromHandoffFailure);
+        Assert.Equal("Provider process exited with code 2.", transparency.HandoffProcessing.ProviderFailureReason);
+        Assert.Contains("NoHandoffProcessingRecord", transparency.HandoffProcessing.Diagnostics);
     }
 
     [Fact]

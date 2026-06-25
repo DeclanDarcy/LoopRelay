@@ -120,7 +120,7 @@ function TransparencySection({ transparency, isLoading, error }: TransparencySec
     return <EmptyState className="empty-state">No execution transparency recorded.</EmptyState>
   }
 
-  const { recovery, monitoring, promptMetadata } = transparency
+  const { recovery, monitoring, promptMetadata, handoffProcessing } = transparency
 
   return (
     <div className="execution-transparency" aria-label="Execution transparency">
@@ -154,6 +154,34 @@ function TransparencySection({ transparency, isLoading, error }: TransparencySec
           title="Monitoring Warnings"
           values={monitoring.monitoringWarnings}
           empty="No monitoring warnings recorded."
+        />
+      </div>
+
+      <div className="execution-rail-list">
+        <h5>Handoff Processing</h5>
+        <div className="execution-rail-summary">
+          <span>Produced: {formatNullableBoolean(handoffProcessing.handoffProduced)}</span>
+          <span>Missing: {formatNullableBoolean(handoffProcessing.handoffMissing)}</span>
+          <span>Archived previous: {formatNullableBoolean(handoffProcessing.handoffArchived)}</span>
+          <span>Archive path: {handoffProcessing.archivePath || 'Not recorded'}</span>
+          <span>Archive sequence: {handoffProcessing.archiveSequence ?? 'Not recorded'}</span>
+          <span>Archive failed: {formatNullableBoolean(handoffProcessing.archiveFailed)}</span>
+          <span>Validated: {formatNullableBoolean(handoffProcessing.handoffValidated)}</span>
+          <span>Validation failure: {handoffProcessing.validationFailure || 'Not recorded'}</span>
+          <span>Resulting session: {handoffProcessing.resultingSessionState}</span>
+          <span>Resulting repository: {repositoryExecutionStatus[handoffProcessing.resultingRepositoryState]?.label ?? handoffProcessing.resultingRepositoryState}</span>
+          <span>Processed: {formatDateTime(handoffProcessing.processedAt)}</span>
+          <span>
+            Provider failure differs:{' '}
+            {formatNullableBoolean(handoffProcessing.providerFailureDistinctFromHandoffFailure)}
+          </span>
+          <span>Provider failure: {handoffProcessing.providerFailureReason || 'Not recorded'}</span>
+          <span>Handoff failure: {handoffProcessing.handoffFailureReason || 'Not recorded'}</span>
+        </div>
+        <PromptStringList
+          title="Handoff Diagnostics"
+          values={handoffProcessing.diagnostics}
+          empty="No handoff processing diagnostics recorded."
         />
       </div>
 

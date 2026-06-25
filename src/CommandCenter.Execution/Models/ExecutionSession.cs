@@ -70,6 +70,8 @@ public sealed class ExecutionSession
 
     public string? HandoffPath { get; init; }
 
+    public ExecutionHandoffProcessing? HandoffProcessing { get; init; }
+
     public string? FailureReason { get; init; }
 
     public IReadOnlyList<ExecutionEvent> Events { get; init; } = [];
