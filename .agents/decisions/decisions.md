@@ -2,17 +2,17 @@
 
 ## Newly Authorized
 
-- Accept the Milestone 4 governance transparency slice as architecturally correct.
-- Treat governance transparency as composition from existing authoritative sources rather than a new consolidated governance explanation authority.
-- Preserve the governance composition chain as:
-  - governance report
-  - review workspace
-  - lifecycle eligibility
-  - resolved decision
-- Keep `DecisionLifecycleTab` as the decision lifecycle presentation composition layer for selected review workspace, proposal eligibility, decision eligibility, and resolved decision response.
-- Add a projection only when a semantic fact is missing, not when presentation becomes inconvenient.
-- Keep recommendation divergence backend-owned; React must not infer divergence from selected option and recommendation.
-- Proceed next with execution influence transparency using backend-owned reason categories.
-- Structure execution influence rendering around authoritative backend categories: included, excluded, superseded, conflicted, ignored, and blocked.
-- Characterize execution influence UI by verifying included, excluded, superseded, conflict, ignored, and blocked reasons render without frontend categorization.
-- After committing and pushing the accepted governance slice, stop executing before continuing remaining Milestone 4 work.
+- Accept the Milestone 4 execution influence verification slice.
+- Treat execution influence transparency implementation work as validated and complete.
+- Preserve execution influence authority flow as:
+  - Decision Services
+  - `ExecutionDecisionProjection`
+  - `DecisionInfluenceTrace`
+  - `ExecutionDecisionInfluencePanel`
+- Keep execution influence categories backend-owned; the UI may group those categories but must not derive them.
+- Keep Milestone 4 free of shared explainability abstractions; consolidate local explanation components during Milestone 8.
+- Proceed next with a regression audit proving the absence of frontend semantic computation for quality scores, recommendation rankings, burden selection, governance findings, lifecycle legality, and influence categorization.
+- Do not add proposal recommendation confidence unless the backend owns a semantic confidence model.
+- Do not elevate insufficient-evidence or duplicate option categories into standalone UI sections unless the backend distinguishes them as first-class semantic categories.
+- Treat validation diagnostics, rejected options, and deduplicated options as the current authoritative explanation for those cases.
+- After committing and pushing the accepted execution influence verification slice, stop executing before continuing remaining Milestone 4 closure activities.
