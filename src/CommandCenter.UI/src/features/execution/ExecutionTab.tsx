@@ -46,6 +46,7 @@ type ExecutionTabProps = {
   launchReadiness: string
   onOpenWorkspaceMilestone: (milestonePath: string) => void
   onOpenWorkspaceExecutionContext: () => void
+  onOpenWorkspaceWorkflow: () => void
   onOpenHandoffArtifact: (handoffPath: string) => void
   onOpenWorkspaceGit: () => void
 }
@@ -75,6 +76,7 @@ export function ExecutionTab({
   launchReadiness,
   onOpenWorkspaceMilestone,
   onOpenWorkspaceExecutionContext,
+  onOpenWorkspaceWorkflow,
   onOpenHandoffArtifact,
   onOpenWorkspaceGit,
 }: ExecutionTabProps) {
@@ -94,7 +96,12 @@ export function ExecutionTab({
         actions={<StatusBadge status={repositoryExecutionStatus[currentExecutionState]} />}
       />
 
-      <ExecutionWorkflowRail workflow={workflow} isLoading={isWorkflowLoading} error={workflowError} />
+      <ExecutionWorkflowRail
+        workflow={workflow}
+        isLoading={isWorkflowLoading}
+        error={workflowError}
+        onOpenWorkflow={onOpenWorkspaceWorkflow}
+      />
 
       <div className="execution-tab-grid">
         <div className="execution-tab-main">

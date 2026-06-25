@@ -2,15 +2,20 @@
 
 ## Newly Authorized
 
-- Treat the execution consolidation slice as aligned with Milestone 9 cohesion principles because it keeps execution semantics unchanged while establishing one primary execution presentation.
-- Keep `ExecutionTab` as the sole primary home for full execution event streams, complete session history, and detailed execution transparency.
-- Treat workspace execution surfaces as contextual overview/dashboard surfaces that may show concise summaries and navigation affordances but must not duplicate detailed execution UI.
-- Preserve the regression-test pattern that asserts contextual workspace surfaces do not render primary execution detail rows such as `.execution-event-row` and `.execution-history-row`.
-- Continue Milestone 9 with workflow presentation consolidation as the next slice.
-- For workflow consolidation:
-  - inventory every workflow display,
-  - classify each workflow surface as primary, contextual, compatibility, or retire candidate,
-  - remove remaining duplicated derivation from `RepositoryExecutionState` where authoritative workflow projection exists,
-  - preserve contextual workflow summaries for current stage, blocking gates, health summary, and required action,
-  - navigate contextual workflow references into the primary Workflow workspace or owning tab section for the complete experience.
-- After workflow consolidation, expect similar Milestone 9 consolidation opportunities in governance summaries, decision summaries, reasoning summaries, and continuity summaries before broader density and terminology work.
+- Treat the workflow presentation consolidation slice as aligned with Milestone 9 because presentation hierarchy now mirrors domain authority.
+- Keep `WorkflowOperationsPanel` via `#workflow-operations` as the single detailed workflow home.
+- Treat `ExecutionWorkflowRail` as a contextual workflow summary only, showing current workflow summary, contextual status, and navigation back to Workflow.
+- Preserve the cohesion pattern that each capability has one primary presentation and secondary surfaces summarize and deep-link:
+  - Execution primary presentation: Execution tab.
+  - Execution contextual surfaces: Workspace summaries.
+  - Workflow primary presentation: Workflow Operations.
+  - Workflow contextual surfaces: Execution workflow summary.
+- Preserve regression coverage that protects architectural rules, especially navigation and workflow-authority characterization tests.
+- Continue Milestone 9 with governance summary consolidation as the next slice.
+- For governance consolidation:
+  - inventory governance presentations,
+  - classify each governance surface as primary, contextual summary, compatibility, or retire candidate,
+  - keep the Governance tab as the only detailed location for lifecycle, recovery, transfer, certification, health, and observability,
+  - convert other governance surfaces to summaries and deep-links,
+  - add characterization tests proving secondary governance surfaces expose summary information, navigate to Governance, and do not reproduce complete lifecycle semantics.
+- After governance consolidation, continue with decision summaries, reasoning summaries, and continuity summaries before information density, layout refinement, terminology normalization, and broader UX polish.

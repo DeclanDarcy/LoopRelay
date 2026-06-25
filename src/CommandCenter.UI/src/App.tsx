@@ -1656,6 +1656,11 @@ function App() {
     setSectionTarget('workspace-inspector')
   }
 
+  const openWorkspaceWorkflow = () => {
+    setActivePrimaryTab('workspace')
+    setSectionTarget('workflow-operations')
+  }
+
   const openHandoffArtifact = (handoffPath: string) => {
     if (selectedRepository) {
       selectArtifact(selectedRepository.repository.id, handoffPath)
@@ -2127,6 +2132,7 @@ function App() {
                   setActivePrimaryTab('workspace')
                   setSectionTarget('workspace-execution-context')
                 }}
+                onOpenWorkspaceWorkflow={openWorkspaceWorkflow}
                 onOpenHandoffArtifact={openHandoffArtifact}
                 onOpenWorkspaceGit={openWorkspaceGit}
               />

@@ -260,6 +260,7 @@ describe('navigation targets', () => {
     expect(getTabForSection('proposal-review')).toBe('operational-context')
     expect(getTabForSection('continuity-warnings')).toBe('continuity')
     expect(getTabForSection('reasoning-thread-view')).toBe('reasoning')
+    expect(getTabForSection('workflow-operations')).toBe('workspace')
     expect(getTabForSection('workspace-milestones')).toBe('workspace')
   })
 
@@ -288,6 +289,7 @@ describe('navigation targets', () => {
     expect(navigationSectionTargets).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ sectionId: 'governance-workspace', tab: 'governance' }),
+        expect.objectContaining({ sectionId: 'workflow-operations', tab: 'workspace' }),
         expect.objectContaining({ sectionId: 'decision-lifecycle', tab: 'decisions' }),
         expect.objectContaining({ sectionId: 'reasoning-trajectory', tab: 'reasoning' }),
         expect.objectContaining({ sectionId: 'continuity-diagnostics', tab: 'continuity' }),

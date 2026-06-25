@@ -86,6 +86,16 @@ export const navigationSectionTargets: NavigationSectionTargetDefinition[] = [
     sectionId: 'workspace-inspector',
   },
   {
+    id: 'section-workflow-operations',
+    kind: 'section',
+    group: 'Inspector Sections',
+    label: 'Workflow Operations',
+    description: 'Open authoritative workflow overview, gates, history, health, recovery, reports, and continuation.',
+    classification: 'contextual',
+    tab: 'workspace',
+    sectionId: 'workflow-operations',
+  },
+  {
     id: 'section-execution-events',
     kind: 'section',
     group: 'Inspector Sections',

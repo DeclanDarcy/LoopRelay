@@ -451,7 +451,7 @@ export function WorkflowOperationsPanel({
   const continuation = useWorkflowContinuation(repositoryId)
 
   return (
-    <section className="workflow-panels" aria-label="Workflow operations">
+    <section id="workflow-operations" className="workflow-panels" aria-label="Workflow operations">
       <WorkflowOverviewPanel workflow={workflow} isLoading={isWorkflowLoading} error={workflowError} />
       <WorkflowRecoveryPanel
         diagnostics={recovery.diagnostics}

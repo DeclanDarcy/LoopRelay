@@ -1,5 +1,5 @@
-import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ExecutionWorkflowRail } from '../../features/execution/ExecutionWorkflowRail'
 import type { WorkflowInstance } from '../../types'
 
@@ -8,7 +8,7 @@ afterEach(() => {
 })
 
 describe('execution workflow rail rendering characterization', () => {
-  it('renders authoritative workflow projection facts in order', () => {
+  it('renders a contextual workflow summary without duplicating primary workflow lifecycle rows', async () => {
     const workflow = {
       currentStage: 'Commit',
       progressState: 'WaitingForHuman',
@@ -55,35 +55,31 @@ describe('execution workflow rail rendering characterization', () => {
         reasoning: ['Workflow selected commit because execution handoff was accepted.'],
       },
     } as unknown as WorkflowInstance
+    const onOpenWorkflow = vi.fn()
 
-    render(<ExecutionWorkflowRail workflow={workflow} />)
+    render(<ExecutionWorkflowRail workflow={workflow} onOpenWorkflow={onOpenWorkflow} />)
 
-    const rail = screen.getByLabelText('Execution lifecycle')
-    const rows = rail.querySelectorAll('.execution-workflow-step')
+    const summary = screen.getByLabelText('Execution workflow summary')
+    const rows = summary.querySelectorAll('.execution-workflow-step')
 
-    expect(Array.from(rows).map((row) => row.querySelector('span')?.textContent)).toEqual([
-      'Stage: Commit',
-      'Progress',
-      'Gate: CommitApproval',
-      'Required Action',
-      'Current Transition',
-    ])
-    expect(rows[0]).toHaveClass('execution-workflow-step-current')
-    expect(rows[1]).toHaveClass('execution-workflow-step-current')
-    expect(rows[2]).toHaveClass('execution-workflow-step-blocked')
-    expect(rows[3]).toHaveClass('execution-workflow-step-current')
-    expect(screen.getByText('Workflow selected commit because execution handoff was accepted.')).toBeInTheDocument()
-    expect(screen.getByText('Prepared commit scope requires human approval.')).toBeInTheDocument()
-    expect(screen.getByText('commit_execution')).toBeInTheDocument()
-    expect(screen.getByText('Review and approve the prepared commit.')).toBeInTheDocument()
-    expect(screen.getByText('Commit approval advances the workflow to push review.')).toBeInTheDocument()
+    expect(rows).toHaveLength(0)
+    expect(screen.getByText('Commit')).toBeInTheDocument()
+    expect(screen.getByText('WaitingForHuman')).toBeInTheDocument()
+    expect(summary).toHaveTextContent('Blocking gate: CommitApproval')
+    expect(summary).toHaveTextContent('Required action: Review and approve the prepared commit.')
+    expect(summary).toHaveTextContent('Open gates: 1')
+    expect(summary).toHaveTextContent('Next stages: Push')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Workflow' }))
+
+    expect(onOpenWorkflow).toHaveBeenCalledTimes(1)
   })
 
   it('renders projection loading and error state without falling back to execution-derived steps', () => {
     render(<ExecutionWorkflowRail workflow={null} error="workflow unavailable" />)
 
-    expect(screen.getByLabelText('Execution lifecycle')).toBeInTheDocument()
-    expect(screen.getByText('Workflow')).toBeInTheDocument()
+    expect(screen.getByLabelText('Execution workflow summary')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Workflow' })).toBeInTheDocument()
     expect(screen.getByText('workflow unavailable')).toBeInTheDocument()
   })
 })
