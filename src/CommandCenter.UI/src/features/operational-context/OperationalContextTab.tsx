@@ -6,11 +6,15 @@ import type {
   RepositoryWorkspaceProjection,
 } from '../../types'
 import { OperationalContextCompressionSummaryPanel } from './OperationalContextCompressionSummaryPanel'
+import { OperationalContextAssimilationLimitPanel } from './OperationalContextAssimilationLimitPanel'
+import { OperationalContextAssimilationPanel } from './OperationalContextAssimilationPanel'
+import { OperationalContextConsequencePanel } from './OperationalContextConsequencePanel'
 import { OperationalContextCurrentPanel } from './OperationalContextCurrentPanel'
 import { OperationalContextProposalComparison } from './OperationalContextProposalComparison'
 import { OperationalContextProposalStatusPanel } from './OperationalContextProposalStatusPanel'
 import { OperationalContextProposalSummaryPanel } from './OperationalContextProposalSummaryPanel'
 import { OperationalContextSemanticChangeList } from './OperationalContextSemanticChangeList'
+import { OperationalContextTaxonomyPanel } from './OperationalContextTaxonomyPanel'
 
 type OperationalContextTabProps = {
   workspace: RepositoryWorkspaceProjection | null
@@ -262,6 +266,18 @@ export function OperationalContextTab({
               semanticChanges={decisionSemanticChanges}
               warnings={decisionContinuityWarnings}
               onOpenContinuityDecisionRetention={onOpenContinuityDecisionRetention}
+            />
+            <OperationalContextAssimilationLimitPanel
+              decisionAssimilation={proposal.decisionAssimilation}
+            />
+            <OperationalContextAssimilationPanel
+              decisionAssimilation={proposal.decisionAssimilation}
+            />
+            <OperationalContextTaxonomyPanel
+              decisionAssimilation={proposal.decisionAssimilation}
+            />
+            <OperationalContextConsequencePanel
+              decisionAssimilation={proposal.decisionAssimilation}
             />
             <OperationalContextSemanticChangeList semanticChanges={proposal.semanticChanges} />
             <OperationalContextCompressionSummaryPanel

@@ -91,6 +91,78 @@ export type OperationalContextCompressionOutcome = {
   evidence: string[]
 }
 
+export type DecisionTaxonomyBasis = {
+  taxonomy: string
+  matchedRules: string[]
+  matchedEvidence: string[]
+  isHeuristicFallback: boolean
+  fallbackReason: string | null
+  diagnostics: string[]
+}
+
+export type DecisionAssimilationRecord = {
+  decisionId: string
+  sourceRelativePath: string
+  statement: string
+  taxonomy: string
+  taxonomyBasis: DecisionTaxonomyBasis
+  status: string
+  isDurable: boolean
+  qualifiesForAssimilation: boolean
+  isAssimilated: boolean
+  isOmittedByLimit: boolean
+  exclusionReason: string | null
+  omissionReason: string | null
+  operationalStatement: string | null
+  rationale: string | null
+  constraintsIntroduced: string[]
+  consequencesIntroduced: string[]
+  openQuestions: string[]
+  sourceEvidence: string[]
+}
+
+export type DecisionAssimilationLimit = {
+  limit: number
+  reason: string
+  totalAnalyzedItemCount: number
+  totalQualifyingItemCount: number
+  assimilatedItemCount: number
+  omittedItemCount: number
+}
+
+export type ContinuityDecisionReference = {
+  decisionId: string
+  sourceRelativePath: string
+  statement: string
+  taxonomy: string
+}
+
+export type ContinuityDecisionConsequence = {
+  consequenceId: string
+  originatingDecision: ContinuityDecisionReference
+  operationalStatement: string
+  affectedArea: string
+  supportingEvidence: string[]
+  operationalImpact: string
+}
+
+export type ContinuityDecisionContradiction = {
+  contradictionId: string
+  firstDecision: ContinuityDecisionReference
+  secondDecision: ContinuityDecisionReference
+  conflictType: string
+  severity: string
+  evidence: string[]
+  resolutionGuidance: string
+}
+
+export type DecisionAssimilationProjection = {
+  decisions: DecisionAssimilationRecord[]
+  consequences: ContinuityDecisionConsequence[]
+  contradictions: ContinuityDecisionContradiction[]
+  limit: DecisionAssimilationLimit
+}
+
 export type OperationalContextProposal = {
   proposalId: string
   repositoryId: string
@@ -100,6 +172,7 @@ export type OperationalContextProposal = {
   generatedContentHash: string
   editedContentRelativePath: string | null
   semanticChanges: OperationalContextSemanticChange[]
+  decisionAssimilation: DecisionAssimilationProjection
   compressionSummary: OperationalContextCompressionSummary
   review: {
     proposalId: string

@@ -2592,6 +2592,75 @@ button:focus-visible {
   min-width: 0;
 }
 
+.assimilation-panel {
+  border: 1px solid var(--border-muted);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.assimilation-panel > ul,
+.assimilation-detail-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.assimilation-panel > ul {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.assimilation-panel > ul > li {
+  border-top: 1px solid var(--border-muted);
+  display: grid;
+  gap: 0.55rem;
+  padding-top: 0.75rem;
+}
+
+.assimilation-header {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.assimilation-header strong,
+.assimilation-header span,
+.assimilation-panel p,
+.assimilation-metadata dt,
+.assimilation-metadata dd,
+.assimilation-detail-list li {
+  overflow-wrap: anywhere;
+}
+
+.assimilation-header strong {
+  color: var(--text-primary);
+}
+
+.assimilation-header span,
+.assimilation-metadata dt {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.assimilation-metadata {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin: 0;
+}
+
+.assimilation-metadata div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.assimilation-detail-list {
+  display: grid;
+  gap: 0.35rem;
+}
+
 .proposal-comparison-grid {
   min-width: 0;
   display: grid;

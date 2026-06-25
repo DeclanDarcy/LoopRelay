@@ -6,25 +6,25 @@ Make operational context explain why information was retained, removed, compress
 
 ### Backend
 
-- [ ] Extend decision assimilation analysis to expose, for every analyzed decision:
-   - [ ] taxonomy
-   - [ ] assimilated or excluded
-   - [ ] exclusion reason
-   - [ ] durability
-   - [ ] resulting operational statement
-   - [ ] evidence
-- [ ] Expose taxonomy classification basis:
-   - [ ] matched evidence
-   - [ ] matched rules
-   - [ ] heuristic/fallback status
-   - [ ] diagnostics
-- [ ] Expose assimilation limits:
-   - [ ] total qualifying items
-   - [ ] assimilated items
-   - [ ] omitted items
-   - [ ] limit
-   - [ ] reason
-- [ ] Expose consequences with originating decision, reasoning, and operational impact.
+- [x] Extend decision assimilation analysis to expose, for every analyzed decision:
+   - [x] taxonomy
+   - [x] assimilated or excluded
+   - [x] exclusion reason
+   - [x] durability
+   - [x] resulting operational statement
+   - [x] evidence
+- [x] Expose taxonomy classification basis:
+   - [x] matched evidence
+   - [x] matched rules
+   - [x] heuristic/fallback status
+   - [x] diagnostics
+- [x] Expose assimilation limits:
+   - [x] total qualifying items
+   - [x] assimilated items
+   - [x] omitted items
+   - [x] limit
+   - [x] reason
+- [x] Expose consequences with originating decision, reasoning, and operational impact.
 - [ ] Surface every detected contradiction with decision A, decision B, conflict type, evidence, severity, and resolution guidance.
 - [ ] Extend operational evolution reporting:
    - [ ] added
@@ -63,29 +63,29 @@ Make operational context explain why information was retained, removed, compress
 
 ### UI
 
-- [ ] Extend operational-context and continuity TypeScript types.
+- [x] Extend operational-context and continuity TypeScript types.
 - [ ] Add panels:
-   - [ ] `OperationalContextAssimilationPanel`
-   - [ ] `OperationalContextTaxonomyPanel`
-   - [ ] `OperationalContextAssimilationLimitPanel`
-   - [ ] `OperationalContextConsequencePanel`
+   - [x] `OperationalContextAssimilationPanel`
+   - [x] `OperationalContextTaxonomyPanel`
+   - [x] `OperationalContextAssimilationLimitPanel`
+   - [x] `OperationalContextConsequencePanel`
    - [ ] `OperationalContextContradictionPanel`
    - [ ] `OperationalContextEvolutionTimeline`
    - [ ] `OperationalContextCompressionExplanation`
    - [ ] `ContinuityDiagnosticsGroupedPanel`
 - [ ] Update `OperationalContextProposalComparison` and `OperationalContextSemanticChangeList` to display modifications as modifications, not separate remove/add entries.
-- [ ] Show omitted assimilation items and silent truncation as visible facts.
+- [x] Show omitted assimilation items and silent truncation as visible facts.
 - [ ] Show compression warnings with specific item reasons and evidence.
 
 ### Tests
 
-- [ ] Backend tests for assimilation inclusion/exclusion reasons.
-- [ ] Backend tests for taxonomy basis and heuristic fallback.
-- [ ] Backend tests for assimilation limits and omitted items.
+- [x] Backend tests for assimilation inclusion/exclusion reasons.
+- [x] Backend tests for taxonomy basis and heuristic fallback.
+- [x] Backend tests for assimilation limits and omitted items.
 - [ ] Backend tests for all contradiction detection.
 - [ ] Backend tests for identity-aware semantic diff modifications.
 - [ ] Backend tests for compression reason categories.
-- [ ] UI tests for the new panels and modification rendering.
+- [x] UI tests for the new panels and modification rendering.
 
 ### Exit Criteria
 

@@ -2,32 +2,28 @@
 
 ## New State This Slice
 
-- Continued Milestone 7 compression transparency work.
-- Rotated previous handoff to `.agents/handoffs/handoff.0058.md`.
-- Added backend-owned item-level compression outcomes to `OperationalContextCompressionSummary`.
-- `UnderstandingCompressionService` now emits outcome rows for retained, added, removed, duplicate-removed, transient-removed, and recent-change window compression cases.
-- Each compression outcome carries backend-authored item kind, item text, rule, threshold, rationale, and evidence.
-- Preserved item outcomes when generation appends decision-analysis warnings to compression summaries.
-- Extended TypeScript operational-context contracts and the dev Tauri mock with `itemOutcomes`.
-- Rendered item-level compression outcomes in `OperationalContextCompressionSummaryPanel` without deriving severity, classification, thresholds, or evidence in React.
-- Added characterization coverage for backend-authored outcome rendering and no synthetic severity labels.
-- Added backend assertions for removal, explicit question resolution, explicit risk retirement, and transient noise outcomes.
+- Continued Milestone 7 decision assimilation transparency work.
+- Rotated previous handoff to `.agents/handoffs/handoff.0059.md`.
+- Extended `OperationalContextProposal` TypeScript contracts with backend-owned `decisionAssimilation`, taxonomy basis, assimilation limits, consequences, contradictions, and decision references.
+- Added `OperationalContextAssimilationPanel`, `OperationalContextTaxonomyPanel`, `OperationalContextAssimilationLimitPanel`, and `OperationalContextConsequencePanel`.
+- Wired the new panels into proposal review so assimilation status, exclusion/omission reasons, taxonomy rules/evidence/fallback diagnostics, omitted-by-limit items, and consequence links render from backend projection fields.
+- Updated the dev Tauri mock to include representative decision assimilation and consequence payloads for generated operational-context proposals.
+- Updated Milestone 7 checklist items for completed assimilation, taxonomy, limit, consequence, type, panel, omitted-item, and focused test coverage.
 
 ## Verification
 
 - `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter OperationalContextGenerationTests`
-- `npm test -- operationalContextCompressionSummaryPanel.test.tsx`
-- `npm test -- operationalContextCompressionSummaryPanel.test.tsx operationalContextProposalStatusPanel.test.tsx operationalContext.test.ts transport.test.ts`
+- `npm test -- operationalContextAssimilationPanels.test.tsx operationalContextProposalStatusPanel.test.tsx`
+- `npm test -- operationalContextAssimilationPanels.test.tsx operationalContextCompressionSummaryPanel.test.tsx operationalContextProposalStatusPanel.test.tsx operationalContextProposalSummaryPanel.test.tsx operationalContextSemanticChangeList.test.tsx operationalContext.test.ts`
 - `npm run build` in `src/CommandCenter.UI`
 - `npm run lint` in `src/CommandCenter.UI`
 
 ## Residual Risk
 
-- Compression outcomes are string-valued rather than enum-valued; acceptable for display, but backend enums would be better if outcomes start driving behavior.
-- "Merged" has not been emitted because the current compression implementation does not perform a distinct merge operation.
-- Modification-aware compression outcomes remain separate from semantic diff modification work.
-- Shared explainability components remain deferred to Milestone 8.
+- Contradictions already exist in the backend assimilation projection but still need a dedicated UI panel.
+- The assimilation panels render string-valued backend enums; this matches existing client contract style but will need updating if generated clients or enum unions are introduced.
+- Evolution timeline, grouped continuity diagnostics, and exit audit remain open before Milestone 8.
 
 ## Recommended Next Slice
 
-- Continue Milestone 7 by adding backend/UI transparency for decision assimilation taxonomy basis, omitted-by-limit items, and consequence links, or by extending compression outcomes with a distinct merge outcome if compression logic gains an actual merge path.
+- Continue Milestone 7 by adding `OperationalContextContradictionPanel`, then do a projection-gap/exit audit for continuity diagnostics, evolution timeline, and semantic diff modification coverage before starting Milestone 8.

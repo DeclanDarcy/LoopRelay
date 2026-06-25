@@ -2,9 +2,11 @@
 
 ## Newly Authorized
 
-- Continue Milestone 7 with decision assimilation transparency as the next dependency.
-- Extend backend projections where needed to expose immutable taxonomy basis, matched rules, matched evidence, heuristic fallback information, ambiguity diagnostics, durable assimilation status, `Excluded` versus `OmittedByLimit`, and consequence relationships back to originating decisions.
-- Preserve decision assimilation transparency fields through persistence, transport, and TypeScript contracts.
-- Render backend-authored assimilation and taxonomy fields directly in `OperationalContextAssimilationPanel`, `OperationalContextTaxonomyPanel`, `OperationalContextAssimilationLimitPanel`, and `OperationalContextConsequencePanel`.
-- Add authority regression tests proving React does not determine assimilation status, classify taxonomy, decide omission versus exclusion, or reconstruct consequence relationships.
-- After decision assimilation transparency, leave Milestone 7 primarily for projection-gap verification and exit audit before starting the shared explainability work in Milestone 8.
+- Continue Milestone 7 with `OperationalContextContradictionPanel` as the next implementation slice.
+- Render structured contradiction records directly from backend continuity projections, including conflict type, evidence, severity, and resolution guidance.
+- Do not synthesize contradiction classifications, priorities, or resolution guidance in React.
+- After the contradiction panel, run a Milestone 7 projection-gap audit to verify backend continuity projections have corresponding UI surfaces.
+- In the projection-gap audit, confirm compatibility strings are not the only visible representation where typed projections now exist.
+- In the projection-gap audit, check semantic-diff coverage for all identity-aware modification paths, operational evolution timeline category coverage, and continuity diagnostic category representation.
+- Run a Milestone 7 exit audit against the documented exit criteria before declaring the milestone complete.
+- If the projection-gap and exit audits are clean after contradiction rendering, transition next into Milestone 8 shared explainability work without reopening continuity semantics.

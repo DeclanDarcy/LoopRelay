@@ -17,6 +17,19 @@ function createProposal(overrides: Partial<OperationalContextProposal> = {}): Op
     generatedContentHash: 'generated-hash',
     editedContentRelativePath: null,
     semanticChanges: [],
+    decisionAssimilation: {
+      decisions: [],
+      consequences: [],
+      contradictions: [],
+      limit: {
+        limit: 0,
+        reason: '',
+        totalAnalyzedItemCount: 0,
+        totalQualifyingItemCount: 0,
+        assimilatedItemCount: 0,
+        omittedItemCount: 0,
+      },
+    },
     compressionSummary: {
       preservedItemCount: 0,
       addedItemCount: 0,
