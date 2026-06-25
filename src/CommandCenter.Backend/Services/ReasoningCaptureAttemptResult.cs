@@ -20,4 +20,5 @@ public sealed record ReasoningCaptureAttemptResult(
     string? DuplicateSignal,
     ReasoningReference? ExistingEventReference,
     ReasoningReference? CapturedEventReference,
-    IReadOnlyList<string> Diagnostics);
+    IReadOnlyList<string> Diagnostics,
+    IReadOnlyList<ReasoningDiagnosticGroup> DiagnosticGroups = null!);

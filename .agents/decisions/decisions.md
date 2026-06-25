@@ -2,9 +2,10 @@
 
 ## Newly Authorized
 
-- Continue Milestone 6 with capture-specific grouped diagnostics next.
-- Capture-specific grouped diagnostics should remain backend-owned and render-only in the UI.
-- Capture mode should determine the diagnostic group a user sees, not merely appear as an event label.
-- Backend capture diagnostic groups should include manual capture, assisted capture, inferred capture, skipped capture, and duplicate capture.
-- Capture diagnostic groups should expose relevant existing structured facts, including capture reason, provenance, source transition, source artifact, duplicate fingerprint, skip reason, existing event reference, and capture-attempt diagnostics.
-- Event feed and capture surfaces should explain why capture succeeded, was skipped, or resolved to an existing event without frontend synthesis.
+- Continue Milestone 6 by completing reconstruction, query, and trace transparency coverage.
+- Audit every Milestone 6 backend projection field before declaring reconstruction/query/trace UI coverage complete.
+- Every backend-owned confidence, scope, evidence, direction, source, target, historical cutoff, and diagnostic field introduced for Milestone 6 must be rendered by an appropriate reasoning surface.
+- Characterization tests must prove each transparency branch is visible.
+- The UI must remain presentation-only and must not derive confidence, reconstruction scope, or evidence relationships from counts or graph topology.
+- Add a field-to-surface audit artifact as milestone evidence mapping backend transparency fields to the UI components responsible for rendering them.
+- Stage, commit, and push the resulting execution-session changes after the slice is complete.

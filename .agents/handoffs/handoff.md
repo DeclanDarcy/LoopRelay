@@ -2,20 +2,18 @@
 
 ## New State This Slice
 
-- Continued Milestone 6 with backend-owned grouped reasoning diagnostics.
-- Rotated previous handoff to `.agents/handoffs/handoff.0047.md`.
-- Added `ReasoningDiagnosticGroup` to reasoning API models and exposed additive `DiagnosticGroups` on graph, trace, query result, reconstruction, and materialization review responses while preserving existing flat `Diagnostics`.
-- `ReasoningGraphService` now emits validation diagnostic groups for graph and trace unresolved-reference diagnostics.
-- `ReasoningReconstructionService` now emits evidence, confidence, reconstruction, and validation diagnostic groups from backend-owned reconstruction facts.
-- `ReasoningQueryService` forwards reconstruction diagnostic groups on query results.
-- `ReasoningMaterializationReviewService` now emits materialization, authority boundary, lifecycle risk, and validation diagnostic groups from review and taxonomy facts.
-- Added optional `diagnosticGroups` TypeScript types and reusable `ReasoningDiagnosticGroups` renderer.
-- Reasoning graph, query, reconstruction, and materialization panels now prefer backend grouped diagnostics and keep flat diagnostic fallback for older responses.
-- Updated Milestone 6 checklist for grouped diagnostics category normalization and grouped diagnostics UI completion; capture diagnostics remain open.
+- Continued Milestone 6 with backend-owned capture diagnostic groups.
+- Rotated previous handoff to `.agents/handoffs/handoff.0048.md`.
+- Added `DiagnosticGroups` to `ReasoningCaptureProvenance` so persisted reasoning events expose normalized capture explanations.
+- `FileSystemReasoningRepository` now enriches new and existing event artifacts with capture groups for manual, assisted, and inferred capture provenance.
+- Added additive `DiagnosticGroups` to `ReasoningCaptureAttemptResult` for inferred capture attempts before or without persisted events.
+- `DecisionReasoningCaptureService` now emits capture groups for captured, duplicate, and skipped inferred attempts, plus validation groups for skipped-attempt diagnostics.
+- Updated TypeScript reasoning types and rendered capture diagnostic groups in `ReasoningEventFeed`.
+- Updated Milestone 6 checklist for capture provenance, inferred reasoning, skipped/deduplicated captures, materialization diagnostics, capture diagnostic normalization, capture UI tests, authored/assisted/inferred distinction, and grouped diagnostic exit criteria.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "FullyQualifiedName~ReasoningReconstructionServiceTests|FullyQualifiedName~ReasoningMaterializationReviewServiceTests|FullyQualifiedName~ReasoningEndpointTests"` passed: 25 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "FullyQualifiedName~ReasoningEndpointTests|FullyQualifiedName~DecisionReasoningCaptureServiceTests"` passed: 23 tests.
 - `npm run test -- src/test/characterization/reasoningTrajectory.test.tsx` passed: 12 tests.
 - `dotnet build CommandCenter.slnx` passed.
 - `npm run build` passed; Vite still reports the existing >500 kB chunk warning.
@@ -23,10 +21,10 @@
 
 ## Residual Risk
 
-- Capture-specific diagnostic grouping is still open in Milestone 6.
-- Grouped diagnostics are currently additive and optional in TypeScript to tolerate older/dev responses.
-- Certification diagnostics still use their existing flat rendering; this slice only grouped graph, trace, query, reconstruction, and materialization diagnostics.
+- `ReasoningCaptureAttemptResult.DiagnosticGroups` is currently backend-facing only; no dedicated UI surface consumes capture-attempt groups yet.
+- Certification diagnostics still use their existing flat rendering.
+- Milestone 6 still has open reconstruction UI explanation coverage for full confidence, evidence branch, direction, scope, and historical cutoff rendering.
 
 ## Recommended Next Slice
 
-- Continue Milestone 6 by adding backend-owned capture diagnostic groups for manual, assisted, inferred, skipped, and deduplicated capture paths, then render those groups in the capture/event feed surfaces.
+- Continue Milestone 6 by finishing reconstruction/query/trace transparency UI coverage: verify confidence rationale, reachable and unreachable evidence, reconstruction direction, source/target scope, and historical cutoff are rendered from backend fields with characterization tests.

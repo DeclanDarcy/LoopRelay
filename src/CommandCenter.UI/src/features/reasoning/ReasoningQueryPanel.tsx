@@ -4,6 +4,7 @@ import type {
   ReasoningQuery,
   ReasoningQueryCategory,
   ReasoningQueryResult,
+  ReasoningReference,
   ReasoningReferenceKind,
   ReasoningTraceDirection,
 } from '../../types'
@@ -193,6 +194,30 @@ export function ReasoningQueryPanel({
             <span>{queryResult.reconstruction.confidenceRationale.level} confidence</span>
           </div>
           <p>{queryResult.reconstruction.narrative.summary}</p>
+          <div className="reasoning-query-transparency" aria-label="Executed reasoning query">
+            <dl className="reasoning-reconstruction-metadata">
+              <div>
+                <dt>Question</dt>
+                <dd>{queryResult.query.question}</dd>
+              </div>
+              <div>
+                <dt>Category</dt>
+                <dd>{queryResult.query.category}</dd>
+              </div>
+              <div>
+                <dt>Direction</dt>
+                <dd>{queryResult.query.direction}</dd>
+              </div>
+              <div>
+                <dt>Target</dt>
+                <dd>{formatReference(queryResult.query.target)}</dd>
+              </div>
+              <div>
+                <dt>Historical cutoff</dt>
+                <dd>{queryResult.query.historicalAt ?? 'Current graph'}</dd>
+              </div>
+            </dl>
+          </div>
           <div className="reasoning-query-transparency" aria-label="Reasoning query transparency">
             <dl className="reasoning-reconstruction-metadata">
               <div>
@@ -213,6 +238,10 @@ export function ReasoningQueryPanel({
               <div>
                 <dt>Historical cutoff</dt>
                 <dd>{queryResult.reconstruction.scope.historicalCutoff ?? 'Current graph'}</dd>
+              </div>
+              <div>
+                <dt>Reachable evidence</dt>
+                <dd>{queryResult.reconstruction.scope.reachableEvidence.length} known item(s)</dd>
               </div>
               <div>
                 <dt>Unreachable evidence</dt>
@@ -289,3 +318,10 @@ const referenceKinds: ReasoningReferenceKind[] = [
   'ReasoningEvent',
   'ReasoningThread',
 ]
+
+function formatReference(reference: ReasoningReference) {
+  const qualifiers = [reference.relativePath, reference.section].filter(Boolean)
+  return qualifiers.length > 0
+    ? `${reference.kind} ${reference.id} (${qualifiers.join(' - ')})`
+    : `${reference.kind} ${reference.id}`
+}

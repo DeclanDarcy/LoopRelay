@@ -229,6 +229,23 @@ function ReasoningTraceList({
             <span>{trace.direction}</span>
             <span>{trace.target.kind} {trace.target.id}</span>
           </div>
+          {trace.nodes.length > 0 ? (
+            <div className="reasoning-graph-table" aria-label={`${title} nodes`}>
+              <div className="reasoning-table-title">Trace Nodes</div>
+              <div className="reasoning-table-header">
+                <span>Node</span>
+                <span>Kind</span>
+                <span>Status</span>
+              </div>
+              {trace.nodes.map((node) => (
+                <div className="reasoning-table-row" key={node.id}>
+                  <span>{node.label}</span>
+                  <span>{node.kind} {node.referenceId}</span>
+                  <span>{node.resolved ? 'Resolved' : 'Unresolved'}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
           {trace.relationships.length > 0 ? (
             <div className="decision-row-list">
               {trace.relationships.map((relationship) => (

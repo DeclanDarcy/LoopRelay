@@ -59,6 +59,15 @@ public sealed class DecisionReasoningCaptureServiceTests
         Assert.Equal(".agents/operational_context/proposals/oc-proposal-1/metadata.json", skippedAttempt.SourceArtifact);
         Assert.Equal(proposal.Promotion.PromotedAt, skippedAttempt.SourceTimestamp);
         Assert.Contains("QuestionAdded", skippedAttempt.SkipReason);
+        ReasoningDiagnosticGroup skippedCaptureGroup = Assert.Single(
+            skippedAttempt.DiagnosticGroups,
+            group => group.Category == "capture");
+        Assert.Equal("Skipped capture", skippedCaptureGroup.Title);
+        Assert.Contains("Attempt result: Skipped.", skippedCaptureGroup.Diagnostics);
+        Assert.Contains("Source transition: OperationalContextPromotionReasoningObserved.", skippedCaptureGroup.Diagnostics);
+        Assert.Contains(skippedAttempt.DiagnosticGroups, group =>
+            group.Category == "validation" &&
+            group.Diagnostics.Contains("Change description: Should cache derived graph projections?"));
         Assert.Equal(2, secondAttempts.Count(attempt => attempt.Result == ReasoningCaptureAttemptOutcome.Duplicate));
         Assert.All(
             secondAttempts.Where(attempt => attempt.Result == ReasoningCaptureAttemptOutcome.Duplicate),
@@ -67,6 +76,10 @@ public sealed class DecisionReasoningCaptureServiceTests
                 Assert.NotNull(attempt.ExistingEventReference);
                 Assert.Null(attempt.CapturedEventReference);
                 Assert.StartsWith("Fingerprint ", attempt.DuplicateSignal);
+                Assert.Contains(attempt.DiagnosticGroups, group =>
+                    group.Category == "capture" &&
+                    group.Title == "Duplicate capture" &&
+                    group.Diagnostics.Any(diagnostic => diagnostic.StartsWith("Existing event reference: EVT-", StringComparison.Ordinal)));
             });
         Assert.Contains(reasoningEvents, reasoningEvent =>
             reasoningEvent.Family == ReasoningEventFamily.ConstraintEvolution &&
@@ -193,6 +206,12 @@ public sealed class DecisionReasoningCaptureServiceTests
         Assert.Equal(".agents/handoffs/handoff.md", firstAttempt.SourceArtifact);
         Assert.Equal(session.AcceptedAt, firstAttempt.SourceTimestamp);
         Assert.NotNull(firstAttempt.CapturedEventReference);
+        ReasoningDiagnosticGroup capturedGroup = Assert.Single(
+            firstAttempt.DiagnosticGroups,
+            group => group.Category == "capture");
+        Assert.Equal("Inferred capture", capturedGroup.Title);
+        Assert.Contains("Attempt result: Captured.", capturedGroup.Diagnostics);
+        Assert.Contains($"Captured event reference: {firstAttempt.CapturedEventReference.Id}.", capturedGroup.Diagnostics);
         Assert.Equal(ReasoningCaptureAttemptOutcome.Duplicate, secondAttempt.Result);
         Assert.NotNull(secondAttempt.ExistingEventReference);
         Assert.Equal(reasoningEvent.Id, secondAttempt.ExistingEventReference?.Id);
@@ -204,6 +223,10 @@ public sealed class DecisionReasoningCaptureServiceTests
         Assert.Equal(".agents/handoffs/handoff.md", reasoningEvent.CaptureProvenance?.SourceArtifact);
         Assert.Equal(reasoningEvent.CreatedAt, reasoningEvent.CaptureProvenance?.SourceTimestamp);
         Assert.Contains("Fingerprint ", reasoningEvent.CaptureProvenance?.DuplicateSignal);
+        ReasoningDiagnosticGroup eventCaptureGroup = Assert.Single(reasoningEvent.CaptureProvenance?.DiagnosticGroups ?? []);
+        Assert.Equal("Inferred capture", eventCaptureGroup.Title);
+        Assert.Contains("Capture mode: Inferred.", eventCaptureGroup.Diagnostics);
+        Assert.Contains("Source transition: ExecutionHandoffAcceptedReasoningObserved.", eventCaptureGroup.Diagnostics);
         Assert.Contains("Execution remains workflow authority", reasoningEvent.Narrative.Details);
         Assert.Contains(reasoningEvent.References, reference =>
             reference.Kind == ReasoningReferenceKind.Handoff &&

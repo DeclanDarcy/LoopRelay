@@ -28,7 +28,8 @@ public sealed record ReasoningCaptureProvenance(
     DateTimeOffset? SourceTimestamp = null,
     string? SkipReason = null,
     string? DuplicateSignal = null,
-    ReasoningReference? ExistingEventReference = null);
+    ReasoningReference? ExistingEventReference = null,
+    IReadOnlyList<ReasoningDiagnosticGroup> DiagnosticGroups = null!);
 
 public sealed record ReasoningBoundaryViolation(
     string BoundaryRule,

@@ -1,5 +1,6 @@
 import { EmptyState } from '../../components/design'
 import type { ReasoningEvent, ReasoningEventFamily } from '../../types'
+import { ReasoningDiagnosticGroups } from './ReasoningDiagnosticGroups'
 
 type ReasoningEventFeedProps = {
   events: ReasoningEvent[]
@@ -91,6 +92,10 @@ export function ReasoningEventFeed({
                   </div>
                 ) : null}
               </dl>
+              <ReasoningDiagnosticGroups
+                groups={event.captureProvenance.diagnosticGroups}
+                label={`${event.id} capture diagnostics`}
+              />
             </article>
           ))}
         </div>

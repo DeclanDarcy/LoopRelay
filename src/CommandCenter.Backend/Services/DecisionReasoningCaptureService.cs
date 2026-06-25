@@ -730,6 +730,7 @@ public sealed class DecisionReasoningCaptureService(
         string captureReason,
         ReasoningEvent reasoningEvent)
     {
+        string? duplicateSignal = DuplicateSignal(reasoningEvent);
         return new ReasoningCaptureAttemptResult(
             ReasoningCaptureMode.Inferred,
             ReasoningCaptureAttemptOutcome.Captured,
@@ -738,10 +739,21 @@ public sealed class DecisionReasoningCaptureService(
             sourceTimestamp,
             captureReason,
             null,
-            DuplicateSignal(reasoningEvent),
+            duplicateSignal,
             null,
             ReasoningEventReference(reasoningEvent),
-            []);
+            [],
+            CreateCaptureAttemptDiagnosticGroups(
+                ReasoningCaptureAttemptOutcome.Captured,
+                sourceTransition,
+                sourceArtifact,
+                sourceTimestamp,
+                captureReason,
+                null,
+                duplicateSignal,
+                null,
+                ReasoningEventReference(reasoningEvent),
+                []));
     }
 
     private static ReasoningCaptureAttemptResult DuplicateAttempt(
@@ -751,6 +763,8 @@ public sealed class DecisionReasoningCaptureService(
         string captureReason,
         ReasoningEvent existingEvent)
     {
+        string? duplicateSignal = DuplicateSignal(existingEvent);
+        ReasoningReference existingEventReference = ReasoningEventReference(existingEvent);
         return new ReasoningCaptureAttemptResult(
             ReasoningCaptureMode.Inferred,
             ReasoningCaptureAttemptOutcome.Duplicate,
@@ -759,10 +773,21 @@ public sealed class DecisionReasoningCaptureService(
             sourceTimestamp,
             captureReason,
             "Equivalent inferred reasoning evidence already exists.",
-            DuplicateSignal(existingEvent),
-            ReasoningEventReference(existingEvent),
+            duplicateSignal,
+            existingEventReference,
             null,
-            []);
+            [],
+            CreateCaptureAttemptDiagnosticGroups(
+                ReasoningCaptureAttemptOutcome.Duplicate,
+                sourceTransition,
+                sourceArtifact,
+                sourceTimestamp,
+                captureReason,
+                "Equivalent inferred reasoning evidence already exists.",
+                duplicateSignal,
+                existingEventReference,
+                null,
+                []));
     }
 
     private static ReasoningCaptureAttemptResult SkippedAttempt(
@@ -784,7 +809,76 @@ public sealed class DecisionReasoningCaptureService(
             null,
             null,
             null,
-            diagnostics);
+            diagnostics,
+            CreateCaptureAttemptDiagnosticGroups(
+                ReasoningCaptureAttemptOutcome.Skipped,
+                sourceTransition,
+                sourceArtifact,
+                sourceTimestamp,
+                captureReason,
+                skipReason,
+                null,
+                null,
+                null,
+                diagnostics));
+    }
+
+    private static IReadOnlyList<ReasoningDiagnosticGroup> CreateCaptureAttemptDiagnosticGroups(
+        ReasoningCaptureAttemptOutcome outcome,
+        string sourceTransition,
+        string? sourceArtifact,
+        DateTimeOffset? sourceTimestamp,
+        string captureReason,
+        string? skipReason,
+        string? duplicateSignal,
+        ReasoningReference? existingEventReference,
+        ReasoningReference? capturedEventReference,
+        IReadOnlyList<string> diagnostics)
+    {
+        var captureDiagnostics = new List<string>
+        {
+            "Capture mode: Inferred.",
+            $"Attempt result: {outcome}.",
+            $"Source transition: {sourceTransition}.",
+            $"Capture reason: {captureReason}."
+        };
+
+        AddIfPresent(captureDiagnostics, "Source artifact", sourceArtifact);
+        AddIfPresent(captureDiagnostics, "Source timestamp", sourceTimestamp?.ToString("O"));
+        AddIfPresent(captureDiagnostics, "Skip reason", skipReason);
+        AddIfPresent(captureDiagnostics, "Duplicate signal", duplicateSignal);
+        if (existingEventReference is not null)
+        {
+            captureDiagnostics.Add($"Existing event reference: {existingEventReference.Id}.");
+        }
+
+        if (capturedEventReference is not null)
+        {
+            captureDiagnostics.Add($"Captured event reference: {capturedEventReference.Id}.");
+        }
+
+        var groups = new List<ReasoningDiagnosticGroup>
+        {
+            new("capture", CaptureAttemptTitle(outcome), captureDiagnostics)
+        };
+
+        if (diagnostics.Count > 0)
+        {
+            groups.Add(new ReasoningDiagnosticGroup("validation", "Capture attempt diagnostics", diagnostics));
+        }
+
+        return groups;
+    }
+
+    private static string CaptureAttemptTitle(ReasoningCaptureAttemptOutcome outcome)
+    {
+        return outcome switch
+        {
+            ReasoningCaptureAttemptOutcome.Captured => "Inferred capture",
+            ReasoningCaptureAttemptOutcome.Duplicate => "Duplicate capture",
+            ReasoningCaptureAttemptOutcome.Skipped => "Skipped capture",
+            _ => "Capture"
+        };
     }
 
     private static string RequireCapturedOrExistingEventId(ReasoningCaptureAttemptResult attempt)
@@ -1198,6 +1292,14 @@ public sealed class DecisionReasoningCaptureService(
     private static bool ContainsAny(string value, params string[] needles)
     {
         return needles.Any(needle => value.Contains(needle, StringComparison.Ordinal));
+    }
+
+    private static void AddIfPresent(List<string> diagnostics, string label, string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            diagnostics.Add($"{label}: {value}.");
+        }
     }
 
     private static string Excerpt(string semanticText, int maxLength = 240)

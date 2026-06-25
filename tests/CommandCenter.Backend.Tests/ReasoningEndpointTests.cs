@@ -391,6 +391,11 @@ public sealed class ReasoningEndpointTests
         Assert.Equal(ReasoningCaptureMode.Manual, resolved.CaptureProvenance?.Mode);
         Assert.Equal("UserSupplied", resolved.CaptureProvenance?.SourceKind);
         Assert.Equal("Captured from explicit user-supplied reasoning.", resolved.CaptureProvenance?.CaptureReason);
+        ReasoningDiagnosticGroup manualGroup = Assert.Single(resolved.CaptureProvenance?.DiagnosticGroups ?? []);
+        Assert.Equal("capture", manualGroup.Category);
+        Assert.Equal("Manual capture", manualGroup.Title);
+        Assert.Contains("Capture mode: Manual.", manualGroup.Diagnostics);
+        Assert.Contains("Captured by: agent.", manualGroup.Diagnostics);
         Assert.Equal([identified.Id, resolved.Id], reloadedThread.EventIds);
     }
 
@@ -421,6 +426,12 @@ public sealed class ReasoningEndpointTests
         Assert.Equal(".agents/handoffs/handoff.md", created.CaptureProvenance?.SourceArtifact);
         Assert.Equal("Fingerprint assisted-fingerprint", created.CaptureProvenance?.DuplicateSignal);
         Assert.Null(created.CaptureProvenance?.SourceTransition);
+        ReasoningDiagnosticGroup assistedGroup = Assert.Single(created.CaptureProvenance?.DiagnosticGroups ?? []);
+        Assert.Equal("capture", assistedGroup.Category);
+        Assert.Equal("Assisted capture", assistedGroup.Title);
+        Assert.Contains("Capture mode: Assisted.", assistedGroup.Diagnostics);
+        Assert.Contains("Source artifact: .agents/handoffs/handoff.md.", assistedGroup.Diagnostics);
+        Assert.Contains("Duplicate signal: Fingerprint assisted-fingerprint.", assistedGroup.Diagnostics);
     }
 
     [Fact]

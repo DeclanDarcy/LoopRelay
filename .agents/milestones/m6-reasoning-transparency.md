@@ -7,15 +7,15 @@ Make reasoning conclusions explain their provenance, confidence, thresholds, rec
 ### Backend
 
 - [ ] Build a reasoning transparency inventory for:
-   - [ ] materialization recommendations
-   - [ ] reconstruction confidence
-   - [ ] reconstruction direction
-   - [ ] capture provenance
-   - [ ] inferred reasoning
-   - [ ] skipped or deduplicated captures
-   - [ ] authority-boundary blocks
-   - [ ] taxonomy lifecycle risk
-   - [ ] diagnostics
+   - [x] materialization recommendations
+   - [x] reconstruction confidence
+   - [x] reconstruction direction
+   - [x] capture provenance
+   - [x] inferred reasoning
+   - [x] skipped or deduplicated captures
+   - [x] authority-boundary blocks
+   - [x] taxonomy lifecycle risk
+   - [x] diagnostics
 - [ ] Extend materialization review models to include:
    - [x] literal recommendation enum
    - [x] failed scenario count
@@ -23,7 +23,7 @@ Make reasoning conclusions explain their provenance, confidence, thresholds, rec
    - [x] thresholds
    - [x] elevated risk signals
    - [x] branch reason
-   - [ ] diagnostics
+   - [x] diagnostics
 - [ ] Extend reconstruction models to include:
    - [x] confidence rationale
    - [x] event evidence present
@@ -59,7 +59,7 @@ Make reasoning conclusions explain their provenance, confidence, thresholds, rec
    - [x] confidence
    - [x] materialization
    - [x] reconstruction
-   - [ ] capture
+   - [x] capture
    - [x] authority boundary
    - [x] lifecycle risk
    - [x] validation
@@ -68,7 +68,7 @@ Make reasoning conclusions explain their provenance, confidence, thresholds, rec
 
 - [x] Update reasoning TypeScript types and API responses.
 - [x] Update `ReasoningMaterializationReviewPanel` to render literal recommendations and threshold basis.
-- [ ] Update `ReasoningReconstructionPanel`, `ReasoningQueryPanel`, and trace panels to show confidence rationale, evidence branches, missing evidence, direction, scope, and historical cutoff.
+- [x] Update `ReasoningReconstructionPanel`, `ReasoningQueryPanel`, and trace panels to show confidence rationale, evidence branches, missing evidence, direction, scope, and historical cutoff.
 - [x] Update `ReasoningEventFeed` with capture provenance badges and inferred capture details.
 - [x] Add authority boundary notices that identify the owning domain and allowed alternative.
 - [x] Update taxonomy and materialization review rendering to show lifecycle-risk rules and thresholds.
@@ -82,15 +82,16 @@ Make reasoning conclusions explain their provenance, confidence, thresholds, rec
 - [x] Backend tests for manual, assisted, and inferred capture.
 - [x] Backend tests for boundary violation explanations.
 - [x] Backend tests for lifecycle risk thresholds.
-- [ ] UI tests for rendering each explanation branch.
+- [x] UI tests for rendering each explanation branch.
    - [x] Grouped reasoning diagnostics rendering.
+   - [x] Capture diagnostic group rendering.
 
 ### Exit Criteria
 
 - [x] Users can understand why materialization was recommended or not.
-- [ ] Confidence labels explain their evidence and missing evidence.
-- [ ] Reconstruction scope and direction are explicit.
-- [ ] Authored, assisted, and inferred reasoning are distinguishable.
+- [x] Confidence labels explain their evidence and missing evidence.
+- [x] Reconstruction scope and direction are explicit.
+- [x] Authored, assisted, and inferred reasoning are distinguishable.
 - [x] Boundary violations explain the owning rule and allowed alternative.
 - [x] Lifecycle risk findings show their rule basis.
-- [ ] Reasoning diagnostics are semantically grouped and actionable.
+- [x] Reasoning diagnostics are semantically grouped and actionable.

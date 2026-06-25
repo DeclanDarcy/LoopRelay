@@ -156,6 +156,7 @@ export type ReasoningCaptureProvenance = {
   skipReason: string | null
   duplicateSignal: string | null
   existingEventReference: ReasoningReference | null
+  diagnosticGroups?: ReasoningDiagnosticGroup[] | null
 }
 
 export type ReasoningDiagnosticGroup = {

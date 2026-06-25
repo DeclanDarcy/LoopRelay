@@ -463,7 +463,8 @@ public sealed class FileSystemReasoningRepository(
 
     private static ReasoningEvent EnrichCaptureProvenance(ReasoningEvent reasoningEvent)
     {
-        if (reasoningEvent.CaptureProvenance is not null)
+        if (reasoningEvent.CaptureProvenance is { DiagnosticGroups: { } existingGroups } &&
+            existingGroups.Count > 0)
         {
             return reasoningEvent;
         }
@@ -476,21 +477,60 @@ public sealed class FileSystemReasoningRepository(
         string? duplicateSignal = string.IsNullOrWhiteSpace(reasoningEvent.Provenance.Fingerprint)
             ? null
             : $"Fingerprint {reasoningEvent.Provenance.Fingerprint}";
+        ReasoningCaptureProvenance provenance = reasoningEvent.CaptureProvenance ?? new ReasoningCaptureProvenance(
+            mode,
+            reasoningEvent.Provenance.SourceKind,
+            reasoningEvent.Provenance.CapturedBy,
+            captureReason,
+            sourceTransition,
+            reasoningEvent.Provenance.RelativePath,
+            mode == ReasoningCaptureMode.Inferred ? reasoningEvent.CreatedAt : null,
+            null,
+            duplicateSignal,
+            null);
 
         return reasoningEvent with
         {
-            CaptureProvenance = new ReasoningCaptureProvenance(
-                mode,
-                reasoningEvent.Provenance.SourceKind,
-                reasoningEvent.Provenance.CapturedBy,
-                captureReason,
-                sourceTransition,
-                reasoningEvent.Provenance.RelativePath,
-                mode == ReasoningCaptureMode.Inferred ? reasoningEvent.CreatedAt : null,
-                null,
-                duplicateSignal,
-                null)
+            CaptureProvenance = provenance with
+            {
+                DiagnosticGroups = CreateCaptureDiagnosticGroups(provenance)
+            }
         };
+    }
+
+    private static IReadOnlyList<ReasoningDiagnosticGroup> CreateCaptureDiagnosticGroups(
+        ReasoningCaptureProvenance provenance)
+    {
+        var diagnostics = new List<string>
+        {
+            $"Capture mode: {provenance.Mode}.",
+            $"Source kind: {provenance.SourceKind}.",
+            $"Captured by: {provenance.CapturedBy}.",
+            $"Capture reason: {provenance.CaptureReason}."
+        };
+
+        AddIfPresent(diagnostics, "Source transition", provenance.SourceTransition);
+        AddIfPresent(diagnostics, "Source artifact", provenance.SourceArtifact);
+        AddIfPresent(diagnostics, "Source timestamp", provenance.SourceTimestamp?.ToString("O"));
+        AddIfPresent(diagnostics, "Duplicate signal", provenance.DuplicateSignal);
+        AddIfPresent(diagnostics, "Skip reason", provenance.SkipReason);
+        if (provenance.ExistingEventReference is not null)
+        {
+            diagnostics.Add($"Existing event reference: {provenance.ExistingEventReference.Id}.");
+        }
+
+        string title = provenance.Mode switch
+        {
+            ReasoningCaptureMode.Manual => "Manual capture",
+            ReasoningCaptureMode.Assisted => "Assisted capture",
+            ReasoningCaptureMode.Inferred => "Inferred capture",
+            _ => "Capture"
+        };
+
+        return
+        [
+            new ReasoningDiagnosticGroup("capture", title, diagnostics)
+        ];
     }
 
     private static ReasoningCaptureMode ResolveCaptureMode(string sourceKind, IReadOnlyList<string> tags)
@@ -555,5 +595,13 @@ public sealed class FileSystemReasoningRepository(
     private static IReadOnlyList<T> Normalize<T>(IReadOnlyList<T>? values)
     {
         return values is null ? Array.Empty<T>() : values.ToArray();
+    }
+
+    private static void AddIfPresent(List<string> diagnostics, string label, string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            diagnostics.Add($"{label}: {value}.");
+        }
     }
 }

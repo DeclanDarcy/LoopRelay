@@ -46,6 +46,20 @@ const events: ReasoningEvent[] = [
       skipReason: null,
       duplicateSignal: 'Fingerprint fingerprint-1',
       existingEventReference: null,
+      diagnosticGroups: [
+        {
+          category: 'capture',
+          title: 'Manual capture',
+          diagnostics: [
+            'Capture mode: Manual.',
+            'Source kind: ManualCapture.',
+            'Captured by: codex.',
+            'Capture reason: Preserve events first.',
+            'Source artifact: .agents/plan.md.',
+            'Duplicate signal: Fingerprint fingerprint-1.',
+          ],
+        },
+      ],
     },
     threadIds: ['THR-0001'],
     tags: ['milestone-1'],
@@ -81,6 +95,19 @@ const events: ReasoningEvent[] = [
       skipReason: null,
       duplicateSignal: 'Fingerprint fingerprint-2',
       existingEventReference: null,
+      diagnosticGroups: [
+        {
+          category: 'capture',
+          title: 'Inferred capture',
+          diagnostics: [
+            'Capture mode: Inferred.',
+            'Source kind: InferredOperationalContextPromotion.',
+            'Captured by: operational-context-lifecycle-service.',
+            'Capture reason: Do not add specialized endpoints.',
+            'Source transition: OperationalContextPromotionReasoningObserved.',
+          ],
+        },
+      ],
     },
     threadIds: [],
     tags: ['derived-only'],
@@ -337,6 +364,11 @@ const reconstruction: ReasoningReconstruction = {
 
 const limitedReconstruction: ReasoningReconstruction = {
   ...reconstruction,
+  query: {
+    ...reconstruction.query,
+    direction: 'Forward',
+    historicalAt: '2026-06-22T16:03:00.0000000Z',
+  },
   confidence: 'Limited',
   confidenceRationale: {
     level: 'Limited',
@@ -412,6 +444,7 @@ const queryResult: ReasoningQueryResult = {
 
 const limitedQueryResult: ReasoningQueryResult = {
   ...queryResult,
+  query: limitedReconstruction.query,
   reconstruction: limitedReconstruction,
   diagnostics: limitedReconstruction.diagnostics,
 }
@@ -624,6 +657,18 @@ describe('reasoning trajectory tab', () => {
     expect(within(feed).getByText('OperationalContextPromotionReasoningObserved')).toBeInTheDocument()
     expect(within(feed).getByText('.agents/plan.md')).toBeInTheDocument()
     expect(within(feed).getByText('Fingerprint fingerprint-1')).toBeInTheDocument()
+    expect(within(feed).getByLabelText('EVT-0001 capture diagnostics')).toHaveTextContent(
+      'Manual capture',
+    )
+    expect(within(feed).getByLabelText('EVT-0001 capture diagnostics')).toHaveTextContent(
+      'Capture reason: Preserve events first.',
+    )
+    expect(within(feed).getByLabelText('EVT-0002 capture diagnostics')).toHaveTextContent(
+      'Inferred capture',
+    )
+    expect(within(feed).getByLabelText('EVT-0002 capture diagnostics')).toHaveTextContent(
+      'Source transition: OperationalContextPromotionReasoningObserved.',
+    )
     expect(screen.getByLabelText('Derived reasoning status')).toHaveTextContent(
       'Derived display only',
     )
@@ -715,6 +760,12 @@ describe('reasoning trajectory tab', () => {
     expect(within(graphRegion).getByLabelText('Backward Trace')).toHaveTextContent(
       'ReasoningEvent:EVT-0001',
     )
+    expect(within(graphRegion).getByLabelText('Backward Trace nodes')).toHaveTextContent(
+      'Event substrate can stay narrow',
+    )
+    expect(within(graphRegion).getByLabelText('Backward Trace nodes')).toHaveTextContent(
+      'Resolved',
+    )
   })
 
   it('submits manual capture from backend-approved templates', async () => {
@@ -779,6 +830,21 @@ describe('reasoning trajectory tab', () => {
     )
     expect(within(queryRegion).getByLabelText('Reasoning query result')).toHaveTextContent(
       '2 evidence items',
+    )
+    expect(within(queryRegion).getByLabelText('Executed reasoning query')).toHaveTextContent(
+      'Why did this decision change?',
+    )
+    expect(within(queryRegion).getByLabelText('Executed reasoning query')).toHaveTextContent(
+      'Decision',
+    )
+    expect(within(queryRegion).getByLabelText('Executed reasoning query')).toHaveTextContent(
+      'Backward',
+    )
+    expect(within(queryRegion).getByLabelText('Executed reasoning query')).toHaveTextContent(
+      'ReasoningEvent EVT-0001',
+    )
+    expect(within(queryRegion).getByLabelText('Executed reasoning query')).toHaveTextContent(
+      'Current graph',
     )
     expect(within(queryRegion).getByLabelText('Reasoning query transparency')).toHaveTextContent(
       'Event evidence and relationship evidence were both reachable',
@@ -873,6 +939,12 @@ describe('reasoning trajectory tab', () => {
       'Forward from unreported source to ReasoningEvent EVT-0001',
     )
     expect(within(queryRegion).getByLabelText('Reasoning query transparency')).toHaveTextContent(
+      '2026-06-22T16:03:00.0000000Z',
+    )
+    expect(within(queryRegion).getByLabelText('Executed reasoning query')).toHaveTextContent(
+      'Forward',
+    )
+    expect(within(queryRegion).getByLabelText('Executed reasoning query')).toHaveTextContent(
       '2026-06-22T16:03:00.0000000Z',
     )
     expect(within(queryRegion).getByLabelText('Reasoning query transparency')).toHaveTextContent(
