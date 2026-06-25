@@ -1,7 +1,7 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { ExecutionSessionPanel } from '../../features/execution/ExecutionSessionPanel'
-import type { ExecutionPromptManifest, ExecutionSessionSummary } from '../../types'
+import type { ExecutionPromptManifest, ExecutionSessionSummary, ExecutionSessionTransparency } from '../../types'
 
 afterEach(() => {
   cleanup()
@@ -91,6 +91,39 @@ function promptManifest(): ExecutionPromptManifest {
   }
 }
 
+function transparency(): ExecutionSessionTransparency {
+  return {
+    sessionId: 'session-alpha',
+    promptMetadata: {
+      generatedAt: '2026-06-21T16:00:30.000Z',
+      repositoryPath: 'C:\\workspace\\AlphaRepo',
+      milestonePath: '.agents/milestones/m0.md',
+      includedArtifactPaths: ['.agents/plan.md', '.agents/milestones/m0.md'],
+    },
+    recovery: {
+      recoveryRan: true,
+      recoveryTrigger: 'StartupRecovery',
+      reattachAttempted: true,
+      reattachSucceeded: false,
+      orphanedProviderState: true,
+      sessionMarkedFailedByRecovery: true,
+      recoveryEventTimestamp: '2026-06-21T16:13:00.000Z',
+      recoveryMessage: 'Active provider process could not be reattached after backend restart.',
+    },
+    monitoring: {
+      providerProcessState: 'Exited',
+      exitCode: 2,
+      lastActivityAt: '2026-06-21T16:13:00.000Z',
+      staleActivity: false,
+      retainedEventCount: 3,
+      firstRetainedEventSequence: 1,
+      lastRetainedEventSequence: 3,
+      eventRetentionTrimmingDetected: false,
+      monitoringWarnings: ['Provider exited with non-zero code 2.'],
+    },
+  }
+}
+
 describe('execution session panel rendering characterization', () => {
   it('renders the active execution session summary fields', () => {
     render(<ExecutionSessionPanel session={sessionSummary()} />)
@@ -151,5 +184,22 @@ describe('execution session panel rendering characterization', () => {
     expect(screen.getByText('Missing - unknown bytes - unknown chars')).toBeInTheDocument()
     expect(screen.getByText('No provider adjustments recorded.')).toBeInTheDocument()
     expect(screen.getByText('NoProviderDivergenceSignal')).toBeInTheDocument()
+  })
+
+  it('renders recovery and monitoring transparency distinctly from prompt manifest details', () => {
+    render(<ExecutionSessionPanel session={sessionSummary()} transparency={transparency()} />)
+
+    expect(screen.getByLabelText('Execution transparency')).toBeInTheDocument()
+    expect(screen.getByText('Recovery')).toBeInTheDocument()
+    expect(screen.getByText('Recovery ran: Yes')).toBeInTheDocument()
+    expect(screen.getByText('Trigger: StartupRecovery')).toBeInTheDocument()
+    expect(screen.getByText('Reattach attempted: Yes')).toBeInTheDocument()
+    expect(screen.getByText('Reattach succeeded: No')).toBeInTheDocument()
+    expect(screen.getByText('Orphaned provider: Yes')).toBeInTheDocument()
+    expect(screen.getByText('Provider process: Exited')).toBeInTheDocument()
+    expect(screen.getByText('Exit code: 2')).toBeInTheDocument()
+    expect(screen.getByText('Retained events: 3')).toBeInTheDocument()
+    expect(screen.getByText('Provider exited with non-zero code 2.')).toBeInTheDocument()
+    expect(screen.getByText('Prompt Metadata')).toBeInTheDocument()
   })
 })

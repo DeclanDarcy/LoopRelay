@@ -119,6 +119,43 @@ public sealed class ExecutionMonitoringEndpointTests
     }
 
     [Fact]
+    public async Task TransparencyEndpointProjectsRecoveryAndMonitoringSignals()
+    {
+        string storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");
+        FileSystemExecutionSessionStore store = await CreateStoreWithSessionAsync(
+            storePath,
+            ExecutionSessionState.Executing,
+            RepositoryExecutionState.Executing);
+        ExecutionSession session = (await store.LoadAsync()).Single();
+        var monitoringService = new ExecutionMonitoringService(store);
+
+        await monitoringService.RecordRecoveryAsync(session.Id, ExecutionSessionService.ReattachedProviderRecoveryMessage);
+        await monitoringService.CreateProviderObserver(session.Id).OnProviderExitedAsync(2);
+
+        await using WebApplication app = CreateApp(storePath);
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+
+        using var client = new HttpClient();
+        HttpResponseMessage response = await client.GetAsync(
+            app.Urls.Single() + $"/api/execution-sessions/{session.Id}/transparency");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var transparency = await ReadJsonAsync<ExecutionSessionTransparency>(response);
+        Assert.NotNull(transparency);
+        Assert.Equal(session.Id, transparency.SessionId);
+        Assert.True(transparency.Recovery.RecoveryRan);
+        Assert.Equal("StartupRecovery", transparency.Recovery.RecoveryTrigger);
+        Assert.True(transparency.Recovery.ReattachAttempted);
+        Assert.True(transparency.Recovery.ReattachSucceeded);
+        Assert.Equal(ExecutionSessionService.ReattachedProviderRecoveryMessage, transparency.Recovery.RecoveryMessage);
+        Assert.Equal("Exited", transparency.Monitoring.ProviderProcessState);
+        Assert.Equal(2, transparency.Monitoring.ExitCode);
+        Assert.True(transparency.Monitoring.RetainedEventCount >= 2);
+        Assert.Contains("Provider exited with non-zero code 2.", transparency.Monitoring.MonitoringWarnings);
+    }
+
+    [Fact]
     public async Task StatusEndpointProjectsCancelledSession()
     {
         string storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");

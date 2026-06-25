@@ -58,6 +58,7 @@ import {
   useExecutionEvents,
   useExecutionPromptManifest,
   useExecutionSession,
+  useExecutionTransparency,
   useGitStatus,
   mergeExecutionEvents,
   useReasoningEvents,
@@ -203,6 +204,11 @@ function App() {
     isLoading: isExecutionPromptManifestLoading,
     error: executionPromptManifestError,
   } = useExecutionPromptManifest(executionSessionId)
+  const {
+    data: executionTransparency,
+    isLoading: isExecutionTransparencyLoading,
+    error: executionTransparencyError,
+  } = useExecutionTransparency(executionSessionId)
   const {
     data: decisionInfluenceTrace,
     isLoading: isDecisionInfluenceLoading,
@@ -1960,8 +1966,11 @@ function App() {
               <ExecutionTab
                 execution={executionDisplay}
                 executionPromptManifest={executionPromptManifest}
+                executionTransparency={executionTransparency}
                 isExecutionPromptManifestLoading={isExecutionPromptManifestLoading}
+                isExecutionTransparencyLoading={isExecutionTransparencyLoading}
                 executionPromptManifestError={executionPromptManifestError}
+                executionTransparencyError={executionTransparencyError}
                 executionContext={executionContextMatchesSelection ? executionContext : null}
                 decisionInfluenceTrace={decisionInfluenceTrace}
                 isDecisionInfluenceLoading={isDecisionInfluenceLoading}

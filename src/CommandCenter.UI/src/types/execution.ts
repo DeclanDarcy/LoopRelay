@@ -84,6 +84,43 @@ export type ExecutionPromptManifest = {
   diagnostics: string[]
 }
 
+export type ExecutionPromptMetadata = {
+  generatedAt: string
+  repositoryPath: string
+  milestonePath: string
+  includedArtifactPaths: string[]
+}
+
+export type ExecutionRecoveryTransparency = {
+  recoveryRan: boolean
+  recoveryTrigger: string | null
+  reattachAttempted: boolean | null
+  reattachSucceeded: boolean | null
+  orphanedProviderState: boolean
+  sessionMarkedFailedByRecovery: boolean
+  recoveryEventTimestamp: string | null
+  recoveryMessage: string | null
+}
+
+export type ExecutionMonitoringTransparency = {
+  providerProcessState: string
+  exitCode: number | null
+  lastActivityAt: string | null
+  staleActivity: boolean
+  retainedEventCount: number
+  firstRetainedEventSequence: number | null
+  lastRetainedEventSequence: number | null
+  eventRetentionTrimmingDetected: boolean
+  monitoringWarnings: string[]
+}
+
+export type ExecutionSessionTransparency = {
+  sessionId: string
+  promptMetadata: ExecutionPromptMetadata | null
+  recovery: ExecutionRecoveryTransparency
+  monitoring: ExecutionMonitoringTransparency
+}
+
 export type ExecutionEvent = {
   sequence: number
   timestamp: string

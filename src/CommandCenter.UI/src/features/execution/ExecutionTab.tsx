@@ -8,6 +8,7 @@ import type {
   ExecutionEvent,
   ExecutionPromptManifest,
   ExecutionSessionSummary,
+  ExecutionSessionTransparency,
   RepositoryExecutionState,
   WorkflowInstance,
 } from '../../types'
@@ -23,8 +24,11 @@ import { ExecutionWorkflowRail } from './ExecutionWorkflowRail'
 type ExecutionTabProps = {
   execution: ExecutionSessionSummary | null
   executionPromptManifest: ExecutionPromptManifest | null
+  executionTransparency: ExecutionSessionTransparency | null
   isExecutionPromptManifestLoading?: boolean
+  isExecutionTransparencyLoading?: boolean
   executionPromptManifestError?: string | null
+  executionTransparencyError?: string | null
   executionContext: ExecutionContextPreview | null
   decisionInfluenceTrace: DecisionInfluenceTrace | null
   isDecisionInfluenceLoading?: boolean
@@ -49,8 +53,11 @@ type ExecutionTabProps = {
 export function ExecutionTab({
   execution,
   executionPromptManifest,
+  executionTransparency,
   isExecutionPromptManifestLoading = false,
+  isExecutionTransparencyLoading = false,
   executionPromptManifestError = null,
+  executionTransparencyError = null,
   executionContext,
   decisionInfluenceTrace,
   isDecisionInfluenceLoading = false,
@@ -109,8 +116,11 @@ export function ExecutionTab({
             <ExecutionSessionPanel
               session={execution}
               promptManifest={executionPromptManifest}
+              transparency={executionTransparency}
               isPromptManifestLoading={isExecutionPromptManifestLoading}
+              isTransparencyLoading={isExecutionTransparencyLoading}
               promptManifestError={executionPromptManifestError}
+              transparencyError={executionTransparencyError}
               onOpenMilestone={
                 execution.milestonePath
                   ? () => onOpenWorkspaceMilestone(execution.milestonePath as string)
@@ -131,6 +141,7 @@ export function ExecutionTab({
 
           <ExecutionDiagnosticsPanel
             execution={execution}
+            transparency={executionTransparency}
             currentExecutionState={currentExecutionState}
             onOpenWorkspaceGit={onOpenWorkspaceGit}
           />
@@ -160,16 +171,19 @@ export function ExecutionTab({
 
 type ExecutionDiagnosticsPanelProps = {
   execution: ExecutionSessionSummary | null
+  transparency: ExecutionSessionTransparency | null
   currentExecutionState: RepositoryExecutionState
   onOpenWorkspaceGit: () => void
 }
 
 function ExecutionDiagnosticsPanel({
   execution,
+  transparency,
   currentExecutionState,
   onOpenWorkspaceGit,
 }: ExecutionDiagnosticsPanelProps) {
   const recentFailure = execution?.failureReason ?? null
+  const monitoring = transparency?.monitoring ?? null
 
   return (
     <Panel className="execution-diagnostics-panel" aria-label="Execution diagnostics">
@@ -194,7 +208,9 @@ function ExecutionDiagnosticsPanel({
         </span>
         <span>Repository state: {repositoryExecutionStatus[currentExecutionState].label}</span>
         <span>Last activity: {formatDateTime(execution?.lastActivityAt ?? null)}</span>
-        <span>Monitoring warnings: Not projected</span>
+        <span>Provider process: {monitoring?.providerProcessState ?? 'Not projected'}</span>
+        <span>Monitoring warnings: {monitoring?.monitoringWarnings.length ?? 'Not projected'}</span>
+        <span>Stale activity: {monitoring ? (monitoring.staleActivity ? 'Yes' : 'No') : 'Not projected'}</span>
       </div>
       {recentFailure ? (
         <div className="execution-rail-warning">

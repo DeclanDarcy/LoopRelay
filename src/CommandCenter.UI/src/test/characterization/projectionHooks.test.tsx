@@ -9,6 +9,7 @@ import {
   useExecutionEvents,
   useExecutionPromptManifest,
   useExecutionSession,
+  useExecutionTransparency,
   useGitStatus,
   useRepositories,
   useRepositoryWorkspace,
@@ -16,6 +17,7 @@ import {
 import type {
   ExecutionContextPreview,
   ExecutionPromptManifest,
+  ExecutionSessionTransparency,
   ExecutionStatus,
   ContinuityDiagnostics,
   ContinuityReport,
@@ -286,6 +288,39 @@ function createExecutionPromptManifest(sessionId = 'session-alpha'): ExecutionPr
     providerAdjustments: [],
     divergenceReason: null,
     diagnostics: ['NoProviderDivergenceSignal'],
+  }
+}
+
+function createExecutionTransparency(sessionId = 'session-alpha'): ExecutionSessionTransparency {
+  return {
+    sessionId,
+    promptMetadata: {
+      generatedAt: '2026-01-01T00:00:30Z',
+      repositoryPath: 'C:\\workspace\\AlphaRepo',
+      milestonePath: '.agents/milestones/m5.md',
+      includedArtifactPaths: ['.agents/plan.md', '.agents/milestones/m5.md'],
+    },
+    recovery: {
+      recoveryRan: true,
+      recoveryTrigger: 'StartupRecovery',
+      reattachAttempted: true,
+      reattachSucceeded: true,
+      orphanedProviderState: false,
+      sessionMarkedFailedByRecovery: false,
+      recoveryEventTimestamp: '2026-01-01T00:01:00Z',
+      recoveryMessage: 'Active provider process was reattached after backend restart.',
+    },
+    monitoring: {
+      providerProcessState: 'Running',
+      exitCode: null,
+      lastActivityAt: '2026-01-01T00:01:00Z',
+      staleActivity: false,
+      retainedEventCount: 2,
+      firstRetainedEventSequence: 1,
+      lastRetainedEventSequence: 2,
+      eventRetentionTrimmingDetected: false,
+      monitoringWarnings: [],
+    },
   }
 }
 
@@ -620,6 +655,19 @@ describe('projection hook characterization', () => {
 
     await waitFor(() => expect(result.current.data).toBe(manifest))
     expect(invoke).toHaveBeenCalledWith('get_execution_prompt_manifest', {
+      sessionId: 'session-alpha',
+    }, undefined)
+  })
+
+  it('loads execution transparency through the shell detail command', async () => {
+    const transparency = createExecutionTransparency('session-alpha')
+    const invoke = vi.fn().mockResolvedValue(transparency)
+    installInvokeMock(invoke)
+
+    const { result } = renderHook(() => useExecutionTransparency('session-alpha'))
+
+    await waitFor(() => expect(result.current.data).toBe(transparency))
+    expect(invoke).toHaveBeenCalledWith('get_execution_transparency', {
       sessionId: 'session-alpha',
     }, undefined)
   })

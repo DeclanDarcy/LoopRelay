@@ -3,6 +3,7 @@ import type {
   ExecutionContextPreview,
   ExecutionPromptManifest,
   ExecutionSessionSummary,
+  ExecutionSessionTransparency,
   ExecutionStatus,
 } from '../types'
 import { invokeCommand } from './tauri'
@@ -44,6 +45,10 @@ export function startExecution(repositoryId: string, milestonePath: string) {
 
 export function getExecutionPromptManifest(sessionId: string) {
   return invokeCommand<ExecutionPromptManifest>('get_execution_prompt_manifest', { sessionId })
+}
+
+export function getExecutionTransparency(sessionId: string) {
+  return invokeCommand<ExecutionSessionTransparency>('get_execution_transparency', { sessionId })
 }
 
 export function acceptExecutionHandoff(sessionId: string) {

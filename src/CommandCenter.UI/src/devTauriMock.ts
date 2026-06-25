@@ -36,10 +36,12 @@ import type {
   RefinementPlan,
   ExecutionDecisionProjection,
   ExecutionContextPreview,
+  ExecutionEvent,
   ExecutionPromptManifest,
   ExecutionSessionState,
   ExecutionSession,
   ExecutionSessionSummary,
+  ExecutionSessionTransparency,
   ManualReasoningCaptureCommand,
   ManualReasoningCaptureTemplate,
   OperationalContextItem,
@@ -3663,6 +3665,88 @@ function createExecutionPromptManifest(state: MockState, sessionId: string): Exe
   }
 }
 
+function createMockExecutionEvents(session: ExecutionSession): ExecutionEvent[] {
+  const events: ExecutionEvent[] = []
+  const startedAt = session.providerStartedAt ?? session.startedAt
+  if (startedAt) {
+    events.push({
+      sequence: events.length + 1,
+      timestamp: startedAt,
+      type: 'ProviderStarted',
+      message: 'Provider process started.',
+    })
+  }
+
+  if (session.failureReason?.includes('reattached')) {
+    events.push({
+      sequence: events.length + 1,
+      timestamp: session.completedAt ?? session.lastActivityAt ?? new Date().toISOString(),
+      type: 'Recovery',
+      message: session.failureReason,
+    })
+  }
+
+  if (session.completedAt) {
+    events.push({
+      sequence: events.length + 1,
+      timestamp: session.completedAt,
+      type: 'ProviderExited',
+      message: 'Provider process exited with code 0.',
+    })
+  }
+
+  return events
+}
+
+function createExecutionTransparency(state: MockState, sessionId: string): ExecutionSessionTransparency {
+  const session = state.sessions[sessionId]
+  if (!session) {
+    throw new Error('Execution session was not found.')
+  }
+
+  const events = createMockExecutionEvents(session)
+  const recoveryEvent = events.find((event) => event.type === 'Recovery') ?? null
+  const providerExitedEvent = [...events].reverse().find((event) => event.type === 'ProviderExited') ?? null
+
+  return {
+    sessionId,
+    promptMetadata: {
+      generatedAt: session.startedAt ?? new Date().toISOString(),
+      repositoryPath: session.repositoryPath,
+      milestonePath: session.milestonePath ?? '',
+      includedArtifactPaths: ['.agents/plan.md', session.milestonePath ?? '.agents/milestones/m5.md'],
+    },
+    recovery: {
+      recoveryRan: Boolean(recoveryEvent),
+      recoveryTrigger: recoveryEvent ? 'StartupRecovery' : null,
+      reattachAttempted: recoveryEvent?.message.includes('reattached') ? true : null,
+      reattachSucceeded: recoveryEvent?.message.includes('reattached') ? true : null,
+      orphanedProviderState: session.failureReason?.includes('reattached') === true,
+      sessionMarkedFailedByRecovery:
+        session.state === 'Failed' && session.failureReason?.includes('reattached') === true,
+      recoveryEventTimestamp: recoveryEvent?.timestamp ?? null,
+      recoveryMessage: recoveryEvent?.message ?? null,
+    },
+    monitoring: {
+      providerProcessState: providerExitedEvent
+        ? 'Exited'
+        : session.state === 'Executing' && session.providerProcessId
+          ? 'Running'
+          : session.providerStartedAt
+            ? 'Unknown'
+            : 'NotStarted',
+      exitCode: providerExitedEvent?.message.includes('code 0') ? 0 : null,
+      lastActivityAt: session.lastActivityAt,
+      staleActivity: false,
+      retainedEventCount: events.length,
+      firstRetainedEventSequence: events[0]?.sequence ?? null,
+      lastRetainedEventSequence: events.at(-1)?.sequence ?? null,
+      eventRetentionTrimmingDetected: false,
+      monitoringWarnings: session.failureReason ? [session.failureReason] : [],
+    },
+  }
+}
+
 function createManifestArtifact(state: MockState, role: string, relativePath: string | null) {
   const content = relativePath ? state.content[relativePath] : undefined
 
@@ -4679,6 +4763,8 @@ export function installDevTauriMock() {
         }
         case 'get_execution_prompt_manifest':
           return clone(createExecutionPromptManifest(state, getStringArg(args, 'sessionId')))
+        case 'get_execution_transparency':
+          return clone(createExecutionTransparency(state, getStringArg(args, 'sessionId')))
         case 'accept_execution_handoff':
           return clone(decideHandoff(state, getStringArg(args, 'sessionId'), 'accept'))
         case 'reject_execution_handoff':

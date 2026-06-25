@@ -5,13 +5,17 @@ import type {
   ExecutionPromptManifest,
   ExecutionPromptManifestArtifact,
   ExecutionSessionSummary,
+  ExecutionSessionTransparency,
 } from '../../types'
 
 type ExecutionSessionPanelProps = {
   session: ExecutionSessionSummary
   promptManifest?: ExecutionPromptManifest | null
+  transparency?: ExecutionSessionTransparency | null
   isPromptManifestLoading?: boolean
+  isTransparencyLoading?: boolean
   promptManifestError?: string | null
+  transparencyError?: string | null
   onOpenMilestone?: () => void
   onOpenHandoff?: () => void
 }
@@ -19,8 +23,11 @@ type ExecutionSessionPanelProps = {
 export function ExecutionSessionPanel({
   session,
   promptManifest = null,
+  transparency = null,
   isPromptManifestLoading = false,
+  isTransparencyLoading = false,
   promptManifestError = null,
+  transparencyError = null,
   onOpenMilestone,
   onOpenHandoff,
 }: ExecutionSessionPanelProps) {
@@ -85,7 +92,82 @@ export function ExecutionSessionPanel({
         isLoading={isPromptManifestLoading}
         error={promptManifestError}
       />
+      <TransparencySection
+        transparency={transparency}
+        isLoading={isTransparencyLoading}
+        error={transparencyError}
+      />
     </Panel>
+  )
+}
+
+type TransparencySectionProps = {
+  transparency: ExecutionSessionTransparency | null
+  isLoading: boolean
+  error: string | null
+}
+
+function TransparencySection({ transparency, isLoading, error }: TransparencySectionProps) {
+  if (isLoading && !transparency) {
+    return <EmptyState className="empty-state">Loading execution transparency.</EmptyState>
+  }
+
+  if (error && !transparency) {
+    return <div className="execution-rail-warning">Execution transparency: {error}</div>
+  }
+
+  if (!transparency) {
+    return <EmptyState className="empty-state">No execution transparency recorded.</EmptyState>
+  }
+
+  const { recovery, monitoring, promptMetadata } = transparency
+
+  return (
+    <div className="execution-transparency" aria-label="Execution transparency">
+      <div className="execution-rail-list">
+        <h5>Recovery</h5>
+        <div className="execution-rail-summary">
+          <span>Recovery ran: {formatNullableBoolean(recovery.recoveryRan)}</span>
+          <span>Trigger: {recovery.recoveryTrigger || 'Not recorded'}</span>
+          <span>Reattach attempted: {formatNullableBoolean(recovery.reattachAttempted)}</span>
+          <span>Reattach succeeded: {formatNullableBoolean(recovery.reattachSucceeded)}</span>
+          <span>Orphaned provider: {formatNullableBoolean(recovery.orphanedProviderState)}</span>
+          <span>Marked failed by recovery: {formatNullableBoolean(recovery.sessionMarkedFailedByRecovery)}</span>
+          <span>Recovery event: {formatDateTime(recovery.recoveryEventTimestamp)}</span>
+          <span>Message: {recovery.recoveryMessage || 'Not recorded'}</span>
+        </div>
+      </div>
+
+      <div className="execution-rail-list">
+        <h5>Monitoring</h5>
+        <div className="execution-rail-summary">
+          <span>Provider process: {monitoring.providerProcessState}</span>
+          <span>Exit code: {monitoring.exitCode ?? 'Not recorded'}</span>
+          <span>Last activity: {formatDateTime(monitoring.lastActivityAt)}</span>
+          <span>Stale activity: {formatNullableBoolean(monitoring.staleActivity)}</span>
+          <span>Retained events: {monitoring.retainedEventCount}</span>
+          <span>First event: {monitoring.firstRetainedEventSequence ?? 'Not recorded'}</span>
+          <span>Last event: {monitoring.lastRetainedEventSequence ?? 'Not recorded'}</span>
+          <span>Retention trimmed: {formatNullableBoolean(monitoring.eventRetentionTrimmingDetected)}</span>
+        </div>
+        <PromptStringList
+          title="Monitoring Warnings"
+          values={monitoring.monitoringWarnings}
+          empty="No monitoring warnings recorded."
+        />
+      </div>
+
+      {promptMetadata ? (
+        <div className="execution-rail-list">
+          <h5>Prompt Metadata</h5>
+          <div className="execution-rail-summary">
+            <span>Generated: {formatDateTime(promptMetadata.generatedAt)}</span>
+            <span>Milestone: {promptMetadata.milestonePath}</span>
+            <span>Included artifacts: {promptMetadata.includedArtifactPaths.length}</span>
+          </div>
+        </div>
+      ) : null}
+    </div>
   )
 }
 
