@@ -27,6 +27,9 @@ public sealed class OperationalContextGenerationService(
     private const string CurrentOperationalContextPath = ".agents/operational_context.md";
     private const string CurrentHandoffPath = ".agents/handoffs/handoff.md";
     private const string CurrentDecisionsPath = ".agents/decisions/decisions.md";
+    private const int DecisionAssimilationLimitCount = 8;
+    private const string DecisionAssimilationLimitReason =
+        "Operational context proposal generation includes at most eight qualifying durable decision signals to keep the proposed context reviewable.";
 
     public async Task<OperationalContextProposal> GenerateAsync(Guid repositoryId)
     {
@@ -34,7 +37,8 @@ public sealed class OperationalContextGenerationService(
         OperationalContextInputSet inputSet = await BuildInputSetAsync(repository);
         OperationalContextDocument currentDocument = parser.Parse(inputSet.CurrentOperationalContext ?? string.Empty);
         DecisionAnalysisResult decisionAnalysis = decisionAnalysisService.Analyze(inputSet.DecisionArtifacts);
-        OperationalContextDocument proposedDocument = BuildProposedDocument(inputSet, currentDocument, decisionAnalysis);
+        DecisionAssimilationProjection decisionAssimilation = BuildDecisionAssimilationProjection(decisionAnalysis);
+        OperationalContextDocument proposedDocument = BuildProposedDocument(inputSet, currentDocument, decisionAssimilation);
         OperationalContextCompressionResult compression = compressionService.Compress(currentDocument, proposedDocument);
         string generatedContent = parser.Render(compression.Document);
         OperationalContextDocument generatedDocument = parser.Parse(generatedContent);
@@ -53,6 +57,7 @@ public sealed class OperationalContextGenerationService(
             BaselineCurrentContextHash = HashOptionalContent(inputSet.CurrentOperationalContext),
             GeneratedContentHash = generatedContentHash,
             SemanticChanges = diffService.Compare(currentDocument, generatedDocument),
+            DecisionAssimilation = decisionAssimilation,
             CompressionSummary = compressionSummary
         };
 
@@ -122,7 +127,7 @@ public sealed class OperationalContextGenerationService(
     private static OperationalContextDocument BuildProposedDocument(
         OperationalContextInputSet inputSet,
         OperationalContextDocument current,
-        DecisionAnalysisResult decisionAnalysis)
+        DecisionAssimilationProjection decisionAssimilation)
     {
         List<OperationalContextItem> currentMentalModel = current.CurrentMentalModel.ToList();
         AddUnique(
@@ -143,9 +148,13 @@ public sealed class OperationalContextGenerationService(
         List<OperationalContextItem> constraints = current.Constraints.ToList();
         List<OperationalContextItem> openQuestions = current.OpenQuestions.ToList();
 
-        foreach (DecisionSignal decision in decisionAnalysis.Signals.Where(IsAssimilatedDecision).Take(8))
+        foreach (DecisionAssimilationRecord decision in decisionAssimilation.Decisions.Where(decision => decision.IsAssimilated))
         {
-            AddUnique(stableDecisions, OperationalContextItemKind.StableDecision, $"Decision: {decision.Statement}", decision.SourceRelativePath);
+            AddUnique(
+                stableDecisions,
+                OperationalContextItemKind.StableDecision,
+                decision.OperationalStatement ?? $"Decision: {decision.Statement}",
+                decision.SourceRelativePath);
 
             if (!string.IsNullOrWhiteSpace(decision.Rationale))
             {
@@ -200,10 +209,122 @@ public sealed class OperationalContextGenerationService(
         };
     }
 
-    private static bool IsAssimilatedDecision(DecisionSignal signal)
+    private static DecisionAssimilationProjection BuildDecisionAssimilationProjection(DecisionAnalysisResult decisionAnalysis)
+    {
+        DecisionSignal[] qualifyingSignals = decisionAnalysis.Signals
+            .Where(QualifiesForAssimilation)
+            .ToArray();
+        HashSet<DecisionSignal> assimilatedSignals = qualifyingSignals
+            .Take(DecisionAssimilationLimitCount)
+            .ToHashSet();
+        HashSet<DecisionSignal> omittedSignals = qualifyingSignals
+            .Skip(DecisionAssimilationLimitCount)
+            .ToHashSet();
+
+        DecisionAssimilationRecord[] records = decisionAnalysis.Signals
+            .Select(signal => CreateAssimilationRecord(signal, assimilatedSignals, omittedSignals))
+            .ToArray();
+
+        return new DecisionAssimilationProjection
+        {
+            Decisions = records,
+            Limit = new DecisionAssimilationLimit
+            {
+                Limit = DecisionAssimilationLimitCount,
+                Reason = DecisionAssimilationLimitReason,
+                TotalAnalyzedItemCount = decisionAnalysis.Signals.Count,
+                TotalQualifyingItemCount = qualifyingSignals.Length,
+                AssimilatedItemCount = assimilatedSignals.Count,
+                OmittedItemCount = omittedSignals.Count
+            }
+        };
+    }
+
+    private static DecisionAssimilationRecord CreateAssimilationRecord(
+        DecisionSignal signal,
+        HashSet<DecisionSignal> assimilatedSignals,
+        HashSet<DecisionSignal> omittedSignals)
+    {
+        bool qualifies = QualifiesForAssimilation(signal);
+        bool assimilated = assimilatedSignals.Contains(signal);
+        bool omitted = omittedSignals.Contains(signal);
+
+        return new DecisionAssimilationRecord
+        {
+            DecisionId = CreateItemId(signal.SourceRelativePath, signal.Statement),
+            SourceRelativePath = signal.SourceRelativePath,
+            Statement = signal.Statement,
+            Taxonomy = signal.Taxonomy,
+            TaxonomyBasis = signal.TaxonomyBasis,
+            Status = assimilated
+                ? DecisionAssimilationStatus.Assimilated
+                : omitted
+                    ? DecisionAssimilationStatus.OmittedByLimit
+                    : DecisionAssimilationStatus.Excluded,
+            IsDurable = IsDurable(signal),
+            QualifiesForAssimilation = qualifies,
+            IsAssimilated = assimilated,
+            IsOmittedByLimit = omitted,
+            ExclusionReason = qualifies ? null : GetExclusionReason(signal),
+            OmissionReason = omitted ? DecisionAssimilationLimitReason : null,
+            OperationalStatement = qualifies ? $"Decision: {signal.Statement}" : null,
+            Rationale = signal.Rationale,
+            ConstraintsIntroduced = signal.ConstraintsIntroduced,
+            OpenQuestions = signal.OpenQuestions,
+            SourceEvidence = BuildSourceEvidence(signal)
+        };
+    }
+
+    private static IReadOnlyList<string> BuildSourceEvidence(DecisionSignal signal)
+    {
+        var evidence = new List<string>
+        {
+            $"Source artifact: {signal.SourceRelativePath}",
+            $"Decision statement: {signal.Statement}"
+        };
+
+        if (!string.IsNullOrWhiteSpace(signal.Rationale))
+        {
+            evidence.Add($"Rationale: {signal.Rationale}");
+        }
+
+        foreach (string constraint in signal.ConstraintsIntroduced.Take(3))
+        {
+            evidence.Add($"Constraint: {constraint}");
+        }
+
+        foreach (string consequence in signal.Consequences.Take(3))
+        {
+            evidence.Add($"Consequence: {consequence}");
+        }
+
+        return evidence;
+    }
+
+    private static string GetExclusionReason(DecisionSignal signal)
+    {
+        if (signal.IsSupersededOrRetired)
+        {
+            return "Decision signal is superseded or retired.";
+        }
+
+        return signal.Taxonomy switch
+        {
+            DecisionTaxonomy.HistoricalDecision => "Historical decision signals are not assimilated into current operational context.",
+            DecisionTaxonomy.TacticalDecision => "Tactical decision signals are execution detail and are not assimilated as durable operational context.",
+            _ => "Decision signal does not satisfy durable assimilation criteria."
+        };
+    }
+
+    private static bool QualifiesForAssimilation(DecisionSignal signal)
     {
         return !signal.IsSupersededOrRetired &&
             signal.Taxonomy is DecisionTaxonomy.ArchitecturalDecision or DecisionTaxonomy.StrategicDecision;
+    }
+
+    private static bool IsDurable(DecisionSignal signal)
+    {
+        return signal.Taxonomy is DecisionTaxonomy.ArchitecturalDecision or DecisionTaxonomy.StrategicDecision;
     }
 
     private static IEnumerable<string> ExtractHandoffSignals(string? handoffMarkdown)

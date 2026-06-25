@@ -6,6 +6,8 @@ public sealed class DecisionSignal
 {
     public DecisionTaxonomy Taxonomy { get; init; }
 
+    public DecisionTaxonomyBasis TaxonomyBasis { get; init; } = new();
+
     public string Statement { get; init; } = string.Empty;
 
     public string? Rationale { get; init; }

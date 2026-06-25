@@ -45,6 +45,7 @@ public sealed class FileSystemOperationalContextProposalStore(IArtifactStore art
             GeneratedContentRelativePath = generatedRelativePath,
             EditedContentRelativePath = proposal.EditedContentRelativePath,
             SemanticChanges = proposal.SemanticChanges,
+            DecisionAssimilation = proposal.DecisionAssimilation,
             CompressionSummary = proposal.CompressionSummary,
             Review = proposal.Review.ProposalId.Length == 0
                 ? CreatePendingReview(proposalId, proposal.BaselineCurrentContextHash)
@@ -163,6 +164,7 @@ public sealed class FileSystemOperationalContextProposalStore(IArtifactStore art
             GeneratedContentRelativePath = proposal.GeneratedContentRelativePath,
             EditedContentRelativePath = editedRelativePath,
             SemanticChanges = proposal.SemanticChanges,
+            DecisionAssimilation = proposal.DecisionAssimilation,
             CompressionSummary = proposal.CompressionSummary,
             Review = proposal.Review,
             Promotion = proposal.Promotion.ProposalId.Length == 0
@@ -193,6 +195,7 @@ public sealed class FileSystemOperationalContextProposalStore(IArtifactStore art
                 GeneratedContentRelativePath = proposal.GeneratedContentRelativePath,
                 EditedContentRelativePath = proposal.EditedContentRelativePath,
                 SemanticChanges = proposal.SemanticChanges,
+                DecisionAssimilation = proposal.DecisionAssimilation,
                 CompressionSummary = proposal.CompressionSummary,
                 Review = new OperationalContextReview
                 {
@@ -271,6 +274,7 @@ file static class OperationalContextProposalContentMutation
             GeneratedContentRelativePath = proposal.GeneratedContentRelativePath,
             EditedContentRelativePath = proposal.EditedContentRelativePath,
             SemanticChanges = proposal.SemanticChanges,
+            DecisionAssimilation = proposal.DecisionAssimilation,
             CompressionSummary = proposal.CompressionSummary,
             Review = proposal.Review,
             Promotion = proposal.Promotion,

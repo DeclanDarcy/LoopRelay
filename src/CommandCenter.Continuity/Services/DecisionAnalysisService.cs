@@ -59,10 +59,12 @@ public sealed class DecisionAnalysisService : IDecisionAnalysisService
         string[] constraints = ExtractConstraints(statement).ToArray();
         string[] consequences = ExtractConsequences(statement).ToArray();
         bool retired = ContainsAny(statement, "superseded", "retired", "deprecated", "replaced", "no longer");
+        DecisionTaxonomyBasis taxonomyBasis = Classify(statement, isCurrent, retired);
 
         return new DecisionSignal
         {
-            Taxonomy = Classify(statement, isCurrent, retired),
+            Taxonomy = taxonomyBasis.Taxonomy,
+            TaxonomyBasis = taxonomyBasis,
             Statement = statement,
             Rationale = rationale,
             ConstraintsIntroduced = constraints,
@@ -73,29 +75,142 @@ public sealed class DecisionAnalysisService : IDecisionAnalysisService
         };
     }
 
-    private static DecisionTaxonomy Classify(string statement, bool isCurrent, bool retired)
+    private static DecisionTaxonomyBasis Classify(string statement, bool isCurrent, bool retired)
     {
+        var candidates = new List<TaxonomyMatch>();
+
         if (retired || !isCurrent)
         {
-            return DecisionTaxonomy.HistoricalDecision;
+            candidates.Add(new TaxonomyMatch(
+                DecisionTaxonomy.HistoricalDecision,
+                retired ? "superseded-or-retired" : "historical-artifact",
+                retired
+                    ? MatchEvidence(statement, "superseded", "retired", "deprecated", "replaced", "no longer")
+                    : [$"Artifact version: historical"]));
         }
 
-        if (ContainsAny(statement, "architecture", "architectural", "authority", "boundary", "workflow authority", "repository-owned", "artifact", "session", "backend", "service", "provider boundary", "operational context"))
+        string[] architecturalTerms =
+        [
+            "architecture",
+            "architectural",
+            "authority",
+            "boundary",
+            "workflow authority",
+            "repository-owned",
+            "artifact",
+            "session",
+            "backend",
+            "service",
+            "provider boundary",
+            "operational context"
+        ];
+        string[] tacticalTerms =
+        [
+            "slice",
+            "temporary",
+            "one-time",
+            "workaround",
+            "verification",
+            "build",
+            "test",
+            "passed",
+            "commit",
+            "push",
+            "stage",
+            "complete",
+            "completed",
+            "next slice"
+        ];
+        string[] strategicTerms =
+        [
+            "must",
+            "should",
+            "avoid",
+            "remain",
+            "continue",
+            "priority",
+            "guardrail",
+            "roadmap",
+            "durable",
+            "stable",
+            "future",
+            "reviewable",
+            "deterministic",
+            "conservative"
+        ];
+
+        string[] architecturalEvidence = MatchEvidence(statement, architecturalTerms);
+        if (architecturalEvidence.Length > 0)
         {
-            return DecisionTaxonomy.ArchitecturalDecision;
+            candidates.Add(new TaxonomyMatch(
+                DecisionTaxonomy.ArchitecturalDecision,
+                "architectural-continuity-keywords",
+                architecturalEvidence));
         }
 
-        if (ContainsAny(statement, "slice", "temporary", "one-time", "workaround", "verification", "build", "test", "passed", "commit", "push", "stage", "complete", "completed", "next slice"))
+        string[] tacticalEvidence = MatchEvidence(statement, tacticalTerms);
+        if (tacticalEvidence.Length > 0)
         {
-            return DecisionTaxonomy.TacticalDecision;
+            candidates.Add(new TaxonomyMatch(
+                DecisionTaxonomy.TacticalDecision,
+                "tactical-execution-keywords",
+                tacticalEvidence));
         }
 
-        if (ContainsAny(statement, "must", "should", "avoid", "remain", "continue", "priority", "guardrail", "roadmap", "durable", "stable", "future", "reviewable", "deterministic", "conservative"))
+        string[] strategicEvidence = MatchEvidence(statement, strategicTerms);
+        if (strategicEvidence.Length > 0)
         {
-            return DecisionTaxonomy.StrategicDecision;
+            candidates.Add(new TaxonomyMatch(
+                DecisionTaxonomy.StrategicDecision,
+                "strategic-policy-keywords",
+                strategicEvidence));
         }
 
-        return DecisionTaxonomy.TacticalDecision;
+        if (candidates.Count == 0)
+        {
+            return new DecisionTaxonomyBasis
+            {
+                Taxonomy = DecisionTaxonomy.TacticalDecision,
+                IsHeuristicFallback = true,
+                FallbackReason = "No taxonomy rules matched; defaulted to tactical so unclassified text does not become durable operational context.",
+                Diagnostics = ["No taxonomy keyword evidence matched the decision statement."]
+            };
+        }
+
+        TaxonomyMatch selected = candidates
+            .OrderBy(match => GetTaxonomyPrecedence(match.Taxonomy))
+            .First();
+        string[] diagnostics = candidates.Count > 1
+            ? [$"Ambiguous taxonomy match resolved to {selected.Taxonomy} by precedence over {string.Join(", ", candidates.Where(match => match.Taxonomy != selected.Taxonomy).Select(match => match.Taxonomy).Distinct())}."]
+            : [];
+
+        return new DecisionTaxonomyBasis
+        {
+            Taxonomy = selected.Taxonomy,
+            MatchedRules = candidates.Select(match => match.Rule).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+            MatchedEvidence = candidates.SelectMany(match => match.Evidence).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+            Diagnostics = diagnostics
+        };
+    }
+
+    private static int GetTaxonomyPrecedence(DecisionTaxonomy taxonomy)
+    {
+        return taxonomy switch
+        {
+            DecisionTaxonomy.HistoricalDecision => 0,
+            DecisionTaxonomy.ArchitecturalDecision => 1,
+            DecisionTaxonomy.TacticalDecision => 2,
+            DecisionTaxonomy.StrategicDecision => 3,
+            _ => 4
+        };
+    }
+
+    private static string[] MatchEvidence(string value, params string[] candidates)
+    {
+        return candidates
+            .Where(candidate => value.Contains(candidate, StringComparison.OrdinalIgnoreCase))
+            .Select(candidate => $"Matched `{candidate}` in `{value}`")
+            .ToArray();
     }
 
     private static IEnumerable<string> ExtractBullets(string markdown)
@@ -231,4 +346,9 @@ public sealed class DecisionAnalysisService : IDecisionAnalysisService
     {
         return $" {string.Join(' ', value.Trim().ToLowerInvariant().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))} ";
     }
+
+    private sealed record TaxonomyMatch(
+        DecisionTaxonomy Taxonomy,
+        string Rule,
+        IReadOnlyList<string> Evidence);
 }

@@ -24,6 +24,8 @@ public sealed class OperationalContextProposal
 
     public IReadOnlyList<OperationalContextSemanticChange> SemanticChanges { get; init; } = [];
 
+    public DecisionAssimilationProjection DecisionAssimilation { get; init; } = new();
+
     public OperationalContextCompressionSummary CompressionSummary { get; init; } = new();
 
     public OperationalContextReview Review { get; init; } = new();

@@ -2,28 +2,27 @@
 
 ## New State This Slice
 
-- Started Milestone 7 with the authorized backend-first authority inventory.
-- Added `.agents/milestones/m7-continuity-authority-matrix.md`.
-- Rotated the previous handoff to `.agents/handoffs/handoff.0050.md`.
-- No product code changed in this slice.
-
-## Key Findings
-
-- `OperationalContextGenerationService` is the proposal-generation composition point for decision analysis, semantic diff, and compression.
-- `DecisionAnalysisService` owns taxonomy, durable-decision selection, consequences, and contradiction warnings, but its structured `DecisionAnalysisResult` is currently in-memory only.
-- Assimilation limiting is currently implicit in `Where(IsAssimilatedDecision).Take(8)`, so omitted qualifying decisions are silent.
-- `UnderstandingDiffService` mostly matches by normalized text, with only decision-rationale key matching approximating identity.
-- `UnderstandingCompressionService` and `ContinuityDiagnosticsService` expose useful aggregate counts and warning strings, but not item-level transparency records.
+- Continued Milestone 7 with backend-only taxonomy classification basis transparency.
+- Rotated previous decisions to `.agents/decisions/decisions.0053.md`.
+- Replaced `.agents/decisions/decisions.md` with only the newly authorized taxonomy-basis decisions.
+- Rotated previous handoff to `.agents/handoffs/handoff.0052.md`.
+- Added immutable generation-time `DecisionTaxonomyBasis` with matched rules, matched evidence, heuristic fallback, fallback reason, and diagnostics.
+- `DecisionSignal` now carries taxonomy basis from `DecisionAnalysisService`.
+- `DecisionAssimilationRecord` now embeds taxonomy basis so consumers can inspect classification and assimilation together.
+- `DecisionAnalysisService` now reports rule-based matches, heuristic fallback to tactical, and ambiguity diagnostics when multiple taxonomy rule families match.
+- Backend tests now cover rule-based classification, fallback, ambiguous classification, excluded classifications, and omitted-by-limit records retaining taxonomy basis.
 
 ## Verification
 
-- Documentation/inventory-only slice; no build or test command was run.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter OperationalContextGenerationTests`
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj`
 
 ## Residual Risk
 
-- The matrix is based on static source inspection and should be kept in sync as Milestone 7 model changes land.
-- Existing UI still relies on aggregate/string continuity facts until typed projections are implemented.
+- Consequences still need structured originating decision, reasoning, and operational-impact projection.
+- Contradictions still need structured decision A/B, conflict type, severity, evidence, and resolution guidance.
+- UI and TypeScript clients intentionally remain untouched until backend continuity semantics stabilize.
 
 ## Recommended Next Slice
 
-- Implement proposal-level assimilation transparency first: persist or project per-decision analysis with taxonomy, assimilated/excluded status, exclusion reason, durability, operational statement, source evidence, and omitted-by-limit state, then add backend tests around inclusion/exclusion and limit visibility.
+- Add structured consequence and contradiction transparency to the same proposal-level continuity projection, preserving warning-string compatibility until typed UI rendering is introduced later.

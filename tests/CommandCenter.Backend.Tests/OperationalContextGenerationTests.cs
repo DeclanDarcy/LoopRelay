@@ -276,6 +276,138 @@ public sealed class OperationalContextGenerationTests
     }
 
     [Fact]
+    public async Task GenerationProjectsDecisionAssimilationReasons()
+    {
+        Harness harness = await CreateHarnessAsync();
+        await WriteAsync(harness.Repository, ".agents/decisions/decisions.md", """
+            # Decisions
+
+            - Backend workflow service boundaries must own operational context authority because client state cannot be authoritative.
+            - M7 build passed.
+            - Deprecated operational context shortcut is retired.
+            """);
+        await WriteAsync(harness.Repository, ".agents/decisions/decisions.0001.md", """
+            # Decisions
+
+            - Historical backend service boundary must own old workflow authority.
+            """);
+
+        OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+
+        DecisionAssimilationRecord assimilated = Assert.Single(
+            proposal.DecisionAssimilation.Decisions,
+            decision => decision.Statement.StartsWith("Backend workflow service boundaries", StringComparison.Ordinal));
+        Assert.Equal(DecisionAssimilationStatus.Assimilated, assimilated.Status);
+        Assert.True(assimilated.IsDurable);
+        Assert.True(assimilated.QualifiesForAssimilation);
+        Assert.True(assimilated.IsAssimilated);
+        Assert.Equal("Decision: Backend workflow service boundaries must own operational context authority because client state cannot be authoritative.", assimilated.OperationalStatement);
+        Assert.Equal(DecisionTaxonomy.ArchitecturalDecision, assimilated.TaxonomyBasis.Taxonomy);
+        Assert.Contains("architectural-continuity-keywords", assimilated.TaxonomyBasis.MatchedRules);
+        Assert.Contains(assimilated.TaxonomyBasis.MatchedEvidence, evidence =>
+            evidence.Contains("backend", StringComparison.OrdinalIgnoreCase));
+        Assert.False(assimilated.TaxonomyBasis.IsHeuristicFallback);
+        Assert.Contains(assimilated.SourceEvidence, evidence =>
+            evidence.Contains(".agents/decisions/decisions.md", StringComparison.OrdinalIgnoreCase));
+
+        DecisionAssimilationRecord tactical = Assert.Single(
+            proposal.DecisionAssimilation.Decisions,
+            decision => decision.Statement == "M7 build passed.");
+        Assert.Equal(DecisionAssimilationStatus.Excluded, tactical.Status);
+        Assert.Contains("tactical-execution-keywords", tactical.TaxonomyBasis.MatchedRules);
+        Assert.Contains(tactical.TaxonomyBasis.MatchedEvidence, evidence =>
+            evidence.Contains("build", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains("Tactical decision", tactical.ExclusionReason!, StringComparison.OrdinalIgnoreCase);
+
+        Assert.Contains(proposal.DecisionAssimilation.Decisions, decision =>
+            decision.Statement == "M7 build passed." &&
+            decision.Status == DecisionAssimilationStatus.Excluded &&
+            decision.ExclusionReason!.Contains("Tactical decision", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(proposal.DecisionAssimilation.Decisions, decision =>
+            decision.Statement == "Deprecated operational context shortcut is retired." &&
+            decision.Status == DecisionAssimilationStatus.Excluded &&
+            decision.ExclusionReason!.Contains("superseded or retired", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(proposal.DecisionAssimilation.Decisions, decision =>
+            decision.Statement == "Historical backend service boundary must own old workflow authority." &&
+            decision.Status == DecisionAssimilationStatus.Excluded &&
+            decision.TaxonomyBasis.MatchedRules.Contains("historical-artifact") &&
+            decision.ExclusionReason!.Contains("Historical decision", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task GenerationProjectsTaxonomyFallbackAndAmbiguityBasis()
+    {
+        Harness harness = await CreateHarnessAsync();
+        await WriteAsync(harness.Repository, ".agents/decisions/decisions.md", """
+            # Decisions
+
+            - Preserve notes.
+            - Backend build verification must remain service owned.
+            """);
+
+        OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+
+        DecisionAssimilationRecord fallback = Assert.Single(
+            proposal.DecisionAssimilation.Decisions,
+            decision => decision.Statement == "Preserve notes.");
+        Assert.Equal(DecisionTaxonomy.TacticalDecision, fallback.TaxonomyBasis.Taxonomy);
+        Assert.True(fallback.TaxonomyBasis.IsHeuristicFallback);
+        Assert.Equal("No taxonomy rules matched; defaulted to tactical so unclassified text does not become durable operational context.", fallback.TaxonomyBasis.FallbackReason);
+        Assert.Contains(fallback.TaxonomyBasis.Diagnostics, diagnostic =>
+            diagnostic.Contains("No taxonomy keyword evidence", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(DecisionAssimilationStatus.Excluded, fallback.Status);
+
+        DecisionAssimilationRecord ambiguous = Assert.Single(
+            proposal.DecisionAssimilation.Decisions,
+            decision => decision.Statement == "Backend build verification must remain service owned.");
+        Assert.Equal(DecisionTaxonomy.ArchitecturalDecision, ambiguous.TaxonomyBasis.Taxonomy);
+        Assert.Contains("architectural-continuity-keywords", ambiguous.TaxonomyBasis.MatchedRules);
+        Assert.Contains("tactical-execution-keywords", ambiguous.TaxonomyBasis.MatchedRules);
+        Assert.Contains("strategic-policy-keywords", ambiguous.TaxonomyBasis.MatchedRules);
+        Assert.Contains(ambiguous.TaxonomyBasis.Diagnostics, diagnostic =>
+            diagnostic.Contains("Ambiguous taxonomy match", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(DecisionAssimilationStatus.Assimilated, ambiguous.Status);
+    }
+
+    [Fact]
+    public async Task GenerationProjectsDecisionAssimilationLimitAndOmittedItems()
+    {
+        Harness harness = await CreateHarnessAsync();
+        string decisions = string.Join(
+            Environment.NewLine,
+            Enumerable.Range(1, 9).Select(index =>
+                $"- Backend service boundary {index} must own workflow authority because UI derivation would drift."));
+        await WriteAsync(harness.Repository, ".agents/decisions/decisions.md", $"""
+            # Decisions
+
+            {decisions}
+            """);
+
+        OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+
+        Assert.Equal(8, proposal.DecisionAssimilation.Limit.Limit);
+        Assert.Equal(9, proposal.DecisionAssimilation.Limit.TotalAnalyzedItemCount);
+        Assert.Equal(9, proposal.DecisionAssimilation.Limit.TotalQualifyingItemCount);
+        Assert.Equal(8, proposal.DecisionAssimilation.Limit.AssimilatedItemCount);
+        Assert.Equal(1, proposal.DecisionAssimilation.Limit.OmittedItemCount);
+        Assert.Equal(8, proposal.DecisionAssimilation.Decisions.Count(decision => decision.Status == DecisionAssimilationStatus.Assimilated));
+
+        DecisionAssimilationRecord omitted = Assert.Single(
+            proposal.DecisionAssimilation.Decisions,
+            decision => decision.Status == DecisionAssimilationStatus.OmittedByLimit);
+        Assert.True(omitted.QualifiesForAssimilation);
+        Assert.True(omitted.IsOmittedByLimit);
+        Assert.False(omitted.IsAssimilated);
+        Assert.Null(omitted.ExclusionReason);
+        Assert.Equal(proposal.DecisionAssimilation.Limit.Reason, omitted.OmissionReason);
+        Assert.Equal(DecisionTaxonomy.ArchitecturalDecision, omitted.TaxonomyBasis.Taxonomy);
+        Assert.Contains("architectural-continuity-keywords", omitted.TaxonomyBasis.MatchedRules);
+        Assert.Contains(omitted.TaxonomyBasis.MatchedEvidence, evidence =>
+            evidence.Contains("workflow authority", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(omitted.OperationalStatement!, proposal.GeneratedContent);
+    }
+
+    [Fact]
     public async Task TacticalDecisionsDoNotBloatOperationalContext()
     {
         Harness harness = await CreateHarnessAsync();
