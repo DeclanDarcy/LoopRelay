@@ -460,6 +460,75 @@ public sealed class OperationalContextGenerationTests
     }
 
     [Fact]
+    public async Task GenerationProjectsStructuredDecisionConsequences()
+    {
+        Harness harness = await CreateHarnessAsync();
+        await WriteAsync(harness.Repository, ".agents/decisions/decisions.md", """
+            # Decisions
+
+            - Backend workflow authority must remain service owned therefore UI actions require backend projection evidence.
+            """);
+
+        OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+
+        ContinuityDecisionConsequence consequence = Assert.Single(proposal.DecisionAssimilation.Consequences);
+        Assert.Contains("therefore UI actions require backend projection evidence", consequence.OperationalStatement);
+        Assert.Equal("Workflow", consequence.AffectedArea);
+        Assert.Contains("backend projection evidence", consequence.OperationalImpact, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("Backend workflow authority must remain service owned therefore UI actions require backend projection evidence.", consequence.OriginatingDecision.Statement);
+        Assert.Equal(".agents/decisions/decisions.md", consequence.OriginatingDecision.SourceRelativePath);
+        Assert.False(string.IsNullOrWhiteSpace(consequence.OriginatingDecision.DecisionId));
+        Assert.Contains(consequence.SupportingEvidence, evidence =>
+            evidence.Contains("Consequence statement", StringComparison.OrdinalIgnoreCase));
+
+        DecisionAssimilationRecord assimilated = Assert.Single(proposal.DecisionAssimilation.Decisions);
+        Assert.Contains(assimilated.ConsequencesIntroduced, item =>
+            item.Contains("therefore UI actions require backend projection evidence", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task GenerationProjectsStructuredDecisionContradictionsAndCompatibilityWarnings()
+    {
+        Harness harness = await CreateHarnessAsync();
+        await WriteAsync(harness.Repository, ".agents/decisions/decisions.md", """
+            # Decisions
+
+            - Backend service boundary must own workflow authority.
+            - Backend service boundary must not own workflow authority.
+            - Decision governance must remain reviewable.
+            - Decision governance must not remain reviewable.
+            """);
+
+        OperationalContextProposal proposal = await harness.GenerationService.GenerateAsync(harness.Repository.Id);
+
+        Assert.Equal(2, proposal.DecisionAssimilation.Contradictions.Count);
+        ContinuityDecisionContradiction authorityConflict = Assert.Single(
+            proposal.DecisionAssimilation.Contradictions,
+            contradiction => contradiction.DecisionA.Statement.Contains("workflow authority", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(DecisionContradictionConflictType.DirectNegation, authorityConflict.ConflictType);
+        Assert.Equal(DecisionContradictionSeverity.Critical, authorityConflict.Severity);
+        Assert.Contains("Resolve the conflicting durable decision", authorityConflict.ResolutionGuidance);
+        Assert.Contains(authorityConflict.ConflictEvidence, evidence =>
+            evidence.Contains("normalized without negation", StringComparison.OrdinalIgnoreCase));
+        Assert.NotEqual(authorityConflict.DecisionA.DecisionId, authorityConflict.DecisionB.DecisionId);
+        Assert.Contains("Backend service boundary must own workflow authority.", authorityConflict.DecisionA.Statement);
+        Assert.Contains("Backend service boundary must not own workflow authority.", authorityConflict.DecisionB.Statement);
+
+        ContinuityDecisionContradiction governanceConflict = Assert.Single(
+            proposal.DecisionAssimilation.Contradictions,
+            contradiction => contradiction.DecisionA.Statement.Contains("Decision governance", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(DecisionContradictionSeverity.High, governanceConflict.Severity);
+
+        foreach (ContinuityDecisionContradiction contradiction in proposal.DecisionAssimilation.Contradictions)
+        {
+            Assert.Contains(proposal.CompressionSummary.Warnings, warning =>
+                warning.Contains(contradiction.CompatibilityWarning, StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(proposal.CompressionSummary.StableUnderstandingRetentionWarnings, warning =>
+                warning.Contains(contradiction.CompatibilityWarning, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    [Fact]
     public async Task CompressionPreservesDurableUnderstandingAndReportsTiers()
     {
         Harness harness = await CreateHarnessAsync();

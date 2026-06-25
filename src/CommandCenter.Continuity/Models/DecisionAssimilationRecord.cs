@@ -34,6 +34,8 @@ public sealed class DecisionAssimilationRecord
 
     public IReadOnlyList<string> ConstraintsIntroduced { get; init; } = [];
 
+    public IReadOnlyList<string> ConsequencesIntroduced { get; init; } = [];
+
     public IReadOnlyList<string> OpenQuestions { get; init; } = [];
 
     public IReadOnlyList<string> SourceEvidence { get; init; } = [];

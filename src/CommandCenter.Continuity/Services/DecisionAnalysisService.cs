@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using CommandCenter.Continuity.Abstractions;
 using CommandCenter.Continuity.Models;
 using CommandCenter.Continuity.Primitives;
@@ -34,10 +36,9 @@ public sealed class DecisionAnalysisService : IDecisionAnalysisService
             warnings.Add($"{historicalCount} historical decision signal(s) detected; avoid replaying completed milestone history into current understanding.");
         }
 
-        foreach (string warning in FindContradictions(signals))
-        {
-            warnings.Add(warning);
-        }
+        ContinuityDecisionConsequence[] consequences = FindConsequences(signals).ToArray();
+        ContinuityDecisionContradiction[] contradictions = FindContradictions(signals).ToArray();
+        warnings.AddRange(contradictions.Select(contradiction => contradiction.CompatibilityWarning));
 
         foreach (DecisionSignal signal in signals.Where(IsDurable).Where(signal => string.IsNullOrWhiteSpace(signal.Rationale)))
         {
@@ -47,6 +48,8 @@ public sealed class DecisionAnalysisService : IDecisionAnalysisService
         return new DecisionAnalysisResult
         {
             Signals = signals,
+            Consequences = consequences,
+            Contradictions = contradictions,
             Warnings = warnings
         };
     }
@@ -63,6 +66,7 @@ public sealed class DecisionAnalysisService : IDecisionAnalysisService
 
         return new DecisionSignal
         {
+            DecisionId = CreateItemId(sourceRelativePath, statement),
             Taxonomy = taxonomyBasis.Taxonomy,
             TaxonomyBasis = taxonomyBasis,
             Statement = statement,
@@ -288,27 +292,63 @@ public sealed class DecisionAnalysisService : IDecisionAnalysisService
         }
     }
 
-    private static IEnumerable<string> FindContradictions(IReadOnlyList<DecisionSignal> signals)
+    private static IEnumerable<ContinuityDecisionConsequence> FindConsequences(IReadOnlyList<DecisionSignal> signals)
+    {
+        foreach (DecisionSignal signal in signals)
+        {
+            foreach (string consequence in signal.Consequences)
+            {
+                yield return new ContinuityDecisionConsequence
+                {
+                    ConsequenceId = CreateItemId(signal.DecisionId, consequence),
+                    OriginatingDecision = CreateReference(signal),
+                    OperationalStatement = $"Decision consequence: {consequence}",
+                    AffectedArea = DetermineAffectedArea(signal.Statement),
+                    SupportingEvidence = BuildConsequenceEvidence(signal, consequence),
+                    OperationalImpact = BuildOperationalImpact(signal, consequence)
+                };
+            }
+        }
+    }
+
+    private static IEnumerable<ContinuityDecisionContradiction> FindContradictions(IReadOnlyList<DecisionSignal> signals)
     {
         DecisionSignal[] activeDurableSignals = signals
             .Where(IsDurable)
             .Where(signal => !signal.IsSupersededOrRetired)
             .ToArray();
 
-        foreach (DecisionSignal left in activeDurableSignals)
+        for (int leftIndex = 0; leftIndex < activeDurableSignals.Length; leftIndex++)
         {
-            foreach (DecisionSignal right in activeDurableSignals)
+            for (int rightIndex = leftIndex + 1; rightIndex < activeDurableSignals.Length; rightIndex++)
             {
-                if (ReferenceEquals(left, right))
-                {
-                    continue;
-                }
+                DecisionSignal left = activeDurableSignals[leftIndex];
+                DecisionSignal right = activeDurableSignals[rightIndex];
 
                 if (IsNegated(left.Statement) != IsNegated(right.Statement) &&
                     string.Equals(RemoveNegation(left.Statement), RemoveNegation(right.Statement), StringComparison.OrdinalIgnoreCase))
                 {
-                    yield return $"Contradictory decision signals require review: `{left.Statement}` conflicts with `{right.Statement}`.";
-                    yield break;
+                    DecisionContradictionSeverity severity = DetermineSeverity(left, right);
+                    string warning = $"Contradictory decision signals require review: `{left.Statement}` conflicts with `{right.Statement}`.";
+                    yield return new ContinuityDecisionContradiction
+                    {
+                        ContradictionId = CreateItemId(left.DecisionId, right.DecisionId),
+                        DecisionA = CreateReference(left),
+                        DecisionB = CreateReference(right),
+                        ConflictType = DecisionContradictionConflictType.DirectNegation,
+                        ConflictEvidence =
+                        [
+                            $"Decision A normalized without negation: {RemoveNegation(left.Statement).Trim()}",
+                            $"Decision B normalized without negation: {RemoveNegation(right.Statement).Trim()}",
+                            $"Decision A negated: {IsNegated(left.Statement)}",
+                            $"Decision B negated: {IsNegated(right.Statement)}"
+                        ],
+                        Severity = severity,
+                        ResolutionGuidance = severity is DecisionContradictionSeverity.Critical or DecisionContradictionSeverity.High
+                            ? "Resolve the conflicting durable decision before promoting the operational context."
+                            : "Review the conflicting durable decision before relying on this context.",
+                        CompatibilityWarning = warning
+                    };
                 }
             }
         }
@@ -345,6 +385,106 @@ public sealed class DecisionAnalysisService : IDecisionAnalysisService
     private static string Normalize(string value)
     {
         return $" {string.Join(' ', value.Trim().ToLowerInvariant().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))} ";
+    }
+
+    private static ContinuityDecisionReference CreateReference(DecisionSignal signal)
+    {
+        return new ContinuityDecisionReference
+        {
+            DecisionId = signal.DecisionId,
+            SourceRelativePath = signal.SourceRelativePath,
+            Statement = signal.Statement,
+            Taxonomy = signal.Taxonomy
+        };
+    }
+
+    private static IReadOnlyList<string> BuildConsequenceEvidence(DecisionSignal signal, string consequence)
+    {
+        var evidence = new List<string>
+        {
+            $"Source artifact: {signal.SourceRelativePath}",
+            $"Decision statement: {signal.Statement}",
+            $"Consequence statement: {consequence}"
+        };
+
+        if (!string.IsNullOrWhiteSpace(signal.Rationale))
+        {
+            evidence.Add($"Rationale: {signal.Rationale}");
+        }
+
+        return evidence;
+    }
+
+    private static string DetermineAffectedArea(string value)
+    {
+        if (ContainsAny(value, "workflow", "gate", "lifecycle"))
+        {
+            return "Workflow";
+        }
+
+        if (ContainsAny(value, "operational context", "continuity", "handoff"))
+        {
+            return "Operational context";
+        }
+
+        if (ContainsAny(value, "architecture", "authority", "boundary", "service", "backend"))
+        {
+            return "Architecture";
+        }
+
+        if (ContainsAny(value, "decision", "governance", "review"))
+        {
+            return "Decision governance";
+        }
+
+        if (ContainsAny(value, "execution", "prompt", "provider"))
+        {
+            return "Execution";
+        }
+
+        return "General";
+    }
+
+    private static string BuildOperationalImpact(DecisionSignal signal, string consequence)
+    {
+        return $"Applying `{signal.Statement}` changes {DetermineAffectedArea(signal.Statement).ToLowerInvariant()} behavior: {consequence}";
+    }
+
+    private static DecisionContradictionSeverity DetermineSeverity(DecisionSignal left, DecisionSignal right)
+    {
+        string combined = $"{left.Statement} {right.Statement}";
+        if (ContainsAny(combined, "authority", "boundary", "must own", "must not own"))
+        {
+            return DecisionContradictionSeverity.Critical;
+        }
+
+        if (ContainsAny(combined, "must", "cannot"))
+        {
+            return DecisionContradictionSeverity.High;
+        }
+
+        if (ContainsAny(combined, "should", "avoid"))
+        {
+            return DecisionContradictionSeverity.Medium;
+        }
+
+        return DecisionContradictionSeverity.Low;
+    }
+
+    private static string CreateItemId(string section, string text)
+    {
+        string normalized = string.Join(
+            ' ',
+            $"{section}:{text}".Trim().ToLowerInvariant().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        byte[] bytes = SHA256.HashData(Encoding.UTF8.GetBytes(normalized));
+        return $"{NormalizeIdPrefix(section)}-{Convert.ToHexString(bytes)[..12].ToLowerInvariant()}";
+    }
+
+    private static string NormalizeIdPrefix(string value)
+    {
+        return string.Join(
+            '-',
+            value.Trim().ToLowerInvariant().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
     }
 
     private sealed record TaxonomyMatch(

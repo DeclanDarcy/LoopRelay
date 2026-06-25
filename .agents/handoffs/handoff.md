@@ -2,15 +2,17 @@
 
 ## New State This Slice
 
-- Continued Milestone 7 with backend-only taxonomy classification basis transparency.
-- Rotated previous decisions to `.agents/decisions/decisions.0053.md`.
-- Replaced `.agents/decisions/decisions.md` with only the newly authorized taxonomy-basis decisions.
-- Rotated previous handoff to `.agents/handoffs/handoff.0052.md`.
-- Added immutable generation-time `DecisionTaxonomyBasis` with matched rules, matched evidence, heuristic fallback, fallback reason, and diagnostics.
-- `DecisionSignal` now carries taxonomy basis from `DecisionAnalysisService`.
-- `DecisionAssimilationRecord` now embeds taxonomy basis so consumers can inspect classification and assimilation together.
-- `DecisionAnalysisService` now reports rule-based matches, heuristic fallback to tactical, and ambiguity diagnostics when multiple taxonomy rule families match.
-- Backend tests now cover rule-based classification, fallback, ambiguous classification, excluded classifications, and omitted-by-limit records retaining taxonomy basis.
+- Continued Milestone 7 with backend-only structured consequence and contradiction transparency.
+- Rotated previous handoff to `.agents/handoffs/handoff.0053.md`.
+- Added stable continuity decision references with decision id, source path, statement, and taxonomy.
+- `DecisionSignal` now carries a stable `DecisionId`.
+- `DecisionAnalysisResult` now exposes structured decision consequences and contradictions alongside compatibility warnings.
+- `DecisionAssimilationProjection` now exposes `Consequences` and `Contradictions` next to assimilation decisions and limits.
+- `DecisionAssimilationRecord` now carries `ConsequencesIntroduced`.
+- Consequence records include originating decision, operational statement, affected area, supporting evidence, and operational impact.
+- Contradiction records include decision A, decision B, conflict type, conflict evidence, severity, resolution guidance, and the generated compatibility warning.
+- Contradiction warning strings are now generated from structured contradiction records and still flow into compression warning surfaces.
+- Backend regression tests now cover consequence projection, contradiction detection, multiple contradictions, severity, symmetric decision references, and compatibility warning generation.
 
 ## Verification
 
@@ -19,10 +21,10 @@
 
 ## Residual Risk
 
-- Consequences still need structured originating decision, reasoning, and operational-impact projection.
-- Contradictions still need structured decision A/B, conflict type, severity, evidence, and resolution guidance.
-- UI and TypeScript clients intentionally remain untouched until backend continuity semantics stabilize.
+- Consequence affected-area and operational-impact text remain deterministic heuristics over decision statements; no separate reasoning graph evidence is attached yet.
+- Contradiction detection still covers direct normalized negation only.
+- UI and TypeScript clients remain deferred until backend continuity semantics stabilize.
 
 ## Recommended Next Slice
 
-- Add structured consequence and contradiction transparency to the same proposal-level continuity projection, preserving warning-string compatibility until typed UI rendering is introduced later.
+- Continue Milestone 7 by extending operational evolution reporting and `UnderstandingDiffService` so modified understanding is detected as modified rather than remove/add pairs when identity, source reference, section, or stable lineage indicates continuity.

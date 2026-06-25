@@ -228,6 +228,8 @@ public sealed class OperationalContextGenerationService(
         return new DecisionAssimilationProjection
         {
             Decisions = records,
+            Consequences = decisionAnalysis.Consequences,
+            Contradictions = decisionAnalysis.Contradictions,
             Limit = new DecisionAssimilationLimit
             {
                 Limit = DecisionAssimilationLimitCount,
@@ -251,7 +253,7 @@ public sealed class OperationalContextGenerationService(
 
         return new DecisionAssimilationRecord
         {
-            DecisionId = CreateItemId(signal.SourceRelativePath, signal.Statement),
+            DecisionId = signal.DecisionId,
             SourceRelativePath = signal.SourceRelativePath,
             Statement = signal.Statement,
             Taxonomy = signal.Taxonomy,
@@ -270,6 +272,7 @@ public sealed class OperationalContextGenerationService(
             OperationalStatement = qualifies ? $"Decision: {signal.Statement}" : null,
             Rationale = signal.Rationale,
             ConstraintsIntroduced = signal.ConstraintsIntroduced,
+            ConsequencesIntroduced = signal.Consequences,
             OpenQuestions = signal.OpenQuestions,
             SourceEvidence = BuildSourceEvidence(signal)
         };

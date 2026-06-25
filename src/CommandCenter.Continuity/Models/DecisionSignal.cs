@@ -4,6 +4,8 @@ namespace CommandCenter.Continuity.Models;
 
 public sealed class DecisionSignal
 {
+    public string DecisionId { get; init; } = string.Empty;
+
     public DecisionTaxonomy Taxonomy { get; init; }
 
     public DecisionTaxonomyBasis TaxonomyBasis { get; init; } = new();
