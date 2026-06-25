@@ -2,27 +2,28 @@
 
 ## New State This Slice
 
-- Performed the Milestone 6 formal exit audit authorized by `.agents/decisions/decisions.md`.
-- Rotated the previous handoff to `.agents/handoffs/handoff.0049.md`.
-- Added `.agents/milestones/m6-exit-audit.md` and marked the remaining parent checklist rows in `.agents/milestones/m6-reasoning-transparency.md` complete.
+- Started Milestone 7 with the authorized backend-first authority inventory.
+- Added `.agents/milestones/m7-continuity-authority-matrix.md`.
+- Rotated the previous handoff to `.agents/handoffs/handoff.0050.md`.
 - No product code changed in this slice.
+
+## Key Findings
+
+- `OperationalContextGenerationService` is the proposal-generation composition point for decision analysis, semantic diff, and compression.
+- `DecisionAnalysisService` owns taxonomy, durable-decision selection, consequences, and contradiction warnings, but its structured `DecisionAnalysisResult` is currently in-memory only.
+- Assimilation limiting is currently implicit in `Where(IsAssimilatedDecision).Take(8)`, so omitted qualifying decisions are silent.
+- `UnderstandingDiffService` mostly matches by normalized text, with only decision-rationale key matching approximating identity.
+- `UnderstandingCompressionService` and `ContinuityDiagnosticsService` expose useful aggregate counts and warning strings, but not item-level transparency records.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "FullyQualifiedName~ReasoningEndpointTests|FullyQualifiedName~ReasoningReconstructionServiceTests|FullyQualifiedName~ReasoningMaterializationReviewServiceTests|FullyQualifiedName~ReasoningGraphServiceTests|FullyQualifiedName~ReasoningSpecializedReadModelBoundaryTests|FullyQualifiedName~ReasoningRepositoryTests|FullyQualifiedName~ReasoningCertificationServiceTests|FullyQualifiedName~DecisionReasoningCaptureServiceTests"` passed: 66 tests.
-- `npm run test -- src/test/characterization/reasoningTrajectory.test.tsx` passed: 12 tests.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 754 tests.
-- `npm test` passed: 55 files, 217 tests.
-- `dotnet build CommandCenter.slnx` passed.
-- `npm run build` passed; Vite still reports the existing >500 kB chunk warning.
-- `cargo check` in `src/CommandCenter.Shell` passed.
+- Documentation/inventory-only slice; no build or test command was run.
 
 ## Residual Risk
 
-- `ReasoningCaptureAttemptResult.DiagnosticGroups` is still backend-facing only for attempts that do not surface as persisted events.
-- Certification diagnostics continue to use the existing certification report rendering.
-- Historical unreachable evidence remains limited to cases the graph can prove.
+- The matrix is based on static source inspection and should be kept in sync as Milestone 7 model changes land.
+- Existing UI still relies on aggregate/string continuity facts until typed projections are implemented.
 
 ## Recommended Next Slice
 
-- Start Milestone 7 with backend-first continuity transparency: inventory current operational-context assimilation, taxonomy, semantic diff, contradiction, compression, and diagnostic authorities before adding UI panels.
+- Implement proposal-level assimilation transparency first: persist or project per-decision analysis with taxonomy, assimilated/excluded status, exclusion reason, durability, operational statement, source evidence, and omitted-by-limit state, then add backend tests around inclusion/exclusion and limit visibility.
