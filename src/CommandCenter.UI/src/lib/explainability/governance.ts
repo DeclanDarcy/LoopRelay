@@ -131,6 +131,125 @@ export function governanceRecoveryDiagnosticsToExplanation(
   ]
 }
 
+export function governanceRecoveryToActions(
+  diagnostics: DecisionSessionRecoveryDiagnostics | null,
+  recovery: DecisionSessionRecoveryResult | null,
+): ExplanationAction[] {
+  const blockingFindings = recovery?.findings.filter((finding) => finding.severity.toLowerCase() === 'error') ?? []
+  const interruptedTransfers = diagnostics?.transferAssessments.filter((assessment) => assessment.status !== 'Completed') ?? []
+  const activeSessionCount = diagnostics?.registryDiagnostics.activeSessionCount ?? recovery?.activeSessionCount ?? null
+
+  return [
+    {
+      label: 'Recover governance',
+      detail: 'Rebuild governance recovery state from the decision-session registry and transfer evidence.',
+      eligible: true,
+      reason:
+        blockingFindings.length > 0 || interruptedTransfers.length > 0 || (activeSessionCount !== null && activeSessionCount > 1)
+          ? 'Recovery has projected registry or transfer issues to reconcile.'
+          : 'Recovery can be rerun to verify governance state.',
+      command: 'decision_session_recover',
+      constraints: [
+        {
+          label: 'Registry active session count',
+          detail: activeSessionCount === null ? 'Not projected' : `${activeSessionCount} active session(s) projected.`,
+          satisfied: activeSessionCount === null || activeSessionCount <= 1,
+        },
+        {
+          label: 'Interrupted transfers',
+          detail: `${interruptedTransfers.length} interrupted transfer assessment(s) projected.`,
+          satisfied: interruptedTransfers.length === 0,
+        },
+        ...blockingFindings.map((finding) => ({
+          label: finding.code,
+          detail: finding.message,
+          satisfied: false,
+        })),
+      ],
+    },
+  ]
+}
+
+export function governanceRecoveryToEvidence(
+  diagnostics: DecisionSessionRecoveryDiagnostics | null,
+  recovery: DecisionSessionRecoveryResult | null,
+): ExplanationEvidence[] {
+  const evidence: ExplanationEvidence[] = []
+
+  if (recovery) {
+    evidence.push({
+      id: recovery.recoveryId,
+      label: 'Recovery run',
+      detail: `${recovery.succeeded ? 'Succeeded' : 'Requires review'} | recovered ${recovery.recoveredAt}`,
+    })
+
+    if (recovery.activeSessionId) {
+      evidence.push({
+        id: `${recovery.recoveryId}-active-session`,
+        label: 'Active session',
+        detail: recovery.activeSessionId,
+      })
+    }
+
+    evidence.push({
+      id: `${recovery.recoveryId}-active-session-count`,
+      label: 'Active sessions',
+      detail: `${recovery.activeSessionCount} active session(s) after recovery.`,
+    })
+
+    for (const event of recovery.events.slice(0, 5)) {
+      evidence.push({
+        id: event.eventId,
+        label: `Recovery event: ${event.eventType}`,
+        detail: event.message,
+      })
+    }
+  }
+
+  if (diagnostics) {
+    evidence.push({
+      id: `${diagnostics.repositoryId}-recovery-diagnostics`,
+      label: 'Recovery diagnostics',
+      detail: `Generated ${diagnostics.generatedAt}`,
+    })
+
+    evidence.push({
+      id: `${diagnostics.repositoryId}-registry-diagnostics`,
+      label: 'Registry diagnostics',
+      detail: `${diagnostics.registryDiagnostics.sessionCount} session(s), ${diagnostics.registryDiagnostics.activeSessionCount} active.`,
+    })
+
+    for (const assessment of diagnostics.transferAssessments.slice(0, 5)) {
+      evidence.push({
+        id: assessment.transferId ?? `${assessment.sourceSessionId}-transfer-assessment`,
+        label: `Transfer assessment: ${assessment.status}`,
+        detail: assessment.message,
+      })
+    }
+  }
+
+  return evidence
+}
+
+export function governanceRecoveryResult(
+  diagnostics: DecisionSessionRecoveryDiagnostics | null,
+  recovery: DecisionSessionRecoveryResult | null,
+) {
+  if (recovery?.succeeded) {
+    return `Recovery ${recovery.recoveryId} completed.`
+  }
+
+  if (recovery) {
+    return `Recovery ${recovery.recoveryId} requires review.`
+  }
+
+  if (diagnostics) {
+    return 'Recovery diagnostics are projected and waiting for execution.'
+  }
+
+  return 'No recovery result has been projected.'
+}
+
 export function governanceHealthDimensionsToExplanation(
   dimensions: Array<WorkflowGovernanceHealthProjection | RepositoryDecisionSessionHealthDimension>,
 ): ExplanationHealthDimension[] {

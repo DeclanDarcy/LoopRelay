@@ -7,6 +7,9 @@ import {
   governanceHealthDimensionsToExplanation,
   governanceRecoveryDiagnosticsToExplanation,
   governanceRecoveryFindingsToDiagnostics,
+  governanceRecoveryResult,
+  governanceRecoveryToActions,
+  governanceRecoveryToEvidence,
   governanceTransferResult,
   governanceTransferToDiagnostics,
   governanceTransferToEvidence,
@@ -100,6 +103,70 @@ describe('governance explainability adapters', () => {
       },
       { label: 'SnapshotRebuilt', detail: 'Snapshot rebuilt from registry.' },
     ])
+    expect(governanceRecoveryToActions(diagnostics, recovery)).toEqual([
+      {
+        label: 'Recover governance',
+        detail: 'Rebuild governance recovery state from the decision-session registry and transfer evidence.',
+        eligible: true,
+        reason: 'Recovery has projected registry or transfer issues to reconcile.',
+        command: 'decision_session_recover',
+        constraints: [
+          {
+            label: 'Registry active session count',
+            detail: '2 active session(s) projected.',
+            satisfied: false,
+          },
+          {
+            label: 'Interrupted transfers',
+            detail: '1 interrupted transfer assessment(s) projected.',
+            satisfied: false,
+          },
+          {
+            label: 'duplicate-active-session',
+            detail: 'Duplicate active sessions require intervention.',
+            satisfied: false,
+          },
+        ],
+      },
+    ])
+    expect(governanceRecoveryToEvidence(diagnostics, recovery)).toEqual([
+      {
+        id: 'recovery-1',
+        label: 'Recovery run',
+        detail: 'Requires review | recovered 2026-01-01T00:05:00Z',
+      },
+      {
+        id: 'recovery-1-active-session',
+        label: 'Active session',
+        detail: 'session-active',
+      },
+      {
+        id: 'recovery-1-active-session-count',
+        label: 'Active sessions',
+        detail: '2 active session(s) after recovery.',
+      },
+      {
+        id: 'event-1',
+        label: 'Recovery event: SnapshotRebuilt',
+        detail: 'Rebuilt recovery snapshot.',
+      },
+      {
+        id: 'repo-alpha-recovery-diagnostics',
+        label: 'Recovery diagnostics',
+        detail: 'Generated 2026-01-01T00:00:00Z',
+      },
+      {
+        id: 'repo-alpha-registry-diagnostics',
+        label: 'Registry diagnostics',
+        detail: '3 session(s), 2 active.',
+      },
+      {
+        id: 'transfer-1',
+        label: 'Transfer assessment: Interrupted',
+        detail: 'Transfer did not complete.',
+      },
+    ])
+    expect(governanceRecoveryResult(diagnostics, recovery)).toBe('Recovery recovery-1 requires review.')
   })
 
   it('preserves health status, findings, and evidence without computing aggregate health', () => {

@@ -27,6 +27,7 @@ Make the application feel unified, not merely smaller. Remove fragmentation so e
    - [x] Execution commit and push/retry actions normalized through a thin execution-specific wrapper around the shared interaction summary. See `./m9-interaction-normalization-execution-git.md`.
    - [x] Execution recovery transparency normalized through a thin execution-specific wrapper around the shared interaction summary. See `./m9-interaction-normalization-execution-recovery.md`.
    - [x] Decision-session transfer actions normalized through the shared interaction summary. See `./m9-interaction-normalization-governance-transfer.md`.
+   - [x] Interaction consistency audit completed and governance recovery action presentation normalized through the shared interaction summary. See `./m9-interaction-consistency-audit.md`.
    - [x] action
    - [x] eligibility
    - [x] evidence

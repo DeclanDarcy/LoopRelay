@@ -15,6 +15,9 @@ import {
   governanceHealthDimensionsToExplanation,
   governanceRecoveryDiagnosticsToExplanation,
   governanceRecoveryFindingsToDiagnostics,
+  governanceRecoveryResult,
+  governanceRecoveryToActions,
+  governanceRecoveryToEvidence,
   governanceTransferResult,
   governanceTransferToDiagnostics,
   governanceTransferToEvidence,
@@ -467,6 +470,9 @@ export function DecisionSessionRecoveryPanel({
   const requiresIntervention = Boolean(recovery?.findings.some((finding) => finding.severity.toLowerCase() === 'error'))
   const findings = governanceRecoveryFindingsToDiagnostics(recovery)
   const recoveryDiagnostics = governanceRecoveryDiagnosticsToExplanation(diagnostics, recovery)
+  const interactionDiagnostics = [...findings, ...recoveryDiagnostics]
+  const actions = governanceRecoveryToActions(diagnostics, recovery)
+  const evidence = governanceRecoveryToEvidence(diagnostics, recovery)
 
   return (
     <Panel className="governance-panel governance-recovery-panel" aria-label="Governance recovery">
@@ -484,24 +490,17 @@ export function DecisionSessionRecoveryPanel({
       />
       {recovery || diagnostics ? (
         <div className="governance-panel-stack">
-          <div className="governance-fact-grid">
-            <span>Recovered: {recovery ? (recovery.succeeded ? 'Yes' : 'No') : 'Not projected'}</span>
-            <span>Diagnosed: {diagnostics ? 'Yes' : 'No'}</span>
-            <span>Requires intervention: {requiresIntervention ? 'Yes' : 'No'}</span>
-            <span>Duplicate active sessions: {diagnostics?.registryDiagnostics.activeSessionCount && diagnostics.registryDiagnostics.activeSessionCount > 1 ? 'Yes' : 'No'}</span>
-            <span>Interrupted transfers: {diagnostics?.transferAssessments.filter((assessment) => assessment.status !== 'Completed').length ?? 'Not projected'}</span>
-            <span>Discarded snapshots: {recovery?.findings.filter((finding) => finding.code.toLowerCase().includes('discard')).length ?? 0}</span>
-            <span>Rebuilt snapshots: {recovery?.events.filter((event) => event.eventType.toLowerCase().includes('rebuilt')).length ?? 0}</span>
-          </div>
-          <DiagnosticList
-            diagnostics={findings}
-            emptyLabel="No recovery findings projected."
-            title="Findings"
-          />
-          <DiagnosticList
-            diagnostics={recoveryDiagnostics}
-            emptyLabel="No recovery diagnostics projected."
-            title="Diagnostics"
+          <InteractionPatternView
+            actions={actions}
+            diagnostics={interactionDiagnostics}
+            evidence={evidence}
+            result={governanceRecoveryResult(diagnostics, recovery)}
+            subject={
+              requiresIntervention
+                ? 'Decision-session recovery requiring review'
+                : 'Decision-session recovery'
+            }
+            title="Recovery Interaction Summary"
           />
         </div>
       ) : (
