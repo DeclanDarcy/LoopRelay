@@ -2,18 +2,24 @@
 
 ## Newly Authorized
 
-- Accept the `DecisionInfluenceExplorer` UI slice as architecturally correct.
-- Treat `DecisionInfluenceExplorer` as the correct decision-local renderer for execution influence reason categories during Milestone 4.
-- Preserve the execution influence authority chain as:
+- Accept the Milestone 4 proposal transparency UI slice as architecturally correct.
+- Treat the new proposal transparency components as decision-local renderers, not shared explainability abstractions:
+  - `DecisionRecommendationExplanation`
+  - `DecisionOptionEvaluationTable`
+  - `DecisionRejectedOptionList`
+  - `DecisionEvidenceFragments`
+- Preserve the proposal transparency authority chain as:
   - decision services
-  - `ExecutionDecisionProjection`
-  - `DecisionInfluenceTrace`
-  - `DecisionInfluenceExplorer`
-- Keep influence categories backend-owned. React must render included, excluded, superseded, conflicting, ignored, and blocked categories from backend projections or persisted traces, not infer them from statement presence.
-- Continue rendering persisted `DecisionInfluenceTrace` for historical execution explanations so historical execution influence remains consistent with current projection inspection.
-- Keep characterization tests focused on backend category rendering, backend reason rendering, and backend diagnostics rendering rather than CSS or implementation details.
-- Proceed next with proposal transparency renderers for recommendation explanation, option evaluation, rejected options, deduplicated options, recommendation evidence, supporting factors, concerns, assumptions, and alternative explanations.
-- Keep proposal transparency render-only: display persisted or generated fields and do not recompute recommendation logic in React.
-- Keep option evaluations attached to their options instead of flattening them into one overall recommendation explanation.
-- Render rejected options with rejected option content, rejection reason, and diagnostics rather than only listing them as discarded items.
-- Keep proposal transparency components decision-local until Milestone 8.
+  - `DecisionProposal`
+  - TypeScript contract
+  - decision-local renderer
+  - `DecisionProposalViewer`
+- Keep option evaluations attached to their options and render backend evaluation granularity instead of collapsing evaluations into a synthesized UI explanation.
+- Keep rejected and deduplicated option semantics backend-owned; React may render rejected options, reasons, diagnostics, deduplicated options, and diagnostics but must not invent rejection categories.
+- Do not invent or infer recommendation confidence in React. Confidence may be rendered only after it becomes an explicit backend-owned projection field.
+- Do not create UI-only validation categories such as insufficient evidence or duplicate unless the backend exposes those categories explicitly. Continue rendering validation issues and deduplicated diagnostics as backend-provided facts.
+- Proceed next with quality transparency, then burden transparency, then governance transparency.
+- Keep `DecisionQualityExplanation` and `DecisionBurdenExplanation` narrowly focused on explanation fields rather than broad status-panel summaries.
+- For quality transparency, render backend-owned score contribution, thresholds, overrides, unknown/default status, diagnostics, and related reasoning without interpretation.
+- For burden transparency, render backend-owned effective burden, winning signal, selection rule, reasoning, and diagnostics without interpretation.
+- For governance transparency, reuse existing governance reports where possible and extend backend projections only when a concrete semantic gap appears during integration.

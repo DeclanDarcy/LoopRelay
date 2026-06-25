@@ -27,11 +27,51 @@ describe('DecisionProposalViewer', () => {
     expect(
       within(recommendation).getByText('Human authority should see evidence before mutation.'),
     ).toBeInTheDocument()
-    expect(within(recommendation).getByText('.agents/plan.md')).toBeInTheDocument()
+    expect(within(recommendation).getAllByText('.agents/plan.md').length).toBeGreaterThan(0)
 
     const optionEvidence = screen.getByLabelText('Option Evidence')
     expect(within(optionEvidence).getByText('The current slice authorizes inspection-only UI.')).toBeInTheDocument()
     expect(within(optionEvidence).getByText('Milestone 4')).toBeInTheDocument()
+  })
+
+  it('renders recommendation mode, supporting context, evidence categories, and option evaluations from the backend', () => {
+    render(<DecisionProposalViewer workspace={createWorkspace()} isLoading={false} />)
+
+    const recommendation = screen.getByLabelText('Decision recommendation')
+    expect(within(recommendation).getByText('Mode PreferredOption')).toBeInTheDocument()
+    expect(within(recommendation).getByText('Backend read models are already available.')).toBeInTheDocument()
+    expect(within(recommendation).getByText('UI must not infer recommendation confidence.')).toBeInTheDocument()
+    expect(within(recommendation).getByText('Assume review workspace remains authoritative.')).toBeInTheDocument()
+    expect(within(recommendation).getByText('Alternative manual review flow remains possible.')).toBeInTheDocument()
+
+    const evidenceCategories = screen.getByLabelText('Recommendation evidence categories')
+    expect(within(evidenceCategories).getByText('Benefit')).toBeInTheDocument()
+    expect(within(evidenceCategories).getByText('Keeps recommendation tied to proposal evidence.')).toBeInTheDocument()
+
+    const evaluations = screen.getByLabelText('Decision option evaluations')
+    expect(within(evaluations).getByText('Rank 1 / Score 92')).toBeInTheDocument()
+    expect(within(evaluations).getByText('Score comes from backend recommendation analysis.')).toBeInTheDocument()
+    expect(within(evaluations).getByText('Avoids duplicate client scoring.')).toBeInTheDocument()
+    expect(within(evaluations).getByText('Requires a larger read-only panel.')).toBeInTheDocument()
+  })
+
+  it('renders analyzed option details, constraints, invalid results, rejected options, and deduplicated options', () => {
+    render(<DecisionProposalViewer workspace={createWorkspace()} isLoading={false} />)
+
+    const optionTransparency = screen.getByLabelText('Option transparency for OPT-A')
+    expect(within(optionTransparency).getByText('Type Adopt')).toBeInTheDocument()
+    expect(within(optionTransparency).getByText('Valid option')).toBeInTheDocument()
+    expect(within(optionTransparency).getByText('1 disqualifying constraints')).toBeInTheDocument()
+    expect(within(optionTransparency).getByText('High: Preserves backend authority.')).toBeInTheDocument()
+    expect(within(optionTransparency).getByText('Medium: Extra UI surface area.')).toBeInTheDocument()
+    expect(within(optionTransparency).getByText('Blocking: Do not compute scores in React.')).toBeInTheDocument()
+
+    const hiddenOptions = screen.getByLabelText('Rejected and hidden proposal options')
+    expect(within(hiddenOptions).getByText('Rejected generated option')).toBeInTheDocument()
+    expect(within(hiddenOptions).getByText('Rejected because it moved authority into React.')).toBeInTheDocument()
+    expect(within(hiddenOptions).getByText('Duplicate generated option')).toBeInTheDocument()
+    expect(within(hiddenOptions).getByText('Duplicate: Same behavior as OPT-A.')).toBeInTheDocument()
+    expect(within(hiddenOptions).getByText('EvidenceMissing: Requires reviewer-supplied evidence.')).toBeInTheDocument()
   })
 
   it('shows review notes separately from proposal revisions', () => {
@@ -99,6 +139,10 @@ function createWorkspace(): DecisionReviewWorkspace {
           id: 'OPT-A',
           title: 'Render a read-only backend workspace',
           description: 'Load and display the selected proposal review workspace.',
+          type: 'Adopt',
+          assumptions: ['Assume proposal review routes remain current.'],
+          dependencies: ['DecisionReviewWorkspace endpoint'],
+          diagnostics: ['Option diagnostics are backend-authored.'],
           evidence: [
             {
               summary: 'The current slice authorizes inspection-only UI.',
@@ -123,6 +167,51 @@ function createWorkspace(): DecisionReviewWorkspace {
       recommendation: {
         optionId: 'OPT-A',
         rationale: 'Use the backend review workspace as the source of truth.',
+        summary: 'Render backend recommendation data without local scoring.',
+        mode: 'PreferredOption',
+        supportingFactors: ['Backend read models are already available.'],
+        concerns: ['UI must not infer recommendation confidence.'],
+        assumptions: ['Assume review workspace remains authoritative.'],
+        alternativeExplanations: ['Alternative manual review flow remains possible.'],
+        recommendationEvidence: [
+          {
+            type: 'Benefit',
+            optionId: 'OPT-A',
+            summary: 'Keeps recommendation tied to proposal evidence.',
+            evidence: [
+              {
+                summary: 'Recommendation evidence is generated by the backend.',
+                sources: [source],
+              },
+            ],
+          },
+        ],
+        optionEvaluations: [
+          {
+            optionId: 'OPT-A',
+            strengths: ['Avoids duplicate client scoring.'],
+            weaknesses: ['Requires a larger read-only panel.'],
+            risks: ['Reviewers may need to scan more generated facts.'],
+            constraints: ['Must remain render-only.'],
+            summary: 'Best fit for proposal transparency.',
+            score: 92,
+            rank: 1,
+            scoreExplanation: 'Score comes from backend recommendation analysis.',
+            evidence: [
+              {
+                type: 'RepositoryState',
+                optionId: 'OPT-A',
+                summary: 'Workspace projection already carries the data.',
+                evidence: [
+                  {
+                    summary: 'Review workspace includes current proposal data.',
+                    sources: [source],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
         evidence: [
           {
             summary: 'Human authority should see evidence before mutation.',
@@ -159,6 +248,117 @@ function createWorkspace(): DecisionReviewWorkspace {
           sources: [source],
         },
       ],
+      analyzedOptions: [
+        {
+          optionId: 'OPT-A',
+          benefits: [
+            {
+              statement: 'Preserves backend authority.',
+              impact: 'High',
+              evidence: [],
+            },
+          ],
+          costs: [
+            {
+              statement: 'Extra UI surface area.',
+              impact: 'Medium',
+              evidence: [],
+            },
+          ],
+          risks: [
+            {
+              statement: 'Do not compute scores in React.',
+              severity: 'Blocking',
+              isUnknown: false,
+              evidence: [],
+            },
+          ],
+          dependencies: [
+            {
+              statement: 'Decision review workspace projection.',
+              evidence: [],
+            },
+          ],
+          consequences: [
+            {
+              statement: 'Reviewers see more backend rationale.',
+              impact: 'High',
+              evidence: [],
+            },
+          ],
+          diagnostics: ['Analyzed option diagnostics remain backend-owned.'],
+          evidence: [
+            {
+              summary: 'Analysis evidence is projected with the proposal.',
+              sources: [source],
+            },
+          ],
+        },
+      ],
+      tradeoffComparisons: [
+        {
+          optionId: 'OPT-A',
+          relativeStrengths: ['Strongest authority preservation.'],
+          relativeWeaknesses: ['More dense review UI.'],
+          uniqueAdvantages: ['Keeps proposal explanations local to decisions.'],
+          uniqueRisks: ['Can overwhelm if not grouped.'],
+          disqualifyingConstraints: ['Must not add React scoring.'],
+          evidence: [
+            {
+              summary: 'Tradeoff comparison came from backend analysis.',
+              sources: [source],
+            },
+          ],
+        },
+      ],
+      generationDiagnostics: {
+        generatedOptionCount: 4,
+        acceptedOptionCount: 1,
+        rejectedOptionCount: 1,
+        deduplicatedOptionCount: 1,
+        fallbackOptionCount: 0,
+        optionValidationResults: [
+          {
+            optionId: 'OPT-A',
+            isValid: true,
+            issues: [],
+          },
+          {
+            optionId: 'OPT-X',
+            isValid: false,
+            issues: [
+              {
+                type: 'EvidenceMissing',
+                message: 'Requires reviewer-supplied evidence.',
+              },
+            ],
+          },
+        ],
+        diagnostics: ['Generation diagnostics are preserved.'],
+        rejectedOptions: [
+          {
+            id: 'OPT-R',
+            title: 'Rejected generated option',
+            description: 'Rejected because it moved authority into React.',
+            diagnostics: ['AuthorityBoundary: React cannot own recommendation scoring.'],
+            evidence: [
+              {
+                summary: 'Rejected option evidence remains visible.',
+                sources: [source],
+              },
+            ],
+          },
+        ],
+        deduplicatedOptions: [
+          {
+            id: 'OPT-D',
+            title: 'Duplicate generated option',
+            description: 'Same behavior as OPT-A.',
+            diagnostics: ['Duplicate: Same behavior as OPT-A.'],
+            evidence: [],
+          },
+        ],
+      },
     },
     review: {
       repositoryId: 'repo-alpha',

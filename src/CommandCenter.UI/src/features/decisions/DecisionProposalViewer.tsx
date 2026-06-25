@@ -1,11 +1,13 @@
 import { Badge, EmptyState } from '../../components/design'
 import type {
-  DecisionEvidence,
   DecisionLifecycleEntityEligibility,
   DecisionProposal,
   DecisionReviewWorkspace,
-  DecisionSourceReference,
 } from '../../types'
+import { DecisionEvidenceBlock, DecisionSourceList } from './DecisionEvidenceFragments'
+import { DecisionOptionEvaluationTable } from './DecisionOptionEvaluationTable'
+import { DecisionRecommendationExplanation } from './DecisionRecommendationExplanation'
+import { DecisionRejectedOptionList } from './DecisionRejectedOptionList'
 
 type DecisionProposalViewerProps = {
   workspace: DecisionReviewWorkspace | null
@@ -162,22 +164,16 @@ export function DecisionProposalViewer({ workspace, eligibility = null, isLoadin
               <strong>{option.title}</strong>
             </div>
             <p>{option.description}</p>
+            <OptionTransparency proposal={proposal} optionId={option.id} />
             <ProposalEvidenceBlock title="Option Evidence" evidence={option.evidence} />
             <TradeoffsForOption proposal={proposal} optionId={option.id} />
           </article>
         ))}
       </div>
 
-      {proposal.recommendation ? (
-        <article className="decision-inspection-card" aria-label="Decision recommendation">
-          <div>
-            <span>Recommendation</span>
-            <strong>{proposal.recommendation.optionId}</strong>
-          </div>
-          <p>{proposal.recommendation.rationale}</p>
-          <ProposalEvidenceBlock title="Recommendation Evidence" evidence={proposal.recommendation.evidence} />
-        </article>
-      ) : null}
+      <DecisionRecommendationExplanation recommendation={proposal.recommendation} />
+      <DecisionOptionEvaluationTable proposal={proposal} />
+      <DecisionRejectedOptionList diagnostics={proposal.generationDiagnostics} />
 
       {proposal.assumptions.length > 0 ? (
         <div className="decision-inspection-list" aria-label="Decision assumptions">
@@ -260,42 +256,78 @@ function TradeoffsForOption({ proposal, optionId }: { proposal: DecisionProposal
   )
 }
 
-function ProposalEvidenceBlock({ title, evidence }: { title: string; evidence: DecisionEvidence[] }) {
-  if (evidence.length === 0) {
+function OptionTransparency({ proposal, optionId }: { proposal: DecisionProposal; optionId: string }) {
+  const option = proposal.options.find((candidate) => candidate.id === optionId)
+  const analyzedOption = proposal.analyzedOptions?.find((candidate) => candidate.optionId === optionId)
+  const comparison = proposal.tradeoffComparisons?.find((candidate) => candidate.optionId === optionId)
+  const validation = proposal.generationDiagnostics?.optionValidationResults.find(
+    (candidate) => candidate.optionId === optionId,
+  )
+
+  return (
+    <div className="decision-option-transparency" aria-label={`Option transparency for ${optionId}`}>
+      <div className="decision-diagnostics-grid">
+        {option?.type ? <span>Type {option.type}</span> : null}
+        {validation ? <span>{validation.isValid ? 'Valid option' : 'Invalid option'}</span> : null}
+        {comparison?.disqualifyingConstraints.length ? (
+          <span>{comparison.disqualifyingConstraints.length} disqualifying constraints</span>
+        ) : null}
+      </div>
+      {option?.dependencies?.length ? <FactChips title={`Dependencies for ${optionId}`} values={option.dependencies} /> : null}
+      {option?.assumptions?.length ? <FactChips title={`Assumptions for ${optionId}`} values={option.assumptions} /> : null}
+      {option?.diagnostics?.length ? <FactChips title={`Diagnostics for ${optionId}`} values={option.diagnostics} /> : null}
+      {validation && !validation.isValid ? (
+        <div className="decision-warning-list" aria-label={`Required human action for ${optionId}`}>
+          {validation.issues.map((issue) => (
+            <span key={`${issue.type}-${issue.message}`}>{issue.type}: {issue.message}</span>
+          ))}
+        </div>
+      ) : null}
+      {analyzedOption ? (
+        <div className="decision-inspection-list" aria-label={`Analyzed option details for ${optionId}`}>
+          <AnalyzedFacts title="Benefits" facts={analyzedOption.benefits.map((item) => `${item.impact}: ${item.statement}`)} />
+          <AnalyzedFacts title="Costs" facts={analyzedOption.costs.map((item) => `${item.impact}: ${item.statement}`)} />
+          <AnalyzedFacts title="Risks" facts={analyzedOption.risks.map((item) => `${item.severity}: ${item.statement}`)} />
+          <AnalyzedFacts title="Dependencies" facts={analyzedOption.dependencies.map((item) => item.statement)} />
+          <AnalyzedFacts title="Consequences" facts={analyzedOption.consequences.map((item) => `${item.impact}: ${item.statement}`)} />
+          <FactChips title={`Analysis diagnostics for ${optionId}`} values={analyzedOption.diagnostics} />
+          <ProposalEvidenceBlock title="Analysis Evidence" evidence={analyzedOption.evidence} />
+        </div>
+      ) : null}
+      {comparison ? (
+        <div className="decision-inspection-list" aria-label={`Tradeoff comparison for ${optionId}`}>
+          <FactChips title={`Relative strengths for ${optionId}`} values={comparison.relativeStrengths} />
+          <FactChips title={`Relative weaknesses for ${optionId}`} values={comparison.relativeWeaknesses} />
+          <FactChips title={`Unique advantages for ${optionId}`} values={comparison.uniqueAdvantages} />
+          <FactChips title={`Unique risks for ${optionId}`} values={comparison.uniqueRisks} />
+          <FactChips title={`Disqualifying constraints for ${optionId}`} values={comparison.disqualifyingConstraints} />
+          <ProposalEvidenceBlock title="Comparison Evidence" evidence={comparison.evidence} />
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function FactChips({ title, values }: { title: string; values: string[] }) {
+  if (values.length === 0) {
     return null
   }
 
   return (
-    <div className="decision-evidence-block" aria-label={title}>
-      <span>{title}</span>
-      {evidence.map((evidenceItem) => (
-        <article key={`${title}-${evidenceItem.summary}`}>
-          <p>{evidenceItem.summary}</p>
-          <SourceList sources={evidenceItem.sources} />
-        </article>
+    <div className="decision-warning-list" aria-label={title}>
+      {values.map((value) => (
+        <span key={value}>{value}</span>
       ))}
     </div>
   )
 }
 
-function SourceList({ sources }: { sources: DecisionSourceReference[] }) {
-  if (sources.length === 0) {
-    return null
-  }
-
-  return (
-    <ul className="decision-source-list" aria-label="Source attribution">
-      {sources.map((source, index) => (
-        <li key={`${source.sourceKind}-${source.relativePath ?? 'none'}-${index}`}>
-          <strong>{source.sourceKind}</strong>
-          {source.relativePath ? <span>{source.relativePath}</span> : null}
-          {source.section ? <span>{source.section}</span> : null}
-          {source.excerpt ? <p>{source.excerpt}</p> : null}
-        </li>
-      ))}
-    </ul>
-  )
+function AnalyzedFacts({ title, facts }: { title: string; facts: string[] }) {
+  return <FactChips title={title} values={facts} />
 }
+
+const ProposalEvidenceBlock = DecisionEvidenceBlock
+const SourceList = DecisionSourceList
 
 function formatDate(value: string) {
   const date = new Date(value)

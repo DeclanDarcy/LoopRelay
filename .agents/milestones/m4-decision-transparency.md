@@ -39,16 +39,20 @@ Expose why decisions, recommendations, options, quality ratings, governance find
 ### UI
 
 - [ ] Add decision-specific projection renderers under `src/CommandCenter.UI/src/features/decisions/`:
-   - [ ] `DecisionRecommendationExplanation`
-   - [ ] `DecisionOptionEvaluationTable`
-   - [ ] `DecisionRejectedOptionList`
+   - [x] `DecisionRecommendationExplanation`
+   - [x] `DecisionOptionEvaluationTable`
+   - [x] `DecisionRejectedOptionList`
    - [ ] `DecisionQualityExplanation`
    - [ ] `DecisionBurdenExplanation`
    - [ ] `DecisionGovernanceExplanation`
    - [x] `DecisionInfluenceExplorer`
 - [ ] Update `DecisionProposalViewer` to display recommendation mode, rationale, confidence when available, supporting factors, concerns, assumptions, alternative explanations, recommendation evidence, and option evaluations.
-- [ ] Update option views to display score, rank, score explanation, benefits, costs, risks, dependencies, constraints, disqualification, and required human action.
+   - [x] Recommendation mode, summary, rationale, supporting factors, concerns, assumptions, alternative explanations, recommendation evidence, and option evaluations render from backend fields.
+   - [ ] Confidence still needs a backend field before the UI can render it.
+- [x] Update option views to display score, rank, score explanation, benefits, costs, risks, dependencies, constraints, disqualification, and required human action.
 - [ ] Display rejected, disqualified, deduplicated, invalid, insufficient-evidence, and duplicate options in a visible section rather than hiding them behind diagnostics.
+   - [x] Rejected options, deduplicated options, invalid option validation issues, disqualifying constraints, and required human action render visibly from backend fields.
+   - [ ] Insufficient-evidence and duplicate categories need explicit backend classification if they should be separated beyond validation issue text and deduplicated option diagnostics.
 - [ ] Update `DecisionQualityPanel` to show score, rating, signal contribution, thresholds, overrides, warnings, unknowns, and burden reasoning.
 - [ ] Update governance panels to show resolution authority, stale authority, recommendation divergence, lifecycle state, allowed transitions, blocked transitions, transition reasons, governance findings, and authority violations.
 - [ ] Update execution influence panels to show why decisions were included, excluded, superseded, conflicted, ignored, or converted into constraints/directives/priorities/rules.
@@ -59,6 +63,7 @@ Expose why decisions, recommendations, options, quality ratings, governance find
 
 - [ ] Backend serialization and projection tests for transparency fields.
 - [ ] UI characterization tests for recommendation explanation, option scoring, rejected options, quality contribution, burden reasoning, governance state, and influence exclusion/conflict reasons.
+   - [x] Proposal viewer characterization covers recommendation explanation, option scoring/rank/explanation, analyzed option details, invalid validation issues, rejected options, and deduplicated options.
 - [ ] Regression tests proving no UI-side scoring, ranking, quality, burden, or governance calculation helpers exist.
 
 ### Exit Criteria

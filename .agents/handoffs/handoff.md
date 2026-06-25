@@ -2,23 +2,28 @@
 
 ## New State This Slice
 
-- Continued Milestone 4: Decision Transparency UI composition.
-- Added `DecisionInfluenceExplorer` under `src/CommandCenter.UI/src/features/decisions/` as a render-only decision influence reason-category component.
-- Wired `ExecutionDecisionInfluencePanel` to display backend-provided included, excluded, superseded, conflicting, ignored, and blocked decision diagnostics from persisted `DecisionInfluenceTrace`.
-- Added CSS for the new influence diagnostic rows using the existing execution influence panel styling.
-- Expanded execution influence characterization tests to prove all six backend-provided reason categories and reason strings render, and that empty backend categories remain visible instead of being inferred from statement IDs.
-- Updated Milestone 4 notes to mark `DecisionInfluenceExplorer` and execution influence reason-category rendering complete.
-- Rotated prior handoff to `.agents/handoffs/handoff.0024.md`.
+- Continued Milestone 4: Decision Transparency proposal UI composition.
+- Added decision-local proposal transparency renderers:
+  - `DecisionRecommendationExplanation`
+  - `DecisionOptionEvaluationTable`
+  - `DecisionRejectedOptionList`
+  - shared `DecisionEvidenceFragments`
+- Wired `DecisionProposalViewer` to render backend-provided recommendation mode, summary, rationale, supporting factors, concerns, assumptions, alternative explanations, recommendation evidence, and option evaluations.
+- Wired option cards to render backend-provided option type, dependencies, assumptions, diagnostics, validation status, validation issues as required human action, analyzed benefits/costs/risks/dependencies/consequences, tradeoff comparison strengths/weaknesses/advantages/risks, and disqualifying constraints.
+- Added visible rejected/hidden option rendering for rejected options, deduplicated options, and invalid option validation results.
+- Expanded `decisionProposalViewer.test.tsx` characterization coverage for recommendation explanation, option score/rank/explanation, analyzed option details, invalid validation issues, rejected options, and deduplicated options.
+- Updated Milestone 4 notes to mark the new proposal transparency renderers and option-view transparency work complete, with confidence and explicit insufficient-evidence/duplicate category separation still deferred pending backend-owned fields.
+- Rotated prior handoff to `.agents/handoffs/handoff.0025.md`.
 
 ## Verification
 
-- `npm test -- executionDecisionInfluencePanel.test.tsx --run` in `src/CommandCenter.UI` passed: 4/4.
+- `npm test -- decisionProposalViewer.test.tsx --run` in `src/CommandCenter.UI` passed: 6/6.
 - `npm run build` in `src/CommandCenter.UI` passed.
 
 ## Remaining Work
 
-- Continue Milestone 4 UI composition:
-  - update `DecisionProposalViewer` to expose recommendation mode, rationale, confidence, supporting factors, concerns, assumptions, alternative explanations, recommendation evidence, and option evaluations
-  - add decision-local renderers for recommendation, option evaluation, rejected options, quality, burden, and governance explanations
-  - add characterization tests for proposal explanations, option scoring/rejections, quality/burden reasoning, and governance state
-- Keep influence and governance UI render-only. Do not synthesize scoring, ranking, quality, burden, governance, or influence explanations in React.
+- Continue Milestone 4 with quality, burden, and governance transparency:
+  - add decision-local renderers for quality explanation, burden explanation, and governance explanation
+  - update `DecisionQualityPanel` to expose score contribution, thresholds, signal contribution, overrides, warnings, unknowns, and burden reasoning
+  - update governance panels for resolution authority, stale authority, recommendation divergence, lifecycle state, allowed/blocked transitions, transition reasons, governance findings, and authority violations
+- Keep all remaining Milestone 4 UI render-only. Do not synthesize quality, burden, governance, confidence, category classification, scoring, or ranking in React.
