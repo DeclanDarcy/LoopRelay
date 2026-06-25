@@ -240,7 +240,22 @@ const reconstruction: ReasoningReconstruction = {
       excerpt: null,
     },
     historicalCutoff: null,
-    reachableEvidence: [],
+    reachableEvidence: [
+      {
+        kind: 'Event',
+        id: 'EVT-0001',
+        title: 'HypothesisRaised: Event substrate can stay narrow',
+        summary: 'Reasoning should begin as immutable events with provenance.',
+        reference: {
+          kind: 'ReasoningEvent',
+          id: 'EVT-0001',
+          relativePath: null,
+          section: null,
+          excerpt: null,
+        },
+        provenance: events[0].provenance,
+      },
+    ],
     unreachableEvidence: [],
   },
   trace: backwardTrace,
@@ -271,12 +286,60 @@ const reconstruction: ReasoningReconstruction = {
   diagnostics: [],
 }
 
+const limitedReconstruction: ReasoningReconstruction = {
+  ...reconstruction,
+  confidence: 'Limited',
+  confidenceRationale: {
+    level: 'Limited',
+    rationale: 'Only event evidence was reachable and trace diagnostics were present.',
+    eventEvidencePresent: true,
+    relationshipEvidencePresent: false,
+    traceDiagnosticsPresent: true,
+    missingEvidence: ['No relationship evidence was reachable for this query.'],
+    whyNotHigher: ['Trace diagnostics were present.', 'Historical cutoff excluded later evidence.'],
+  },
+  scope: {
+    ...reconstruction.scope,
+    direction: 'Forward',
+    source: null,
+    historicalCutoff: '2026-06-22T16:03:00.0000000Z',
+    unreachableEvidence: [
+      {
+        kind: 'Event',
+        id: 'EVT-0002',
+        title: 'AlternativeRejected: Specialized entity storage deferred',
+        summary: 'Specialized storage stays behind the materialization gate.',
+        reference: {
+          kind: 'ReasoningEvent',
+          id: 'EVT-0002',
+          relativePath: null,
+          section: null,
+          excerpt: null,
+        },
+        provenance: events[1].provenance,
+      },
+    ],
+  },
+  trace: {
+    ...backwardTrace,
+    direction: 'Forward',
+    diagnostics: ['Historical cutoff excluded one future event.'],
+  },
+  diagnostics: ['Historical cutoff excluded one future event.'],
+}
+
 const queryResult: ReasoningQueryResult = {
   repositoryId: 'repo-alpha',
   generatedAt: reconstruction.generatedAt,
   query: reconstruction.query,
   reconstruction,
   diagnostics: [],
+}
+
+const limitedQueryResult: ReasoningQueryResult = {
+  ...queryResult,
+  reconstruction: limitedReconstruction,
+  diagnostics: limitedReconstruction.diagnostics,
 }
 
 const materializationReview: ReasoningMaterializationReviewReport = {
@@ -566,6 +629,12 @@ describe('reasoning trajectory tab', () => {
     expect(within(queryRegion).getByLabelText('Reasoning query result')).toHaveTextContent(
       '2 evidence items',
     )
+    expect(within(queryRegion).getByLabelText('Reasoning query transparency')).toHaveTextContent(
+      'Event evidence and relationship evidence were both reachable',
+    )
+    expect(within(queryRegion).getByLabelText('Reasoning query transparency')).toHaveTextContent(
+      'Backward from ReasoningThread THR-0001 to ReasoningEvent EVT-0001',
+    )
 
     const reconstructionRegion = screen.getByRole('region', { name: 'Reasoning reconstruction' })
     expect(
@@ -574,6 +643,21 @@ describe('reasoning trajectory tab', () => {
     expect(within(reconstructionRegion).getByLabelText('Reconstruction evidence')).toHaveTextContent(
       'HypothesisRaised: Event substrate can stay narrow',
     )
+    expect(
+      within(reconstructionRegion).getByLabelText('Reconstruction confidence rationale'),
+    ).toHaveTextContent('Event evidence and relationship evidence were both reachable')
+    expect(
+      within(reconstructionRegion).getByLabelText('Reconstruction confidence rationale'),
+    ).toHaveTextContent('No missing evidence reported.')
+    expect(within(reconstructionRegion).getByLabelText('Reconstruction scope')).toHaveTextContent(
+      'Backward',
+    )
+    expect(
+      within(reconstructionRegion).getByLabelText('Reachable reconstruction evidence'),
+    ).toHaveTextContent('HypothesisRaised: Event substrate can stay narrow')
+    expect(
+      within(reconstructionRegion).getByLabelText('Known unreachable reconstruction evidence'),
+    ).toHaveTextContent('No known unreachable evidence reported.')
     expect(within(reconstructionRegion).getByLabelText('Project narrative reconstruction')).toHaveTextContent(
       'Project reconstruction uses 1 event evidence item(s)',
     )
@@ -610,6 +694,57 @@ describe('reasoning trajectory tab', () => {
       },
       direction: 'Backward',
     })
+  })
+
+  it('surfaces limited reconstruction rationale, blockers, historical scope, and unreachable evidence', () => {
+    renderTab({ queryResult: limitedQueryResult, reconstruction: limitedReconstruction })
+
+    const queryRegion = screen.getByRole('region', { name: 'Reasoning query' })
+    expect(within(queryRegion).getByLabelText('Reasoning query transparency')).toHaveTextContent(
+      'Only event evidence was reachable and trace diagnostics were present.',
+    )
+    expect(within(queryRegion).getByLabelText('Reasoning query transparency')).toHaveTextContent(
+      'No relationship evidence was reachable for this query.',
+    )
+    expect(within(queryRegion).getByLabelText('Reasoning query transparency')).toHaveTextContent(
+      'Historical cutoff excluded later evidence.',
+    )
+    expect(within(queryRegion).getByLabelText('Reasoning query transparency')).toHaveTextContent(
+      'Forward from unreported source to ReasoningEvent EVT-0001',
+    )
+    expect(within(queryRegion).getByLabelText('Reasoning query transparency')).toHaveTextContent(
+      '2026-06-22T16:03:00.0000000Z',
+    )
+    expect(within(queryRegion).getByLabelText('Reasoning query transparency')).toHaveTextContent(
+      '1 known item(s)',
+    )
+
+    const reconstructionRegion = screen.getByRole('region', { name: 'Reasoning reconstruction' })
+    expect(
+      within(reconstructionRegion).getByLabelText('Reconstruction confidence rationale'),
+    ).toHaveTextContent('Relationship evidenceNot present')
+    expect(
+      within(reconstructionRegion).getByLabelText('Reconstruction confidence rationale'),
+    ).toHaveTextContent('Trace diagnosticsPresent')
+    expect(
+      within(reconstructionRegion).getByLabelText('Reconstruction confidence rationale'),
+    ).toHaveTextContent('No relationship evidence was reachable for this query.')
+    expect(
+      within(reconstructionRegion).getByLabelText('Reconstruction confidence rationale'),
+    ).toHaveTextContent('Trace diagnostics were present.')
+    expect(within(reconstructionRegion).getByLabelText('Reconstruction scope')).toHaveTextContent(
+      'Forward',
+    )
+    expect(within(reconstructionRegion).getByLabelText('Reconstruction scope')).toHaveTextContent(
+      'Not reported',
+    )
+    expect(within(reconstructionRegion).getByLabelText('Reconstruction scope')).toHaveTextContent(
+      '2026-06-22T16:03:00.0000000Z',
+    )
+    expect(
+      within(reconstructionRegion).getByLabelText('Known unreachable reconstruction evidence'),
+    ).toHaveTextContent('AlternativeRejected: Specialized entity storage deferred')
+    expect(reconstructionRegion).toHaveTextContent('Historical cutoff excluded one future event.')
   })
 
   it('shows materialization review findings as advisory architecture review', () => {

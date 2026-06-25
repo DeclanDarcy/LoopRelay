@@ -2,30 +2,25 @@
 
 ## New State This Slice
 
-- Began Milestone 6 backend-first with the reconstruction transparency gap.
-- Rotated previous handoff to `.agents/handoffs/handoff.0040.md`.
-- Extended `ReasoningReconstruction` with structured `ConfidenceRationale` and `Scope` projections.
-- `ConfidenceRationale` now exposes level, rationale, event evidence presence, relationship evidence presence, trace diagnostic presence, missing evidence, and why confidence was not higher.
-- `Scope` now exposes reconstruction direction, target reference, source reference, historical cutoff, reachable evidence, and historical unreachable evidence where known.
-- Updated reconstruction report Markdown projection to include confidence rationale, missing evidence, confidence blockers, scope, and unreachable evidence.
-- Updated frontend reasoning TypeScript types, dev Tauri mock reconstruction responses, and the reasoning trajectory characterization fixture for the new response shape.
-- Added `.agents/milestones/m6-reconstruction-transparency.md`.
-- Marked the Milestone 6 reconstruction model checklist and backend reconstruction tests for confidence/scope complete.
+- Continued Milestone 6 by wiring the new reasoning reconstruction transparency fields into the UI.
+- Rotated previous handoff to `.agents/handoffs/handoff.0041.md`.
+- `ReasoningReconstructionPanel` now renders backend-owned `confidenceRationale` with level, rationale, evidence presence, missing evidence, and why confidence was not higher.
+- `ReasoningReconstructionPanel` now renders backend-owned `scope` with direction, target, source, historical cutoff, reachable evidence, and known unreachable evidence.
+- `ReasoningQueryPanel` now exposes compact query-result transparency from the same backend-owned confidence rationale and scope fields.
+- Updated `reasoningTrajectory` characterization coverage for high confidence, limited confidence, missing evidence, confidence blockers, forward/backward direction, historical cutoff, reachable evidence, and known unreachable evidence.
+- Updated `.agents/milestones/m6-reconstruction-transparency.md` with this UI slice and verification.
 
 ## Verification
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "FullyQualifiedName~ReasoningReconstructionServiceTests"` passed: 8 tests.
-- `npm test -- reasoningTrajectory` passed: 1 file, 10 tests.
+- `npm test -- reasoningTrajectory` passed: 1 file, 11 tests.
 - `npm run build` passed. Vite still reports the existing large chunk warning.
-- `dotnet build CommandCenter.slnx` passed.
-- Full backend suite currently has an order-dependent failure in `ExecutionSessionServiceTests.AcceptAndRejectEndpointsReturnTransitionedSessionMetadata`; it passed in isolation.
-- Full UI suite currently has an order-dependent smoke failure for commit preparation; it passed in isolation.
 
 ## Residual Risk
 
-- Milestone 6 UI presentation still needs to render the new confidence rationale and scope fields.
-- Unreachable evidence is only populated for historical event cutoffs where the service can identify future events.
+- Known unreachable evidence remains limited by backend reconstruction capability; the UI now renders whatever the backend reports.
+- Full backend and full UI suite order-dependent failures from the previous slice were not re-investigated in this slice.
+- Milestone 6 still needs a broader reasoning transparency pass beyond reconstruction/query, especially report history and any remaining reasoning surfaces that should expose confidence or scope.
 
 ## Recommended Next Slice
 
-- Continue Milestone 6 by updating `ReasoningReconstructionPanel` and `ReasoningQueryPanel` to render the new `confidenceRationale` and `scope` fields, with characterization coverage for missing evidence, why-confidence-was-not-higher, direction, source/target, historical cutoff, and unreachable evidence.
+- Continue Milestone 6 by reviewing the remaining reasoning UI surfaces for semantic transparency gaps, then run the focused reasoning tests plus the smallest affected broader suite.

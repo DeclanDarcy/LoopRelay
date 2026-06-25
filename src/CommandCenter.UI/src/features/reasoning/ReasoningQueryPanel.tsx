@@ -189,9 +189,62 @@ export function ReasoningQueryPanel({
             <span>{queryResult.reconstruction.trace.nodes.length} nodes</span>
             <span>{queryResult.reconstruction.trace.relationships.length} relationships</span>
             <span>{queryResult.reconstruction.evidence.length} evidence items</span>
-            <span>{queryResult.reconstruction.confidence} confidence</span>
+            <span>{queryResult.reconstruction.confidenceRationale.level} confidence</span>
           </div>
           <p>{queryResult.reconstruction.narrative.summary}</p>
+          <div className="reasoning-query-transparency" aria-label="Reasoning query transparency">
+            <dl className="reasoning-reconstruction-metadata">
+              <div>
+                <dt>Confidence basis</dt>
+                <dd>{queryResult.reconstruction.confidenceRationale.rationale}</dd>
+              </div>
+              <div>
+                <dt>Scope</dt>
+                <dd>
+                  {queryResult.reconstruction.scope.direction} from{' '}
+                  {queryResult.reconstruction.scope.source
+                    ? `${queryResult.reconstruction.scope.source.kind} ${queryResult.reconstruction.scope.source.id}`
+                    : 'unreported source'}{' '}
+                  to {queryResult.reconstruction.scope.target.kind}{' '}
+                  {queryResult.reconstruction.scope.target.id}
+                </dd>
+              </div>
+              <div>
+                <dt>Historical cutoff</dt>
+                <dd>{queryResult.reconstruction.scope.historicalCutoff ?? 'Current graph'}</dd>
+              </div>
+              <div>
+                <dt>Unreachable evidence</dt>
+                <dd>{queryResult.reconstruction.scope.unreachableEvidence.length} known item(s)</dd>
+              </div>
+            </dl>
+            {queryResult.reconstruction.confidenceRationale.missingEvidence.length > 0 ? (
+              <div className="reasoning-reconstruction-section">
+                <div className="reasoning-list-title">
+                  <strong>Missing Evidence</strong>
+                  <span>{queryResult.reconstruction.confidenceRationale.missingEvidence.length} items</span>
+                </div>
+                <ul>
+                  {queryResult.reconstruction.confidenceRationale.missingEvidence.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {queryResult.reconstruction.confidenceRationale.whyNotHigher.length > 0 ? (
+              <div className="reasoning-reconstruction-section">
+                <div className="reasoning-list-title">
+                  <strong>Why Confidence Was Not Higher</strong>
+                  <span>{queryResult.reconstruction.confidenceRationale.whyNotHigher.length} items</span>
+                </div>
+                <ul>
+                  {queryResult.reconstruction.confidenceRationale.whyNotHigher.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
           {queryResult.diagnostics.length > 0 ? (
             <div className="reasoning-diagnostics">
               {queryResult.diagnostics.map((diagnostic) => (
