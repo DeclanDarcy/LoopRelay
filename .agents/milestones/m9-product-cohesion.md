@@ -57,6 +57,7 @@ Make the application feel unified, not merely smaller. Remove fragmentation so e
   - [x] Execution git commit/push surface terminology aligned so it no longer presents a competing workflow authority label. See `./m9-obsolete-ui-cleanup-execution-git-workflow-terminology.md`.
   - [x] Final health/certification renderer audit completed; remaining local surfaces are intentional domain wrappers or compact dashboard rollups. See `./m9-health-certification-renderer-audit.md`.
 - [ ] Align terminology across statuses, health, diagnostics, recovery, certification, governance, execution, and explainability.
+  - [x] Terminology and primary surface reachability audit completed for the primary workspace tab strip, contextual section labels, and Git Evidence naming. See `./m9-terminology-reachability-audit.md`.
 
 ### Likely Cleanup Targets
 
@@ -79,7 +80,7 @@ Make the application feel unified, not merely smaller. Remove fragmentation so e
 ### Tests
 
 - [x] Navigation characterization tests.
-- [ ] UI tests proving primary surfaces remain reachable.
+- [x] UI tests proving primary surfaces remain reachable.
 - [ ] Static or unit tests for removed duplicate helpers where practical.
 - [ ] Backend endpoint disposition tests for retained routes.
 

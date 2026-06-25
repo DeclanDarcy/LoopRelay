@@ -2,16 +2,17 @@
 
 ## Newly Authorized
 
-- Treat the Milestone 9 health/certification renderer audit as an appropriate verification and classification slice.
-- Use the renderer audit as an explicit stopping rule for cleanup work.
-- Keep the boundary that shared explainability owns generic evidence, diagnostics, health, and certification-finding presentation.
-- Keep the boundary that domain workspaces own summaries, histories, timelines, status chips, navigation, fact grids, and compact operational rollups.
-- Prevent the explainability layer from becoming a replacement for every UI component while still eliminating duplicated generic rendering logic.
-- Treat focused characterization verification as sufficient for documentation and audit-oriented slices when product code does not change.
-- Structure the next Milestone 9 phase as a product-wide audit rather than another implementation milestone.
-- Include terminology consistency for Workflow, Governance, Execution, Git Evidence, Recovery, Health, Certification, Diagnostics, Explainability, Operational Context, and Continuity.
-- Confirm every capability has one primary workspace, contextual summaries elsewhere, and navigation instead of duplicated detail.
-- Verify every primary workspace is reachable through primary navigation, approved contextual links, and dashboard summaries.
-- Reconfirm the UI does not derive lifecycle, eligibility, workflow, confidence, certification, or continuity semantics.
-- Run the full characterization suite, full build, navigation verification, and primary-surface reachability tests before positioning Milestone 9 for closure.
-- Treat remaining Milestone 9 work as validation-oriented: terminology consistency, final presentation cleanup, final reachability verification, and final cohesion audit.
+- Treat the completed primary surface reachability slice as a valid Milestone 9 validation-focused slice.
+- Treat primary workspace reachability as a user-visible contract requiring the correct tab activation, active navigation state, and expected primary landmark.
+- Keep `Workflow` terminology reserved for the authoritative operational lifecycle.
+- Keep `Git Evidence` terminology as execution-owned evidence, not as a competing workflow concept.
+- Treat backend endpoint disposition verification as the next Milestone 9 slice.
+- Treat endpoint disposition as the backend analogue of the UI reachability audit.
+- Classify retained endpoint routes as `Keep`, `Redirect`, `Internal`, or `Remove`.
+- Verify retained endpoint routes still satisfy the current UI.
+- Verify compatibility routes remain intentional.
+- Verify obsolete routes are removed or explicitly documented.
+- Verify no duplicate endpoint exposes the same semantic capability through parallel APIs.
+- After backend endpoint disposition verification, rerun focused backend endpoint tests, the UI navigation and reachability suite, and update Milestone 9 evidence.
+- Treat Milestone 9 as having moved from implementation into verification.
+- Treat the remaining Milestone 9 work as backend endpoint disposition, final terminology verification, and final cohesion audit before preparing for Milestone 10.
