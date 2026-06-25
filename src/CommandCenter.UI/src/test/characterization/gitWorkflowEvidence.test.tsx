@@ -2,6 +2,7 @@ import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   CommitPreparationSummary,
+  CommitPreparationChangeBuckets,
   GitEligibilitySummary,
   GitStatusDetails,
   PushReviewSummary,
@@ -52,12 +53,14 @@ const commitPreparation: CommitPreparation = {
       path: 'src/App.tsx',
       changeType: 'Modified',
       origin: 'ExecutionGenerated',
+      originBasis: 'Path was absent from the launch-time dirty snapshot and appeared after execution.',
       isSelected: true,
     },
     {
       path: '.agents/handoff.md',
       changeType: 'Added',
       origin: 'PreExisting',
+      originBasis: 'Path was dirty in the launch-time repository snapshot captured before execution.',
       isSelected: true,
     },
   ],
@@ -135,9 +138,33 @@ describe('git workflow evidence rendering characterization', () => {
     expect(screen.getByText('Branch: (detached)')).toBeInTheDocument()
     expect(screen.getByText('Changed paths: 2')).toBeInTheDocument()
     expect(screen.getByText('Selected: 1')).toBeInTheDocument()
+    expect(screen.getByText('Execution-generated: 1')).toBeInTheDocument()
+    expect(screen.getByText('Pre-existing paths: 1')).toBeInTheDocument()
     expect(screen.getByText('Pre-existing: Present')).toBeInTheDocument()
     expect(screen.getByText(/^Generated:/)).toBeInTheDocument()
     expect(screen.getByText(/^Captured:/)).toBeInTheDocument()
+  })
+
+  it('renders classified commit path buckets with backend origin basis', () => {
+    render(<CommitPreparationChangeBuckets preparation={commitPreparation} />)
+
+    const buckets = screen.getByLabelText('Classified commit paths')
+    expect(within(buckets).getByRole('heading', { level: 5, name: 'Modified' })).toBeInTheDocument()
+    expect(within(buckets).getByRole('heading', { level: 5, name: 'Added' })).toBeInTheDocument()
+    expect(within(buckets).getByText('src/App.tsx')).toBeInTheDocument()
+    expect(within(buckets).getByText('.agents/handoff.md')).toBeInTheDocument()
+    expect(within(buckets).getByText('Execution generated')).toBeInTheDocument()
+    expect(within(buckets).getByText('Pre-existing')).toBeInTheDocument()
+    expect(
+      within(buckets).getByText(
+        'Path was absent from the launch-time dirty snapshot and appeared after execution.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      within(buckets).getByText(
+        'Path was dirty in the launch-time repository snapshot captured before execution.',
+      ),
+    ).toBeInTheDocument()
   })
 
   it('renders push review metadata from git status when loaded', () => {

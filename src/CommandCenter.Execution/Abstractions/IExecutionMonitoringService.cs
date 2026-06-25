@@ -12,6 +12,16 @@ public interface IExecutionMonitoringService
 
     Task RecordRecoveryAsync(Guid sessionId, string message);
 
+    Task RecordCommitPreparationCreatedAsync(Guid sessionId, int changedPathCount, bool hasPreExistingChanges);
+
+    Task RecordCommitSucceededAsync(Guid sessionId, string commitSha);
+
+    Task RecordPushAttemptedAsync(Guid sessionId);
+
+    Task RecordPushSucceededAsync(Guid sessionId, string? commitSha);
+
+    Task RecordPushFailedAsync(Guid sessionId, string reason);
+
     Task RecordCancellationAsync(Guid sessionId, string reason);
 
     Task<ExecutionStatus?> GetStatusAsync(Guid sessionId);

@@ -10,6 +10,7 @@ import type {
 } from '../../types'
 import {
   CommitPreparationSummary,
+  CommitPreparationChangeBuckets,
   GitStatusDetails,
   PushReviewSummary,
   GitEligibilitySummary,
@@ -40,6 +41,8 @@ type GitWorkflowPanelProps = {
   onCommitMessageChange: (message: string) => void
   onSelectAllCommitPaths: () => void
   onSelectNoCommitPaths: () => void
+  onSelectExecutionGeneratedPaths: () => void
+  onDeselectPreExistingPaths: () => void
   onSetCommitPathSelection: (path: string, isSelected: boolean) => void
   onCommitPreparedScope: () => void
   onPushExecution: () => void
@@ -70,6 +73,8 @@ export function GitWorkflowPanel({
   onCommitMessageChange,
   onSelectAllCommitPaths,
   onSelectNoCommitPaths,
+  onSelectExecutionGeneratedPaths,
+  onDeselectPreExistingPaths,
   onSetCommitPathSelection,
   onCommitPreparedScope,
   onPushExecution,
@@ -136,6 +141,24 @@ export function GitWorkflowPanel({
               </button>
               <button
                 type="button"
+                className="secondary-action"
+                onClick={onSelectExecutionGeneratedPaths}
+                disabled={
+                  !commitPreparation.scopeItems.some((item) => item.origin === 'ExecutionGenerated')
+                }
+              >
+                Select Execution Generated
+              </button>
+              <button
+                type="button"
+                className="secondary-action"
+                onClick={onDeselectPreExistingPaths}
+                disabled={!commitPreparation.scopeItems.some((item) => item.origin === 'PreExisting')}
+              >
+                Deselect Pre-existing
+              </button>
+              <button
+                type="button"
                 className="primary-action"
                 onClick={onCommitPreparedScope}
                 disabled={!canCommitPreparedScope}
@@ -143,6 +166,7 @@ export function GitWorkflowPanel({
                 {isCommitting ? 'Committing...' : 'Commit Selected'}
               </button>
             </div>
+            <CommitPreparationChangeBuckets preparation={commitPreparation} />
             {commitPreparation.scopeItems.length === 0 ? (
               <EmptyState className="empty-state">No changed paths are available for commit.</EmptyState>
             ) : (
@@ -159,6 +183,7 @@ export function GitWorkflowPanel({
                     <span>{item.path}</span>
                     <small>{item.changeType}</small>
                     <small>{item.origin === 'PreExisting' ? 'Pre-existing' : 'Execution generated'}</small>
+                    {item.originBasis ? <small>{item.originBasis}</small> : null}
                   </label>
                 ))}
               </div>

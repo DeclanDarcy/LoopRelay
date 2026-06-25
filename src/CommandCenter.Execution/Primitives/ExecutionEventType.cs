@@ -8,6 +8,11 @@ public enum ExecutionEventType
     ProviderStarted,
     ProviderExited,
     HandoffValidated,
+    GitCommitPreparationCreated,
+    GitCommitSucceeded,
+    GitPushAttempted,
+    GitPushSucceeded,
+    GitPushFailed,
     Failure,
     Cancellation,
     Recovery

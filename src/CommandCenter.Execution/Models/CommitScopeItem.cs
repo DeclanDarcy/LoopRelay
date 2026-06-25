@@ -10,5 +10,7 @@ public sealed class CommitScopeItem
 
     public CommitChangeOrigin Origin { get; init; } = CommitChangeOrigin.ExecutionGenerated;
 
+    public string OriginBasis { get; init; } = string.Empty;
+
     public bool IsSelected { get; init; } = true;
 }

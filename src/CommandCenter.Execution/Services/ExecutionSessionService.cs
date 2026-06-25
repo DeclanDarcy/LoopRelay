@@ -334,6 +334,10 @@ public sealed class ExecutionSessionService(
             CommitPreparation preparation = await gitService.PrepareCommitAsync(repository, session);
             ExecutionSession preparedSession = session.WithCommitPreparation(preparation, DateTimeOffset.UtcNow);
             await ReplaceSessionAsync(sessions, preparedSession);
+            await monitoringService.RecordCommitPreparationCreatedAsync(
+                session.Id,
+                preparation.ScopeItems.Count,
+                preparation.HasPreExistingChanges);
             return preparation;
         }
         finally
@@ -413,6 +417,7 @@ public sealed class ExecutionSessionService(
 
             ExecutionSession committedSession = session.WithCommitResult(result, DateTimeOffset.UtcNow);
             await ReplaceSessionAsync(sessions, committedSession);
+            await monitoringService.RecordCommitSucceededAsync(session.Id, result.CommitSha);
             return committedSession.ToSummary();
         }
         finally
@@ -451,12 +456,16 @@ public sealed class ExecutionSessionService(
                 DateTimeOffset failedAttemptAt = DateTimeOffset.UtcNow;
                 ExecutionSession retryableSession = session.WithPushFailure(failedAttemptAt, exception.Message);
                 await ReplaceSessionAsync(sessions, retryableSession);
+                await monitoringService.RecordPushAttemptedAsync(session.Id);
+                await monitoringService.RecordPushFailedAsync(session.Id, exception.Message);
                 throw;
             }
 
             ExecutionRepositorySnapshot snapshot = await gitService.GetSnapshotAsync(repository);
             ExecutionSession pushedSession = session.WithPushResult(result, DateTimeOffset.UtcNow, snapshot);
             await ReplaceSessionAsync(sessions, pushedSession);
+            await monitoringService.RecordPushAttemptedAsync(session.Id);
+            await monitoringService.RecordPushSucceededAsync(session.Id, result.PushedCommitSha);
             return pushedSession.ToSummary();
         }
         finally

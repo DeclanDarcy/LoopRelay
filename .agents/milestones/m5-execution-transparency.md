@@ -73,20 +73,20 @@ Make execution explainable: what was launched, what context was included, what r
    - [x] handoff validated
    - [x] validation failure
    - [x] resulting session state
-- [ ] Add semantic categories and consequence text to execution events:
+- [x] Add semantic categories and consequence text to execution events:
    - [x] launch
    - [x] provider
    - [x] monitoring
    - [x] recovery
    - [x] handoff
-   - [ ] git
+   - [x] git
    - [x] failure
    - [x] Current execution event projection normalizes older retained events that lack persisted category/consequence fields.
-   - [ ] Git-specific event semantics remain open until the execution git workflow emits git events or a git event projection is added.
+   - [x] Git-specific event semantics cover commit preparation, commit success, push attempt, push success, and push failure lifecycle transitions.
 
 ### UI
 
-- [ ] Extend execution TypeScript types for prompt manifest, recovery diagnostics, git eligibility, handoff processing, monitoring health, structured governed conflicts, and semantic event grouping.
+- [x] Extend execution TypeScript types for prompt manifest, recovery diagnostics, git eligibility, handoff processing, monitoring health, structured governed conflicts, and semantic event grouping.
    - [x] Added prompt manifest TypeScript types.
    - [x] Added execution transparency TypeScript types for prompt metadata, recovery, and monitoring health.
    - [x] Added structured governed conflict diagnostic TypeScript types.
@@ -101,7 +101,7 @@ Make execution explainable: what was launched, what context was included, what r
 - [x] Update `GitWorkflowPanel` to show commit and push precondition checklists, blocked reasons, retry warnings, previous push failure, and push attempt history.
    - [x] Previous push failure and last push attempt timestamp now render from the execution summary.
    - [x] Commit/push eligibility, disabled reasons, stale preparation, selected path state, remote branch state, and previous push failure now render from the backend eligibility projection.
-- [ ] Update `GitPathBucket` and `GitWorkflowEvidence` to distinguish execution-generated changes from pre-existing repository changes and provide bulk actions to select only execution-generated changes or deselect pre-existing changes.
+- [x] Update `GitPathBucket` and `GitWorkflowEvidence` to distinguish execution-generated changes from pre-existing repository changes and provide bulk actions to select only execution-generated changes or deselect pre-existing changes.
 - [x] Update handoff panels to show post-processing state, archive diagnostics, validation diagnostics, and whether provider failure differs from handoff processing failure.
 - [x] Replace placeholder monitoring text with real monitoring health fields.
 - [x] Update execution validation list to render governed decision conflicts as governance blockers with decision id, conflicting excerpt, conflict reason, affected prompt/context, and resolution path.
@@ -113,10 +113,10 @@ Make execution explainable: what was launched, what context was included, what r
    - [x] Prompt manifest persistence covers requested vs delivered artifacts and the explicit no-provider-divergence diagnostic.
    - [ ] Preview-vs-launched prompt differences still need coverage when preview and launch surfaces are wired together.
 - [x] Backend tests for push conflict response containing updated retry state.
-- [ ] Backend tests for git eligibility branches and structured governed conflicts.
+- [x] Backend tests for git eligibility branches and structured governed conflicts.
    - [x] Git eligibility branches cover stale commit preparation, selected path state, missing message, previous push failure, remote branch state, and endpoint projection.
    - [x] Structured governed conflict diagnostics cover decision id, conflicting excerpt, affected context, affected prompt section, resolution path, blocking severity, authority, evidence, and launch blocking.
-- [ ] UI tests for prompt manifest, provider adjustments, recovery banner, push retry, disabled commit/push reasons, handoff processing diagnostics, pre-existing change warnings, and event grouping.
+- [x] UI tests for prompt manifest, provider adjustments, recovery banner, push retry, disabled commit/push reasons, handoff processing diagnostics, pre-existing change warnings, and event grouping.
    - [x] Prompt manifest rendering covers requested vs delivered context, provider adjustments empty state, and `NoProviderDivergenceSignal`.
    - [x] Prompt manifest hook coverage proves shell detail-command loading.
    - [x] Recovery and monitoring transparency rendering covers recovery events, orphaned-provider state, provider process state, exit code, retained events, and monitoring warnings.
@@ -126,6 +126,7 @@ Make execution explainable: what was launched, what context was included, what r
    - [x] Governed conflict rendering covers governance blocker details and preserves backend validation strings.
    - [x] Handoff processing rendering covers produced/missing state, archive path and sequence, validation outcome, resulting state, provider-vs-handoff failure distinction, diagnostics, and hook shape.
    - [x] Event grouping rendering covers semantic categories, consequences, backend category data attributes, and compatibility fallback for older events.
+   - [x] Pre-existing change warnings cover backend origin, origin basis, classified path buckets, and execution-generated/pre-existing counts.
 
 ### Exit Criteria
 
@@ -137,4 +138,4 @@ Make execution explainable: what was launched, what context was included, what r
 - [x] Handoff post-processing is visible and distinguishable from provider failure.
 - [x] Monitoring diagnostics are real.
 - [x] Governed decision conflicts are distinct from generic validation errors.
-- [ ] Pre-existing changes are separated from execution-generated changes.
+- [x] Pre-existing changes are separated from execution-generated changes.

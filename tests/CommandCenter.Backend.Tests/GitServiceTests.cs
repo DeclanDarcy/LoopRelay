@@ -151,10 +151,16 @@ public sealed class GitServiceTests
         CommitScopeItem preExisting = Assert.Single(preparation.ScopeItems, item => item.Path == "src/pre-existing.cs");
         Assert.Equal(CommitChangeType.Modified, preExisting.ChangeType);
         Assert.Equal(CommitChangeOrigin.PreExisting, preExisting.Origin);
+        Assert.Equal(
+            "Path was dirty in the launch-time repository snapshot captured before execution.",
+            preExisting.OriginBasis);
 
         CommitScopeItem generated = Assert.Single(preparation.ScopeItems, item => item.Path == "src/new.cs");
         Assert.Equal(CommitChangeType.Untracked, generated.ChangeType);
         Assert.Equal(CommitChangeOrigin.ExecutionGenerated, generated.Origin);
+        Assert.Equal(
+            "Path was absent from the launch-time dirty snapshot and appeared after execution.",
+            generated.OriginBasis);
     }
 
     [Fact]

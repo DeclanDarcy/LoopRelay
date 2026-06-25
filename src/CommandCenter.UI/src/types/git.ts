@@ -24,6 +24,7 @@ export type CommitScopeItem = {
   path: string
   changeType: CommitChangeType
   origin: CommitChangeOrigin
+  originBasis?: string
   isSelected: boolean
 }
 

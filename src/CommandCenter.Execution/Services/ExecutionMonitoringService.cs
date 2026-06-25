@@ -72,6 +72,59 @@ public sealed class ExecutionMonitoringService : IExecutionMonitoringService
         return AppendEventAsync(sessionId, ExecutionEventType.Recovery, message, DateTimeOffset.UtcNow);
     }
 
+    public Task RecordCommitPreparationCreatedAsync(
+        Guid sessionId,
+        int changedPathCount,
+        bool hasPreExistingChanges)
+    {
+        string pathLabel = changedPathCount == 1 ? "path" : "paths";
+        string message = hasPreExistingChanges
+            ? $"Commit preparation created for {changedPathCount} changed {pathLabel}; pre-existing changes are present."
+            : $"Commit preparation created for {changedPathCount} changed {pathLabel}.";
+        return AppendEventAsync(
+            sessionId,
+            ExecutionEventType.GitCommitPreparationCreated,
+            message,
+            DateTimeOffset.UtcNow);
+    }
+
+    public Task RecordCommitSucceededAsync(Guid sessionId, string commitSha)
+    {
+        return AppendEventAsync(
+            sessionId,
+            ExecutionEventType.GitCommitSucceeded,
+            $"Commit succeeded: {commitSha}.",
+            DateTimeOffset.UtcNow);
+    }
+
+    public Task RecordPushAttemptedAsync(Guid sessionId)
+    {
+        return AppendEventAsync(
+            sessionId,
+            ExecutionEventType.GitPushAttempted,
+            "Push attempted for the execution commit.",
+            DateTimeOffset.UtcNow);
+    }
+
+    public Task RecordPushSucceededAsync(Guid sessionId, string? commitSha)
+    {
+        string suffix = string.IsNullOrWhiteSpace(commitSha) ? string.Empty : $" Commit: {commitSha}.";
+        return AppendEventAsync(
+            sessionId,
+            ExecutionEventType.GitPushSucceeded,
+            $"Push succeeded for the execution commit.{suffix}",
+            DateTimeOffset.UtcNow);
+    }
+
+    public Task RecordPushFailedAsync(Guid sessionId, string reason)
+    {
+        return AppendEventAsync(
+            sessionId,
+            ExecutionEventType.GitPushFailed,
+            $"Push failed: {reason}",
+            DateTimeOffset.UtcNow);
+    }
+
     public Task RecordCancellationAsync(Guid sessionId, string reason)
     {
         return AppendEventAsync(
@@ -378,6 +431,11 @@ public sealed class ExecutionMonitoringService : IExecutionMonitoringService
             ExecutionEventType.StdErr => "Provider",
             ExecutionEventType.Recovery => "Recovery",
             ExecutionEventType.HandoffValidated => "Handoff",
+            ExecutionEventType.GitCommitPreparationCreated or
+            ExecutionEventType.GitCommitSucceeded or
+            ExecutionEventType.GitPushAttempted or
+            ExecutionEventType.GitPushSucceeded or
+            ExecutionEventType.GitPushFailed => "Git",
             ExecutionEventType.Failure or
             ExecutionEventType.Cancellation => "Failure",
             ExecutionEventType.Info => "Monitoring",
@@ -398,6 +456,16 @@ public sealed class ExecutionMonitoringService : IExecutionMonitoringService
                 "Provider exited; session state reflects the observed exit result.",
             ExecutionEventType.HandoffValidated =>
                 "Handoff passed validation and the repository is awaiting acceptance.",
+            ExecutionEventType.GitCommitPreparationCreated =>
+                "Git commit review became available with classified execution and pre-existing changes.",
+            ExecutionEventType.GitCommitSucceeded =>
+                "Selected execution changes were committed and the repository is awaiting push.",
+            ExecutionEventType.GitPushAttempted =>
+                "Command Center attempted to push the execution commit.",
+            ExecutionEventType.GitPushSucceeded =>
+                "Execution commit was pushed successfully.",
+            ExecutionEventType.GitPushFailed =>
+                "Push failed and retry context is available from the execution session.",
             ExecutionEventType.Failure =>
                 "Execution is failed or requires recovery before normal progression can continue.",
             ExecutionEventType.Cancellation =>
@@ -446,6 +514,16 @@ public sealed class ExecutionMonitoringService : IExecutionMonitoringService
             PromptMetadata = session.PromptMetadata,
             PromptManifest = session.PromptManifest,
             RepositorySnapshot = session.RepositorySnapshot,
+            CommitPreparation = session.CommitPreparation,
+            CommitSha = session.CommitSha,
+            CommittedAt = session.CommittedAt,
+            CommitMessage = session.CommitMessage,
+            PreparationSnapshotId = session.PreparationSnapshotId,
+            PushAttemptedAt = session.PushAttemptedAt,
+            PushedAt = session.PushedAt,
+            PushedCommitSha = session.PushedCommitSha,
+            PushRemoteName = session.PushRemoteName,
+            PushBranchName = session.PushBranchName,
             PreviousHandoffContent = session.PreviousHandoffContent,
             PreviousHandoffCapturedAt = session.PreviousHandoffCapturedAt,
             HandoffPath = session.HandoffPath,

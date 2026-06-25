@@ -55,8 +55,12 @@ public sealed class GitService(IProcessRunner processRunner) : IGitService
     public async Task<CommitPreparation> PrepareCommitAsync(Repository repository, ExecutionSession session)
     {
         RepositoryGitStatus status = await GetStatusAsync(repository);
+        bool hasLaunchSnapshot = session.RepositorySnapshot is not null;
         ISet<string> preExistingPaths = GetAllDirtyPaths(session.RepositorySnapshot?.DirtyState);
-        IReadOnlyList<CommitScopeItem> scopeItems = BuildScopeItems(status.DirtyState, preExistingPaths);
+        IReadOnlyList<CommitScopeItem> scopeItems = BuildScopeItems(
+            status.DirtyState,
+            preExistingPaths,
+            hasLaunchSnapshot);
         CommitStatusSnapshot snapshot = CreateCommitStatusSnapshot(status);
 
         return new CommitPreparation
@@ -293,15 +297,16 @@ public sealed class GitService(IProcessRunner processRunner) : IGitService
 
     private static IReadOnlyList<CommitScopeItem> BuildScopeItems(
         RepositoryDirtyState dirtyState,
-        ISet<string> preExistingPaths)
+        ISet<string> preExistingPaths,
+        bool hasLaunchSnapshot)
     {
         var items = new Dictionary<string, CommitScopeItem>(StringComparer.OrdinalIgnoreCase);
-        AddScopeItems(items, dirtyState.StagedPaths, CommitChangeType.Staged, preExistingPaths);
-        AddScopeItems(items, dirtyState.ModifiedPaths, CommitChangeType.Modified, preExistingPaths);
-        AddScopeItems(items, dirtyState.AddedPaths, CommitChangeType.Added, preExistingPaths);
-        AddScopeItems(items, dirtyState.DeletedPaths, CommitChangeType.Deleted, preExistingPaths);
-        AddScopeItems(items, dirtyState.RenamedPaths, CommitChangeType.Renamed, preExistingPaths);
-        AddScopeItems(items, dirtyState.UntrackedPaths, CommitChangeType.Untracked, preExistingPaths);
+        AddScopeItems(items, dirtyState.StagedPaths, CommitChangeType.Staged, preExistingPaths, hasLaunchSnapshot);
+        AddScopeItems(items, dirtyState.ModifiedPaths, CommitChangeType.Modified, preExistingPaths, hasLaunchSnapshot);
+        AddScopeItems(items, dirtyState.AddedPaths, CommitChangeType.Added, preExistingPaths, hasLaunchSnapshot);
+        AddScopeItems(items, dirtyState.DeletedPaths, CommitChangeType.Deleted, preExistingPaths, hasLaunchSnapshot);
+        AddScopeItems(items, dirtyState.RenamedPaths, CommitChangeType.Renamed, preExistingPaths, hasLaunchSnapshot);
+        AddScopeItems(items, dirtyState.UntrackedPaths, CommitChangeType.Untracked, preExistingPaths, hasLaunchSnapshot);
 
         return items.Values.OrderBy(item => item.Path, StringComparer.OrdinalIgnoreCase).ToArray();
     }
@@ -310,7 +315,8 @@ public sealed class GitService(IProcessRunner processRunner) : IGitService
         IDictionary<string, CommitScopeItem> items,
         IEnumerable<string> paths,
         CommitChangeType changeType,
-        ISet<string> preExistingPaths)
+        ISet<string> preExistingPaths,
+        bool hasLaunchSnapshot)
     {
         foreach (string path in paths.Select(NormalizeGitPath))
         {
@@ -319,16 +325,31 @@ public sealed class GitService(IProcessRunner processRunner) : IGitService
                 continue;
             }
 
+            CommitChangeOrigin origin = preExistingPaths.Contains(path)
+                ? CommitChangeOrigin.PreExisting
+                : CommitChangeOrigin.ExecutionGenerated;
+
             items[path] = new CommitScopeItem
             {
                 Path = path,
                 ChangeType = changeType,
-                Origin = preExistingPaths.Contains(path)
-                    ? CommitChangeOrigin.PreExisting
-                    : CommitChangeOrigin.ExecutionGenerated,
+                Origin = origin,
+                OriginBasis = BuildOriginBasis(origin, hasLaunchSnapshot),
                 IsSelected = true
             };
         }
+    }
+
+    private static string BuildOriginBasis(CommitChangeOrigin origin, bool hasLaunchSnapshot)
+    {
+        if (!hasLaunchSnapshot)
+        {
+            return "No launch-time repository snapshot was available; execution treats this path as execution-generated.";
+        }
+
+        return origin == CommitChangeOrigin.PreExisting
+            ? "Path was dirty in the launch-time repository snapshot captured before execution."
+            : "Path was absent from the launch-time dirty snapshot and appeared after execution.";
     }
 
     private static ISet<string> GetAllDirtyPaths(RepositoryDirtyState? dirtyState)

@@ -710,6 +710,29 @@ function App() {
     setSelectedCommitPaths(new Set())
   }
 
+  function selectExecutionGeneratedCommitPaths() {
+    setSelectedCommitPaths(
+      new Set(
+        commitPreparation?.scopeItems
+          .filter((item) => item.origin === 'ExecutionGenerated')
+          .map((item) => item.path) ?? [],
+      ),
+    )
+  }
+
+  function deselectPreExistingCommitPaths() {
+    setSelectedCommitPaths((currentPaths) => {
+      const nextPaths = new Set(currentPaths)
+      for (const item of commitPreparation?.scopeItems ?? []) {
+        if (item.origin === 'PreExisting') {
+          nextPaths.delete(item.path)
+        }
+      }
+
+      return nextPaths
+    })
+  }
+
   async function commitPreparedScope() {
     if (!executionSessionId || !commitPreparation || !canCommitPreparedScope) {
       return
@@ -2058,6 +2081,8 @@ function App() {
                     onCommitMessageChange={setCommitMessage}
                     onSelectAllCommitPaths={selectAllCommitPaths}
                     onSelectNoCommitPaths={selectNoCommitPaths}
+                    onSelectExecutionGeneratedPaths={selectExecutionGeneratedCommitPaths}
+                    onDeselectPreExistingPaths={deselectPreExistingCommitPaths}
                     onSetCommitPathSelection={setCommitPathSelection}
                     onCommitPreparedScope={() => void commitPreparedScope()}
                     onPushExecution={() => void pushExecution()}

@@ -24,4 +24,38 @@ describe('git path bucket rendering characterization', () => {
       '.agents/plan.md',
     ])
   })
+
+  it('renders backend classification and basis for classified items', () => {
+    render(
+      <GitPathBucket
+        label="Modified"
+        items={[
+          {
+            path: 'src/App.tsx',
+            origin: 'ExecutionGenerated',
+            originBasis: 'Path was absent from the launch-time dirty snapshot and appeared after execution.',
+          },
+          {
+            path: '.agents/plan.md',
+            origin: 'PreExisting',
+            originBasis: 'Path was dirty in the launch-time repository snapshot captured before execution.',
+          },
+        ]}
+      />,
+    )
+
+    const list = screen.getByRole('list')
+    expect(within(list).getByText('Execution generated')).toBeInTheDocument()
+    expect(within(list).getByText('Pre-existing')).toBeInTheDocument()
+    expect(
+      within(list).getByText(
+        'Path was absent from the launch-time dirty snapshot and appeared after execution.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      within(list).getByText(
+        'Path was dirty in the launch-time repository snapshot captured before execution.',
+      ),
+    ).toBeInTheDocument()
+  })
 })

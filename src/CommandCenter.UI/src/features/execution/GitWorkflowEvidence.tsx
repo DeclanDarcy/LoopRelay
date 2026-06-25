@@ -1,5 +1,7 @@
 import type {
+  CommitChangeType,
   CommitPreparation,
+  CommitScopeItem,
   ExecutionGitActionEligibility,
   RepositoryGitStatus,
   ExecutionSessionSummary,
@@ -16,6 +18,13 @@ export function CommitPreparationSummary({
   preparation,
   selectedPathCount,
 }: CommitPreparationSummaryProps) {
+  const executionGeneratedCount = preparation.scopeItems.filter(
+    (item) => item.origin === 'ExecutionGenerated',
+  ).length
+  const preExistingCount = preparation.scopeItems.filter(
+    (item) => item.origin === 'PreExisting',
+  ).length
+
   return (
     <div className="context-summary">
       <span>Preparation: {preparation.id}</span>
@@ -24,10 +33,49 @@ export function CommitPreparationSummary({
       <span>Generated: {formatDateTime(preparation.generatedAt)}</span>
       <span>Changed paths: {preparation.scopeItems.length}</span>
       <span>Selected: {selectedPathCount}</span>
+      <span>Execution-generated: {executionGeneratedCount}</span>
+      <span>Pre-existing paths: {preExistingCount}</span>
       <span>Pre-existing: {preparation.hasPreExistingChanges ? 'Present' : 'None detected'}</span>
       <span>Captured: {formatDateTime(preparation.statusSnapshot.capturedAt)}</span>
     </div>
   )
+}
+
+const changeTypeBuckets: CommitChangeType[] = [
+  'Staged',
+  'Modified',
+  'Added',
+  'Deleted',
+  'Renamed',
+  'Untracked',
+]
+
+type CommitPreparationChangeBucketsProps = {
+  preparation: CommitPreparation
+}
+
+export function CommitPreparationChangeBuckets({ preparation }: CommitPreparationChangeBucketsProps) {
+  return (
+    <div className="context-columns" aria-label="Classified commit paths">
+      {changeTypeBuckets.map((changeType) => (
+        <GitPathBucket
+          key={changeType}
+          label={changeType}
+          items={preparation.scopeItems
+            .filter((item) => item.changeType === changeType)
+            .map(toBucketItem)}
+        />
+      ))}
+    </div>
+  )
+}
+
+function toBucketItem(item: CommitScopeItem) {
+  return {
+    path: item.path,
+    origin: item.origin,
+    originBasis: item.originBasis,
+  }
 }
 
 type PushReviewSummaryProps = {

@@ -112,6 +112,57 @@ public sealed class ExecutionMonitoringServiceTests
     }
 
     [Fact]
+    public async Task GitLifecycleEventsAreProjectedWithGitCategoryAndConsequences()
+    {
+        FileSystemExecutionSessionStore store = await CreateStoreWithSessionAsync();
+        ExecutionSession session = (await store.LoadAsync()).Single();
+        var monitoringService = new ExecutionMonitoringService(store);
+
+        await monitoringService.RecordCommitPreparationCreatedAsync(session.Id, 2, hasPreExistingChanges: true);
+        await monitoringService.RecordCommitSucceededAsync(session.Id, "abc123");
+        await monitoringService.RecordPushAttemptedAsync(session.Id);
+        await monitoringService.RecordPushFailedAsync(session.Id, "git push failed: rejected");
+
+        IReadOnlyList<ExecutionEvent> events = await monitoringService.GetEventsAsync(session.Id);
+
+        Assert.Collection(
+            events,
+            executionEvent =>
+            {
+                Assert.Equal(ExecutionEventType.GitCommitPreparationCreated, executionEvent.Type);
+                Assert.Equal("Git", executionEvent.Category);
+                Assert.Equal(
+                    "Git commit review became available with classified execution and pre-existing changes.",
+                    executionEvent.Consequence);
+                Assert.Contains("pre-existing changes are present", executionEvent.Message);
+            },
+            executionEvent =>
+            {
+                Assert.Equal(ExecutionEventType.GitCommitSucceeded, executionEvent.Type);
+                Assert.Equal("Git", executionEvent.Category);
+                Assert.Equal(
+                    "Selected execution changes were committed and the repository is awaiting push.",
+                    executionEvent.Consequence);
+                Assert.Contains("abc123", executionEvent.Message);
+            },
+            executionEvent =>
+            {
+                Assert.Equal(ExecutionEventType.GitPushAttempted, executionEvent.Type);
+                Assert.Equal("Git", executionEvent.Category);
+                Assert.Equal("Command Center attempted to push the execution commit.", executionEvent.Consequence);
+            },
+            executionEvent =>
+            {
+                Assert.Equal(ExecutionEventType.GitPushFailed, executionEvent.Type);
+                Assert.Equal("Git", executionEvent.Category);
+                Assert.Equal(
+                    "Push failed and retry context is available from the execution session.",
+                    executionEvent.Consequence);
+                Assert.Contains("rejected", executionEvent.Message);
+            });
+    }
+
+    [Fact]
     public async Task ProviderCancellationRecordsCancellationEventAndState()
     {
         DateTimeOffset startedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
