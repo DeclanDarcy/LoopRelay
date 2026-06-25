@@ -82,26 +82,26 @@ Discovery -> Candidate -> Proposal -> Review -> Refinement -> Resolution -> Supe
 
 - [x] Backend tests for lifecycle eligibility projection.
 - [x] Endpoint test for decision lifecycle eligibility route.
-- [ ] Endpoint tests for remaining shell-reachable lifecycle routes.
-- [ ] UI tests for candidate actions, proposal generation, proposal review transitions, supersede, archive, and refresh behavior.
+- [x] Endpoint tests for remaining shell-reachable lifecycle routes.
+- [x] UI tests for candidate actions, proposal generation, proposal review transitions, supersede, archive, and refresh behavior.
   - [x] Proposal generation result rendering, backend-owned generate action eligibility, and generated proposal selection.
   - [x] Supersede/archive action reachability, required fields, blocked eligibility rendering, and execution projection refresh callback.
-- [ ] End-to-end test path:
-  - [ ] discover candidate
-  - [ ] promote candidate
-  - [ ] generate proposal
-  - [ ] mark viewed
-  - [ ] mark needs refinement
-  - [ ] refine proposal
-  - [ ] mark ready for resolution
-  - [ ] resolve decision
-  - [ ] supersede decision
-  - [ ] archive superseded decision
+- [x] End-to-end test path:
+  - [x] discover candidate
+  - [x] promote candidate
+  - [x] generate proposal
+  - [x] mark viewed
+  - [x] mark needs refinement
+  - [x] refine proposal
+  - [x] mark ready for resolution
+  - [x] resolve decision
+  - [x] supersede decision
+  - [x] archive superseded decision
 
 ### Exit Criteria
 
-- [ ] Every Core MVP decision lifecycle operation is reachable from the product.
-- [ ] UI action availability comes from backend eligibility, not client guesses.
-- [ ] Proposal generation feeds live review, refinement, and resolution panels.
-- [ ] Supersede and archive update decision governance and execution influence projections.
-- [ ] Deferred lifecycle endpoints have explicit dispositions.
+- [x] Every Core MVP decision lifecycle operation is reachable from the product.
+- [x] UI action availability comes from backend eligibility, not client guesses.
+- [x] Proposal generation feeds live review, refinement, and resolution panels.
+- [x] Supersede and archive update decision governance and execution influence projections.
+- [x] Deferred lifecycle endpoints have explicit dispositions.

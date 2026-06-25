@@ -2,26 +2,22 @@
 
 ## New State This Slice
 
-- Continued Milestone 3: Decision Pipeline Completion, focusing on the remaining proposal feature disposition audit.
-- Added `.agents/milestones/m3-proposal-feature-disposition.md` documenting the placement and MVP disposition for:
-  - proposal review notes
-  - proposal revision list
-  - revision comparison
-  - context snapshot listing
-  - Proposal Actions panel placement
-- Updated `.agents/milestones/m3-decision-pipeline.md` to mark lower-priority lifecycle feature classification complete.
-- Classified proposal review note authoring as Deferred while retaining read-only display from backend review projections.
-- Classified proposal revision list and revision comparison as Diagnostic, read-only backend-projected surfaces.
-- Classified standalone context snapshot listing as Internal for Milestone 3 and deferred any browser to continuity/operational-context work.
-- Decided to retain the separate Proposal Actions panel for Milestone 3 because it owns lifecycle mutations while the proposal viewer owns semantic review facts.
-- Rotated previous handoff to `.agents/handoffs/handoff.0017.md`.
+- Closed Milestone 3: Decision Pipeline Completion.
+- Added `tests/CommandCenter.Backend.Tests/DecisionLifecycleEndpointTests.cs` with:
+  - an end-to-end backend route test for discover, promote, generate proposal, mark viewed, mark needs refinement, refine proposal, mark ready for resolution, resolve, supersede, and archive
+  - endpoint coverage for dismiss candidate, expire candidate, mark duplicate candidate, expire proposal, and discard proposal
+- Added `.agents/milestones/m3-exit-audit.md` documenting reachability, authority, verification, and disposition evidence.
+- Updated `.agents/milestones/m3-decision-pipeline.md` to mark remaining endpoint tests, UI tests, end-to-end path, and exit criteria complete.
+- Rotated prior handoff to `.agents/handoffs/handoff.0018.md`.
 
 ## Verification
 
-- Documentation-only slice. No build or test run was needed.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~DecisionLifecycleEndpointTests`
+  - Passed: 2 tests.
+- `npm test -- --run src/test/characterization/transport.test.ts src/test/characterization/decisionLifecycleNavigation.test.tsx src/test/characterization/decisionCandidateBrowser.test.tsx src/test/characterization/decisionProposalViewer.test.tsx`
+  - Passed: 4 files, 21 tests.
 
-## Remaining Milestone 3 Work
+## Remaining Work
 
-- Add broader end-to-end lifecycle characterization for the full decision path.
-- Review endpoint coverage for remaining shell-reachable lifecycle routes.
-- Perform a Milestone 3 exit audit against the exit criteria.
+- Begin Milestone 4: Decision Transparency.
+- Start by auditing decision explanation fields already projected by backend models before adding any UI composition.
