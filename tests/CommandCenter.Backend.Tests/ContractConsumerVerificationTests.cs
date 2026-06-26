@@ -44,6 +44,38 @@ public sealed class ContractConsumerVerificationTests
     }
 
     [Fact]
+    public void RepositoryDashboardTypeScriptTypeMatchesGoldenFixture()
+    {
+        JsonElement backendDashboardItem = ReadRepositoryDashboardGoldenFixture()[0];
+        TypeScriptContractShapeProvider typeScriptShapes = ReadTypeScriptContractShapes();
+        ContractConsumerVerifier verifier = new(new ConsumerContractVerifierSpec(
+            "TypeScript RepositoryDashboardProjection",
+            typeScriptShapes.GetShape("RepositoryDashboardProjection")));
+
+        ConsumerContractDrift[] drifts = verifier.Compare("$[]", backendDashboardItem).ToArray();
+
+        Assert.Empty(drifts);
+    }
+
+    [Fact]
+    public void RepositoryDashboardTypeScriptTypeRecursivelyVerifiesImportedNestedShape()
+    {
+        JsonElement backendDashboardItem = ReadRepositoryDashboardGoldenFixture()[0];
+        TypeScriptContractShapeProvider typeScriptShapes = ReadTypeScriptContractShapes();
+        ContractConsumerVerifier verifier = new(new ConsumerContractVerifierSpec(
+            "TypeScript RepositoryDashboardProjection",
+            typeScriptShapes.GetShape("RepositoryDashboardProjection")));
+
+        ConsumerContractDrift[] drifts = verifier.Compare("$[]", backendDashboardItem).ToArray();
+
+        Assert.DoesNotContain(drifts, drift => drift.Path.StartsWith("$[].executionSummary.", StringComparison.Ordinal));
+        Assert.DoesNotContain(drifts, drift => drift.Path.StartsWith("$[].executionHistory[].", StringComparison.Ordinal));
+        Assert.DoesNotContain(drifts, drift => drift.Path.StartsWith("$[].decisionSessionSummary.", StringComparison.Ordinal));
+        Assert.DoesNotContain(drifts, drift => drift.Path.StartsWith("$[].decisionSessionSummary.healthDimensions[].", StringComparison.Ordinal));
+        Assert.DoesNotContain(drifts, drift => drift.Path.StartsWith("$[].decisionSessionSummary.recentTransferLineage[].", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void ConsumerVerifierReportsNestedMissingFields()
     {
         using JsonDocument backend = JsonDocument.Parse("""
@@ -89,6 +121,14 @@ public sealed class ContractConsumerVerificationTests
             .Combine("src", "CommandCenter.Shell", "src", "main.rs"));
 
         return RustContractShapeProvider.Parse(source);
+    }
+
+    private static TypeScriptContractShapeProvider ReadTypeScriptContractShapes()
+    {
+        DirectoryInfo typesDirectory = FindRepositoryRoot()
+            .CombineDirectory("src", "CommandCenter.UI", "src", "types");
+
+        return TypeScriptContractShapeProvider.Parse(typesDirectory);
     }
 
     private static DirectoryInfo FindRepositoryRoot()
@@ -319,6 +359,164 @@ public sealed class ContractConsumerVerificationTests
 
     private sealed record RustFieldDefinition(string Name, string Type);
 
+    private sealed class TypeScriptContractShapeProvider(IReadOnlyDictionary<string, TypeScriptTypeDefinition> types)
+    {
+        public static TypeScriptContractShapeProvider Parse(DirectoryInfo typesDirectory)
+        {
+            Dictionary<string, TypeScriptTypeDefinition> types = new(StringComparer.Ordinal);
+            foreach (FileInfo file in typesDirectory.EnumerateFiles("*.ts"))
+            {
+                foreach (TypeScriptTypeDefinition definition in ReadTypeDefinitions(File.ReadAllText(file.FullName)))
+                {
+                    types.Add(definition.Name, definition);
+                }
+            }
+
+            return new TypeScriptContractShapeProvider(types);
+        }
+
+        public ConsumerContractShape GetShape(string typeName)
+        {
+            HashSet<string> resolving = new(StringComparer.Ordinal);
+            return ResolveType(typeName, resolving);
+        }
+
+        private ConsumerContractShape ResolveType(string typeExpression, HashSet<string> resolving)
+        {
+            typeExpression = NormalizeTypeExpression(typeExpression);
+            if (typeExpression.Contains('|', StringComparison.Ordinal))
+            {
+                string[] unionParts = typeExpression.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                bool isNullable = unionParts.Any(part => part == "null");
+                string[] nonNullParts = unionParts.Where(part => part != "null").ToArray();
+
+                if (nonNullParts.All(IsStringLiteral))
+                {
+                    return ApplyNullability(ConsumerContractShape.Primitive(ConsumerContractPrimitiveKind.String), isNullable);
+                }
+
+                Assert.Single(nonNullParts);
+                return ApplyNullability(ResolveType(nonNullParts[0], resolving), isNullable);
+            }
+
+            if (typeExpression.EndsWith("[]", StringComparison.Ordinal))
+            {
+                return ConsumerContractShape.Array(ResolveType(typeExpression[..^2], resolving));
+            }
+
+            if (typeExpression.StartsWith("Array<", StringComparison.Ordinal) && typeExpression.EndsWith(">", StringComparison.Ordinal))
+            {
+                return ConsumerContractShape.Array(ResolveType(typeExpression["Array<".Length..^1], resolving));
+            }
+
+            if (IsStringLiteral(typeExpression))
+            {
+                return ConsumerContractShape.Primitive(ConsumerContractPrimitiveKind.String);
+            }
+
+            if (typeExpression == "string")
+            {
+                return ConsumerContractShape.Primitive(ConsumerContractPrimitiveKind.String);
+            }
+
+            if (typeExpression == "number")
+            {
+                return ConsumerContractShape.Primitive(ConsumerContractPrimitiveKind.Number);
+            }
+
+            if (typeExpression == "boolean")
+            {
+                return ConsumerContractShape.Primitive(ConsumerContractPrimitiveKind.Boolean);
+            }
+
+            if (typeExpression == "unknown" || typeExpression == "Record<string, unknown>")
+            {
+                return ConsumerContractShape.Any();
+            }
+
+            Assert.True(types.ContainsKey(typeExpression), $"TypeScript type {typeExpression} should exist.");
+            Assert.True(resolving.Add(typeExpression), $"TypeScript type {typeExpression} contains a recursive contract shape.");
+
+            TypeScriptTypeDefinition definition = types[typeExpression];
+            ConsumerContractShape shape = definition.Body.TrimStart().StartsWith("{", StringComparison.Ordinal)
+                ? ResolveObject(definition.Body, resolving)
+                : ResolveType(definition.Body, resolving);
+
+            resolving.Remove(typeExpression);
+            return shape;
+        }
+
+        private ConsumerContractShape ResolveObject(string body, HashSet<string> resolving)
+        {
+            string objectBody = body.Trim();
+            Assert.StartsWith("{", objectBody);
+            Assert.EndsWith("}", objectBody);
+
+            Dictionary<string, ConsumerContractShape> properties = new(StringComparer.Ordinal);
+            foreach (string line in objectBody[1..^1].Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                Match property = Regex.Match(line, @"^(?<name>[A-Za-z_][A-Za-z0-9_]*)(?<optional>\?)?:\s*(?<type>.+?)(,)?$");
+                if (!property.Success)
+                {
+                    continue;
+                }
+
+                ConsumerContractShape propertyShape = ResolveType(property.Groups["type"].Value, resolving);
+                if (property.Groups["optional"].Success)
+                {
+                    propertyShape = propertyShape.AsNullable();
+                }
+
+                properties.Add(property.Groups["name"].Value, propertyShape);
+            }
+
+            return ConsumerContractShape.Object(properties);
+        }
+
+        private static IReadOnlyList<TypeScriptTypeDefinition> ReadTypeDefinitions(string source)
+        {
+            MatchCollection matches = Regex.Matches(
+                source,
+                @"export\s+type\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?<body>.*?)(?=\nexport\s+type|\z)",
+                RegexOptions.Singleline);
+
+            return matches
+                .Cast<Match>()
+                .Select(match => new TypeScriptTypeDefinition(
+                    match.Groups["name"].Value,
+                    TrimTrailingSemicolon(match.Groups["body"].Value)))
+                .ToArray();
+        }
+
+        private static ConsumerContractShape ApplyNullability(ConsumerContractShape shape, bool isNullable)
+        {
+            return isNullable ? shape.AsNullable() : shape;
+        }
+
+        private static bool IsStringLiteral(string typeExpression)
+        {
+            return typeExpression.Length >= 2
+                && typeExpression.StartsWith("'", StringComparison.Ordinal)
+                && typeExpression.EndsWith("'", StringComparison.Ordinal);
+        }
+
+        private static string NormalizeTypeExpression(string typeExpression)
+        {
+            return TrimTrailingSemicolon(typeExpression)
+                .Replace("\r", string.Empty, StringComparison.Ordinal)
+                .Replace("\n", " ", StringComparison.Ordinal)
+                .Trim()
+                .TrimEnd(',');
+        }
+
+        private static string TrimTrailingSemicolon(string value)
+        {
+            return value.Trim().TrimEnd(';').Trim();
+        }
+    }
+
+    private sealed record TypeScriptTypeDefinition(string Name, string Body);
+
     private sealed record ConsumerContractVerifierSpec(string Consumer, ConsumerContractShape RootShape);
 
     private sealed record ConsumerContractShape(
@@ -416,5 +614,10 @@ internal static class DirectoryInfoExtensions
     public static string Combine(this DirectoryInfo directory, params string[] paths)
     {
         return Path.Combine([directory.FullName, .. paths]);
+    }
+
+    public static DirectoryInfo CombineDirectory(this DirectoryInfo directory, params string[] paths)
+    {
+        return new DirectoryInfo(directory.Combine(paths));
     }
 }

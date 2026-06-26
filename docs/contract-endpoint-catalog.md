@@ -161,13 +161,16 @@ Known consumers:
 Known compatibility finding:
 
 - The Rust `RepositoryDashboardProjection` mirror currently includes `reasoningSummary` but omits `decisionSessionSummary`, while backend and TypeScript dashboard contracts include `decisionSessionSummary`. This is now protected by recursive `ContractConsumerVerificationTests` as downstream consumer drift evidence for the Oracle and a later passive-transport/manual-mirror retirement slice; it is not corrected by this inventory slice.
+- The manual TypeScript `RepositoryDashboardProjection` currently matches the Oracle fixture shape, including imported execution summary aliases and nested decision-session summary arrays. This proves TypeScript is a verified compatibility consumer for the repository dashboard pilot, not a contract authority.
 
 Current consumer verification scope:
 
 - Rust `RepositoryDashboardProjection` root shape.
 - Nested Rust `Repository`, `ExecutionSessionSummary`, `RepositoryContinuitySummary`, and `RepositoryReasoningSummary` shape reachable from the dashboard fixture.
+- TypeScript `RepositoryDashboardProjection` root shape.
+- Nested TypeScript `Repository`, `ExecutionSessionSummary`, `RepositoryContinuitySummary`, `RepositoryReasoningSummary`, `RepositoryDecisionSessionSummary`, `RepositoryDecisionSessionHealthDimension`, and `RepositoryDecisionSessionTransferSummary` shape reachable from the dashboard fixture.
 - Missing, extra, and value-kind drift classification.
-- TypeScript type verification and dev mock verification remain pending.
+- Dev mock verification remains pending.
 
 Top-level field catalog:
 
@@ -226,7 +229,7 @@ Nested field catalog:
 
 ## Remaining Catalog Work
 
-- Add TypeScript and dev mock consumer verification against the repository dashboard Oracle fixture.
+- Add dev mock consumer verification against the repository dashboard Oracle fixture.
 - Map every Decision, DecisionSession, Reasoning, and Workflow endpoint to a specific backend service/projection type rather than family-level authority.
 - Classify shell-owned commands separately from backend-relay commands.
 - Add an Oracle dependency graph showing backend projection type to endpoint to shell command to TS API/type to UI consumer.

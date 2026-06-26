@@ -41,7 +41,8 @@ Current scope:
 - repository dashboard golden fixture and recursive backend serialization comparison test,
 - repository dashboard drift policy classification for structural drift versus compatibility-review drift,
 - recursive executable dashboard consumer drift verification against the Rust shell mirror,
+- recursive executable dashboard consumer verification against the manual TypeScript type,
 - initial parallel truth inventory,
 - fixture gating rule.
 
-The Oracle is now executable for one pilot contract only, and consumer verification is still limited to the Rust repository dashboard mirror. Certification still requires broader golden serialized fixtures, expanded dependency graph coverage, generated or verified TypeScript/mock consumers, fixture update tooling, and an Oracle change workflow.
+The Oracle is now executable for one pilot contract only, and consumer verification covers the Rust and TypeScript repository dashboard consumers. Certification still requires broader golden serialized fixtures, expanded dependency graph coverage, dev mock verification, generated artifact freshness checks, fixture update tooling, and an Oracle change workflow.

@@ -1,35 +1,39 @@
-# Decisions: 2026-06-26 Slice 0012 Recursive Consumer Verification Checkpoint
+# Decisions: 2026-06-26 Slice 0013 TypeScript Consumer Verification Checkpoint
 
-These decisions capture only newly authorized direction from the response accepting recursive consumer verification and authorizing the checkpoint workflow.
+These decisions capture only newly authorized direction from the response accepting TypeScript consumer verification and authorizing the checkpoint workflow.
 
 ## Authorized Decisions
 
-1. Treat Slice 0012 as the point where consumer verification becomes a framework-oriented mechanism rather than a consumer-specific test.
-   - Recursive parsing is valuable because it advances the architecture toward reusable consumer conformance verification.
-   - The verifier should continue evolving around consumer shape, recursive comparison, and drift reporting rather than one-off downstream technology checks.
+1. Treat Slice 0013 as validation that consumer verification is language-agnostic.
+   - The same recursive comparison engine now verifies both Rust and TypeScript downstream representations.
+   - Language-specific code should remain isolated to extraction, while comparison remains canonical and shared.
 
-2. Preserve layered consumer verification as the M0.2 progression model.
-   - Level 1: surface field verification is established.
-   - Level 2: recursive structural verification is established for the Rust repository dashboard pilot.
-   - Level 3: multiple consumer verification is next.
-   - Level 4: semantic consumer verification remains future authority-restoration work.
+2. Formalize the extractor concept as `Consumer Shape Extractor`.
+   - Rust extractor, TypeScript extractor, mock extractor, and future generated-contract extractor should all produce the same canonical structural representation.
+   - Avoid framing the mechanism as separate language-specific verifier implementations.
 
-3. Add TypeScript repository dashboard verification next, but keep it symmetric with Rust.
-   - Do not build a standalone TypeScript-only verifier.
-   - Implement TypeScript as another shape provider feeding the same recursive comparison and drift report mechanism.
+3. Preserve TypeScript as a downstream compatibility consumer.
+   - Backend serialization defines the contract.
+   - The Oracle observes and protects backend serialized truth.
+   - Consumer verification measures downstream conformance.
+   - Manual TypeScript types remain consumers, even when they are important compile-time surfaces.
 
-4. Split consumer verification conceptually into extraction and comparison before adding TypeScript.
-   - Consumer shape extraction should produce a canonical consumer shape.
-   - Recursive comparison should remain language-agnostic.
-   - Rust, TypeScript, mock, and future generated-contract extractors should all feed the same intermediate representation.
+4. Add repository dashboard dev mock verification next.
+   - `devTauriMock.ts` should become the third repository dashboard consumer checked against the same Oracle fixture.
+   - The mock is a development/test consumer and must not become a contract authority.
 
-5. Treat the transient execution-session test failure as an observation, not an architectural decision.
-   - It was observed once, passed in isolation, and passed again in the full backend suite.
-   - No M0.2 scope expansion is authorized unless the failure becomes reproducible.
-   - Monitor for recurrence.
+5. Classify consumers separately in reporting.
+   - Rust mirror: runtime consumer.
+   - TypeScript types: compile-time consumer.
+   - `devTauriMock`: development/test consumer.
+   - This categorization should be retained for future generated artifacts, SDKs, documentation, and other downstream surfaces.
 
-6. Commit and push Slice 0012 as an architectural checkpoint.
-   - Rationale: recursive consumer verification materially strengthens the Oracle ecosystem by generalizing consumer conformance beyond a one-off Rust comparison.
+6. Treat current M0.2 work as having crossed from architectural proof into coverage and certification work.
+   - The architecture of the Oracle and consumer verification model is now demonstrated by Rust and TypeScript consumers.
+   - Remaining M0.2 work should focus on coverage, certification, evidence, and acceptance rather than reproving the core model.
+
+7. Commit and push Slice 0013 as an architectural checkpoint.
+   - Rationale: multi-consumer verification materially strengthens the Oracle by proving a singular backend fixture can govern multiple downstream consumer classes through shared recursive comparison.
 
 ## Current M0.2 Certification Posture
 
@@ -37,21 +41,22 @@ These decisions capture only newly authorized direction from the response accept
 | --- | --- |
 | Oracle definition | Complete |
 | Boundary taxonomy | Complete |
-| Endpoint inventory | Complete |
-| Consumer taxonomy | Complete |
-| Field catalog | Complete for repository dashboard pilot |
+| Contract inventory | Complete |
+| Endpoint catalog | Complete |
+| Field ownership | Complete for repository dashboard pilot |
 | Serialization observations | Complete for repository dashboard pilot |
-| First executable fixture | Complete |
+| Executable fixture | Complete for repository dashboard pilot |
 | Recursive Oracle comparison | Complete for repository dashboard pilot |
 | Drift classification | Complete for repository dashboard pilot |
-| Consumer verification | Complete as Rust pilot |
-| Recursive consumer verification | Complete as Rust pilot |
-| Multiple consumer verification | Remaining |
+| Rust consumer verification | Complete for repository dashboard pilot |
+| TypeScript consumer verification | Complete for repository dashboard pilot |
+| Dev mock consumer verification | Remaining |
+| Generated artifact freshness | Remaining |
 | Oracle certification | Remaining |
 
 ## Next Authorized Sequence
 
-1. Refactor consumer verification around canonical consumer shape extraction and language-agnostic recursive comparison.
-2. Keep the Rust repository dashboard extractor plugged into that pipeline.
-3. Add TypeScript repository dashboard shape extraction and verification.
-4. Add manual mock repository dashboard verification after TypeScript.
+1. Add repository dashboard `devTauriMock.ts` verification against the Oracle fixture.
+2. Report consumer category alongside consumer name.
+3. Keep the mock classified as a development/test consumer and downstream compatibility surface.
+4. Continue using the canonical recursive comparison model fed by consumer shape extractors.
