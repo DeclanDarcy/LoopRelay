@@ -83,6 +83,7 @@ Current catalog scope:
 - Backend JSON serialization observations from `Program.CreateApp`: web defaults plus string enum conversion.
 - Repository dashboard field ownership pilot for `GET /api/repositories`, including top-level fields, nested summary fields, nullability, derived status, and known compatibility drift.
 - Repository dashboard golden fixture at `tests/CommandCenter.Backend.Tests/ContractFixtures/repository-dashboard.golden.json`, protected by `ContractOracleFixtureTests.RepositoryDashboardGoldenFixtureMatchesBackendSerialization`.
+- Repository dashboard drift policy classification in `ContractOracleFixtureTests`, with structural drift failing immediately and additive field drift requiring explicit compatibility review.
 - Priority endpoint rows for the first fixture candidates.
 
 The catalog is not a generated schema. It is an inventory and fixture-selection mechanism used to prevent fixtures from certifying accidental or consumer-owned shape.
@@ -113,7 +114,20 @@ The initial executable workflow for the repository dashboard pilot is:
 1. Build representative backend projection data with stable identifiers and timestamps.
 2. Serialize with `JsonSerializerDefaults.Web` plus `JsonStringEnumConverter`.
 3. Compare serialized JSON recursively against the golden fixture while treating object property ordering as non-semantic.
-4. Fail structural drift immediately for missing fields, unexpected fields, type changes, null/object changes, array/scalar changes, changed values, or array length changes.
-5. Review fixture updates through Milestone 0.2 evidence before downstream Rust, TypeScript, mock, or generated consumers are changed.
+4. Fail structural drift immediately for missing fields, type changes, null/object changes, array/scalar changes, changed values, or array length changes.
+5. Classify additive backend fields as compatibility-review drift unless their exact JSON path is explicitly recorded as a reviewed compatibility addition for that fixture.
+6. Review fixture updates through Milestone 0.2 evidence before downstream Rust, TypeScript, mock, or generated consumers are changed.
 
-This workflow is a pilot mechanism, not the full Oracle lifecycle. It still needs policy-drift classification, fixture update tooling, consumer regeneration or verification, and broader endpoint coverage before Milestone 0.2 certification.
+This workflow is a pilot mechanism, not the full Oracle lifecycle. It still needs fixture update tooling, consumer regeneration or verification, and broader endpoint coverage before Milestone 0.2 certification.
+
+## Drift Policy Classification
+
+The repository dashboard Oracle pilot currently recognizes these drift categories:
+
+| Category | Examples | Oracle behavior |
+| --- | --- | --- |
+| Structural drift | Missing fixture field, type change, null/object mismatch, array/scalar mismatch, changed value, array length change, serializer behavior change. | Hard failure. The backend serialized shape no longer matches the accepted contract fixture. |
+| Compatibility-review drift | Additive backend field not present in the fixture. | Failure until the field is reviewed, documented, and either added to the fixture or explicitly recorded as a reviewed compatibility addition. |
+| Consumer drift | Rust, TypeScript, mock, or characterization representation differs from backend Oracle truth. | Must be surfaced by consumer verification. It must not weaken the backend Oracle fixture. |
+
+Reviewed compatibility additions are path-specific. A reviewed additive field does not make the consumer current; it only records that the backend fixture comparison may permit that additive field while the compatibility path is handled.

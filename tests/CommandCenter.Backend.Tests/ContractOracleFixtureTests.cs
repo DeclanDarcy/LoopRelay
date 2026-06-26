@@ -26,7 +26,54 @@ public sealed class ContractOracleFixtureTests
         using JsonDocument expected = JsonDocument.Parse(expectedJson);
         using JsonDocument actual = JsonDocument.Parse(actualJson);
 
-        JsonContractAssert.Equal(expected.RootElement, actual.RootElement, "$");
+        JsonContractAssert.MatchesFixture(
+            expected.RootElement,
+            actual.RootElement,
+            ContractDriftPolicy.NoCompatibilityDriftAllowed("Repository dashboard"));
+    }
+
+    [Fact]
+    public void ContractOracleClassifiesMissingFieldAsStructuralDrift()
+    {
+        using JsonDocument expected = JsonDocument.Parse("""{"name":"Repository","summary":{"count":1}}""");
+        using JsonDocument actual = JsonDocument.Parse("""{"summary":{"count":1}}""");
+
+        ContractDrift[] drift = JsonContractAssert.Compare(expected.RootElement, actual.RootElement).ToArray();
+
+        ContractDrift missingField = Assert.Single(drift);
+        Assert.Equal(ContractDriftCategory.Structural, missingField.Category);
+        Assert.Equal(ContractDriftKind.MissingField, missingField.Kind);
+        Assert.Equal("$.name", missingField.Path);
+    }
+
+    [Fact]
+    public void ContractOracleClassifiesAdditiveFieldAsCompatibilityReviewDrift()
+    {
+        using JsonDocument expected = JsonDocument.Parse("""{"name":"Repository"}""");
+        using JsonDocument actual = JsonDocument.Parse("""{"name":"Repository","displayName":"Repository"}""");
+
+        ContractOracleDriftException exception = Assert.Throws<ContractOracleDriftException>(() =>
+            JsonContractAssert.MatchesFixture(
+                expected.RootElement,
+                actual.RootElement,
+                ContractDriftPolicy.NoCompatibilityDriftAllowed("Repository dashboard")));
+
+        Assert.Contains("compatibility review drift", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("$.displayName", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ContractOracleAllowsReviewedCompatibilityAdditiveField()
+    {
+        using JsonDocument expected = JsonDocument.Parse("""{"name":"Repository"}""");
+        using JsonDocument actual = JsonDocument.Parse("""{"name":"Repository","displayName":"Repository"}""");
+
+        JsonContractAssert.MatchesFixture(
+            expected.RootElement,
+            actual.RootElement,
+            ContractDriftPolicy.WithReviewedCompatibilityAdditions(
+                "Repository dashboard",
+                "$.displayName"));
     }
 
     private static RepositoryDashboardProjection CreateRepresentativeRepositoryDashboardProjection()
@@ -164,67 +211,263 @@ public sealed class ContractOracleFixtureTests
 
     private static class JsonContractAssert
     {
-        public static void Equal(JsonElement expected, JsonElement actual, string path)
+        public static void MatchesFixture(JsonElement expected, JsonElement actual, ContractDriftPolicy policy)
         {
-            Assert.Equal(expected.ValueKind, actual.ValueKind);
+            ContractDrift[] drifts = Compare(expected, actual, policy).ToArray();
+            if (drifts.Length == 0)
+            {
+                return;
+            }
+
+            throw new ContractOracleDriftException(policy.ContractName, drifts);
+        }
+
+        public static IEnumerable<ContractDrift> Compare(JsonElement expected, JsonElement actual)
+        {
+            return Compare(expected, actual, ContractDriftPolicy.NoCompatibilityDriftAllowed("Contract"));
+        }
+
+        private static IEnumerable<ContractDrift> Compare(JsonElement expected, JsonElement actual, ContractDriftPolicy policy)
+        {
+            return Compare(expected, actual, "$", policy);
+        }
+
+        private static IEnumerable<ContractDrift> Compare(
+            JsonElement expected,
+            JsonElement actual,
+            string path,
+            ContractDriftPolicy policy)
+        {
+            if (expected.ValueKind != actual.ValueKind)
+            {
+                yield return ContractDrift.Structural(
+                    ContractDriftKind.ValueKindChanged,
+                    path,
+                    $"expected {expected.ValueKind}, actual {actual.ValueKind}");
+                yield break;
+            }
 
             switch (expected.ValueKind)
             {
                 case JsonValueKind.Object:
-                    EqualObjects(expected, actual, path);
+                    foreach (ContractDrift drift in CompareObjects(expected, actual, path, policy))
+                    {
+                        yield return drift;
+                    }
+
                     break;
                 case JsonValueKind.Array:
-                    EqualArrays(expected, actual, path);
+                    foreach (ContractDrift drift in CompareArrays(expected, actual, path, policy))
+                    {
+                        yield return drift;
+                    }
+
                     break;
                 case JsonValueKind.String:
-                    Assert.Equal(expected.GetString(), actual.GetString());
+                    if (!StringComparer.Ordinal.Equals(expected.GetString(), actual.GetString()))
+                    {
+                        yield return ContractDrift.Structural(
+                            ContractDriftKind.ValueChanged,
+                            path,
+                            $"expected {expected.GetRawText()}, actual {actual.GetRawText()}");
+                    }
+
                     break;
                 case JsonValueKind.Number:
-                    Assert.Equal(expected.GetRawText(), actual.GetRawText());
+                    if (!StringComparer.Ordinal.Equals(expected.GetRawText(), actual.GetRawText()))
+                    {
+                        yield return ContractDrift.Structural(
+                            ContractDriftKind.ValueChanged,
+                            path,
+                            $"expected {expected.GetRawText()}, actual {actual.GetRawText()}");
+                    }
+
                     break;
                 case JsonValueKind.True:
                 case JsonValueKind.False:
-                    Assert.Equal(expected.GetBoolean(), actual.GetBoolean());
+                    if (expected.GetBoolean() != actual.GetBoolean())
+                    {
+                        yield return ContractDrift.Structural(
+                            ContractDriftKind.ValueChanged,
+                            path,
+                            $"expected {expected.GetBoolean()}, actual {actual.GetBoolean()}");
+                    }
+
                     break;
                 case JsonValueKind.Null:
-                    Assert.Equal(JsonValueKind.Null, actual.ValueKind);
                     break;
                 default:
-                    Assert.Equal(expected.GetRawText(), actual.GetRawText());
+                    if (!StringComparer.Ordinal.Equals(expected.GetRawText(), actual.GetRawText()))
+                    {
+                        yield return ContractDrift.Structural(
+                            ContractDriftKind.ValueChanged,
+                            path,
+                            $"expected {expected.GetRawText()}, actual {actual.GetRawText()}");
+                    }
+
                     break;
             }
         }
 
-        private static void EqualObjects(JsonElement expected, JsonElement actual, string path)
+        private static IEnumerable<ContractDrift> CompareObjects(
+            JsonElement expected,
+            JsonElement actual,
+            string path,
+            ContractDriftPolicy policy)
         {
             Dictionary<string, JsonElement> expectedProperties = expected.EnumerateObject()
                 .ToDictionary(property => property.Name, property => property.Value);
             Dictionary<string, JsonElement> actualProperties = actual.EnumerateObject()
                 .ToDictionary(property => property.Name, property => property.Value);
 
-            string[] missing = expectedProperties.Keys.Except(actualProperties.Keys, StringComparer.Ordinal).ToArray();
-            string[] unexpected = actualProperties.Keys.Except(expectedProperties.Keys, StringComparer.Ordinal).ToArray();
-            Assert.True(missing.Length == 0, $"{path} missing contract field(s): {string.Join(", ", missing)}");
-            Assert.True(unexpected.Length == 0, $"{path} unexpected contract field(s): {string.Join(", ", unexpected)}");
+            foreach (string missing in expectedProperties.Keys.Except(actualProperties.Keys, StringComparer.Ordinal))
+            {
+                yield return ContractDrift.Structural(
+                    ContractDriftKind.MissingField,
+                    BuildPropertyPath(path, missing),
+                    "field exists in the fixture but not in backend serialization");
+            }
+
+            foreach (string unexpected in actualProperties.Keys.Except(expectedProperties.Keys, StringComparer.Ordinal))
+            {
+                string unexpectedPath = BuildPropertyPath(path, unexpected);
+                if (!policy.IsReviewedCompatibilityAddition(unexpectedPath))
+                {
+                    yield return ContractDrift.CompatibilityReview(
+                        ContractDriftKind.UnexpectedField,
+                        unexpectedPath,
+                        "backend serialization added a field that requires fixture and consumer review");
+                }
+            }
 
             foreach ((string name, JsonElement expectedValue) in expectedProperties)
             {
-                Equal(expectedValue, actualProperties[name], $"{path}.{name}");
+                if (actualProperties.TryGetValue(name, out JsonElement actualValue))
+                {
+                    foreach (ContractDrift drift in Compare(expectedValue, actualValue, BuildPropertyPath(path, name), policy))
+                    {
+                        yield return drift;
+                    }
+                }
             }
         }
 
-        private static void EqualArrays(JsonElement expected, JsonElement actual, string path)
+        private static IEnumerable<ContractDrift> CompareArrays(
+            JsonElement expected,
+            JsonElement actual,
+            string path,
+            ContractDriftPolicy policy)
         {
             JsonElement[] expectedItems = expected.EnumerateArray().ToArray();
             JsonElement[] actualItems = actual.EnumerateArray().ToArray();
-            Assert.True(
-                expectedItems.Length == actualItems.Length,
-                $"{path} array length drift: expected {expectedItems.Length}, actual {actualItems.Length}");
+            if (expectedItems.Length != actualItems.Length)
+            {
+                yield return ContractDrift.Structural(
+                    ContractDriftKind.ArrayLengthChanged,
+                    path,
+                    $"expected {expectedItems.Length}, actual {actualItems.Length}");
+                yield break;
+            }
 
             for (int i = 0; i < expectedItems.Length; i++)
             {
-                Equal(expectedItems[i], actualItems[i], $"{path}[{i}]");
+                foreach (ContractDrift drift in Compare(expectedItems[i], actualItems[i], $"{path}[{i}]", policy))
+                {
+                    yield return drift;
+                }
             }
         }
+
+        private static string BuildPropertyPath(string path, string propertyName)
+        {
+            return $"{path}.{propertyName}";
+        }
+    }
+
+    private sealed class ContractOracleDriftException(string contractName, IReadOnlyList<ContractDrift> drifts)
+        : Exception(CreateMessage(contractName, drifts))
+    {
+        private static string CreateMessage(string contractName, IReadOnlyList<ContractDrift> drifts)
+        {
+            string details = string.Join(
+                Environment.NewLine,
+                drifts.Select(drift => $"- {drift.Category} {drift.Kind} at {drift.Path}: {drift.Message}"));
+
+            bool hasStructuralDrift = drifts.Any(drift => drift.Category == ContractDriftCategory.Structural);
+            bool hasCompatibilityReviewDrift = drifts.Any(drift => drift.Category == ContractDriftCategory.CompatibilityReview);
+            string summary = (hasStructuralDrift, hasCompatibilityReviewDrift) switch
+            {
+                (true, true) => "structural drift and compatibility review drift",
+                (true, false) => "structural drift",
+                (false, true) => "compatibility review drift",
+                _ => "contract drift"
+            };
+
+            return $"{contractName} Contract Oracle detected {summary}:{Environment.NewLine}{details}";
+        }
+    }
+
+    private sealed class ContractDriftPolicy
+    {
+        private readonly HashSet<string> _reviewedCompatibilityAdditions;
+
+        private ContractDriftPolicy(string contractName, IEnumerable<string> reviewedCompatibilityAdditions)
+        {
+            ContractName = contractName;
+            _reviewedCompatibilityAdditions = new HashSet<string>(
+                reviewedCompatibilityAdditions,
+                StringComparer.Ordinal);
+        }
+
+        public string ContractName { get; }
+
+        public static ContractDriftPolicy NoCompatibilityDriftAllowed(string contractName)
+        {
+            return new ContractDriftPolicy(contractName, []);
+        }
+
+        public static ContractDriftPolicy WithReviewedCompatibilityAdditions(
+            string contractName,
+            params string[] reviewedCompatibilityAdditions)
+        {
+            return new ContractDriftPolicy(contractName, reviewedCompatibilityAdditions);
+        }
+
+        public bool IsReviewedCompatibilityAddition(string path)
+        {
+            return _reviewedCompatibilityAdditions.Contains(path);
+        }
+    }
+
+    private sealed record ContractDrift(
+        ContractDriftCategory Category,
+        ContractDriftKind Kind,
+        string Path,
+        string Message)
+    {
+        public static ContractDrift Structural(ContractDriftKind kind, string path, string message)
+        {
+            return new ContractDrift(ContractDriftCategory.Structural, kind, path, message);
+        }
+
+        public static ContractDrift CompatibilityReview(ContractDriftKind kind, string path, string message)
+        {
+            return new ContractDrift(ContractDriftCategory.CompatibilityReview, kind, path, message);
+        }
+    }
+
+    private enum ContractDriftCategory
+    {
+        Structural,
+        CompatibilityReview
+    }
+
+    private enum ContractDriftKind
+    {
+        MissingField,
+        UnexpectedField,
+        ValueKindChanged,
+        ValueChanged,
+        ArrayLengthChanged
     }
 }

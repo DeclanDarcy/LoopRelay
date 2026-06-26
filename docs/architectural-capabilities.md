@@ -39,8 +39,9 @@ Current scope:
 - backend HTTP JSON serialization observations,
 - repository dashboard field ownership pilot,
 - repository dashboard golden fixture and recursive backend serialization comparison test,
+- repository dashboard drift policy classification for structural drift versus compatibility-review drift,
 - first explicit dashboard compatibility drift finding against a Rust shell mirror,
 - initial parallel truth inventory,
 - fixture gating rule.
 
-The Oracle is now executable for one pilot contract only. Certification still requires broader golden serialized fixtures, policy-drift classification, expanded dependency graph coverage, generated or verified consumers, and an Oracle change workflow.
+The Oracle is now executable for one pilot contract only. Certification still requires broader golden serialized fixtures, expanded dependency graph coverage, generated or verified consumers, fixture update tooling, and an Oracle change workflow.

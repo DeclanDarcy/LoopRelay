@@ -1,32 +1,41 @@
-# Decisions: 2026-06-26 Slice 0009 Oracle Mechanism Checkpoint
+# Decisions: 2026-06-26 Slice 0010 Oracle Governance Checkpoint
 
-These decisions capture only newly authorized direction from the response accepting the repository dashboard Oracle fixture slice and authorizing the checkpoint workflow.
+These decisions capture only newly authorized direction from the response accepting the Oracle drift policy classification slice and authorizing the checkpoint workflow.
 
 ## Authorized Decisions
 
-1. Treat Slice 0009 as the point where the Contract Oracle transitions from architectural concept to executable mechanism.
-   - Accepted pipeline: backend projection -> backend serialization -> golden fixture -> recursive comparison -> executable drift detection.
-   - Accepted status: the repository dashboard fixture establishes the first end-to-end Oracle mechanism, while the broader Oracle remains uncertified.
+1. Treat Slice 0010 as the point where the Contract Oracle basic governance model becomes executable.
+   - Accepted capability: the Oracle can now distinguish structural drift from compatibility-review drift.
+   - Accepted status: the repository dashboard pilot remains partial and uncertified, but it now supports governed contract evolution rather than simple fixture equality.
 
-2. Treat the Rust `RepositoryDashboardProjection` omission of `decisionSessionSummary` as executable architectural evidence.
-   - The drift remains a consumer compatibility finding, not a backend contract defect.
-   - The Oracle remains authoritative; consumer drift must be surfaced through consumer verification rather than by weakening the backend fixture.
+2. Treat additive backend fields as compatibility-review drift, not silent acceptance.
+   - Additive backend fields must require human review before allowlisting or fixture adoption.
+   - The backend serialized contract remains authoritative.
+   - Contract evolution must not bypass review by appearing as harmless unknown JSON.
 
-3. Prioritize drift policy classification before expanding fixture coverage.
-   - Structural drift should be a hard failure: field removal, field rename, type change, null/object mismatch, array/scalar mismatch, serializer behavior change, or required field missing.
-   - Compatibility drift should require review: additive optional field, additive metadata, compatibility alias, unordered ordering change, or serializer configuration expansion.
-   - Consumer drift should be visible through consumer verification and must not fail the Oracle itself.
+3. Keep the current drift classes separate by owner and response.
+   - Structural drift is a hard Oracle failure.
+   - Compatibility-review drift requires explicit review before allowlisting.
+   - Consumer drift is evidence for consumer verification and must not redefine Oracle authority.
 
-4. Prioritize downstream consumer verification before adding a second fixture.
-   - Target chain: backend -> Oracle -> consumer verification.
-   - Consumer verification answers how far Rust, TypeScript, mocks, or characterization tests have drifted without treating those consumers as contract authority.
+4. Preserve exact JSON-path allowlisting for reviewed compatibility additions.
+   - Exact paths are accepted because they are deterministic, auditable, and retireable.
+   - Wildcards or broad pattern matching are not authorized.
+   - Introducing wildcard allowlisting would require a separate architectural decision because it would weaken the mechanism.
 
-5. Defer the second fixture until after policy drift classification and consumer verification exist.
-   - The second fixture should be orthogonal to the dashboard business example.
-   - Its purpose should be serialization edge coverage: explicit nulls, omitted fields, empty arrays, empty objects, zero-length history, maximum nesting, and timestamp edge cases.
+5. Make the next Milestone 0.2 capability the first consumer verification mechanism.
+   - Consumer verification should be separate from the Oracle.
+   - The known Rust `RepositoryDashboardProjection` omission of `decisionSessionSummary` is the preferred first verification target.
+   - Consumer verification reports downstream drift; it must not redefine backend Oracle truth.
 
-6. Commit and push Slice 0009 as a single architectural checkpoint.
-   - Rationale: Milestone 0.2 moved from documentation into executable enforcement, with implementation, documentation, evidence, and backend verification aligned.
+6. Classify consumer verification drift symmetrically when implemented.
+   - Missing downstream field: consumer omitted a backend field.
+   - Extra downstream field: consumer invented a field.
+   - Shape mismatch: consumer shape differs from backend serialized shape.
+   - Semantic reinterpretation should eventually be classified separately because it indicates downstream semantic authority, not just structural consumer drift.
+
+7. Commit and push Slice 0010 as an architectural checkpoint before beginning consumer verification.
+   - Rationale: Milestone 0.2 advanced from fixture comparison into governed contract evolution, with implementation, documentation, evidence, and backend verification aligned.
 
 ## Current M0.2 Certification Posture
 
@@ -34,18 +43,18 @@ These decisions capture only newly authorized direction from the response accept
 | --- | --- |
 | Oracle definition | Complete |
 | Boundary taxonomy | Complete |
-| Consumer taxonomy | Complete |
-| Endpoint inventory | Complete |
-| Field ownership | Complete |
-| Parallel truth inventory | Complete |
+| Contract inventory | Complete |
+| Consumer inventory | Complete |
+| Endpoint catalog | Complete |
+| Field catalog | Complete for repository dashboard pilot |
 | First executable fixture | Complete |
 | Recursive comparison | Complete |
-| Drift policy | Pending |
+| Drift classification | Complete for repository dashboard pilot |
 | Consumer verification | Pending |
 | Oracle certification | Pending |
 
 ## Next Authorized Sequence
 
-1. Add policy-drift classification around the repository dashboard Oracle pilot.
-2. Add downstream consumer verification while preserving backend Oracle authority.
-3. Add an orthogonal serialization edge-case fixture after consumer verification is in place.
+1. Add downstream consumer verification for the repository dashboard pilot.
+2. Start with the Rust shell dashboard mirror drift around `decisionSessionSummary`.
+3. Keep TypeScript/manual mock verification visible but non-authoritative.
