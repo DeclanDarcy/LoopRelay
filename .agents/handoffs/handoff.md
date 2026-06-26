@@ -1,38 +1,40 @@
-# Handoff: 2026-06-26 After Workflow Instance Fixture Slice 0028
+# Handoff: 2026-06-26 After Workflow TypeScript Consumer Verification Slice 0029
 
-Current milestone state: Milestone 0.2 remains active and uncertified. Workflow coverage now has initial backend fixture comparison for the primary `WorkflowInstance` contract only.
+Current milestone state: Milestone 0.2 remains active and uncertified. Workflow coverage now has backend fixture comparison for the primary `WorkflowInstance` contract and first TypeScript consumer verification for the represented fixture variant.
 
 New state from this slice:
 
-- Added `tests/CommandCenter.Backend.Tests/ContractFixtures/workflow-instance.golden.json`.
-- Added `ContractOracleFixtureTests.WorkflowInstanceGoldenFixtureMatchesBackendSerialization`.
-- Added representative `WorkflowInstance` backend serialization data covering lifecycle enums, compatibility booleans, explicit nulls, nested objects, arrays, timeline, transitions, gates, diagnostics, eligibility booleans, and `decisionSession: null`.
-- Added `.agents/milestones/m0.2-workflow-instance-fixture-slice-0028.md`.
-- Updated `docs/contracts.md`, `docs/architectural-mechanisms.md`, and `docs/architectural-capabilities.md` to record workflow fixture comparison status.
-- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0028.md`.
+- Added `src/CommandCenter.UI/src/test/characterization/workflowContractFixture.test.ts`.
+- The test reads `tests/CommandCenter.Backend.Tests/ContractFixtures/workflow-instance.golden.json` as backend Oracle truth.
+- The test defines a typed schema map for manual TypeScript `WorkflowInstance` and represented nested workflow shapes, then recursively reports fixture fields missing from TypeScript shape, unexpected TypeScript fields, and object/array kind mismatches.
+- Added `.agents/milestones/m0.2-workflow-typescript-consumer-verification-slice-0029.md`.
+- Updated `docs/contracts.md`, `docs/architectural-mechanisms.md`, and `docs/architectural-capabilities.md` to record workflow TypeScript consumer verification status.
+- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0029.md`.
 
 Verification:
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~ContractOracleFixtureTests`
-- Result: 6 passed, 0 failed, 0 skipped.
+- `npm run test -- --run src/test/characterization/workflowContractFixture.test.ts`
+- `npm run build`
+- `npm run lint`
+- Result: all passed.
 
 Current limits:
 
-- No workflow consumer verification exists for TypeScript, Rust shell mirrors, or dev mock payloads.
 - No workflow artifact freshness manifest exists.
 - No workflow request-boundary verifier exists for `GET /api/repositories/{repositoryId}/workflow`.
 - No populated `decisionSession` fixture variant exists.
-- Sibling workflow endpoints remain excluded.
+- No sibling workflow endpoint fixtures or consumer verifiers exist.
+- No dev mock workflow handler was implemented or verified; `devTauriMock.ts` still lacks `get_workflow_projection` / `get_workflow_*` handler coverage.
 - No local workflow Oracle certification exists.
-- Untracked `docs/audits/` content existed before this slice and was left untouched.
+- Existing untracked `docs/audits/` content existed before this slice and was left untouched.
 
 High-leverage decisions currently relevant:
 
-- The workflow fixture is Oracle evidence for backend serialization only; it does not authorize TS, Rust, or dev mock shapes as contract authority.
-- Flattened workflow statuses and booleans remain compatibility-sensitive and must continue to derive from backend-owned nested/source fields.
-- `decisionSession = null` is now pinned for the first fixture; populated `decisionSession` still needs separate coverage before broader workflow certification.
-- Sibling workflow endpoints remain outside the current fixture claim.
+- The backend golden fixture remains Oracle truth; the TypeScript test verifies a downstream manual consumer and does not make TypeScript contract authority.
+- Rust workflow commands for this endpoint family currently return `serde_json::Value`, so the relevant Rust concern is preserving pass-through transport behavior, not correcting a `WorkflowInstance` mirror in this slice.
+- `decisionSession: null` remains the only workflow decision-session fixture state; populated `decisionSession` coverage must be added separately before broader workflow certification.
+- Dev mock workflow absence should be treated as a coverage gap until a mock handler is implemented or generated from Oracle-backed data.
 
 Recommended next slice:
 
-- Add workflow consumer verification for the manual TypeScript `WorkflowInstance` contract shape against `workflow-instance.golden.json`, while reporting Rust shell drift and missing dev mock workflow handler coverage as downstream consumer gaps rather than fixing them in the same slice.
+- Add workflow request-boundary verification for `GET /api/repositories/{repositoryId}/workflow`, covering the backend route, Rust `get_workflow_projection(repository_id)` pass-through GET command, and TypeScript `getWorkflowProjection(repositoryId)` command arguments. After that, add a workflow artifact freshness manifest for the manual TypeScript workflow contract artifact.
