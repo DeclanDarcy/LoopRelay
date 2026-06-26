@@ -69,15 +69,16 @@ Primary evidence:
 - `docs/contract-endpoint-catalog.md`
 - `.agents/milestones/m0.2-contract-inventory-slice-0006.md`
 - `.agents/milestones/m0.2-contract-endpoint-catalog-slice-0007.md`
+- `.agents/milestones/m0.2-repository-dashboard-field-catalog-slice-0008.md`
 
 Mechanism intent:
 
 | Oracle mechanism | Current protection | Remaining gap |
 | --- | --- | --- |
-| Canonical contract authority | `docs/contracts.md` defines contract truth as backend-owned projection and command-result shape after backend JSON serialization. | Endpoint-level and field-level ownership still need inventory. |
-| Endpoint and consumer visibility | `docs/contract-endpoint-catalog.md` catalogs 177 backend endpoint mappings by family, defines required endpoint-level inventory fields, identifies consumer classes, and records priority fixture candidates. | Field-level ownership, exact backend JSON options, and a full dependency graph still need inventory. |
-| Fixture gating | `docs/contracts.md` forbids golden fixtures before identity, owner, producer, consumers, parallel representations, compatibility, and serialization rules are known. `docs/contract-endpoint-catalog.md` adds narrow serialization rules that fixtures must observe. | No fixtures exist yet. |
-| Parallel truth visibility | Initial matrix identifies backend, Rust, TypeScript, API wrapper, mock, test, and docs surfaces that can drift. Endpoint catalog records compatibility consumer classes. | No automated stale-artifact or drift comparison exists yet. |
+| Canonical contract authority | `docs/contracts.md` defines contract truth as backend-owned projection and command-result shape after backend JSON serialization. The repository dashboard pilot now records field-level ownership for the first fixture candidate. | Most endpoint families still need field-level inventory. |
+| Endpoint and consumer visibility | `docs/contract-endpoint-catalog.md` catalogs 177 backend endpoint mappings by family, defines required endpoint-level inventory fields, identifies consumer classes, records priority fixture candidates, and catalogs repository dashboard consumers. | A full dependency graph still needs inventory. |
+| Fixture gating | `docs/contracts.md` forbids golden fixtures before identity, owner, producer, consumers, parallel representations, compatibility, and serialization rules are known. `docs/contract-endpoint-catalog.md` adds narrow serialization rules and backend JSON observations that fixtures must observe. | No fixtures exist yet; repository dashboard fixture data still needs selection. |
+| Parallel truth visibility | Initial matrix identifies backend, Rust, TypeScript, API wrapper, mock, test, and docs surfaces that can drift. Endpoint catalog records compatibility consumer classes and now records the Rust dashboard mirror missing `decisionSessionSummary`. | No automated stale-artifact or drift comparison exists yet. |
 | Oracle drift detection | Not active. | Add golden fixtures and recursive backend serialization comparison tests. |
 
 ## Mechanism Lifecycle Rule

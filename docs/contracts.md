@@ -80,9 +80,13 @@ Current catalog scope:
 - 177 backend endpoint mappings under `src/CommandCenter.Backend/Endpoints`.
 - Consumer taxonomy covering backend tests, Rust shell commands, TypeScript API wrappers, manual TypeScript types, dev Tauri mocks, React consumers, characterization/E2E tests, and durable docs.
 - Narrow serialization rules for identifiers, enum-like strings, null versus omitted fields, empty collections, date/time capture, ordering, unknown fields, error envelopes, streams, and compatibility fields.
+- Backend JSON serialization observations from `Program.CreateApp`: web defaults plus string enum conversion.
+- Repository dashboard field ownership pilot for `GET /api/repositories`, including top-level fields, nested summary fields, nullability, derived status, and known compatibility drift.
 - Priority endpoint rows for the first fixture candidates.
 
 The catalog is not a generated schema. It is an inventory and fixture-selection mechanism used to prevent fixtures from certifying accidental or consumer-owned shape.
+
+The repository dashboard pilot currently exposes one compatibility finding: the Rust `RepositoryDashboardProjection` mirror omits `decisionSessionSummary`, while the backend and TypeScript dashboard contracts include it. This is evidence for the Oracle and a later shell/manual-mirror migration; the Oracle fixture must not treat the Rust mirror as contract authority.
 
 ## Fixture Gating Rule
 
@@ -98,3 +102,5 @@ Golden fixtures may be introduced only after the target contract has:
 - and an update workflow for fixture review and consumer regeneration.
 
 The first fixture candidates are repository dashboard, repository workspace, workflow projection, decision lifecycle eligibility, decision proposal browser, decision-session governance snapshot, reasoning graph/report, continuity diagnostics, execution summary/status, and error envelope.
+
+The repository dashboard candidate now satisfies the pre-fixture field ownership and serialization-observation gate. Fixture capture still requires an explicit representative-data choice so the golden sample exercises nulls, empty arrays, non-empty execution data, and non-empty decision-session data intentionally.

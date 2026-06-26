@@ -1,27 +1,31 @@
-# Handoff: 2026-06-26 Slice 0007
+# Handoff: 2026-06-26 Slice 0008
 
-Current milestone state: Milestone 0.2 remains active. Oracle definition and family-level inventory already existed; this slice added endpoint cataloging and narrow serialization rules. No golden fixtures or drift comparison tests exist yet.
+Current milestone state: Milestone 0.2 remains active. This slice advanced the repository dashboard pilot from endpoint-level inventory to field-level pre-fixture readiness. No golden fixtures or drift comparison tests exist yet.
 
 New state from this slice:
 
-- Added `docs/contract-endpoint-catalog.md` with a 177-route backend endpoint scan baseline, consumer taxonomy, narrow serialization rules, endpoint family coverage, and priority endpoint rows for first fixture candidates.
-- Updated `docs/contracts.md` to reference the endpoint catalog and clarify that the catalog is an inventory/fixture-selection mechanism, not a generated schema.
-- Updated `docs/architectural-capabilities.md` and `docs/architectural-mechanisms.md` to reflect endpoint catalog and serialization-rule progress while leaving the Oracle uncertified.
-- Added `.agents/milestones/m0.2-contract-endpoint-catalog-slice-0007.md` as evidence.
-- Rotated previous active handoff to `.agents/handoffs/handoff.0006.md`.
+- Confirmed backend HTTP JSON configuration from source: `JsonSerializerDefaults.Web` plus `JsonStringEnumConverter` in `Program.CreateApp`.
+- Added backend serialization observations to `docs/contract-endpoint-catalog.md`: camelCase properties, string enums, explicit null emission, empty arrays, `DateTimeOffset` strings, `TimeSpan` strings, and non-semantic object property ordering.
+- Added a repository dashboard field ownership pilot for `GET /api/repositories`, including top-level dashboard fields and nested repository, continuity, reasoning, decision-session, and execution-summary references.
+- Recorded a compatibility finding: Rust shell `RepositoryDashboardProjection` omits `decisionSessionSummary`, while backend and TypeScript dashboard contracts include it.
+- Updated `docs/contracts.md`, `docs/architectural-capabilities.md`, and `docs/architectural-mechanisms.md` to reflect field-level dashboard progress while leaving the Oracle uncertified.
+- Added `.agents/milestones/m0.2-repository-dashboard-field-catalog-slice-0008.md` as evidence.
+- Rotated previous active handoff to `.agents/handoffs/handoff.0007.md`.
 
 Verified:
 
-- Documentation-only slice; no build or test commands were required.
-- Inventory scans used `rg` over backend endpoints, shell commands, UI API wrappers, and UI type modules.
+- Documentation/inventory slice only; no build or test commands were required.
+- Inventory used direct source reads and `rg` across backend serialization config, repository endpoints/projections, shell mirrors, TypeScript API/types, dev mock, and backend tests.
 
 Current limits:
 
-- Field-level ownership and nullability are not cataloged yet.
-- Exact backend JSON options and date/time serialization behavior still need confirmation from source and emitted JSON.
-- Decision, DecisionSession, Reasoning, and Workflow endpoints are mostly cataloged by route family rather than exact service/projection owner.
-- No Oracle dependency graph, golden fixtures, recursive comparison tests, or lifecycle workflow exists yet.
+- No repository dashboard golden fixture exists yet.
+- No recursive fixture comparison test exists yet.
+- Representative dashboard fixture data has not been selected.
+- `ExecutionSessionSummary` nested field ownership is referenced but not fully cataloged.
+- Most non-repository endpoint families still need field-level inventory.
+- The Oracle dependency graph is still missing.
 
 Next suggested slice:
 
-- Confirm backend JSON serialization options and choose one high-value, low-ambiguity fixture candidate, preferably `GET /api/repositories` repository dashboard. Add field-level cataloging for that contract before creating the first fixture.
+- Select and build the repository dashboard fixture data strategy, preferably a focused backend test harness that emits one JSON fixture covering explicit nulls, empty arrays, non-empty execution summary/history, non-empty decision-session summary, continuity timestamp serialization, and the Rust mirror drift as a compatibility finding rather than authority. Then add the first recursive fixture comparison mechanism.

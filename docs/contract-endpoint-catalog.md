@@ -52,6 +52,23 @@ These rules are now required before selecting any first golden fixture. Unknowns
 | Streams | Streaming endpoints require stream-specific trace or fixture rules. Single JSON fixture rules do not certify event-stream ordering or reconnection behavior. |
 | Compatibility fields | A compatibility field may be fixture-certified only when its authoritative source, consumer list, replacement path, and retirement condition are recorded. |
 
+## Backend JSON Serialization Observation
+
+The backend HTTP JSON configuration is currently `JsonSerializerDefaults.Web` plus `JsonStringEnumConverter` in `src/CommandCenter.Backend/Program.cs`.
+
+Observed implications for Oracle fixtures:
+
+| Concern | Observed backend behavior | Repository dashboard implication |
+| --- | --- | --- |
+| Property naming | Web defaults emit camelCase property names. | Fixtures must record `repository`, `executionState`, `continuitySummary`, and other emitted camelCase names. |
+| Enum representation | `JsonStringEnumConverter` emits enum values as strings. | `availability`, `readiness`, `executionState`, `state`, and `repositoryState` are string-valued contract fields. |
+| Null emission | Web defaults do not ignore null values unless an ignore condition is configured. | Nullable dashboard fields such as `activeExecutionSession`, `executionSummary`, `operationalContextLastUpdatedAt`, and decision-session fields emit explicit `null`. |
+| Empty collections | Empty arrays are emitted for initialized collection properties. | `executionHistory`, `healthDimensions`, `recentTransferLineage`, and `diagnostics` must remain arrays, including when empty. |
+| Date/time values | `DateTimeOffset` values are serialized by System.Text.Json as JSON strings preserving offset/UTC information. | Timestamp fields must be captured from emitted JSON rather than inferred from TypeScript date formatting. |
+| Time spans | `TimeSpan` values are serialized by System.Text.Json as JSON strings. | `duration` and `estimatedCacheTtl` are string-valued duration contracts when present. |
+| Field ordering | Serialization order follows the current serializer/type metadata, but no semantic ordering guarantee is documented for object properties. | Fixture comparisons should treat object property order as non-semantic unless a later Oracle rule explicitly changes this. |
+| Array ordering | Array order is whatever the backend projection returns. | Repository dashboard repository order follows `IRepositoryService.GetAllAsync`; `executionHistory` order is owned by execution session projection behavior. |
+
 ## Endpoint Family Coverage
 
 | Family | Route count | Contract identity scope | Primary consumers | Compatibility consumers | Fixture priority |
@@ -120,10 +137,90 @@ These entries are sufficient to pick early fixture candidates after field-level 
 | Workflow certification | `GET /api/repositories/{repositoryId}/workflow/certification` | `get_workflow_certification` | `WorkflowCertificationResult` | TS workflow API/types, workflow UI | manual TS type, dev mock | Medium |
 | Error envelope | all non-success backend responses | shell error handling | backend error payload and optional `boundaryViolation` | TS `TransportError`, UI boundary notices | Rust error serialization, TS parser, tests | High |
 
+## Repository Dashboard Field Ownership Pilot
+
+Contract identity: `Repository dashboard`.
+
+Producer endpoint: `GET /api/repositories`.
+
+Backend projection type: `RepositoryDashboardProjection[]`.
+
+Serialization authority: backend HTTP JSON configuration.
+
+Primary backend owner: `RepositoryProjectionService.GetDashboardAsync`, which composes repository identity, availability, planning readiness, execution state/session summary, artifact-derived counts, continuity summary, reasoning summary, and decision-session summary.
+
+Known consumers:
+
+- Rust Tauri command `list_repositories`.
+- TypeScript API wrapper `listRepositories`.
+- Manual TypeScript type `RepositoryDashboardProjection`.
+- Dev Tauri mock `dashboardEntry`.
+- React shell and navigation consumers, including sidebar and selected repository summary surfaces.
+- Backend projection tests and frontend characterization tests.
+
+Known compatibility finding:
+
+- The Rust `RepositoryDashboardProjection` mirror currently includes `reasoningSummary` but omits `decisionSessionSummary`, while backend and TypeScript dashboard contracts include `decisionSessionSummary`. This is a contract mirror drift finding for the Oracle and a later passive-transport/manual-mirror retirement slice; it is not corrected by this inventory slice.
+
+Top-level field catalog:
+
+| JSON field | Backend field/type | Semantic owner | Serialization owner | Consumers | Compatibility field | Required | Derived | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `repository` | `Repository` | Core repository service/configuration | Backend JSON | shell, TS, UI, mock, tests | No | Yes | No | Repository identity object. |
+| `availability` | `RepositoryAvailability` | Middle repository projection availability check | Backend JSON string enum | shell, TS, UI, mock, tests | No | Yes | Yes | Derived from repository path, directory access, and `.git` presence. |
+| `readiness` | `ExecutionReadiness` | Planning service | Backend JSON string enum | shell, TS, UI, mock, tests | No | Yes | Yes | Derived from plan and milestone artifact state. |
+| `executionState` | `RepositoryExecutionState` | Execution session service | Backend JSON string enum | shell, TS, UI, mock, tests | No | Yes | Yes | Repository-level execution lifecycle state. |
+| `activeExecutionSession` | `ExecutionSessionSummary` or `null` | Execution session service | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Explicit `null` when no active execution session exists. |
+| `executionSummary` | `ExecutionSessionSummary` or `null` | Execution session service | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Latest/current summary; explicit `null` allowed. |
+| `executionHistory` | `ExecutionSessionSummary[]` | Execution session service | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Empty array is meaningful. |
+| `milestoneCount` | `int` | Artifact inventory/projection service | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Count of discovered milestone artifacts. |
+| `hasCurrentHandoff` | `bool` | Artifact inventory/projection service | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Derived from current handoff artifact discovery. |
+| `hasCurrentDecisions` | `bool` | Artifact inventory/projection service | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Derived from current decisions artifact discovery. |
+| `continuitySummary` | `RepositoryContinuitySummary` | Continuity projection composition | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Summary of operational-context state. |
+| `reasoningSummary` | `RepositoryReasoningSummary` | Reasoning repository/projection composition | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Empty summary is emitted when reasoning repository is absent. |
+| `decisionSessionSummary` | `RepositoryDecisionSessionSummary` | Decision-session observability/projection composition | Backend JSON | TS, UI, mock, backend tests; Rust mirror drift | No | Yes | Yes | Empty summary is emitted when observability service is absent. |
+
+Nested field catalog:
+
+| JSON field path | Backend field/type | Semantic owner | Serialization owner | Consumers | Compatibility field | Required | Derived | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `repository.id` | `Guid` | Core repository service/configuration | Backend JSON string | shell, TS, UI, mock, tests | No | Yes | No | Stable repository identifier. |
+| `repository.name` | `string` | Core repository registration | Backend JSON | shell, TS, UI, mock, tests | No | Yes | No | Repository display name. |
+| `repository.path` | `string` | Core repository registration | Backend JSON | shell, TS, UI, mock, tests | No | Yes | No | Local path string, not normalized by transport. |
+| `continuitySummary.operationalContextExists` | `bool` | Continuity/artifact projection | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Derived from current operational-context artifact. |
+| `continuitySummary.operationalContextRevisionCount` | `int` | Continuity/artifact projection | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Counts current plus historical operational-context artifacts. |
+| `continuitySummary.operationalContextLastUpdatedAt` | `DateTimeOffset?` | Continuity/artifact projection | Backend JSON string/null | shell, TS, UI, mock, tests | No | Yes | Yes | Explicit `null` when no current operational context exists. |
+| `continuitySummary.openQuestionCount` | `int` | Continuity parser/projection | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Count of parsed open questions. |
+| `continuitySummary.activeRiskCount` | `int` | Continuity parser/projection | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Count of parsed active risks. |
+| `continuitySummary.pendingProposalExists` | `bool` | Operational-context proposal store/projection | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Derived from latest proposal status. |
+| `reasoningSummary.*Count` | `int` fields | Reasoning repository/projection | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Event/thread/relationship and event-family counts. |
+| `reasoningSummary.last*At` | `DateTimeOffset?` fields | Reasoning repository/projection | Backend JSON string/null | shell, TS, UI, mock, tests | No | Yes | Yes | Explicit `null` when no corresponding activity exists. |
+| `reasoningSummary.certificationResult` | `string?` | Reasoning certification/projection | Backend JSON string/null | shell, TS, UI, mock, tests | No | Yes | Yes | Currently nullable summary field. |
+| `decisionSessionSummary.decisionSessionId` | `string?` | Decision-session observability | Backend JSON string/null | TS, UI, mock, backend tests; Rust mirror drift | No | Yes | Yes | Stringified active session id, explicit `null` when absent. |
+| `decisionSessionSummary.state` | `string?` | Decision-session lifecycle authority | Backend JSON string/null | TS, UI, mock, backend tests; Rust mirror drift | No | Yes | Yes | Stringified active session state. |
+| `decisionSessionSummary.lifecycleDecision` | `string?` | Decision-session lifecycle policy | Backend JSON string/null | TS, UI, mock, backend tests; Rust mirror drift | No | Yes | Yes | Stringified lifecycle policy decision. |
+| `decisionSessionSummary.transferEligibilityStatus` | `string?` | Decision-session transfer eligibility | Backend JSON string/null | TS, UI, mock, backend tests; Rust mirror drift | No | Yes | Yes | Stringified transfer eligibility status. |
+| `decisionSessionSummary.estimatedTokenCount` | `long?` | Decision-session metrics/size authority | Backend JSON number/null | TS, UI, mock, backend tests; Rust mirror drift | No | Yes | Yes | Uses size estimate, falling back to metrics estimate. |
+| `decisionSessionSummary.estimatedCacheTtl` | `TimeSpan?` | Decision-session metrics/cache authority | Backend JSON string/null | TS, UI, mock, backend tests; Rust mirror drift | No | Yes | Yes | Duration string when present. |
+| `decisionSessionSummary.cacheMissRisk` | `decimal?` | Decision-session metrics/cache authority | Backend JSON number/null | TS, UI, mock, backend tests; Rust mirror drift | No | Yes | Yes | Numeric risk score when present. |
+| `decisionSessionSummary.coherenceScore` | `decimal?` | Decision-session coherence authority | Backend JSON number/null | TS, UI, mock, backend tests; Rust mirror drift | No | Yes | Yes | Numeric coherence score when present. |
+| `decisionSessionSummary.transferPressure` | `decimal?` | Decision-session coherence authority | Backend JSON number/null | TS, UI, mock, backend tests; Rust mirror drift | No | Yes | Yes | Numeric transfer pressure when present. |
+| `decisionSessionSummary.healthDimensions` | `RepositoryDecisionSessionHealthDimension[]` | Decision-session health authority | Backend JSON array | TS, UI, mock, backend tests; Rust mirror drift | No | Yes | Yes | Empty array when absent. |
+| `decisionSessionSummary.healthDimensions[].name` | `string` | Decision-session health authority | Backend JSON | TS, UI, mock, backend tests; Rust mirror drift | No | Yes | Yes | Health dimension name. |
+| `decisionSessionSummary.healthDimensions[].status` | `string` | Decision-session health authority | Backend JSON | TS, UI, mock, backend tests; Rust mirror drift | No | Yes | Yes | Stringified health status. |
+| `decisionSessionSummary.healthDimensions[].findings` | `string[]` | Decision-session health authority | Backend JSON array | TS, UI, mock, backend tests; Rust mirror drift | No | Yes | Yes | Empty array allowed. |
+| `decisionSessionSummary.recentTransferLineage` | `RepositoryDecisionSessionTransferSummary[]` | Decision-session transfer authority | Backend JSON array | TS, UI, mock, backend tests; Rust mirror drift | No | Yes | Yes | Empty array when absent. |
+| `decisionSessionSummary.recentTransferLineage[].*At` | `DateTimeOffset`/`DateTimeOffset?` | Decision-session transfer authority | Backend JSON string/null | TS, UI, mock, backend tests; Rust mirror drift | No | Yes | Yes | `completedAt` is nullable. |
+| `decisionSessionSummary.diagnostics` | `string[]` | Decision-session diagnostics authority | Backend JSON array | TS, UI, mock, backend tests; Rust mirror drift | No | Yes | Yes | Concatenated distinct errors and warnings. |
+| `decisionSessionSummary.generatedAt` | `DateTimeOffset?` | Decision-session observability | Backend JSON string/null | TS, UI, mock, backend tests; Rust mirror drift | No | Yes | Yes | Projection generation timestamp, explicit `null` when no observability service exists. |
+| `activeExecutionSession.*` | `ExecutionSessionSummary` fields | Execution session service | Backend JSON | shell, TS, UI, mock, tests | No | Conditional | Yes | Shares execution summary contract; explicit `null` when absent. |
+| `executionSummary.*` | `ExecutionSessionSummary` fields | Execution session service | Backend JSON | shell, TS, UI, mock, tests | No | Conditional | Yes | Shares execution summary contract; explicit `null` when absent. |
+| `executionHistory[]` | `ExecutionSessionSummary` items | Execution session service | Backend JSON array | shell, TS, UI, mock, tests | No | Yes | Yes | Empty array when no history exists. |
+
 ## Remaining Catalog Work
 
-- Add field-level ownership and nullability observations for the first fixture candidate.
-- Confirm exact backend JSON options and date/time serialization behavior from program configuration and emitted responses.
+- Select representative repository dashboard fixture data that exercises explicit nulls, empty arrays, non-empty execution summary/history, and non-empty decision-session summary.
+- Capture the first repository dashboard golden fixture only after fixture data selection is explicit.
 - Map every Decision, DecisionSession, Reasoning, and Workflow endpoint to a specific backend service/projection type rather than family-level authority.
 - Classify shell-owned commands separately from backend-relay commands.
 - Add an Oracle dependency graph showing backend projection type to endpoint to shell command to TS API/type to UI consumer.

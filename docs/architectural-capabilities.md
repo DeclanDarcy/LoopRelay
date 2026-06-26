@@ -36,7 +36,10 @@ Current scope:
 - family-level contract relationship matrix,
 - endpoint catalog and consumer taxonomy,
 - narrow serialization rules required before fixture selection,
+- backend HTTP JSON serialization observations,
+- repository dashboard field ownership pilot,
+- first explicit dashboard compatibility drift finding against a Rust shell mirror,
 - initial parallel truth inventory,
 - fixture gating rule.
 
-The Oracle is not yet an executable protection. Certification requires field-level inventory for fixture candidates, exact backend JSON option confirmation, golden serialized fixtures, recursive comparison tests, and an Oracle change workflow.
+The Oracle is not yet an executable protection. Certification requires representative fixture data selection, golden serialized fixtures, recursive comparison tests, expanded dependency graph coverage, and an Oracle change workflow.
