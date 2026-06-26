@@ -85,6 +85,7 @@ Current catalog scope:
 - Repository dashboard golden fixture at `tests/CommandCenter.Backend.Tests/ContractFixtures/repository-dashboard.golden.json`, protected by `ContractOracleFixtureTests.RepositoryDashboardGoldenFixtureMatchesBackendSerialization`.
 - Repository dashboard drift policy classification in `ContractOracleFixtureTests`, with structural drift failing immediately and additive field drift requiring explicit compatibility review.
 - Repository dashboard Rust, TypeScript, and dev mock consumer verification in `ContractConsumerVerificationTests`, backed by shared test-support infrastructure in `ContractVerification/ContractConsumerVerificationSupport.cs`, which recursively compares the backend golden fixture shape against downstream consumer shapes, reports the known Rust `decisionSessionSummary` omission as downstream consumer drift, verifies the manual TypeScript dashboard type as current, and verifies the `devTauriMock` dashboard entry shape for the pilot fixture.
+- Repository dashboard contract artifact freshness verification in `ContractGeneratedArtifactFreshnessTests`, backed by `repository-dashboard.artifact-freshness.json`, which hashes the Oracle fixture and the current TypeScript repository contract artifact to distinguish stale artifacts, unexpected artifact edits, and missing expected artifacts.
 - Priority endpoint rows for the first fixture candidates.
 
 The catalog is not a generated schema. It is an inventory and fixture-selection mechanism used to prevent fixtures from certifying accidental or consumer-owned shape.
@@ -172,3 +173,35 @@ Current protection:
 - `ConsumerVerifierReportsNestedMissingFields` protects recursive missing-field behavior independent of the Rust parser.
 
 This pilot does not yet compare command argument bodies, generated artifact freshness, additional mock command payloads, or semantic reinterpretation. Those remain later Milestone 0.2 and Milestone 1.2/1.3 work.
+
+## Contract Artifact Freshness Pilot
+
+Artifact freshness verification is separate from both Oracle fixture comparison and consumer verification.
+
+The Oracle fixture comparison asks whether backend serialization still matches accepted backend-owned fixture truth. Consumer verification asks whether downstream shapes conform to that Oracle-observed truth. Artifact freshness asks whether a tracked contract artifact baseline has moved in lockstep with the Oracle source that justifies it.
+
+The repository dashboard pilot stores its freshness manifest at `tests/CommandCenter.Backend.Tests/ContractFixtures/repository-dashboard.artifact-freshness.json`. The manifest records:
+
+- contract identity,
+- Oracle source path and SHA-256,
+- expected contract artifact path,
+- artifact kind,
+- expected artifact SHA-256.
+
+Current artifact coverage:
+
+| Contract | Oracle source | Artifact | Artifact kind |
+| --- | --- | --- | --- |
+| Repository dashboard | `tests/CommandCenter.Backend.Tests/ContractFixtures/repository-dashboard.golden.json` | `src/CommandCenter.UI/src/types/repositories.ts` | Phase 0 verified contract artifact |
+
+This artifact is still a manual TypeScript contract file, not a generated Milestone 1.2 output. The freshness verifier intentionally treats it as a Phase 0 verified contract artifact so stale/missing/manual-edit failure semantics exist before the generated contract ecosystem is introduced.
+
+Freshness failure modes:
+
+| Failure mode | Meaning | Remediation |
+| --- | --- | --- |
+| Stale generated artifact | Oracle source hash changed while the artifact still matches the previous baseline, or both source and artifact changed without updated regeneration evidence. | Review the Oracle change, regenerate or update the artifact through the approved workflow, then update the freshness manifest with evidence. |
+| Unexpected manual artifact modification | Artifact hash changed while the Oracle source baseline did not change. | Revert or justify the artifact change through decision/evidence governance before accepting the new baseline. |
+| Missing expected artifact | The manifest names an artifact that no longer exists. | Restore the artifact, update the manifest after an approved relocation, or retire the artifact through the compatibility path. |
+
+This pilot does not generate TypeScript, prove artifact determinism, detect manual edits inside generated headers, compare command argument bodies, or certify the generated ecosystem. Those remain Milestone 1.2 responsibilities.

@@ -45,7 +45,9 @@ Current scope:
 - recursive executable dashboard consumer verification against the dev Tauri mock,
 - consumer category reporting for runtime, compile-time, and development/test consumers,
 - shared consumer-verification test-support infrastructure for the recursive comparison engine and Rust, TypeScript, and dev mock shape providers,
+- repository dashboard contract artifact freshness manifest and verifier,
+- distinct freshness failure modes for stale artifacts, unexpected manual artifact modification, and missing expected artifacts,
 - initial parallel truth inventory,
 - fixture gating rule.
 
-The Oracle is now executable for one pilot contract only, and consumer verification covers the Rust, TypeScript, and dev mock repository dashboard consumers. Certification still requires broader golden serialized fixtures, expanded dependency graph coverage, generated artifact freshness checks, fixture update tooling, command argument verification, semantic reinterpretation checks, and an Oracle change workflow.
+The Oracle is now executable for one pilot contract only. Consumer verification covers the Rust, TypeScript, and dev mock repository dashboard consumers, and freshness verification covers the repository dashboard TypeScript contract artifact as a Phase 0 verified manual artifact. Certification still requires broader golden serialized fixtures, expanded dependency graph coverage, deterministic generated artifacts, fixture update tooling, command argument verification, semantic reinterpretation checks, and an Oracle change workflow.
