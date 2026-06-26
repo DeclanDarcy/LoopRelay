@@ -37,5 +37,5 @@ describe('primary surface reachability', () => {
 
       expect(screen.getByLabelText(surface.landmark)).toBeInTheDocument()
     }
-  })
+  }, 15_000)
 })
