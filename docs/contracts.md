@@ -115,7 +115,7 @@ The first fixture candidates are repository dashboard, repository workspace, wor
 
 The repository dashboard candidate now has the first golden fixture and recursive backend serialization comparison. The fixture intentionally covers explicit nulls, populated arrays, non-empty execution summary and history, decision-session summary, timestamps, durations, enum strings, and nested summary objects. Empty-array coverage remains represented by nested zero-count reasoning fields and will need a second dashboard variant or another fixture if empty collection serialization must be pinned for this contract specifically.
 
-The repository workspace candidate now has the second golden fixture, recursive backend serialization comparison, consumer verification against Rust, TypeScript, and dev mock downstream shapes, artifact freshness verification for the shared TypeScript repository contract artifact, and request-boundary verification for the primary workspace GET path. The fixture intentionally covers artifact inventory nulls and populated arrays, full operational-context item arrays, proposal summary enum/null/date fields, execution summary accepted/commit/push fields, empty decision-session arrays, and the backend-owned `decisionSessionSummary` field that is missing from the Rust workspace mirror. This proves the Oracle pattern can repeat across a second contract family, but it does not yet add local repository workspace Oracle certification.
+The repository workspace candidate now has the second golden fixture, recursive backend serialization comparison, consumer verification against Rust, TypeScript, and dev mock downstream shapes, artifact freshness verification for the shared TypeScript repository contract artifact, and request-boundary verification for the primary workspace GET path. The fixture intentionally covers artifact inventory nulls and populated arrays, full operational-context item arrays, proposal summary enum/null/date fields, execution summary accepted/commit/push fields, empty decision-session arrays, and the backend-owned `decisionSessionSummary` field that is missing from the Rust workspace mirror. This proves the Oracle pattern can repeat across a second contract family, and local repository workspace Oracle certification is recorded in `.agents/milestones/m0.2-repository-workspace-oracle-certification-slice-0024.md`.
 
 ## Initial Oracle Fixture Workflow
 
@@ -317,12 +317,18 @@ For the current repository fixture pilots, the minimum fixture comparison comman
 dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~ContractOracleFixtureTests
 ```
 
-For the locally certified repository dashboard pilot, the minimum acceptance command set also includes:
+For the locally certified repository dashboard and repository workspace pilots, the minimum acceptance command set also includes:
 
 ```powershell
 dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~ContractConsumerVerificationTests
 dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~ContractGeneratedArtifactFreshnessTests
 dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~ContractRequestBoundaryTests
+```
+
+The repository workspace local certification used the combined Oracle mechanism filter:
+
+```powershell
+dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "FullyQualifiedName~ContractRequestBoundaryTests|FullyQualifiedName~ContractGeneratedArtifactFreshnessTests|FullyQualifiedName~ContractConsumerVerificationTests|FullyQualifiedName~ContractOracleFixtureTests"
 ```
 
 The full backend test project remains the certification check before accepting a Milestone 0.2 checkpoint.

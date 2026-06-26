@@ -342,7 +342,7 @@ Nested field catalog:
 
 ## Remaining Catalog Work
 
-- Locally certify the repository workspace Oracle pilot now that fixture comparison, consumer verification, artifact freshness, and request-boundary verification exist for the primary workspace GET path.
+- Extend the repository workspace request-boundary pilot beyond the primary GET path to refresh and artifact rotation routes when those request shapes are selected for Oracle coverage.
 - Extend request-boundary verification beyond dashboard and workspace GET paths to route/query/body compatibility classification.
 - Map every Decision, DecisionSession, Reasoning, and Workflow endpoint to a specific backend service/projection type rather than family-level authority.
 - Classify shell-owned commands separately from backend-relay commands.
