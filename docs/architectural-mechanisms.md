@@ -57,6 +57,26 @@ Invariant matrix:
 | Transport preserves null and empty values | The Rust shell test asserts explicit null, empty object, empty array, and empty string preservation. | Additional command families still need migration or classification. |
 | Transport preserves backend errors | Boundary-violation error envelopes returned through the generic GET value helper are serialized back to JSON and compared for preservation. | Non-boundary error semantics and additional command families still need migration or classification before passive transport certification. |
 
+## Contract Oracle
+
+Introduced: Milestone 0.2.
+
+Status: defined and inventoried at the contract-family level; not yet executable protection.
+
+Primary evidence:
+
+- `docs/contracts.md`
+- `.agents/milestones/m0.2-contract-inventory-slice-0006.md`
+
+Mechanism intent:
+
+| Oracle mechanism | Current protection | Remaining gap |
+| --- | --- | --- |
+| Canonical contract authority | `docs/contracts.md` defines contract truth as backend-owned projection and command-result shape after backend JSON serialization. | Endpoint-level and field-level ownership still need inventory. |
+| Fixture gating | `docs/contracts.md` forbids golden fixtures before identity, owner, producer, consumers, parallel representations, compatibility, and serialization rules are known. | No fixtures exist yet. |
+| Parallel truth visibility | Initial matrix identifies backend, Rust, TypeScript, API wrapper, mock, test, and docs surfaces that can drift. | No automated stale-artifact or drift comparison exists yet. |
+| Oracle drift detection | Not active. | Add golden fixtures and recursive backend serialization comparison tests. |
+
 ## Mechanism Lifecycle Rule
 
 A verifier can be treated as architectural protection only when its command or source, protected surface, known gaps, owner, and retirement criteria for any quarantine are recorded.

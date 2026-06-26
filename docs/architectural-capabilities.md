@@ -5,6 +5,7 @@ This matrix records architectural capabilities as they become observable, protec
 | Capability | Introduced | Protected | Certified | Reference Documentation | Status |
 | --- | --- | --- | --- | --- | --- |
 | Structural verification | 0.1 | 0.1, future architectural regression framework | 0.1 local command-line baseline | `docs/architectural-mechanisms.md` | Certified locally with quarantines |
+| Canonical contract Oracle | 0.2 | Pending fixture comparison and generated/verified consumers | Pending | `docs/contracts.md` | Introduced as definition and initial inventory |
 
 ## Structural Verification
 
@@ -23,3 +24,17 @@ Accepted quarantines:
 - unknown Tauri packaged release path.
 
 The shell passive relay regressions now prove successful opaque backend JSON and boundary-violation error envelopes are preserved without shell-owned domain interpretation through the generic GET value helper. The next protections are POST relay coverage, non-boundary error semantics, and command-family classification.
+
+## Canonical Contract Oracle
+
+The Contract Oracle is introduced as a durable definition and initial inventory in `docs/contracts.md`.
+
+Current scope:
+
+- canonical Oracle definition,
+- boundary taxonomy,
+- family-level contract relationship matrix,
+- initial parallel truth inventory,
+- fixture gating rule.
+
+The Oracle is not yet an executable protection. Certification requires endpoint-level inventory, serialization rules, golden serialized fixtures, recursive comparison tests, and an Oracle change workflow.
