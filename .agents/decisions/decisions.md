@@ -1,35 +1,35 @@
-# Decisions: 2026-06-26 Slice 0022 Workspace Artifact Freshness Repeatability
+# Decisions: 2026-06-26 Slice 0023 Workspace Request-Boundary Checkpoint
 
-These decisions capture only newly authorized direction from the response accepting Slice 0022 as a freshness-mechanism repeatability slice.
+These decisions capture only newly authorized direction from the response accepting Slice 0023 as completing repository workspace mechanism coverage.
 
 ## Authorized Decisions
 
-1. Treat Slice 0022 primarily as mechanism stability evidence.
-   - The important architectural result is that repository workspace artifact freshness reused the existing manifest and verifier model unchanged.
-   - Repository workspace did not authorize a new freshness mechanism, drift taxonomy, manifest model, artifact classification, or generated-artifact assumption.
+1. Treat Slice 0023 as completing the repository workspace pilot mechanism set.
+   - Repository workspace now has Oracle fixture comparison, consumer verification, artifact freshness verification, and request-boundary verification.
+   - Remaining repository workspace work is local certification, not introduction of additional Oracle capabilities.
 
-2. Keep freshness scoped to Phase 0 verified manual artifacts.
-   - `src/CommandCenter.UI/src/types/repositories.ts` remains a verified manual TypeScript contract artifact during Milestone 0.2.
-   - Milestone 0.2 proves the Oracle can observe and govern artifacts.
-   - Generated artifacts remain Milestone 1.2 work.
+2. Treat unchanged request-boundary reuse as repeatability evidence.
+   - No new request-contract framework was authorized or introduced.
+   - The existing request-boundary mechanism was sufficient for the second contract family.
+   - This supports the conclusion that the Oracle architecture is stabilizing through reuse.
 
-3. Track mechanism stability explicitly for repeated Oracle mechanisms.
-   - Evidence should classify reuse as unchanged, implementation refinement, or architectural refinement.
-   - Unchanged reuse indicates mechanism stability.
-   - Implementation refinements, such as parser fidelity improvements, should remain distinct from architectural refinements.
-   - Architectural refinements required by repeated contract families should be treated as maturity signals before local or global certification.
+3. Preserve the Rust `decisionSessionSummary` omission as executable consumer drift.
+   - Backend serialization remains contract authority.
+   - Downstream mirrors are measured consumers and do not redefine the contract.
+   - The known Rust workspace mirror drift should remain visible until a later passive-transport or mirror-retirement slice addresses it.
 
-4. Preserve repository workspace maturity posture.
-   - Repository workspace now has fixture comparison, consumer verification, and artifact freshness verification.
-   - Repository workspace still lacks request-boundary verification and local certification.
-   - Milestone 0.2 remains active and uncertified globally.
+4. Keep certification scope narrow.
+   - The next certification should certify the repository workspace pilot only.
+   - It must not imply that the full Oracle contract surface or all of Milestone 0.2 is certified.
 
-5. Continue repository workspace through the same dashboard lifecycle.
-   - Next repository workspace step is request-boundary verification.
-   - If request-boundary verification completes without new Oracle mechanism types, proceed to local repository workspace Oracle certification.
+5. Use the dashboard certification pattern for repository workspace.
+   - Verify the complete workspace Oracle mechanism set.
+   - Run the full backend test suite.
+   - Reconcile evidence against the workspace pilot.
+   - Record remaining gaps explicitly as local certification limits.
 
 ## Next Authorized Sequence
 
-1. Stage, commit, and push Slice 0022 and this decision checkpoint.
+1. Stage, commit, and push Slice 0023 and this decision checkpoint.
 2. Stop executing after the checkpoint.
-3. In the next work slice, begin repository workspace request-boundary verification.
+3. In the next work slice, perform repository workspace local certification using the existing Oracle mechanisms unchanged.

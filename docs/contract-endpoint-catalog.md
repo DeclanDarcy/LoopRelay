@@ -267,6 +267,9 @@ Current fixture coverage:
 - `ContractConsumerVerificationTests.RepositoryWorkspaceDevTauriMockPayloadMatchesGoldenFixture`.
 - `tests/CommandCenter.Backend.Tests/ContractFixtures/repository-workspace.artifact-freshness.json`.
 - `ContractGeneratedArtifactFreshnessTests.RepositoryWorkspaceTypeScriptContractArtifactMatchesFreshnessManifest`.
+- `ContractRequestBoundaryTests.RepositoryWorkspaceBackendEndpointHasRepositoryIdRouteArgumentAndNoBody`.
+- `ContractRequestBoundaryTests.RepositoryWorkspaceRustCommandHasRepositoryIdArgumentAndForwardsGetWithoutBody`.
+- `ContractRequestBoundaryTests.RepositoryWorkspaceTypeScriptApiInvokesCommandWithRepositoryIdArgument`.
 - Fixture data covers populated `artifactInventory` arrays, explicit `currentDecisions: null`, full `operationalContext` item arrays, proposal summary enum/date/null fields, populated execution accepted/commit/push metadata, populated reasoning summary, populated decision-session summary, and empty nested arrays for decision-session findings, transfer lineage, and diagnostics.
 
 Current consumer verification scope:
@@ -278,6 +281,12 @@ Current consumer verification scope:
 - Dev Tauri mock `get_repository_workspace` typed workspace command payload.
 - Runtime, compile-time, and development/test consumer category reporting.
 - Missing, extra, and value-kind drift classification.
+
+Current request-boundary verification scope:
+
+- Backend `GET /api/repositories/{repositoryId:guid}/workspace` route method, route parameter, GUID policy, and no body metadata.
+- Rust `get_repository_workspace(repository_id: String)` command argument and bodyless GET forwarding path.
+- TypeScript `getRepositoryWorkspace(repositoryId: string)` wrapper command name and `{ repositoryId }` argument object.
 
 Top-level field catalog:
 
@@ -333,7 +342,8 @@ Nested field catalog:
 
 ## Remaining Catalog Work
 
-- Add repository workspace request-boundary verification if the workspace pilot proceeds to local certification.
+- Locally certify the repository workspace Oracle pilot now that fixture comparison, consumer verification, artifact freshness, and request-boundary verification exist for the primary workspace GET path.
+- Extend request-boundary verification beyond dashboard and workspace GET paths to route/query/body compatibility classification.
 - Map every Decision, DecisionSession, Reasoning, and Workflow endpoint to a specific backend service/projection type rather than family-level authority.
 - Classify shell-owned commands separately from backend-relay commands.
 - Add an Oracle dependency graph showing backend projection type to endpoint to shell command to TS API/type to UI consumer.

@@ -91,6 +91,7 @@ Current catalog scope:
 - Repository workspace golden fixture at `tests/CommandCenter.Backend.Tests/ContractFixtures/repository-workspace.golden.json`, protected by `ContractOracleFixtureTests.RepositoryWorkspaceGoldenFixtureMatchesBackendSerialization`.
 - Repository workspace Rust, TypeScript, and dev mock consumer verification in `ContractConsumerVerificationTests`, using the shared verifier support to report the known Rust `decisionSessionSummary` omission, verify the manual TypeScript workspace type as current, and verify the `devTauriMock` workspace command payload shape through the typed mock workspace store.
 - Repository workspace contract artifact freshness verification in `ContractGeneratedArtifactFreshnessTests`, backed by `repository-workspace.artifact-freshness.json`, which hashes the workspace Oracle fixture and the current TypeScript repository contract artifact.
+- Repository workspace request-boundary verification in `ContractRequestBoundaryTests`, which pins `GET /api/repositories/{repositoryId}/workspace` as a single route-argument, bodyless backend route, `get_repository_workspace(repository_id)` as a Rust Tauri command that forwards a GET without request-body construction, and `getRepositoryWorkspace(repositoryId)` as a TypeScript API wrapper that passes only the repository id command argument.
 - Priority endpoint rows for the first fixture candidates.
 
 The catalog is not a generated schema. It is an inventory and fixture-selection mechanism used to prevent fixtures from certifying accidental or consumer-owned shape.
@@ -114,7 +115,7 @@ The first fixture candidates are repository dashboard, repository workspace, wor
 
 The repository dashboard candidate now has the first golden fixture and recursive backend serialization comparison. The fixture intentionally covers explicit nulls, populated arrays, non-empty execution summary and history, decision-session summary, timestamps, durations, enum strings, and nested summary objects. Empty-array coverage remains represented by nested zero-count reasoning fields and will need a second dashboard variant or another fixture if empty collection serialization must be pinned for this contract specifically.
 
-The repository workspace candidate now has the second golden fixture, recursive backend serialization comparison, consumer verification against Rust, TypeScript, and dev mock downstream shapes, and artifact freshness verification for the shared TypeScript repository contract artifact. The fixture intentionally covers artifact inventory nulls and populated arrays, full operational-context item arrays, proposal summary enum/null/date fields, execution summary accepted/commit/push fields, empty decision-session arrays, and the backend-owned `decisionSessionSummary` field that is missing from the Rust workspace mirror. This proves the Oracle pattern can repeat across a second contract family, but it does not yet add workspace request-boundary verification or local certification.
+The repository workspace candidate now has the second golden fixture, recursive backend serialization comparison, consumer verification against Rust, TypeScript, and dev mock downstream shapes, artifact freshness verification for the shared TypeScript repository contract artifact, and request-boundary verification for the primary workspace GET path. The fixture intentionally covers artifact inventory nulls and populated arrays, full operational-context item arrays, proposal summary enum/null/date fields, execution summary accepted/commit/push fields, empty decision-session arrays, and the backend-owned `decisionSessionSummary` field that is missing from the Rust workspace mirror. This proves the Oracle pattern can repeat across a second contract family, but it does not yet add local repository workspace Oracle certification.
 
 ## Initial Oracle Fixture Workflow
 
@@ -203,11 +204,22 @@ The repository dashboard request boundary is intentionally no-argument:
 | Rust Tauri command | `list_repositories()`, no command parameters, backend `GET /api/repositories`, no client request-body construction. |
 | TypeScript API wrapper | `listRepositories()`, invokes `list_repositories` without an argument object. |
 
+The repository workspace request boundary is the first non-empty request-boundary pilot:
+
+| Boundary participant | Expected request shape |
+| --- | --- |
+| Backend endpoint | `GET /api/repositories/{repositoryId:guid}/workspace`, one required `repositoryId` GUID route parameter, no body metadata. |
+| Rust Tauri command | `get_repository_workspace(repository_id: String)`, backend `GET /api/repositories/{repository_id}/workspace`, no client request-body construction. |
+| TypeScript API wrapper | `getRepositoryWorkspace(repositoryId: string)`, invokes `get_repository_workspace` with `{ repositoryId }` and no additional command fields. |
+
 Current protection:
 
 - `RepositoryDashboardBackendEndpointHasNoRequestArguments` verifies the backend route method, pattern, route parameters, and body metadata.
 - `RepositoryDashboardRustCommandHasNoCommandArgumentsAndForwardsGetWithoutBody` verifies the Rust command signature and GET forwarding path.
 - `RepositoryDashboardTypeScriptApiInvokesCommandWithoutArguments` verifies the TypeScript command invocation has no argument object.
+- `RepositoryWorkspaceBackendEndpointHasRepositoryIdRouteArgumentAndNoBody` verifies the backend route method, pattern, required GUID route parameter, and absence of body metadata.
+- `RepositoryWorkspaceRustCommandHasRepositoryIdArgumentAndForwardsGetWithoutBody` verifies the Rust command accepts a repository id, forwards the backend GET path, and constructs no request body.
+- `RepositoryWorkspaceTypeScriptApiInvokesCommandWithRepositoryIdArgument` verifies the TypeScript wrapper invokes `get_repository_workspace` with the expected repository id command argument.
 
 This is still a narrow pilot check. It does not introduce a general request-contract model, does not verify non-empty command DTOs, and does not classify request compatibility for route, query, or body evolution.
 
@@ -253,6 +265,7 @@ The workflow applies to Oracle-managed contracts when one of these mechanisms re
 - golden fixture comparison,
 - downstream consumer verification,
 - contract artifact freshness verification.
+- request-boundary verification.
 
 ### Required Change Record
 
@@ -281,7 +294,7 @@ Every accepted Oracle change must produce evidence that records:
 5. If the backend change is authoritative, record compatibility impact and affected consumers before updating any downstream artifact.
 6. Update the golden fixture only after the authority and compatibility review is complete.
 7. Refresh or regenerate verified consumer artifacts from the accepted fixture path. During Phase 0, manual artifacts may be updated only as verified contract artifacts with evidence.
-8. Re-run fixture comparison, consumer verification, and artifact freshness for the affected contract family.
+8. Re-run fixture comparison, consumer verification, artifact freshness, and request-boundary verification for the affected contract family where applicable.
 9. Update milestone evidence with the drift classification, fixture/artifact actions, verification commands, and rollback path.
 10. Update durable contract documentation when the change alters contract lifecycle, versioning, compatibility, authority ownership, or consumer obligations.
 
@@ -309,6 +322,7 @@ For the locally certified repository dashboard pilot, the minimum acceptance com
 ```powershell
 dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~ContractConsumerVerificationTests
 dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~ContractGeneratedArtifactFreshnessTests
+dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~ContractRequestBoundaryTests
 ```
 
 The full backend test project remains the certification check before accepting a Milestone 0.2 checkpoint.
