@@ -2643,8 +2643,12 @@ fn decision_proposal_transition(
 }
 
 fn backend_get_value(path: &str, fallback: &str) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!("{BACKEND_URL}{path}"))
-        .map_err(|error| error.to_string())?;
+    backend_get_value_from(BACKEND_URL, path, fallback)
+}
+
+fn backend_get_value_from(base_url: &str, path: &str, fallback: &str) -> Result<Value, String> {
+    let response =
+        reqwest::blocking::get(format!("{base_url}{path}")).map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
         return response.json().map_err(|error| error.to_string());
@@ -2690,14 +2694,77 @@ fn response_error<T>(response: reqwest::blocking::Response, fallback: &str) -> R
     let status = response.status();
     let message = match response.json::<ErrorResponse>() {
         Ok(error_response) if error_response.boundary_violation.is_some() => {
-            serde_json::to_string(&error_response)
-                .unwrap_or_else(|_| error_response.error)
+            serde_json::to_string(&error_response).unwrap_or_else(|_| error_response.error)
         }
         Ok(error_response) => error_response.error,
         Err(_) => format!("{fallback} with status {status}"),
     };
 
     Err(message)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{
+        io::{Read, Write},
+        net::TcpListener,
+        thread,
+    };
+
+    #[test]
+    fn backend_get_value_relays_opaque_json_without_interpretation() {
+        let expected = json!({
+            "id": "opaque-response",
+            "unknownField": {
+                "nested": [
+                    { "kind": "backend-owned-enum-like-string", "value": "NeedsReview" },
+                    { "kind": "null-carrier", "value": null },
+                    { "kind": "empty-array-carrier", "value": [] }
+                ],
+                "emptyObject": {}
+            },
+            "items": [
+                "alpha",
+                null,
+                { "semanticStatus": "BackendOwnsThis" }
+            ],
+            "emptyString": "",
+            "emptyArray": [],
+            "explicitNull": null
+        });
+        let base_url = serve_json_once(expected.to_string());
+
+        let actual = backend_get_value_from(&base_url, "/opaque", "opaque lookup failed")
+            .expect("opaque JSON response should relay");
+
+        assert_eq!(actual, expected);
+    }
+
+    fn serve_json_once(body: String) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("test server should bind");
+        let address = listener
+            .local_addr()
+            .expect("test server should have address");
+
+        thread::spawn(move || {
+            let (mut stream, _) = listener
+                .accept()
+                .expect("test server should accept request");
+            let mut buffer = [0; 1024];
+            let _ = stream.read(&mut buffer);
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            stream
+                .write_all(response.as_bytes())
+                .expect("test server should write response");
+        });
+
+        format!("http://{address}")
+    }
 }
 
 fn backend_executable_path() -> Result<PathBuf, String> {

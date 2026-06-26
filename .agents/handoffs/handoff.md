@@ -1,24 +1,27 @@
-# Handoff: 2026-06-26 Slice 0003
+# Handoff: 2026-06-26 Slice 0004
 
-Current milestone: 0.1 Restore Structural Verification.
+Current milestone state: Milestone 0.1 is accepted; this slice completed the authorized shell passivity preparation before Milestone 0.2.
 
 New state from this slice:
 
-- Added `.agents/milestones/m0.1-structural-verification-certification.md`.
-- Milestone 0.1 is now certified for local command-line structural verification only.
-- Updated `.agents/milestones/m0.1-structural-verification.md` checklist to complete based on slice 0001, slice 0002, and the certification package.
-- Added `docs/architectural-capabilities.md` with the first capability row for structural verification.
-- Added `docs/architectural-mechanisms.md` with the local verifier baseline and current quarantines.
-- Rotated the previous active handoff to `.agents/handoffs/handoff.0002.md`.
+- Added Rust shell regression `backend_get_value_relays_opaque_json_without_interpretation` in `src/CommandCenter.Shell/src/main.rs`.
+- Added testable helper `backend_get_value_from`; production `backend_get_value` still uses `BACKEND_URL`.
+- Updated `docs/architectural-mechanisms.md` with a passive transport invariant matrix.
+- Updated `docs/architectural-capabilities.md` so Rust shell behavioral coverage is partial instead of absent.
+- Added evidence package `.agents/milestones/m0.1-shell-passivity-prep-slice-0004.md`.
+- Rotated previous active handoff to `.agents/handoffs/handoff.0003.md`.
 
-Certified scope:
+Verified:
 
-- Local verifier entry points are accepted for controlled Phase 0 work.
-- `.NET` build/test remain serialized by rule.
-- CI, IDE verification, Tauri packaged release verification, and Rust shell behavioral coverage remain quarantined.
-- Rust compile/test command execution is certified only as compiler/test-harness health; it is not shell behavior certification.
+- `cargo fmt` in `src/CommandCenter.Shell`.
+- `cargo test` in `src/CommandCenter.Shell`: 1 passed.
+- `cargo build` in `src/CommandCenter.Shell`.
+
+Current limits:
+
+- Shell passivity is protected only for successful opaque JSON relay through the generic GET value helper.
+- Backend error-envelope preservation, generic POST relay, command-family classification, and domain-shaped Rust mirror retirement remain open.
 
 Next suggested slice:
 
-- Start Milestone 0.2 only after adding the first narrow shell passivity regression, or make that regression the opening slice of M0.3/M1.3 preparation.
-- The highest leverage next executable protection is a Rust shell test proving passive response relay: opaque backend JSON with unknown fields, nested objects, arrays, nulls, and enum-like strings must be returned unchanged without domain-shaped deserialization.
+- Add a backend error-envelope relay regression in the Rust shell before starting the Contract Oracle implementation, then begin Milestone 0.2 with contract surface inventory and fixture pilot.
