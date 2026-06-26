@@ -44,6 +44,7 @@ Current scope:
 - recursive executable dashboard consumer verification against the manual TypeScript type,
 - recursive executable dashboard consumer verification against the dev Tauri mock,
 - consumer category reporting for runtime, compile-time, and development/test consumers,
+- shared consumer-verification test-support infrastructure for the recursive comparison engine and Rust, TypeScript, and dev mock shape providers,
 - initial parallel truth inventory,
 - fixture gating rule.
 

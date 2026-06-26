@@ -1,65 +1,39 @@
-# Decisions: 2026-06-26 Slice 0014 Consumer Verification Subsystem Checkpoint
+# Decisions: 2026-06-26 Slice 0015 Consumer Verification Extraction Checkpoint
 
-These decisions capture only newly authorized direction from the response accepting dev mock consumer verification and authorizing the checkpoint workflow.
+These decisions capture only newly authorized direction from the response accepting the Slice 0015 infrastructure extraction and authorizing the checkpoint workflow.
 
 ## Authorized Decisions
 
-1. Treat consumer categories as an architectural taxonomy.
-   - Runtime consumers, compile-time consumers, and development/test consumers should remain explicit categories in consumer verification.
-   - Future consumers such as generated artifacts, SDKs, documentation, and OpenAPI artifacts should be categorized without changing Oracle authority.
+1. Treat Slice 0015 as the correct extraction point for consumer-verification infrastructure.
+   - Repeated use through Rust, TypeScript, and dev mock verification justified the abstraction before extraction.
+   - The extraction is accepted as consolidation, not scope expansion.
 
-2. Treat the consumer verification model as an emerging architectural subsystem.
-   - The shared shape extraction and recursive comparison model is no longer just a set of one-off tests.
-   - The next consolidation work should make the existing separation between Oracle fixture, comparison engine, and consumer shape providers explicit.
+2. Preserve the separation between verification infrastructure and verification scenarios.
+   - Repository dashboard tests should remain scenario/spec tests.
+   - Recursive comparison, shape model, drift records, and consumer providers should remain reusable consumer-verification infrastructure.
 
-3. Keep `DevTauriMockShapeProvider` intentionally narrow.
-   - Its purpose is to expose the shape of the specific downstream `devTauriMock` dashboard compatibility consumer.
-   - It should not become a general-purpose TypeScript parser, especially because generated artifacts in Milestone 1.2 may supersede parts of this mechanism.
+3. Keep consumer verification and freshness verification as sibling mechanisms.
+   - Consumer verification answers whether downstream consumers conform to Oracle-observed contracts.
+   - Freshness verification answers whether generated artifacts have fallen behind the Oracle.
+   - Freshness verification should not be implemented as an extension of consumer verification.
 
-4. Do not expand Milestone 0.2 to investigate the transient temp-file lock.
-   - The full backend test rerun passed.
-   - The failure mode aligns with the already documented serialized .NET verifier quarantine.
-   - Treat the event as supporting evidence for the existing quarantine rather than a new M0.2 investigation target.
+4. Keep generated-artifact responsibilities out of the consumer-verification support layer.
+   - Do not add code generation, serializer metadata, fixture lifecycle, artifact writing, or generation orchestration to `ContractConsumerVerificationSupport.cs`.
+   - Those responsibilities belong to later generated-artifact lifecycle work.
 
-5. Prioritize extracting shared verifier/provider infrastructure before generated artifact freshness verification.
-   - Rust, TypeScript, and dev mock providers already prove the abstraction is serving multiple implementations.
-   - A small extraction now is authorized as consolidation, not speculative generalization.
+5. Add generated/stale artifact freshness verification next.
+   - It should sit beside fixture comparison and consumer verification under the Contract Oracle.
+   - It should prepare for Milestone 1.2 without moving Milestone 1.2 responsibilities into Milestone 0.2.
 
-6. Keep generated artifact freshness verification separate from consumer verification.
-   - Consumer verification answers whether a downstream consumer matches the Oracle.
-   - Freshness verification answers whether a generated artifact is stale relative to the Oracle.
-   - This distinction should be preserved for Milestone 1.2.
+6. Distinguish freshness failure modes.
+   - Freshness verification should distinguish stale artifacts, unexpected manual artifact modification, and missing expected artifacts.
+   - These failure modes should have separate remediation paths as the generated ecosystem expands.
 
-7. Treat remaining M0.2 work as consolidation and certification work.
-   - The major architectural pieces are now in place: Oracle definition, boundary taxonomy, contract inventory, endpoint catalog, field ownership, executable fixture, drift classification, runtime/compile-time/development-test consumer verification, and consumer categories.
-   - Remaining slices should strengthen structure, coverage, evidence, and certification rather than introduce new architectural concepts unless a blocker emerges.
-
-8. Commit and push Slice 0014 as an architectural checkpoint.
-   - Rationale: dev mock verification plus consumer categories completes the third repository dashboard consumer class and establishes the consumer verification model as reusable architecture.
-
-## Current M0.2 Certification Posture
-
-| Capability | Status |
-| --- | --- |
-| Oracle definition | Complete |
-| Boundary taxonomy | Complete |
-| Contract inventory | Complete |
-| Endpoint catalog | Complete |
-| Field ownership | Complete for repository dashboard pilot |
-| Serialization observations | Complete for repository dashboard pilot |
-| Executable fixture | Complete for repository dashboard pilot |
-| Recursive Oracle comparison | Complete for repository dashboard pilot |
-| Drift classification | Complete for repository dashboard pilot |
-| Rust runtime consumer verification | Complete for repository dashboard pilot |
-| TypeScript compile-time consumer verification | Complete for repository dashboard pilot |
-| Dev mock development/test consumer verification | Complete for repository dashboard pilot |
-| Consumer category reporting | Complete for repository dashboard pilot |
-| Shared verifier/provider extraction | Next |
-| Generated artifact freshness | Remaining |
-| Oracle certification | Remaining |
+7. Continue leaving unrelated untracked `docs/audits/` work untouched.
+   - It is outside the current milestone slice and not part of the tracked architectural baseline for this checkpoint.
 
 ## Next Authorized Sequence
 
-1. Extract the shared recursive comparison engine and consumer shape/provider abstractions from the test-local implementation.
-2. Keep the extraction small and driven by the existing Rust, TypeScript, and dev mock providers.
-3. Add generated artifact freshness verification later as a separate mechanism from consumer verification.
+1. Commit and push Slice 0015 as an architectural checkpoint.
+2. Stop executing after the checkpoint.
+3. In the next work slice, add generated/stale artifact freshness verification as a sibling mechanism to consumer verification.

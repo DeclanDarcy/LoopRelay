@@ -76,6 +76,7 @@ Primary evidence:
 - `.agents/milestones/m0.2-recursive-consumer-verification-slice-0012.md`
 - `.agents/milestones/m0.2-typescript-consumer-verification-slice-0013.md`
 - `.agents/milestones/m0.2-dev-mock-consumer-verification-slice-0014.md`
+- `.agents/milestones/m0.2-consumer-verifier-extraction-slice-0015.md`
 
 Mechanism intent:
 
@@ -87,7 +88,7 @@ Mechanism intent:
 | Parallel truth visibility | Initial matrix identifies backend, Rust, TypeScript, API wrapper, mock, test, and docs surfaces that can drift. Endpoint catalog records compatibility consumer classes, records the Rust dashboard mirror missing `decisionSessionSummary`, verifies the manual TypeScript dashboard type against the Oracle fixture, and verifies the dev mock dashboard entry as a downstream development/test consumer. | Additional mock commands and full dependency graph coverage remain pending. |
 | Oracle drift detection | `ContractOracleFixtureTests.RepositoryDashboardGoldenFixtureMatchesBackendSerialization` recursively compares backend JSON serialization against `repository-dashboard.golden.json` and ignores object property ordering. | Drift detection covers only the repository dashboard pilot. |
 | Oracle drift policy | `ContractOracleFixtureTests` classifies missing fields, type/value drift, and array length changes as structural drift; additive backend fields are compatibility-review drift unless explicitly allowlisted by JSON path as reviewed compatibility additions. | Policy classification is still local to the pilot helper and has no fixture update tooling or consumer verification chain yet. |
-| Consumer verification | `ContractConsumerVerificationTests` recursively compares repository dashboard Oracle fixture shape against Rust, TypeScript, and dev mock downstream shapes, reports the known Rust missing `decisionSessionSummary` field as downstream consumer drift, verifies the manual TypeScript dashboard type as current, verifies the dev mock dashboard entry as current, resolves imported TS aliases, resolves mock `workspace.*` references, reports consumer category, and protects recursive missing-field behavior with a synthetic verifier regression. | Coverage is repository dashboard only; generated-artifact freshness, command argument verification, additional mock payloads, and semantic reinterpretation verification remain pending. |
+| Consumer verification | `ContractConsumerVerificationTests` uses shared test-support infrastructure in `ContractVerification/ContractConsumerVerificationSupport.cs` to recursively compare repository dashboard Oracle fixture shape against Rust, TypeScript, and dev mock downstream shapes. It reports the known Rust missing `decisionSessionSummary` field as downstream consumer drift, verifies the manual TypeScript dashboard type as current, verifies the dev mock dashboard entry as current, resolves imported TS aliases, resolves mock `workspace.*` references, reports consumer category, and protects recursive missing-field behavior with a synthetic verifier regression. | Coverage is repository dashboard only; generated-artifact freshness, command argument verification, additional mock payloads, and semantic reinterpretation verification remain pending. |
 
 ## Mechanism Lifecycle Rule
 
