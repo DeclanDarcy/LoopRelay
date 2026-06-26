@@ -1,35 +1,28 @@
-# Decisions: 2026-06-26 Slice 0017 Oracle Certification Posture
+# Decisions: 2026-06-26 Slice 0018 Repository Dashboard Request Boundary
 
-These decisions capture only newly authorized direction from the response accepting the Slice 0017 Oracle change workflow and authorizing the next checkpoint.
+These decisions capture only newly authorized direction from the response accepting the Slice 0018 repository dashboard Oracle pilot certification posture.
 
 ## Authorized Decisions
 
-1. Stop expanding Milestone 0.2 Oracle mechanisms for now.
-   - The fixture comparison, consumer verification, artifact freshness, and change workflow mechanisms are sufficient for the current repository dashboard Oracle ecosystem.
-   - New verification capabilities should not be added unless certification exposes a material gap.
+1. Preserve the certification distinction.
+   - The repository dashboard Oracle pilot is locally certified.
+   - Milestone 0.2 is not globally certified.
+   - Future evidence must not overclaim full contract-surface protection from the pilot result.
 
-2. Treat the Oracle change workflow as the lifecycle closure around the existing mechanisms.
-   - The workflow governs how accepted contract changes happen.
-   - It must not be treated as another verification mechanism.
+2. Treat the repository dashboard pilot as the certified reference pattern.
+   - The pilot ecosystem now covers response fixture comparison, drift classification, consumer verification, runtime consumer visibility, TypeScript/manual type visibility, dev mock visibility, artifact freshness, change workflow governance, and local certification evidence.
+   - The pattern can be scaled only by adding comparable evidence to other contract surfaces.
 
-3. Keep the Oracle workflow procedural at this stage.
-   - Automation is deferred so architectural decisions remain explicit.
-   - Generation remains Milestone 1.2 work and must later implement the Oracle rather than redefine it.
+3. Complete the repository dashboard pilot with command/API argument verification before expanding to another fixture family.
+   - The next slice should observe request and command shape drift for the repository dashboard boundary.
+   - The goal is fuller pilot boundary verification, not a general request-contract framework.
 
-4. Begin a Milestone 0.2 consolidation and certification pass next.
-   - The next slice should certify the repository dashboard Oracle ecosystem before expanding contract coverage.
-   - Certification should be structured around Milestone 0.2 exit criteria and evidence, not only passing tests.
-
-5. Make the gap review adversarial.
-   - The certification pass should ask which Milestone 0.2 exit criteria cannot yet be demonstrated by executable evidence.
-   - Documentation-only claims should be identified as gaps or explicit limits.
-
-6. Let certification determine the next expansion path.
-   - If repository dashboard pilot gaps remain, close them first.
-   - If no material pilot gap remains, use the pilot as the template for the second contract family.
+4. Keep the next slice narrow.
+   - Do not introduce a broad request-contract framework yet.
+   - Prove only that the repository dashboard pilot can observe request/argument boundary drift.
 
 ## Next Authorized Sequence
 
-1. Commit and push Slice 0017 as an architectural checkpoint.
+1. Commit and push Slice 0018 certification and decision state.
 2. Stop executing after the checkpoint.
-3. In the next work slice, run the Milestone 0.2 consolidation/certification pass for the repository dashboard Oracle ecosystem.
+3. In the next work slice, add repository dashboard command/API argument verification.

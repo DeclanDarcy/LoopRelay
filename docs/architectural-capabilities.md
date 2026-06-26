@@ -5,7 +5,7 @@ This matrix records architectural capabilities as they become observable, protec
 | Capability | Introduced | Protected | Certified | Reference Documentation | Status |
 | --- | --- | --- | --- | --- | --- |
 | Structural verification | 0.1 | 0.1, future architectural regression framework | 0.1 local command-line baseline | `docs/architectural-mechanisms.md` | Certified locally with quarantines |
-| Canonical contract Oracle | 0.2 | Repository dashboard golden fixture comparison pilot | Pending | `docs/contracts.md` | Partially executable; uncertified |
+| Canonical contract Oracle | 0.2 | Repository dashboard golden fixture comparison, consumer verification, artifact freshness verification, and procedural change workflow | Repository dashboard pilot only | `docs/contracts.md` | Pilot certified locally; Milestone 0.2 remains active |
 
 ## Structural Verification
 
@@ -51,4 +51,6 @@ Current scope:
 - initial parallel truth inventory,
 - fixture gating rule.
 
-The Oracle is now executable for one pilot contract only. Consumer verification covers the Rust, TypeScript, and dev mock repository dashboard consumers, and freshness verification covers the repository dashboard TypeScript contract artifact as a Phase 0 verified manual artifact. The Oracle change workflow is procedural rather than automated. Certification still requires broader golden serialized fixtures, expanded dependency graph coverage, deterministic generated artifacts, fixture update tooling, command argument verification, semantic reinterpretation checks, versioning rules, and workflow automation where needed.
+The Oracle is now locally certified for one pilot contract only: repository dashboard. Certification evidence is recorded in `.agents/milestones/m0.2-repository-dashboard-oracle-certification-slice-0018.md` and covers targeted Oracle tests plus the full backend test project.
+
+Consumer verification covers the Rust, TypeScript, and dev mock repository dashboard consumers, and freshness verification covers the repository dashboard TypeScript contract artifact as a Phase 0 verified manual artifact. The Oracle change workflow is procedural rather than automated. Milestone-level certification still requires broader golden serialized fixtures, expanded dependency graph coverage, deterministic generated artifacts, fixture update tooling, command argument verification, semantic reinterpretation checks, versioning rules, and workflow automation where needed.

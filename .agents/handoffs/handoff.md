@@ -1,28 +1,31 @@
-# Handoff: 2026-06-26 Slice 0017
+# Handoff: 2026-06-26 Slice 0018
 
-Current milestone state: Milestone 0.2 remains active. This slice added procedural Oracle change workflow governance; the Oracle remains partial and uncertified.
+Current milestone state: Milestone 0.2 remains active. This slice locally certified the repository dashboard Contract Oracle pilot; it did not certify Milestone 0.2 globally.
 
 New state from this slice:
 
-- Added the Oracle change workflow to `docs/contracts.md`.
-- Updated `docs/architectural-mechanisms.md` to list `.agents/milestones/m0.2-oracle-change-workflow-slice-0017.md` as Contract Oracle evidence and to describe the workflow mechanism.
-- Updated `docs/architectural-capabilities.md` to include procedural workflow scope and remaining certification gaps.
-- Added `.agents/milestones/m0.2-oracle-change-workflow-slice-0017.md` as evidence.
-- Rotated previous active handoff to `.agents/handoffs/handoff.0016.md`.
+- Added `.agents/milestones/m0.2-repository-dashboard-oracle-certification-slice-0018.md` with consolidation/certification evidence.
+- Updated `docs/architectural-mechanisms.md` to include the Slice 0018 certification evidence and repository dashboard pilot certification mechanism row.
+- Updated `docs/architectural-capabilities.md` to mark the Canonical Contract Oracle as repository-dashboard-pilot certified locally while keeping Milestone 0.2 active.
+- Rotated previous active handoff to `.agents/handoffs/handoff.0017.md`.
 
 Verified:
 
 - `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~ContractOracleFixtureTests`
 - `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~ContractConsumerVerificationTests`
 - `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~ContractGeneratedArtifactFreshnessTests`
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj`
 
 Current limits:
 
-- The workflow is procedural, not automated.
-- No generator, fixture update tool, manifest writer, or versioning automation was added.
 - Oracle coverage remains limited to the repository dashboard pilot.
-- Full backend test project was not rerun in this slice.
+- Milestone 0.2 is not globally certified.
+- Most contract families lack field-level inventory and fixtures.
+- Command argument/body verification and semantic reinterpretation checks remain unimplemented.
+- The TypeScript artifact is still a Phase 0 verified manual artifact, not generated output.
+- Known Rust shell mirror drift remains: `RepositoryDashboardProjection` omits `decisionSessionSummary`.
+- Untracked `docs/audits/` content existed before this slice and was left untouched.
 
 Next suggested slice:
 
-- Run a Milestone 0.2 consolidation/certification pass for the repository dashboard Oracle ecosystem, including full backend tests and a gap review against the M0.2 exit criteria. Then choose either repository dashboard command/API argument verification or the next fixture candidate.
+- Add repository dashboard command/API argument verification to complete the pilot family before expanding to a second contract family.

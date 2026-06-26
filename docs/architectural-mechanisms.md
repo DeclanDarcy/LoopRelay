@@ -79,6 +79,7 @@ Primary evidence:
 - `.agents/milestones/m0.2-consumer-verifier-extraction-slice-0015.md`
 - `.agents/milestones/m0.2-artifact-freshness-slice-0016.md`
 - `.agents/milestones/m0.2-oracle-change-workflow-slice-0017.md`
+- `.agents/milestones/m0.2-repository-dashboard-oracle-certification-slice-0018.md`
 
 Mechanism intent:
 
@@ -93,6 +94,7 @@ Mechanism intent:
 | Consumer verification | `ContractConsumerVerificationTests` uses shared test-support infrastructure in `ContractVerification/ContractConsumerVerificationSupport.cs` to recursively compare repository dashboard Oracle fixture shape against Rust, TypeScript, and dev mock downstream shapes. It reports the known Rust missing `decisionSessionSummary` field as downstream consumer drift, verifies the manual TypeScript dashboard type as current, verifies the dev mock dashboard entry as current, resolves imported TS aliases, resolves mock `workspace.*` references, reports consumer category, and protects recursive missing-field behavior with a synthetic verifier regression. | Coverage is repository dashboard only; command argument verification, additional mock payloads, and semantic reinterpretation verification remain pending. |
 | Contract artifact freshness | `ContractGeneratedArtifactFreshnessTests` uses `repository-dashboard.artifact-freshness.json` and shared test-support infrastructure in `ContractVerification/ContractGeneratedArtifactFreshnessSupport.cs` to hash the repository dashboard Oracle fixture and the current TypeScript repository contract artifact. It fails distinctly for stale artifacts, unexpected manual artifact modification, and missing expected artifacts. | Coverage is repository dashboard only; the artifact is a Phase 0 verified manual contract artifact, not generated output. Deterministic generation, generated headers, artifact writing, command argument artifacts, and generated ecosystem certification remain pending. |
 | Oracle change workflow | `docs/contracts.md` defines the procedural workflow for classifying fixture comparison, consumer verification, and artifact freshness drift before accepting a new baseline. It names the required change record, canonical sequence, acceptance rules, repository dashboard pilot commands, evidence requirements, and rollback requirement. | The workflow is procedural, not automated. It does not assign versions mechanically, generate artifacts, update freshness manifests, or certify additional contract families. |
+| Repository dashboard pilot certification | `.agents/milestones/m0.2-repository-dashboard-oracle-certification-slice-0018.md` records local certification evidence for the repository dashboard fixture comparison, consumer verification, artifact freshness verification, and full backend test suite. | Certification is limited to the repository dashboard pilot. It does not certify Milestone 0.2 globally, command argument/body verification, semantic reinterpretation checks, additional contract families, or generated artifact determinism. |
 
 ## Mechanism Lifecycle Rule
 
