@@ -1,33 +1,35 @@
-# Decisions: 2026-06-26 Slice 0026 Workflow Inventory
+# Decisions: 2026-06-26 Workflow Fixture Ownership Classification
 
-These decisions capture only newly authorized direction from the request to continue the current milestone after Slice 0025 and then rotate handoff/decisions and publish the slice.
+These decisions capture only newly authorized direction from the response accepting Slice 0026 and refining the next workflow fixture slice.
 
 ## Authorized Decisions
 
-1. Continue Milestone 0.2 by starting workflow projection Oracle coverage.
-   - The workflow projection is the next coverage target after repository dashboard and repository workspace repeatability evidence.
-   - The initial workflow slice is inventory-only and must not add a golden fixture before ownership, producers, consumers, compatibility obligations, request boundaries, and semantic lifecycle fields are mapped.
+1. Preserve workflow projection coverage as inventory-only until the fixture slice begins.
+   - Slice 0026 remains protection and planning evidence, not certification.
+   - Workflow coverage should continue through the established Oracle lifecycle: inventory, ownership, fixture, consumer verification, artifact freshness, request-boundary verification, and local certification.
 
-2. Keep workflow primary projection scope narrow.
-   - The primary workflow fixture candidate is `WorkflowInstance` from `GET /api/repositories/{repositoryId}/workflow`.
-   - Sibling workflow endpoint contracts for diagnostics, timeline, history, transitions, gates, recovery, execution, handoff, decisions, operational context, Git, continuation, preparation, health, reports, and certification are not certified by the primary projection inventory.
+2. Use workflow as the next semantic robustness test for the Oracle.
+   - Workflow is the first contract family in Milestone 0.2 to materially stress lifecycle state, transitions, gates, timelines, eligibility flags, diagnostics, completion state, and decision-session linkage.
+   - If the Oracle mechanisms remain unchanged through workflow coverage, that becomes stronger evidence that the architecture generalizes beyond repository read models.
 
-3. Treat workflow inventory as protection, not certification.
-   - Workflow projection has field inventory and fixture planning evidence only.
-   - No workflow fixture, consumer verifier, artifact freshness manifest, request-boundary verifier, or local certification is authorized by this slice.
+3. Treat Rust workflow response passivity as distinct from repository Rust mirror drift.
+   - Because workflow responses already travel through `serde_json::Value`, there is no typed Rust workflow response mirror to verify in the same way as repository dashboard/workspace.
+   - The principal downstream workflow compatibility risks are manual TypeScript types, development mocks, and other manually maintained consumers.
 
-4. Record workflow consumer gaps before fixture work.
-   - Rust shell workflow response pass-through through `serde_json::Value` is relevant evidence for passive transport.
-   - Manual TypeScript workflow types remain the primary parallel response-shape representation.
-   - The absent dev Tauri mock `get_workflow_projection` handler is a coverage gap, not a verified mock consumer.
+4. Classify the missing dev Tauri workflow command handler as a coverage gap, not drift.
+   - Drift requires two existing artifacts that disagree.
+   - The absent `get_workflow_projection` dev mock handler means mock coverage has not been implemented yet.
 
-5. Publish the completed slice and stop executing.
-   - Rotate active handoff and decisions files.
-   - Stage only the intended Slice 0026 files plus the rotated Slice 0025 handoff and decision files.
-   - Commit and push, then stop further milestone execution.
+5. Keep the first workflow fixture narrowly scoped.
+   - The first workflow fixture target remains `GET /api/repositories/{repositoryId}/workflow` and `WorkflowInstance`.
+   - Sibling workflow endpoints must not be included unless separately authorized.
+
+6. Before capturing the workflow fixture, classify every fixture field by architectural role.
+   - Each field should be classified as semantic authority, structural metadata, compatibility field, diagnostic field, or derived presentation helper if any exist.
+   - This classification should happen before or as part of fixture capture so later authority restoration work can reuse the evidence.
 
 ## Next Authorized Sequence
 
-1. Add the primary workflow projection golden fixture for `WorkflowInstance` only.
-2. Use representative data that covers lifecycle enums, explicit nulls, non-empty and empty arrays, transitions, gates, timeline, completion, diagnostics, eligibility booleans, and nullable or populated `decisionSession`.
-3. Do not add sibling workflow endpoint fixtures unless separately authorized.
+1. Stage, commit, and push this decision checkpoint.
+2. Stop executing after the push.
+3. In the next work slice, begin the primary workflow fixture slice by adding field-role classification for the `WorkflowInstance` fixture candidate before accepting the golden fixture.
