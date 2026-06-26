@@ -1,30 +1,38 @@
-# Handoff: 2026-06-26 Slice 0025
+# Handoff: 2026-06-26 Slice 0026
 
-Current milestone state: Milestone 0.2 remains active. This slice recorded cross-pilot Contract Oracle repeatability evidence only; it did not add new contract-family coverage, change verifier behavior, or certify Milestone 0.2 globally.
+Current milestone state: Milestone 0.2 remains active. This slice started workflow projection Oracle coverage with gated field inventory only; it did not add a workflow fixture, verifier behavior, artifact freshness manifest, request-boundary test, or certification.
 
 New state from this slice:
 
-- Added `.agents/milestones/m0.2-oracle-repeatability-evidence-slice-0025.md`.
-- Recorded in `docs/contracts.md`, `docs/architectural-mechanisms.md`, and `docs/architectural-capabilities.md` that repository dashboard and repository workspace reused the same Oracle lifecycle without framework redesign.
-- Rotated previous active handoff to `.agents/handoffs/handoff.0024.md`.
+- Added `.agents/milestones/m0.2-workflow-projection-field-inventory-slice-0026.md`.
+- Updated `docs/contracts.md` to record workflow projection inventory status and fixture gate.
+- Updated `docs/contract-endpoint-catalog.md` with the primary `WorkflowInstance` producer, consumer, request-boundary, compatibility, and top-level field inventory.
+- Updated `docs/architectural-mechanisms.md` and `docs/architectural-capabilities.md` to record workflow inventory as protection, not certification.
+- Rotated previous active handoff to `.agents/handoffs/handoff.0025.md`.
+
+Key findings:
+
+- Primary workflow projection identity is `Workflow projection`, produced by `GET /api/repositories/{repositoryId}/workflow` and backend `WorkflowInstance`.
+- Rust shell currently relays `get_workflow_projection` responses as `serde_json::Value`; no typed Rust `WorkflowInstance` response mirror was found.
+- Manual TypeScript workflow types are the largest parallel response-shape representation.
+- `src/CommandCenter.UI/src/devTauriMock.ts` does not currently handle `get_workflow_projection`; this is a dev mock coverage gap, not a verified mock consumer.
+- Workflow has 27 sibling endpoint contracts that must not be silently certified by the primary workflow projection fixture.
 
 Verification:
 
-- No code or verifier behavior changed in this slice.
-- The repeatability checkpoint relies on Slice 0024's latest recorded verifier results:
-  - focused Oracle mechanism filter: 27 passed, 0 failed, 0 skipped,
-  - full backend test project: 797 passed, 0 failed, 0 skipped.
+- No tests were run because this slice changed documentation and evidence only.
 
 Current limits:
 
+- No workflow golden fixture exists.
+- No workflow consumer verification exists.
+- No workflow artifact freshness manifest exists for `src/CommandCenter.UI/src/types/workflow.ts`.
+- No workflow request-boundary verifier exists.
+- Sibling workflow endpoints remain family-level inventory only.
+- Semantic reinterpretation checks remain pending.
 - Milestone 0.2 remains active and uncertified globally.
-- Repeatability is proven only across repository dashboard and repository workspace pilots.
-- Repository workspace request-boundary certification covers only the primary GET path; refresh and artifact rotation request boundaries remain pending.
-- Known Rust shell mirror drift remains for dashboard and workspace `decisionSessionSummary`.
-- Manual TypeScript repository contract freshness is Phase 0 verified artifact coverage, not generated Milestone 1.2 output.
-- Semantic reinterpretation checks, fixture update automation, deterministic generation, mechanical versioning, stream fixtures, error-envelope fixtures, non-empty command-body verification, and broad dependency graph coverage remain pending.
 - Untracked `docs/audits/` content existed before this slice and was left untouched.
 
 Next suggested slice:
 
-- Start workflow projection Oracle coverage with gated field inventory first: identify the workflow projection identity, backend owner, endpoint producer, shell/TypeScript/mock/UI consumers, parallel representations, compatibility obligations, request boundaries, fixture candidate data, and semantic/lifecycle fields before adding any golden fixture.
+- Add the primary workflow projection golden fixture for `WorkflowInstance` only, using representative data that covers lifecycle enums, explicit nulls, non-empty and empty arrays, transitions, gates, timeline, completion, diagnostics, eligibility booleans, and nullable or populated `decisionSession`. Do not include sibling workflow endpoint fixtures unless separately authorized.

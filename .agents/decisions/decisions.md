@@ -1,38 +1,33 @@
-# Decisions: 2026-06-26 Slice 0025 Repeatability Baseline
+# Decisions: 2026-06-26 Slice 0026 Workflow Inventory
 
-These decisions capture only newly authorized direction from the response accepting Slice 0025 as the repeatability baseline before workflow projection coverage.
+These decisions capture only newly authorized direction from the request to continue the current milestone after Slice 0025 and then rotate handoff/decisions and publish the slice.
 
 ## Authorized Decisions
 
-1. Treat the Oracle lifecycle repeatability claim as explicitly proven at two-pilot scope.
-   - The demonstrated architectural claim is stronger than having two fixtures.
-   - Repository dashboard and repository workspace proved that field inventory, golden fixture comparison, drift classification, consumer verification, artifact freshness, request-boundary verification, and local certification can repeat without Oracle architectural redesign.
-   - The absence of architectural redesign across the second pilot is itself accepted as architectural evidence.
+1. Continue Milestone 0.2 by starting workflow projection Oracle coverage.
+   - The workflow projection is the next coverage target after repository dashboard and repository workspace repeatability evidence.
+   - The initial workflow slice is inventory-only and must not add a golden fixture before ownership, producers, consumers, compatibility obligations, request boundaries, and semantic lifecycle fields are mapped.
 
-2. Preserve the narrow certification posture.
-   - Repository dashboard and repository workspace remain locally certified pilots.
-   - The Oracle capability is not globally certified.
-   - Repeatability evidence must not be conflated with broad contract coverage or milestone-wide certification.
+2. Keep workflow primary projection scope narrow.
+   - The primary workflow fixture candidate is `WorkflowInstance` from `GET /api/repositories/{repositoryId}/workflow`.
+   - Sibling workflow endpoint contracts for diagnostics, timeline, history, transitions, gates, recovery, execution, handoff, decisions, operational context, Git, continuation, preparation, health, reports, and certification are not certified by the primary projection inventory.
 
-3. Treat the two certified pilots as the reference Oracle implementation before workflow begins.
-   - Workflow projection should be evaluated against the existing reference lifecycle rather than evolving the Oracle immediately.
-   - The reference implementation consists of the dashboard and workspace inventory, fixture, drift, consumer-verification, artifact-freshness, request-boundary, and certification mechanisms.
+3. Treat workflow inventory as protection, not certification.
+   - Workflow projection has field inventory and fixture planning evidence only.
+   - No workflow fixture, consumer verifier, artifact freshness manifest, request-boundary verifier, or local certification is authorized by this slice.
 
-4. Start workflow projection coverage with field-level inventory only.
-   - No workflow fixture is authorized until ownership, producers, consumers, compatibility obligations, request boundaries, and semantic lifecycle fields are mapped.
-   - Workflow is selected as the next stress test because it adds richer lifecycle semantics, deeper object graphs, more compatibility consumers, and more request/response interactions.
+4. Record workflow consumer gaps before fixture work.
+   - Rust shell workflow response pass-through through `serde_json::Value` is relevant evidence for passive transport.
+   - Manual TypeScript workflow types remain the primary parallel response-shape representation.
+   - The absent dev Tauri mock `get_workflow_projection` handler is a coverage gap, not a verified mock consumer.
 
-5. Classify workflow-discovered gaps before changing Oracle architecture.
-   - Contract-specific complexity should be handled by inventory and contract-family evidence.
-   - Framework implementation refinement may improve existing mechanisms without changing the Oracle design.
-   - True architectural gaps require explicit governance before changing the Oracle design.
-
-6. Keep documentation-only repeatability slices tied to prior verifier evidence.
-   - Not rerunning tests for Slice 0025 is accepted because it only updated documentation and evidence.
-   - Slice 0025 may rely on Slice 0024's focused Oracle and full backend verification results.
+5. Publish the completed slice and stop executing.
+   - Rotate active handoff and decisions files.
+   - Stage only the intended Slice 0026 files plus the rotated Slice 0025 handoff and decision files.
+   - Commit and push, then stop further milestone execution.
 
 ## Next Authorized Sequence
 
-1. Stage, commit, and push Slice 0025 and this decision checkpoint.
-2. Stop executing after the push.
-3. In the next work slice, begin workflow projection Oracle coverage with gated field inventory only.
+1. Add the primary workflow projection golden fixture for `WorkflowInstance` only.
+2. Use representative data that covers lifecycle enums, explicit nulls, non-empty and empty arrays, transitions, gates, timeline, completion, diagnostics, eligibility booleans, and nullable or populated `decisionSession`.
+3. Do not add sibling workflow endpoint fixtures unless separately authorized.

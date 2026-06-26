@@ -340,9 +340,69 @@ Nested field catalog:
 | `reasoningSummary.*` | `RepositoryReasoningSummary` fields | Reasoning repository/projection | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Shares reasoning summary contract with dashboard. |
 | `decisionSessionSummary.*` | `RepositoryDecisionSessionSummary` fields | Decision-session observability/projection composition | Backend JSON | TS, UI, mock, backend tests; Rust mirror drift | No | Yes | Yes | Shares decision-session summary contract with dashboard. |
 
+## Workflow Projection Field Inventory
+
+Contract identity: `Workflow projection`.
+
+Producer endpoint: `GET /api/repositories/{repositoryId}/workflow`.
+
+Backend projection type: `WorkflowInstance`.
+
+Serialization authority: backend HTTP JSON configuration.
+
+Primary backend owner: `WorkflowProjectionService.ProjectAsync`, which composes execution, handoff, decision, operational-context, Git, decision-session, gate, timeline, and state-machine evidence.
+
+Known consumers:
+
+- Rust Tauri command `get_workflow_projection`, which currently returns `serde_json::Value` and does not define a typed Rust `WorkflowInstance` response mirror.
+- TypeScript API wrapper `getWorkflowProjection(repositoryId)`.
+- Manual TypeScript type `WorkflowInstance` and nested workflow types in `src/CommandCenter.UI/src/types/workflow.ts`.
+- React `useWorkflowProjection`, workflow operations panels, workspace workflow rail, execution workflow rail, governance workspace, selected repository summary, and shell header.
+- Backend workflow projection tests and frontend characterization tests.
+
+Known compatibility findings:
+
+- The Rust shell is currently passive for the workflow projection response shape because `get_workflow_projection` returns `Value`; request-shape compatibility still depends on the manual Rust command signature and backend path string.
+- The dev Tauri mock does not currently expose a `get_workflow_projection` command handler, so it is a workflow coverage gap rather than a verified mock response-shape consumer.
+- The TypeScript transport characterization test verifies `get_workflow_projection` command name and `{ repositoryId }` argument shape with a partial `WorkflowInstance` payload. It does not verify full response shape.
+- The workflow family has many sibling endpoints. The primary workflow projection fixture must not certify diagnostics, timeline, history, transitions, gates, recovery, execution, handoff, decisions, operational-context, Git, continuation, preparation, health, reports, or certification endpoint contracts unless those endpoints receive separate inventory and fixtures.
+
+Current fixture status:
+
+- No workflow golden fixture exists.
+- No workflow consumer verification exists.
+- No workflow artifact freshness manifest exists.
+- No workflow request-boundary verifier exists.
+
+Current request-boundary inventory:
+
+| Boundary participant | Expected request shape |
+| --- | --- |
+| Backend endpoint | `GET /api/repositories/{repositoryId:guid}/workflow`, one required `repositoryId` GUID route parameter, no body metadata. |
+| Rust Tauri command | `get_workflow_projection(repository_id: String)`, backend `GET /api/repositories/{repository_id}/workflow`, no client request-body construction. |
+| TypeScript API wrapper | `getWorkflowProjection(repositoryId: string)`, invokes `get_workflow_projection` with `{ repositoryId }`. |
+
+Top-level field catalog:
+
+| JSON field or group | Backend field/type | Semantic owner | Serialization owner | Consumers | Compatibility field | Required | Derived | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `repositoryId` | `Guid` | Workflow projection/core repository identity | Backend JSON string | TS, UI, tests | No | Yes | Yes | Correlates projection to route repository. |
+| `currentStage`, `progressState`, `blockingGate`, `requiredHumanAction` | workflow lifecycle fields | Workflow state-machine/projection service | Backend JSON string enums and string | TS, UI, tests | No | Yes | Yes | Backend-owned lifecycle and human-action semantics. |
+| `currentExecution`, `executionStatus`, `isExecutionEligible`, `executionFailure`, `executionDiagnostics` | `WorkflowExecutionProjection`, enum, booleans, diagnostics | Workflow execution service | Backend JSON | TS, UI, tests | No | Yes | Yes | Execution lifecycle, eligibility, failure, and evidence diagnostics. |
+| `currentHandoff`, `handoffStatus`, `handoffValidation`, `handoffDiagnostics` | handoff projection and diagnostics | Workflow handoff service | Backend JSON | TS, UI, tests | No | Yes | Yes | Handoff validity and acceptance/rejection state. |
+| `currentDecision`, `decisionStatus`, `isDecisionResolutionEligible`, `isDecisionGovernanceBlocked`, `decisionDiagnostics` | decision projection and diagnostics | Workflow decision service and decision governance inputs | Backend JSON | TS, UI, tests | No | Yes | Yes | Decision lifecycle, resolution legality, governance, quality, certification, and supersession signals. |
+| `currentOperationalContext`, `operationalContextStatus`, `isOperationalContextReviewEligible`, `isOperationalContextPromotionEligible`, `isOperationalContextCommitEligible`, `operationalContextDiagnostics` | operational-context projection and diagnostics | Workflow operational-context service | Backend JSON | TS, UI, tests | No | Yes | Yes | Review, promotion, commit eligibility, source linkage, and continuity signals. |
+| `currentGit`, `gitCommitStatus`, `gitPushStatus`, `hasPendingGitChanges`, `hasUnpushedGitChanges`, `completionEvaluation`, `gitDiagnostics` | Git projection, completion, diagnostics | Workflow Git service | Backend JSON | TS, UI, tests | No | Yes | Yes | Commit/push lifecycle and completion evidence. |
+| `nextPossibleStages`, `validTransitions`, `blockedTransitions` | workflow transition collections | Workflow state-machine service | Backend JSON arrays | TS, UI, tests | No | Yes | Yes | Transition legality and blocking-condition evidence. |
+| `timeline` | `WorkflowTimelineEntry[]` | Workflow projection/timeline factory | Backend JSON array | TS, UI, tests | No | Yes | Yes | Array order is workflow-owned evidence order. |
+| `openGates`, `satisfiedGates`, `gateHistory`, `gateDiagnostics` | gate projections and diagnostics | Workflow gate catalog service | Backend JSON arrays/object | TS, UI, tests | No | Yes | Yes | Human gates, satisfying commands, evidence, missing evidence, and conflicts. |
+| `diagnostics` | `WorkflowProjectionDiagnostics` | Workflow projection/state-machine service | Backend JSON | TS, UI, tests | No | Yes | Yes | Projection inputs, selected state/gate, reasoning, unknown states, and conflicts. |
+| `decisionSession` | `WorkflowDecisionSessionProjection?` | Workflow decision-session service | Backend JSON object/null | TS, UI, tests | No | Yes | Yes | Nullable init-only governance/session projection; explicit null must be fixture-observed. |
+
 ## Remaining Catalog Work
 
 - Extend the repository workspace request-boundary pilot beyond the primary GET path to refresh and artifact rotation routes when those request shapes are selected for Oracle coverage.
+- Add workflow projection golden fixture, TypeScript consumer verification, artifact freshness, and request-boundary verification after the Slice 0026 gated inventory.
 - Extend request-boundary verification beyond dashboard and workspace GET paths to route/query/body compatibility classification.
 - Map every Decision, DecisionSession, Reasoning, and Workflow endpoint to a specific backend service/projection type rather than family-level authority.
 - Classify shell-owned commands separately from backend-relay commands.
