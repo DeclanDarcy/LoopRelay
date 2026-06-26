@@ -117,6 +117,8 @@ The repository dashboard candidate now has the first golden fixture and recursiv
 
 The repository workspace candidate now has the second golden fixture, recursive backend serialization comparison, consumer verification against Rust, TypeScript, and dev mock downstream shapes, artifact freshness verification for the shared TypeScript repository contract artifact, and request-boundary verification for the primary workspace GET path. The fixture intentionally covers artifact inventory nulls and populated arrays, full operational-context item arrays, proposal summary enum/null/date fields, execution summary accepted/commit/push fields, empty decision-session arrays, and the backend-owned `decisionSessionSummary` field that is missing from the Rust workspace mirror. This proves the Oracle pattern can repeat across a second contract family, and local repository workspace Oracle certification is recorded in `.agents/milestones/m0.2-repository-workspace-oracle-certification-slice-0024.md`.
 
+Cross-pilot repeatability evidence is recorded in `.agents/milestones/m0.2-oracle-repeatability-evidence-slice-0025.md`. The repeatability claim is limited to the repository dashboard and repository workspace pilots: both used the same field-inventory, golden-fixture, drift-classification, consumer-verification, artifact-freshness, request-boundary, and local-certification lifecycle without an Oracle framework redesign. This moves Milestone 0.2 from pilot architecture discovery toward broader coverage expansion, but it does not certify the milestone globally.
+
 ## Initial Oracle Fixture Workflow
 
 The initial executable workflow for the repository dashboard and repository workspace fixture pilots is:

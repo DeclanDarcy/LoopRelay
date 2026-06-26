@@ -1,29 +1,30 @@
-# Handoff: 2026-06-26 Slice 0024
+# Handoff: 2026-06-26 Slice 0025
 
-Current milestone state: Milestone 0.2 remains active. This slice locally certified the repository workspace Contract Oracle pilot only; it did not certify all Milestone 0.2 contracts or expand Oracle mechanisms.
+Current milestone state: Milestone 0.2 remains active. This slice recorded cross-pilot Contract Oracle repeatability evidence only; it did not add new contract-family coverage, change verifier behavior, or certify Milestone 0.2 globally.
 
 New state from this slice:
 
-- Added `.agents/milestones/m0.2-repository-workspace-oracle-certification-slice-0024.md`.
-- Recorded repository workspace local certification in `docs/contracts.md`, `docs/architectural-mechanisms.md`, and `docs/architectural-capabilities.md`.
-- Updated `docs/contract-endpoint-catalog.md` so remaining catalog work no longer asks to locally certify the workspace pilot and instead points to future workspace refresh/artifact-rotation request-boundary coverage.
-- Rotated previous active handoff to `.agents/handoffs/handoff.0023.md`.
+- Added `.agents/milestones/m0.2-oracle-repeatability-evidence-slice-0025.md`.
+- Recorded in `docs/contracts.md`, `docs/architectural-mechanisms.md`, and `docs/architectural-capabilities.md` that repository dashboard and repository workspace reused the same Oracle lifecycle without framework redesign.
+- Rotated previous active handoff to `.agents/handoffs/handoff.0024.md`.
 
-Verified:
+Verification:
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "FullyQualifiedName~ContractRequestBoundaryTests|FullyQualifiedName~ContractGeneratedArtifactFreshnessTests|FullyQualifiedName~ContractConsumerVerificationTests|FullyQualifiedName~ContractOracleFixtureTests"`: 27 passed, 0 failed, 0 skipped.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj`: 797 passed, 0 failed, 0 skipped.
+- No code or verifier behavior changed in this slice.
+- The repeatability checkpoint relies on Slice 0024's latest recorded verifier results:
+  - focused Oracle mechanism filter: 27 passed, 0 failed, 0 skipped,
+  - full backend test project: 797 passed, 0 failed, 0 skipped.
 
 Current limits:
 
 - Milestone 0.2 remains active and uncertified globally.
-- Oracle coverage is locally certified only for repository dashboard and repository workspace pilots.
+- Repeatability is proven only across repository dashboard and repository workspace pilots.
 - Repository workspace request-boundary certification covers only the primary GET path; refresh and artifact rotation request boundaries remain pending.
-- Known Rust shell mirror drift remains: `RepositoryWorkspaceProjection` omits `decisionSessionSummary`.
+- Known Rust shell mirror drift remains for dashboard and workspace `decisionSessionSummary`.
 - Manual TypeScript repository contract freshness is Phase 0 verified artifact coverage, not generated Milestone 1.2 output.
-- Semantic reinterpretation checks, fixture update automation, deterministic generation, mechanical versioning, and broad dependency graph coverage remain pending.
+- Semantic reinterpretation checks, fixture update automation, deterministic generation, mechanical versioning, stream fixtures, error-envelope fixtures, non-empty command-body verification, and broad dependency graph coverage remain pending.
 - Untracked `docs/audits/` content existed before this slice and was left untouched.
 
 Next suggested slice:
 
-- Expand Milestone 0.2 to the next representative contract family, preferably workflow projection, starting with gated field inventory and a golden backend serialization fixture before adding consumer verification, artifact freshness, request-boundary verification, and local certification.
+- Start workflow projection Oracle coverage with gated field inventory first: identify the workflow projection identity, backend owner, endpoint producer, shell/TypeScript/mock/UI consumers, parallel representations, compatibility obligations, request boundaries, fixture candidate data, and semantic/lifecycle fields before adding any golden fixture.

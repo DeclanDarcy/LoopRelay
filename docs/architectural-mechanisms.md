@@ -85,6 +85,8 @@ Primary evidence:
 - `.agents/milestones/m0.2-repository-workspace-consumer-verification-slice-0021.md`
 - `.agents/milestones/m0.2-repository-workspace-artifact-freshness-slice-0022.md`
 - `.agents/milestones/m0.2-repository-workspace-request-boundary-slice-0023.md`
+- `.agents/milestones/m0.2-repository-workspace-oracle-certification-slice-0024.md`
+- `.agents/milestones/m0.2-oracle-repeatability-evidence-slice-0025.md`
 
 Mechanism intent:
 
@@ -103,6 +105,7 @@ Mechanism intent:
 | Repository workspace request boundary | `ContractRequestBoundaryTests` verifies `GET /api/repositories/{repositoryId:guid}/workspace` has exactly one required GUID route parameter and no body metadata, Rust `get_repository_workspace(repository_id)` forwards a backend GET without request-body construction, and TypeScript `getRepositoryWorkspace(repositoryId)` invokes `get_repository_workspace` with only `{ repositoryId }`. | Coverage is only the primary workspace GET path. Refresh, artifact rotation, query/body request shapes, route/query/body compatibility classification, and a general request-contract model remain pending. |
 | Repository dashboard pilot certification | `.agents/milestones/m0.2-repository-dashboard-oracle-certification-slice-0018.md` records local certification evidence for the repository dashboard fixture comparison, consumer verification, artifact freshness verification, and full backend test suite. | Certification is limited to the repository dashboard pilot as of Slice 0018. It does not certify Milestone 0.2 globally, request-boundary Slice 0019, semantic reinterpretation checks, additional contract families, or generated artifact determinism. |
 | Repository workspace pilot certification | `.agents/milestones/m0.2-repository-workspace-oracle-certification-slice-0024.md` records local certification evidence for the repository workspace fixture comparison, consumer verification, artifact freshness verification, primary GET request-boundary verification, combined Oracle mechanism filter, and full backend test suite. | Certification is limited to the repository workspace pilot as of Slice 0024. It does not certify Milestone 0.2 globally, refresh or artifact rotation request boundaries, semantic reinterpretation checks, additional contract families, or generated artifact determinism. |
+| Cross-pilot repeatability evidence | `.agents/milestones/m0.2-oracle-repeatability-evidence-slice-0025.md` records that the same Oracle lifecycle repeated across repository dashboard and repository workspace without framework redesign: field inventory, golden fixture, drift classification, consumer verification, artifact freshness, request-boundary verification, and local certification. | Repeatability is proven only across two repository read-model pilots. More complex families such as workflow, decisions, reasoning, execution, streams, errors, and non-empty command bodies still need coverage expansion. |
 
 ## Mechanism Lifecycle Rule
 
