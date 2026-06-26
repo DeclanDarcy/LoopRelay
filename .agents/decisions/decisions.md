@@ -1,38 +1,35 @@
-# Decisions: 2026-06-26 Slice 0011 Consumer Verification Checkpoint
+# Decisions: 2026-06-26 Slice 0012 Recursive Consumer Verification Checkpoint
 
-These decisions capture only newly authorized direction from the response accepting the consumer verification pilot and authorizing the checkpoint workflow.
+These decisions capture only newly authorized direction from the response accepting recursive consumer verification and authorizing the checkpoint workflow.
 
 ## Authorized Decisions
 
-1. Treat Slice 0011 as the point where contract authority and consumer conformance become architecturally separate executable mechanisms.
-   - The Contract Oracle owns backend serialized contract truth.
-   - Consumer verification owns downstream conformance.
-   - Downstream Rust, TypeScript, mocks, and fixtures must not become alternative sources of contract authority.
+1. Treat Slice 0012 as the point where consumer verification becomes a framework-oriented mechanism rather than a consumer-specific test.
+   - Recursive parsing is valuable because it advances the architecture toward reusable consumer conformance verification.
+   - The verifier should continue evolving around consumer shape, recursive comparison, and drift reporting rather than one-off downstream technology checks.
 
-2. Classify the repository dashboard Rust mirror finding as executable consumer drift.
-   - The known `$[].decisionSessionSummary` omission has progressed from observation to documented parallel truth to continuously observable consumer verification evidence.
-   - The drift remains a downstream conformance issue, not a backend contract defect.
+2. Preserve layered consumer verification as the M0.2 progression model.
+   - Level 1: surface field verification is established.
+   - Level 2: recursive structural verification is established for the Rust repository dashboard pilot.
+   - Level 3: multiple consumer verification is next.
+   - Level 4: semantic consumer verification remains future authority-restoration work.
 
-3. Evolve consumer verification by levels rather than by technology-specific one-offs.
-   - Level 1: structural surface checks such as missing fields, extra fields, type mismatches, and property names.
-   - Level 2: nested shape checks including recursive objects, arrays, optional values, and null semantics.
-   - Level 3: consumer inventory across Rust mirrors, manual TypeScript types, development mocks, and characterization fixtures.
-   - Level 4: semantic consumer verification for downstream eligibility, severity, lifecycle, recommendation, or other semantic computation.
+3. Add TypeScript repository dashboard verification next, but keep it symmetric with Rust.
+   - Do not build a standalone TypeScript-only verifier.
+   - Implement TypeScript as another shape provider feeding the same recursive comparison and drift report mechanism.
 
-4. Keep semantic consumer verification separate from structural consumer drift.
-   - Semantic verification should wait until later authority restoration work.
-   - Semantic reinterpretation is a different class of drift from structural mismatch and must remain separately classified.
+4. Split consumer verification conceptually into extraction and comparison before adding TypeScript.
+   - Consumer shape extraction should produce a canonical consumer shape.
+   - Recursive comparison should remain language-agnostic.
+   - Rust, TypeScript, mock, and future generated-contract extractors should all feed the same intermediate representation.
 
-5. Generalize consumer verification before adding more consumers.
-   - Introduce a reusable abstraction with verifier name, source, comparison strategy, and exclusions.
-   - Plug the Rust repository dashboard verifier into that framework first.
-   - Add TypeScript as the second consumer and manual mocks as the third.
+5. Treat the transient execution-session test failure as an observation, not an architectural decision.
+   - It was observed once, passed in isolation, and passed again in the full backend suite.
+   - No M0.2 scope expansion is authorized unless the failure becomes reproducible.
+   - Monitor for recurrence.
 
-6. Treat Milestone 0.2 as architecturally mature in concept but not yet certified.
-   - Remaining work is breadth, framework generalization, additional consumers, broader contract catalog coverage, and certification.
-
-7. Commit and push Slice 0011 as an architectural checkpoint.
-   - Rationale: the Oracle/conformance distinction is now executable, documented, and tested as a coherent architectural capability.
+6. Commit and push Slice 0012 as an architectural checkpoint.
+   - Rationale: recursive consumer verification materially strengthens the Oracle ecosystem by generalizing consumer conformance beyond a one-off Rust comparison.
 
 ## Current M0.2 Certification Posture
 
@@ -45,14 +42,16 @@ These decisions capture only newly authorized direction from the response accept
 | Field catalog | Complete for repository dashboard pilot |
 | Serialization observations | Complete for repository dashboard pilot |
 | First executable fixture | Complete |
-| Recursive comparison | Complete |
+| Recursive Oracle comparison | Complete for repository dashboard pilot |
 | Drift classification | Complete for repository dashboard pilot |
-| Consumer verification | Complete as pilot |
+| Consumer verification | Complete as Rust pilot |
+| Recursive consumer verification | Complete as Rust pilot |
+| Multiple consumer verification | Remaining |
 | Oracle certification | Remaining |
 
 ## Next Authorized Sequence
 
-1. Generalize the consumer verification framework with nested recursive comparison and reusable verifier abstraction.
-2. Plug the Rust repository dashboard verifier into that framework.
-3. Add TypeScript repository dashboard verification.
-4. Add manual mock repository dashboard verification.
+1. Refactor consumer verification around canonical consumer shape extraction and language-agnostic recursive comparison.
+2. Keep the Rust repository dashboard extractor plugged into that pipeline.
+3. Add TypeScript repository dashboard shape extraction and verification.
+4. Add manual mock repository dashboard verification after TypeScript.

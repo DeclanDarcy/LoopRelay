@@ -73,6 +73,7 @@ Primary evidence:
 - `.agents/milestones/m0.2-repository-dashboard-fixture-slice-0009.md`
 - `.agents/milestones/m0.2-oracle-drift-policy-slice-0010.md`
 - `.agents/milestones/m0.2-consumer-verification-slice-0011.md`
+- `.agents/milestones/m0.2-recursive-consumer-verification-slice-0012.md`
 
 Mechanism intent:
 
@@ -84,7 +85,7 @@ Mechanism intent:
 | Parallel truth visibility | Initial matrix identifies backend, Rust, TypeScript, API wrapper, mock, test, and docs surfaces that can drift. Endpoint catalog records compatibility consumer classes and now records the Rust dashboard mirror missing `decisionSessionSummary`. | TypeScript and dev mock downstream drift comparison remain pending. |
 | Oracle drift detection | `ContractOracleFixtureTests.RepositoryDashboardGoldenFixtureMatchesBackendSerialization` recursively compares backend JSON serialization against `repository-dashboard.golden.json` and ignores object property ordering. | Drift detection covers only the repository dashboard pilot. |
 | Oracle drift policy | `ContractOracleFixtureTests` classifies missing fields, type/value drift, and array length changes as structural drift; additive backend fields are compatibility-review drift unless explicitly allowlisted by JSON path as reviewed compatibility additions. | Policy classification is still local to the pilot helper and has no fixture update tooling or consumer verification chain yet. |
-| Consumer verification | `ContractConsumerVerificationTests.RepositoryDashboardRustMirrorReportsKnownDecisionSessionSummaryOmission` compares repository dashboard Oracle fixture top-level fields against the Rust shell `RepositoryDashboardProjection` mirror and reports the known missing `decisionSessionSummary` field as downstream consumer drift. | Coverage is top-level Rust mirror only; no nested shape, TypeScript, mock, generated-artifact, or semantic reinterpretation verification exists yet. |
+| Consumer verification | `ContractConsumerVerificationTests` recursively compares repository dashboard Oracle fixture shape against the Rust shell `RepositoryDashboardProjection` mirror, reports the known missing `decisionSessionSummary` field as downstream consumer drift, and protects recursive missing-field behavior with a synthetic verifier regression. | Coverage is Rust repository dashboard only; TypeScript, mock, generated-artifact freshness, and semantic reinterpretation verification remain pending. |
 
 ## Mechanism Lifecycle Rule
 

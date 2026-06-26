@@ -1,27 +1,32 @@
-# Handoff: 2026-06-26 Slice 0011
+# Handoff: 2026-06-26 Slice 0012
 
-Current milestone state: Milestone 0.2 remains active. This slice added the first downstream consumer verification mechanism for the repository dashboard Contract Oracle pilot; the Oracle remains partial and uncertified.
+Current milestone state: Milestone 0.2 remains active. This slice generalized repository dashboard consumer verification from top-level Rust field comparison to recursive structural shape comparison; the Oracle remains partial and uncertified.
 
 New state from this slice:
 
-- Added `ContractConsumerVerificationTests.RepositoryDashboardRustMirrorReportsKnownDecisionSessionSummaryOmission`.
-- The verifier reads `repository-dashboard.golden.json` as backend Oracle-observed truth and compares top-level fields against the Rust shell `RepositoryDashboardProjection` mirror in `src/CommandCenter.Shell/src/main.rs`.
-- The known Rust omission of `$[].decisionSessionSummary` is now executable consumer drift evidence.
-- Updated `docs/contracts.md`, `docs/architectural-mechanisms.md`, `docs/architectural-capabilities.md`, and `docs/contract-endpoint-catalog.md` to describe the consumer verification pilot.
-- Added `.agents/milestones/m0.2-consumer-verification-slice-0011.md` as evidence.
-- Rotated previous active handoff to `.agents/handoffs/handoff.0010.md`.
+- Reworked `ContractConsumerVerificationTests` around a reusable `ConsumerContractVerifierSpec` and recursive shape verifier.
+- Added a Rust shape provider that parses `src/CommandCenter.Shell/src/main.rs`, follows nested structs, unwraps `Option<T>`, compares `Vec<T>` item shape when fixture items exist, and treats `serde_json::Value` as opaque.
+- Kept the known Rust `$[].decisionSessionSummary` omission as the only expected repository dashboard consumer drift.
+- Added regression coverage for mirrored nested Rust dashboard shape and synthetic nested missing-field detection.
+- Updated `docs/contracts.md`, `docs/architectural-mechanisms.md`, `docs/architectural-capabilities.md`, and `docs/contract-endpoint-catalog.md` to reflect recursive consumer verification scope.
+- Added `.agents/milestones/m0.2-recursive-consumer-verification-slice-0012.md` as evidence.
+- Rotated previous active handoff to `.agents/handoffs/handoff.0011.md`.
 
 Verified:
 
 - `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~ContractConsumerVerificationTests`
 - `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj`
 
+Verification note:
+
+- One first full backend run failed in unrelated `ExecutionSessionServiceTests.AcceptAndRejectEndpointsReturnTransitionedSessionMetadata`; the isolated test passed and the full project then passed on rerun with 777 tests.
+
 Current limits:
 
-- Consumer verification covers only top-level fields for the Rust repository dashboard mirror.
-- Nested shape comparison, TypeScript type verification, dev mock verification, generated artifact freshness, and semantic reinterpretation classification remain pending.
-- The known Rust mirror drift is intentionally not corrected yet.
+- Consumer verification still covers only the Rust repository dashboard mirror.
+- TypeScript type verification, dev mock verification, generated artifact freshness, and semantic reinterpretation classification remain pending.
+- Representative fixture shape cannot prove empty-array item shape or alternate nullable object states without additional variants.
 
 Next suggested slice:
 
-- Generalize repository dashboard consumer verification for nested shape and add TypeScript/manual mock visibility while keeping backend Oracle fixtures authoritative.
+- Add TypeScript repository dashboard type verification against the Oracle fixture using the same consumer-verification levels, keeping TypeScript as a downstream compatibility consumer rather than a contract authority.

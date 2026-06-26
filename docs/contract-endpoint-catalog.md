@@ -160,7 +160,14 @@ Known consumers:
 
 Known compatibility finding:
 
-- The Rust `RepositoryDashboardProjection` mirror currently includes `reasoningSummary` but omits `decisionSessionSummary`, while backend and TypeScript dashboard contracts include `decisionSessionSummary`. This is now protected by `ContractConsumerVerificationTests.RepositoryDashboardRustMirrorReportsKnownDecisionSessionSummaryOmission` as downstream consumer drift evidence for the Oracle and a later passive-transport/manual-mirror retirement slice; it is not corrected by this inventory slice.
+- The Rust `RepositoryDashboardProjection` mirror currently includes `reasoningSummary` but omits `decisionSessionSummary`, while backend and TypeScript dashboard contracts include `decisionSessionSummary`. This is now protected by recursive `ContractConsumerVerificationTests` as downstream consumer drift evidence for the Oracle and a later passive-transport/manual-mirror retirement slice; it is not corrected by this inventory slice.
+
+Current consumer verification scope:
+
+- Rust `RepositoryDashboardProjection` root shape.
+- Nested Rust `Repository`, `ExecutionSessionSummary`, `RepositoryContinuitySummary`, and `RepositoryReasoningSummary` shape reachable from the dashboard fixture.
+- Missing, extra, and value-kind drift classification.
+- TypeScript type verification and dev mock verification remain pending.
 
 Top-level field catalog:
 
@@ -219,7 +226,6 @@ Nested field catalog:
 
 ## Remaining Catalog Work
 
-- Add nested Rust mirror shape comparison for repository dashboard once the top-level consumer verification pilot is generalized.
 - Add TypeScript and dev mock consumer verification against the repository dashboard Oracle fixture.
 - Map every Decision, DecisionSession, Reasoning, and Workflow endpoint to a specific backend service/projection type rather than family-level authority.
 - Classify shell-owned commands separately from backend-relay commands.
