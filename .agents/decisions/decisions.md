@@ -1,39 +1,39 @@
-# Decisions: 2026-06-26 Workflow Artifact Freshness and Certification Authorization
+# Decisions: 2026-06-26 Workflow Certification and Cross-Family Repeatability
 
-These decisions capture only newly authorized direction from the user response following Slice 0031.
+These decisions capture only newly authorized direction from the user response following Slice 0032.
 
 ## Authorized Decisions
 
-1. Accept Slice 0031 as completing the mechanism set for the initial workflow Oracle pilot.
-   - Workflow now has fixture comparison, TypeScript consumer verification, request-boundary verification, and artifact freshness verification.
-   - The remaining workflow questions are certification sufficiency questions, not missing-mechanism questions.
+1. Treat Slice 0032 as the point where the Oracle lifecycle has been locally certified across three independent contract families.
+   - Repository dashboard, repository workspace, and primary workflow projection are the certified pilot families.
+   - The strongest current claim is repeatability of the same Oracle lifecycle, not success of a single pilot.
 
-2. Treat artifact freshness transfer as the key architectural result of Slice 0031.
-   - Repository dashboard, repository workspace, and workflow instance now use the same manifest-driven freshness architecture.
-   - No workflow-specific freshness model should be introduced for the current pilot.
+2. Frame workflow certification as evidence of Oracle repeatability across a richer semantic contract family.
+   - Workflow adds lifecycle, transition, diagnostic, gate, and compatibility-field complexity.
+   - This does not mean Milestone 0.2 is complete.
 
-3. Preserve the workflow contract authority split.
-   - `tests/CommandCenter.Backend.Tests/ContractFixtures/workflow-instance.golden.json` remains Oracle truth.
-   - `src/CommandCenter.UI/src/types/workflow.ts` remains a verified downstream contract artifact, not contract authority.
+3. Preserve the accepted workflow pilot gaps.
+   - Missing dev mock workflow coverage remains a coverage limitation, not a certification blocker.
+   - Missing populated `decisionSession` coverage remains a fixture variant limitation, not a certification blocker.
 
-4. Treat missing dev mock workflow coverage as an accepted certification gap for the initial workflow pilot.
-   - Unless the development mock is expected to support workflow today, the absence affects coverage breadth rather than Oracle mechanism validity.
-   - Record the gap during certification instead of blocking local workflow certification on it.
+4. Treat serialized .NET verifier execution as a stable operational constraint.
+   - Parallel `dotnet test` execution can cause build-output locks.
+   - Continue serializing verifier execution and documenting the quarantine until output isolation is implemented and demonstrated.
 
-5. Treat populated `decisionSession` workflow coverage as an accepted fixture variant gap.
-   - The current `decisionSession: null` fixture pins a valid serialization contract.
-   - A populated variant should remain planned follow-on coverage, not a prerequisite for certifying the initial workflow pilot architecture.
+5. Make the next slice cross-family repeatability evidence.
+   - The evidence should prove that the same mechanism set was reused unchanged across dashboard, workspace, and workflow.
+   - It should compare field inventory, field-role classification, Oracle fixture, consumer verification, artifact freshness, request-boundary verification, and local certification across the three families.
 
-6. Proceed to local workflow Oracle certification next.
-   - The certification slice should verify fixture comparison, TypeScript consumer verification, request-boundary verification, artifact freshness, the full backend test suite, and explicit gap review.
-   - The certification record should state that dev mock workflow coverage and populated `decisionSession` coverage are intentionally absent and do not invalidate the demonstrated Oracle mechanisms.
+6. Do not automatically add a fourth contract family.
+   - First ask which architectural property remains unvalidated by the first three certified pilots.
+   - If no substantial property remains, prefer evidence synthesis over breadth-only coverage.
 
-7. If workflow certification passes, frame the evidence as Oracle repeatability across independent contract families with increasing semantic complexity.
-   - The architectural claim should move beyond repository-only coverage.
-   - The workflow pilot strengthens Milestone 0.2 by demonstrating the same Oracle architecture on a richer semantic contract family.
+7. If another family is needed, prefer decision lifecycle eligibility over error envelope.
+   - Decision lifecycle eligibility better exercises semantic authority, eligibility rules, compatibility-sensitive booleans, and downstream semantic drift risk.
+   - Error envelope remains important, but primarily exercises failure representation rather than semantic authority.
 
 ## Next Authorized Sequence
 
-1. Stage, commit, and push Slice 0031 plus this decision checkpoint.
+1. Stage, commit, and push Slice 0032 plus this decision checkpoint.
 2. Stop executing after the push.
-3. In the next work slice, run local workflow Oracle certification with explicit accepted-gap review.
+3. In the next work slice, produce cross-family Oracle repeatability evidence and use it to decide whether Milestone 0.2 needs another representative family before milestone-level certification.
