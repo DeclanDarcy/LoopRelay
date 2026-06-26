@@ -5,7 +5,18 @@ public sealed class ContractGeneratedArtifactFreshnessTests
     [Fact]
     public void RepositoryDashboardTypeScriptContractArtifactMatchesFreshnessManifest()
     {
-        ContractArtifactFreshnessSpec spec = LoadRepositoryDashboardFreshnessSpec();
+        ContractArtifactFreshnessSpec spec = LoadFreshnessSpec("repository-dashboard.artifact-freshness.json");
+        ContractGeneratedArtifactFreshnessVerifier verifier = new(spec);
+
+        IReadOnlyList<ContractGeneratedArtifactFreshnessDrift> drifts = verifier.Verify(FindRepositoryRoot());
+
+        Assert.Empty(drifts);
+    }
+
+    [Fact]
+    public void RepositoryWorkspaceTypeScriptContractArtifactMatchesFreshnessManifest()
+    {
+        ContractArtifactFreshnessSpec spec = LoadFreshnessSpec("repository-workspace.artifact-freshness.json");
         ContractGeneratedArtifactFreshnessVerifier verifier = new(spec);
 
         IReadOnlyList<ContractGeneratedArtifactFreshnessDrift> drifts = verifier.Verify(FindRepositoryRoot());
@@ -16,7 +27,7 @@ public sealed class ContractGeneratedArtifactFreshnessTests
     [Fact]
     public void FreshnessVerifierReportsStaleGeneratedArtifactWhenOracleSourceChanges()
     {
-        ContractArtifactFreshnessSpec current = LoadRepositoryDashboardFreshnessSpec();
+        ContractArtifactFreshnessSpec current = LoadFreshnessSpec("repository-dashboard.artifact-freshness.json");
         ContractFreshnessArtifactSpec artifact = Assert.Single(current.Artifacts);
         ContractArtifactFreshnessSpec staleSpec = current with
         {
@@ -35,7 +46,7 @@ public sealed class ContractGeneratedArtifactFreshnessTests
     [Fact]
     public void FreshnessVerifierReportsUnexpectedManualArtifactModification()
     {
-        ContractArtifactFreshnessSpec current = LoadRepositoryDashboardFreshnessSpec();
+        ContractArtifactFreshnessSpec current = LoadFreshnessSpec("repository-dashboard.artifact-freshness.json");
         ContractFreshnessArtifactSpec artifact = Assert.Single(current.Artifacts);
         ContractArtifactFreshnessSpec modifiedArtifactSpec = current with
         {
@@ -59,7 +70,7 @@ public sealed class ContractGeneratedArtifactFreshnessTests
     [Fact]
     public void FreshnessVerifierReportsMissingExpectedArtifact()
     {
-        ContractArtifactFreshnessSpec current = LoadRepositoryDashboardFreshnessSpec();
+        ContractArtifactFreshnessSpec current = LoadFreshnessSpec("repository-dashboard.artifact-freshness.json");
         ContractFreshnessArtifactSpec artifact = Assert.Single(current.Artifacts);
         ContractArtifactFreshnessSpec missingArtifactSpec = current with
         {
@@ -80,12 +91,12 @@ public sealed class ContractGeneratedArtifactFreshnessTests
         Assert.Equal("src/CommandCenter.UI/src/types/repositories.generated.missing.ts", drift.ArtifactPath);
     }
 
-    private static ContractArtifactFreshnessSpec LoadRepositoryDashboardFreshnessSpec()
+    private static ContractArtifactFreshnessSpec LoadFreshnessSpec(string fileName)
     {
         string manifestPath = Path.Combine(
             AppContext.BaseDirectory,
             "ContractFixtures",
-            "repository-dashboard.artifact-freshness.json");
+            fileName);
 
         return ContractArtifactFreshnessSpec.Load(manifestPath);
     }

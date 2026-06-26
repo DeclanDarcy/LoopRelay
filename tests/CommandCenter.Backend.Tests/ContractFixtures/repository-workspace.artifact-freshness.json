@@ -1,0 +1,13 @@
+{
+  "contractId": "repository-workspace",
+  "sourcePath": "tests/CommandCenter.Backend.Tests/ContractFixtures/repository-workspace.golden.json",
+  "sourceSha256": "EE7F16F76A6A0A1E6F27E709BA2E174C2B88E3BF5F39003A7AD9EA573B683A25",
+  "artifacts": [
+    {
+      "artifactId": "typescript-repository-workspace-contract",
+      "artifactPath": "src/CommandCenter.UI/src/types/repositories.ts",
+      "artifactKind": "phase0-verified-contract-artifact",
+      "artifactSha256": "3E0F0E372A70A164FC4748B573BCD02890210CE9CD27348ED4DCA0251A4770F4"
+    }
+  ]
+}

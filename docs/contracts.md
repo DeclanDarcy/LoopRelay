@@ -90,6 +90,7 @@ Current catalog scope:
 - Repository workspace field ownership and golden fixture pilot for `GET /api/repositories/{repositoryId}/workspace`, including top-level workspace fields, artifact inventory, full operational-context projection shape, nested execution, reasoning, and decision-session summaries, and known Rust workspace mirror drift.
 - Repository workspace golden fixture at `tests/CommandCenter.Backend.Tests/ContractFixtures/repository-workspace.golden.json`, protected by `ContractOracleFixtureTests.RepositoryWorkspaceGoldenFixtureMatchesBackendSerialization`.
 - Repository workspace Rust, TypeScript, and dev mock consumer verification in `ContractConsumerVerificationTests`, using the shared verifier support to report the known Rust `decisionSessionSummary` omission, verify the manual TypeScript workspace type as current, and verify the `devTauriMock` workspace command payload shape through the typed mock workspace store.
+- Repository workspace contract artifact freshness verification in `ContractGeneratedArtifactFreshnessTests`, backed by `repository-workspace.artifact-freshness.json`, which hashes the workspace Oracle fixture and the current TypeScript repository contract artifact.
 - Priority endpoint rows for the first fixture candidates.
 
 The catalog is not a generated schema. It is an inventory and fixture-selection mechanism used to prevent fixtures from certifying accidental or consumer-owned shape.
@@ -113,7 +114,7 @@ The first fixture candidates are repository dashboard, repository workspace, wor
 
 The repository dashboard candidate now has the first golden fixture and recursive backend serialization comparison. The fixture intentionally covers explicit nulls, populated arrays, non-empty execution summary and history, decision-session summary, timestamps, durations, enum strings, and nested summary objects. Empty-array coverage remains represented by nested zero-count reasoning fields and will need a second dashboard variant or another fixture if empty collection serialization must be pinned for this contract specifically.
 
-The repository workspace candidate now has the second golden fixture, recursive backend serialization comparison, and consumer verification against Rust, TypeScript, and dev mock downstream shapes. The fixture intentionally covers artifact inventory nulls and populated arrays, full operational-context item arrays, proposal summary enum/null/date fields, execution summary accepted/commit/push fields, empty decision-session arrays, and the backend-owned `decisionSessionSummary` field that is missing from the Rust workspace mirror. This proves the Oracle pattern can repeat across a second contract family, but it does not yet add workspace artifact freshness, request-boundary verification, or local certification.
+The repository workspace candidate now has the second golden fixture, recursive backend serialization comparison, consumer verification against Rust, TypeScript, and dev mock downstream shapes, and artifact freshness verification for the shared TypeScript repository contract artifact. The fixture intentionally covers artifact inventory nulls and populated arrays, full operational-context item arrays, proposal summary enum/null/date fields, execution summary accepted/commit/push fields, empty decision-session arrays, and the backend-owned `decisionSessionSummary` field that is missing from the Rust workspace mirror. This proves the Oracle pattern can repeat across a second contract family, but it does not yet add workspace request-boundary verification or local certification.
 
 ## Initial Oracle Fixture Workflow
 
@@ -216,7 +217,7 @@ Artifact freshness verification is separate from both Oracle fixture comparison 
 
 The Oracle fixture comparison asks whether backend serialization still matches accepted backend-owned fixture truth. Consumer verification asks whether downstream shapes conform to that Oracle-observed truth. Artifact freshness asks whether a tracked contract artifact baseline has moved in lockstep with the Oracle source that justifies it.
 
-The repository dashboard pilot stores its freshness manifest at `tests/CommandCenter.Backend.Tests/ContractFixtures/repository-dashboard.artifact-freshness.json`. The manifest records:
+The repository dashboard pilot stores its freshness manifest at `tests/CommandCenter.Backend.Tests/ContractFixtures/repository-dashboard.artifact-freshness.json`, and the repository workspace pilot stores its manifest at `tests/CommandCenter.Backend.Tests/ContractFixtures/repository-workspace.artifact-freshness.json`. Each manifest records:
 
 - contract identity,
 - Oracle source path and SHA-256,
@@ -229,6 +230,7 @@ Current artifact coverage:
 | Contract | Oracle source | Artifact | Artifact kind |
 | --- | --- | --- | --- |
 | Repository dashboard | `tests/CommandCenter.Backend.Tests/ContractFixtures/repository-dashboard.golden.json` | `src/CommandCenter.UI/src/types/repositories.ts` | Phase 0 verified contract artifact |
+| Repository workspace | `tests/CommandCenter.Backend.Tests/ContractFixtures/repository-workspace.golden.json` | `src/CommandCenter.UI/src/types/repositories.ts` | Phase 0 verified contract artifact |
 
 This artifact is still a manual TypeScript contract file, not a generated Milestone 1.2 output. The freshness verifier intentionally treats it as a Phase 0 verified contract artifact so stale/missing/manual-edit failure semantics exist before the generated contract ecosystem is introduced.
 

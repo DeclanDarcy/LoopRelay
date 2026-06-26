@@ -265,6 +265,8 @@ Current fixture coverage:
 - `ContractConsumerVerificationTests.RepositoryWorkspaceRustMirrorRecursivelyVerifiesMirroredNestedShape`.
 - `ContractConsumerVerificationTests.RepositoryWorkspaceTypeScriptTypeMatchesGoldenFixture`.
 - `ContractConsumerVerificationTests.RepositoryWorkspaceDevTauriMockPayloadMatchesGoldenFixture`.
+- `tests/CommandCenter.Backend.Tests/ContractFixtures/repository-workspace.artifact-freshness.json`.
+- `ContractGeneratedArtifactFreshnessTests.RepositoryWorkspaceTypeScriptContractArtifactMatchesFreshnessManifest`.
 - Fixture data covers populated `artifactInventory` arrays, explicit `currentDecisions: null`, full `operationalContext` item arrays, proposal summary enum/date/null fields, populated execution accepted/commit/push metadata, populated reasoning summary, populated decision-session summary, and empty nested arrays for decision-session findings, transfer lineage, and diagnostics.
 
 Current consumer verification scope:
@@ -331,7 +333,7 @@ Nested field catalog:
 
 ## Remaining Catalog Work
 
-- Add repository workspace artifact freshness and request-boundary verification if the workspace pilot proceeds to local certification.
+- Add repository workspace request-boundary verification if the workspace pilot proceeds to local certification.
 - Map every Decision, DecisionSession, Reasoning, and Workflow endpoint to a specific backend service/projection type rather than family-level authority.
 - Classify shell-owned commands separately from backend-relay commands.
 - Add an Oracle dependency graph showing backend projection type to endpoint to shell command to TS API/type to UI consumer.
