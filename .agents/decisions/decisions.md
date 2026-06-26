@@ -1,38 +1,38 @@
-# Decisions: 2026-06-26 Workflow Field Classification Gate
+# Decisions: 2026-06-26 Workflow Fixture Capture Authorization
 
-These decisions capture only newly authorized direction from the user response following checkpoint commit `d02be2b4`.
+These decisions capture only newly authorized direction from the user response following Slice 0027.
 
 ## Authorized Decisions
 
-1. Treat the workflow contract family as inventory-only until the fixture slice executes.
-   - Repository Dashboard Oracle pilot remains locally certified.
-   - Repository Workspace Oracle pilot remains locally certified.
-   - Workflow coverage remains active in Milestone 0.2 but has not progressed beyond inventory.
+1. Accept the workflow fixture field-classification gate as the required control point before the first workflow fixture.
+   - The workflow fixture must remain an observation of an already-understood contract.
+   - The fixture must not define unresolved ownership or semantic decisions.
 
-2. Make workflow fixture field classification an explicit review artifact.
-   - The classification belongs outside the golden fixture itself.
-   - The fixture must not be accepted until each `WorkflowInstance` fixture candidate field has been classified.
+2. Keep flattened workflow statuses and booleans compatibility-sensitive.
+   - Flattened fields must be treated as backend-derived compatibility surfaces when they duplicate richer lifecycle or nested projection state.
+   - The Oracle must not freeze UI convenience fields as independent canonical semantics.
 
-3. Record the following minimum attributes for each classified workflow fixture field.
-   - Field name.
-   - Semantic owner.
-   - Role, such as lifecycle, diagnostic, eligibility, timeline, transition, metadata, or compatibility.
-   - Required or optional serialization expectation.
-   - Nullability and explicit serialization behavior.
-   - Known downstream consumer set.
-   - Compatibility obligation for consumers that depend on the current form.
+3. Preserve explicit `decisionSession` serialization semantics.
+   - `decisionSession = null` and `decisionSession = object` are distinct serialized contract states.
+   - Omission is not equivalent to explicit null for the workflow Oracle fixture path.
 
-4. Keep the first workflow fixture restricted to the primary workflow projection.
-   - The only authorized fixture target is `GET /api/repositories/{repositoryId}/workflow`.
-   - The backend contract identity is `WorkflowInstance`.
+4. Keep the first workflow fixture scoped to the primary workflow endpoint.
+   - The fixture target remains `GET /api/repositories/{repositoryId}/workflow`.
+   - The backend contract identity remains `WorkflowInstance`.
    - Sibling workflow endpoints remain excluded unless separately authorized.
 
-5. Prefer applying the existing Oracle mechanism before changing the mechanism set.
-   - Workflow should validate whether the current Oracle architecture generalizes to a richer contract family.
-   - Introduce a new Oracle mechanism only if workflow exposes a genuine architectural gap that cannot fit the existing lifecycle.
+5. Keep the next workflow fixture slice intentionally minimal.
+   - Capture representative backend JSON.
+   - Produce the golden fixture.
+   - Add backend serialization comparison.
+   - Stop before layering consumer verification, artifact freshness, or request-boundary verification.
+
+6. Add an explicit representative field-category coverage checklist to workflow fixture review evidence.
+   - The checklist should verify coverage for lifecycle enum, compatibility boolean, explicit null, nested object, array, timeline, transition, gate, diagnostic, eligibility, and `decisionSession = null`.
+   - `decisionSession = object` may be planned for a future fixture or variant if it does not fit the first minimal fixture.
 
 ## Next Authorized Sequence
 
-1. Stage, commit, and push this decision checkpoint.
+1. Stage, commit, and push the current Slice 0027 evidence and this decision checkpoint.
 2. Stop executing after the push.
-3. In the next work slice, create the workflow field-classification review artifact before capturing or accepting the primary workflow golden fixture.
+3. In the next work slice, capture the primary `WorkflowInstance` golden fixture and backend serialization comparison only, with fixture review evidence that includes the representative field-category coverage checklist.
