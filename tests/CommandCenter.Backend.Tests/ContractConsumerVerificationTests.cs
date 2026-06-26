@@ -12,6 +12,7 @@ public sealed class ContractConsumerVerificationTests
         RustContractShapeProvider rustShapes = ReadRustContractShapes();
         ContractConsumerVerifier verifier = new(new ConsumerContractVerifierSpec(
             "Rust shell RepositoryDashboardProjection",
+            "runtime consumer",
             rustShapes.GetShape("RepositoryDashboardProjection")));
 
         ConsumerContractDrift[] drifts = verifier.Compare("$[]", backendDashboardItem).ToArray();
@@ -20,6 +21,7 @@ public sealed class ContractConsumerVerificationTests
         Assert.Equal(ConsumerContractDriftKind.MissingDownstreamField, drift.Kind);
         Assert.Equal("$[].decisionSessionSummary", drift.Path);
         Assert.Equal("Rust shell RepositoryDashboardProjection", drift.Consumer);
+        Assert.Equal("runtime consumer", drift.ConsumerCategory);
         Assert.Equal(
             "backend serialized field is omitted by the downstream mirror",
             drift.Message);
@@ -32,6 +34,7 @@ public sealed class ContractConsumerVerificationTests
         RustContractShapeProvider rustShapes = ReadRustContractShapes();
         ContractConsumerVerifier verifier = new(new ConsumerContractVerifierSpec(
             "Rust shell RepositoryDashboardProjection",
+            "runtime consumer",
             rustShapes.GetShape("RepositoryDashboardProjection")));
 
         ConsumerContractDrift[] drifts = verifier.Compare("$[]", backendDashboardItem).ToArray();
@@ -50,6 +53,7 @@ public sealed class ContractConsumerVerificationTests
         TypeScriptContractShapeProvider typeScriptShapes = ReadTypeScriptContractShapes();
         ContractConsumerVerifier verifier = new(new ConsumerContractVerifierSpec(
             "TypeScript RepositoryDashboardProjection",
+            "compile-time consumer",
             typeScriptShapes.GetShape("RepositoryDashboardProjection")));
 
         ConsumerContractDrift[] drifts = verifier.Compare("$[]", backendDashboardItem).ToArray();
@@ -64,6 +68,7 @@ public sealed class ContractConsumerVerificationTests
         TypeScriptContractShapeProvider typeScriptShapes = ReadTypeScriptContractShapes();
         ContractConsumerVerifier verifier = new(new ConsumerContractVerifierSpec(
             "TypeScript RepositoryDashboardProjection",
+            "compile-time consumer",
             typeScriptShapes.GetShape("RepositoryDashboardProjection")));
 
         ConsumerContractDrift[] drifts = verifier.Compare("$[]", backendDashboardItem).ToArray();
@@ -73,6 +78,40 @@ public sealed class ContractConsumerVerificationTests
         Assert.DoesNotContain(drifts, drift => drift.Path.StartsWith("$[].decisionSessionSummary.", StringComparison.Ordinal));
         Assert.DoesNotContain(drifts, drift => drift.Path.StartsWith("$[].decisionSessionSummary.healthDimensions[].", StringComparison.Ordinal));
         Assert.DoesNotContain(drifts, drift => drift.Path.StartsWith("$[].decisionSessionSummary.recentTransferLineage[].", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void RepositoryDashboardDevTauriMockMatchesGoldenFixture()
+    {
+        JsonElement backendDashboardItem = ReadRepositoryDashboardGoldenFixture()[0];
+        TypeScriptContractShapeProvider typeScriptShapes = ReadTypeScriptContractShapes();
+        DevTauriMockShapeProvider mockShapes = ReadDevTauriMockShapes(typeScriptShapes);
+        ContractConsumerVerifier verifier = new(new ConsumerContractVerifierSpec(
+            "devTauriMock dashboardEntry",
+            "development/test consumer",
+            mockShapes.GetDashboardEntryShape()));
+
+        ConsumerContractDrift[] drifts = verifier.Compare("$[]", backendDashboardItem).ToArray();
+
+        Assert.Empty(drifts);
+    }
+
+    [Fact]
+    public void RepositoryDashboardDevTauriMockRecursivelyVerifiesInlineContinuityShape()
+    {
+        JsonElement backendDashboardItem = ReadRepositoryDashboardGoldenFixture()[0];
+        TypeScriptContractShapeProvider typeScriptShapes = ReadTypeScriptContractShapes();
+        DevTauriMockShapeProvider mockShapes = ReadDevTauriMockShapes(typeScriptShapes);
+        ContractConsumerVerifier verifier = new(new ConsumerContractVerifierSpec(
+            "devTauriMock dashboardEntry",
+            "development/test consumer",
+            mockShapes.GetDashboardEntryShape()));
+
+        ConsumerContractDrift[] drifts = verifier.Compare("$[]", backendDashboardItem).ToArray();
+
+        Assert.DoesNotContain(drifts, drift => drift.Path.StartsWith("$[].continuitySummary.", StringComparison.Ordinal));
+        Assert.DoesNotContain(drifts, drift => drift.Path.StartsWith("$[].reasoningSummary.", StringComparison.Ordinal));
+        Assert.DoesNotContain(drifts, drift => drift.Path.StartsWith("$[].decisionSessionSummary.", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -89,6 +128,7 @@ public sealed class ContractConsumerVerificationTests
             """);
         ContractConsumerVerifier verifier = new(new ConsumerContractVerifierSpec(
             "Synthetic consumer",
+            "synthetic consumer category",
             ConsumerContractShape.Object(new Dictionary<string, ConsumerContractShape>(StringComparer.Ordinal)
             {
                 ["repository"] = ConsumerContractShape.Object(new Dictionary<string, ConsumerContractShape>(StringComparer.Ordinal)
@@ -103,6 +143,7 @@ public sealed class ContractConsumerVerificationTests
         ConsumerContractDrift drift = Assert.Single(drifts);
         Assert.Equal(ConsumerContractDriftKind.MissingDownstreamField, drift.Kind);
         Assert.Equal("$.repository.path", drift.Path);
+        Assert.Equal("synthetic consumer category", drift.ConsumerCategory);
     }
 
     private static JsonElement ReadRepositoryDashboardGoldenFixture()
@@ -129,6 +170,14 @@ public sealed class ContractConsumerVerificationTests
             .CombineDirectory("src", "CommandCenter.UI", "src", "types");
 
         return TypeScriptContractShapeProvider.Parse(typesDirectory);
+    }
+
+    private static DevTauriMockShapeProvider ReadDevTauriMockShapes(TypeScriptContractShapeProvider typeScriptShapes)
+    {
+        string source = File.ReadAllText(FindRepositoryRoot()
+            .Combine("src", "CommandCenter.UI", "src", "devTauriMock.ts"));
+
+        return DevTauriMockShapeProvider.Parse(source, typeScriptShapes);
     }
 
     private static DirectoryInfo FindRepositoryRoot()
@@ -169,6 +218,7 @@ public sealed class ContractConsumerVerificationTests
             {
                 yield return new ConsumerContractDrift(
                     spec.Consumer,
+                    spec.ConsumerCategory,
                     ConsumerContractDriftKind.ValueKindChanged,
                     path,
                     $"backend serialized value kind {backend.ValueKind} is not accepted by downstream mirror");
@@ -185,6 +235,7 @@ public sealed class ContractConsumerVerificationTests
                 {
                     yield return new ConsumerContractDrift(
                         spec.Consumer,
+                        spec.ConsumerCategory,
                         ConsumerContractDriftKind.MissingDownstreamField,
                         $"{path}.{missing}",
                         "backend serialized field is omitted by the downstream mirror");
@@ -194,6 +245,7 @@ public sealed class ContractConsumerVerificationTests
                 {
                     yield return new ConsumerContractDrift(
                         spec.Consumer,
+                        spec.ConsumerCategory,
                         ConsumerContractDriftKind.ExtraDownstreamField,
                         $"{path}.{extra}",
                         "downstream mirror declares a field not present in backend serialization");
@@ -381,6 +433,21 @@ public sealed class ContractConsumerVerificationTests
             return ResolveType(typeName, resolving);
         }
 
+        public ConsumerContractShape GetPropertyShape(string typeName, params string[] propertyPath)
+        {
+            ConsumerContractShape current = GetShape(typeName).WithoutNullability();
+            foreach (string property in propertyPath)
+            {
+                Assert.Equal(ConsumerContractShapeKind.Object, current.Kind);
+                Assert.True(
+                    current.Properties.TryGetValue(property, out ConsumerContractShape? next),
+                    $"TypeScript type {typeName} should expose property path {string.Join('.', propertyPath)}.");
+                current = next.WithoutNullability();
+            }
+
+            return current;
+        }
+
         private ConsumerContractShape ResolveType(string typeExpression, HashSet<string> resolving)
         {
             typeExpression = NormalizeTypeExpression(typeExpression);
@@ -517,7 +584,147 @@ public sealed class ContractConsumerVerificationTests
 
     private sealed record TypeScriptTypeDefinition(string Name, string Body);
 
-    private sealed record ConsumerContractVerifierSpec(string Consumer, ConsumerContractShape RootShape);
+    private sealed class DevTauriMockShapeProvider(ConsumerContractShape dashboardEntryShape)
+    {
+        public static DevTauriMockShapeProvider Parse(string source, TypeScriptContractShapeProvider typeScriptShapes)
+        {
+            string returnObject = ExtractReturnObject(source, "dashboardEntry");
+            return new DevTauriMockShapeProvider(ResolveObject(returnObject, typeScriptShapes));
+        }
+
+        public ConsumerContractShape GetDashboardEntryShape()
+        {
+            return dashboardEntryShape;
+        }
+
+        private static ConsumerContractShape ResolveObject(string objectLiteral, TypeScriptContractShapeProvider typeScriptShapes)
+        {
+            string body = objectLiteral.Trim();
+            Assert.StartsWith("{", body);
+            Assert.EndsWith("}", body);
+
+            Dictionary<string, ConsumerContractShape> properties = new(StringComparer.Ordinal);
+            foreach (string entry in SplitTopLevelEntries(body[1..^1]))
+            {
+                int separator = entry.IndexOf(':', StringComparison.Ordinal);
+                if (separator < 0)
+                {
+                    continue;
+                }
+
+                string name = entry[..separator].Trim();
+                string expression = entry[(separator + 1)..].Trim();
+                properties.Add(name, ResolveExpression(expression, typeScriptShapes));
+            }
+
+            return ConsumerContractShape.Object(properties);
+        }
+
+        private static ConsumerContractShape ResolveExpression(string expression, TypeScriptContractShapeProvider typeScriptShapes)
+        {
+            expression = expression.Trim();
+            if (expression.StartsWith("{", StringComparison.Ordinal))
+            {
+                return ResolveObject(expression, typeScriptShapes);
+            }
+
+            Match nullableWorkspaceProperty = Regex.Match(
+                expression,
+                @"^workspace\.[A-Za-z_][A-Za-z0-9_]*\s*===\s*'.*?'\s*\?\s*workspace\.(?<property>[A-Za-z_][A-Za-z0-9_]*)\s*:\s*null$",
+                RegexOptions.Singleline);
+            if (nullableWorkspaceProperty.Success)
+            {
+                return typeScriptShapes
+                    .GetPropertyShape("RepositoryWorkspaceProjection", nullableWorkspaceProperty.Groups["property"].Value)
+                    .AsNullable();
+            }
+
+            Match workspacePath = Regex.Match(
+                expression,
+                @"^workspace\.(?<path>[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)$",
+                RegexOptions.Singleline);
+            if (workspacePath.Success)
+            {
+                string[] propertyPath = workspacePath.Groups["path"].Value.Split('.');
+                if (propertyPath is [.., "length"])
+                {
+                    return ConsumerContractShape.Primitive(ConsumerContractPrimitiveKind.Number);
+                }
+
+                return typeScriptShapes.GetPropertyShape("RepositoryWorkspaceProjection", propertyPath);
+            }
+
+            throw new InvalidOperationException($"Unsupported devTauriMock dashboardEntry expression '{expression}'.");
+        }
+
+        private static string ExtractReturnObject(string source, string functionName)
+        {
+            Match function = Regex.Match(source, $@"function\s+{Regex.Escape(functionName)}\s*\(");
+            Assert.True(function.Success, $"devTauriMock function {functionName} should exist.");
+
+            int returnIndex = source.IndexOf("return", function.Index, StringComparison.Ordinal);
+            Assert.True(returnIndex >= 0, $"devTauriMock function {functionName} should return an object.");
+
+            int objectStart = source.IndexOf('{', returnIndex);
+            Assert.True(objectStart >= 0, $"devTauriMock function {functionName} should return an object literal.");
+
+            int depth = 0;
+            for (int index = objectStart; index < source.Length; index++)
+            {
+                if (source[index] == '{')
+                {
+                    depth++;
+                }
+                else if (source[index] == '}')
+                {
+                    depth--;
+                    if (depth == 0)
+                    {
+                        return source[objectStart..(index + 1)];
+                    }
+                }
+            }
+
+            throw new InvalidOperationException($"Could not parse returned object literal for {functionName}.");
+        }
+
+        private static IReadOnlyList<string> SplitTopLevelEntries(string body)
+        {
+            List<string> entries = [];
+            int depth = 0;
+            int start = 0;
+            for (int index = 0; index < body.Length; index++)
+            {
+                if (body[index] == '{')
+                {
+                    depth++;
+                }
+                else if (body[index] == '}')
+                {
+                    depth--;
+                }
+                else if (body[index] == ',' && depth == 0)
+                {
+                    AddEntry(body[start..index]);
+                    start = index + 1;
+                }
+            }
+
+            AddEntry(body[start..]);
+            return entries;
+
+            void AddEntry(string entry)
+            {
+                string trimmed = entry.Trim();
+                if (trimmed.Length > 0)
+                {
+                    entries.Add(trimmed);
+                }
+            }
+        }
+    }
+
+    private sealed record ConsumerContractVerifierSpec(string Consumer, string ConsumerCategory, ConsumerContractShape RootShape);
 
     private sealed record ConsumerContractShape(
         ConsumerContractShapeKind Kind,
@@ -582,6 +789,7 @@ public sealed class ContractConsumerVerificationTests
 
     private sealed record ConsumerContractDrift(
         string Consumer,
+        string ConsumerCategory,
         ConsumerContractDriftKind Kind,
         string Path,
         string Message);

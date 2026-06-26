@@ -162,6 +162,7 @@ Known compatibility finding:
 
 - The Rust `RepositoryDashboardProjection` mirror currently includes `reasoningSummary` but omits `decisionSessionSummary`, while backend and TypeScript dashboard contracts include `decisionSessionSummary`. This is now protected by recursive `ContractConsumerVerificationTests` as downstream consumer drift evidence for the Oracle and a later passive-transport/manual-mirror retirement slice; it is not corrected by this inventory slice.
 - The manual TypeScript `RepositoryDashboardProjection` currently matches the Oracle fixture shape, including imported execution summary aliases and nested decision-session summary arrays. This proves TypeScript is a verified compatibility consumer for the repository dashboard pilot, not a contract authority.
+- The dev Tauri mock `dashboardEntry(workspace)` currently matches the Oracle fixture shape, including inline continuity summary fields and workspace-derived reasoning and decision-session summaries. This proves the development/test mock is a verified compatibility consumer for the repository dashboard pilot, not a contract authority.
 
 Current consumer verification scope:
 
@@ -169,8 +170,10 @@ Current consumer verification scope:
 - Nested Rust `Repository`, `ExecutionSessionSummary`, `RepositoryContinuitySummary`, and `RepositoryReasoningSummary` shape reachable from the dashboard fixture.
 - TypeScript `RepositoryDashboardProjection` root shape.
 - Nested TypeScript `Repository`, `ExecutionSessionSummary`, `RepositoryContinuitySummary`, `RepositoryReasoningSummary`, `RepositoryDecisionSessionSummary`, `RepositoryDecisionSessionHealthDimension`, and `RepositoryDecisionSessionTransferSummary` shape reachable from the dashboard fixture.
+- Dev Tauri mock `dashboardEntry(workspace)` root shape.
+- Inline dev mock `continuitySummary` shape and workspace-derived `reasoningSummary` and `decisionSessionSummary` shapes reachable from the dashboard fixture.
+- Runtime, compile-time, and development/test consumer category reporting.
 - Missing, extra, and value-kind drift classification.
-- Dev mock verification remains pending.
 
 Top-level field catalog:
 

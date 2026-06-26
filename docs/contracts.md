@@ -84,12 +84,12 @@ Current catalog scope:
 - Repository dashboard field ownership pilot for `GET /api/repositories`, including top-level fields, nested summary fields, nullability, derived status, and known compatibility drift.
 - Repository dashboard golden fixture at `tests/CommandCenter.Backend.Tests/ContractFixtures/repository-dashboard.golden.json`, protected by `ContractOracleFixtureTests.RepositoryDashboardGoldenFixtureMatchesBackendSerialization`.
 - Repository dashboard drift policy classification in `ContractOracleFixtureTests`, with structural drift failing immediately and additive field drift requiring explicit compatibility review.
-- Repository dashboard Rust and TypeScript consumer verification in `ContractConsumerVerificationTests`, which recursively compares the backend golden fixture shape against downstream consumer shapes, reports the known Rust `decisionSessionSummary` omission as downstream consumer drift, and verifies the manual TypeScript dashboard type as current for the pilot fixture.
+- Repository dashboard Rust, TypeScript, and dev mock consumer verification in `ContractConsumerVerificationTests`, which recursively compares the backend golden fixture shape against downstream consumer shapes, reports the known Rust `decisionSessionSummary` omission as downstream consumer drift, verifies the manual TypeScript dashboard type as current, and verifies the `devTauriMock` dashboard entry shape for the pilot fixture.
 - Priority endpoint rows for the first fixture candidates.
 
 The catalog is not a generated schema. It is an inventory and fixture-selection mechanism used to prevent fixtures from certifying accidental or consumer-owned shape.
 
-The repository dashboard pilot currently exposes one executable compatibility finding: the Rust `RepositoryDashboardProjection` mirror omits `decisionSessionSummary`, while the backend and TypeScript dashboard contracts include it. `ContractConsumerVerificationTests` records this as downstream consumer drift and separately verifies the manual TypeScript `RepositoryDashboardProjection` shape against the same Oracle fixture. This is evidence for the Oracle and a later shell/manual-mirror migration; the Oracle fixture does not treat any downstream mirror as contract authority.
+The repository dashboard pilot currently exposes one executable compatibility finding: the Rust `RepositoryDashboardProjection` mirror omits `decisionSessionSummary`, while the backend, TypeScript dashboard contract, and dev mock dashboard entry include it. `ContractConsumerVerificationTests` records this as downstream consumer drift and separately verifies the manual TypeScript `RepositoryDashboardProjection` shape and `devTauriMock` dashboard entry shape against the same Oracle fixture. This is evidence for the Oracle and a later shell/manual-mirror migration; the Oracle fixture does not treat any downstream mirror as contract authority.
 
 ## Fixture Gating Rule
 
@@ -137,7 +137,15 @@ Reviewed compatibility additions are path-specific. A reviewed additive field do
 
 Consumer verification is separate from Oracle fixture comparison. The Oracle compares backend serialization to accepted backend-owned fixture truth. Consumer verification compares downstream representations against that Oracle-observed truth and reports where a consumer is stale, invented, or structurally incompatible.
 
-The consumer verification pilot now uses a reusable verifier specification with a consumer name and root consumer shape. The Rust shape provider parses `src/CommandCenter.Shell/src/main.rs`, follows nested struct references, unwraps `Option<T>` nullability, compares `Vec<T>` array item shape when the fixture contains an item, and treats `serde_json::Value` as opaque transport shape. The TypeScript shape provider parses exported type aliases under `src/CommandCenter.UI/src/types`, resolves imported/manual aliases through the shared type folder, treats string-literal unions as string-valued contracts, unwraps nullable unions, and compares array item shape when the fixture contains an item.
+The consumer verification pilot now uses a reusable verifier specification with a consumer name, consumer category, and root consumer shape. The Rust shape provider parses `src/CommandCenter.Shell/src/main.rs`, follows nested struct references, unwraps `Option<T>` nullability, compares `Vec<T>` array item shape when the fixture contains an item, and treats `serde_json::Value` as opaque transport shape. The TypeScript shape provider parses exported type aliases under `src/CommandCenter.UI/src/types`, resolves imported/manual aliases through the shared type folder, treats string-literal unions as string-valued contracts, unwraps nullable unions, and compares array item shape when the fixture contains an item. The dev mock shape provider parses `src/CommandCenter.UI/src/devTauriMock.ts`, extracts the `dashboardEntry(workspace)` returned object shape, resolves `workspace.*` references through the TypeScript workspace type, recognizes inline object literals, and treats `.length` projections as numeric fields.
+
+Consumer categories currently reported by the verifier are:
+
+| Consumer | Category |
+| --- | --- |
+| Rust `RepositoryDashboardProjection` mirror | Runtime consumer |
+| TypeScript `RepositoryDashboardProjection` type | Compile-time consumer |
+| `devTauriMock` `dashboardEntry` object | Development/test consumer |
 
 It classifies:
 
@@ -151,6 +159,7 @@ Current finding:
 
 - `src/CommandCenter.Shell/src/main.rs` omits `$[].decisionSessionSummary` from `RepositoryDashboardProjection`.
 - `src/CommandCenter.UI/src/types/repositories.ts` currently matches the repository dashboard Oracle fixture shape, including imported execution summaries and nested decision-session summary arrays.
+- `src/CommandCenter.UI/src/devTauriMock.ts` currently matches the repository dashboard Oracle fixture shape for the `dashboardEntry(workspace)` mock projection, including inline continuity summary fields and workspace-derived reasoning and decision-session summaries.
 
 Current protection:
 
@@ -158,6 +167,8 @@ Current protection:
 - `RepositoryDashboardRustMirrorRecursivelyVerifiesMirroredNestedShape` proves the Rust mirror's existing nested repository, execution summary/history, continuity summary, and reasoning summary shapes still conform to the backend fixture.
 - `RepositoryDashboardTypeScriptTypeMatchesGoldenFixture` proves the manual TypeScript dashboard type has no missing, extra, or value-kind drift against the pilot fixture.
 - `RepositoryDashboardTypeScriptTypeRecursivelyVerifiesImportedNestedShape` proves imported execution summary aliases and nested decision-session summary arrays are resolved by the shared verifier pipeline.
+- `RepositoryDashboardDevTauriMockMatchesGoldenFixture` proves the dev mock dashboard entry has no missing, extra, or value-kind drift against the pilot fixture.
+- `RepositoryDashboardDevTauriMockRecursivelyVerifiesInlineContinuityShape` proves inline mock object literals and workspace-derived nested summaries participate in the shared verifier pipeline.
 - `ConsumerVerifierReportsNestedMissingFields` protects recursive missing-field behavior independent of the Rust parser.
 
-This pilot does not yet compare dev mocks, command argument bodies, generated artifact freshness, or semantic reinterpretation. Those remain later Milestone 0.2 and Milestone 1.2/1.3 work.
+This pilot does not yet compare command argument bodies, generated artifact freshness, additional mock command payloads, or semantic reinterpretation. Those remain later Milestone 0.2 and Milestone 1.2/1.3 work.
