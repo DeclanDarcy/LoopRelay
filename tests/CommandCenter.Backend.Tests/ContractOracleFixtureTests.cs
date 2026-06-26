@@ -9,6 +9,8 @@ using CommandCenter.Core.Repositories;
 using CommandCenter.Execution;
 using CommandCenter.Execution.Models;
 using CommandCenter.Execution.Primitives;
+using CommandCenter.Workflow.Models;
+using CommandCenter.Workflow.Primitives;
 
 namespace CommandCenter.Backend.Tests;
 
@@ -52,6 +54,25 @@ public sealed class ContractOracleFixtureTests
             expected.RootElement,
             actual.RootElement,
             ContractDriftPolicy.NoCompatibilityDriftAllowed("Repository workspace"));
+    }
+
+    [Fact]
+    public void WorkflowInstanceGoldenFixtureMatchesBackendSerialization()
+    {
+        WorkflowInstance workflow = CreateRepresentativeWorkflowInstance();
+        string actualJson = JsonSerializer.Serialize(workflow, BackendJsonOptions);
+        string expectedJson = File.ReadAllText(Path.Combine(
+            AppContext.BaseDirectory,
+            "ContractFixtures",
+            "workflow-instance.golden.json"));
+
+        using JsonDocument expected = JsonDocument.Parse(expectedJson);
+        using JsonDocument actual = JsonDocument.Parse(actualJson);
+
+        JsonContractAssert.MatchesFixture(
+            expected.RootElement,
+            actual.RootElement,
+            ContractDriftPolicy.NoCompatibilityDriftAllowed("Workflow instance"));
     }
 
     [Fact]
@@ -408,6 +429,348 @@ public sealed class ContractOracleFixtureTests
                 Diagnostics = [],
                 GeneratedAt = generatedAt
             }
+        };
+    }
+
+    private static WorkflowInstance CreateRepresentativeWorkflowInstance()
+    {
+        Guid repositoryId = Guid.Parse("cccccccc-dddd-eeee-ffff-000000000000");
+        Guid executionId = Guid.Parse("dddddddd-eeee-ffff-0000-111111111111");
+        DateTimeOffset executionStartedAt = new(2026, 06, 26, 8, 0, 0, TimeSpan.Zero);
+        DateTimeOffset executionCompletedAt = new(2026, 06, 26, 8, 12, 0, TimeSpan.Zero);
+        DateTimeOffset handoffAcceptedAt = new(2026, 06, 26, 8, 20, 0, TimeSpan.Zero);
+        DateTimeOffset decisionCreatedAt = new(2026, 06, 26, 8, 30, 0, TimeSpan.Zero);
+        DateTimeOffset decisionResolvedAt = new(2026, 06, 26, 8, 45, 0, TimeSpan.Zero);
+        DateTimeOffset contextCreatedAt = new(2026, 06, 26, 8, 50, 0, TimeSpan.Zero);
+        DateTimeOffset contextReviewedAt = new(2026, 06, 26, 9, 5, 0, TimeSpan.Zero);
+        DateTimeOffset timelineBase = new(2026, 06, 26, 9, 10, 0, TimeSpan.Zero);
+
+        WorkflowCompletionEvaluation completion = new(
+            repositoryId,
+            false,
+            "Commit approval is still required before workflow completion.",
+            null,
+            ["execution accepted", "decision resolved", "context reviewed"],
+            ["push evidence is not available yet"]);
+
+        WorkflowExecutionDiagnostics executionDiagnostics = new(
+            repositoryId,
+            [".agents/handoffs/handoff.md"],
+            [],
+            [],
+            ["Completed execution was accepted and is no longer the active gate."]);
+
+        WorkflowHandoffValidation handoffValidation = new(
+            true,
+            ["handoff exists", "handoff accepted"],
+            []);
+
+        WorkflowHandoffDiagnostics handoffDiagnostics = new(
+            repositoryId,
+            [".agents/handoffs/handoff.md"],
+            [],
+            [],
+            ["Accepted handoff allows decision review to proceed."]);
+
+        WorkflowDecisionDiagnostics decisionDiagnostics = new(
+            repositoryId,
+            ["decisions", "governance", "quality", "certification"],
+            ["Resolved decision closes the decision gate."],
+            ["No blocking governance findings."],
+            ["Quality score mixed:61."],
+            ["Decision lifecycle certification passed."],
+            [],
+            []);
+
+        WorkflowOperationalContextDiagnostics operationalContextDiagnostics = new(
+            repositoryId,
+            ["operational-context-proposal", "decision DEC-0007"],
+            ["Reviewed operational context is ready for promotion before commit."],
+            ["Review accepted by human operator."],
+            ["Promotion has not been recorded."],
+            ["Proposal links to decision DEC-0007 and execution dddddddd-eeee-ffff-0000-111111111111."],
+            []);
+
+        WorkflowGitDiagnostics gitDiagnostics = new(
+            repositoryId,
+            ["git status", "commit preparation"],
+            ["push result"],
+            ["Pending changes require commit approval."],
+            ["Push cannot run before commit."],
+            ["Git stage is waiting on human commit approval."],
+            []);
+
+        WorkflowTransition decisionToContext = new(
+            WorkflowStage.Decision,
+            WorkflowStage.OperationalContext,
+            WorkflowGateType.DecisionResolution,
+            WorkflowBlockingCondition.UnresolvedDecision,
+            "Decision resolution allows operational context review.");
+        WorkflowTransition contextToCommit = new(
+            WorkflowStage.OperationalContext,
+            WorkflowStage.Commit,
+            WorkflowGateType.OperationalContextReview,
+            WorkflowBlockingCondition.PendingContextReview,
+            "Reviewed operational context allows commit approval.");
+        WorkflowTransition commitToPush = new(
+            WorkflowStage.Commit,
+            WorkflowStage.Push,
+            WorkflowGateType.CommitApproval,
+            WorkflowBlockingCondition.PendingCommitApproval,
+            "Commit approval allows push approval.");
+
+        WorkflowTransitionResult validTransition = new(
+            contextToCommit,
+            true,
+            false,
+            new WorkflowGateResolution(
+                WorkflowGateType.OperationalContextReview,
+                WorkflowBlockingCondition.PendingContextReview,
+                "Review the operational context proposal.",
+                true),
+            null,
+            "Operational context review is satisfied.");
+        WorkflowTransitionResult blockedTransition = new(
+            commitToPush,
+            false,
+            true,
+            new WorkflowGateResolution(
+                WorkflowGateType.CommitApproval,
+                WorkflowBlockingCondition.PendingCommitApproval,
+                "Approve the prepared commit.",
+                false),
+            WorkflowBlockingCondition.PendingCommitApproval,
+            "Commit approval is required before push.");
+
+        WorkflowGateEvidence openGateEvidence = new(
+            "git",
+            ".agents/workflow/gates.json",
+            "Pending changes require a reviewed commit.",
+            timelineBase.AddMinutes(1),
+            "gate-open-fingerprint");
+        WorkflowGate openGate = new(
+            "commit-approval",
+            WorkflowGateType.CommitApproval,
+            repositoryId,
+            WorkflowStage.Commit,
+            WorkflowGateStatus.Open,
+            "Approve the prepared commit.",
+            "commit_execution_session",
+            ["commit_execution_session"],
+            "git",
+            ".agents/workflow/gates.json",
+            timelineBase.AddMinutes(1),
+            null,
+            null,
+            "Pending changes are present.",
+            [openGateEvidence]);
+
+        WorkflowGateEvidence satisfiedGateEvidence = new(
+            "decisions",
+            ".agents/decisions/decisions.md",
+            "Decision DEC-0007 was resolved.",
+            decisionResolvedAt,
+            "gate-satisfied-fingerprint");
+        WorkflowGate satisfiedGate = new(
+            "decision-resolution",
+            WorkflowGateType.DecisionResolution,
+            repositoryId,
+            WorkflowStage.Decision,
+            WorkflowGateStatus.Satisfied,
+            "Resolve the generated decision.",
+            "resolve_decision",
+            ["resolve_decision"],
+            "decisions",
+            ".agents/decisions/decisions.md",
+            decisionCreatedAt,
+            decisionResolvedAt,
+            "human",
+            "Decision was resolved.",
+            [satisfiedGateEvidence]);
+
+        WorkflowGateDiagnostics gateDiagnostics = new(
+            repositoryId,
+            WorkflowGateType.CommitApproval,
+            [openGate],
+            [satisfiedGate],
+            ["CommitApproval=commit_execution_session", "PushApproval=push_execution_session"],
+            ["Commit approval is the only open gate."],
+            [],
+            []);
+
+        WorkflowStateMachineDiagnostics stateMachineDiagnostics = new(
+            repositoryId,
+            WorkflowStage.Commit,
+            WorkflowProgressState.AwaitingGate,
+            WorkflowGateType.CommitApproval,
+            [WorkflowStage.Push],
+            [validTransition],
+            [blockedTransition],
+            ["Canonical graph selected Commit because context review is complete and commit approval is pending."],
+            ["Push transition rejected until commit approval exists."]);
+
+        WorkflowProjectionDiagnostics projectionDiagnostics = new(
+            repositoryId,
+            ["execution", "handoff", "decisions", "operational-context", "git"],
+            WorkflowStage.Commit,
+            WorkflowGateType.CommitApproval,
+            [WorkflowStage.Push],
+            [validTransition],
+            [blockedTransition],
+            stateMachineDiagnostics,
+            ["Flattened workflow fields derive from nested backend projection state."],
+            [],
+            []);
+
+        return new WorkflowInstance(
+            repositoryId,
+            WorkflowStage.Commit,
+            WorkflowProgressState.AwaitingGate,
+            WorkflowGateType.CommitApproval,
+            "Approve the prepared commit.",
+            new WorkflowExecutionProjection(
+                repositoryId,
+                executionId,
+                WorkflowExecutionStatus.Completed,
+                executionStartedAt,
+                executionCompletedAt,
+                null,
+                handoffAcceptedAt,
+                null,
+                null,
+                null,
+                null,
+                null,
+                true,
+                true,
+                null,
+                false,
+                null,
+                executionDiagnostics),
+            WorkflowExecutionStatus.Completed,
+            false,
+            null,
+            executionDiagnostics,
+            new WorkflowHandoffProjection(
+                repositoryId,
+                executionId,
+                "handoff-0007",
+                ".agents/handoffs/handoff.md",
+                WorkflowHandoffStatus.Accepted,
+                executionCompletedAt,
+                handoffAcceptedAt,
+                null,
+                true,
+                "Execution accepted for workflow fixture coverage.",
+                handoffValidation,
+                handoffDiagnostics),
+            WorkflowHandoffStatus.Accepted,
+            handoffValidation,
+            handoffDiagnostics,
+            new WorkflowDecisionProjection(
+                repositoryId,
+                "DEC-0007",
+                null,
+                null,
+                "proposal-0007",
+                "package-0007",
+                WorkflowDecisionStatus.Resolved,
+                "ReadyForResolution",
+                "Accepted",
+                "MinorRefinement",
+                decisionCreatedAt,
+                decisionResolvedAt,
+                true,
+                false,
+                "Clear",
+                "Mixed:61",
+                "Passed",
+                null,
+                decisionDiagnostics),
+            WorkflowDecisionStatus.Resolved,
+            true,
+            false,
+            decisionDiagnostics,
+            new WorkflowOperationalContextProjection(
+                repositoryId,
+                "ctx-0007",
+                WorkflowOperationalContextStatus.Accepted,
+                "Accepted",
+                "PendingPromotion",
+                contextCreatedAt,
+                contextReviewedAt,
+                null,
+                "operator",
+                "Operational context reviewed for the workflow fixture.",
+                "DEC-0007",
+                executionId.ToString(),
+                false,
+                true,
+                false,
+                operationalContextDiagnostics),
+            WorkflowOperationalContextStatus.Accepted,
+            false,
+            true,
+            false,
+            operationalContextDiagnostics,
+            new WorkflowGitProjection(
+                repositoryId,
+                WorkflowGitStatus.AwaitingCommit,
+                WorkflowGitStatus.NotReady,
+                null,
+                "feature/workflow-fixture",
+                null,
+                null,
+                true,
+                false,
+                true,
+                false,
+                true,
+                false,
+                completion,
+                gitDiagnostics),
+            WorkflowGitStatus.AwaitingCommit,
+            WorkflowGitStatus.NotReady,
+            true,
+            false,
+            completion,
+            gitDiagnostics,
+            [WorkflowStage.Push],
+            [validTransition],
+            [blockedTransition],
+            [
+                new WorkflowTimelineEntry(
+                    WorkflowTimelineEventType.ExecutionCompleted,
+                    WorkflowStage.Handoff,
+                    executionCompletedAt,
+                    "Execution completed and produced handoff evidence.",
+                    "execution",
+                    ".agents/handoffs/handoff.md",
+                    "timeline-execution-completed"),
+                new WorkflowTimelineEntry(
+                    WorkflowTimelineEventType.DecisionResolved,
+                    WorkflowStage.Decision,
+                    decisionResolvedAt,
+                    "Decision DEC-0007 resolved.",
+                    "decisions",
+                    ".agents/decisions/decisions.md",
+                    "timeline-decision-resolved"),
+                new WorkflowTimelineEntry(
+                    WorkflowTimelineEventType.OperationalContextAccepted,
+                    WorkflowStage.OperationalContext,
+                    contextReviewedAt,
+                    "Operational context proposal accepted.",
+                    "continuity",
+                    ".agents/operational_context.md",
+                    "timeline-context-accepted")
+            ],
+            [openGate],
+            [satisfiedGate],
+            [satisfiedGate],
+            gateDiagnostics,
+            projectionDiagnostics)
+        {
+            DecisionSession = null
         };
     }
 

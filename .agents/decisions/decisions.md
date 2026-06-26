@@ -1,38 +1,37 @@
-# Decisions: 2026-06-26 Workflow Fixture Capture Authorization
+# Decisions: 2026-06-26 Workflow Instance Fixture Checkpoint Authorization
 
-These decisions capture only newly authorized direction from the user response following Slice 0027.
+These decisions capture only newly authorized direction from the user response following Slice 0028.
 
 ## Authorized Decisions
 
-1. Accept the workflow fixture field-classification gate as the required control point before the first workflow fixture.
-   - The workflow fixture must remain an observation of an already-understood contract.
-   - The fixture must not define unresolved ownership or semantic decisions.
+1. Accept Slice 0028 as an architectural checkpoint.
+   - The workflow family has crossed from inventory/review-gate status into executable Oracle coverage.
+   - The fixture was introduced after field-role classification and within the existing Milestone 0.2 lifecycle.
 
-2. Keep flattened workflow statuses and booleans compatibility-sensitive.
-   - Flattened fields must be treated as backend-derived compatibility surfaces when they duplicate richer lifecycle or nested projection state.
-   - The Oracle must not freeze UI convenience fields as independent canonical semantics.
+2. Treat `workflow-instance.golden.json` as backend serialization Oracle evidence only.
+   - The fixture does not make Rust, TypeScript, development mocks, characterization data, or UI code contract authority.
+   - Downstream consumers must continue to be verified or reported against backend Oracle truth.
 
-3. Preserve explicit `decisionSession` serialization semantics.
-   - `decisionSession = null` and `decisionSession = object` are distinct serialized contract states.
-   - Omission is not equivalent to explicit null for the workflow Oracle fixture path.
+3. Preserve `decisionSession: null` as the first workflow fixture state.
+   - Explicit null is now part of the observed `WorkflowInstance` serialization contract.
+   - Populated `decisionSession` is additional future coverage, not a requirement for this first fixture.
 
-4. Keep the first workflow fixture scoped to the primary workflow endpoint.
-   - The fixture target remains `GET /api/repositories/{repositoryId}/workflow`.
-   - The backend contract identity remains `WorkflowInstance`.
-   - Sibling workflow endpoints remain excluded unless separately authorized.
+4. Keep flattened workflow lifecycle and eligibility fields compatibility-sensitive.
+   - Flattened statuses and booleans must derive from backend-owned nested/source authority.
+   - They must not become independent canonical semantics.
 
-5. Keep the next workflow fixture slice intentionally minimal.
-   - Capture representative backend JSON.
-   - Produce the golden fixture.
-   - Add backend serialization comparison.
-   - Stop before layering consumer verification, artifact freshness, or request-boundary verification.
+5. Distinguish workflow fixture variants from workflow contract families.
+   - `workflow-instance.golden.json` is a representative variant within the `WorkflowInstance` contract family.
+   - Future populated decision-session, alternate lifecycle, terminal workflow, or failed workflow fixtures should be treated as variants of the same family unless a distinct contract identity is authorized.
 
-6. Add an explicit representative field-category coverage checklist to workflow fixture review evidence.
-   - The checklist should verify coverage for lifecycle enum, compatibility boolean, explicit null, nested object, array, timeline, transition, gate, diagnostic, eligibility, and `decisionSession = null`.
-   - `decisionSession = object` may be planned for a future fixture or variant if it does not fit the first minimal fixture.
+6. Continue the workflow Oracle lifecycle through downstream consumer verification next.
+   - TypeScript should be verified against the workflow fixture.
+   - Rust should be reported as drift evidence if applicable.
+   - Dev mock coverage should be reported as a coverage gap until implemented.
+   - Freshness and request-boundary verification should wait until after TypeScript consumer verification.
 
 ## Next Authorized Sequence
 
-1. Stage, commit, and push the current Slice 0027 evidence and this decision checkpoint.
+1. Stage, commit, and push the current Slice 0028 checkpoint and this decision checkpoint.
 2. Stop executing after the push.
-3. In the next work slice, capture the primary `WorkflowInstance` golden fixture and backend serialization comparison only, with fixture review evidence that includes the representative field-category coverage checklist.
+3. In the next work slice, add TypeScript consumer verification for `WorkflowInstance` before adding workflow artifact freshness or request-boundary verification.
