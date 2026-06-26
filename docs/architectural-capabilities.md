@@ -5,7 +5,7 @@ This matrix records architectural capabilities as they become observable, protec
 | Capability | Introduced | Protected | Certified | Reference Documentation | Status |
 | --- | --- | --- | --- | --- | --- |
 | Structural verification | 0.1 | 0.1, future architectural regression framework | 0.1 local command-line baseline | `docs/architectural-mechanisms.md` | Certified locally with quarantines |
-| Canonical contract Oracle | 0.2 | Repository dashboard golden fixture comparison, consumer verification, artifact freshness verification, and procedural change workflow | Repository dashboard pilot only | `docs/contracts.md` | Pilot certified locally; Milestone 0.2 remains active |
+| Canonical contract Oracle | 0.2 | Repository dashboard golden fixture comparison, consumer verification, artifact freshness verification, request-boundary verification, and procedural change workflow | Repository dashboard pilot certified locally as of Slice 0018; request-boundary extension verified in Slice 0019 | `docs/contracts.md` | Pilot extended locally; Milestone 0.2 remains active |
 
 ## Structural Verification
 
@@ -46,11 +46,12 @@ Current scope:
 - consumer category reporting for runtime, compile-time, and development/test consumers,
 - shared consumer-verification test-support infrastructure for the recursive comparison engine and Rust, TypeScript, and dev mock shape providers,
 - repository dashboard contract artifact freshness manifest and verifier,
+- repository dashboard no-argument request-boundary verifier,
 - distinct freshness failure modes for stale artifacts, unexpected manual artifact modification, and missing expected artifacts,
 - procedural Oracle change workflow for drift classification, fixture update, consumer/artifact refresh, evidence, and rollback,
 - initial parallel truth inventory,
 - fixture gating rule.
 
-The Oracle is now locally certified for one pilot contract only: repository dashboard. Certification evidence is recorded in `.agents/milestones/m0.2-repository-dashboard-oracle-certification-slice-0018.md` and covers targeted Oracle tests plus the full backend test project.
+The Oracle is now locally certified for one pilot contract only: repository dashboard. Certification evidence is recorded in `.agents/milestones/m0.2-repository-dashboard-oracle-certification-slice-0018.md` and covers targeted Oracle tests plus the full backend test project. Slice 0019 extends the pilot with no-argument request-boundary verification but does not recertify the full pilot or Milestone 0.2 globally.
 
-Consumer verification covers the Rust, TypeScript, and dev mock repository dashboard consumers, and freshness verification covers the repository dashboard TypeScript contract artifact as a Phase 0 verified manual artifact. The Oracle change workflow is procedural rather than automated. Milestone-level certification still requires broader golden serialized fixtures, expanded dependency graph coverage, deterministic generated artifacts, fixture update tooling, command argument verification, semantic reinterpretation checks, versioning rules, and workflow automation where needed.
+Consumer verification covers the Rust, TypeScript, and dev mock repository dashboard consumers, freshness verification covers the repository dashboard TypeScript contract artifact as a Phase 0 verified manual artifact, and request-boundary verification covers the repository dashboard no-argument command/API path. The Oracle change workflow is procedural rather than automated. Milestone-level certification still requires broader golden serialized fixtures, expanded dependency graph coverage, deterministic generated artifacts, fixture update tooling, non-empty command argument/body verification, semantic reinterpretation checks, versioning rules, and workflow automation where needed.

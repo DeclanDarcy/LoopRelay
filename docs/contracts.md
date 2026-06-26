@@ -86,6 +86,7 @@ Current catalog scope:
 - Repository dashboard drift policy classification in `ContractOracleFixtureTests`, with structural drift failing immediately and additive field drift requiring explicit compatibility review.
 - Repository dashboard Rust, TypeScript, and dev mock consumer verification in `ContractConsumerVerificationTests`, backed by shared test-support infrastructure in `ContractVerification/ContractConsumerVerificationSupport.cs`, which recursively compares the backend golden fixture shape against downstream consumer shapes, reports the known Rust `decisionSessionSummary` omission as downstream consumer drift, verifies the manual TypeScript dashboard type as current, and verifies the `devTauriMock` dashboard entry shape for the pilot fixture.
 - Repository dashboard contract artifact freshness verification in `ContractGeneratedArtifactFreshnessTests`, backed by `repository-dashboard.artifact-freshness.json`, which hashes the Oracle fixture and the current TypeScript repository contract artifact to distinguish stale artifacts, unexpected artifact edits, and missing expected artifacts.
+- Repository dashboard request-boundary verification in `ContractRequestBoundaryTests`, which pins `GET /api/repositories` as a no-argument backend route, `list_repositories` as a no-argument Rust Tauri command that forwards a GET without request-body construction, and `listRepositories()` as a TypeScript API wrapper that invokes `list_repositories` without command arguments.
 - Priority endpoint rows for the first fixture candidates.
 
 The catalog is not a generated schema. It is an inventory and fixture-selection mechanism used to prevent fixtures from certifying accidental or consumer-owned shape.
@@ -172,7 +173,27 @@ Current protection:
 - `RepositoryDashboardDevTauriMockRecursivelyVerifiesInlineContinuityShape` proves inline mock object literals and workspace-derived nested summaries participate in the shared verifier pipeline.
 - `ConsumerVerifierReportsNestedMissingFields` protects recursive missing-field behavior independent of the Rust parser.
 
-This pilot does not yet compare command argument bodies, generated artifact freshness, additional mock command payloads, or semantic reinterpretation. Those remain later Milestone 0.2 and Milestone 1.2/1.3 work.
+This pilot does not yet compare non-empty command argument bodies, additional mock command payloads, or semantic reinterpretation. Those remain later Milestone 0.2 and Milestone 1.2/1.3 work.
+
+## Request Boundary Verification Pilot
+
+Request boundary verification is separate from response fixture comparison and downstream response-shape consumer verification. It asks whether the backend endpoint, shell command, and TypeScript API wrapper still agree on the externally observable request shape for a contract boundary.
+
+The repository dashboard request boundary is intentionally no-argument:
+
+| Boundary participant | Expected request shape |
+| --- | --- |
+| Backend endpoint | `GET /api/repositories`, no route parameters, no body metadata. |
+| Rust Tauri command | `list_repositories()`, no command parameters, backend `GET /api/repositories`, no client request-body construction. |
+| TypeScript API wrapper | `listRepositories()`, invokes `list_repositories` without an argument object. |
+
+Current protection:
+
+- `RepositoryDashboardBackendEndpointHasNoRequestArguments` verifies the backend route method, pattern, route parameters, and body metadata.
+- `RepositoryDashboardRustCommandHasNoCommandArgumentsAndForwardsGetWithoutBody` verifies the Rust command signature and GET forwarding path.
+- `RepositoryDashboardTypeScriptApiInvokesCommandWithoutArguments` verifies the TypeScript command invocation has no argument object.
+
+This is still a narrow pilot check. It does not introduce a general request-contract model, does not verify non-empty command DTOs, and does not classify request compatibility for route, query, or body evolution.
 
 ## Contract Artifact Freshness Pilot
 
