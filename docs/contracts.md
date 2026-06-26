@@ -205,3 +205,69 @@ Freshness failure modes:
 | Missing expected artifact | The manifest names an artifact that no longer exists. | Restore the artifact, update the manifest after an approved relocation, or retire the artifact through the compatibility path. |
 
 This pilot does not generate TypeScript, prove artifact determinism, detect manual edits inside generated headers, compare command argument bodies, or certify the generated ecosystem. Those remain Milestone 1.2 responsibilities.
+
+## Oracle Change Workflow
+
+The Oracle change workflow governs how a detected contract drift becomes an accepted contract baseline. It is procedural during Milestone 0.2 so the review path is explicit before generation, regeneration, and lifecycle automation are introduced in later milestones.
+
+The workflow applies to Oracle-managed contracts when one of these mechanisms reports drift:
+
+- golden fixture comparison,
+- downstream consumer verification,
+- contract artifact freshness verification.
+
+### Required Change Record
+
+Every accepted Oracle change must produce evidence that records:
+
+| Field | Requirement |
+| --- | --- |
+| Contract identity | Stable contract family or endpoint identity affected by the change. |
+| Oracle source | Backend projection or command result and serialized fixture path. |
+| Drift source | Fixture comparison, consumer verification, artifact freshness, or manual inventory finding. |
+| Drift classification | Structural drift, compatibility-review drift, consumer drift, stale artifact, unexpected artifact modification, or missing artifact. |
+| Authority owner | Backend authority responsible for the semantic or structural contract change. |
+| Affected consumers | Rust shell, TypeScript types/API wrappers, dev Tauri mock, UI resources/hooks/components, tests, docs, or generated artifacts. |
+| Compatibility path | Required compatibility field, version rule, consumer migration, or explicit statement that no compatibility path is required. |
+| Fixture action | Preserve, update, add, split, or retire the fixture. |
+| Artifact action | Preserve, refresh, regenerate, relocate, or retire each verified artifact. |
+| Verification | Commands and test results proving the accepted baseline. |
+| Rollback path | How to restore the prior accepted contract or compatibility behavior if downstream validation fails. |
+
+### Canonical Sequence
+
+1. Run the relevant Oracle verifier and capture the failing mechanism.
+2. Classify the drift before changing fixtures or consumers.
+3. Identify whether the backend projection or command result is the intended authority change.
+4. If the backend change is not authoritative, repair the producer and keep the existing fixture baseline.
+5. If the backend change is authoritative, record compatibility impact and affected consumers before updating any downstream artifact.
+6. Update the golden fixture only after the authority and compatibility review is complete.
+7. Refresh or regenerate verified consumer artifacts from the accepted fixture path. During Phase 0, manual artifacts may be updated only as verified contract artifacts with evidence.
+8. Re-run fixture comparison, consumer verification, and artifact freshness for the affected contract family.
+9. Update milestone evidence with the drift classification, fixture/artifact actions, verification commands, and rollback path.
+10. Update durable contract documentation when the change alters contract lifecycle, versioning, compatibility, authority ownership, or consumer obligations.
+
+### Classification Rules
+
+| Drift classification | Acceptance rule |
+| --- | --- |
+| Structural drift | Do not update fixtures first. Prove the backend change is authoritative or restore the previous serialized shape. |
+| Compatibility-review drift | Record additive path, consumer impact, compatibility owner, and retirement condition before allowing the fixture baseline to move. |
+| Consumer drift | Keep the Oracle fixture unchanged. Update or quarantine the stale consumer with owner, risk, and retirement criteria. |
+| Stale artifact | Refresh or regenerate the artifact through the approved workflow, then update the freshness manifest with evidence. |
+| Unexpected manual artifact modification | Revert the artifact or accept it only with explicit authority, consumer, verification, and rollback evidence. |
+| Missing expected artifact | Restore the artifact, approve relocation, or retire it through a documented compatibility path. |
+
+### Repository Dashboard Pilot Workflow
+
+For the current repository dashboard pilot, the minimum acceptance command set is:
+
+```powershell
+dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~ContractOracleFixtureTests
+dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~ContractConsumerVerificationTests
+dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~ContractGeneratedArtifactFreshnessTests
+```
+
+The full backend test project remains the certification check before accepting a Milestone 0.2 checkpoint.
+
+This workflow is not yet automation. It does not generate artifacts, assign contract versions mechanically, update manifests automatically, or certify additional contract families. Those remain pending Oracle lifecycle and generated ecosystem work.
