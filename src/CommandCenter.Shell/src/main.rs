@@ -2733,7 +2733,7 @@ mod tests {
             "emptyArray": [],
             "explicitNull": null
         });
-        let base_url = serve_json_once(expected.to_string());
+        let base_url = serve_response_once("200 OK", expected.to_string());
 
         let actual = backend_get_value_from(&base_url, "/opaque", "opaque lookup failed")
             .expect("opaque JSON response should relay");
@@ -2741,11 +2741,36 @@ mod tests {
         assert_eq!(actual, expected);
     }
 
-    fn serve_json_once(body: String) -> String {
+    #[test]
+    fn backend_get_value_preserves_boundary_violation_error_envelope() {
+        let expected = json!({
+            "error": "architectural boundary violation",
+            "boundaryViolation": {
+                "boundary": "transport",
+                "invariant": "passive-error-relay",
+                "details": {
+                    "unknownBackendField": "preserve-me",
+                    "explicitNull": null,
+                    "emptyArray": []
+                }
+            }
+        });
+        let base_url = serve_response_once("409 Conflict", expected.to_string());
+
+        let actual = backend_get_value_from(&base_url, "/opaque", "opaque lookup failed")
+            .expect_err("backend error envelope should be relayed as an error");
+        let actual: Value =
+            serde_json::from_str(&actual).expect("boundary violation error should remain JSON");
+
+        assert_eq!(actual, expected);
+    }
+
+    fn serve_response_once(status: &str, body: String) -> String {
         let listener = TcpListener::bind("127.0.0.1:0").expect("test server should bind");
         let address = listener
             .local_addr()
             .expect("test server should have address");
+        let status = status.to_string();
 
         thread::spawn(move || {
             let (mut stream, _) = listener
@@ -2754,7 +2779,7 @@ mod tests {
             let mut buffer = [0; 1024];
             let _ = stream.read(&mut buffer);
             let response = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
                 body.len(),
                 body
             );

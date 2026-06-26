@@ -22,4 +22,4 @@ Accepted quarantines:
 - unknown IDE verification path,
 - unknown Tauri packaged release path.
 
-The first shell passive response relay regression proves successful opaque backend JSON is preserved without shell-owned domain interpretation through the generic GET value helper. The next protections are backend error-envelope preservation, POST relay coverage, and command-family classification.
+The shell passive relay regressions now prove successful opaque backend JSON and boundary-violation error envelopes are preserved without shell-owned domain interpretation through the generic GET value helper. The next protections are POST relay coverage, non-boundary error semantics, and command-family classification.
