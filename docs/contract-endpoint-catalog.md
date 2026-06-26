@@ -253,13 +253,29 @@ Known consumers:
 
 Known compatibility finding:
 
-- The Rust `RepositoryWorkspaceProjection` mirror currently includes `reasoningSummary` but omits `decisionSessionSummary`, while backend and TypeScript workspace contracts include `decisionSessionSummary`. This slice records the drift as Oracle evidence and does not correct it, because shell mirror retirement belongs to later generated-consumer or passive-transport work.
+- The Rust `RepositoryWorkspaceProjection` mirror currently includes `reasoningSummary` but omits `decisionSessionSummary`, while backend and TypeScript workspace contracts include `decisionSessionSummary`. This is now protected by recursive `ContractConsumerVerificationTests` as downstream consumer drift evidence for the Oracle and a later passive-transport/manual-mirror retirement slice; it is not corrected by this consumer-verification slice.
+- The manual TypeScript `RepositoryWorkspaceProjection` currently matches the Oracle fixture shape, including imported artifact inventory, operational-context, execution summary, reasoning summary, and decision-session summary aliases. This proves TypeScript is a verified compatibility consumer for the repository workspace response shape, not a contract authority.
+- The dev Tauri mock `get_repository_workspace` payload currently returns typed workspace entries from `state.workspaces[repositoryId]` and matches the Oracle fixture shape. This proves the development/test mock workspace payload is a verified compatibility consumer for the repository workspace response shape, not a contract authority.
 
 Current fixture coverage:
 
 - `tests/CommandCenter.Backend.Tests/ContractFixtures/repository-workspace.golden.json`.
 - `ContractOracleFixtureTests.RepositoryWorkspaceGoldenFixtureMatchesBackendSerialization`.
+- `ContractConsumerVerificationTests.RepositoryWorkspaceRustMirrorReportsKnownDecisionSessionSummaryOmission`.
+- `ContractConsumerVerificationTests.RepositoryWorkspaceRustMirrorRecursivelyVerifiesMirroredNestedShape`.
+- `ContractConsumerVerificationTests.RepositoryWorkspaceTypeScriptTypeMatchesGoldenFixture`.
+- `ContractConsumerVerificationTests.RepositoryWorkspaceDevTauriMockPayloadMatchesGoldenFixture`.
 - Fixture data covers populated `artifactInventory` arrays, explicit `currentDecisions: null`, full `operationalContext` item arrays, proposal summary enum/date/null fields, populated execution accepted/commit/push metadata, populated reasoning summary, populated decision-session summary, and empty nested arrays for decision-session findings, transfer lineage, and diagnostics.
+
+Current consumer verification scope:
+
+- Rust `RepositoryWorkspaceProjection` root shape.
+- Nested Rust `Repository`, `ExecutionSessionSummary`, `ArtifactInventory`, `Artifact`, `OperationalContextProposalSummary`, `OperationalContextProjection`, `OperationalContextItem`, and `RepositoryReasoningSummary` shape reachable from the workspace fixture.
+- TypeScript `RepositoryWorkspaceProjection` root shape.
+- Nested TypeScript artifact inventory, operational-context, execution, reasoning, and decision-session shapes reachable from the workspace fixture.
+- Dev Tauri mock `get_repository_workspace` typed workspace command payload.
+- Runtime, compile-time, and development/test consumer category reporting.
+- Missing, extra, and value-kind drift classification.
 
 Top-level field catalog:
 
@@ -315,7 +331,6 @@ Nested field catalog:
 
 ## Remaining Catalog Work
 
-- Add repository workspace consumer verification against Rust, TypeScript, and dev mock consumers.
 - Add repository workspace artifact freshness and request-boundary verification if the workspace pilot proceeds to local certification.
 - Map every Decision, DecisionSession, Reasoning, and Workflow endpoint to a specific backend service/projection type rather than family-level authority.
 - Classify shell-owned commands separately from backend-relay commands.

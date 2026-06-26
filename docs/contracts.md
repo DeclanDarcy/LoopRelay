@@ -89,6 +89,7 @@ Current catalog scope:
 - Repository dashboard request-boundary verification in `ContractRequestBoundaryTests`, which pins `GET /api/repositories` as a no-argument backend route, `list_repositories` as a no-argument Rust Tauri command that forwards a GET without request-body construction, and `listRepositories()` as a TypeScript API wrapper that invokes `list_repositories` without command arguments.
 - Repository workspace field ownership and golden fixture pilot for `GET /api/repositories/{repositoryId}/workspace`, including top-level workspace fields, artifact inventory, full operational-context projection shape, nested execution, reasoning, and decision-session summaries, and known Rust workspace mirror drift.
 - Repository workspace golden fixture at `tests/CommandCenter.Backend.Tests/ContractFixtures/repository-workspace.golden.json`, protected by `ContractOracleFixtureTests.RepositoryWorkspaceGoldenFixtureMatchesBackendSerialization`.
+- Repository workspace Rust, TypeScript, and dev mock consumer verification in `ContractConsumerVerificationTests`, using the shared verifier support to report the known Rust `decisionSessionSummary` omission, verify the manual TypeScript workspace type as current, and verify the `devTauriMock` workspace command payload shape through the typed mock workspace store.
 - Priority endpoint rows for the first fixture candidates.
 
 The catalog is not a generated schema. It is an inventory and fixture-selection mechanism used to prevent fixtures from certifying accidental or consumer-owned shape.
@@ -112,7 +113,7 @@ The first fixture candidates are repository dashboard, repository workspace, wor
 
 The repository dashboard candidate now has the first golden fixture and recursive backend serialization comparison. The fixture intentionally covers explicit nulls, populated arrays, non-empty execution summary and history, decision-session summary, timestamps, durations, enum strings, and nested summary objects. Empty-array coverage remains represented by nested zero-count reasoning fields and will need a second dashboard variant or another fixture if empty collection serialization must be pinned for this contract specifically.
 
-The repository workspace candidate now has the second golden fixture and recursive backend serialization comparison. The fixture intentionally covers artifact inventory nulls and populated arrays, full operational-context item arrays, proposal summary enum/null/date fields, execution summary accepted/commit/push fields, empty decision-session arrays, and the backend-owned `decisionSessionSummary` field that is missing from the Rust workspace mirror. This proves the Oracle pattern can repeat across a second contract family, but it does not yet add workspace consumer verification, artifact freshness, request-boundary verification, or local certification.
+The repository workspace candidate now has the second golden fixture, recursive backend serialization comparison, and consumer verification against Rust, TypeScript, and dev mock downstream shapes. The fixture intentionally covers artifact inventory nulls and populated arrays, full operational-context item arrays, proposal summary enum/null/date fields, execution summary accepted/commit/push fields, empty decision-session arrays, and the backend-owned `decisionSessionSummary` field that is missing from the Rust workspace mirror. This proves the Oracle pattern can repeat across a second contract family, but it does not yet add workspace artifact freshness, request-boundary verification, or local certification.
 
 ## Initial Oracle Fixture Workflow
 
@@ -143,15 +144,18 @@ Reviewed compatibility additions are path-specific. A reviewed additive field do
 
 Consumer verification is separate from Oracle fixture comparison. The Oracle compares backend serialization to accepted backend-owned fixture truth. Consumer verification compares downstream representations against that Oracle-observed truth and reports where a consumer is stale, invented, or structurally incompatible.
 
-The consumer verification pilot now uses shared test-support infrastructure with a reusable verifier specification, recursive comparison engine, consumer shape model, and source-specific shape providers. The Rust shape provider parses `src/CommandCenter.Shell/src/main.rs`, follows nested struct references, unwraps `Option<T>` nullability, compares `Vec<T>` array item shape when the fixture contains an item, and treats `serde_json::Value` as opaque transport shape. The TypeScript shape provider parses exported type aliases under `src/CommandCenter.UI/src/types`, resolves imported/manual aliases through the shared type folder, treats string-literal unions as string-valued contracts, unwraps nullable unions, and compares array item shape when the fixture contains an item. The dev mock shape provider parses `src/CommandCenter.UI/src/devTauriMock.ts`, extracts the `dashboardEntry(workspace)` returned object shape, resolves `workspace.*` references through the TypeScript workspace type, recognizes inline object literals, and treats `.length` projections as numeric fields.
+The consumer verification pilot now uses shared test-support infrastructure with a reusable verifier specification, recursive comparison engine, consumer shape model, and source-specific shape providers. The Rust shape provider parses `src/CommandCenter.Shell/src/main.rs`, follows nested struct references, unwraps `Option<T>` nullability, honors explicit `#[serde(rename = "...")]` field names before camel-casing, compares `Vec<T>` array item shape when the fixture contains an item, and treats `serde_json::Value` as opaque transport shape. The TypeScript shape provider parses exported type aliases under `src/CommandCenter.UI/src/types`, resolves imported/manual aliases through the shared type folder, treats string-literal unions as string-valued contracts, unwraps nullable unions, and compares array item shape when the fixture contains an item. The dev mock shape provider parses `src/CommandCenter.UI/src/devTauriMock.ts`, extracts the `dashboardEntry(workspace)` returned object shape, resolves `workspace.*` references through the TypeScript workspace type, recognizes inline object literals, treats `.length` projections as numeric fields, and verifies that the repository workspace mock command returns the typed `state.workspaces[repositoryId]` payload.
 
 Consumer categories currently reported by the verifier are:
 
 | Consumer | Category |
 | --- | --- |
 | Rust `RepositoryDashboardProjection` mirror | Runtime consumer |
+| Rust `RepositoryWorkspaceProjection` mirror | Runtime consumer |
 | TypeScript `RepositoryDashboardProjection` type | Compile-time consumer |
+| TypeScript `RepositoryWorkspaceProjection` type | Compile-time consumer |
 | `devTauriMock` `dashboardEntry` object | Development/test consumer |
+| `devTauriMock` `get_repository_workspace` payload | Development/test consumer |
 
 It classifies:
 
@@ -164,8 +168,11 @@ It classifies:
 Current finding:
 
 - `src/CommandCenter.Shell/src/main.rs` omits `$[].decisionSessionSummary` from `RepositoryDashboardProjection`.
+- `src/CommandCenter.Shell/src/main.rs` omits `$.decisionSessionSummary` from `RepositoryWorkspaceProjection`.
 - `src/CommandCenter.UI/src/types/repositories.ts` currently matches the repository dashboard Oracle fixture shape, including imported execution summaries and nested decision-session summary arrays.
+- `src/CommandCenter.UI/src/types/repositories.ts` currently matches the repository workspace Oracle fixture shape, including artifact inventory, operational-context, reasoning, execution, and decision-session summary shapes.
 - `src/CommandCenter.UI/src/devTauriMock.ts` currently matches the repository dashboard Oracle fixture shape for the `dashboardEntry(workspace)` mock projection, including inline continuity summary fields and workspace-derived reasoning and decision-session summaries.
+- `src/CommandCenter.UI/src/devTauriMock.ts` currently returns typed workspace mock payloads for `get_repository_workspace` that match the repository workspace Oracle fixture shape.
 
 Current protection:
 
@@ -175,6 +182,10 @@ Current protection:
 - `RepositoryDashboardTypeScriptTypeRecursivelyVerifiesImportedNestedShape` proves imported execution summary aliases and nested decision-session summary arrays are resolved by the shared verifier pipeline.
 - `RepositoryDashboardDevTauriMockMatchesGoldenFixture` proves the dev mock dashboard entry has no missing, extra, or value-kind drift against the pilot fixture.
 - `RepositoryDashboardDevTauriMockRecursivelyVerifiesInlineContinuityShape` proves inline mock object literals and workspace-derived nested summaries participate in the shared verifier pipeline.
+- `RepositoryWorkspaceRustMirrorReportsKnownDecisionSessionSummaryOmission` keeps the known root-level Rust workspace omission executable.
+- `RepositoryWorkspaceRustMirrorRecursivelyVerifiesMirroredNestedShape` proves the Rust mirror's existing nested repository, execution, artifact inventory, operational-context, and reasoning shapes still conform to the backend fixture.
+- `RepositoryWorkspaceTypeScriptTypeMatchesGoldenFixture` proves the manual TypeScript workspace type has no missing, extra, or value-kind drift against the pilot fixture.
+- `RepositoryWorkspaceDevTauriMockPayloadMatchesGoldenFixture` proves the dev mock workspace command payload has no missing, extra, or value-kind drift against the pilot fixture.
 - `ConsumerVerifierReportsNestedMissingFields` protects recursive missing-field behavior independent of the Rust parser.
 
 This pilot does not yet compare non-empty command argument bodies, additional mock command payloads, or semantic reinterpretation. Those remain later Milestone 0.2 and Milestone 1.2/1.3 work.

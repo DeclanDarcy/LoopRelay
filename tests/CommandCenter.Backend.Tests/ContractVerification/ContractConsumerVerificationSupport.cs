@@ -142,7 +142,7 @@ internal sealed class RustContractShapeProvider(IReadOnlyDictionary<string, Rust
         Dictionary<string, ConsumerContractShape> properties = new(StringComparer.Ordinal);
         foreach (RustFieldDefinition field in structs[structName].Fields)
         {
-            properties.Add(ToCamelCase(field.Name), ResolveType(field.Type, resolving));
+            properties.Add(field.SerializedName ?? ToCamelCase(field.Name), ResolveType(field.Type, resolving));
         }
 
         resolving.Remove(structName);
@@ -175,15 +175,37 @@ internal sealed class RustContractShapeProvider(IReadOnlyDictionary<string, Rust
 
     private static IReadOnlyList<RustFieldDefinition> ReadFields(string body)
     {
-        return body
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(line => !line.StartsWith("#", StringComparison.Ordinal))
-            .Select(line => Regex.Match(line, @"^(?<name>[A-Za-z_][A-Za-z0-9_]*):\s*(?<type>[^,]+),?$"))
-            .Where(field => field.Success)
-            .Select(field => new RustFieldDefinition(
+        List<RustFieldDefinition> fields = [];
+        string? serdeRename = null;
+        foreach (string line in body.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            Match rename = Regex.Match(line, """^\#\[serde\(rename\s*=\s*"(?<name>[^"]+)"\)\]$""");
+            if (rename.Success)
+            {
+                serdeRename = rename.Groups["name"].Value;
+                continue;
+            }
+
+            if (line.StartsWith("#", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            Match field = Regex.Match(line, @"^(?<name>[A-Za-z_][A-Za-z0-9_]*):\s*(?<type>[^,]+),?$");
+            if (!field.Success)
+            {
+                serdeRename = null;
+                continue;
+            }
+
+            fields.Add(new RustFieldDefinition(
                 field.Groups["name"].Value,
-                field.Groups["type"].Value.Trim()))
-            .ToArray();
+                serdeRename,
+                field.Groups["type"].Value.Trim()));
+            serdeRename = null;
+        }
+
+        return fields;
     }
 
     private static bool TryUnwrapGeneric(string rustType, string genericName, out string innerType)
@@ -216,7 +238,7 @@ internal sealed class RustContractShapeProvider(IReadOnlyDictionary<string, Rust
 
 internal sealed record RustStructDefinition(string Name, IReadOnlyList<RustFieldDefinition> Fields);
 
-internal sealed record RustFieldDefinition(string Name, string Type);
+internal sealed record RustFieldDefinition(string Name, string? SerializedName, string Type);
 
 internal sealed class TypeScriptContractShapeProvider(IReadOnlyDictionary<string, TypeScriptTypeDefinition> types)
 {
@@ -391,17 +413,35 @@ internal sealed class TypeScriptContractShapeProvider(IReadOnlyDictionary<string
 
 internal sealed record TypeScriptTypeDefinition(string Name, string Body);
 
-internal sealed class DevTauriMockShapeProvider(ConsumerContractShape dashboardEntryShape)
+internal sealed class DevTauriMockShapeProvider(
+    ConsumerContractShape dashboardEntryShape,
+    ConsumerContractShape workspaceCommandPayloadShape)
 {
     public static DevTauriMockShapeProvider Parse(string source, TypeScriptContractShapeProvider typeScriptShapes)
     {
         string returnObject = ExtractReturnObject(source, "dashboardEntry");
-        return new DevTauriMockShapeProvider(ResolveObject(returnObject, typeScriptShapes));
+        Assert.Contains(
+            "case 'get_repository_workspace':",
+            source,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "return clone(state.workspaces[getStringArg(args, 'repositoryId')])",
+            source,
+            StringComparison.Ordinal);
+
+        return new DevTauriMockShapeProvider(
+            ResolveObject(returnObject, typeScriptShapes),
+            typeScriptShapes.GetShape("RepositoryWorkspaceProjection"));
     }
 
     public ConsumerContractShape GetDashboardEntryShape()
     {
         return dashboardEntryShape;
+    }
+
+    public ConsumerContractShape GetWorkspaceCommandPayloadShape()
+    {
+        return workspaceCommandPayloadShape;
     }
 
     private static ConsumerContractShape ResolveObject(string objectLiteral, TypeScriptContractShapeProvider typeScriptShapes)

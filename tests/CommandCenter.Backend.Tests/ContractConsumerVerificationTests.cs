@@ -114,6 +114,80 @@ public sealed class ContractConsumerVerificationTests
     }
 
     [Fact]
+    public void RepositoryWorkspaceRustMirrorReportsKnownDecisionSessionSummaryOmission()
+    {
+        JsonElement backendWorkspace = ReadRepositoryWorkspaceGoldenFixture();
+        RustContractShapeProvider rustShapes = ReadRustContractShapes();
+        ContractConsumerVerifier verifier = new(new ConsumerContractVerifierSpec(
+            "Rust shell RepositoryWorkspaceProjection",
+            "runtime consumer",
+            rustShapes.GetShape("RepositoryWorkspaceProjection")));
+
+        ConsumerContractDrift[] drifts = verifier.Compare("$", backendWorkspace).ToArray();
+
+        ConsumerContractDrift drift = Assert.Single(drifts);
+        Assert.Equal(ConsumerContractDriftKind.MissingDownstreamField, drift.Kind);
+        Assert.Equal("$.decisionSessionSummary", drift.Path);
+        Assert.Equal("Rust shell RepositoryWorkspaceProjection", drift.Consumer);
+        Assert.Equal("runtime consumer", drift.ConsumerCategory);
+        Assert.Equal(
+            "backend serialized field is omitted by the downstream mirror",
+            drift.Message);
+    }
+
+    [Fact]
+    public void RepositoryWorkspaceRustMirrorRecursivelyVerifiesMirroredNestedShape()
+    {
+        JsonElement backendWorkspace = ReadRepositoryWorkspaceGoldenFixture();
+        RustContractShapeProvider rustShapes = ReadRustContractShapes();
+        ContractConsumerVerifier verifier = new(new ConsumerContractVerifierSpec(
+            "Rust shell RepositoryWorkspaceProjection",
+            "runtime consumer",
+            rustShapes.GetShape("RepositoryWorkspaceProjection")));
+
+        ConsumerContractDrift[] drifts = verifier.Compare("$", backendWorkspace).ToArray();
+
+        Assert.DoesNotContain(drifts, drift => drift.Path.StartsWith("$.repository.", StringComparison.Ordinal));
+        Assert.DoesNotContain(drifts, drift => drift.Path.StartsWith("$.executionSummary.", StringComparison.Ordinal));
+        Assert.DoesNotContain(drifts, drift => drift.Path.StartsWith("$.executionHistory[].", StringComparison.Ordinal));
+        Assert.DoesNotContain(drifts, drift => drift.Path.StartsWith("$.artifactInventory.", StringComparison.Ordinal));
+        Assert.DoesNotContain(drifts, drift => drift.Path.StartsWith("$.operationalContextProposalSummary.", StringComparison.Ordinal));
+        Assert.DoesNotContain(drifts, drift => drift.Path.StartsWith("$.operationalContext.", StringComparison.Ordinal));
+        Assert.DoesNotContain(drifts, drift => drift.Path.StartsWith("$.reasoningSummary.", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void RepositoryWorkspaceTypeScriptTypeMatchesGoldenFixture()
+    {
+        JsonElement backendWorkspace = ReadRepositoryWorkspaceGoldenFixture();
+        TypeScriptContractShapeProvider typeScriptShapes = ReadTypeScriptContractShapes();
+        ContractConsumerVerifier verifier = new(new ConsumerContractVerifierSpec(
+            "TypeScript RepositoryWorkspaceProjection",
+            "compile-time consumer",
+            typeScriptShapes.GetShape("RepositoryWorkspaceProjection")));
+
+        ConsumerContractDrift[] drifts = verifier.Compare("$", backendWorkspace).ToArray();
+
+        Assert.Empty(drifts);
+    }
+
+    [Fact]
+    public void RepositoryWorkspaceDevTauriMockPayloadMatchesGoldenFixture()
+    {
+        JsonElement backendWorkspace = ReadRepositoryWorkspaceGoldenFixture();
+        TypeScriptContractShapeProvider typeScriptShapes = ReadTypeScriptContractShapes();
+        DevTauriMockShapeProvider mockShapes = ReadDevTauriMockShapes(typeScriptShapes);
+        ContractConsumerVerifier verifier = new(new ConsumerContractVerifierSpec(
+            "devTauriMock get_repository_workspace payload",
+            "development/test consumer",
+            mockShapes.GetWorkspaceCommandPayloadShape()));
+
+        ConsumerContractDrift[] drifts = verifier.Compare("$", backendWorkspace).ToArray();
+
+        Assert.Empty(drifts);
+    }
+
+    [Fact]
     public void ConsumerVerifierReportsNestedMissingFields()
     {
         using JsonDocument backend = JsonDocument.Parse("""
@@ -151,6 +225,16 @@ public sealed class ContractConsumerVerificationTests
             AppContext.BaseDirectory,
             "ContractFixtures",
             "repository-dashboard.golden.json");
+        using JsonDocument document = JsonDocument.Parse(File.ReadAllText(fixturePath));
+        return document.RootElement.Clone();
+    }
+
+    private static JsonElement ReadRepositoryWorkspaceGoldenFixture()
+    {
+        string fixturePath = Path.Combine(
+            AppContext.BaseDirectory,
+            "ContractFixtures",
+            "repository-workspace.golden.json");
         using JsonDocument document = JsonDocument.Parse(File.ReadAllText(fixturePath));
         return document.RootElement.Clone();
     }
