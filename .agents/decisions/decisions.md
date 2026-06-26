@@ -1,33 +1,39 @@
 # Decisions: 2026-06-26 Slice Response
 
-These decisions capture only the newly authorized direction from the response to Milestone 0.1 Slice 0001.
+These decisions capture only the newly authorized direction from the response to Milestone 0.1 Slice 0002.
 
 ## Authorized Decisions
 
-1. The `primarySurfaceReachability` timeout repair is accepted as verifier strengthening, not weakening.
-   - Rationale: the test consistently exercises a full app mount and measured near the default 5s timeout; a bounded 15s budget preserves the reachability assertion without hiding failures.
+1. Milestone 0.1 should certify the local verification baseline now rather than adding CI first.
+   - Rationale: M0.1's immediate purpose is to make the existing verification substrate trustworthy; adding CI can become a separate infrastructure slice and expand Phase 0 indefinitely.
 
-2. The `CS2012` .NET output contention must be treated as a managed verifier dependency/quarantine, not permanent tribal knowledge.
-   - Required evidence: why contention exists, whether it is architectural or incidental, retirement condition, and whether isolated output paths would remove the restriction.
-   - Current operating rule remains serialized `.NET` build/test execution until a verified isolation mechanism exists.
+2. CI absence is quarantined for Milestone 0.1 certification.
+   - Owner: Milestone 0.1 / verification governance.
+   - Risk: local verification can be healthy while remote verification remains absent.
+   - Retirement condition: CI quarantine retires when a minimal workflow runs the same canonical local verification set or a documented supported subset.
 
-3. Rust build and Rust tests must be classified separately.
-   - Rust build: healthy structural verifier.
-   - Rust tests: command executes, but has no behavioral coverage because it discovers zero tests.
+3. The first Rust shell behavioral invariant is passive response relay.
+   - Invariant: opaque backend JSON responses are relayed without shell-owned domain interpretation.
+   - Minimum first regression: arbitrary backend JSON with unknown fields, nested objects, arrays, nulls, and enum-like strings is returned as the same JSON body without deserializing into domain-shaped structs.
+   - Rationale: this directly protects later Milestone 1.3 passive transport work while remaining small.
 
-4. Missing CI must be recorded as absence of a CI verification baseline.
-   - Preferred wording: local verification baseline exists; CI verification baseline does not yet exist.
+4. `.NET` build/test remain serialized as a formal verifier execution rule.
+   - Retirement condition: output path isolation is implemented and proven by verification evidence.
 
-5. Milestone 0.1 should continue through documentation and evidence slices before certification.
-   - Slice 0002: Verification Inventory.
-   - Slice 0003: Verification Governance.
-   - Slice 0004: Certification.
+5. The next slice is Milestone 0.1 certification/governance.
+   - Required content: structural verification certification package, CI absence quarantine, Rust behavioral coverage quarantine, serialized `.NET` execution rule, and first shell passivity regression specification as a bridge into M0.3 / M1.3.
 
-6. Add a Verification Capability Matrix to the Milestone 0.1 evidence set even though it is not explicitly listed in the plan.
-   - Purpose: map architectural concerns to current verifier protection, strength, and gaps so Milestones 0.2, 0.3, and later phases can show measurable protection gains.
+## Certification Posture
+
+Milestone 0.1 can certify after the next slice if the package explicitly states:
+
+- local verification is healthy enough to support architectural refactoring,
+- CI is not yet a verified path,
+- Rust shell behavior is not yet behaviorally protected,
+- and the CI/Rust gaps are quarantined rather than hidden.
 
 ## Explicit Non-Decisions
 
-- No architectural migration is authorized by this response.
 - No CI implementation is authorized yet.
-- No shell behavioral test scope is authorized yet beyond recognizing the coverage gap.
+- No production architecture migration is authorized.
+- No shell startup/process lifecycle regression is selected as the first Rust behavioral invariant.
