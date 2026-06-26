@@ -25,6 +25,17 @@ public sealed class ContractGeneratedArtifactFreshnessTests
     }
 
     [Fact]
+    public void WorkflowInstanceTypeScriptContractArtifactMatchesFreshnessManifest()
+    {
+        ContractArtifactFreshnessSpec spec = LoadFreshnessSpec("workflow-instance.artifact-freshness.json");
+        ContractGeneratedArtifactFreshnessVerifier verifier = new(spec);
+
+        IReadOnlyList<ContractGeneratedArtifactFreshnessDrift> drifts = verifier.Verify(FindRepositoryRoot());
+
+        Assert.Empty(drifts);
+    }
+
+    [Fact]
     public void FreshnessVerifierReportsStaleGeneratedArtifactWhenOracleSourceChanges()
     {
         ContractArtifactFreshnessSpec current = LoadFreshnessSpec("repository-dashboard.artifact-freshness.json");

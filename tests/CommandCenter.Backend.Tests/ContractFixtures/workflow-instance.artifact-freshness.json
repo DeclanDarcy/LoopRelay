@@ -1,0 +1,13 @@
+{
+  "contractId": "workflow-instance",
+  "sourcePath": "tests/CommandCenter.Backend.Tests/ContractFixtures/workflow-instance.golden.json",
+  "sourceSha256": "1AB23C555FEB72DB29E745E0194250FA2E137DD15CEF1F73516C249B704CDE6E",
+  "artifacts": [
+    {
+      "artifactId": "typescript-workflow-instance-contract",
+      "artifactPath": "src/CommandCenter.UI/src/types/workflow.ts",
+      "artifactKind": "phase0-verified-contract-artifact",
+      "artifactSha256": "8123A405EB50F1158C8C0882932EB1A04FD8A262B5F5A76B122E62F3C13039F5"
+    }
+  ]
+}

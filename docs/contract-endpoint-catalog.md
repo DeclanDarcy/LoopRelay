@@ -369,10 +369,10 @@ Known compatibility findings:
 
 Current fixture status:
 
-- No workflow golden fixture exists.
-- No workflow consumer verification exists.
-- No workflow artifact freshness manifest exists.
-- No workflow request-boundary verifier exists.
+- `workflow-instance.golden.json` exists for the primary workflow projection and is protected by backend fixture comparison.
+- TypeScript consumer verification exists for the manual `WorkflowInstance` shape and represented nested workflow shapes.
+- `workflow-instance.artifact-freshness.json` exists for the manual TypeScript workflow contract artifact.
+- Request-boundary verification exists for the primary workflow projection endpoint, Rust command, and TypeScript API wrapper.
 
 Current request-boundary inventory:
 
@@ -402,7 +402,7 @@ Top-level field catalog:
 ## Remaining Catalog Work
 
 - Extend the repository workspace request-boundary pilot beyond the primary GET path to refresh and artifact rotation routes when those request shapes are selected for Oracle coverage.
-- Add workflow projection golden fixture, TypeScript consumer verification, artifact freshness, and request-boundary verification after the Slice 0026 gated inventory.
+- Add populated `decisionSession` workflow fixture coverage, dev mock workflow handler coverage, and sibling workflow endpoint fixtures after the primary workflow projection pilot.
 - Extend request-boundary verification beyond dashboard and workspace GET paths to route/query/body compatibility classification.
 - Map every Decision, DecisionSession, Reasoning, and Workflow endpoint to a specific backend service/projection type rather than family-level authority.
 - Classify shell-owned commands separately from backend-relay commands.
