@@ -230,9 +230,93 @@ Nested field catalog:
 | `executionSummary.*` | `ExecutionSessionSummary` fields | Execution session service | Backend JSON | shell, TS, UI, mock, tests | No | Conditional | Yes | Shares execution summary contract; explicit `null` when absent. |
 | `executionHistory[]` | `ExecutionSessionSummary` items | Execution session service | Backend JSON array | shell, TS, UI, mock, tests | No | Yes | Yes | Empty array when no history exists. |
 
+## Repository Workspace Field Ownership Pilot
+
+Contract identity: `Repository workspace`.
+
+Producer endpoints: `GET /api/repositories/{repositoryId}/workspace`, `POST /api/repositories/{repositoryId}/refresh`, and artifact rotation endpoints that return `RepositoryWorkspaceProjection`.
+
+Backend projection type: `RepositoryWorkspaceProjection`.
+
+Serialization authority: backend HTTP JSON configuration.
+
+Primary backend owner: `RepositoryProjectionService.BuildWorkspaceProjectionAsync`, which composes repository identity, availability, planning readiness, execution state/session history, artifact inventory, operational-context proposal and full projection state, reasoning summary, and decision-session summary.
+
+Known consumers:
+
+- Rust Tauri commands `get_repository_workspace`, `refresh_repository_workspace`, `rotate_current_handoff`, and `rotate_current_decisions`.
+- TypeScript API wrappers for repository workspace and artifact rotation commands.
+- Manual TypeScript type `RepositoryWorkspaceProjection`.
+- Dev Tauri mock workspace entries under `state.workspaces`.
+- React workspace, navigation, artifact, execution, operational-context, reasoning, and selected repository summary surfaces.
+- Backend projection tests and frontend characterization tests.
+
+Known compatibility finding:
+
+- The Rust `RepositoryWorkspaceProjection` mirror currently includes `reasoningSummary` but omits `decisionSessionSummary`, while backend and TypeScript workspace contracts include `decisionSessionSummary`. This slice records the drift as Oracle evidence and does not correct it, because shell mirror retirement belongs to later generated-consumer or passive-transport work.
+
+Current fixture coverage:
+
+- `tests/CommandCenter.Backend.Tests/ContractFixtures/repository-workspace.golden.json`.
+- `ContractOracleFixtureTests.RepositoryWorkspaceGoldenFixtureMatchesBackendSerialization`.
+- Fixture data covers populated `artifactInventory` arrays, explicit `currentDecisions: null`, full `operationalContext` item arrays, proposal summary enum/date/null fields, populated execution accepted/commit/push metadata, populated reasoning summary, populated decision-session summary, and empty nested arrays for decision-session findings, transfer lineage, and diagnostics.
+
+Top-level field catalog:
+
+| JSON field | Backend field/type | Semantic owner | Serialization owner | Consumers | Compatibility field | Required | Derived | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `repository` | `Repository` | Core repository service/configuration | Backend JSON | shell, TS, UI, mock, tests | No | Yes | No | Repository identity object. |
+| `availability` | `RepositoryAvailability` | Middle repository projection availability check | Backend JSON string enum | shell, TS, UI, mock, tests | No | Yes | Yes | Derived from repository path, directory access, and `.git` presence. |
+| `readiness` | `ExecutionReadiness` | Planning service | Backend JSON string enum | shell, TS, UI, mock, tests | No | Yes | Yes | Derived from plan and milestone artifact state. |
+| `executionState` | `RepositoryExecutionState` | Execution session service | Backend JSON string enum | shell, TS, UI, mock, tests | No | Yes | Yes | Repository-level execution lifecycle state. |
+| `executionSummary` | `ExecutionSessionSummary` or `null` | Execution session service | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Latest/current summary; explicit `null` allowed. |
+| `executionHistory` | `ExecutionSessionSummary[]` | Execution session service | Backend JSON array | shell, TS, UI, mock, tests | No | Yes | Yes | Empty array is meaningful. |
+| `artifactInventory` | `ArtifactInventory` | Artifact discovery/projection service | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Current and historical artifact references. |
+| `milestoneCount` | `int` | Artifact inventory/projection service | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Count of discovered milestone artifacts. |
+| `hasPlan` | `bool` | Artifact inventory/projection service | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Derived from current plan artifact discovery. |
+| `hasOperationalContext` | `bool` | Artifact inventory/projection service | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Derived from current operational-context artifact discovery. |
+| `hasCurrentHandoff` | `bool` | Artifact inventory/projection service | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Derived from current handoff artifact discovery. |
+| `hasCurrentDecisions` | `bool` | Artifact inventory/projection service | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Derived from current decisions artifact discovery. |
+| `operationalContextProposalSummary` | `OperationalContextProposalSummary` | Continuity proposal store/projection | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Latest proposal state summary. |
+| `operationalContext` | `OperationalContextProjection` | Continuity parser/projection | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Full parsed operational-context projection. |
+| `reasoningSummary` | `RepositoryReasoningSummary` | Reasoning repository/projection composition | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Empty summary is emitted when reasoning repository is absent. |
+| `decisionSessionSummary` | `RepositoryDecisionSessionSummary` | Decision-session observability/projection composition | Backend JSON | TS, UI, mock, backend tests; Rust mirror drift | No | Yes | Yes | Empty summary is emitted when observability service is absent. |
+
+Nested field catalog:
+
+| JSON field path | Backend field/type | Semantic owner | Serialization owner | Consumers | Compatibility field | Required | Derived | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `artifactInventory.*` | `Artifact?` and `Artifact[]` | Artifact discovery/projection service | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Current artifacts emit objects or explicit `null`; historical sets emit arrays. |
+| `artifactInventory.*.relativePath` | `string` | Artifact discovery | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Repository-relative artifact path. |
+| `artifactInventory.*.name` | `string` | Artifact discovery | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | File name display value. |
+| `artifactInventory.*.type` | `ArtifactType` | Artifact classification | Backend JSON string enum | shell, TS, UI, mock, tests | No | Yes | Yes | Serialized artifact type. |
+| `artifactInventory.*.family` | `ArtifactFamily` | Artifact classification | Backend JSON string enum | shell, TS, UI, mock, tests | No | Yes | Yes | Serialized artifact family. |
+| `artifactInventory.*.versionKind` | `ArtifactVersionKind` | Artifact classification | Backend JSON string enum | shell, TS, UI, mock, tests | No | Yes | Yes | Current or historical artifact version. |
+| `operationalContextProposalSummary.*` | `OperationalContextProposalSummary` fields | Continuity proposal store/projection | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Includes booleans, strings/nulls, date/nulls, counts, and status string/null. |
+| `operationalContext.exists` | `bool` | Continuity artifact/projection | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Absence marker for operational context. |
+| `operationalContext.currentRelativePath` | `string?` | Continuity artifact/projection | Backend JSON string/null | shell, TS, UI, mock, tests | No | Yes | Yes | Explicit `null` when no current context exists. |
+| `operationalContext.revisionCount` | `int` | Continuity artifact/projection | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Current plus historical context count. |
+| `operationalContext.currentRevisionNumber` | `int` | Continuity artifact/projection | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Derived revision number. |
+| `operationalContext.lastUpdatedAt` | `DateTimeOffset?` | Continuity artifact/projection | Backend JSON string/null | shell, TS, UI, mock, tests | No | Yes | Yes | Current context last-write timestamp. |
+| `operationalContext.lastPromotionAt` | `DateTimeOffset?` | Continuity proposal promotion | Backend JSON string/null | shell, TS, UI, mock, tests | No | Yes | Yes | Last promoted proposal timestamp. |
+| `operationalContext.currentUnderstandingSummary` | `string[]` | Continuity parser/projection | Backend JSON array | shell, TS, UI, mock, tests | No | Yes | Yes | Empty array allowed. |
+| `operationalContext.architecture[]`, `authorityBoundaries[]`, `constraints[]`, `stableDecisions[]`, `decisionRationale[]`, `openQuestions[]`, `activeRisks[]`, `recentUnderstandingChanges[]` | `OperationalContextItem[]` | Continuity parser/projection | Backend JSON array | shell, TS, UI, mock, tests | No | Yes | Yes | Parsed operational-context sections; array order follows parser/projection output. |
+| `operationalContext.*[].id` | `string` | Continuity parser/projection | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Parsed item identity. |
+| `operationalContext.*[].kind` | `OperationalContextItemKind` | Continuity parser/projection | Backend JSON string enum | shell, TS, UI, mock, tests | No | Yes | Yes | Section/item kind. |
+| `operationalContext.*[].text` | `string` | Continuity parser/projection | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Parsed item text. |
+| `operationalContext.*[].rationale` | `string?` | Continuity parser/projection | Backend JSON string/null | shell, TS, UI, mock, tests | No | Yes | Yes | Optional rationale. |
+| `operationalContext.*[].sourceRelativePath` | `string?` | Continuity parser/projection | Backend JSON string/null | shell, TS, UI, mock, tests | No | Yes | Yes | Optional source path. |
+| `operationalContext.pendingProposalSummary` | `OperationalContextProposalSummary` | Continuity proposal store/projection | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Same shape as top-level workspace proposal summary. |
+| `operationalContext.latestReviewState` | `OperationalContextReviewState?` | Continuity proposal review | Backend JSON string/null | shell, TS, UI, mock, tests | No | Yes | Yes | Explicit `null` when absent. |
+| `operationalContext.continuityWarnings` | `string[]` | Continuity proposal compression/review | Backend JSON array | shell, TS, UI, mock, tests | No | Yes | Yes | Empty array allowed. |
+| `executionSummary.*`, `executionHistory[]` | `ExecutionSessionSummary` fields | Execution session service | Backend JSON | shell, TS, UI, mock, tests | No | Conditional | Yes | Shares execution summary contract with dashboard. |
+| `reasoningSummary.*` | `RepositoryReasoningSummary` fields | Reasoning repository/projection | Backend JSON | shell, TS, UI, mock, tests | No | Yes | Yes | Shares reasoning summary contract with dashboard. |
+| `decisionSessionSummary.*` | `RepositoryDecisionSessionSummary` fields | Decision-session observability/projection composition | Backend JSON | TS, UI, mock, backend tests; Rust mirror drift | No | Yes | Yes | Shares decision-session summary contract with dashboard. |
+
 ## Remaining Catalog Work
 
-- Add dev mock consumer verification against the repository dashboard Oracle fixture.
+- Add repository workspace consumer verification against Rust, TypeScript, and dev mock consumers.
+- Add repository workspace artifact freshness and request-boundary verification if the workspace pilot proceeds to local certification.
 - Map every Decision, DecisionSession, Reasoning, and Workflow endpoint to a specific backend service/projection type rather than family-level authority.
 - Classify shell-owned commands separately from backend-relay commands.
 - Add an Oracle dependency graph showing backend projection type to endpoint to shell command to TS API/type to UI consumer.

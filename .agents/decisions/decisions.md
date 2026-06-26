@@ -1,40 +1,36 @@
-# Decisions: 2026-06-26 Slice 0019 Repository Workspace Expansion
+# Decisions: 2026-06-26 Slice 0020 Repository Workspace Repeatability
 
-These decisions capture only newly authorized direction from the response accepting Slice 0019 as the repository dashboard pilot completion path.
+These decisions capture only newly authorized direction from the response accepting Slice 0020 as a fixture-repeatability slice.
 
 ## Authorized Decisions
 
-1. Treat Slice 0019 as the correct completion of the repository dashboard pilot.
-   - Request-boundary verification completes the pilot by protecting entry into the contract.
-   - The slice remains intentionally narrow and does not authorize a general request-contract framework.
+1. Treat Slice 0020 as evidence of Oracle repeatability, not merely as another fixture.
+   - The key architectural result is that repository workspace reused the same Oracle design as repository dashboard.
+   - No second Oracle mechanism or contract-family-specific design is authorized.
 
-2. Preserve the repository dashboard pilot maturity posture.
-   - The repository dashboard Oracle ecosystem is locally certified.
-   - Oracle architecture is validated through one complete pilot.
-   - Global Oracle coverage remains intentionally incomplete.
+2. Preserve the repository workspace maturity posture.
+   - Repository workspace currently has fixture comparison only.
+   - Repository workspace is not locally certified.
    - Milestone 0.2 remains active and uncertified globally.
 
-3. Move next to a second contract family.
-   - Choose repository workspace before workflow or decisions because it is less semantically complex.
-   - The objective is to prove repeatability of the Oracle pattern, not to introduce new mechanism types.
+3. Keep backend serialization as contract authority.
+   - Rust, TypeScript, and dev mock representations remain downstream consumers.
+   - The Rust `RepositoryWorkspaceProjection` omission of `decisionSessionSummary` remains consumer drift, not Oracle authority.
 
-4. Apply the repository dashboard sequence to repository workspace.
-   - Field inventory.
-   - Consumer inventory.
-   - Serialization observations.
-   - Golden fixture.
-   - Consumer verification.
+4. Complete repository workspace through the same lifecycle order as repository dashboard.
+   - Rust consumer verification.
+   - TypeScript consumer verification.
+   - Dev Tauri mock verification.
    - Artifact freshness.
    - Request-boundary verification where applicable.
    - Local certification.
 
-5. Avoid premature generalization while implementing the second contract.
-   - Treat repository dashboard as the reference implementation.
-   - Keep repository workspace documentation and tests intentionally lean.
-   - Extract repeated documentation, helper code, or procedural steps only after reuse is demonstrated across the two independent contract families.
+5. Track mechanism reuse explicitly while completing repository workspace.
+   - Future workspace evidence should record which dashboard mechanisms were reused unchanged.
+   - The mechanism reuse table should distinguish completed reuse from pending reuse across fixture comparison, recursive comparison, drift classification, consumer verification, artifact freshness, and request-boundary verification.
 
 ## Next Authorized Sequence
 
-1. Stage, commit, and push Slice 0019 and this decision checkpoint.
+1. Stage, commit, and push Slice 0020 and this decision checkpoint.
 2. Stop executing after the checkpoint.
-3. In the next work slice, begin repository workspace field and consumer inventory.
+3. In the next work slice, begin repository workspace consumer verification, starting with Rust consumer verification.

@@ -1,0 +1,299 @@
+{
+  "repository": {
+    "id": "bbbbbbbb-cccc-dddd-eeee-ffffffffffff",
+    "name": "WorkspaceFixtureRepository",
+    "path": "C:/command-center-fixtures/WorkspaceFixtureRepository"
+  },
+  "availability": "Available",
+  "readiness": "Ready",
+  "executionState": "Ready",
+  "executionSummary": {
+    "sessionId": "22222222-3333-4444-5555-666666666666",
+    "state": "Completed",
+    "repositoryState": "Ready",
+    "milestonePath": ".agents/milestones/m0.2-contract-oracle.md",
+    "startedAt": "2026-06-25T08:30:00+00:00",
+    "completedAt": "2026-06-25T08:45:00+00:00",
+    "duration": "00:15:00",
+    "acceptedAt": "2026-06-25T08:50:00+00:00",
+    "rejectedAt": null,
+    "decisionNote": "Accepted for workspace fixture coverage.",
+    "lastActivityAt": "2026-06-25T08:45:00+00:00",
+    "providerName": "codex",
+    "providerExecutablePath": "C:/tools/codex.exe",
+    "providerProcessId": 4242,
+    "providerStartedAt": "2026-06-25T08:29:00+00:00",
+    "handoffPath": ".agents/handoffs/handoff.md",
+    "commitSha": "abc1234",
+    "committedAt": "2026-06-25T08:55:00+00:00",
+    "commitMessage": "Add workspace fixture",
+    "preparationSnapshotId": "prep-workspace-0001",
+    "pushAttemptedAt": "2026-06-25T08:57:00+00:00",
+    "pushedAt": "2026-06-25T08:58:00+00:00",
+    "pushedCommitSha": "abc1234",
+    "pushRemoteName": "origin",
+    "pushBranchName": "main",
+    "failureReason": null
+  },
+  "executionHistory": [
+    {
+      "sessionId": "22222222-3333-4444-5555-666666666666",
+      "state": "Completed",
+      "repositoryState": "Ready",
+      "milestonePath": ".agents/milestones/m0.2-contract-oracle.md",
+      "startedAt": "2026-06-25T08:30:00+00:00",
+      "completedAt": "2026-06-25T08:45:00+00:00",
+      "duration": "00:15:00",
+      "acceptedAt": "2026-06-25T08:50:00+00:00",
+      "rejectedAt": null,
+      "decisionNote": "Accepted for workspace fixture coverage.",
+      "lastActivityAt": "2026-06-25T08:45:00+00:00",
+      "providerName": "codex",
+      "providerExecutablePath": "C:/tools/codex.exe",
+      "providerProcessId": 4242,
+      "providerStartedAt": "2026-06-25T08:29:00+00:00",
+      "handoffPath": ".agents/handoffs/handoff.md",
+      "commitSha": "abc1234",
+      "committedAt": "2026-06-25T08:55:00+00:00",
+      "commitMessage": "Add workspace fixture",
+      "preparationSnapshotId": "prep-workspace-0001",
+      "pushAttemptedAt": "2026-06-25T08:57:00+00:00",
+      "pushedAt": "2026-06-25T08:58:00+00:00",
+      "pushedCommitSha": "abc1234",
+      "pushRemoteName": "origin",
+      "pushBranchName": "main",
+      "failureReason": null
+    }
+  ],
+  "artifactInventory": {
+    "plan": {
+      "relativePath": ".agents/plan.md",
+      "name": "plan.md",
+      "type": "Plan",
+      "family": "Plan",
+      "versionKind": "Current"
+    },
+    "operationalContext": {
+      "relativePath": ".agents/operational_context.md",
+      "name": "operational_context.md",
+      "type": "OperationalContext",
+      "family": "OperationalContext",
+      "versionKind": "Current"
+    },
+    "historicalOperationalContexts": [
+      {
+        "relativePath": ".agents/operational_context.0001.md",
+        "name": "operational_context.0001.md",
+        "type": "OperationalContext",
+        "family": "OperationalContext",
+        "versionKind": "Historical"
+      }
+    ],
+    "milestones": [
+      {
+        "relativePath": ".agents/milestones/m0.2-contract-oracle.md",
+        "name": "m0.2-contract-oracle.md",
+        "type": "Milestone",
+        "family": "Milestone",
+        "versionKind": "Current"
+      },
+      {
+        "relativePath": ".agents/milestones/m0.2-repository-workspace-fixture-slice-0020.md",
+        "name": "m0.2-repository-workspace-fixture-slice-0020.md",
+        "type": "Milestone",
+        "family": "Milestone",
+        "versionKind": "Current"
+      }
+    ],
+    "currentHandoff": {
+      "relativePath": ".agents/handoffs/handoff.md",
+      "name": "handoff.md",
+      "type": "Handoff",
+      "family": "Handoff",
+      "versionKind": "Current"
+    },
+    "historicalHandoffs": [
+      {
+        "relativePath": ".agents/handoffs/handoff.0019.md",
+        "name": "handoff.0019.md",
+        "type": "Handoff",
+        "family": "Handoff",
+        "versionKind": "Historical"
+      }
+    ],
+    "currentDecisions": null,
+    "historicalDecisions": [
+      {
+        "relativePath": ".agents/decisions/decisions.0019.md",
+        "name": "decisions.0019.md",
+        "type": "Decision",
+        "family": "Decision",
+        "versionKind": "Historical"
+      }
+    ],
+    "reasoningArtifacts": [
+      {
+        "relativePath": ".agents/reasoning/events.jsonl",
+        "name": "events.jsonl",
+        "type": "Reasoning",
+        "family": "Reasoning",
+        "versionKind": "Current"
+      }
+    ]
+  },
+  "milestoneCount": 2,
+  "hasPlan": true,
+  "hasOperationalContext": true,
+  "hasCurrentHandoff": true,
+  "hasCurrentDecisions": false,
+  "operationalContextProposalSummary": {
+    "pendingProposalExists": true,
+    "latestProposalId": "proposal-workspace-0001",
+    "generatedAt": "2026-06-25T08:40:00+00:00",
+    "status": "Pending",
+    "sourceInputCount": 3,
+    "contentByteCount": 2048,
+    "contentCharacterCount": 1900,
+    "lastPromotedAt": null,
+    "lastArchivedRelativePath": null
+  },
+  "operationalContext": {
+    "exists": true,
+    "currentRelativePath": ".agents/operational_context.md",
+    "revisionCount": 2,
+    "currentRevisionNumber": 2,
+    "lastUpdatedAt": "2026-06-25T08:30:00+00:00",
+    "lastPromotionAt": "2026-06-25T07:00:00+00:00",
+    "currentUnderstandingSummary": [
+      "The Contract Oracle owns serialized backend projection truth."
+    ],
+    "architecture": [
+      {
+        "id": "arch-1",
+        "kind": "Architecture",
+        "text": "Backend projection serialization is the contract authority.",
+        "rationale": "M0.2 Oracle decision.",
+        "sourceRelativePath": ".agents/plan.md"
+      }
+    ],
+    "authorityBoundaries": [
+      {
+        "id": "authority-1",
+        "kind": "AuthorityBoundary",
+        "text": "Rust and TypeScript mirrors are consumers, not authorities.",
+        "rationale": null,
+        "sourceRelativePath": ".agents/decisions/decisions.md"
+      }
+    ],
+    "constraints": [
+      {
+        "id": "constraint-1",
+        "kind": "Constraint",
+        "text": "Fixtures require field inventory before capture.",
+        "rationale": null,
+        "sourceRelativePath": null
+      }
+    ],
+    "stableDecisions": [
+      {
+        "id": "decision-1",
+        "kind": "StableDecision",
+        "text": "Repository workspace is the second Oracle family.",
+        "rationale": "Repeatability before generalization.",
+        "sourceRelativePath": ".agents/decisions/decisions.md"
+      }
+    ],
+    "decisionRationale": [
+      {
+        "id": "rationale-1",
+        "kind": "DecisionRationale",
+        "text": "Workspace is less semantically complex than workflow or decisions.",
+        "rationale": null,
+        "sourceRelativePath": null
+      }
+    ],
+    "openQuestions": [
+      {
+        "id": "question-1",
+        "kind": "OpenQuestion",
+        "text": "Which command-body contracts should be verified first?",
+        "rationale": null,
+        "sourceRelativePath": null
+      }
+    ],
+    "activeRisks": [
+      {
+        "id": "risk-1",
+        "kind": "ActiveRisk",
+        "text": "Shell mirrors can silently drift until generated or pass-through transport replaces them.",
+        "rationale": null,
+        "sourceRelativePath": "src/CommandCenter.Shell/src/main.rs"
+      }
+    ],
+    "recentUnderstandingChanges": [
+      {
+        "id": "change-1",
+        "kind": "RecentChange",
+        "text": "Workspace fixture now exercises artifact inventory and operational context serialization.",
+        "rationale": null,
+        "sourceRelativePath": ".agents/milestones/m0.2-repository-workspace-fixture-slice-0020.md"
+      }
+    ],
+    "pendingProposalSummary": {
+      "pendingProposalExists": true,
+      "latestProposalId": "proposal-workspace-0001",
+      "generatedAt": "2026-06-25T08:40:00+00:00",
+      "status": "Pending",
+      "sourceInputCount": 3,
+      "contentByteCount": 2048,
+      "contentCharacterCount": 1900,
+      "lastPromotedAt": null,
+      "lastArchivedRelativePath": null
+    },
+    "latestReviewState": "PendingReview",
+    "continuityWarnings": [
+      "Pending proposal has not been promoted."
+    ]
+  },
+  "reasoningSummary": {
+    "eventCount": 6,
+    "threadCount": 2,
+    "relationshipCount": 2,
+    "hypothesisEventCount": 1,
+    "alternativeEventCount": 1,
+    "contradictionEventCount": 0,
+    "directionEventCount": 1,
+    "decisionEvolutionEventCount": 1,
+    "assumptionEvolutionEventCount": 1,
+    "constraintEvolutionEventCount": 1,
+    "evidenceEventCount": 0,
+    "lastEventAt": "2026-06-25T08:48:00+00:00",
+    "lastThreadActivityAt": "2026-06-25T08:52:00+00:00",
+    "lastRelationshipAt": "2026-06-25T08:54:00+00:00",
+    "lastActivityAt": "2026-06-25T08:54:00+00:00",
+    "lastReconstructionAt": "2026-06-25T08:56:00+00:00",
+    "lastCertificationAt": null,
+    "certificationResult": "Pending"
+  },
+  "decisionSessionSummary": {
+    "decisionSessionId": "bbbbbbbb-cccc-dddd-eeee-ffffffffffff",
+    "state": "Active",
+    "lifecycleDecision": "Continue",
+    "transferEligibilityStatus": "NotEligible",
+    "estimatedTokenCount": 175000,
+    "estimatedCacheTtl": "00:20:00",
+    "cacheMissRisk": 0.18,
+    "coherenceScore": 0.91,
+    "transferPressure": 0.22,
+    "healthDimensions": [
+      {
+        "name": "Coherence",
+        "status": "Healthy",
+        "findings": []
+      }
+    ],
+    "recentTransferLineage": [],
+    "diagnostics": [],
+    "generatedAt": "2026-06-25T09:00:00+00:00"
+  }
+}

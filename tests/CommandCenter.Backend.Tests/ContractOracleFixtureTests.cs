@@ -1,5 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using CommandCenter.Continuity.Models;
+using CommandCenter.Continuity.Primitives;
+using CommandCenter.Core.Artifacts;
 using CommandCenter.Core.Planning;
 using CommandCenter.Core.Projections;
 using CommandCenter.Core.Repositories;
@@ -30,6 +33,25 @@ public sealed class ContractOracleFixtureTests
             expected.RootElement,
             actual.RootElement,
             ContractDriftPolicy.NoCompatibilityDriftAllowed("Repository dashboard"));
+    }
+
+    [Fact]
+    public void RepositoryWorkspaceGoldenFixtureMatchesBackendSerialization()
+    {
+        RepositoryWorkspaceProjection workspace = CreateRepresentativeRepositoryWorkspaceProjection();
+        string actualJson = JsonSerializer.Serialize(workspace, BackendJsonOptions);
+        string expectedJson = File.ReadAllText(Path.Combine(
+            AppContext.BaseDirectory,
+            "ContractFixtures",
+            "repository-workspace.golden.json"));
+
+        using JsonDocument expected = JsonDocument.Parse(expectedJson);
+        using JsonDocument actual = JsonDocument.Parse(actualJson);
+
+        JsonContractAssert.MatchesFixture(
+            expected.RootElement,
+            actual.RootElement,
+            ContractDriftPolicy.NoCompatibilityDriftAllowed("Repository workspace"));
     }
 
     [Fact]
@@ -196,6 +218,230 @@ public sealed class ContractOracleFixtureTests
                 Diagnostics = ["registry warning"],
                 GeneratedAt = generatedAt
             }
+        };
+    }
+
+    private static RepositoryWorkspaceProjection CreateRepresentativeRepositoryWorkspaceProjection()
+    {
+        DateTimeOffset startedAt = new(2026, 06, 25, 8, 30, 0, TimeSpan.Zero);
+        DateTimeOffset completedAt = new(2026, 06, 25, 8, 45, 0, TimeSpan.Zero);
+        DateTimeOffset generatedAt = new(2026, 06, 25, 9, 0, 0, TimeSpan.Zero);
+        var sessionId = Guid.Parse("22222222-3333-4444-5555-666666666666");
+
+        var executionSummary = new ExecutionSessionSummary
+        {
+            SessionId = sessionId,
+            State = ExecutionSessionState.Completed,
+            RepositoryState = RepositoryExecutionState.Ready,
+            MilestonePath = ".agents/milestones/m0.2-contract-oracle.md",
+            StartedAt = startedAt,
+            CompletedAt = completedAt,
+            Duration = TimeSpan.FromMinutes(15),
+            AcceptedAt = completedAt.AddMinutes(5),
+            RejectedAt = null,
+            DecisionNote = "Accepted for workspace fixture coverage.",
+            LastActivityAt = completedAt,
+            ProviderName = "codex",
+            ProviderExecutablePath = "C:/tools/codex.exe",
+            ProviderProcessId = 4242,
+            ProviderStartedAt = startedAt.AddMinutes(-1),
+            HandoffPath = ".agents/handoffs/handoff.md",
+            CommitSha = "abc1234",
+            CommittedAt = completedAt.AddMinutes(10),
+            CommitMessage = "Add workspace fixture",
+            PreparationSnapshotId = "prep-workspace-0001",
+            PushAttemptedAt = completedAt.AddMinutes(12),
+            PushedAt = completedAt.AddMinutes(13),
+            PushedCommitSha = "abc1234",
+            PushRemoteName = "origin",
+            PushBranchName = "main",
+            FailureReason = null
+        };
+
+        var proposalSummary = new OperationalContextProposalSummary
+        {
+            PendingProposalExists = true,
+            LatestProposalId = "proposal-workspace-0001",
+            GeneratedAt = generatedAt.AddMinutes(-20),
+            Status = OperationalContextProposalStatus.Pending,
+            SourceInputCount = 3,
+            ContentByteCount = 2048,
+            ContentCharacterCount = 1900,
+            LastPromotedAt = null,
+            LastArchivedRelativePath = null
+        };
+
+        return new RepositoryWorkspaceProjection
+        {
+            Repository = new Repository
+            {
+                Id = Guid.Parse("bbbbbbbb-cccc-dddd-eeee-ffffffffffff"),
+                Name = "WorkspaceFixtureRepository",
+                Path = "C:/command-center-fixtures/WorkspaceFixtureRepository"
+            },
+            Availability = RepositoryAvailability.Available,
+            Readiness = ExecutionReadiness.Ready,
+            ExecutionState = RepositoryExecutionState.Ready,
+            ExecutionSummary = executionSummary,
+            ExecutionHistory = [executionSummary],
+            ArtifactInventory = new ArtifactInventory
+            {
+                Plan = CreateArtifact(".agents/plan.md", "plan.md", ArtifactType.Plan, ArtifactFamily.Plan, ArtifactVersionKind.Current),
+                OperationalContext = CreateArtifact(".agents/operational_context.md", "operational_context.md", ArtifactType.OperationalContext, ArtifactFamily.OperationalContext, ArtifactVersionKind.Current),
+                HistoricalOperationalContexts =
+                [
+                    CreateArtifact(".agents/operational_context.0001.md", "operational_context.0001.md", ArtifactType.OperationalContext, ArtifactFamily.OperationalContext, ArtifactVersionKind.Historical)
+                ],
+                Milestones =
+                [
+                    CreateArtifact(".agents/milestones/m0.2-contract-oracle.md", "m0.2-contract-oracle.md", ArtifactType.Milestone, ArtifactFamily.Milestone, ArtifactVersionKind.Current),
+                    CreateArtifact(".agents/milestones/m0.2-repository-workspace-fixture-slice-0020.md", "m0.2-repository-workspace-fixture-slice-0020.md", ArtifactType.Milestone, ArtifactFamily.Milestone, ArtifactVersionKind.Current)
+                ],
+                CurrentHandoff = CreateArtifact(".agents/handoffs/handoff.md", "handoff.md", ArtifactType.Handoff, ArtifactFamily.Handoff, ArtifactVersionKind.Current),
+                HistoricalHandoffs =
+                [
+                    CreateArtifact(".agents/handoffs/handoff.0019.md", "handoff.0019.md", ArtifactType.Handoff, ArtifactFamily.Handoff, ArtifactVersionKind.Historical)
+                ],
+                CurrentDecisions = null,
+                HistoricalDecisions =
+                [
+                    CreateArtifact(".agents/decisions/decisions.0019.md", "decisions.0019.md", ArtifactType.Decision, ArtifactFamily.Decision, ArtifactVersionKind.Historical)
+                ],
+                ReasoningArtifacts =
+                [
+                    CreateArtifact(".agents/reasoning/events.jsonl", "events.jsonl", ArtifactType.Reasoning, ArtifactFamily.Reasoning, ArtifactVersionKind.Current)
+                ]
+            },
+            MilestoneCount = 2,
+            HasPlan = true,
+            HasOperationalContext = true,
+            HasCurrentHandoff = true,
+            HasCurrentDecisions = false,
+            OperationalContextProposalSummary = proposalSummary,
+            OperationalContext = new OperationalContextProjection
+            {
+                Exists = true,
+                CurrentRelativePath = ".agents/operational_context.md",
+                RevisionCount = 2,
+                CurrentRevisionNumber = 2,
+                LastUpdatedAt = generatedAt.AddMinutes(-30),
+                LastPromotionAt = generatedAt.AddHours(-2),
+                CurrentUnderstandingSummary = ["The Contract Oracle owns serialized backend projection truth."],
+                Architecture =
+                [
+                    CreateOperationalContextItem("arch-1", OperationalContextItemKind.Architecture, "Backend projection serialization is the contract authority.", "M0.2 Oracle decision.", ".agents/plan.md")
+                ],
+                AuthorityBoundaries =
+                [
+                    CreateOperationalContextItem("authority-1", OperationalContextItemKind.AuthorityBoundary, "Rust and TypeScript mirrors are consumers, not authorities.", null, ".agents/decisions/decisions.md")
+                ],
+                Constraints =
+                [
+                    CreateOperationalContextItem("constraint-1", OperationalContextItemKind.Constraint, "Fixtures require field inventory before capture.", null, null)
+                ],
+                StableDecisions =
+                [
+                    CreateOperationalContextItem("decision-1", OperationalContextItemKind.StableDecision, "Repository workspace is the second Oracle family.", "Repeatability before generalization.", ".agents/decisions/decisions.md")
+                ],
+                DecisionRationale =
+                [
+                    CreateOperationalContextItem("rationale-1", OperationalContextItemKind.DecisionRationale, "Workspace is less semantically complex than workflow or decisions.", null, null)
+                ],
+                OpenQuestions =
+                [
+                    CreateOperationalContextItem("question-1", OperationalContextItemKind.OpenQuestion, "Which command-body contracts should be verified first?", null, null)
+                ],
+                ActiveRisks =
+                [
+                    CreateOperationalContextItem("risk-1", OperationalContextItemKind.ActiveRisk, "Shell mirrors can silently drift until generated or pass-through transport replaces them.", null, "src/CommandCenter.Shell/src/main.rs")
+                ],
+                RecentUnderstandingChanges =
+                [
+                    CreateOperationalContextItem("change-1", OperationalContextItemKind.RecentChange, "Workspace fixture now exercises artifact inventory and operational context serialization.", null, ".agents/milestones/m0.2-repository-workspace-fixture-slice-0020.md")
+                ],
+                PendingProposalSummary = proposalSummary,
+                LatestReviewState = OperationalContextReviewState.PendingReview,
+                ContinuityWarnings = ["Pending proposal has not been promoted."]
+            },
+            ReasoningSummary = new RepositoryReasoningSummary
+            {
+                EventCount = 6,
+                ThreadCount = 2,
+                RelationshipCount = 2,
+                HypothesisEventCount = 1,
+                AlternativeEventCount = 1,
+                ContradictionEventCount = 0,
+                DirectionEventCount = 1,
+                DecisionEvolutionEventCount = 1,
+                AssumptionEvolutionEventCount = 1,
+                ConstraintEvolutionEventCount = 1,
+                EvidenceEventCount = 0,
+                LastEventAt = generatedAt.AddMinutes(-12),
+                LastThreadActivityAt = generatedAt.AddMinutes(-8),
+                LastRelationshipAt = generatedAt.AddMinutes(-6),
+                LastActivityAt = generatedAt.AddMinutes(-6),
+                LastReconstructionAt = generatedAt.AddMinutes(-4),
+                LastCertificationAt = null,
+                CertificationResult = "Pending"
+            },
+            DecisionSessionSummary = new RepositoryDecisionSessionSummary
+            {
+                DecisionSessionId = "bbbbbbbb-cccc-dddd-eeee-ffffffffffff",
+                State = "Active",
+                LifecycleDecision = "Continue",
+                TransferEligibilityStatus = "NotEligible",
+                EstimatedTokenCount = 175_000,
+                EstimatedCacheTtl = TimeSpan.FromMinutes(20),
+                CacheMissRisk = 0.18m,
+                CoherenceScore = 0.91m,
+                TransferPressure = 0.22m,
+                HealthDimensions =
+                [
+                    new RepositoryDecisionSessionHealthDimension
+                    {
+                        Name = "Coherence",
+                        Status = "Healthy",
+                        Findings = []
+                    }
+                ],
+                RecentTransferLineage = [],
+                Diagnostics = [],
+                GeneratedAt = generatedAt
+            }
+        };
+    }
+
+    private static Artifact CreateArtifact(
+        string relativePath,
+        string name,
+        ArtifactType type,
+        ArtifactFamily family,
+        ArtifactVersionKind versionKind)
+    {
+        return new Artifact
+        {
+            RelativePath = relativePath,
+            Name = name,
+            Type = type,
+            Family = family,
+            VersionKind = versionKind
+        };
+    }
+
+    private static OperationalContextItem CreateOperationalContextItem(
+        string id,
+        OperationalContextItemKind kind,
+        string text,
+        string? rationale,
+        string? sourceRelativePath)
+    {
+        return new OperationalContextItem
+        {
+            Id = id,
+            Kind = kind,
+            Text = text,
+            Rationale = rationale,
+            SourceRelativePath = sourceRelativePath
         };
     }
 

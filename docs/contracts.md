@@ -87,6 +87,8 @@ Current catalog scope:
 - Repository dashboard Rust, TypeScript, and dev mock consumer verification in `ContractConsumerVerificationTests`, backed by shared test-support infrastructure in `ContractVerification/ContractConsumerVerificationSupport.cs`, which recursively compares the backend golden fixture shape against downstream consumer shapes, reports the known Rust `decisionSessionSummary` omission as downstream consumer drift, verifies the manual TypeScript dashboard type as current, and verifies the `devTauriMock` dashboard entry shape for the pilot fixture.
 - Repository dashboard contract artifact freshness verification in `ContractGeneratedArtifactFreshnessTests`, backed by `repository-dashboard.artifact-freshness.json`, which hashes the Oracle fixture and the current TypeScript repository contract artifact to distinguish stale artifacts, unexpected artifact edits, and missing expected artifacts.
 - Repository dashboard request-boundary verification in `ContractRequestBoundaryTests`, which pins `GET /api/repositories` as a no-argument backend route, `list_repositories` as a no-argument Rust Tauri command that forwards a GET without request-body construction, and `listRepositories()` as a TypeScript API wrapper that invokes `list_repositories` without command arguments.
+- Repository workspace field ownership and golden fixture pilot for `GET /api/repositories/{repositoryId}/workspace`, including top-level workspace fields, artifact inventory, full operational-context projection shape, nested execution, reasoning, and decision-session summaries, and known Rust workspace mirror drift.
+- Repository workspace golden fixture at `tests/CommandCenter.Backend.Tests/ContractFixtures/repository-workspace.golden.json`, protected by `ContractOracleFixtureTests.RepositoryWorkspaceGoldenFixtureMatchesBackendSerialization`.
 - Priority endpoint rows for the first fixture candidates.
 
 The catalog is not a generated schema. It is an inventory and fixture-selection mechanism used to prevent fixtures from certifying accidental or consumer-owned shape.
@@ -110,9 +112,11 @@ The first fixture candidates are repository dashboard, repository workspace, wor
 
 The repository dashboard candidate now has the first golden fixture and recursive backend serialization comparison. The fixture intentionally covers explicit nulls, populated arrays, non-empty execution summary and history, decision-session summary, timestamps, durations, enum strings, and nested summary objects. Empty-array coverage remains represented by nested zero-count reasoning fields and will need a second dashboard variant or another fixture if empty collection serialization must be pinned for this contract specifically.
 
+The repository workspace candidate now has the second golden fixture and recursive backend serialization comparison. The fixture intentionally covers artifact inventory nulls and populated arrays, full operational-context item arrays, proposal summary enum/null/date fields, execution summary accepted/commit/push fields, empty decision-session arrays, and the backend-owned `decisionSessionSummary` field that is missing from the Rust workspace mirror. This proves the Oracle pattern can repeat across a second contract family, but it does not yet add workspace consumer verification, artifact freshness, request-boundary verification, or local certification.
+
 ## Initial Oracle Fixture Workflow
 
-The initial executable workflow for the repository dashboard pilot is:
+The initial executable workflow for the repository dashboard and repository workspace fixture pilots is:
 
 1. Build representative backend projection data with stable identifiers and timestamps.
 2. Serialize with `JsonSerializerDefaults.Web` plus `JsonStringEnumConverter`.
@@ -279,12 +283,17 @@ Every accepted Oracle change must produce evidence that records:
 | Unexpected manual artifact modification | Revert the artifact or accept it only with explicit authority, consumer, verification, and rollback evidence. |
 | Missing expected artifact | Restore the artifact, approve relocation, or retire it through a documented compatibility path. |
 
-### Repository Dashboard Pilot Workflow
+### Repository Fixture Pilot Workflow
 
-For the current repository dashboard pilot, the minimum acceptance command set is:
+For the current repository fixture pilots, the minimum fixture comparison command is:
 
 ```powershell
 dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~ContractOracleFixtureTests
+```
+
+For the locally certified repository dashboard pilot, the minimum acceptance command set also includes:
+
+```powershell
 dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~ContractConsumerVerificationTests
 dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~ContractGeneratedArtifactFreshnessTests
 ```
