@@ -1,37 +1,39 @@
-# Decisions: 2026-06-26 Workflow TypeScript Consumer Verification Checkpoint Authorization
+# Decisions: 2026-06-26 Workflow Request Boundary Checkpoint Authorization
 
-These decisions capture only newly authorized direction from the user response following Slice 0029.
+These decisions capture only newly authorized direction from the user response following Slice 0030.
 
 ## Authorized Decisions
 
-1. Accept Slice 0029 as the correct continuation of the workflow Oracle family.
-   - TypeScript consumer verification was the right next step before workflow request-boundary verification and artifact freshness.
-   - The ordering mirrors the repository pilot lifecycle while respecting workflow-specific transport differences.
+1. Accept Slice 0030 as the correct continuation of the workflow Oracle family.
+   - The workflow request-boundary verifier reused the established backend endpoint metadata, passive Rust transport, and TypeScript invocation model.
+   - No workflow-specific request verification architecture was introduced.
 
-2. Treat `workflowContractFixture.test.ts` as a downstream Oracle consumer-verification implementation.
-   - The frontend test validates conformance to backend Oracle truth.
-   - It does not create a second contract authority or a separate consumer-verification architecture.
-   - The broader pattern remains one Contract Oracle architecture with multiple implementation points.
+2. Treat request-boundary mechanism reuse as the key architectural result of Slice 0030.
+   - The same mechanism now covers repository dashboard, repository workspace, and workflow projection.
+   - The workflow family adds richer response semantics without requiring a new request-boundary model.
 
-3. Preserve backend serialized JSON as workflow contract authority.
-   - Authority continues to flow from backend serialization to golden fixture to consumer verification.
-   - Manual TypeScript workflow types remain verified consumers, not contract authorities.
+3. Preserve the Rust workflow projection posture as passive transport.
+   - `get_workflow_projection` returning `Result<Value, String>` means Rust preserves workflow response shape without modeling it.
+   - Do not introduce a Rust `WorkflowInstance` mirror solely for symmetry with repository contract families.
 
-4. Keep the Rust workflow posture as passive transport.
-   - Workflow Rust commands returning `serde_json::Value` should preserve backend response shape.
-   - Do not introduce a Rust `WorkflowInstance` mirror merely to satisfy consumer verification.
-   - Rust workflow concerns should remain aligned with Milestone 1.3 passive transport work.
+4. Treat missing workflow dev mock coverage as a coverage gap, not a certification blocker by itself.
+   - Unless the dev mock is an active workflow projection consumer, absence of a workflow handler should remain recorded as a gap.
+   - It should not automatically prevent local workflow pilot certification.
 
-5. Treat populated `decisionSession` as a future fixture variant.
-   - The initial `decisionSession: null` fixture remains valid.
-   - Populated `decisionSession` coverage should extend scenario coverage within the same workflow contract family, not redefine the initial fixture.
+5. Treat populated `decisionSession` as a fixture scenario gap, not a mechanism gap.
+   - The current `decisionSession: null` fixture variant remains a valid intentional scenario.
+   - Populated decision-session coverage can be added later as another fixture scenario within the same workflow contract family.
 
-6. Characterize current workflow family posture as partially advanced but uncertified.
-   - Field inventory, field-role classification, Oracle fixture, backend serialization verification, and TypeScript consumer verification are complete for the current variant.
-   - Artifact freshness, request-boundary verification, and local certification remain pending.
+6. Proceed to workflow artifact freshness before local workflow certification.
+   - Reuse the existing manifest, verifier, and failure taxonomy.
+   - Expect no new Oracle mechanism to be introduced for workflow freshness.
+
+7. After workflow freshness, explicitly review whether workflow introduced any new Oracle mechanisms.
+   - The target answer is none.
+   - If true, the workflow family becomes repeatability evidence for Oracle stability across a more semantically complex contract.
 
 ## Next Authorized Sequence
 
-1. Stage, commit, and push the current Slice 0029 checkpoint and this decision checkpoint.
+1. Stage, commit, and push Slice 0030 plus this decision checkpoint.
 2. Stop executing after the push.
-3. In the next work slice, add workflow request-boundary verification before workflow artifact freshness and local certification.
+3. In the next work slice, add workflow artifact freshness, then review readiness for local workflow Oracle certification.

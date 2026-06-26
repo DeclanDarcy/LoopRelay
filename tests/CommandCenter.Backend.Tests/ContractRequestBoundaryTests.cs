@@ -46,6 +46,25 @@ public sealed class ContractRequestBoundaryTests
     }
 
     [Fact]
+    public async Task WorkflowProjectionBackendEndpointHasRepositoryIdRouteArgumentAndNoBody()
+    {
+        await using WebApplication app = Program.CreateApp([]);
+        app.Urls.Add("http://127.0.0.1:0");
+        await app.StartAsync();
+
+        RouteEndpoint endpoint = FindEndpoint(app, "/api/repositories/{repositoryId:guid}/workflow", "GET");
+
+        HttpMethodMetadata method = endpoint.Metadata.GetRequiredMetadata<HttpMethodMetadata>();
+        RoutePatternParameterPart parameter = Assert.Single(endpoint.RoutePattern.Parameters);
+
+        Assert.Equal(["GET"], method.HttpMethods);
+        Assert.Equal("repositoryId", parameter.Name);
+        Assert.Equal("guid", Assert.Single(parameter.ParameterPolicies).Content);
+        Assert.False(parameter.IsOptional);
+        Assert.DoesNotContain(endpoint.Metadata, metadata => metadata is IFromBodyMetadata);
+    }
+
+    [Fact]
     public void RepositoryDashboardRustCommandHasNoCommandArgumentsAndForwardsGetWithoutBody()
     {
         string source = File.ReadAllText(FindRepositoryRoot()
@@ -76,6 +95,22 @@ public sealed class ContractRequestBoundaryTests
     }
 
     [Fact]
+    public void WorkflowProjectionRustCommandHasRepositoryIdArgumentAndForwardsGetWithoutBody()
+    {
+        string source = File.ReadAllText(FindRepositoryRoot()
+            .Combine("src", "CommandCenter.Shell", "src", "main.rs"));
+        string body = ExtractRustFunctionBody(source, "get_workflow_projection");
+
+        Assert.Contains("fn get_workflow_projection(repository_id: String) -> Result<Value, String>", source, StringComparison.Ordinal);
+        Assert.Contains("\"/api/repositories/{repository_id}/workflow\"", body, StringComparison.Ordinal);
+        Assert.Contains("backend_get_value(", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("Client::new", body, StringComparison.Ordinal);
+        Assert.DoesNotContain(".post(", body, StringComparison.Ordinal);
+        Assert.DoesNotContain(".json(&", body, StringComparison.Ordinal);
+        Assert.DoesNotContain(".send(", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void RepositoryDashboardTypeScriptApiInvokesCommandWithoutArguments()
     {
         string source = File.ReadAllText(FindRepositoryRoot()
@@ -97,6 +132,19 @@ public sealed class ContractRequestBoundaryTests
         Assert.Contains("invokeCommand<RepositoryWorkspaceProjection>('get_repository_workspace', { repositoryId })", body, StringComparison.Ordinal);
         Assert.DoesNotContain("'get_repository_workspace')", body, StringComparison.Ordinal);
         Assert.DoesNotContain("'get_repository_workspace', {})", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WorkflowProjectionTypeScriptApiInvokesCommandWithRepositoryIdArgument()
+    {
+        string source = File.ReadAllText(FindRepositoryRoot()
+            .Combine("src", "CommandCenter.UI", "src", "api", "workflow.ts"));
+        string body = ExtractTypeScriptFunctionBody(source, "getWorkflowProjection");
+
+        Assert.Contains("function getWorkflowProjection(repositoryId: string)", source, StringComparison.Ordinal);
+        Assert.Contains("invokeCommand<WorkflowInstance>('get_workflow_projection', { repositoryId })", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("'get_workflow_projection')", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("'get_workflow_projection', {})", body, StringComparison.Ordinal);
     }
 
     private static RouteEndpoint FindEndpoint(WebApplication app, string rawText, string method)
