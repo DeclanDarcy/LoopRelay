@@ -9,10 +9,54 @@ import {
 import type {
   ExecutionSessionSummary,
   RepositoryDashboardProjection,
+  RepositoryDecisionSessionSummary,
   RepositoryExecutionState,
+  RepositoryReasoningSummary,
   RepositoryWorkspaceProjection,
   WorkflowInstance,
 } from '../../types'
+
+// The backend computes these summaries from snapshots that can transiently fail
+// to rebuild (e.g. a locked file), in which case the field is serialized as null
+// or omitted. On first paint the workspace is also still null. Fall back to a
+// fully-populated empty summary so a missing sub-projection degrades to
+// "Not projected" instead of white-screening the whole dashboard.
+const EMPTY_REASONING_SUMMARY: RepositoryReasoningSummary = {
+  eventCount: 0,
+  threadCount: 0,
+  relationshipCount: 0,
+  hypothesisEventCount: 0,
+  alternativeEventCount: 0,
+  contradictionEventCount: 0,
+  directionEventCount: 0,
+  decisionEvolutionEventCount: 0,
+  assumptionEvolutionEventCount: 0,
+  constraintEvolutionEventCount: 0,
+  evidenceEventCount: 0,
+  lastEventAt: null,
+  lastThreadActivityAt: null,
+  lastRelationshipAt: null,
+  lastActivityAt: null,
+  lastReconstructionAt: null,
+  lastCertificationAt: null,
+  certificationResult: null,
+}
+
+const EMPTY_DECISION_SESSION_SUMMARY: RepositoryDecisionSessionSummary = {
+  decisionSessionId: null,
+  state: null,
+  lifecycleDecision: null,
+  transferEligibilityStatus: null,
+  estimatedTokenCount: null,
+  estimatedCacheTtl: null,
+  cacheMissRisk: null,
+  coherenceScore: null,
+  transferPressure: null,
+  healthDimensions: [],
+  recentTransferLineage: [],
+  diagnostics: [],
+  generatedAt: null,
+}
 
 type SelectedRepositorySummaryProps = {
   repository: RepositoryDashboardProjection
@@ -84,8 +128,12 @@ export function SelectedRepositorySummary({
   const readiness = workspace?.readiness ?? repository.readiness
   const milestoneCount = workspace?.milestoneCount ?? repository.milestoneCount
   const hasOperationalContext = Boolean(workspace?.hasOperationalContext)
-  const governanceSummary = workspace?.decisionSessionSummary ?? repository.decisionSessionSummary
-  const reasoningSummary = workspace?.reasoningSummary ?? repository.reasoningSummary
+  const governanceSummary =
+    workspace?.decisionSessionSummary ??
+    repository.decisionSessionSummary ??
+    EMPTY_DECISION_SESSION_SUMMARY
+  const reasoningSummary =
+    workspace?.reasoningSummary ?? repository.reasoningSummary ?? EMPTY_REASONING_SUMMARY
   const continuityRevisionCount =
     workspace?.operationalContext.revisionCount ??
     repository.continuitySummary.operationalContextRevisionCount
