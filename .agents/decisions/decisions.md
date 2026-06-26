@@ -1,39 +1,43 @@
-# Decisions: 2026-06-26 Slice 0006 Checkpoint and Milestone 0.2 Continuation
+# Decisions: 2026-06-26 Slice 0007 Repository Dashboard Pilot Authorization
 
-These decisions capture only newly authorized direction from the response accepting the Milestone 0.2 Oracle definition and inventory slice.
+These decisions capture only newly authorized direction from the response accepting the Milestone 0.2 endpoint catalog slice and repository dashboard pilot sequence.
 
 ## Authorized Decisions
 
-1. Treat slice 0006 as the correct direction for Milestone 0.2.
-   - Accepted framing: define the Oracle before implementing fixtures or drift mechanisms.
-   - Accepted invariant: the Oracle observes backend-owned serialized contracts; it does not become a semantic or contract authority.
+1. Treat slice 0007 as a meaningful advancement of Milestone 0.2.
+   - Accepted framing: the unit of analysis has moved from contract families to externally observable endpoint contracts.
+   - Accepted value: the 177-route catalog is a concrete baseline for future Oracle coverage and bypass detection.
 
-2. Keep golden fixtures delayed until contract ownership and consumer mapping are explicit.
-   - Required preconditions: semantic owner, serialized-shape owner, consumer set, duplicate representations, and compatibility obligations.
-   - Rationale: fixtures must not certify accidental implementation details.
+2. Keep compatibility consumers as first-class contract inventory artifacts.
+   - Required consumers to track: Rust mirrors, manual TypeScript types, development mocks, characterization tests, and other downstream contract mirrors.
+   - Rationale: later migration and compatibility decisions should be based on explicit consumer evidence rather than incidental implementation knowledge.
 
-3. Add `Compatibility consumers` as a required field in the endpoint-level contract inventory.
-   - Required endpoint-level fields: endpoint or command, backend authority, projection type, serialization authority, contract identity, consumers, parallel truths, compatibility consumers, fixture candidate, and fixture priority.
-   - Rationale: this makes the inventory directly useful for Milestones 1.1 and 1.2 without another discovery pass.
+3. Continue postponing golden fixtures until fixture preconditions are known.
+   - Required preconditions: field ownership, serialization behavior, nullability, and compatibility consumers.
+   - Rationale: fixtures must observe authoritative backend contracts rather than freezing accidental implementation artifacts.
 
-4. Define narrow observable serialization rules before selecting the first fixture.
-   - Initial focus: identifier representation, enum serialization, null versus omitted fields, empty collections, property naming, date/time representation, ordering guarantees if any, and unknown-field preservation expectations.
-   - Deferral: broader versioning and compatibility policy should wait until the actual contract surface is sufficiently observed.
+4. Use the repository dashboard contract as the first pilot fixture candidate.
+   - Target: `GET /api/repositories` / repository dashboard projection boundary.
+   - Rationale: comparatively stable, high visibility, multi-layer consumption, lower semantic ambiguity, and likely enough shape variety to validate the Oracle workflow.
+   - Explicit deferral: workflow, execution, and decision projections should not be first fixtures because they carry more evolving semantics and compatibility obligations.
 
-5. Create a checkpoint commit before continuing deeper into Milestone 0.2.
-   - Scope: Milestone 0.1 certification and initial mechanisms, shell passivity preparation already present in the working body, Oracle definition, durable docs, handoff, evidence, and decision trail.
+5. Insert a field ownership catalog before capturing the repository dashboard fixture.
+   - Required field-level columns: field, semantic owner, serialization owner, consumer count, compatibility field, required, derived, and notes.
+   - Rationale: field provenance makes fixture review easier and creates the template for subsequent Oracle fixtures.
+
+6. Keep serialization confirmation narrowly observational.
+   - Required checklist: property naming policy, enum representation, null emission versus omission, empty collections, date/time representation, identifier formatting, numeric formatting when applicable, and intentional ordering guarantees.
+   - Constraint: do not introduce broader compatibility policy in this slice; first describe what the backend actually emits.
 
 ## Next Authorized Sequence
 
-1. Endpoint-level contract inventory.
-2. Consumer taxonomy.
-3. Serialization rules.
-4. Parallel truth matrix completion.
-5. First carefully selected golden fixture.
-6. Drift comparison mechanism.
+1. Confirm backend JSON serialization options and observable emitted behavior.
+2. Create the field ownership catalog for the repository dashboard contract.
+3. Capture the first repository dashboard golden fixture only after field ownership and serialization behavior are explicit.
+4. Add the first drift comparison mechanism protecting that pilot fixture.
 
 ## Explicit Non-Decisions
 
-- No golden fixture is authorized before endpoint-level inventory and narrow serialization rules.
-- No Oracle drift comparison mechanism is authorized before fixture preconditions are satisfied.
-- No production migration of Rust mirrors, TypeScript manual types, or dev mock contracts is authorized by this checkpoint.
+- No workflow, execution, or decision fixture is authorized as the first pilot fixture.
+- No golden fixture is authorized before the repository dashboard field ownership catalog exists.
+- No broad compatibility/versioning policy is authorized by this response.

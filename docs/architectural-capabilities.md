@@ -34,7 +34,9 @@ Current scope:
 - canonical Oracle definition,
 - boundary taxonomy,
 - family-level contract relationship matrix,
+- endpoint catalog and consumer taxonomy,
+- narrow serialization rules required before fixture selection,
 - initial parallel truth inventory,
 - fixture gating rule.
 
-The Oracle is not yet an executable protection. Certification requires endpoint-level inventory, serialization rules, golden serialized fixtures, recursive comparison tests, and an Oracle change workflow.
+The Oracle is not yet an executable protection. Certification requires field-level inventory for fixture candidates, exact backend JSON option confirmation, golden serialized fixtures, recursive comparison tests, and an Oracle change workflow.

@@ -66,15 +66,18 @@ Status: defined and inventoried at the contract-family level; not yet executable
 Primary evidence:
 
 - `docs/contracts.md`
+- `docs/contract-endpoint-catalog.md`
 - `.agents/milestones/m0.2-contract-inventory-slice-0006.md`
+- `.agents/milestones/m0.2-contract-endpoint-catalog-slice-0007.md`
 
 Mechanism intent:
 
 | Oracle mechanism | Current protection | Remaining gap |
 | --- | --- | --- |
 | Canonical contract authority | `docs/contracts.md` defines contract truth as backend-owned projection and command-result shape after backend JSON serialization. | Endpoint-level and field-level ownership still need inventory. |
-| Fixture gating | `docs/contracts.md` forbids golden fixtures before identity, owner, producer, consumers, parallel representations, compatibility, and serialization rules are known. | No fixtures exist yet. |
-| Parallel truth visibility | Initial matrix identifies backend, Rust, TypeScript, API wrapper, mock, test, and docs surfaces that can drift. | No automated stale-artifact or drift comparison exists yet. |
+| Endpoint and consumer visibility | `docs/contract-endpoint-catalog.md` catalogs 177 backend endpoint mappings by family, defines required endpoint-level inventory fields, identifies consumer classes, and records priority fixture candidates. | Field-level ownership, exact backend JSON options, and a full dependency graph still need inventory. |
+| Fixture gating | `docs/contracts.md` forbids golden fixtures before identity, owner, producer, consumers, parallel representations, compatibility, and serialization rules are known. `docs/contract-endpoint-catalog.md` adds narrow serialization rules that fixtures must observe. | No fixtures exist yet. |
+| Parallel truth visibility | Initial matrix identifies backend, Rust, TypeScript, API wrapper, mock, test, and docs surfaces that can drift. Endpoint catalog records compatibility consumer classes. | No automated stale-artifact or drift comparison exists yet. |
 | Oracle drift detection | Not active. | Add golden fixtures and recursive backend serialization comparison tests. |
 
 ## Mechanism Lifecycle Rule

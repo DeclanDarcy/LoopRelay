@@ -71,6 +71,19 @@ The first inventory slice found these active parallel contract truth sources:
 - Characterization and backend tests that encode expected shape indirectly.
 - Durable docs for operational-context and reasoning repository persistence contracts.
 
+## Endpoint Catalog and Consumer Taxonomy
+
+The endpoint-level inventory is maintained in `docs/contract-endpoint-catalog.md`.
+
+Current catalog scope:
+
+- 177 backend endpoint mappings under `src/CommandCenter.Backend/Endpoints`.
+- Consumer taxonomy covering backend tests, Rust shell commands, TypeScript API wrappers, manual TypeScript types, dev Tauri mocks, React consumers, characterization/E2E tests, and durable docs.
+- Narrow serialization rules for identifiers, enum-like strings, null versus omitted fields, empty collections, date/time capture, ordering, unknown fields, error envelopes, streams, and compatibility fields.
+- Priority endpoint rows for the first fixture candidates.
+
+The catalog is not a generated schema. It is an inventory and fixture-selection mechanism used to prevent fixtures from certifying accidental or consumer-owned shape.
+
 ## Fixture Gating Rule
 
 Golden fixtures may be introduced only after the target contract has:

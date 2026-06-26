@@ -1,26 +1,27 @@
-# Handoff: 2026-06-26 Slice 0006
+# Handoff: 2026-06-26 Slice 0007
 
-Current milestone state: Milestone 0.2 has begun with Oracle definition and contract-family inventory. No golden fixtures or comparison tests exist yet.
+Current milestone state: Milestone 0.2 remains active. Oracle definition and family-level inventory already existed; this slice added endpoint cataloging and narrow serialization rules. No golden fixtures or drift comparison tests exist yet.
 
 New state from this slice:
 
-- Added `docs/contracts.md` with the canonical Oracle definition, boundary taxonomy, initial contract relationship matrix, initial parallel truth inventory, and fixture gating rule.
-- Added `.agents/milestones/m0.2-contract-inventory-slice-0006.md` as evidence for the first Milestone 0.2 inventory slice.
-- Updated `docs/architectural-capabilities.md` to mark Canonical Contract Oracle as introduced but not protected or certified.
-- Updated `docs/architectural-mechanisms.md` with the current Contract Oracle mechanism status and remaining gaps.
-- Rotated previous active handoff to `.agents/handoffs/handoff.0005.md`.
+- Added `docs/contract-endpoint-catalog.md` with a 177-route backend endpoint scan baseline, consumer taxonomy, narrow serialization rules, endpoint family coverage, and priority endpoint rows for first fixture candidates.
+- Updated `docs/contracts.md` to reference the endpoint catalog and clarify that the catalog is an inventory/fixture-selection mechanism, not a generated schema.
+- Updated `docs/architectural-capabilities.md` and `docs/architectural-mechanisms.md` to reflect endpoint catalog and serialization-rule progress while leaving the Oracle uncertified.
+- Added `.agents/milestones/m0.2-contract-endpoint-catalog-slice-0007.md` as evidence.
+- Rotated previous active handoff to `.agents/handoffs/handoff.0006.md`.
 
 Verified:
 
 - Documentation-only slice; no build or test commands were required.
-- Inventory scans used `rg` over backend endpoints, shell commands, UI types, and UI API wrappers.
+- Inventory scans used `rg` over backend endpoints, shell commands, UI API wrappers, and UI type modules.
 
 Current limits:
 
-- Contract matrix is family-level, not endpoint-level or field-level.
-- Serialization rules, consumer taxonomy, Oracle dependency graph, lifecycle/versioning workflow, fixtures, and recursive comparison tests remain open.
-- Rust mirrors, manual TypeScript types, and dev mock payloads are inventoried risks only; no migration occurred.
+- Field-level ownership and nullability are not cataloged yet.
+- Exact backend JSON options and date/time serialization behavior still need confirmation from source and emitted JSON.
+- Decision, DecisionSession, Reasoning, and Workflow endpoints are mostly cataloged by route family rather than exact service/projection owner.
+- No Oracle dependency graph, golden fixtures, recursive comparison tests, or lifecycle workflow exists yet.
 
 Next suggested slice:
 
-- Expand Milestone 0.2 into an endpoint-level contract surface catalog and consumer taxonomy, then define serialization rules before selecting the first golden fixture.
+- Confirm backend JSON serialization options and choose one high-value, low-ambiguity fixture candidate, preferably `GET /api/repositories` repository dashboard. Add field-level cataloging for that contract before creating the first fixture.
