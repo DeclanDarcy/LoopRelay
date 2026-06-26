@@ -40,7 +40,7 @@ Current scope:
 - repository dashboard field ownership pilot,
 - repository dashboard golden fixture and recursive backend serialization comparison test,
 - repository dashboard drift policy classification for structural drift versus compatibility-review drift,
-- first explicit dashboard compatibility drift finding against a Rust shell mirror,
+- first executable dashboard consumer drift verification against a Rust shell mirror,
 - initial parallel truth inventory,
 - fixture gating rule.
 

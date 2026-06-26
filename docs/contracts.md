@@ -84,11 +84,12 @@ Current catalog scope:
 - Repository dashboard field ownership pilot for `GET /api/repositories`, including top-level fields, nested summary fields, nullability, derived status, and known compatibility drift.
 - Repository dashboard golden fixture at `tests/CommandCenter.Backend.Tests/ContractFixtures/repository-dashboard.golden.json`, protected by `ContractOracleFixtureTests.RepositoryDashboardGoldenFixtureMatchesBackendSerialization`.
 - Repository dashboard drift policy classification in `ContractOracleFixtureTests`, with structural drift failing immediately and additive field drift requiring explicit compatibility review.
+- Repository dashboard Rust consumer verification in `ContractConsumerVerificationTests.RepositoryDashboardRustMirrorReportsKnownDecisionSessionSummaryOmission`, which compares the backend golden fixture's top-level fields against the Rust shell mirror fields and reports the known `decisionSessionSummary` omission as downstream consumer drift.
 - Priority endpoint rows for the first fixture candidates.
 
 The catalog is not a generated schema. It is an inventory and fixture-selection mechanism used to prevent fixtures from certifying accidental or consumer-owned shape.
 
-The repository dashboard pilot currently exposes one compatibility finding: the Rust `RepositoryDashboardProjection` mirror omits `decisionSessionSummary`, while the backend and TypeScript dashboard contracts include it. This is evidence for the Oracle and a later shell/manual-mirror migration; the Oracle fixture does not treat the Rust mirror as contract authority.
+The repository dashboard pilot currently exposes one executable compatibility finding: the Rust `RepositoryDashboardProjection` mirror omits `decisionSessionSummary`, while the backend and TypeScript dashboard contracts include it. `ContractConsumerVerificationTests` now records this as downstream consumer drift. This is evidence for the Oracle and a later shell/manual-mirror migration; the Oracle fixture does not treat the Rust mirror as contract authority.
 
 ## Fixture Gating Rule
 
@@ -131,3 +132,20 @@ The repository dashboard Oracle pilot currently recognizes these drift categorie
 | Consumer drift | Rust, TypeScript, mock, or characterization representation differs from backend Oracle truth. | Must be surfaced by consumer verification. It must not weaken the backend Oracle fixture. |
 
 Reviewed compatibility additions are path-specific. A reviewed additive field does not make the consumer current; it only records that the backend fixture comparison may permit that additive field while the compatibility path is handled.
+
+## Consumer Verification Pilot
+
+Consumer verification is separate from Oracle fixture comparison. The Oracle compares backend serialization to accepted backend-owned fixture truth. Consumer verification compares downstream representations against that Oracle-observed truth and reports where a consumer is stale, invented, or structurally incompatible.
+
+The first consumer verification pilot covers only the top-level fields of the Rust shell `RepositoryDashboardProjection` mirror. It classifies:
+
+| Consumer drift kind | Meaning |
+| --- | --- |
+| Missing downstream field | Backend serialized field exists in the Oracle fixture, but the consumer mirror omits it. |
+| Extra downstream field | Consumer mirror declares a field not present in the backend Oracle fixture. |
+
+Current finding:
+
+- `src/CommandCenter.Shell/src/main.rs` omits `$[].decisionSessionSummary` from `RepositoryDashboardProjection`.
+
+This pilot does not yet compare nested shape, TypeScript types, dev mocks, command argument bodies, or semantic reinterpretation. Those remain later Milestone 0.2 and Milestone 1.2/1.3 work.

@@ -72,6 +72,7 @@ Primary evidence:
 - `.agents/milestones/m0.2-repository-dashboard-field-catalog-slice-0008.md`
 - `.agents/milestones/m0.2-repository-dashboard-fixture-slice-0009.md`
 - `.agents/milestones/m0.2-oracle-drift-policy-slice-0010.md`
+- `.agents/milestones/m0.2-consumer-verification-slice-0011.md`
 
 Mechanism intent:
 
@@ -80,9 +81,10 @@ Mechanism intent:
 | Canonical contract authority | `docs/contracts.md` defines contract truth as backend-owned projection and command-result shape after backend JSON serialization. The repository dashboard pilot now records field-level ownership and has a golden serialized fixture. | Most endpoint families still need field-level inventory. |
 | Endpoint and consumer visibility | `docs/contract-endpoint-catalog.md` catalogs 177 backend endpoint mappings by family, defines required endpoint-level inventory fields, identifies consumer classes, records priority fixture candidates, and catalogs repository dashboard consumers. | A full dependency graph still needs inventory. |
 | Fixture gating | `docs/contracts.md` forbids golden fixtures before identity, owner, producer, consumers, parallel representations, compatibility, and serialization rules are known. The repository dashboard fixture was added only after that gate was satisfied. | Broader fixture selection still needs endpoint-by-endpoint gating. |
-| Parallel truth visibility | Initial matrix identifies backend, Rust, TypeScript, API wrapper, mock, test, and docs surfaces that can drift. Endpoint catalog records compatibility consumer classes and now records the Rust dashboard mirror missing `decisionSessionSummary`. | No automated stale-artifact or generated-consumer drift comparison exists yet. |
+| Parallel truth visibility | Initial matrix identifies backend, Rust, TypeScript, API wrapper, mock, test, and docs surfaces that can drift. Endpoint catalog records compatibility consumer classes and now records the Rust dashboard mirror missing `decisionSessionSummary`. | TypeScript and dev mock downstream drift comparison remain pending. |
 | Oracle drift detection | `ContractOracleFixtureTests.RepositoryDashboardGoldenFixtureMatchesBackendSerialization` recursively compares backend JSON serialization against `repository-dashboard.golden.json` and ignores object property ordering. | Drift detection covers only the repository dashboard pilot. |
 | Oracle drift policy | `ContractOracleFixtureTests` classifies missing fields, type/value drift, and array length changes as structural drift; additive backend fields are compatibility-review drift unless explicitly allowlisted by JSON path as reviewed compatibility additions. | Policy classification is still local to the pilot helper and has no fixture update tooling or consumer verification chain yet. |
+| Consumer verification | `ContractConsumerVerificationTests.RepositoryDashboardRustMirrorReportsKnownDecisionSessionSummaryOmission` compares repository dashboard Oracle fixture top-level fields against the Rust shell `RepositoryDashboardProjection` mirror and reports the known missing `decisionSessionSummary` field as downstream consumer drift. | Coverage is top-level Rust mirror only; no nested shape, TypeScript, mock, generated-artifact, or semantic reinterpretation verification exists yet. |
 
 ## Mechanism Lifecycle Rule
 

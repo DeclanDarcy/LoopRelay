@@ -160,7 +160,7 @@ Known consumers:
 
 Known compatibility finding:
 
-- The Rust `RepositoryDashboardProjection` mirror currently includes `reasoningSummary` but omits `decisionSessionSummary`, while backend and TypeScript dashboard contracts include `decisionSessionSummary`. This is a contract mirror drift finding for the Oracle and a later passive-transport/manual-mirror retirement slice; it is not corrected by this inventory slice.
+- The Rust `RepositoryDashboardProjection` mirror currently includes `reasoningSummary` but omits `decisionSessionSummary`, while backend and TypeScript dashboard contracts include `decisionSessionSummary`. This is now protected by `ContractConsumerVerificationTests.RepositoryDashboardRustMirrorReportsKnownDecisionSessionSummaryOmission` as downstream consumer drift evidence for the Oracle and a later passive-transport/manual-mirror retirement slice; it is not corrected by this inventory slice.
 
 Top-level field catalog:
 
@@ -219,8 +219,8 @@ Nested field catalog:
 
 ## Remaining Catalog Work
 
-- Select representative repository dashboard fixture data that exercises explicit nulls, empty arrays, non-empty execution summary/history, and non-empty decision-session summary.
-- Capture the first repository dashboard golden fixture only after fixture data selection is explicit.
+- Add nested Rust mirror shape comparison for repository dashboard once the top-level consumer verification pilot is generalized.
+- Add TypeScript and dev mock consumer verification against the repository dashboard Oracle fixture.
 - Map every Decision, DecisionSession, Reasoning, and Workflow endpoint to a specific backend service/projection type rather than family-level authority.
 - Classify shell-owned commands separately from backend-relay commands.
 - Add an Oracle dependency graph showing backend projection type to endpoint to shell command to TS API/type to UI consumer.
