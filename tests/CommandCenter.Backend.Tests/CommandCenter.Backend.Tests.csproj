@@ -32,4 +32,8 @@
     <ProjectReference Include="..\..\src\CommandCenter.Backend\CommandCenter.Backend.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="ContractFixtures\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

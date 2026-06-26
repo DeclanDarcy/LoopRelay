@@ -82,11 +82,12 @@ Current catalog scope:
 - Narrow serialization rules for identifiers, enum-like strings, null versus omitted fields, empty collections, date/time capture, ordering, unknown fields, error envelopes, streams, and compatibility fields.
 - Backend JSON serialization observations from `Program.CreateApp`: web defaults plus string enum conversion.
 - Repository dashboard field ownership pilot for `GET /api/repositories`, including top-level fields, nested summary fields, nullability, derived status, and known compatibility drift.
+- Repository dashboard golden fixture at `tests/CommandCenter.Backend.Tests/ContractFixtures/repository-dashboard.golden.json`, protected by `ContractOracleFixtureTests.RepositoryDashboardGoldenFixtureMatchesBackendSerialization`.
 - Priority endpoint rows for the first fixture candidates.
 
 The catalog is not a generated schema. It is an inventory and fixture-selection mechanism used to prevent fixtures from certifying accidental or consumer-owned shape.
 
-The repository dashboard pilot currently exposes one compatibility finding: the Rust `RepositoryDashboardProjection` mirror omits `decisionSessionSummary`, while the backend and TypeScript dashboard contracts include it. This is evidence for the Oracle and a later shell/manual-mirror migration; the Oracle fixture must not treat the Rust mirror as contract authority.
+The repository dashboard pilot currently exposes one compatibility finding: the Rust `RepositoryDashboardProjection` mirror omits `decisionSessionSummary`, while the backend and TypeScript dashboard contracts include it. This is evidence for the Oracle and a later shell/manual-mirror migration; the Oracle fixture does not treat the Rust mirror as contract authority.
 
 ## Fixture Gating Rule
 
@@ -103,4 +104,16 @@ Golden fixtures may be introduced only after the target contract has:
 
 The first fixture candidates are repository dashboard, repository workspace, workflow projection, decision lifecycle eligibility, decision proposal browser, decision-session governance snapshot, reasoning graph/report, continuity diagnostics, execution summary/status, and error envelope.
 
-The repository dashboard candidate now satisfies the pre-fixture field ownership and serialization-observation gate. Fixture capture still requires an explicit representative-data choice so the golden sample exercises nulls, empty arrays, non-empty execution data, and non-empty decision-session data intentionally.
+The repository dashboard candidate now has the first golden fixture and recursive backend serialization comparison. The fixture intentionally covers explicit nulls, populated arrays, non-empty execution summary and history, decision-session summary, timestamps, durations, enum strings, and nested summary objects. Empty-array coverage remains represented by nested zero-count reasoning fields and will need a second dashboard variant or another fixture if empty collection serialization must be pinned for this contract specifically.
+
+## Initial Oracle Fixture Workflow
+
+The initial executable workflow for the repository dashboard pilot is:
+
+1. Build representative backend projection data with stable identifiers and timestamps.
+2. Serialize with `JsonSerializerDefaults.Web` plus `JsonStringEnumConverter`.
+3. Compare serialized JSON recursively against the golden fixture while treating object property ordering as non-semantic.
+4. Fail structural drift immediately for missing fields, unexpected fields, type changes, null/object changes, array/scalar changes, changed values, or array length changes.
+5. Review fixture updates through Milestone 0.2 evidence before downstream Rust, TypeScript, mock, or generated consumers are changed.
+
+This workflow is a pilot mechanism, not the full Oracle lifecycle. It still needs policy-drift classification, fixture update tooling, consumer regeneration or verification, and broader endpoint coverage before Milestone 0.2 certification.

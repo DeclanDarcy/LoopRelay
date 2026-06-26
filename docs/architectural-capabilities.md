@@ -5,7 +5,7 @@ This matrix records architectural capabilities as they become observable, protec
 | Capability | Introduced | Protected | Certified | Reference Documentation | Status |
 | --- | --- | --- | --- | --- | --- |
 | Structural verification | 0.1 | 0.1, future architectural regression framework | 0.1 local command-line baseline | `docs/architectural-mechanisms.md` | Certified locally with quarantines |
-| Canonical contract Oracle | 0.2 | Pending fixture comparison and generated/verified consumers | Pending | `docs/contracts.md` | Introduced as definition and initial inventory |
+| Canonical contract Oracle | 0.2 | Repository dashboard golden fixture comparison pilot | Pending | `docs/contracts.md` | Partially executable; uncertified |
 
 ## Structural Verification
 
@@ -38,8 +38,9 @@ Current scope:
 - narrow serialization rules required before fixture selection,
 - backend HTTP JSON serialization observations,
 - repository dashboard field ownership pilot,
+- repository dashboard golden fixture and recursive backend serialization comparison test,
 - first explicit dashboard compatibility drift finding against a Rust shell mirror,
 - initial parallel truth inventory,
 - fixture gating rule.
 
-The Oracle is not yet an executable protection. Certification requires representative fixture data selection, golden serialized fixtures, recursive comparison tests, expanded dependency graph coverage, and an Oracle change workflow.
+The Oracle is now executable for one pilot contract only. Certification still requires broader golden serialized fixtures, policy-drift classification, expanded dependency graph coverage, generated or verified consumers, and an Oracle change workflow.
