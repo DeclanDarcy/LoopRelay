@@ -1,28 +1,36 @@
-# Decisions: 2026-06-27 M1.1 Acceptance Boundary Direction
+# Decisions: 2026-06-27 M1.1 Acceptance Readiness Direction
 
-These decisions capture only newly authorized direction from the user response that continued work after M1.1 Certification Validation Direction.
+These decisions capture only newly authorized direction from the user response following M1.1 Canonical Contract Model Certification Slice 0064.
 
 ## Authorized Decisions
 
-1. Treat Slice 0064 as the M1.1 certification slice.
-   - M1.1 is locally certified as a model-complete canonical contract foundation.
-   - Certification is not acceptance, baseline publication, generated ecosystem implementation, fixture expansion, transport migration, or consumer migration.
+1. Treat M1.1 as architecturally specified, refined, exemplified, and certified.
+   - The completed progression is identity, taxonomy, ownership, normalization, boundary semantics, evolution, compatibility, governance, canonical conformance cases, and certification.
+   - The remaining M1.1 work is acceptance and baseline governance, not additional architecture construction.
 
-2. Preserve the M1.1 to M1.2 boundary.
-   - M1.2 may start only after M1.1 acceptance and baseline closeout.
-   - M1.2 generation should consume the certified M1.1 model rather than inventing contract identity, category, ownership, normalization, boundary, compatibility, versioning, or governance rules.
+2. Preserve certification and acceptance as separate gates.
+   - Certification answers whether the contract model is coherent and sufficiently evidenced.
+   - Acceptance must answer whether the rest of the program can safely depend on the certified model.
+   - M1.1 must not move into M1.2 implementation solely because certification passed.
 
-3. Use acceptance as the next gate.
-   - The next slice should record M1.1 acceptance and baseline closeout.
-   - Acceptance must confirm downstream compatibility obligations, accepted limitations, rollback readiness, capability matrix final status, durable documentation alignment, and the starting boundary for generated contract ecosystem work.
+3. Define M1.1 acceptance around operational readiness.
+   - Acceptance must demonstrate compatibility obligations are complete for the M1.2 starting boundary.
+   - Acceptance must demonstrate rollback boundaries are explicit.
+   - Acceptance must demonstrate `docs/contracts.md`, the capability matrix, governance documentation, milestone evidence, and active decision evidence describe the same architectural state.
+   - Acceptance must demonstrate the generation boundary is fixed before M1.2 starts.
 
-4. Keep certification evidence separate from implementation evidence.
-   - Slice 0064 evidence proves model completeness and determinism.
-   - Generated artifacts, schema IR, artifact freshness for generated output, shell transport passivity, TypeScript migration, Rust mirror retirement, and dev mock generation require later milestone evidence.
+4. Fix the generation boundary before M1.2.
+   - Generators may derive an intermediate representation and generated consumer artifacts from the accepted Canonical Contract Model.
+   - Generators must not decide contract identity, serialization ownership, compatibility, version evolution, stability interpretation, governance rules, or semantic authority.
+   - Everything above the Canonical Contract Model to generated artifact derivation boundary belongs to M1.1, not M1.2.
 
-5. Rotate handoff and decisions artifacts before publication.
-   - The active handoff was rotated to `.agents/handoffs/handoff.0062.md` and replaced with the Slice 0064 handoff.
-   - The prior active decisions checkpoint was rotated to `.agents/decisions/decisions.0064.md` and replaced with this acceptance-boundary checkpoint.
+5. Scope M1.2 rollback to implementation artifacts and migrations.
+   - If M1.2 uncovers an issue, the preferred rollback path is generated artifacts, generator implementation, manifests, freshness evidence, and consumer migrations.
+   - Redefining the M1.1 contract model is not the default rollback path; reopening M1.1 requires a named model defect with governance evidence.
+
+6. Keep M1.1 acceptance documentation- and governance-focused unless an acceptance blocker appears.
+   - Current verification evidence is proportional: the focused architecture/contract subset passed with 56 tests, and `git diff --check` passed with known line-ending warnings only.
+   - Acceptance should not introduce generators, shell changes, TypeScript regeneration, fixture expansion, or transport changes.
 
 ## Evidence Targets
 
@@ -32,10 +40,10 @@ These decisions capture only newly authorized direction from the user response t
 - `docs/contracts.md`
 - `docs/architectural-capabilities.md`
 - `.agents/handoffs/handoff.md`
-- `.agents/decisions/decisions.0064.md`
+- `.agents/decisions/decisions.0065.md`
 
 ## Next Authorized Sequence
 
-1. Stage the M1.1 certification slice, handoff rotation, decision rotation, and this acceptance-boundary decision checkpoint.
+1. Stage the decision rotation and this M1.1 acceptance-readiness decision checkpoint.
 2. Commit and push to `origin/dev`.
 3. Stop executing after the push.
