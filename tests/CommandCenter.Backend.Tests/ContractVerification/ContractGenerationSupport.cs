@@ -197,6 +197,20 @@ internal static class RepositoryDashboardGenerationMetadata
             "$[].executionSummary.state",
             semanticDomain: "ExecutionSessionState",
             domainValues: ["Created", "Executing", "Completed", "Failed", "Cancelled"]),
+        RequiredNonNullable(
+            "$[].executionSummary.repositoryState",
+            semanticDomain: "RepositoryExecutionState",
+            domainValues:
+            [
+                "Ready",
+                "Executing",
+                "AwaitingAcceptance",
+                "Accepted",
+                "AwaitingCommit",
+                "AwaitingPush",
+                "Failed",
+                "Cancelled"
+            ]),
         RequiredNullable("$[].executionSummary.milestonePath", semanticDomain: "RepositoryRelativePath"),
         RequiredNullable("$[].executionSummary.startedAt", stringFormat: "date-time"),
         RequiredNullable("$[].executionSummary.completedAt", stringFormat: "date-time"),
@@ -223,6 +237,20 @@ internal static class RepositoryDashboardGenerationMetadata
             "$[].executionHistory[].state",
             semanticDomain: "ExecutionSessionState",
             domainValues: ["Created", "Executing", "Completed", "Failed", "Cancelled"]),
+        RequiredNonNullable(
+            "$[].executionHistory[].repositoryState",
+            semanticDomain: "RepositoryExecutionState",
+            domainValues:
+            [
+                "Ready",
+                "Executing",
+                "AwaitingAcceptance",
+                "Accepted",
+                "AwaitingCommit",
+                "AwaitingPush",
+                "Failed",
+                "Cancelled"
+            ]),
         RequiredNullable("$[].executionHistory[].milestonePath", semanticDomain: "RepositoryRelativePath"),
         RequiredNullable("$[].executionHistory[].startedAt", stringFormat: "date-time"),
         RequiredNullable("$[].executionHistory[].completedAt", stringFormat: "date-time"),

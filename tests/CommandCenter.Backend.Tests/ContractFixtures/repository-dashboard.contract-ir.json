@@ -1740,6 +1740,27 @@
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
+      "path": "$[].executionSummary.repositoryState",
+      "presence": "Required",
+      "nullability": "NonNullable",
+      "semanticDomain": "RepositoryExecutionState",
+      "domainValues": [
+        "Ready",
+        "Executing",
+        "AwaitingAcceptance",
+        "Accepted",
+        "AwaitingCommit",
+        "AwaitingPush",
+        "Failed",
+        "Cancelled"
+      ],
+      "identityRole": null,
+      "arrayOrdering": null,
+      "stringFormat": null,
+      "primitiveType": null,
+      "source": "M1.2 repository-dashboard governed schema metadata pilot"
+    },
+    {
       "path": "$[].executionSummary.milestonePath",
       "presence": "Required",
       "nullability": "Nullable",
@@ -2012,6 +2033,27 @@
         "Created",
         "Executing",
         "Completed",
+        "Failed",
+        "Cancelled"
+      ],
+      "identityRole": null,
+      "arrayOrdering": null,
+      "stringFormat": null,
+      "primitiveType": null,
+      "source": "M1.2 repository-dashboard governed schema metadata pilot"
+    },
+    {
+      "path": "$[].executionHistory[].repositoryState",
+      "presence": "Required",
+      "nullability": "NonNullable",
+      "semanticDomain": "RepositoryExecutionState",
+      "domainValues": [
+        "Ready",
+        "Executing",
+        "AwaitingAcceptance",
+        "Accepted",
+        "AwaitingCommit",
+        "AwaitingPush",
         "Failed",
         "Cancelled"
       ],

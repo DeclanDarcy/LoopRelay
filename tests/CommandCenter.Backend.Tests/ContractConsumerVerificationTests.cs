@@ -126,6 +126,10 @@ public sealed class ContractConsumerVerificationTests
             "$[].decisionSessionSummary.state",
             typeScriptShapes.GetPropertyShape("RepositoryDashboardProjection", "decisionSessionSummary", "state"),
             typeScriptShapes.GetPropertyShape("RepositoryDashboardConsumerCandidateProjection", "decisionSessionSummary", "state"));
+        AssertConsumerShapeEquivalent(
+            "$[].executionSummary.repositoryState",
+            typeScriptShapes.GetPropertyShape("RepositoryDashboardProjection", "executionSummary", "repositoryState"),
+            typeScriptShapes.GetPropertyShape("RepositoryDashboardConsumerCandidateProjection", "executionSummary", "repositoryState"));
 
         string generatedSource = File.ReadAllText(FindRepositoryRoot().Combine(
             "src",
@@ -136,6 +140,7 @@ public sealed class ContractConsumerVerificationTests
             "repository-dashboard.generated.ts"));
         Assert.Contains("availability: 'Available' | 'Missing' | 'AccessDenied'", generatedSource, StringComparison.Ordinal);
         Assert.Contains("executionState: 'Ready' | 'Executing' | 'AwaitingAcceptance' | 'Accepted' | 'AwaitingCommit' | 'AwaitingPush' | 'Failed' | 'Cancelled'", generatedSource, StringComparison.Ordinal);
+        Assert.Contains("repositoryState: 'Ready' | 'Executing' | 'AwaitingAcceptance' | 'Accepted' | 'AwaitingCommit' | 'AwaitingPush' | 'Failed' | 'Cancelled'", generatedSource, StringComparison.Ordinal);
         Assert.Contains("state: 'Created' | 'Active' | 'TransferPending' | 'Transferred' | 'Retired' | null", generatedSource, StringComparison.Ordinal);
     }
 

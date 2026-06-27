@@ -7,7 +7,7 @@
       "artifactId": "generated-typescript-repository-dashboard-contract",
       "artifactPath": "src/CommandCenter.UI/src/contracts/generated/repository-dashboard.generated.ts",
       "artifactKind": "generated-typescript-contract",
-      "artifactSha256": "D7B7A373DB52D48C76EF15DA69974A9DDE030F78AD6C8621AEE6459BD0AE34AC"
+      "artifactSha256": "2297AF9EBFC0D14D02E7CBDCA979AF570AD80DDF19E804238879C6531F9294B8"
     }
   ]
 }

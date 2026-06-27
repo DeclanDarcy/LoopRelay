@@ -1,3 +1,9 @@
+import type {
+  RepositoryDashboardConsumerCandidateProjection,
+  RepositoryDashboardConsumerCandidateProjectionDecisionSessionSummary,
+  RepositoryDashboardConsumerCandidateProjectionDecisionSessionSummaryHealthDimensions,
+  RepositoryDashboardConsumerCandidateProjectionDecisionSessionSummaryRecentTransferLineage,
+} from '../contracts/generated/repository-dashboard.generated'
 import type { ArtifactInventory } from './artifacts'
 import type { ExecutionReadiness, ExecutionSessionSummary, RepositoryExecutionState } from './execution'
 import type { OperationalContextProjection, OperationalContextProposalSummary } from './operationalContext'
@@ -40,53 +46,16 @@ export type RepositoryReasoningSummary = {
   certificationResult: string | null
 }
 
-export type RepositoryDecisionSessionHealthDimension = {
-  name: string
-  status: string
-  findings: string[]
-}
+export type RepositoryDecisionSessionHealthDimension =
+  RepositoryDashboardConsumerCandidateProjectionDecisionSessionSummaryHealthDimensions
 
-export type RepositoryDecisionSessionTransferSummary = {
-  transferId: string
-  sourceSessionId: string
-  targetSessionId: string | null
-  continuityArtifactId: string | null
-  startedAt: string
-  completedAt: string | null
-  succeeded: boolean
-}
+export type RepositoryDecisionSessionTransferSummary =
+  RepositoryDashboardConsumerCandidateProjectionDecisionSessionSummaryRecentTransferLineage
 
-export type RepositoryDecisionSessionSummary = {
-  decisionSessionId: string | null
-  state: string | null
-  lifecycleDecision: string | null
-  transferEligibilityStatus: string | null
-  estimatedTokenCount: number | null
-  estimatedCacheTtl: string | null
-  cacheMissRisk: number | null
-  coherenceScore: number | null
-  transferPressure: number | null
-  healthDimensions: RepositoryDecisionSessionHealthDimension[]
-  recentTransferLineage: RepositoryDecisionSessionTransferSummary[]
-  diagnostics: string[]
-  generatedAt: string | null
-}
+export type RepositoryDecisionSessionSummary =
+  RepositoryDashboardConsumerCandidateProjectionDecisionSessionSummary
 
-export type RepositoryDashboardProjection = {
-  repository: Repository
-  availability: RepositoryAvailability
-  readiness: ExecutionReadiness
-  executionState: RepositoryExecutionState
-  activeExecutionSession: ExecutionSessionSummary | null
-  executionSummary: ExecutionSessionSummary | null
-  executionHistory: ExecutionSessionSummary[]
-  milestoneCount: number
-  hasCurrentHandoff: boolean
-  hasCurrentDecisions: boolean
-  continuitySummary: RepositoryContinuitySummary
-  reasoningSummary: RepositoryReasoningSummary
-  decisionSessionSummary: RepositoryDecisionSessionSummary
-}
+export type RepositoryDashboardProjection = RepositoryDashboardConsumerCandidateProjection
 
 export type RepositoryWorkspaceProjection = {
   repository: Repository

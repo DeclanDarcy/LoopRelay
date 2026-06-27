@@ -725,6 +725,14 @@ export const repositoryDashboardContractFieldMetadata = [
     source: 'M1.2 repository-dashboard governed schema metadata pilot',
   },
   {
+    path: '$[].executionSummary.repositoryState',
+    presence: 'required',
+    nullability: 'nonNullable',
+    semanticDomain: 'RepositoryExecutionState',
+    domainValues: ['Ready', 'Executing', 'AwaitingAcceptance', 'Accepted', 'AwaitingCommit', 'AwaitingPush', 'Failed', 'Cancelled'],
+    source: 'M1.2 repository-dashboard governed schema metadata pilot',
+  },
+  {
     path: '$[].executionSummary.milestonePath',
     presence: 'required',
     nullability: 'nullable',
@@ -884,6 +892,14 @@ export const repositoryDashboardContractFieldMetadata = [
     nullability: 'nonNullable',
     semanticDomain: 'ExecutionSessionState',
     domainValues: ['Created', 'Executing', 'Completed', 'Failed', 'Cancelled'],
+    source: 'M1.2 repository-dashboard governed schema metadata pilot',
+  },
+  {
+    path: '$[].executionHistory[].repositoryState',
+    presence: 'required',
+    nullability: 'nonNullable',
+    semanticDomain: 'RepositoryExecutionState',
+    domainValues: ['Ready', 'Executing', 'AwaitingAcceptance', 'Accepted', 'AwaitingCommit', 'AwaitingPush', 'Failed', 'Cancelled'],
     source: 'M1.2 repository-dashboard governed schema metadata pilot',
   },
   {
@@ -1382,7 +1398,7 @@ export type RepositoryDashboardConsumerCandidateProjectionRepository = {
 export type RepositoryDashboardConsumerCandidateExecutionSessionSummary = {
   sessionId: string
   state: 'Created' | 'Executing' | 'Completed' | 'Failed' | 'Cancelled'
-  repositoryState: string
+  repositoryState: 'Ready' | 'Executing' | 'AwaitingAcceptance' | 'Accepted' | 'AwaitingCommit' | 'AwaitingPush' | 'Failed' | 'Cancelled'
   milestonePath: string | null
   startedAt: string | null
   completedAt: string | null
@@ -1411,7 +1427,7 @@ export type RepositoryDashboardConsumerCandidateExecutionSessionSummary = {
 export type RepositoryDashboardConsumerCandidateProjectionExecutionHistory = {
   sessionId: string
   state: 'Created' | 'Executing' | 'Completed' | 'Failed' | 'Cancelled'
-  repositoryState: string
+  repositoryState: 'Ready' | 'Executing' | 'AwaitingAcceptance' | 'Accepted' | 'AwaitingCommit' | 'AwaitingPush' | 'Failed' | 'Cancelled'
   milestonePath: string | null
   startedAt: string | null
   completedAt: string | null
