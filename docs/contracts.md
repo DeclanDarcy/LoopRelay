@@ -33,6 +33,61 @@ backend authority
 | Persistence | Stores repository data and internal records; persisted shapes are not external contracts unless exposed across a boundary. |
 | Runtime | Scopes failures, partial data, absence, retries, and recovery without changing contract meaning. |
 
+## Canonical Contract Identity Model
+
+A contract identity is the stable architectural name for one externally observable request, response, event, stream event, error envelope, or command result shape. It names the boundary artifact that consumers may depend on; it is not the C# type name, Rust mirror name, TypeScript alias, endpoint path, Tauri command, fixture file, or UI feature that happens to observe it.
+
+Contract identity exists so generation, compatibility review, fixture drift, and consumer migration can all point at the same artifact without allowing any downstream representation to become contract authority.
+
+The canonical identity record for each contract must include:
+
+| Field | Requirement |
+| --- | --- |
+| Contract identity | Stable human-readable name used by Oracle fixtures, manifests, generated artifacts, evidence, and compatibility records. |
+| Category | Contract taxonomy category, such as public projection, command request, command response, event, streaming event, error envelope, diagnostics, health, or certification. |
+| Owning authority | Backend domain service, projection service, endpoint, or shell-owned command that owns the source meaning. |
+| Owning projection or command | Projection type, request DTO, command result, stream event, or primitive that is serialized externally. |
+| Producer boundary | Backend route, Tauri command, event stream, or shell-owned surface that emits the contract. |
+| Serialization authority | Backend HTTP JSON serialization unless explicitly shell-owned or stream-specific. |
+| Version identity | Current accepted version label or explicit unversioned pilot status. Until mechanical versioning exists, fixture and freshness manifests are the observable baseline. |
+| Compatibility obligations | Current manual consumers, compatibility fields, downstream drift, migration owner, and retirement condition. |
+| Oracle source | Golden fixture, stream trace, request-boundary inventory, or explicit statement that no Oracle source exists yet. |
+| Consumer set | Generated, verified, observational, transforming, testing, presentation, and compatibility consumers that depend on the identity. |
+| Evolution rule | Required governance path for additive, breaking, compatibility, fixture, artifact, or request-boundary changes. |
+
+Identity rules:
+
+- The identity is assigned to the externally observable serialized shape, not to a downstream mirror or local UI model.
+- A single backend projection may expose multiple contract identities only when producer boundaries, consumer sets, compatibility obligations, or version lifecycles differ.
+- Multiple producer boundaries may share one contract identity only when they serialize the same authority-owned shape and accept the same compatibility obligations.
+- Aggregation contracts are allowed only when the aggregation itself is an authority-owned projection with named source projections and consumer obligations.
+- Request and response contracts are separate identities even when they are handled by the same endpoint or Tauri command.
+- Error envelopes are contracts whenever structured error payloads cross backend, shell, or TypeScript transport boundaries.
+- Stream contracts require an identity for the event payload and, when ordering/reconnection semantics matter, a separate stream lifecycle identity.
+- Persistence and configuration shapes are not external contract identities unless they cross a runtime, API, generated-artifact, or compatibility boundary.
+- Manual Rust mirrors, manual TypeScript aliases, and dev mocks are compatibility consumers or verified artifacts. They cannot define identity.
+
+Initial version identity rule:
+
+| State | Meaning | Allowed use |
+| --- | --- | --- |
+| Unversioned pilot | Contract is identified and protected by Oracle or request-boundary evidence, but mechanical versioning does not exist yet. | Phase 0 and M1.1 inventory records. |
+| Fixture baseline | Contract has an accepted golden fixture or stream trace that acts as the observable version baseline. | Oracle-managed read models and command results before generated artifacts. |
+| Freshness baseline | A verified artifact is tied to an Oracle source by hash. | Manual TypeScript artifacts during Phase 0; generated artifacts in M1.2 after generation exists. |
+| Versioned contract | Contract has an explicit semantic or schema version with compatibility rules and generated artifact lifecycle. | Future M1.2 and later generated contract ecosystem work. |
+
+## Initial Contract Identity Inventory
+
+This inventory seeds M1.1 from the already certified Phase 0 Oracle pilots. It deliberately does not introduce generation, broad endpoint coverage, or new runtime behavior.
+
+| Contract identity | Category | Owning authority | Owning projection or command | Producer boundary | Serialization authority | Version identity | Oracle source | Compatibility obligations |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Repository dashboard | Public projection response | Middle repository dashboard projection composed from repository, execution, continuity, reasoning, and decision-session authorities | `RepositoryDashboardProjection[]` | `GET /api/repositories`; Tauri `list_repositories` | Backend HTTP JSON | Fixture baseline, unversioned pilot | `tests/CommandCenter.Backend.Tests/ContractFixtures/repository-dashboard.golden.json`; request-boundary verifier; artifact freshness manifest | Rust dashboard mirror has known `decisionSessionSummary` drift; manual TypeScript type and dev mock are verified compatibility consumers until generated artifacts replace them. |
+| Repository workspace | Public projection response | Middle repository workspace projection composed from repository, artifact, execution, continuity, reasoning, and decision-session authorities | `RepositoryWorkspaceProjection` | `GET /api/repositories/{repositoryId}/workspace`; Tauri `get_repository_workspace` | Backend HTTP JSON | Fixture baseline, unversioned pilot | `tests/CommandCenter.Backend.Tests/ContractFixtures/repository-workspace.golden.json`; request-boundary verifier; artifact freshness manifest | Rust workspace mirror has known `decisionSessionSummary` drift; manual TypeScript type and dev mock workspace payload are verified compatibility consumers until generated artifacts replace them. |
+| Workflow projection | Public projection response | Workflow projection service and workflow state-machine authorities | `WorkflowInstance` | `GET /api/repositories/{repositoryId}/workflow`; Tauri `get_workflow_projection` | Backend HTTP JSON | Fixture baseline, unversioned pilot | `tests/CommandCenter.Backend.Tests/ContractFixtures/workflow-instance.golden.json`; request-boundary verifier; artifact freshness manifest | Rust response path is currently passive `serde_json::Value`; manual TypeScript workflow type is a verified compatibility consumer; dev mock response coverage is absent and remains a known gap. |
+
+These three identities are enough to start M1.1 because they demonstrate identity across a collection response, an aggregate workspace response, and a workflow projection response. They do not classify command bodies, mutation results, event streams, diagnostics, health, certification reports, error envelopes, or shell-owned commands yet.
+
 ## Initial Contract Relationship Matrix
 
 This matrix records contract families discovered in the first Milestone 0.2 inventory slice. Later slices must expand each family into endpoint-level and field-level entries before fixtures are certified.
