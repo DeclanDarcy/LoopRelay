@@ -1,29 +1,32 @@
-# Handoff: After M0.4 Authority/Projection Watchlist Slice 0055
+# Handoff: After M0.4 Compatibility Structure Governance Slice 0056
 
 Current milestone state: M0.4 is started but not certified.
 
 New state from this slice:
 
-- Added `docs/authority-projection-governance-watchlist.md`.
-- Added `ArchitecturalDecisionGovernanceTests.AuthorityAndProjectionLikeFileNamesRemainGoverned`.
-- The guard scans source file names under `src/` and `tests/CommandCenter.Backend.Tests/` for `.cs`, `.ts`, `.tsx`, and `.rs` files containing `Authority` or `Projection`, case-insensitively.
-- The guard requires each watched file to appear in the watchlist and rejects stale watchlist entries.
-- Updated `.agents/decisions/decisions.md` with the Slice 0055 evidence target.
-- Added `.agents/milestones/m0.4-authority-projection-watchlist-slice-0055.md`.
+- Added `docs/compatibility-structure-governance.md`.
+- Added `ArchitecturalDecisionGovernanceTests.CompatibilityStructuresRemainGoverned`.
+- The guard validates compatibility field, route, command, and mirror inventory sections.
+- Each compatibility inventory row must include kind, owner, consumers, replacement path, retirement condition, and reachable evidence.
+- The guard aligns compatibility routes with the bounded compatibility route list from `BackendEndpointDispositionTests`.
+- The guard aligns compatibility command families and Rust mirror entries with `docs/shell-transport-classification.md`.
+- Updated `.agents/decisions/decisions.md` with the Slice 0056 evidence target.
+- Added `.agents/milestones/m0.4-compatibility-structure-governance-slice-0056.md`.
 - Updated `.agents/milestones/m0.4-decision-governance.md`, `docs/architectural-capabilities.md`, and `docs/architectural-mechanisms.md`.
-- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0053.md`.
+- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0054.md`.
 
 Verification:
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter ArchitecturalDecisionGovernanceTests` passed: 9 passed, 0 failed, 0 skipped.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "ArchitecturalRegressionFrameworkTests|ArchitecturalDecisionGovernanceTests"` passed: 23 passed, 0 failed, 0 skipped.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter ArchitecturalDecisionGovernanceTests` passed: 10 passed, 0 failed, 0 skipped.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "ArchitecturalRegressionFrameworkTests|ArchitecturalDecisionGovernanceTests"` passed: 24 passed, 0 failed, 0 skipped.
 
 High-leverage decisions currently relevant:
 
-- New source files with authority/projection-like names now require explicit watchlist governance before acceptance.
-- This guard is intentionally heuristic and file-name scoped; it does not certify authority correctness, projection purity, or semantic inference absence.
-- Case-insensitive matching is intentional so lowercase test/hook names like `projectionHooks.test.tsx` remain governed.
+- Compatibility structures are governed as transitional architecture, not judged as intrinsically correct or incorrect.
+- The guard requires owner, consumers, replacement path, retirement condition, and evidence for compatibility fields, routes, commands, and mirrors.
+- The guard is inventory-level: it does not prove compatibility derivation, consumer migration completeness, passive transport correctness, or retirement readiness.
+- Shell compatibility command and mirror governance now depends on `docs/shell-transport-classification.md` staying aligned with the compatibility inventory.
 
 Recommended next slice:
 
-- Continue M0.4 with compatibility-field governance: add a narrow source/documentation inventory and guard requiring new compatibility fields, routes, commands, or mirrors to have owner, consumer list, replacement path, retirement condition, and reachable evidence.
+- Continue M0.4 with certification preparation: add a decision governance certification report that maps all M0.4 required outputs and exit criteria to the current evidence, identifies any accepted limitations, and states whether M0.4 can be certified or what narrow blocker remains.

@@ -112,6 +112,29 @@ public sealed class ArchitecturalDecisionGovernanceTests
         "## Non-Claims"
     ];
 
+    private static readonly string[] RequiredCompatibilityStructureHeadings =
+    [
+        "## Detection Scope",
+        "## Compatibility Kinds",
+        "## Compatibility Field Inventory",
+        "## Compatibility Route Inventory",
+        "## Compatibility Command Inventory",
+        "## Compatibility Mirror Inventory",
+        "## Exclusions",
+        "## Non-Claims"
+    ];
+
+    private static readonly string[] RequiredCompatibilityInventoryColumns =
+    [
+        "Compatibility structure",
+        "Kind",
+        "Owner",
+        "Consumers",
+        "Replacement path",
+        "Retirement condition",
+        "Evidence"
+    ];
+
     private static readonly ArchitectureRegressionBypassPattern[] ArchitectureRegressionBypassPatterns =
     [
         new(
@@ -479,6 +502,89 @@ public sealed class ArchitecturalDecisionGovernanceTests
             $"docs/authority-projection-governance-watchlist.md contains authority/projection watchlist entries that no longer exist. Retire or update the governed entry with evidence. Stale files: {string.Join(", ", staleGovernedFiles)}");
     }
 
+    [Fact]
+    public void CompatibilityStructuresRemainGoverned()
+    {
+        DirectoryInfo repositoryRoot = FindRepositoryRoot();
+        string inventoryPath = Path.Combine(
+            repositoryRoot.FullName,
+            "docs",
+            "compatibility-structure-governance.md");
+
+        Assert.True(
+            File.Exists(inventoryPath),
+            "M0.4 requires a compatibility-structure inventory before compatibility fields, routes, commands, or mirrors can be accepted as transitional architecture.");
+
+        string inventory = File.ReadAllText(inventoryPath);
+        foreach (string heading in RequiredCompatibilityStructureHeadings)
+        {
+            Assert.Contains(heading, inventory);
+        }
+
+        IReadOnlyList<IReadOnlyDictionary<string, string>> fieldRows = ReadCompatibilityInventory("## Compatibility Field Inventory");
+        IReadOnlyList<IReadOnlyDictionary<string, string>> routeRows = ReadCompatibilityInventory("## Compatibility Route Inventory");
+        IReadOnlyList<IReadOnlyDictionary<string, string>> commandRows = ReadCompatibilityInventory("## Compatibility Command Inventory");
+        IReadOnlyList<IReadOnlyDictionary<string, string>> mirrorRows = ReadCompatibilityInventory("## Compatibility Mirror Inventory");
+
+        AssertCompatibilityRowsHaveGovernanceMetadata(repositoryRoot, fieldRows, "Compatibility field");
+        AssertCompatibilityRowsHaveGovernanceMetadata(repositoryRoot, routeRows, "Compatibility route");
+        AssertCompatibilityRowsHaveGovernanceMetadata(repositoryRoot, commandRows, "Compatibility command");
+        AssertCompatibilityRowsHaveGovernanceMetadata(repositoryRoot, mirrorRows, "Compatibility mirror");
+
+        string[] governedRoutes = routeRows
+            .Select(row => row["Compatibility structure"].Trim('`'))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(
+            [
+                "GET /api/ping",
+                "GET /api/repositories/{repositoryId:guid}/planning"
+            ],
+            governedRoutes);
+
+        string shellClassification = File.ReadAllText(Path.Combine(repositoryRoot.FullName, "docs", "shell-transport-classification.md"));
+        string[] transitionalCommandFamilies = ReadTableRows(
+                shellClassification,
+                "## Command-Family Inventory",
+                "Family",
+                ["Family", "Representative commands", "Current category", "Target category", "Evidence", "Known gap"])
+            .Where(row => row["Current category"] == "Transitional compatibility")
+            .Select(row => $"{row["Family"]} shell command family")
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        string[] governedCommandFamilies = commandRows
+            .Select(row => row["Compatibility structure"])
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(transitionalCommandFamilies, governedCommandFamilies);
+
+        string[] shellCompatibilityMirrors = ReadTableRows(
+                shellClassification,
+                "## Rust Mirror Inventory",
+                "Rust struct or group",
+                ["Rust struct or group", "Current state", "Target state", "Reason", "Retirement or quarantine condition"])
+            .Where(row => row["Current state"] is "Mirror" or "Compatibility")
+            .Select(row => row["Rust struct or group"])
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        string[] governedMirrors = mirrorRows
+            .Select(row => row["Compatibility structure"])
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(shellCompatibilityMirrors, governedMirrors);
+
+        IReadOnlyList<IReadOnlyDictionary<string, string>> ReadCompatibilityInventory(string heading)
+        {
+            return ReadTable(
+                "docs/compatibility-structure-governance.md",
+                heading,
+                "Compatibility structure",
+                RequiredCompatibilityInventoryColumns);
+        }
+    }
+
     private static IReadOnlyList<IReadOnlyDictionary<string, string>> ReadTable(
         string relativePath,
         string heading,
@@ -533,6 +639,87 @@ public sealed class ArchitecturalDecisionGovernanceTests
         Assert.NotEmpty(rows);
 
         return rows;
+    }
+
+    private static IReadOnlyList<IReadOnlyDictionary<string, string>> ReadTableRows(
+        string source,
+        string heading,
+        string firstColumnName,
+        IReadOnlyList<string> requiredColumns)
+    {
+        string[] lines = source.Split('\n');
+        int headingIndex = Array.FindIndex(lines, line => line.Trim() == heading);
+
+        Assert.True(
+            headingIndex >= 0,
+            $"Source must define '{heading}'.");
+
+        int headerIndex = Array.FindIndex(lines, headingIndex, line => line.StartsWith($"| {firstColumnName} |", StringComparison.Ordinal));
+
+        Assert.True(
+            headerIndex > headingIndex,
+            $"{heading} must use a markdown table whose first column is '{firstColumnName}'.");
+
+        string[] columns = SplitMarkdownTableRow(lines[headerIndex]);
+
+        Assert.Equal(requiredColumns, columns);
+
+        List<IReadOnlyDictionary<string, string>> rows = [];
+
+        for (int i = headerIndex + 2; i < lines.Length; i++)
+        {
+            string line = lines[i];
+
+            if (!line.StartsWith("|", StringComparison.Ordinal))
+            {
+                break;
+            }
+
+            string[] values = SplitMarkdownTableRow(line);
+
+            Assert.True(
+                values.Length == columns.Length,
+                $"Governance table row has {values.Length} columns but expected {columns.Length}: {line}");
+
+            rows.Add(columns
+                .Zip(values, static (column, value) => new { column, value })
+                .ToDictionary(pair => pair.column, pair => pair.value));
+        }
+
+        Assert.NotEmpty(rows);
+
+        return rows;
+    }
+
+    private static void AssertCompatibilityRowsHaveGovernanceMetadata(
+        DirectoryInfo repositoryRoot,
+        IReadOnlyList<IReadOnlyDictionary<string, string>> rows,
+        string expectedKind)
+    {
+        foreach (IReadOnlyDictionary<string, string> row in rows)
+        {
+            Assert.Equal(expectedKind, row["Kind"]);
+
+            foreach (string column in RequiredCompatibilityInventoryColumns)
+            {
+                Assert.True(
+                    HasAcceptedCatalogValue(row[column]),
+                    $"Ungoverned compatibility structure detected. '{row["Compatibility structure"]}' must populate '{column}' so compatibility remains transitional and traceable.");
+            }
+
+            string[] evidenceLinks = ExtractRepositoryRelativeLinks(
+                    row["Evidence"],
+                    @"(?:\.agents/milestones/m0\.[0-9]-[^`\s)]+\.md|docs/[^`\s)]+\.md|tests/[^`\s)]+\.cs)")
+                .ToArray();
+
+            Assert.NotEmpty(evidenceLinks);
+            foreach (string evidenceLink in evidenceLinks)
+            {
+                Assert.True(
+                    File.Exists(Path.Combine(repositoryRoot.FullName, evidenceLink)),
+                    $"Compatibility structure '{row["Compatibility structure"]}' cites missing evidence: {evidenceLink}");
+            }
+        }
     }
 
     private static DirectoryInfo FindRepositoryRoot()

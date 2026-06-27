@@ -1,37 +1,35 @@
-# Decisions: 2026-06-27 M0.4 Compatibility Structure Governance Direction
+# Decisions: 2026-06-27 M0.4 Certification Review Direction
 
-These decisions capture only newly authorized direction from the user response following M0.4 Authority/Projection Watchlist Slice 0055.
+These decisions capture only newly authorized direction from the user response following M0.4 Compatibility Structure Governance Slice 0056.
 
 ## Authorized Decisions
 
-1. Accept Slice 0055 as a correct M0.4 governance-strengthening step.
-   - The authority/projection detector is a governance watchlist, not an architectural correctness checker.
-   - File-name heuristics may surface potential governance events but must not claim to prove semantic correctness.
-   - The watchlist raises attention for governance review; it does not render an architectural verdict.
+1. Accept Slice 0056 as a correct M0.4 governance-strengthening step.
+   - Compatibility structures should be governed as transitional architecture rather than evaluated as inherently good or bad.
+   - Compatibility mechanisms may be necessary during architectural evolution.
+   - The architectural risk is unmanaged permanence without ownership, consumers, replacement path, retirement condition, and reachable evidence.
 
-2. Preserve the limited certification claim for authority/projection watchlist governance.
-   - The guard may require explicit inventory for authority/projection-like source file names.
-   - The guard must not certify semantic authority correctness, projection purity, or architectural role.
-   - Later authority and projection mechanisms remain responsible for stronger semantic enforcement.
+2. Preserve the limited certification claim for compatibility-structure governance.
+   - The guard proves compatibility inventory, required governance metadata, and reachable evidence.
+   - The guard does not prove derivation correctness, migration completeness, passive transport correctness, or retirement readiness.
+   - Those claims remain separate later architectural work.
 
-3. Continue M0.4 with compatibility-structure governance.
-   - Compatibility structures should have explicit lifecycle and supporting evidence.
-   - The guard should ensure every compatibility structure has owner, consumers, replacement path, retirement condition, and reachable evidence.
-   - The guard should not judge whether the compatibility mechanism is intrinsically good or bad.
+3. Treat M0.4 as ready for certification review rather than additional governance-concept expansion.
+   - The next slice should synthesize current M0.4 evidence against the milestone definition.
+   - The certification review should demonstrate that the governance framework satisfies its own milestone requirements.
+   - Certification should not broaden coverage beyond the evidence produced by M0.4.
 
-4. Classify compatibility objects by kind.
-   - Compatibility field: transitional serialized property.
-   - Compatibility route: legacy endpoint.
-   - Compatibility command: legacy transport command.
-   - Compatibility mirror: transitional Rust or TypeScript model.
-   - Each kind should satisfy the same governance metadata while remaining reportable for retirement planning.
+4. Organize M0.4 certification evidence into three groups.
+   - Governance foundation: decision governance, evidence model, rollback model, and templates.
+   - Governance enforcement: metadata guards, regression weakening guard, shell inventory validation, authority/projection watchlist, and compatibility governance.
+   - Governance limitations: historical corpus not fully validated, semantic decision quality not automatically assessed, and compatibility correctness not yet proven.
 
-5. Align compatibility governance failure language with M0.4.
-   - Prefer "Ungoverned compatibility structure detected."
-   - The failure model should emphasize missing governance metadata rather than implying compatibility itself is undesirable.
+5. Continue toward M0.4 closeout with certification, evidence synthesis, and milestone acceptance.
+   - Required outputs, exit criteria, implemented mechanisms, executable guards, accepted limitations, and blockers should be explicit.
+   - If no narrow blocker remains, certification can support milestone acceptance as a separate step.
 
 ## Next Authorized Sequence
 
-1. Stage Slice 0055 changes, handoff rotation, decision rotation, and this decision checkpoint.
+1. Stage Slice 0056 changes, handoff rotation, decision rotation, and this decision checkpoint.
 2. Commit and push to `origin/dev`.
 3. Stop executing after the push.
