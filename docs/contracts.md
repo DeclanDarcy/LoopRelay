@@ -76,6 +76,115 @@ Initial version identity rule:
 | Freshness baseline | A verified artifact is tied to an Oracle source by hash. | Manual TypeScript artifacts during Phase 0; generated artifacts in M1.2 after generation exists. |
 | Versioned contract | Contract has an explicit semantic or schema version with compatibility rules and generated artifact lifecycle. | Future M1.2 and later generated contract ecosystem work. |
 
+## Contract Taxonomy
+
+A contract category identifies why a serialized shape crosses a boundary and which rules govern its ownership, compatibility, verification, and evolution. The category does not make a downstream representation authoritative.
+
+| Category | Definition | Primary authority | Current examples |
+| --- | --- | --- | --- |
+| Public projection response | Backend-owned read model exposed to the UI or shell as externally observable product state. | Backend projection or composition service. | Repository dashboard, repository workspace, workflow projection. |
+| Internal projection response | Backend-owned read model exposed only to internal tooling, tests, diagnostics, or a non-product integration boundary. | Backend service that owns the projection. | Planning milestone projection until product consumers require public compatibility. |
+| Command request | Serialized route, query, or body input accepted by a backend route or shell-owned command. | Backend endpoint/request DTO, except explicitly shell-owned commands. | Repository id route parameters, future POST command bodies. |
+| Command response | Serialized result emitted after a command changes state or performs an action. | Backend command service and result projection. | Repository refresh result, execution start result, Git commit result, proposal review result. |
+| Event | Discrete serialized fact emitted from a backend event or activity list. | Backend event producer. | Execution events endpoint payloads, reasoning event records. |
+| Notification | Serialized transient message intended to inform a client without defining durable state. | Backend or shell runtime producer that owns the notification meaning. | Future UI notifications or runtime progress messages. |
+| Streaming event | Serialized event payload delivered through a stream where ordering, reconnection, or lifecycle semantics may matter. | Backend stream producer and stream lifecycle owner. | Execution event stream entries. |
+| Stream lifecycle | Contract for stream connection, ordering, terminal, retry, or reconnection behavior when those semantics are observable. | Backend stream endpoint and runtime isolation owner. | Future execution stream lifecycle identity. |
+| Persistence | Stored shape that becomes a contract only when read across a runtime, generated-artifact, migration, or compatibility boundary. | Persisting domain service or storage adapter. | Reasoning repository records when exposed through reports or generated artifacts. |
+| Configuration | Configuration shape that becomes a contract when edited, generated, imported, exported, or consumed across a process boundary. | Configuration owner. | Repository registration/configuration surfaces. |
+| Diagnostics | Serialized health, warning, finding, or explanatory evidence emitted for troubleshooting or governance. | Service that owns the diagnostic meaning. | Continuity diagnostics, workflow diagnostics, governance findings. |
+| Health | Serialized availability, readiness, liveness, or degradation state. | Health/status authority. | Ping primitive, workflow health, repository availability. |
+| Certification | Serialized certification report or acceptance evidence. | Certifying service or governance mechanism. | Decision certification, workflow certification, reasoning certification. |
+| Error envelope | Structured failure payload that crosses backend, shell, TypeScript transport, or runtime boundaries. | Boundary that creates the failure contract; backend for backend errors. | Backend error payload with `boundaryViolation`. |
+| Compatibility artifact | Transitional downstream representation that is checked against a contract but cannot define it. | The upstream contract identity and compatibility owner. | Manual TypeScript types, Rust mirrors, dev Tauri mock payloads. |
+
+Category rules:
+
+- A public projection response must be fixture-eligible unless an evidence record explains why the response is not stable enough to baseline yet.
+- A command request and command response are separate contracts even when they share one user action.
+- A streaming event contract does not certify stream ordering or retry behavior unless a stream lifecycle identity also exists.
+- Persistence and configuration shapes are not contract categories by storage location alone; they enter the contract taxonomy only when a boundary makes their shape externally observable.
+- Diagnostics, health, and certification contracts may contain semantic conclusions, but those conclusions must be computed by the owning backend authority before serialization.
+- Compatibility artifacts may be generated or verified, but they are never the source category for a contract identity.
+
+## Projection And Contract Relationship Model
+
+A projection is the backend-owned read model or command result before serialization. A contract is the externally observable serialized shape emitted from that projection or command result.
+
+Projection-to-contract rules:
+
+- One projection normally maps to one response contract at one producer boundary.
+- One projection may expose multiple contract identities only when producer boundaries, consumer classes, compatibility obligations, or version lifecycles differ.
+- Multiple endpoints or commands may share one contract identity only when they emit the same serialized shape from the same authority and accept the same compatibility obligations.
+- An aggregation contract is allowed only when the aggregation is itself an authority-owned projection with named source projections and explicit consumer obligations.
+- A route parameter, query parameter, body payload, response payload, event payload, stream lifecycle, and error envelope are distinct contract surfaces even when they are processed by the same endpoint.
+- Compatibility fields inside a projection remain part of the serialized contract until retired; they must derive from authoritative structure and include owner, consumer list, replacement path, and retirement condition.
+
+Allowed projection-to-contract transformations:
+
+| Transformation | Allowed when |
+| --- | --- |
+| Backend JSON property naming | It is produced by the backend serialization authority. |
+| Enum-to-string serialization | The backend JSON serializer emits the enum string and the semantic enum remains backend-owned. |
+| Nullable value emission | The backend serializer emits explicit null or omission according to the accepted contract baseline. |
+| Collection ordering | The projection owner defines ordering or the fixture records the current non-semantic order without treating it as a semantic guarantee. |
+| Compatibility derivation | The compatibility field is derived upstream, documented, and regression-protected until retirement. |
+| Aggregation | The aggregate projection names source authorities and does not let the consumer compute missing meaning. |
+
+Forbidden projection-to-contract transformations:
+
+| Transformation | Why forbidden |
+| --- | --- |
+| Rust, TypeScript, mock, hook, controller, or presentation code adding semantic fields | Downstream code would become semantic authority. |
+| Transport converting null to omitted, omitted to null, empty array to null, or error payload to string-only failure | Transport would stop preserving the contract. |
+| UI deriving eligibility, severity, health, retryability, lifecycle legality, certification status, or recommendation rank from weak strings | Presentation would become authority. |
+| Generated artifacts silently renaming, dropping, widening, narrowing, or reordering contract fields without Oracle evidence | Generation would become an implicit contract authority. |
+| A fixture update without authority, compatibility, consumer, verification, and rollback evidence | The Oracle baseline would move without governance. |
+
+## Contract Ownership Matrix
+
+Every contract identity must eventually name owners for these dimensions. A single service may own multiple dimensions, but each dimension must remain explicit.
+
+| Ownership dimension | Owner | Owns | Does not own |
+| --- | --- | --- | --- |
+| Semantic ownership | Domain or backend service that computes meaning. | Lifecycle legality, eligibility, severity, health, diagnostics, recovery, certification, and source facts. | JSON naming, UI labels, transport mechanics, generated artifact location. |
+| Shape ownership | Projection service, command result, request DTO, event producer, or error envelope producer. | Field membership, nesting, required/null states, collection shape, and compatibility fields. | Presentation grouping or downstream convenience aliases. |
+| Serialization ownership | Backend HTTP JSON configuration unless explicitly shell-owned or stream-specific. | Property names, enum representation, date/time representation, null emission, primitive JSON kinds. | Semantic interpretation or consumer migration. |
+| Compatibility ownership | Named compatibility owner for each temporary field, mirror, route, command, or artifact. | Consumer list, replacement path, retirement condition, and compatibility regressions. | Redefining source semantics or weakening Oracle truth. |
+| Version ownership | Contract lifecycle owner established by M1.2 versioning or, before then, fixture/freshness baseline owner. | Version identity, additive/breaking classification, fixture baseline, generated artifact freshness. | Domain meaning unless also the semantic owner. |
+| Evolution ownership | Contract governance decision owner for the affected contract identity. | Approval path for additive, breaking, migration, fixture, artifact, request, stream, and error-envelope changes. | Bypassing evidence requirements. |
+| Deprecation ownership | Compatibility owner plus affected authority owner. | Deprecation notice, migration target, retirement criteria, rollback path, and final removal evidence. | Silent deletion while consumers remain. |
+| Consumer ownership | Generated, verified, observational, transforming, testing, presentation, or compatibility consumer owner. | Correct use of the contract and local adaptation within allowed boundaries. | Contract identity, semantics, serialization, or compatibility obligations. |
+
+Ownership rules:
+
+- Shape ownership follows the serialized producer, not the most convenient downstream consumer.
+- Serialization ownership is singular for a contract identity. If shell serialization differs from backend serialization, the shell surface must be classified as shell-owned or quarantined.
+- Compatibility ownership is required before a compatibility field, manual mirror, or manual artifact can be accepted as transitional debt.
+- Version ownership cannot be delegated to fixture filenames, TypeScript aliases, Rust structs, or mocks.
+- Deprecation is not complete until consumers are migrated or retired and the removal is regression-protected.
+
+## Consumer Model
+
+Consumers are classified by how they depend on a contract. A consumer may belong to more than one class, but its permissions are limited by the most restrictive class involved.
+
+| Consumer class | Definition | Allowed ownership | Forbidden ownership |
+| --- | --- | --- | --- |
+| Generated consumer | Artifact deterministically produced from the canonical contract model or Oracle source. | Local generated representation and regeneration evidence. | Manual semantic edits or independent compatibility policy. |
+| Verified consumer | Manual artifact checked against Oracle-observed truth. | Local representation while freshness and consumer verification pass. | Contract authority or unreviewed shape divergence. |
+| Observational consumer | Test, report, or tool that observes contract behavior without producing product behavior. | Evidence capture and drift reporting. | Changing contract meaning or compatibility obligations. |
+| Transforming consumer | Adapter that maps a contract into another local format for a bounded purpose. | Mechanical mapping that preserves source facts and records lossiness. | Semantic inference or silent data loss. |
+| Testing consumer | Unit, integration, characterization, fixture, or E2E test that depends on a contract. | Regression evidence and expected behavior. | Defining shape independently of Oracle truth. |
+| Presentation consumer | UI component, display adapter, or accessibility mapper. | Labels, colors, icons, layout, grouping, local affordances, and accessibility text. | Eligibility, severity, health, lifecycle legality, recovery, certification, or recommendation meaning. |
+| Compatibility consumer | Transitional mirror, mock, manual type, route, command, or field maintained for migration. | Temporary shape preservation with owner, risk, replacement path, and retirement condition. | Becoming permanent contract authority. |
+
+Consumer rules:
+
+- Generated and verified consumers may fail a build when stale; they may not update the contract by being updated first.
+- Transforming consumers must identify whether they preserve unknown fields, drop unsupported fields, or create a lossy view.
+- Presentation consumers may adapt display, but missing backend semantics must be fixed in the owning projection rather than inferred in React.
+- Compatibility consumers are allowed only while they have an explicit retirement path or blocking condition.
+
 ## Initial Contract Identity Inventory
 
 This inventory seeds M1.1 from the already certified Phase 0 Oracle pilots. It deliberately does not introduce generation, broad endpoint coverage, or new runtime behavior.
