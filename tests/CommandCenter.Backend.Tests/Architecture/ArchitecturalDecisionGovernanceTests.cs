@@ -83,6 +83,22 @@ public sealed class ArchitecturalDecisionGovernanceTests
         "## Follow-Up"
     ];
 
+    private static readonly ArchitectureRegressionBypassPattern[] ArchitectureRegressionBypassPatterns =
+    [
+        new(
+            "xUnit skip",
+            @"\[(Fact|Theory)\s*\([^\)]*\bSkip\s*=",
+            "Backend architecture regressions cannot be disabled with xUnit Skip without an explicit regression-weakening decision and mechanism evidence."),
+        new(
+            "Vitest skipped suite or test",
+            @"\b(describe|it|test)\.skip\s*\(",
+            "Frontend architecture regressions cannot be disabled with Vitest .skip without an explicit regression-weakening decision and mechanism evidence."),
+        new(
+            "Vitest focused suite or test",
+            @"\b(describe|it|test)\.only\s*\(",
+            "Frontend architecture regressions cannot be focused with Vitest .only because it can silently exclude other architecture regressions.")
+    ];
+
     [Fact]
     public void DecisionGovernanceDocumentDefinesRequiredDecisionClasses()
     {
@@ -192,6 +208,39 @@ public sealed class ArchitecturalDecisionGovernanceTests
         }
     }
 
+    [Fact]
+    public void ArchitectureRegressionTestsAreNotDisabledOrFocused()
+    {
+        DirectoryInfo repositoryRoot = FindRepositoryRoot();
+        string[] architectureRegressionFiles =
+        [
+            .. Directory.GetFiles(
+                Path.Combine(repositoryRoot.FullName, "tests", "CommandCenter.Backend.Tests", "Architecture"),
+                "*.cs",
+                SearchOption.TopDirectoryOnly),
+            .. Directory.GetFiles(
+                Path.Combine(repositoryRoot.FullName, "src", "CommandCenter.UI", "src", "test", "architecture"),
+                "*.ts",
+                SearchOption.TopDirectoryOnly),
+            .. Directory.GetFiles(
+                Path.Combine(repositoryRoot.FullName, "src", "CommandCenter.UI", "src", "test", "architecture"),
+                "*.tsx",
+                SearchOption.TopDirectoryOnly)
+        ];
+
+        foreach (string architectureRegressionFile in architectureRegressionFiles)
+        {
+            string source = File.ReadAllText(architectureRegressionFile);
+
+            foreach (ArchitectureRegressionBypassPattern bypassPattern in ArchitectureRegressionBypassPatterns)
+            {
+                Assert.False(
+                    System.Text.RegularExpressions.Regex.IsMatch(source, bypassPattern.Pattern),
+                    $"{bypassPattern.Description} File: {Path.GetRelativePath(repositoryRoot.FullName, architectureRegressionFile)}. M0.4 treats disabled, focused, or bypassed architecture regressions as regression weakening; add governance evidence before weakening the guard.");
+            }
+        }
+    }
+
     private static IReadOnlyList<IReadOnlyDictionary<string, string>> ReadTable(
         string relativePath,
         string heading,
@@ -279,4 +328,9 @@ public sealed class ArchitecturalDecisionGovernanceTests
             && !string.Equals(value, "TODO", StringComparison.OrdinalIgnoreCase)
             && !string.Equals(value, "None", StringComparison.OrdinalIgnoreCase);
     }
+
+    private sealed record ArchitectureRegressionBypassPattern(
+        string Name,
+        string Pattern,
+        string Description);
 }
