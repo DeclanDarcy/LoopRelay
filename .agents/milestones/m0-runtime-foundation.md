@@ -4,11 +4,11 @@ Goal: establish permanent runtime boundaries without changing observable product
 
 ## Implementation
 
-- [ ] Add `src/CommandCenter.Agents` to the solution.
+- [x] Add `src/CommandCenter.Agents` to the solution.
 - [ ] Move role-agnostic process abstractions and implementations from `CommandCenter.Execution` into `CommandCenter.Agents`:
-  - `IProcessRunner`
-  - `ProcessRunner`
-  - process run/start result models
+  - [x] `IProcessRunner`
+  - [x] `ProcessRunner`
+  - [x] process run/start result models
   - Codex executable resolution if it has no operational semantics
   - provider/process lifecycle primitives
   - stream/event primitives that are not execution-specific

@@ -1,6 +1,6 @@
-using CommandCenter.Execution.Models;
+using CommandCenter.Agents.Models;
 
-namespace CommandCenter.Execution.Abstractions;
+namespace CommandCenter.Agents.Abstractions;
 
 public interface IProcessRunner
 {

@@ -1,4 +1,4 @@
-namespace CommandCenter.Execution.Models;
+namespace CommandCenter.Agents.Models;
 
 public sealed class ProcessRunResult
 {

@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/CommandCenter.Agents/CommandCenter.Agents.csproj" />
     <Project Path="src/CommandCenter.Core/CommandCenter.Core.csproj" />
     <Project Path="src/CommandCenter.Continuity/CommandCenter.Continuity.csproj" />
     <Project Path="src/CommandCenter.DecisionSessions/CommandCenter.DecisionSessions.csproj" />

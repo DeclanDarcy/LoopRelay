@@ -1,8 +1,8 @@
 using System.Diagnostics;
-using CommandCenter.Execution.Abstractions;
-using CommandCenter.Execution.Models;
+using CommandCenter.Agents.Abstractions;
+using CommandCenter.Agents.Models;
 
-namespace CommandCenter.Execution.Services;
+namespace CommandCenter.Agents.Services;
 
 public sealed class ProcessRunner : IProcessRunner
 {

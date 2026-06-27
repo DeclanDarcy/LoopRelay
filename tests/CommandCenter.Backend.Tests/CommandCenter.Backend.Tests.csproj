@@ -21,6 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\CommandCenter.Agents\CommandCenter.Agents.csproj" />
     <ProjectReference Include="..\..\src\CommandCenter.Core\CommandCenter.Core.csproj" />
     <ProjectReference Include="..\..\src\CommandCenter.Continuity\CommandCenter.Continuity.csproj" />
     <ProjectReference Include="..\..\src\CommandCenter.DecisionSessions\CommandCenter.DecisionSessions.csproj" />
