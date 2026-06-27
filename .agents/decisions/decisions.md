@@ -1,35 +1,40 @@
-# Decisions: 2026-06-26 M0.3 Regression Taxonomy Direction
+# Decisions: 2026-06-26 M0.3 Ownership And Severity Direction
 
-These decisions capture only newly authorized direction from the user response following Slice 0037.
+These decisions capture only newly authorized direction from the user response following Slice 0038.
 
 ## Authorized Decisions
 
-1. Accept the M0.3 invariant catalog slice as correctly scoped.
-   - The catalog should remain a first-class architectural artifact.
-   - The catalog is part of the enforcement pipeline, not passive documentation.
-   - Protecting the catalog with executable regression is an accepted architectural strengthening step.
+1. Accept the M0.3 regression taxonomy slice as correctly scoped.
+   - Regression mechanism selection should remain governed by taxonomy rather than individual engineering judgment.
+   - The taxonomy is the policy layer between architectural intent and regression implementation.
+   - The framework progression remains: architecture, invariant catalog, regression taxonomy, regression framework, executable regressions.
 
-2. Keep `Enforcement strength` as an honest maturity signal.
-   - Invariants may be explicitly classified as documentation, inventory, executable regression, or stronger protection.
-   - Weak or early-stage protection should not be overstated.
-   - Later milestones may strengthen enforcement without redefining the invariant.
+2. Keep `Preferred mechanism` and `Minimum acceptable mechanism` separate.
+   - This distinction is an accepted way to express architectural maturity honestly.
+   - Weak temporary protections may exist, but they must not be treated as equivalent to executable protections.
+   - Future strengthening should move protections toward preferred mechanisms without redefining the underlying invariant.
 
-3. Treat the next M0.3 slice as the regression taxonomy slice.
-   - The taxonomy should classify regression mechanisms rather than merely list them.
-   - Initial categories should include structural, contract, consumer, freshness, transport, runtime, and documentation/metadata validation.
-   - Later invariants should use this vocabulary when selecting enforcement mechanisms.
+3. Keep `Preferred execution phase` as regression-selection metadata.
+   - Execution phase should help decide whether a regression belongs in local build, CI, integration, UI characterization, or E2E verification.
+   - Expensive regressions should not move into fast verifier layers without explicit justification.
+   - This metadata should support later answers about which regressions run locally, in CI, or near release.
 
-4. Add `Preferred execution phase` to the taxonomy.
-   - The taxonomy should state where a mechanism normally belongs, such as unit test, UI characterization, integration, or E2E.
-   - This metadata should keep expensive regressions out of fast verification layers unless explicitly justified.
-   - It should make expected verifier placement clear for later slices.
+4. Treat the next M0.3 slice as the ownership and severity model slice.
+   - Ownership surfaces should include backend, frontend, shell, cross-layer, Oracle, generated artifacts, build, and CI.
+   - Ownership should remain orthogonal to regression category: category classifies mechanism type; owner classifies responsibility.
+   - The slice should guard owner, severity, evidence, remediation, and escalation metadata.
 
-5. Distinguish `preferred mechanism` from `minimum acceptable mechanism`.
-   - Some invariants may temporarily be protected by documentation or inventory before stronger executable mechanisms exist.
-   - The taxonomy should make temporary weaker protection explicit instead of implying full enforcement.
-   - Future strengthening can move an invariant from minimum acceptable protection toward preferred protection.
+5. Separate severity meaning from execution policy.
+   - Severity should describe architectural impact, not be tightly coupled to the current build pipeline.
+   - Initial severity meanings should distinguish advisory, warning, required, and critical impact levels.
+   - Local behavior, CI behavior, and release behavior should be specified separately from severity meaning.
+
+6. Add `Escalation rule` to ownership and severity metadata.
+   - Escalation should describe the response path when a regression fails.
+   - Initial escalation examples may include local fix, milestone blocker, architectural decision required, and governance review required.
+   - This field should connect regression failure to the correct architectural response.
 
 ## Next Authorized Sequence
 
-1. Stage, commit, and push Slice 0037 plus this decision checkpoint.
+1. Stage, commit, and push Slice 0038 plus this decision checkpoint.
 2. Stop executing after the push.

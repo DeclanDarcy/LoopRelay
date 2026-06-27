@@ -131,13 +131,14 @@ Mechanism intent:
 
 Introduced: Milestone 0.3.
 
-Status: initial inventory, backend architecture-test skeleton, and invariant catalog installed.
+Status: initial inventory, backend architecture-test skeleton, invariant catalog, and regression taxonomy installed.
 
 Primary evidence:
 
 - `tests/CommandCenter.Backend.Tests/Architecture/ArchitecturalRegressionFrameworkTests.cs`
 - `.agents/milestones/m0.3-regression-framework-inventory-skeleton-slice-0036.md`
 - `.agents/milestones/m0.3-invariant-catalog-slice-0037.md`
+- `.agents/milestones/m0.3-regression-taxonomy-slice-0038.md`
 
 Framework intent:
 
@@ -146,16 +147,27 @@ Framework intent:
 | Contract Oracle mechanisms | Backend architecture meta-regression discovers fixture drift, consumer verification, artifact freshness, request-boundary, and framework-wiring tests. | Backend architecture tests | Local build failure | Mechanism disappearance, fixture-copy drift, or unreviewed Oracle wiring drift. |
 | Authority, projection, transport, state, controller, workspace, presentation, runtime, governance, and evidence invariants | Planned executable regressions cataloged for later M0.3 slices before broad migration work depends on them. | Area-specific test surface selected by invariant | Severity to be assigned per invariant before implementation | Duplicate authority, projection impurity, transport responsibility growth, state duplication, composition creep, semantic leakage, unscoped failures, or governance bypass. |
 
-Initial regression taxonomy:
+### Regression Taxonomy
 
-| Category | Preferred mechanism | Current status |
-| --- | --- | --- |
-| Backend authority and projection invariants | C# unit, reflection, and endpoint integration tests | Planned after framework skeleton. |
-| Contract and Oracle invariants | Golden fixture comparison, consumer verification, freshness verification, request-boundary tests, and backend meta-regressions | Seeded by M0.2 and protected by the M0.3 skeleton. |
-| Transport invariants | Rust helper tests plus source scans for command classification and domain mirrors | Partially seeded by passive GET helper tests; full classification deferred. |
-| Frontend state, resource, controller, workspace, and presentation invariants | Vitest characterization, source scans, and later lint rules where stable | Planned after state and feature ownership inventory. |
-| Runtime isolation invariants | Endpoint tests, resource failure tests, workspace error boundary tests, and E2E characterization | Planned for runtime isolation milestones. |
-| Governance, evidence, and mechanism lifecycle invariants | Source/documentation scans and architecture-test catalog checks | Seeded by the framework skeleton. |
+The regression taxonomy classifies architectural protection mechanisms before later milestones depend on them. Preferred mechanisms describe the long-term protection target; minimum acceptable mechanisms describe the weakest temporary protection allowed while an invariant is still being inventoried or a stronger mechanism is not yet safe to install.
+
+| Category | Preferred mechanism | Minimum acceptable mechanism | Preferred execution phase | Owner | Severity | Evidence | Drift model | Remediation |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Structural verification | Compiler, test, and fixture-output wiring regressions. | Documented verifier inventory with executable smoke test. | Local build or backend test. | Build and backend architecture tests | Local build failure | Verification evidence with accepted commands, quarantines, and output wiring. | Accepted verifier disappears, stops running, or loses required fixture/source input. | Restore verifier wiring or quarantine the verifier with owner, risk, and retirement criteria. |
+| Contract shape and request boundary | Golden fixture comparison, request-boundary integration tests, and Oracle meta-regressions. | Field inventory plus reviewed serialized fixture candidate. | Backend test. | Backend architecture tests | Local build failure | Contract evidence with fixture, request shape, consumers, compatibility classification, and serialization rules. | Backend response shape, route/query/body contract, or Oracle wiring drifts without review. | Follow the Oracle change workflow, refresh fixtures or request metadata, and record compatibility evidence. |
+| Consumer contract compatibility | Recursive consumer verification against Oracle fixtures and generated contract compile checks. | Explicit downstream mirror inventory with known drift record. | Backend test or UI characterization. | Cross-layer contract tests | Compatibility warning | Consumer evidence naming runtime, compile-time, mock, generated, and documentation consumers. | Downstream mirror silently drops, renames, or reinterprets backend-owned fields. | Update generated/manual consumer artifacts or quarantine the consumer with replacement path and retirement condition. |
+| Artifact freshness and generation | Deterministic generation check, generated-header enforcement, and artifact freshness manifests. | Manual artifact freshness manifest tied to Oracle fixture hash. | Backend test, UI test, or CI generation check. | Contract generation tests | CI failure | Generated artifact evidence with source fixture hashes, generation command, output diff, and stale-artifact classification. | Artifact is stale, manually edited, missing, or generated from an unaccepted source. | Regenerate from the canonical source or restore the verified artifact and record the change workflow evidence. |
+| Passive transport | Rust relay tests, command-family classification, unknown-field/null/error preservation tests, and mirror allowlists. | Source inventory of shell command families and domain mirrors. | Rust test or shell source scan. | Shell architecture tests | CI failure | Transport evidence with command classification, preserved payload samples, and boundary-error cases. | Shell interprets domain shape, rewrites backend errors, drops unknown fields, or constructs semantic response mirrors. | Move command to passive relay, preserve opaque backend payloads, or record a shell-owned exception. |
+| Runtime isolation | Backend error-envelope tests, resource failure characterization, workspace error-boundary tests, and E2E failure paths. | Runtime failure inventory with scoped owner and reproduction notes. | Integration test, UI characterization, or E2E. | Cross-layer runtime tests | Release blocker | Runtime evidence with failure reproduction, failure scope, partial-data behavior, recovery path, and telemetry notes. | Failure crosses boundaries, collapses into untyped absence, loses partial data, or hides recovery guidance. | Restore typed failure boundary, preserve partial data, and add a scoped recovery regression. |
+| Documentation and metadata validation | Schema/source scans for decisions, evidence, capability matrix, taxonomy, and mechanism lifecycle metadata. | Durable architecture document updated with explicit owner and known gaps. | Backend architecture test or script-based source scan. | Governance architecture tests | CI failure | Governance evidence linking decision, invariant, mechanism, certification, rollback, and durable docs. | Architecture-changing work lands without owner, evidence, severity, rollback, or updated reference documentation. | Add the missing governance metadata, decision record, or quarantine before accepting the slice. |
+
+Severity rules:
+
+- Advisory warning is allowed only for early inventory that cannot yet fail a build and has named owner, risk, and strengthening path.
+- Compatibility warning is allowed only for transitional consumer or compatibility-field drift with an explicit replacement and retirement condition.
+- Local build failure is the default for backend-owned framework, Oracle, and structural verifier protections.
+- CI failure is the default for cross-layer, generated, frontend, and shell protections once their verifier is stable.
+- Release blocker is required when runtime failure scope, semantic authority, or decision governance can make accepted architecture claims unsafe.
 
 Regression UX rule:
 

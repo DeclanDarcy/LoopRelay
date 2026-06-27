@@ -16,6 +16,19 @@ public sealed class ArchitecturalRegressionFrameworkTests
         "Enforcement strength"
     ];
 
+    private static readonly string[] RequiredRegressionTaxonomyColumns =
+    [
+        "Category",
+        "Preferred mechanism",
+        "Minimum acceptable mechanism",
+        "Preferred execution phase",
+        "Owner",
+        "Severity",
+        "Evidence",
+        "Drift model",
+        "Remediation"
+    ];
+
     private static readonly string[] RequiredInvariantCatalogEntries =
     [
         "Backend domain services compute semantic meaning.",
@@ -34,6 +47,17 @@ public sealed class ArchitecturalRegressionFrameworkTests
         "Compatibility fields are transitional and derive from structured authority fields.",
         "Projection, authority, and presentation taxonomies remain distinct.",
         "Architectural mechanisms cannot disappear, weaken, or lose fixture wiring silently."
+    ];
+
+    private static readonly string[] RequiredRegressionTaxonomyCategories =
+    [
+        "Structural verification",
+        "Contract shape and request boundary",
+        "Consumer contract compatibility",
+        "Artifact freshness and generation",
+        "Passive transport",
+        "Runtime isolation",
+        "Documentation and metadata validation"
     ];
 
     private static readonly ArchitecturalRegressionMechanism[] RequiredMechanisms =
@@ -127,7 +151,10 @@ public sealed class ArchitecturalRegressionFrameworkTests
     [Fact]
     public void InvariantCatalogDefinesRequiredMetadataForEveryCoreInvariant()
     {
-        IReadOnlyList<IReadOnlyDictionary<string, string>> catalog = ReadInvariantCatalog();
+        IReadOnlyList<IReadOnlyDictionary<string, string>> catalog = ReadMechanismsDocumentTable(
+            "### Architectural Invariant Catalog",
+            "Invariant",
+            RequiredInvariantCatalogColumns);
 
         foreach (string invariant in RequiredInvariantCatalogEntries)
         {
@@ -147,6 +174,32 @@ public sealed class ArchitecturalRegressionFrameworkTests
         }
     }
 
+    [Fact]
+    public void RegressionTaxonomyDefinesMechanismSelectionMetadata()
+    {
+        IReadOnlyList<IReadOnlyDictionary<string, string>> taxonomy = ReadMechanismsDocumentTable(
+            "### Regression Taxonomy",
+            "Category",
+            RequiredRegressionTaxonomyColumns);
+
+        foreach (string category in RequiredRegressionTaxonomyCategories)
+        {
+            Assert.Contains(
+                taxonomy,
+                row => row["Category"] == category);
+        }
+
+        foreach (IReadOnlyDictionary<string, string> row in taxonomy)
+        {
+            foreach (string column in RequiredRegressionTaxonomyColumns)
+            {
+                Assert.True(
+                    row.TryGetValue(column, out string? value) && HasAcceptedCatalogValue(value),
+                    $"Regression taxonomy row '{row["Category"]}' must populate '{column}'. M0.3 needs category, preferred mechanism, minimum mechanism, execution phase, owner, severity, evidence, drift, and remediation metadata so future invariants choose the right protection instead of adding ad hoc checks.");
+            }
+        }
+    }
+
     private static bool HasXunitTestMethod(Type type)
     {
         return type.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
@@ -154,7 +207,10 @@ public sealed class ArchitecturalRegressionFrameworkTests
                 .Any(attribute => attribute.GetType().FullName is "Xunit.FactAttribute" or "Xunit.TheoryAttribute"));
     }
 
-    private static IReadOnlyList<IReadOnlyDictionary<string, string>> ReadInvariantCatalog()
+    private static IReadOnlyList<IReadOnlyDictionary<string, string>> ReadMechanismsDocumentTable(
+        string heading,
+        string firstColumnName,
+        IReadOnlyList<string> requiredColumns)
     {
         string mechanismsDocumentPath = Path.Combine(
             FindRepositoryRoot().FullName,
@@ -162,21 +218,21 @@ public sealed class ArchitecturalRegressionFrameworkTests
             "architectural-mechanisms.md");
 
         string[] lines = File.ReadAllLines(mechanismsDocumentPath);
-        int headingIndex = Array.FindIndex(lines, line => line.Trim() == "### Architectural Invariant Catalog");
+        int headingIndex = Array.FindIndex(lines, line => line.Trim() == heading);
 
         Assert.True(
             headingIndex >= 0,
-            "docs/architectural-mechanisms.md must define '### Architectural Invariant Catalog'. This catalog is the M0.3 canonical mapping from core invariants to planned executable mechanisms.");
+            $"docs/architectural-mechanisms.md must define '{heading}'. M0.3 framework metadata must be durable and directly verifiable.");
 
-        int headerIndex = Array.FindIndex(lines, headingIndex, line => line.StartsWith("| Invariant |", StringComparison.Ordinal));
+        int headerIndex = Array.FindIndex(lines, headingIndex, line => line.StartsWith($"| {firstColumnName} |", StringComparison.Ordinal));
 
         Assert.True(
             headerIndex > headingIndex,
-            "Architectural invariant catalog must use a markdown table whose first column is 'Invariant'.");
+            $"{heading} must use a markdown table whose first column is '{firstColumnName}'.");
 
         string[] columns = SplitMarkdownTableRow(lines[headerIndex]);
 
-        Assert.Equal(RequiredInvariantCatalogColumns, columns);
+        Assert.Equal(requiredColumns, columns);
 
         List<IReadOnlyDictionary<string, string>> rows = [];
 

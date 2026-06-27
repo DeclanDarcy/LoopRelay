@@ -1,28 +1,30 @@
-# Handoff: 2026-06-26 After M0.3 Invariant Catalog Slice 0037
+# Handoff: 2026-06-26 After M0.3 Regression Taxonomy Slice 0038
 
-Current milestone state: Milestone 0.3 is in progress. The backend architecture-test skeleton from Slice 0036 remains active, and Slice 0037 added the M0.3 invariant catalog plus an executable catalog metadata guard.
+Current milestone state: Milestone 0.3 is in progress. Slice 0038 completed the regression taxonomy output and added an executable taxonomy metadata guard.
 
 New state from this slice:
 
-- Added `### Architectural Invariant Catalog` to `docs/architectural-mechanisms.md`.
-- Extended `tests/CommandCenter.Backend.Tests/Architecture/ArchitecturalRegressionFrameworkTests.cs` with `InvariantCatalogDefinesRequiredMetadataForEveryCoreInvariant`.
-- Added `.agents/milestones/m0.3-invariant-catalog-slice-0037.md`.
-- Updated `.agents/milestones/m0.3-regression-framework.md` to mark the invariant catalog task and output complete.
-- Updated `docs/architectural-capabilities.md` to reflect the guarded catalog state.
-- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0037.md`.
+- Replaced the informal initial taxonomy in `docs/architectural-mechanisms.md` with `### Regression Taxonomy`.
+- Taxonomy rows now require category, preferred mechanism, minimum acceptable mechanism, preferred execution phase, owner, severity, evidence, drift model, and remediation.
+- Added severity rules for advisory warning, compatibility warning, local build failure, CI failure, and release blocker.
+- Extended `tests/CommandCenter.Backend.Tests/Architecture/ArchitecturalRegressionFrameworkTests.cs` with `RegressionTaxonomyDefinesMechanismSelectionMetadata`.
+- Added `.agents/milestones/m0.3-regression-taxonomy-slice-0038.md`.
+- Updated `.agents/milestones/m0.3-regression-framework.md` to mark regression taxonomy complete.
+- Updated `docs/architectural-capabilities.md` to record the taxonomy guard as active M0.3 protection.
+- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0038.md`.
 
 Verification:
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter ArchitecturalRegressionFrameworkTests` passed: 4 passed, 0 failed, 0 skipped.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter ArchitecturalRegressionFrameworkTests` passed: 5 passed, 0 failed, 0 skipped.
 - `git diff --check` passed with line-ending normalization warnings only.
 
 High-leverage decisions currently relevant:
 
-- The invariant catalog is now the canonical M0.3 mapping from core invariants to planned protections.
-- The catalog must keep invariant, mechanism, owner, severity, evidence, drift model, coverage, and enforcement-strength metadata populated.
-- Enforcement strength intentionally exposes weak areas as `Documentation` or `Inventory` until later executable mechanisms exist.
-- M0.3 is still not certified; the catalog guard protects metadata shape, not broad invariant enforcement.
+- Regression category selection is now governed by the taxonomy rather than chosen ad hoc per future invariant.
+- `Minimum acceptable mechanism` is intentionally distinct from `Preferred mechanism` so temporary documentation or inventory protection remains explicit and cannot masquerade as mature enforcement.
+- `Preferred execution phase` is now part of the mechanism-selection metadata, keeping expensive checks out of fast verifier layers unless a later decision justifies escalation.
+- M0.3 still is not certified; the taxonomy guard protects category metadata, not the full regression framework.
 
 Recommended next slice:
 
-- Continue M0.3 with the regression taxonomy and mechanism-selection slice. Normalize the catalog's planned protections into explicit regression categories, preferred mechanism types, owner surfaces, and severity rules, then add one guard that prevents taxonomy categories from losing owner/severity/remediation metadata.
+- Continue M0.3 with the regression ownership and severity model slice. Extract explicit owner surfaces for backend, frontend, shell, cross-layer, Oracle, generated artifacts, build, and CI regressions, formalize severity escalation rules, and add a guard that prevents owner/severity rows from losing remediation and evidence metadata.
