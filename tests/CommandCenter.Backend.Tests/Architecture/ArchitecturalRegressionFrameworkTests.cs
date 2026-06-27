@@ -253,6 +253,18 @@ public sealed class ArchitecturalRegressionFrameworkTests
             "Keep the mechanism catalog, test namespace, and fixture wiring aligned.")
     ];
 
+    private static readonly string[] RequiredFrontendArchitectureRegressionSignals =
+    [
+        "src/test/architecture",
+        "frontend architecture regression framework",
+        "Frontend architecture tests",
+        "TypeScript clients and React consume authoritative facts without semantic inference.",
+        "Every mutable state has one owner.",
+        "Feature controllers own resources, actions, refresh, loading, errors, and view-model construction.",
+        "Workspaces compose controllers and local interaction flow only.",
+        "Application root composes repository selection, global shell state, primary navigation, and workspaces only."
+    ];
+
     [Fact]
     public void RequiredArchitectureMechanismsAreDiscoverableByBackendTestAssembly()
     {
@@ -403,6 +415,40 @@ public sealed class ArchitecturalRegressionFrameworkTests
             Assert.True(
                 File.Exists(fixturePath),
                 $"{fixture} must be copied to backend test output so architectural regressions can run from the compiled test assembly. Check CommandCenter.Backend.Tests.csproj ContractFixtures wiring.");
+        }
+    }
+
+    [Fact]
+    public void FrontendArchitectureRegressionAreaIsDiscoverable()
+    {
+        DirectoryInfo repositoryRoot = FindRepositoryRoot();
+        string frontendArchitectureTestPath = Path.Combine(
+            repositoryRoot.FullName,
+            "src",
+            "CommandCenter.UI",
+            "src",
+            "test",
+            "architecture");
+        string frontendRegressionTestPath = Path.Combine(
+            frontendArchitectureTestPath,
+            "regressionFramework.test.ts");
+        string mechanisms = File.ReadAllText(Path.Combine(
+            repositoryRoot.FullName,
+            "docs",
+            "architectural-mechanisms.md"));
+
+        Assert.True(
+            Directory.Exists(frontendArchitectureTestPath),
+            "M0.3 requires a frontend architecture regression area so TypeScript/Vitest guards have a stable home before broad frontend rules are enforced.");
+        Assert.True(
+            File.Exists(frontendRegressionTestPath),
+            "M0.3 requires a minimal frontend regression framework Vitest guard at src/CommandCenter.UI/src/test/architecture/regressionFramework.test.ts.");
+
+        foreach (string signal in RequiredFrontendArchitectureRegressionSignals)
+        {
+            Assert.True(
+                mechanisms.Contains(signal, StringComparison.Ordinal),
+                $"Frontend architecture regression metadata must mention '{signal}'. The UI skeleton must be discoverable and tied to frontend ownership/invariant metadata before later rules enforce presentation, resource, controller, workspace, root, or state boundaries.");
         }
     }
 

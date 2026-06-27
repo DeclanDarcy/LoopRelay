@@ -131,7 +131,7 @@ Mechanism intent:
 
 Introduced: Milestone 0.3.
 
-Status: initial inventory, backend architecture-test skeleton, invariant catalog, regression taxonomy, drift model, regression UX, and architectural confidence model installed.
+Status: initial inventory, backend architecture-test skeleton, frontend architecture-test area, invariant catalog, regression taxonomy, drift model, regression UX, and architectural confidence model installed.
 
 Primary evidence:
 
@@ -145,12 +145,14 @@ Primary evidence:
 - `.agents/milestones/m0.3-architectural-confidence-model-slice-0042.md`
 - `.agents/milestones/m0.3-regression-lifecycle-model-slice-0043.md`
 - `.agents/milestones/m0.3-regression-architecture-specification-slice-0044.md`
+- `.agents/milestones/m0.3-frontend-regression-skeleton-slice-0045.md`
 
 Framework intent:
 
 | Regression area | Initial mechanism | Owner | Severity | Drift model |
 | --- | --- | --- | --- | --- |
 | Contract Oracle mechanisms | Backend architecture meta-regression discovers fixture drift, consumer verification, artifact freshness, request-boundary, and framework-wiring tests. | Backend architecture tests | Local build failure | Mechanism disappearance, fixture-copy drift, or unreviewed Oracle wiring drift. |
+| Frontend architecture-test area | Vitest metadata skeleton under `src/CommandCenter.UI/src/test/architecture` verifies that the frontend architecture regression framework is discoverable and tied to frontend invariant ownership before broad UI rules are enforced. | Frontend architecture tests | CI failure | Missing frontend regression location, unowned UI guard, or frontend invariant metadata drift. |
 | Authority, projection, transport, state, controller, workspace, presentation, runtime, governance, and evidence invariants | Planned executable regressions cataloged for later M0.3 slices before broad migration work depends on them. | Area-specific test surface selected by invariant | Severity to be assigned per invariant before implementation | Duplicate authority, projection impurity, transport responsibility growth, state duplication, composition creep, semantic leakage, unscoped failures, or governance bypass. |
 
 ### Regression Taxonomy
