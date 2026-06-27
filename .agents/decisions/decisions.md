@@ -1,35 +1,34 @@
-# Decisions: 2026-06-26 Milestone 0.2 Acceptance Transition
+# Decisions: 2026-06-26 M0.2 Boundary and M0.3 Opening
 
-These decisions capture only newly authorized direction from the user response following Slice 0034.
+These decisions capture only newly authorized direction from the user response following Slice 0035.
 
 ## Authorized Decisions
 
-1. Treat Milestone 0.2 as transitioning from implementation to acceptance.
-   - The accepted claim is not "M0.2 is finished" in an unqualified sense.
-   - The accepted claim is that the Oracle foundation is certification-ready with accepted limitations.
+1. Accept the M0.2 milestone boundary as coherent and complete for its scoped purpose.
+   - M0.2 now has an accepted baseline rather than only accumulated implementation slices.
+   - The accepted boundary is the Phase 0 Contract Oracle foundation, not full contract-surface coverage.
 
-2. Accept the architectural conclusion that the Oracle design is reusable.
-   - The supporting evidence is the complete Oracle subsystem exercised across repository dashboard, repository workspace, and primary workflow projection without architectural redesign.
-   - The subsystem includes inventory, boundary taxonomy, ownership model, fixtures, drift classification, consumer verification, artifact freshness, request-boundary verification, governance, certification, repeatability evidence, and certification review.
+2. Do not reopen M0.2 unless there is a named uncovered property.
+   - Deferred coverage is not itself a reason to reopen M0.2.
+   - Later work should stay in later milestones unless a concrete M0.2 architectural claim is found unsupported.
 
-3. Keep generated contracts, mechanical versioning, and broad contract-surface coverage outside Milestone 0.2.
-   - These are intentionally deferred responsibilities of later milestones, not M0.2 omissions.
+3. Treat the Contract Oracle as a complete Phase 0 architectural capability.
+   - The capability consists of authority definition, boundary taxonomy, field ownership, fixture governance, drift classification, consumer verification, artifact freshness, request-boundary verification, procedural change workflow, local certification, repeatability evidence, and acceptance baseline.
 
-4. Keep workflow dev mock coverage, populated `decisionSession` fixture variants, and broader workflow endpoint coverage as accepted pilot limitations.
-   - These are not certification blockers for the M0.2 foundation.
+4. Start M0.3 by building framework before scaling regressions.
+   - The first M0.3 slice should inventory existing architecture-facing tests and helpers.
+   - It should define regression namespaces, organization, and naming.
+   - It should introduce one small architectural regression, update `docs/architectural-mechanisms.md`, and verify the narrow test set plus `git diff --check`.
 
-5. Characterize M0.2 acceptance as a certified foundation with explicit deferrals.
-   - Certified foundation: Oracle architecture, governance, lifecycle, repeatability, and three locally certified pilots.
-   - Deferred intentionally: full coverage, generated ecosystem, automatic regeneration, contract versioning, and complete contract catalog.
+5. Make the first M0.3 regression intentionally meta.
+   - The first regression should protect the existence or wiring of an architectural mechanism rather than adding another contract-property check.
+   - Candidate targets include Oracle fixture directory existence, Oracle fixture test discoverability, consumer verification infrastructure references, or freshness verifier wiring into the backend test project.
 
-6. Move the next slice to formal Milestone 0.2 acceptance and baseline update.
-   - The baseline should be frozen after acceptance.
-   - After that, work should move to Milestone 0.3.
-
-7. Do not add more implementation work to M0.2 by default.
-   - Additional Oracle work should arise from M1.x requirements or genuine defects, not from reluctance to close M0.2.
+6. Treat architectural mechanisms themselves as regression targets.
+   - M0.3 should establish the idea that drift detection protects the mechanisms that protect architecture.
+   - Later milestones can add more sophisticated architecture-specific regressions on top of that foundation.
 
 ## Next Authorized Sequence
 
-1. Stage, commit, and push Slice 0034 plus this decision checkpoint.
+1. Stage, commit, and push Slice 0035 plus this decision checkpoint.
 2. Stop executing after the push.

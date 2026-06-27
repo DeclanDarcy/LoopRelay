@@ -61,7 +61,7 @@ Invariant matrix:
 
 Introduced: Milestone 0.2.
 
-Status: defined and inventoried at the contract-family level; locally certified for the repository dashboard, repository workspace, and primary workflow projection pilots.
+Status: accepted and baselined as the Phase 0 Contract Oracle foundation with explicit deferrals; locally certified for the repository dashboard, repository workspace, and primary workflow projection pilots.
 
 Primary evidence:
 
@@ -96,6 +96,7 @@ Primary evidence:
 - `.agents/milestones/m0.2-workflow-oracle-certification-slice-0032.md`
 - `.agents/milestones/m0.2-oracle-repeatability-evidence-slice-0033.md`
 - `.agents/milestones/m0.2-oracle-certification-review-slice-0034.md`
+- `.agents/milestones/m0.2-oracle-acceptance-baseline-slice-0035.md`
 
 Mechanism intent:
 
@@ -118,6 +119,7 @@ Mechanism intent:
 | Cross-family repeatability evidence | `.agents/milestones/m0.2-oracle-repeatability-evidence-slice-0025.md` records repository dashboard/workspace repeatability, and `.agents/milestones/m0.2-oracle-repeatability-evidence-slice-0033.md` records that the same Oracle lifecycle repeated across repository dashboard, repository workspace, and primary workflow projection without framework redesign: field inventory or fixture gate, golden fixture, drift classification, consumer verification, artifact freshness, request-boundary verification, and local certification. | Repeatability is proven across three pilots, not globally. Decision lifecycle eligibility remains the preferred fourth family only if a future review finds a concrete backend-owned eligibility semantics gap; reasoning, execution, streams, errors, and non-empty command bodies still need later coverage expansion. |
 | Workflow projection field inventory | `.agents/milestones/m0.2-workflow-projection-field-inventory-slice-0026.md` identifies `WorkflowInstance` as the next primary Oracle contract, maps producer, request boundary, shell pass-through, TypeScript type/API consumers, UI consumers, absent dev mock handler, top-level semantic field groups, fixture candidate requirements, and sibling endpoint limits. | Populated `decisionSession` variant, dev mock workflow coverage, and sibling endpoint fixtures remain pending; local certification is recorded separately for the initial primary projection pilot. |
 | Milestone 0.2 certification review | `.agents/milestones/m0.2-oracle-certification-review-slice-0034.md` maps every required output and exit criterion to current evidence and classifies each item as certified, partial with accepted limitation, or blocker. | Certification is scoped to the Phase 0 Oracle foundation. It does not claim full endpoint coverage, generated artifacts, mechanical versioning, passive transport, stream/error certification, or semantic reinterpretation coverage. |
+| Milestone 0.2 acceptance baseline | `.agents/milestones/m0.2-oracle-acceptance-baseline-slice-0035.md` records formal acceptance of the scoped Phase 0 Contract Oracle foundation and freezes the baseline with explicit deferrals. | Acceptance does not expand certified coverage beyond the three pilots. Full contract coverage, generation, versioning, complete dependency graph coverage, stream/error coverage, passive transport, and semantic reinterpretation detection remain later work. |
 | Workflow fixture field classification | `.agents/milestones/m0.2-workflow-fixture-field-classification-slice-0027.md` classifies each top-level `WorkflowInstance` field as semantic authority, structural metadata, compatibility field, diagnostic field, or derived presentation helper; defines nested path classification rules; and blocks fixture capture until explicit nulls, diagnostics arrays, ordered arrays, backend eligibility booleans, and flattened compatibility fields are represented. | The gate was satisfied for the first `WorkflowInstance` fixture only; populated `decisionSession` coverage and sibling workflow endpoints remain pending. |
 | Workflow instance fixture comparison | `.agents/milestones/m0.2-workflow-instance-fixture-slice-0028.md` adds `workflow-instance.golden.json` and `ContractOracleFixtureTests.WorkflowInstanceGoldenFixtureMatchesBackendSerialization` for the primary workflow endpoint response shape. | Dev mock workflow handler verification and populated `decisionSession` fixture coverage remain pending; local workflow Oracle certification is recorded in Slice 0032. |
 | Workflow TypeScript consumer verification | `.agents/milestones/m0.2-workflow-typescript-consumer-verification-slice-0029.md` adds `workflowContractFixture.test.ts`, which reads `workflow-instance.golden.json` and checks the manual TypeScript `WorkflowInstance` shape plus represented nested workflow shapes. | This is a UI characterization verifier, not generated contract infrastructure. Rust workflow commands are pass-through `serde_json::Value`; dev mock workflow handler coverage remains absent. |
