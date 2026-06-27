@@ -131,12 +131,13 @@ Mechanism intent:
 
 Introduced: Milestone 0.3.
 
-Status: initial inventory and backend architecture-test skeleton installed.
+Status: initial inventory, backend architecture-test skeleton, and invariant catalog installed.
 
 Primary evidence:
 
 - `tests/CommandCenter.Backend.Tests/Architecture/ArchitecturalRegressionFrameworkTests.cs`
 - `.agents/milestones/m0.3-regression-framework-inventory-skeleton-slice-0036.md`
+- `.agents/milestones/m0.3-invariant-catalog-slice-0037.md`
 
 Framework intent:
 
@@ -159,6 +160,29 @@ Initial regression taxonomy:
 Regression UX rule:
 
 Every architectural regression must name the protected architectural intent and give a concrete remediation path. The initial backend framework test enforces that rule for the registered mechanism catalog.
+
+### Architectural Invariant Catalog
+
+The invariant catalog is the canonical M0.3 mapping between architectural principles and planned executable protections. It is intentionally broader than current executable coverage so future slices can add regressions without redefining classification, ownership, severity, or evidence expectations.
+
+| Invariant | Protecting mechanism | Owner | Severity | Evidence | Drift model | Current coverage | Enforcement strength |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Backend domain services compute semantic meaning. | Authority-source scans and backend service/projection tests. | Backend architecture tests | Release blocker | Authority evidence package with owner map and duplicate-computation scan. | New semantic computation appears outside the owning backend authority. | Planned for M2.1 and M2.2. | Inventory |
+| Projections expose authoritative meaning and do not create new meaning. | Projection purity tests and source scans for projection-only derivation. | Backend architecture tests | CI failure | Projection evidence package with authority source and invalidation rule. | Projection code introduces lifecycle, eligibility, severity, or recovery decisions. | Planned for M5.1; Oracle fixtures provide partial visibility. | Inventory |
+| Contracts describe externally observable projection shape through the canonical Oracle. | Golden fixture comparison, consumer verification, artifact freshness, and request-boundary tests. | Backend architecture tests | Local build failure | Contract Oracle fixture and compatibility evidence. | Backend shape, request boundary, or downstream mirror drifts from accepted fixture baseline. | Active for repository dashboard, repository workspace, and primary workflow projection pilots. | Executable regression |
+| Transport preserves request, response, status, null, empty, and error semantics without domain participation. | Rust relay tests, command-family classification, and shell mirror source scans. | Shell architecture tests | CI failure | Transport evidence package with command classification and error/null/status preservation samples. | Shell adds domain-shaped mirrors, reinterpretation, filtering, or error rewriting. | Partial passive GET helper coverage from M0.1; broader classification planned for M1.3. | Executable regression |
+| TypeScript clients and React consume authoritative facts without semantic inference. | TypeScript source scans, Vitest characterization, and presentation vocabulary tests. | Frontend architecture tests | CI failure | Authority and presentation evidence showing semantic fields are backend-owned. | UI infers eligibility, severity, health, retryability, recovery, certification, rank, or lifecycle legality from weak strings. | Planned for M2.2 and M2.3. | Inventory |
+| Every mutable state has one owner. | State ownership matrix checks, resource hook characterization, and duplicate-state source scans. | Frontend architecture tests | CI failure | State evidence package with owner matrix and synchronization graph. | New local state duplicates backend, resource, controller, workspace, or shell-owned state. | Planned for M3.1. | Inventory |
+| Feature controllers own resources, actions, refresh, loading, errors, and view-model construction. | Controller-boundary source scans and hook/resource ownership tests. | Frontend architecture tests | CI failure | Feature ownership evidence with controller responsibilities and cross-controller contracts. | Root components or presentation components accumulate feature orchestration. | Planned for M3.2 and M4.1. | Inventory |
+| Workspaces compose controllers and local interaction flow only. | Workspace boundary tests, navigation isolation scans, and E2E characterization. | Frontend architecture tests | CI failure | Workspace evidence with composition map and scoped failure behavior. | Workspace imports unrelated feature internals or becomes semantic authority. | Planned for M4.2. | Inventory |
+| Application root composes repository selection, global shell state, primary navigation, and workspaces only. | Root composition source scan and controller/workspace import allowlist. | Frontend architecture tests | CI failure | Feature ownership evidence showing root responsibility boundaries. | Root regains mutation flags, draft state, eligibility decisions, refresh chains, or feature hooks. | Planned for M3.2 and M4.1. | Inventory |
+| Runtime failures are typed, scoped, observable, and recoverable at the smallest valid boundary. | Backend error-envelope tests, resource failure tests, workspace error-boundary tests, and E2E failure characterization. | Cross-layer architecture tests | Release blocker | Runtime evidence package with failure reproduction, scope, partial-data behavior, and recovery path. | Errors cross boundaries, collapse into untyped absence, or discard partial data. | Planned for M4.3 and M8. | Inventory |
+| Architectural decisions govern changes to authority, ownership, contracts, transport, runtime, and mechanisms. | Decision-record presence scans and evidence-link checks. | Governance architecture tests | Release blocker | Decision evidence naming invariant, owner, consumers, regressions, rollback, and docs update. | Architecture-affecting change lands without a decision or evidence package. | Planned for M0.4; current decisions are manually maintained. | Documentation |
+| Architectural evidence supports decisions, mechanisms, certification, acceptance, and baselines. | Evidence package schema scans and milestone certification checks. | Governance architecture tests | CI failure | Evidence package with commands, results, files, limits, and reviewer/certifier. | Certification or acceptance claims lack traceable evidence. | Planned for M0.4 and M9. | Documentation |
+| Generated artifacts are replaced wholesale and manual edits to generated output are forbidden. | Artifact freshness tests, generated-header checks, and deterministic generation verification. | Contract generation tests | CI failure | Contract evidence with generated artifact diff and deterministic output proof. | Generated output is manually modified, stale, or bypassed without quarantine. | Manual artifact freshness is active for three pilot TypeScript contracts; generation planned for M1.2. | Executable regression |
+| Compatibility fields are transitional and derive from structured authority fields. | Compatibility-field inventory checks and derivation regressions. | Backend architecture tests | Compatibility warning | Compatibility evidence with owner, consumers, replacement path, retirement condition, and derivation proof. | Compatibility field persists without owner, consumer list, retirement path, or derivation regression. | Planned for M1.2, M1.3, and M2.2. | Inventory |
+| Projection, authority, and presentation taxonomies remain distinct. | Taxonomy source scans, naming rules, and role-purity tests. | Cross-layer architecture tests | CI failure | Taxonomy evidence mapping roles, owners, and allowed dependencies. | Naming or dependency changes blur authority, projection, renderer, controller, or workspace roles. | Planned for M5.1, M5.2, and M5.3. | Inventory |
+| Architectural mechanisms cannot disappear, weaken, or lose fixture wiring silently. | Backend mechanism meta-regression and lifecycle checks. | Backend architecture tests | Local build failure | Mechanism evidence with command/source, protected surface, owner, known gaps, and retirement criteria. | Accepted verifier is removed, unregistered, loses required metadata, or stops copying fixtures. | Active for M0.2 Oracle mechanisms and this catalog. | Multiple-mechanism protection |
 
 ## Mechanism Lifecycle Rule
 

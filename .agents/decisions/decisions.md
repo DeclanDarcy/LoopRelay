@@ -1,36 +1,35 @@
-# Decisions: 2026-06-26 M0.3 Invariant Catalog Direction
+# Decisions: 2026-06-26 M0.3 Regression Taxonomy Direction
 
-These decisions capture only newly authorized direction from the user response following Slice 0036.
+These decisions capture only newly authorized direction from the user response following Slice 0037.
 
 ## Authorized Decisions
 
-1. Accept the M0.3 opening skeleton as correctly scoped.
-   - The first M0.3 slice should remain a framework skeleton rather than immediately expanding the regression catalog.
-   - The current checks are accepted as framework checks: mechanism discoverability, mechanism metadata, and fixture output wiring.
+1. Accept the M0.3 invariant catalog slice as correctly scoped.
+   - The catalog should remain a first-class architectural artifact.
+   - The catalog is part of the enforcement pipeline, not passive documentation.
+   - Protecting the catalog with executable regression is an accepted architectural strengthening step.
 
-2. Treat architectural mechanisms as regression targets.
-   - M0.3 should protect the existence and integrity of mechanisms introduced by earlier milestones.
-   - Mechanism disappearance, unregistered mechanisms, or broken wiring are architectural drift.
+2. Keep `Enforcement strength` as an honest maturity signal.
+   - Invariants may be explicitly classified as documentation, inventory, executable regression, or stronger protection.
+   - Weak or early-stage protection should not be overstated.
+   - Later milestones may strengthen enforcement without redefining the invariant.
 
-3. Require architectural regressions to carry intent and remediation.
-   - Regression failures should explain the invariant that no longer holds.
-   - Regression failures should also explain the expected restoration path.
+3. Treat the next M0.3 slice as the regression taxonomy slice.
+   - The taxonomy should classify regression mechanisms rather than merely list them.
+   - Initial categories should include structural, contract, consumer, freshness, transport, runtime, and documentation/metadata validation.
+   - Later invariants should use this vocabulary when selecting enforcement mechanisms.
 
-4. Make the invariant catalog the canonical mapping for M0.3.
-   - The catalog should map invariant, protecting mechanism, owner, severity, evidence, drift model, current coverage, and enforcement strength.
-   - Later regression implementations should consume or align to this catalog rather than inventing disconnected classifications.
+4. Add `Preferred execution phase` to the taxonomy.
+   - The taxonomy should state where a mechanism normally belongs, such as unit test, UI characterization, integration, or E2E.
+   - This metadata should keep expensive regressions out of fast verification layers unless explicitly justified.
+   - It should make expected verifier placement clear for later slices.
 
-5. Add enforcement strength to the invariant catalog.
-   - Enforcement strength distinguishes documentation, inventory, executable regression, runtime enforcement, and multiple-mechanism protection.
-   - This column should expose which architectural principles remain convention-based and which are mechanically enforced.
-
-6. Protect the catalog with a catalog regression.
-   - The regression should verify required columns exist.
-   - It should verify required metadata is populated.
-   - Every invariant should have an owner.
-   - Every invariant should have an intended protecting mechanism.
+5. Distinguish `preferred mechanism` from `minimum acceptable mechanism`.
+   - Some invariants may temporarily be protected by documentation or inventory before stronger executable mechanisms exist.
+   - The taxonomy should make temporary weaker protection explicit instead of implying full enforcement.
+   - Future strengthening can move an invariant from minimum acceptable protection toward preferred protection.
 
 ## Next Authorized Sequence
 
-1. Stage, commit, and push Slice 0036 plus this decision checkpoint.
+1. Stage, commit, and push Slice 0037 plus this decision checkpoint.
 2. Stop executing after the push.

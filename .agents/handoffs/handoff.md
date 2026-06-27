@@ -1,27 +1,28 @@
-# Handoff: 2026-06-26 After M0.3 Regression Framework Skeleton Slice 0036
+# Handoff: 2026-06-26 After M0.3 Invariant Catalog Slice 0037
 
-Current milestone state: Milestone 0.3 is opened and in progress. The first slice installed a backend architecture-test skeleton and a meta-regression that treats existing M0.2 Oracle mechanisms as regression targets.
+Current milestone state: Milestone 0.3 is in progress. The backend architecture-test skeleton from Slice 0036 remains active, and Slice 0037 added the M0.3 invariant catalog plus an executable catalog metadata guard.
 
 New state from this slice:
 
-- Added `tests/CommandCenter.Backend.Tests/Architecture/ArchitecturalRegressionFrameworkTests.cs`.
-- Added `.agents/milestones/m0.3-regression-framework-inventory-skeleton-slice-0036.md`.
-- Updated `docs/architectural-mechanisms.md` with initial M0.3 taxonomy, ownership, severity, drift model, and regression UX rules.
-- Updated `docs/architectural-capabilities.md` with the in-progress architectural regression framework capability.
-- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0036.md`.
+- Added `### Architectural Invariant Catalog` to `docs/architectural-mechanisms.md`.
+- Extended `tests/CommandCenter.Backend.Tests/Architecture/ArchitecturalRegressionFrameworkTests.cs` with `InvariantCatalogDefinesRequiredMetadataForEveryCoreInvariant`.
+- Added `.agents/milestones/m0.3-invariant-catalog-slice-0037.md`.
+- Updated `.agents/milestones/m0.3-regression-framework.md` to mark the invariant catalog task and output complete.
+- Updated `docs/architectural-capabilities.md` to reflect the guarded catalog state.
+- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0037.md`.
 
 Verification:
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter ArchitecturalRegressionFrameworkTests` passed: 3 passed, 0 failed, 0 skipped.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter ArchitecturalRegressionFrameworkTests` passed: 4 passed, 0 failed, 0 skipped.
 - `git diff --check` passed with line-ending normalization warnings only.
 
 High-leverage decisions currently relevant:
 
-- Keep M0.3 focused on framework shape before broad invariant coverage.
-- Architectural mechanisms are themselves regression targets; a verifier disappearing or losing fixture wiring is architectural drift.
-- Regression failures must explain protected architectural intent and a concrete remediation path.
-- This slice does not certify M0.3; broad invariant catalog, frontend regression area, shell classification, confidence model, and certification remain pending.
+- The invariant catalog is now the canonical M0.3 mapping from core invariants to planned protections.
+- The catalog must keep invariant, mechanism, owner, severity, evidence, drift model, coverage, and enforcement-strength metadata populated.
+- Enforcement strength intentionally exposes weak areas as `Documentation` or `Inventory` until later executable mechanisms exist.
+- M0.3 is still not certified; the catalog guard protects metadata shape, not broad invariant enforcement.
 
 Recommended next slice:
 
-- Continue M0.3 with an invariant-catalog slice. Build a durable catalog that maps each core invariant to a planned executable mechanism, owner, severity, drift model, evidence requirement, and current coverage state, then add one small source/documentation regression that prevents the catalog from disappearing or omitting required columns.
+- Continue M0.3 with the regression taxonomy and mechanism-selection slice. Normalize the catalog's planned protections into explicit regression categories, preferred mechanism types, owner surfaces, and severity rules, then add one guard that prevents taxonomy categories from losing owner/severity/remediation metadata.
