@@ -1,6 +1,6 @@
-# Decisions: 2026-06-27 Governance-Link Certification Repair
+# Decisions: 2026-06-27 Phase 0 Certification Repair Completion
 
-These decisions capture only newly authorized direction from the user response pausing Phase 0 implementation until the governance-link failure is repaired.
+These decisions capture only newly authorized direction for the current certification-repair slice.
 
 ## Evidence
 
@@ -8,27 +8,25 @@ These decisions capture only newly authorized direction from the user response p
 
 ## Authorized Decisions
 
-1. Pause Phase 0 implementation until the governance-link failure is repaired.
-   - Do not proceed to stream/event primitives while the backend suite is blocked by governance reachability.
-   - Treat the next work as certification repair only, not new architectural scope.
+1. Treat the governance-link certification repair as complete after backend verification.
+   - `ArchitecturalDecisionGovernanceTests.ReferentialGovernanceClaimsRemainReachable` remains protected by reachable M0.4 evidence.
+   - The governance mechanism stays intact; no verifier weakening, bypass, or compatibility exception was introduced.
 
-2. Repair `ArchitecturalDecisionGovernanceTests.ReferentialGovernanceClaimsRemainReachable`.
-   - Restore active decision governance reachability by making `.agents/decisions/decisions.md` cite reachable M0.4 governance evidence.
-   - The repair must preserve the existing governance mechanism rather than weakening or bypassing it.
+2. Resume Phase 0 implementation after committing and pushing this certification-repair state.
+   - The next implementation target remains stream/event primitives in `CommandCenter.Agents`.
+   - Those primitives must project supervisor lifecycle facts and must not define independent lifecycle semantics.
 
-3. Accept the Phase 0 agent process supervision slice subject to certification repair.
-   - Supervision remains scoped to one process lifecycle.
-   - Agents must not accumulate registry, routing, retry, repository, or independent lifecycle-stream semantics.
+3. Preserve the current process-supervision authority boundaries.
+   - `CommandCenter.Agents` owns role-agnostic process lifecycle primitives only.
+   - Execution keeps operational semantics, provider contracts, Git, handoffs, prompts, and operational evidence.
    - `IProcessRunner` compatibility remains intact.
 
-4. Sequence the next implementation slice after certification repair.
-   - After the full backend suite is green, continue with stream/event primitives projected from supervisor lifecycle facts.
-   - Streams must not define independent lifecycle semantics.
+4. Stop executing after staging, committing, and pushing this slice.
+   - Further Phase 0 feature implementation should happen in the next work slice.
 
 ## Next Authorized Sequence
 
-1. Rerun the full backend suite.
-2. Stage the supervision slice, governance repair, decision rotation, and handoff rotation.
-3. Commit on `dev`.
-4. Push to `origin/dev`.
-5. Stop executing after the push.
+1. Stage the certification-repair decision rotation and handoff rotation.
+2. Commit on `dev`.
+3. Push to `origin/dev`.
+4. Stop executing after the push.
