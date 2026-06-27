@@ -379,6 +379,32 @@ Governance rules:
 - Request, response, error, and stream lifecycle changes must be governed independently because their compatibility risks differ.
 - Governance evidence may be procedural in M1.1, but M1.2 and later mechanisms must make generation, versioning, freshness, and drift checks executable.
 
+## M1.1 Accepted Generation Boundary
+
+Milestone 1.1 is accepted and baselined as the canonical contract model foundation for Milestone 1.2 generated contract ecosystem work. Acceptance evidence is recorded in `.agents/milestones/m1.1-canonical-contract-model-acceptance-baseline-slice-0065.md`; model-complete certification evidence is recorded in `.agents/milestones/m1.1-canonical-contract-model-certification-slice-0064.md`.
+
+The accepted M1.1 boundary owns:
+
+- contract identity meaning;
+- contract taxonomy categories;
+- semantic, shape, serialization, compatibility, version, evolution, deprecation, and consumer ownership rules;
+- normalization rules for identifiers, enums, dates, optional values, collections, names, metadata, ordering, evidence, diagnostics, and compatibility fields;
+- allowed and forbidden transformations at request, response, error-envelope, stream, transport, generated-artifact, and presentation boundaries;
+- compatibility, deprecation, fixture movement, artifact movement, and rollback governance;
+- canonical conformance examples for repository, workflow, decision, execution, reasoning, continuity, governance, health, and certification families.
+
+Milestone 1.2 may implement:
+
+- intermediate representation shape;
+- schema or manifest extraction mechanics;
+- generator location and invocation;
+- generated artifact headers and freshness manifests;
+- deterministic artifact checks;
+- generated TypeScript, mock, shell metadata, or fixture pilot order;
+- consumer adoption and rollback mechanics for generated artifacts.
+
+M1.2 may not redefine contract identity, taxonomy, ownership, normalization, compatibility, versioning, or governance through generator implementation. If generation exposes a defect in the accepted model, M1.1 must be reopened through decision governance with evidence that names the defective model rule, affected consumers, rollback path, and required documentation change.
+
 ## Canonical Contract Examples
 
 These examples are conformance cases for the M1.1 model. They show how current contract families must be described before M1.2 generation can produce artifacts without inventing architectural rules. They are not fixture expansion, generated artifacts, endpoint certification, or consumer migration.

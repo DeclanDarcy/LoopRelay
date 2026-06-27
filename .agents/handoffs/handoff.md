@@ -1,14 +1,14 @@
-# Handoff: After M1.1 Canonical Contract Model Certification Slice 0064
+# Handoff: After M1.1 Acceptance Baseline Slice 0065
 
-Current milestone state: M1.1 is locally certified as a model-complete canonical contract foundation. M1.1 is not accepted or baselined yet.
+Current milestone state: M1.1 is accepted and baselined as the canonical contract model foundation. M1.2 generated contract ecosystem work has not started.
 
 New state from this slice:
 
-- Added `.agents/milestones/m1.1-canonical-contract-model-certification-slice-0064.md`.
-- Updated `.agents/milestones/m1.1-canonical-contract-model.md` to mark implementation tasks, required outputs, and exit criteria complete for certification.
-- Updated `docs/architectural-capabilities.md` to mark the Canonical contract model capability locally certified in Slice 0064 while leaving acceptance pending.
-- Updated `.agents/decisions/decisions.md` evidence targets to include the new M1.1 certification evidence.
-- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0062.md`.
+- Added `.agents/milestones/m1.1-canonical-contract-model-acceptance-baseline-slice-0065.md`.
+- Updated `docs/contracts.md` with the accepted M1.1 generation boundary for M1.2.
+- Updated `docs/architectural-capabilities.md` to mark the Canonical contract model capability accepted and baselined in Slice 0065.
+- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0063.md`.
+- Rotated prior `.agents/decisions/decisions.md` to `.agents/decisions/decisions.0066.md` and created a new active decisions checkpoint for this slice.
 
 Verification:
 
@@ -17,10 +17,10 @@ Verification:
 
 High-leverage decisions currently relevant:
 
-- M1.1 certification is model certification, not generated ecosystem implementation. It does not authorize generated artifacts, schema IR, fixture expansion, endpoint changes, shell migration, TypeScript migration, or dev mock generation.
-- M1.1 is certified locally but not accepted. Acceptance still needs downstream obligation review, rollback readiness, durable baseline alignment, and a clean handoff into M1.2.
-- The certification claim is determinism: an M1.2 generator should not need to invent contract identity, category, ownership, normalization, boundary, compatibility, versioning, or governance rules.
+- M1.1 acceptance authorizes M1.2 to implement generation mechanics, not to redefine contract identity, taxonomy, ownership, normalization, compatibility, versioning, or governance.
+- Existing Rust mirrors, manual TypeScript types, and dev mocks remain transitional compatibility consumers until generated or passive replacements are implemented and verified.
+- If generation exposes a model defect, reopen M1.1 through decision governance with evidence; do not silently make the generator the model authority.
 
 Recommended next slice:
 
-- Record M1.1 acceptance and baseline closeout. The slice should confirm downstream compatibility obligations, accepted limitations, rollback path, capability matrix final status, durable documentation alignment, and the exact starting boundary for M1.2 generated contract ecosystem work.
+- Start M1.2 with an inventory/mechanism slice that defines the generated-contract IR/schema pilot and freshness boundary for one low-risk contract family, preferably one already covered by the Phase 0 Oracle pilots.
