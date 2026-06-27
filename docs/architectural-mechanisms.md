@@ -47,15 +47,33 @@ Primary evidence:
 
 - `src/CommandCenter.Shell/src/main.rs` test `backend_get_value_relays_opaque_json_without_interpretation`
 - `src/CommandCenter.Shell/src/main.rs` test `backend_get_value_preserves_boundary_violation_error_envelope`
+- `docs/shell-transport-classification.md`
+- `.agents/milestones/m0.3-shell-regression-classification-slice-0046.md`
 
 Invariant matrix:
 
 | Transport invariant | Current protection | Remaining gap |
 | --- | --- | --- |
-| Transport preserves payload semantics | Successful JSON responses that flow through `serde_json::Value` are compared as opaque values in the Rust shell test. Boundary-violation error envelopes are preserved as backend-owned JSON errors. | Domain-shaped command mirrors still exist and are not yet inventoried or retired. |
+| Transport preserves payload semantics | Successful JSON responses that flow through `serde_json::Value` are compared as opaque values in the Rust shell test. Boundary-violation error envelopes are preserved as backend-owned JSON errors. Shell command-family classification is recorded in `docs/shell-transport-classification.md`. | Domain-shaped command mirrors are inventoried but not yet retired. |
 | Transport preserves unknown fields | The Rust shell test includes unknown nested objects, arrays, nulls, empty strings, empty arrays, and enum-like strings. | Protection currently covers the generic GET value helper only. |
 | Transport preserves null and empty values | The Rust shell test asserts explicit null, empty object, empty array, and empty string preservation. | Additional command families still need migration or classification. |
 | Transport preserves backend errors | Boundary-violation error envelopes returned through the generic GET value helper are serialized back to JSON and compared for preservation. | Non-boundary error semantics and additional command families still need migration or classification before passive transport certification. |
+
+Shell command-family classification:
+
+| Responsibility category | Current classification evidence | Regression use |
+| --- | --- | --- |
+| Passive transport | `docs/shell-transport-classification.md` inventories Value-returning backend relay families for operational context, decisions, reasoning, continuity, workflow, decision sessions, and partial execution/session detail commands. | Gives M1.3 a guarded starting point for opaque relay, POST body, status, null/empty, and error-envelope preservation checks. |
+| Shell-owned operations | `docs/shell-transport-classification.md` classifies backend sidecar lifecycle, backend URL, ping, and native repository-directory selection as shell-owned operations. | Prevents shell-owned process/dialog behavior from being confused with backend domain authority. |
+| Transitional compatibility | `docs/shell-transport-classification.md` classifies repository catalog/workspace, artifact rotation, execution, Git, commit, push, and request-body structs as compatibility mirrors or adapters. | Keeps manual Rust mirrors visible until generated contracts or passive relay removes them. |
+| Unknown / requires review | `docs/shell-transport-classification.md` reserves this category for future shell commands that lack evidence. | New shell command families cannot claim passive transport certification before classification. |
+
+Shell mirror property model:
+
+| Property | Values | Regression use |
+| --- | --- | --- |
+| Current state | Passive, Mirror, Compatibility, Unknown | Records whether a Rust struct is shell-owned/passive state, a backend response mirror, a compatibility request/error adapter, or unclassified. |
+| Target state | Passive, Shell-owned, Retired, Quarantined | Records whether the struct should remain passive/shell-owned, be removed after generated/passive replacement, or stay only as a governed compatibility exception. |
 
 ## Contract Oracle
 

@@ -265,6 +265,56 @@ public sealed class ArchitecturalRegressionFrameworkTests
         "Application root composes repository selection, global shell state, primary navigation, and workspaces only."
     ];
 
+    private static readonly string[] RequiredShellCommandFamilyCategories =
+    [
+        "Passive transport",
+        "Shell-owned operations",
+        "Transitional compatibility",
+        "Unknown / requires review"
+    ];
+
+    private static readonly string[] RequiredShellMirrorCurrentStates =
+    [
+        "Passive",
+        "Mirror",
+        "Compatibility",
+        "Unknown"
+    ];
+
+    private static readonly string[] RequiredShellMirrorTargetStates =
+    [
+        "Passive",
+        "Shell-owned",
+        "Retired",
+        "Quarantined"
+    ];
+
+    private static readonly string[] RequiredShellClassificationSignals =
+    [
+        "Backend lifecycle and shell metadata",
+        "Native repository selection",
+        "Repository catalog",
+        "Repository workspace and artifacts",
+        "Operational context",
+        "Decision candidates and proposals",
+        "Decision governance, certification, quality, and influence",
+        "Reasoning",
+        "Continuity diagnostics and reports",
+        "Workflow",
+        "Decision sessions",
+        "Execution and Git",
+        "RepositoryDashboardProjection",
+        "RepositoryWorkspaceProjection",
+        "ExecutionSessionSummary",
+        "RepositoryGitStatus",
+        "CommitPreparation",
+        "PushAttemptResult",
+        "ErrorResponse",
+        "Transport preserves request, response, status, null, empty, and error semantics without domain participation.",
+        "Transport responsibility growth",
+        ".agents/milestones/m0.3-shell-regression-classification-slice-0046.md"
+    ];
+
     [Fact]
     public void RequiredArchitectureMechanismsAreDiscoverableByBackendTestAssembly()
     {
@@ -450,6 +500,50 @@ public sealed class ArchitecturalRegressionFrameworkTests
                 mechanisms.Contains(signal, StringComparison.Ordinal),
                 $"Frontend architecture regression metadata must mention '{signal}'. The UI skeleton must be discoverable and tied to frontend ownership/invariant metadata before later rules enforce presentation, resource, controller, workspace, root, or state boundaries.");
         }
+    }
+
+    [Fact]
+    public void ShellTransportClassificationDefinesCommandFamiliesAndMirrorInventory()
+    {
+        DirectoryInfo repositoryRoot = FindRepositoryRoot();
+        string classificationPath = Path.Combine(
+            repositoryRoot.FullName,
+            "docs",
+            "shell-transport-classification.md");
+        string mechanismsPath = Path.Combine(
+            repositoryRoot.FullName,
+            "docs",
+            "architectural-mechanisms.md");
+
+        Assert.True(
+            File.Exists(classificationPath),
+            "M0.3 requires a durable shell transport classification inventory before shell regressions can certify command-family responsibility or mirror retirement.");
+
+        string classification = File.ReadAllText(classificationPath);
+        string mechanisms = File.ReadAllText(mechanismsPath);
+
+        foreach (string category in RequiredShellCommandFamilyCategories)
+        {
+            Assert.Contains(category, classification);
+        }
+
+        foreach (string currentState in RequiredShellMirrorCurrentStates)
+        {
+            Assert.Contains(currentState, classification);
+        }
+
+        foreach (string targetState in RequiredShellMirrorTargetStates)
+        {
+            Assert.Contains(targetState, classification);
+        }
+
+        foreach (string signal in RequiredShellClassificationSignals)
+        {
+            Assert.Contains(signal, classification);
+        }
+
+        Assert.Contains("docs/shell-transport-classification.md", mechanisms);
+        Assert.Contains("Shell command-family classification", mechanisms);
     }
 
     [Fact]
