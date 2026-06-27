@@ -809,6 +809,31 @@ Freshness failure modes:
 
 This pilot does not generate TypeScript, prove artifact determinism, detect manual edits inside generated headers, compare command argument bodies, or certify the generated ecosystem. Those remain Milestone 1.2 responsibilities.
 
+## Generated Contract Pipeline Pilot
+
+Milestone 1.2 begins with a generation-pipeline validation slice for the `repository-dashboard` Oracle family. The pilot consumes the accepted M1.1 model boundary and does not redefine contract identity, taxonomy, normalization, compatibility, or ownership.
+
+The first executable path is:
+
+```text
+repository-dashboard.golden.json
+  -> repository-dashboard.contract-ir.json
+  -> src/CommandCenter.UI/src/contracts/generated/repository-dashboard.generated.ts
+  -> repository-dashboard.generated-artifact-freshness.json
+```
+
+The generated TypeScript artifact is contract metadata, not a migrated UI consumer type. It records the Oracle-observed field paths, shape kinds, and TypeScript primitive categories needed to validate determinism and freshness before generating replacement consumer types. The artifact is protected by `ContractGeneratedArtifactPipelineTests`, which regenerates the IR and TypeScript metadata in memory during normal test runs and supports explicit refresh only when `COMMANDCENTER_UPDATE_GENERATED_CONTRACTS=1` is set.
+
+Current M1.2 pilot boundaries:
+
+- Source authority remains the accepted Oracle fixture and backend serialization path.
+- The IR contains only contract identity, contract name, root shape, observed fields, shape kinds, and TypeScript primitive categories.
+- Generated output lives under `src/CommandCenter.UI/src/contracts/generated/` and is not imported by product code yet.
+- Freshness verification now covers the generated metadata artifact through `repository-dashboard.generated-artifact-freshness.json`.
+- Manual TypeScript types, Rust mirrors, and dev Tauri mock payloads remain verified or transitional compatibility consumers until later migration slices.
+
+This pilot does not produce full generated TypeScript consumer aliases, Rust command metadata, mock data, command-body schemas, or contract versioning. If later generation requires concepts absent from M1.1, M1.1 must be reopened through decision governance rather than extending the IR ad hoc.
+
 ## Oracle Change Workflow
 
 The Oracle change workflow governs how a detected contract drift becomes an accepted contract baseline. It is procedural during Milestone 0.2 so the review path is explicit before generation, regeneration, and lifecycle automation are introduced in later milestones.

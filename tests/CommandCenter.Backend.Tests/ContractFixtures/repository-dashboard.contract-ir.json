@@ -1,0 +1,1586 @@
+{
+  "contractId": "repository-dashboard",
+  "contractName": "Repository dashboard",
+  "rootShape": {
+    "kind": "Array",
+    "items": [
+      {
+        "kind": "Object",
+        "items": [],
+        "properties": [
+          {
+            "name": "repository",
+            "shape": {
+              "kind": "Object",
+              "items": [],
+              "properties": [
+                {
+                  "name": "id",
+                  "shape": {
+                    "kind": "String",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "name",
+                  "shape": {
+                    "kind": "String",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "path",
+                  "shape": {
+                    "kind": "String",
+                    "items": [],
+                    "properties": []
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "availability",
+            "shape": {
+              "kind": "String",
+              "items": [],
+              "properties": []
+            }
+          },
+          {
+            "name": "readiness",
+            "shape": {
+              "kind": "String",
+              "items": [],
+              "properties": []
+            }
+          },
+          {
+            "name": "executionState",
+            "shape": {
+              "kind": "String",
+              "items": [],
+              "properties": []
+            }
+          },
+          {
+            "name": "activeExecutionSession",
+            "shape": {
+              "kind": "Null",
+              "items": [],
+              "properties": []
+            }
+          },
+          {
+            "name": "executionSummary",
+            "shape": {
+              "kind": "Object",
+              "items": [],
+              "properties": [
+                {
+                  "name": "sessionId",
+                  "shape": {
+                    "kind": "String",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "state",
+                  "shape": {
+                    "kind": "String",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "repositoryState",
+                  "shape": {
+                    "kind": "String",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "milestonePath",
+                  "shape": {
+                    "kind": "String",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "startedAt",
+                  "shape": {
+                    "kind": "String",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "completedAt",
+                  "shape": {
+                    "kind": "String",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "duration",
+                  "shape": {
+                    "kind": "String",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "acceptedAt",
+                  "shape": {
+                    "kind": "Null",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "rejectedAt",
+                  "shape": {
+                    "kind": "Null",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "decisionNote",
+                  "shape": {
+                    "kind": "Null",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "lastActivityAt",
+                  "shape": {
+                    "kind": "String",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "providerName",
+                  "shape": {
+                    "kind": "String",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "providerExecutablePath",
+                  "shape": {
+                    "kind": "Null",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "providerProcessId",
+                  "shape": {
+                    "kind": "Null",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "providerStartedAt",
+                  "shape": {
+                    "kind": "Null",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "handoffPath",
+                  "shape": {
+                    "kind": "String",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "commitSha",
+                  "shape": {
+                    "kind": "Null",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "committedAt",
+                  "shape": {
+                    "kind": "Null",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "commitMessage",
+                  "shape": {
+                    "kind": "Null",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "preparationSnapshotId",
+                  "shape": {
+                    "kind": "String",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "pushAttemptedAt",
+                  "shape": {
+                    "kind": "Null",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "pushedAt",
+                  "shape": {
+                    "kind": "Null",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "pushedCommitSha",
+                  "shape": {
+                    "kind": "Null",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "pushRemoteName",
+                  "shape": {
+                    "kind": "Null",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "pushBranchName",
+                  "shape": {
+                    "kind": "Null",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "failureReason",
+                  "shape": {
+                    "kind": "Null",
+                    "items": [],
+                    "properties": []
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "executionHistory",
+            "shape": {
+              "kind": "Array",
+              "items": [
+                {
+                  "kind": "Object",
+                  "items": [],
+                  "properties": [
+                    {
+                      "name": "sessionId",
+                      "shape": {
+                        "kind": "String",
+                        "items": [],
+                        "properties": []
+                      }
+                    },
+                    {
+                      "name": "state",
+                      "shape": {
+                        "kind": "String",
+                        "items": [],
+                        "properties": []
+                      }
+                    },
+                    {
+                      "name": "repositoryState",
+                      "shape": {
+                        "kind": "String",
+                        "items": [],
+                        "properties": []
+                      }
+                    },
+                    {
+                      "name": "milestonePath",
+                      "shape": {
+                        "kind": "String",
+                        "items": [],
+                        "properties": []
+                      }
+                    },
+                    {
+                      "name": "startedAt",
+                      "shape": {
+                        "kind": "String",
+                        "items": [],
+                        "properties": []
+                      }
+                    },
+                    {
+                      "name": "completedAt",
+                      "shape": {
+                        "kind": "String",
+                        "items": [],
+                        "properties": []
+                      }
+                    },
+                    {
+                      "name": "duration",
+                      "shape": {
+                        "kind": "String",
+                        "items": [],
+                        "properties": []
+                      }
+                    },
+                    {
+                      "name": "acceptedAt",
+                      "shape": {
+                        "kind": "Null",
+                        "items": [],
+                        "properties": []
+                      }
+                    },
+                    {
+                      "name": "rejectedAt",
+                      "shape": {
+                        "kind": "Null",
+                        "items": [],
+                        "properties": []
+                      }
+                    },
+                    {
+                      "name": "decisionNote",
+                      "shape": {
+                        "kind": "Null",
+                        "items": [],
+                        "properties": []
+                      }
+                    },
+                    {
+                      "name": "lastActivityAt",
+                      "shape": {
+                        "kind": "String",
+                        "items": [],
+                        "properties": []
+                      }
+                    },
+                    {
+                      "name": "providerName",
+                      "shape": {
+                        "kind": "String",
+                        "items": [],
+                        "properties": []
+                      }
+                    },
+                    {
+                      "name": "providerExecutablePath",
+                      "shape": {
+                        "kind": "Null",
+                        "items": [],
+                        "properties": []
+                      }
+                    },
+                    {
+                      "name": "providerProcessId",
+                      "shape": {
+                        "kind": "Null",
+                        "items": [],
+                        "properties": []
+                      }
+                    },
+                    {
+                      "name": "providerStartedAt",
+                      "shape": {
+                        "kind": "Null",
+                        "items": [],
+                        "properties": []
+                      }
+                    },
+                    {
+                      "name": "handoffPath",
+                      "shape": {
+                        "kind": "String",
+                        "items": [],
+                        "properties": []
+                      }
+                    },
+                    {
+                      "name": "commitSha",
+                      "shape": {
+                        "kind": "Null",
+                        "items": [],
+                        "properties": []
+                      }
+                    },
+                    {
+                      "name": "committedAt",
+                      "shape": {
+                        "kind": "Null",
+                        "items": [],
+                        "properties": []
+                      }
+                    },
+                    {
+                      "name": "commitMessage",
+                      "shape": {
+                        "kind": "Null",
+                        "items": [],
+                        "properties": []
+                      }
+                    },
+                    {
+                      "name": "preparationSnapshotId",
+                      "shape": {
+                        "kind": "String",
+                        "items": [],
+                        "properties": []
+                      }
+                    },
+                    {
+                      "name": "pushAttemptedAt",
+                      "shape": {
+                        "kind": "Null",
+                        "items": [],
+                        "properties": []
+                      }
+                    },
+                    {
+                      "name": "pushedAt",
+                      "shape": {
+                        "kind": "Null",
+                        "items": [],
+                        "properties": []
+                      }
+                    },
+                    {
+                      "name": "pushedCommitSha",
+                      "shape": {
+                        "kind": "Null",
+                        "items": [],
+                        "properties": []
+                      }
+                    },
+                    {
+                      "name": "pushRemoteName",
+                      "shape": {
+                        "kind": "Null",
+                        "items": [],
+                        "properties": []
+                      }
+                    },
+                    {
+                      "name": "pushBranchName",
+                      "shape": {
+                        "kind": "Null",
+                        "items": [],
+                        "properties": []
+                      }
+                    },
+                    {
+                      "name": "failureReason",
+                      "shape": {
+                        "kind": "Null",
+                        "items": [],
+                        "properties": []
+                      }
+                    }
+                  ]
+                }
+              ],
+              "properties": []
+            }
+          },
+          {
+            "name": "milestoneCount",
+            "shape": {
+              "kind": "Number",
+              "items": [],
+              "properties": []
+            }
+          },
+          {
+            "name": "hasCurrentHandoff",
+            "shape": {
+              "kind": "Boolean",
+              "items": [],
+              "properties": []
+            }
+          },
+          {
+            "name": "hasCurrentDecisions",
+            "shape": {
+              "kind": "Boolean",
+              "items": [],
+              "properties": []
+            }
+          },
+          {
+            "name": "continuitySummary",
+            "shape": {
+              "kind": "Object",
+              "items": [],
+              "properties": [
+                {
+                  "name": "operationalContextExists",
+                  "shape": {
+                    "kind": "Boolean",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "operationalContextRevisionCount",
+                  "shape": {
+                    "kind": "Number",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "operationalContextLastUpdatedAt",
+                  "shape": {
+                    "kind": "String",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "openQuestionCount",
+                  "shape": {
+                    "kind": "Number",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "activeRiskCount",
+                  "shape": {
+                    "kind": "Number",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "pendingProposalExists",
+                  "shape": {
+                    "kind": "Boolean",
+                    "items": [],
+                    "properties": []
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "reasoningSummary",
+            "shape": {
+              "kind": "Object",
+              "items": [],
+              "properties": [
+                {
+                  "name": "eventCount",
+                  "shape": {
+                    "kind": "Number",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "threadCount",
+                  "shape": {
+                    "kind": "Number",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "relationshipCount",
+                  "shape": {
+                    "kind": "Number",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "hypothesisEventCount",
+                  "shape": {
+                    "kind": "Number",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "alternativeEventCount",
+                  "shape": {
+                    "kind": "Number",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "contradictionEventCount",
+                  "shape": {
+                    "kind": "Number",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "directionEventCount",
+                  "shape": {
+                    "kind": "Number",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "decisionEvolutionEventCount",
+                  "shape": {
+                    "kind": "Number",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "assumptionEvolutionEventCount",
+                  "shape": {
+                    "kind": "Number",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "constraintEvolutionEventCount",
+                  "shape": {
+                    "kind": "Number",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "evidenceEventCount",
+                  "shape": {
+                    "kind": "Number",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "lastEventAt",
+                  "shape": {
+                    "kind": "String",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "lastThreadActivityAt",
+                  "shape": {
+                    "kind": "String",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "lastRelationshipAt",
+                  "shape": {
+                    "kind": "String",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "lastActivityAt",
+                  "shape": {
+                    "kind": "String",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "lastReconstructionAt",
+                  "shape": {
+                    "kind": "Null",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "lastCertificationAt",
+                  "shape": {
+                    "kind": "Null",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "certificationResult",
+                  "shape": {
+                    "kind": "Null",
+                    "items": [],
+                    "properties": []
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "decisionSessionSummary",
+            "shape": {
+              "kind": "Object",
+              "items": [],
+              "properties": [
+                {
+                  "name": "decisionSessionId",
+                  "shape": {
+                    "kind": "String",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "state",
+                  "shape": {
+                    "kind": "String",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "lifecycleDecision",
+                  "shape": {
+                    "kind": "String",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "transferEligibilityStatus",
+                  "shape": {
+                    "kind": "String",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "estimatedTokenCount",
+                  "shape": {
+                    "kind": "Number",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "estimatedCacheTtl",
+                  "shape": {
+                    "kind": "String",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "cacheMissRisk",
+                  "shape": {
+                    "kind": "Number",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "coherenceScore",
+                  "shape": {
+                    "kind": "Number",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "transferPressure",
+                  "shape": {
+                    "kind": "Number",
+                    "items": [],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "healthDimensions",
+                  "shape": {
+                    "kind": "Array",
+                    "items": [
+                      {
+                        "kind": "Object",
+                        "items": [],
+                        "properties": [
+                          {
+                            "name": "name",
+                            "shape": {
+                              "kind": "String",
+                              "items": [],
+                              "properties": []
+                            }
+                          },
+                          {
+                            "name": "status",
+                            "shape": {
+                              "kind": "String",
+                              "items": [],
+                              "properties": []
+                            }
+                          },
+                          {
+                            "name": "findings",
+                            "shape": {
+                              "kind": "Array",
+                              "items": [
+                                {
+                                  "kind": "String",
+                                  "items": [],
+                                  "properties": []
+                                }
+                              ],
+                              "properties": []
+                            }
+                          }
+                        ]
+                      }
+                    ],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "recentTransferLineage",
+                  "shape": {
+                    "kind": "Array",
+                    "items": [
+                      {
+                        "kind": "Object",
+                        "items": [],
+                        "properties": [
+                          {
+                            "name": "transferId",
+                            "shape": {
+                              "kind": "String",
+                              "items": [],
+                              "properties": []
+                            }
+                          },
+                          {
+                            "name": "sourceSessionId",
+                            "shape": {
+                              "kind": "String",
+                              "items": [],
+                              "properties": []
+                            }
+                          },
+                          {
+                            "name": "targetSessionId",
+                            "shape": {
+                              "kind": "Null",
+                              "items": [],
+                              "properties": []
+                            }
+                          },
+                          {
+                            "name": "continuityArtifactId",
+                            "shape": {
+                              "kind": "String",
+                              "items": [],
+                              "properties": []
+                            }
+                          },
+                          {
+                            "name": "startedAt",
+                            "shape": {
+                              "kind": "String",
+                              "items": [],
+                              "properties": []
+                            }
+                          },
+                          {
+                            "name": "completedAt",
+                            "shape": {
+                              "kind": "String",
+                              "items": [],
+                              "properties": []
+                            }
+                          },
+                          {
+                            "name": "succeeded",
+                            "shape": {
+                              "kind": "Boolean",
+                              "items": [],
+                              "properties": []
+                            }
+                          }
+                        ]
+                      }
+                    ],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "diagnostics",
+                  "shape": {
+                    "kind": "Array",
+                    "items": [
+                      {
+                        "kind": "String",
+                        "items": [],
+                        "properties": []
+                      }
+                    ],
+                    "properties": []
+                  }
+                },
+                {
+                  "name": "generatedAt",
+                  "shape": {
+                    "kind": "String",
+                    "items": [],
+                    "properties": []
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "properties": []
+  },
+  "fields": [
+    {
+      "path": "$",
+      "shapeKind": "Array",
+      "typeScriptType": "Record\u003Cstring, unknown\u003E[]"
+    },
+    {
+      "path": "$[]",
+      "shapeKind": "Object",
+      "typeScriptType": "Record\u003Cstring, unknown\u003E"
+    },
+    {
+      "path": "$[].repository",
+      "shapeKind": "Object",
+      "typeScriptType": "Record\u003Cstring, unknown\u003E"
+    },
+    {
+      "path": "$[].repository.id",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].repository.name",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].repository.path",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].availability",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].readiness",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].executionState",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].activeExecutionSession",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].executionSummary",
+      "shapeKind": "Object",
+      "typeScriptType": "Record\u003Cstring, unknown\u003E"
+    },
+    {
+      "path": "$[].executionSummary.sessionId",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].executionSummary.state",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].executionSummary.repositoryState",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].executionSummary.milestonePath",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].executionSummary.startedAt",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].executionSummary.completedAt",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].executionSummary.duration",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].executionSummary.acceptedAt",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].executionSummary.rejectedAt",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].executionSummary.decisionNote",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].executionSummary.lastActivityAt",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].executionSummary.providerName",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].executionSummary.providerExecutablePath",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].executionSummary.providerProcessId",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].executionSummary.providerStartedAt",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].executionSummary.handoffPath",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].executionSummary.commitSha",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].executionSummary.committedAt",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].executionSummary.commitMessage",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].executionSummary.preparationSnapshotId",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].executionSummary.pushAttemptedAt",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].executionSummary.pushedAt",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].executionSummary.pushedCommitSha",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].executionSummary.pushRemoteName",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].executionSummary.pushBranchName",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].executionSummary.failureReason",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].executionHistory",
+      "shapeKind": "Array",
+      "typeScriptType": "Record\u003Cstring, unknown\u003E[]"
+    },
+    {
+      "path": "$[].executionHistory[]",
+      "shapeKind": "Object",
+      "typeScriptType": "Record\u003Cstring, unknown\u003E"
+    },
+    {
+      "path": "$[].executionHistory[].sessionId",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].executionHistory[].state",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].executionHistory[].repositoryState",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].executionHistory[].milestonePath",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].executionHistory[].startedAt",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].executionHistory[].completedAt",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].executionHistory[].duration",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].executionHistory[].acceptedAt",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].executionHistory[].rejectedAt",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].executionHistory[].decisionNote",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].executionHistory[].lastActivityAt",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].executionHistory[].providerName",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].executionHistory[].providerExecutablePath",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].executionHistory[].providerProcessId",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].executionHistory[].providerStartedAt",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].executionHistory[].handoffPath",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].executionHistory[].commitSha",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].executionHistory[].committedAt",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].executionHistory[].commitMessage",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].executionHistory[].preparationSnapshotId",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].executionHistory[].pushAttemptedAt",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].executionHistory[].pushedAt",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].executionHistory[].pushedCommitSha",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].executionHistory[].pushRemoteName",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].executionHistory[].pushBranchName",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].executionHistory[].failureReason",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].milestoneCount",
+      "shapeKind": "Number",
+      "typeScriptType": "number"
+    },
+    {
+      "path": "$[].hasCurrentHandoff",
+      "shapeKind": "Boolean",
+      "typeScriptType": "boolean"
+    },
+    {
+      "path": "$[].hasCurrentDecisions",
+      "shapeKind": "Boolean",
+      "typeScriptType": "boolean"
+    },
+    {
+      "path": "$[].continuitySummary",
+      "shapeKind": "Object",
+      "typeScriptType": "Record\u003Cstring, unknown\u003E"
+    },
+    {
+      "path": "$[].continuitySummary.operationalContextExists",
+      "shapeKind": "Boolean",
+      "typeScriptType": "boolean"
+    },
+    {
+      "path": "$[].continuitySummary.operationalContextRevisionCount",
+      "shapeKind": "Number",
+      "typeScriptType": "number"
+    },
+    {
+      "path": "$[].continuitySummary.operationalContextLastUpdatedAt",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].continuitySummary.openQuestionCount",
+      "shapeKind": "Number",
+      "typeScriptType": "number"
+    },
+    {
+      "path": "$[].continuitySummary.activeRiskCount",
+      "shapeKind": "Number",
+      "typeScriptType": "number"
+    },
+    {
+      "path": "$[].continuitySummary.pendingProposalExists",
+      "shapeKind": "Boolean",
+      "typeScriptType": "boolean"
+    },
+    {
+      "path": "$[].reasoningSummary",
+      "shapeKind": "Object",
+      "typeScriptType": "Record\u003Cstring, unknown\u003E"
+    },
+    {
+      "path": "$[].reasoningSummary.eventCount",
+      "shapeKind": "Number",
+      "typeScriptType": "number"
+    },
+    {
+      "path": "$[].reasoningSummary.threadCount",
+      "shapeKind": "Number",
+      "typeScriptType": "number"
+    },
+    {
+      "path": "$[].reasoningSummary.relationshipCount",
+      "shapeKind": "Number",
+      "typeScriptType": "number"
+    },
+    {
+      "path": "$[].reasoningSummary.hypothesisEventCount",
+      "shapeKind": "Number",
+      "typeScriptType": "number"
+    },
+    {
+      "path": "$[].reasoningSummary.alternativeEventCount",
+      "shapeKind": "Number",
+      "typeScriptType": "number"
+    },
+    {
+      "path": "$[].reasoningSummary.contradictionEventCount",
+      "shapeKind": "Number",
+      "typeScriptType": "number"
+    },
+    {
+      "path": "$[].reasoningSummary.directionEventCount",
+      "shapeKind": "Number",
+      "typeScriptType": "number"
+    },
+    {
+      "path": "$[].reasoningSummary.decisionEvolutionEventCount",
+      "shapeKind": "Number",
+      "typeScriptType": "number"
+    },
+    {
+      "path": "$[].reasoningSummary.assumptionEvolutionEventCount",
+      "shapeKind": "Number",
+      "typeScriptType": "number"
+    },
+    {
+      "path": "$[].reasoningSummary.constraintEvolutionEventCount",
+      "shapeKind": "Number",
+      "typeScriptType": "number"
+    },
+    {
+      "path": "$[].reasoningSummary.evidenceEventCount",
+      "shapeKind": "Number",
+      "typeScriptType": "number"
+    },
+    {
+      "path": "$[].reasoningSummary.lastEventAt",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].reasoningSummary.lastThreadActivityAt",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].reasoningSummary.lastRelationshipAt",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].reasoningSummary.lastActivityAt",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].reasoningSummary.lastReconstructionAt",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].reasoningSummary.lastCertificationAt",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].reasoningSummary.certificationResult",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].decisionSessionSummary",
+      "shapeKind": "Object",
+      "typeScriptType": "Record\u003Cstring, unknown\u003E"
+    },
+    {
+      "path": "$[].decisionSessionSummary.decisionSessionId",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].decisionSessionSummary.state",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].decisionSessionSummary.lifecycleDecision",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].decisionSessionSummary.transferEligibilityStatus",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].decisionSessionSummary.estimatedTokenCount",
+      "shapeKind": "Number",
+      "typeScriptType": "number"
+    },
+    {
+      "path": "$[].decisionSessionSummary.estimatedCacheTtl",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].decisionSessionSummary.cacheMissRisk",
+      "shapeKind": "Number",
+      "typeScriptType": "number"
+    },
+    {
+      "path": "$[].decisionSessionSummary.coherenceScore",
+      "shapeKind": "Number",
+      "typeScriptType": "number"
+    },
+    {
+      "path": "$[].decisionSessionSummary.transferPressure",
+      "shapeKind": "Number",
+      "typeScriptType": "number"
+    },
+    {
+      "path": "$[].decisionSessionSummary.healthDimensions",
+      "shapeKind": "Array",
+      "typeScriptType": "Record\u003Cstring, unknown\u003E[]"
+    },
+    {
+      "path": "$[].decisionSessionSummary.healthDimensions[]",
+      "shapeKind": "Object",
+      "typeScriptType": "Record\u003Cstring, unknown\u003E"
+    },
+    {
+      "path": "$[].decisionSessionSummary.healthDimensions[].name",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].decisionSessionSummary.healthDimensions[].status",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].decisionSessionSummary.healthDimensions[].findings",
+      "shapeKind": "Array",
+      "typeScriptType": "string[]"
+    },
+    {
+      "path": "$[].decisionSessionSummary.healthDimensions[].findings[]",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].decisionSessionSummary.recentTransferLineage",
+      "shapeKind": "Array",
+      "typeScriptType": "Record\u003Cstring, unknown\u003E[]"
+    },
+    {
+      "path": "$[].decisionSessionSummary.recentTransferLineage[]",
+      "shapeKind": "Object",
+      "typeScriptType": "Record\u003Cstring, unknown\u003E"
+    },
+    {
+      "path": "$[].decisionSessionSummary.recentTransferLineage[].transferId",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].decisionSessionSummary.recentTransferLineage[].sourceSessionId",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].decisionSessionSummary.recentTransferLineage[].targetSessionId",
+      "shapeKind": "Null",
+      "typeScriptType": "null"
+    },
+    {
+      "path": "$[].decisionSessionSummary.recentTransferLineage[].continuityArtifactId",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].decisionSessionSummary.recentTransferLineage[].startedAt",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].decisionSessionSummary.recentTransferLineage[].completedAt",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].decisionSessionSummary.recentTransferLineage[].succeeded",
+      "shapeKind": "Boolean",
+      "typeScriptType": "boolean"
+    },
+    {
+      "path": "$[].decisionSessionSummary.diagnostics",
+      "shapeKind": "Array",
+      "typeScriptType": "string[]"
+    },
+    {
+      "path": "$[].decisionSessionSummary.diagnostics[]",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    },
+    {
+      "path": "$[].decisionSessionSummary.generatedAt",
+      "shapeKind": "String",
+      "typeScriptType": "string"
+    }
+  ]
+}
