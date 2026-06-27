@@ -12,6 +12,7 @@
     <ProjectReference Include="..\CommandCenter.DecisionSessions\CommandCenter.DecisionSessions.csproj" />
     <ProjectReference Include="..\CommandCenter.Decisions\CommandCenter.Decisions.csproj" />
     <ProjectReference Include="..\CommandCenter.Execution\CommandCenter.Execution.csproj" />
+    <ProjectReference Include="..\CommandCenter.Orchestration\CommandCenter.Orchestration.csproj" />
     <ProjectReference Include="..\CommandCenter.Workflow\CommandCenter.Workflow.csproj" />
     <ProjectReference Include="..\CommandCenter.Middle\CommandCenter.Middle.csproj" />
     <ProjectReference Include="..\CommandCenter.Reasoning\CommandCenter.Reasoning.csproj" />

@@ -1,0 +1,119 @@
+using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
+using CommandCenter.Agents.Abstractions;
+using CommandCenter.Core.Artifacts;
+using Microsoft.Extensions.Caching.Memory;
+
+namespace CommandCenter.Orchestration.Services;
+
+/// <summary>
+/// Process-wide singleton that hands out EXACTLY ONE live <see cref="RepositoryOrchestrator"/> per
+/// repository id. Two mechanisms combine to make a duplicate impossible even under concurrency:
+/// <list type="bullet">
+/// <item>the dictionary value is a <see cref="Lazy{T}"/> with
+/// <see cref="LazyThreadSafetyMode.ExecutionAndPublication"/>, so even when
+/// <see cref="ConcurrentDictionary{TKey,TValue}.GetOrAdd(TKey, Func{TKey, TValue})"/> races and
+/// builds several lazies, only the stored one is ever forced; and</item>
+/// <item>creation (<see cref="GetOrCreateAsync"/>) and teardown (<see cref="RemoveAsync"/>) are
+/// serialized by <c>mutationGate</c>, and teardown holds the gate across the orchestrator's full
+/// <c>DisposeAsync</c> — so a replacement is published only AFTER the prior instance is completely
+/// disposed. Without this, <see cref="RemoveAsync"/> would drop the entry, then yield while disposing
+/// live Codex handles, and a concurrent create would publish a second live orchestrator for the same
+/// id during that window.</item>
+/// </list>
+/// Orchestrators hold live process handles, never durable state, so the registry itself persists
+/// nothing across a restart. (The gate is registry-wide; per-id locking is a later optimization if
+/// cross-repository teardown contention ever matters — teardown is rare and short.)
+/// </summary>
+public sealed class RepositoryOrchestratorRegistry : IAsyncDisposable
+{
+    private readonly ConcurrentDictionary<string, Lazy<RepositoryOrchestrator>> orchestrators =
+        new(StringComparer.Ordinal);
+
+    // Serializes structural mutations (create-new-entry, remove+dispose) so a fresh orchestrator is
+    // never published while the prior one for the same id is still tearing down. NOT disposed
+    // (singleton-lifetime; avoids a Release-vs-Dispose ObjectDisposedException).
+    private readonly SemaphoreSlim mutationGate = new(1, 1);
+
+    private readonly IAgentRuntime agentRuntime;
+    private readonly IArtifactStore artifactStore;
+    private readonly IMemoryCache memoryCache;
+
+    public RepositoryOrchestratorRegistry(
+        IAgentRuntime agentRuntime,
+        IArtifactStore artifactStore,
+        IMemoryCache memoryCache)
+    {
+        this.agentRuntime = agentRuntime;
+        this.artifactStore = artifactStore;
+        this.memoryCache = memoryCache;
+    }
+
+    public int Count => orchestrators.Count;
+
+    public async Task<RepositoryOrchestrator> GetOrCreateAsync(string repositoryId, CancellationToken cancellationToken = default)
+    {
+        await mutationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return orchestrators.GetOrAdd(
+                repositoryId,
+                id => new Lazy<RepositoryOrchestrator>(
+                    () => new RepositoryOrchestrator(id, agentRuntime, artifactStore, memoryCache),
+                    LazyThreadSafetyMode.ExecutionAndPublication)).Value;
+        }
+        finally
+        {
+            mutationGate.Release();
+        }
+    }
+
+    public bool TryGet(string repositoryId, [MaybeNullWhen(false)] out RepositoryOrchestrator orchestrator)
+    {
+        if (orchestrators.TryGetValue(repositoryId, out Lazy<RepositoryOrchestrator>? lazy) && lazy.IsValueCreated)
+        {
+            orchestrator = lazy.Value;
+            return true;
+        }
+
+        orchestrator = null;
+        return false;
+    }
+
+    /// <summary>
+    /// Tears down a repository's orchestrator (deselection, failure, runtime teardown). Holds
+    /// <c>mutationGate</c> across the entire remove + dispose so no replacement can be published
+    /// for this id until disposal completes.
+    /// </summary>
+    public async Task<bool> RemoveAsync(string repositoryId)
+    {
+        await mutationGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (orchestrators.TryRemove(repositoryId, out Lazy<RepositoryOrchestrator>? lazy))
+            {
+                if (lazy.IsValueCreated)
+                {
+                    await lazy.Value.DisposeAsync().ConfigureAwait(false);
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+        finally
+        {
+            mutationGate.Release();
+        }
+    }
+
+    /// <summary>Disposes every orchestrator on application shutdown (singleton disposal).</summary>
+    public async ValueTask DisposeAsync()
+    {
+        foreach (string repositoryId in orchestrators.Keys.ToArray())
+        {
+            await RemoveAsync(repositoryId).ConfigureAwait(false);
+        }
+    }
+}

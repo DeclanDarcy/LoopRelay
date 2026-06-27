@@ -34,17 +34,20 @@ public sealed class CodexAgentArgumentBuilderTests
     }
 
     [Fact]
-    public void PersistentNoLongerUsesRemovedProtoSubcommand()
+    public void PersistentBuildsAppServerStdioArgs()
     {
-        // codex 0.139 removed `codex proto`; both modes now run `exec --json` (held-open
-        // multi-turn is a separate runtime concern via exec resume / app-server).
+        // codex 0.139 removed `codex proto`; the held-open path is the app-server JSON-RPC transport.
         IReadOnlyList<string> args = CodexAgentArgumentBuilder.Build(
             Spec(canWrite: true, requiresApproval: false, AgentEffortLevel.High),
             AgentSessionMode.Persistent);
 
-        Assert.Equal("exec", args[0]);
-        Assert.Contains("--json", args);
+        Assert.Contains("app-server", args);
+        Assert.Contains("--listen", args);
+        Assert.Contains("stdio://", args);
+        Assert.Contains("--ask-for-approval", args);
+        Assert.Contains("never", args);
         Assert.DoesNotContain("proto", args);
+        Assert.DoesNotContain("exec", args);
     }
 
     [Fact]
@@ -52,7 +55,7 @@ public sealed class CodexAgentArgumentBuilderTests
     {
         IReadOnlyList<string> args = CodexAgentArgumentBuilder.Build(
             Spec(canWrite: false, requiresApproval: true, AgentEffortLevel.Low),
-            AgentSessionMode.Persistent);
+            AgentSessionMode.OneShot);
 
         Assert.Contains("read-only", args);
         Assert.DoesNotContain("workspace-write", args);
@@ -63,7 +66,7 @@ public sealed class CodexAgentArgumentBuilderTests
     {
         IReadOnlyList<string> args = CodexAgentArgumentBuilder.Build(
             Spec(canWrite: true, requiresApproval: false, AgentEffortLevel.High),
-            AgentSessionMode.Persistent);
+            AgentSessionMode.OneShot);
 
         Assert.Contains("approval_policy=\"never\"", args);
     }
@@ -73,7 +76,7 @@ public sealed class CodexAgentArgumentBuilderTests
     {
         IReadOnlyList<string> args = CodexAgentArgumentBuilder.Build(
             Spec(canWrite: false, requiresApproval: true, AgentEffortLevel.Low),
-            AgentSessionMode.Persistent);
+            AgentSessionMode.OneShot);
 
         Assert.DoesNotContain("approval_policy=\"never\"", args);
     }
@@ -83,7 +86,7 @@ public sealed class CodexAgentArgumentBuilderTests
     {
         IReadOnlyList<string> args = CodexAgentArgumentBuilder.Build(
             Spec(canWrite: true, requiresApproval: false, AgentEffortLevel.High),
-            AgentSessionMode.Persistent);
+            AgentSessionMode.OneShot);
 
         Assert.Contains("model_reasoning_effort=\"high\"", args);
     }
@@ -99,7 +102,7 @@ public sealed class CodexAgentArgumentBuilderTests
             new EffortProfile(AgentEffortLevel.High, Identifier: "xhigh"),
             workingDirectory: "/repo");
 
-        IReadOnlyList<string> args = CodexAgentArgumentBuilder.Build(spec, AgentSessionMode.Persistent);
+        IReadOnlyList<string> args = CodexAgentArgumentBuilder.Build(spec, AgentSessionMode.OneShot);
 
         Assert.Contains("model_reasoning_effort=\"xhigh\"", args);
     }

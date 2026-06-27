@@ -30,6 +30,7 @@
     <ProjectReference Include="..\..\src\CommandCenter.Workflow\CommandCenter.Workflow.csproj" />
     <ProjectReference Include="..\..\src\CommandCenter.Reasoning\CommandCenter.Reasoning.csproj" />
     <ProjectReference Include="..\..\src\CommandCenter.Middle\CommandCenter.Middle.csproj" />
+    <ProjectReference Include="..\..\src\CommandCenter.Orchestration\CommandCenter.Orchestration.csproj" />
     <ProjectReference Include="..\..\src\CommandCenter.Backend\CommandCenter.Backend.csproj" />
   </ItemGroup>
 

@@ -14,7 +14,8 @@ public sealed class AgentRuntime(
         CancellationToken cancellationToken = default)
     {
         IAgentProcess process = await launcher.LaunchAsync(spec, AgentSessionMode.Persistent, cancellationToken);
-        var session = new AgentSession(spec, AgentSessionMode.Persistent, process, boundaryDetector, tokenEstimator);
+        // Held-open sessions speak the Codex app-server JSON-RPC protocol over the process's stdio.
+        var session = new CodexAppServerSession(spec, process, tokenEstimator);
 
         if (!registry.TryAdd(new AgentSessionKey(spec.RepositoryId, spec.SessionId), session))
         {

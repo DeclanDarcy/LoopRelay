@@ -15,6 +15,7 @@ using CommandCenter.Execution.Extensions;
 using CommandCenter.Continuity.Extensions;
 using CommandCenter.DecisionSessions.Extensions;
 using CommandCenter.Decisions.Extensions;
+using CommandCenter.Orchestration.Extensions;
 using CommandCenter.Reasoning.Extensions;
 using CommandCenter.Workflow.Extensions;
 using CommandCenter.Workflow.Models;
@@ -45,6 +46,7 @@ public static class Program
         builder.Services.AddSingleton<IOperationalContextGenerationService, OperationalContextGenerationService>();
         builder.Services.AddSingleton<IPlanningService, PlanningService>();
         builder.Services.AddExecution();
+        builder.Services.AddOrchestration();
         builder.Services.Configure<WorkflowContinuationOptions>(
             builder.Configuration.GetSection("CommandCenter:Workflow"));
         builder.Services.AddWorkflow();
@@ -71,6 +73,7 @@ public static class Program
         app.MapRepositoriesEndpoints();
         app.MapArtifactsEndpoints();
         app.MapPlanningEndpoints();
+        app.MapPlanStatusEndpoints();
         app.MapOperationalContextEndpoints();
         app.MapContinuityEndpoints();
         app.MapExecutionEndpoints();

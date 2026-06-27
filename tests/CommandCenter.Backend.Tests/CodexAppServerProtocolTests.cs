@@ -67,6 +67,15 @@ public sealed class CodexAppServerProtocolTests
     }
 
     [Fact]
+    public void InitializedNotificationHasMethodAndNoId()
+    {
+        JsonElement root = Root(CodexAppServerProtocol.Initialized());
+
+        Assert.Equal("initialized", root.GetProperty("method").GetString());
+        Assert.False(root.TryGetProperty("id", out _));
+    }
+
+    [Fact]
     public void ApprovalResponseEchoesRequestIdAndDecision()
     {
         JsonElement root = Root(CodexAppServerProtocol.ApprovalResponse(7L, CodexAppServerProtocol.DeclineDecision));
@@ -132,25 +141,36 @@ public sealed class CodexAppServerTurnReaderTests
     private static CodexAppServerMessage Msg(string json) => CodexAppServerMessage.Parse(json);
 
     [Fact]
-    public void AccumulatesAgentMessageTextRealUsageAndCompletion()
+    public void AccumulatesAgentMessageDeltasRealUsageAndCompletion()
     {
         var reader = new CodexAppServerTurnReader();
 
         reader.Apply(Msg("""{"method":"turn/started","params":{"threadId":"T","turn":{"id":"u1","status":"inProgress"}}}"""));
         string? delta = reader.Apply(Msg("""{"method":"item/agentMessage/delta","params":{"threadId":"T","turnId":"u1","itemId":"i1","delta":"Hel"}}"""));
-        reader.Apply(Msg("""{"method":"item/completed","params":{"threadId":"T","turnId":"u1","item":{"id":"i1","type":"agent_message","text":"Hello"}}}"""));
-        reader.Apply(Msg("""{"method":"thread/tokenUsage/updated","params":{"threadId":"T","turnId":"u1","tokenUsage":{"last":{"totalTokens":37,"inputTokens":30,"outputTokens":7}}}}"""));
+        reader.Apply(Msg("""{"method":"item/agentMessage/delta","params":{"threadId":"T","turnId":"u1","itemId":"i1","delta":"lo"}}"""));
+        reader.Apply(Msg("""{"method":"thread/tokenUsage/updated","params":{"threadId":"T","turnId":"u1","tokenUsage":{"last":{"totalTokens":37,"inputTokens":30,"cachedInputTokens":1,"outputTokens":7,"reasoningOutputTokens":0}}}}"""));
         Assert.False(reader.IsComplete);
         reader.Apply(Msg("""{"method":"turn/completed","params":{"threadId":"T","turn":{"id":"u1","status":"completed"}}}"""));
 
-        Assert.Equal("Hel", delta); // streamed live, not double-counted into output
+        Assert.Equal("Hel", delta); // returned for live streaming
         Assert.True(reader.IsComplete);
 
         CodexAppServerTurnOutcome outcome = reader.Result();
-        Assert.Equal("Hello", outcome.Output);
+        Assert.Equal("Hello", outcome.Output); // deltas concatenate into the reply
         Assert.Equal(AgentTurnState.Completed, outcome.State);
         Assert.Equal(30, outcome.Usage!.PromptTokens);
         Assert.Equal(7, outcome.Usage.OutputTokens);
+    }
+
+    [Fact]
+    public void DeltasAreTheOutputAndACompletedItemDoesNotDoubleCount()
+    {
+        var reader = new CodexAppServerTurnReader();
+        reader.Apply(Msg("""{"method":"item/agentMessage/delta","params":{"itemId":"i1","delta":"answer"}}"""));
+        // A trailing completed item carrying the same full text must not be appended again.
+        reader.Apply(Msg("""{"method":"item/completed","params":{"item":{"type":"agentMessage","text":"answer"}}}"""));
+
+        Assert.Equal("answer", reader.Result().Output);
     }
 
     [Fact]
@@ -174,16 +194,16 @@ public sealed class CodexAppServerTurnReaderTests
     }
 
     [Fact]
-    public void MultipleAgentMessagesAreJoinedAndResponsesAreIgnored()
+    public void CompletedAgentItemIsFallbackWhenNoDeltasAndResponsesAreIgnored()
     {
         var reader = new CodexAppServerTurnReader();
 
         // A response (ack) must not affect turn accumulation.
         Assert.Null(reader.Apply(Msg("""{"id":3,"result":{"turn":{"id":"u1"}}}""")));
-        reader.Apply(Msg("""{"method":"item/completed","params":{"item":{"type":"agent_message","text":"one"}}}"""));
-        reader.Apply(Msg("""{"method":"item/completed","params":{"item":{"type":"assistant_message","text":"two"}}}"""));
+        // No deltas arrived, so the completed agent item supplies the text.
+        reader.Apply(Msg("""{"method":"item/completed","params":{"item":{"type":"agent_message","text":"fallback reply"}}}"""));
 
-        Assert.Equal("one\ntwo", reader.Result().Output);
+        Assert.Equal("fallback reply", reader.Result().Output);
     }
 
     [Fact]

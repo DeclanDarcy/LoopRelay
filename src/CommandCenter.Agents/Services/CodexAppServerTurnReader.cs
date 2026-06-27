@@ -12,11 +12,12 @@ public sealed record CodexAppServerTurnOutcome(
     string? FailureMessage);
 
 /// <summary>
-/// Accumulates a single Codex app-server turn from its notification stream: agent-message text into
-/// the turn output, the real token usage from <c>thread/tokenUsage/updated</c>, and the terminal
-/// state from <c>turn/completed</c>. Streaming deltas are returned for live surfacing but are not
-/// double-counted into the output (the authoritative text comes from the completed agent-message
-/// items). One reader instance accumulates one turn.
+/// Accumulates a single Codex app-server turn from its notification stream: the agent reply text
+/// from <c>item/agentMessage/delta</c> chunks (the reply streams as deltas — confirmed against the
+/// reference Conduit.Codex client and the live protocol; a completed agent-message item is only a
+/// fallback when no deltas arrived), the real token usage from <c>thread/tokenUsage/updated</c>, and
+/// the terminal state from <c>turn/completed</c>. Deltas are also returned for live surfacing.
+/// One reader instance accumulates one turn.
 /// </summary>
 public sealed class CodexAppServerTurnReader
 {
@@ -41,10 +42,21 @@ public sealed class CodexAppServerTurnReader
         switch (message.Method)
         {
             case "item/agentMessage/delta":
-                return StringProperty(message.Params, "delta");
+                string? delta = StringProperty(message.Params, "delta");
+                if (!string.IsNullOrEmpty(delta))
+                {
+                    output.Append(delta);
+                }
+
+                return delta;
 
             case "item/completed":
-                AppendAgentMessage(message.Params);
+                // The reply streams as deltas; a completed item is only a fallback if none arrived.
+                if (output.Length == 0)
+                {
+                    AppendAgentMessage(message.Params);
+                }
+
                 return null;
 
             case "thread/tokenUsage/updated":

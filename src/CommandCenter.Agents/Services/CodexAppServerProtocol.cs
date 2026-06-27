@@ -31,6 +31,17 @@ public static class CodexAppServerProtocol
             }
         });
 
+    /// <summary>
+    /// The notification the client sends immediately after the <c>initialize</c> response and before
+    /// any thread/turn request (LSP-style handshake completion; confirmed against the reference client).
+    /// </summary>
+    public static string Initialized() =>
+        JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["jsonrpc"] = "2.0",
+            ["method"] = "initialized"
+        }, Options);
+
     /// <summary>Creates a thread; the response carries <c>thread.id</c> used to address turns.</summary>
     public static string ThreadStart(long id, string? cwd, string? sandbox, string? approvalPolicy) =>
         Request(id, "thread/start", Compact(new Dictionary<string, object?>

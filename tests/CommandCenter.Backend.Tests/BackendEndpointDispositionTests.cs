@@ -118,6 +118,11 @@ public sealed class BackendEndpointDispositionTests
             return EndpointFamily.Planning;
         }
 
+        if (pattern.StartsWith("/api/repositories/{repositoryId:guid}/plan/", StringComparison.Ordinal))
+        {
+            return EndpointFamily.Plan;
+        }
+
         if (pattern.StartsWith("/api/repositories/{repositoryId:guid}/workflow", StringComparison.Ordinal))
         {
             return EndpointFamily.Workflow;
@@ -188,6 +193,7 @@ public sealed class BackendEndpointDispositionTests
         Repositories,
         Artifacts,
         Planning,
+        Plan,
         Workflow,
         DecisionSessions,
         Decisions,

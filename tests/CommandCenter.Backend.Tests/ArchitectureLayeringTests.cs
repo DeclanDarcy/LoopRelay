@@ -9,11 +9,13 @@ namespace CommandCenter.Backend.Tests;
 /// that both reach Codex only through the shared, role-agnostic <c>CommandCenter.Agents</c>
 /// runtime — and neither role nor the shared center may reach back up into composition layers.
 ///
-/// Negative (isolation) invariants are asserted via reflection over the compiled assembly
-/// manifest (sound: an unused reference is pruned by the compiler, so absence is real).
-/// The positive "DecisionSessions is wired to Agents" invariant cannot be seen by reflection
-/// until a concrete Agents type is consumed (refactor-plan Phase 3), so it is asserted
-/// structurally against the .csproj build graph.
+/// Negative (isolation) invariants are asserted at TWO levels. Reflection over the compiled
+/// assembly manifest catches a forbidden reference whose types are actually CONSUMED. But the
+/// compiler prunes a declared-but-unconsumed reference from the manifest, so reflection alone would
+/// let a forbidden ProjectReference that is merely DECLARED (no type used yet) slip through — so a
+/// structural check over the .csproj build graph backstops every forbidden edge. The positive
+/// "DecisionSessions is wired to Agents" invariant likewise cannot be seen by reflection until a
+/// concrete Agents type is consumed (refactor-plan Phase 3), so it too is asserted structurally.
 /// </summary>
 public sealed class ArchitectureLayeringTests
 {
@@ -23,6 +25,7 @@ public sealed class ArchitectureLayeringTests
     private static Assembly CoreAssembly => typeof(CommandCenter.Core.Repositories.Repository).Assembly;
     private static Assembly DecisionSessionsAssembly => typeof(CommandCenter.DecisionSessions.Models.DecisionSessionHealthStatus).Assembly;
     private static Assembly ExecutionAssembly => typeof(CommandCenter.Execution.Abstractions.IGitService).Assembly;
+    private static Assembly OrchestrationAssembly => typeof(CommandCenter.Orchestration.Services.RepositoryOrchestratorRegistry).Assembly;
 
     private static HashSet<string> ReferencedCommandCenterAssemblies(Assembly assembly) =>
         assembly.GetReferencedAssemblies()
@@ -46,24 +49,37 @@ public sealed class ArchitectureLayeringTests
 
     [Theory]
     [InlineData("CommandCenter.Execution")]
+    [InlineData("CommandCenter.Orchestration")]
     [InlineData("CommandCenter.Workflow")]
     [InlineData("CommandCenter.Middle")]
     [InlineData("CommandCenter.Backend")]
     public void DecisionSessions_does_not_reference_operational_or_higher_layers(string forbidden)
     {
         // A Decision Session reasons over handoffs; it must not reach Execution's operational
-        // orchestration (ExecutionSessionService, Git/commit/push lifecycle) or any layer above it.
+        // orchestration (ExecutionSessionService, Git/commit/push lifecycle), the composition-root
+        // orchestrator that drives both roles, or any layer above it.
         Assert.DoesNotContain(forbidden, ReferencedCommandCenterAssemblies(DecisionSessionsAssembly));
     }
 
     [Theory]
     [InlineData("CommandCenter.DecisionSessions")]
+    [InlineData("CommandCenter.Orchestration")]
     [InlineData("CommandCenter.Workflow")]
     [InlineData("CommandCenter.Middle")]
     [InlineData("CommandCenter.Backend")]
     public void Execution_does_not_reference_the_decision_role_or_higher_layers(string forbidden)
     {
         Assert.DoesNotContain(forbidden, ReferencedCommandCenterAssemblies(ExecutionAssembly));
+    }
+
+    [Theory]
+    [InlineData("CommandCenter.Workflow")]
+    [InlineData("CommandCenter.Middle")]
+    [InlineData("CommandCenter.Backend")]
+    public void Orchestration_is_a_composition_root_below_Backend_and_reaches_no_higher_layer(string forbidden)
+    {
+        // The orchestrator composes the roles from below; Backend wires it in, never the reverse.
+        Assert.DoesNotContain(forbidden, ReferencedCommandCenterAssemblies(OrchestrationAssembly));
     }
 
     [Fact]
@@ -81,6 +97,53 @@ public sealed class ArchitectureLayeringTests
         Assert.False(
             HasActiveProjectReference("CommandCenter.DecisionSessions", "CommandCenter.Execution"),
             "CommandCenter.DecisionSessions must not reference Execution's operational orchestration.");
+    }
+
+    [Theory]
+    [InlineData("CommandCenter.Agents")]
+    [InlineData("CommandCenter.Execution")]
+    [InlineData("CommandCenter.DecisionSessions")]
+    public void Orchestration_csproj_composes_both_roles_through_the_shared_runtime(string referenced)
+    {
+        // The orchestrator is the single composition root permitted to reach BOTH roles at once.
+        // These references are currently structural (unconsumed until the lifecycle phases land),
+        // so the build-graph assertion — not reflection — is the right enforcement point.
+        Assert.True(
+            HasActiveProjectReference("CommandCenter.Orchestration", referenced),
+            $"CommandCenter.Orchestration must reference {referenced} to compose the lifecycle.");
+    }
+
+    [Fact]
+    public void Backend_csproj_references_the_orchestration_composition_root()
+    {
+        Assert.True(
+            HasActiveProjectReference("CommandCenter.Backend", "CommandCenter.Orchestration"),
+            "CommandCenter.Backend must wire in the orchestration composition root.");
+    }
+
+    [Theory]
+    // Structural backstop for the negative isolation invariants: a forbidden ProjectReference that
+    // is DECLARED but not yet consumed is pruned from the metadata manifest and would pass the
+    // reflection theories above. The .csproj build graph is the authoritative edge, so it is checked
+    // directly here. The roles must not reach each other or any layer at/above the composition root.
+    [InlineData("CommandCenter.Orchestration", "CommandCenter.Backend")]
+    [InlineData("CommandCenter.Orchestration", "CommandCenter.Middle")]
+    [InlineData("CommandCenter.Orchestration", "CommandCenter.Workflow")]
+    [InlineData("CommandCenter.DecisionSessions", "CommandCenter.Execution")]
+    [InlineData("CommandCenter.DecisionSessions", "CommandCenter.Orchestration")]
+    [InlineData("CommandCenter.DecisionSessions", "CommandCenter.Middle")]
+    [InlineData("CommandCenter.DecisionSessions", "CommandCenter.Workflow")]
+    [InlineData("CommandCenter.DecisionSessions", "CommandCenter.Backend")]
+    [InlineData("CommandCenter.Execution", "CommandCenter.DecisionSessions")]
+    [InlineData("CommandCenter.Execution", "CommandCenter.Orchestration")]
+    [InlineData("CommandCenter.Execution", "CommandCenter.Middle")]
+    [InlineData("CommandCenter.Execution", "CommandCenter.Workflow")]
+    [InlineData("CommandCenter.Execution", "CommandCenter.Backend")]
+    public void Forbidden_project_references_are_absent_from_the_build_graph(string project, string forbidden)
+    {
+        Assert.False(
+            HasActiveProjectReference(project, forbidden),
+            $"{project} must not declare a ProjectReference to {forbidden} (layering invariant).");
     }
 
     // XDocument.Load discards XML comments, so a commented-out ProjectReference never appears
