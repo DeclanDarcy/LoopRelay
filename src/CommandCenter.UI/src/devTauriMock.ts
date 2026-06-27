@@ -53,6 +53,8 @@ import type {
   OperationalContextProjection,
   OperationalContextProposal,
   OperationalContextProposalSummary,
+  PlanStatus,
+  PlanStreamEvent,
   ReasoningEvent,
   ReasoningCertificationReport,
   ReasoningGraph,
@@ -97,6 +99,8 @@ type MockState = {
   reasoningThreads: Record<string, ReasoningThread[]>
   reasoningRelationships: Record<string, ReasoningRelationship[]>
   reasoningCertificationReports: Record<string, ReasoningCertificationReport[]>
+  planStatuses: Record<string, PlanStatus>
+  planStreamSubscribers: Record<string, ((event: PlanStreamEvent) => void)[]>
   commandCalls: Record<string, number>
 }
 
@@ -108,10 +112,15 @@ type TauriInternals = {
   convertFileSrc: (filePath: string) => string
 }
 
+type PlanStreamBridge = {
+  subscribe: (repositoryId: string, onPlanEvent: (event: PlanStreamEvent) => void) => () => void
+}
+
 declare global {
   interface Window {
     __TAURI_INTERNALS__?: TauriInternals
     __COMMAND_CENTER_MOCK_STATE__?: MockState
+    __COMMAND_CENTER_MOCK_PLAN_STREAM__?: PlanStreamBridge
   }
 }
 
@@ -2671,8 +2680,20 @@ function createInitialState(): MockState {
     reasoningThreads: {},
     reasoningRelationships: {},
     reasoningCertificationReports: {},
+    planStatuses: {},
+    planStreamSubscribers: {},
     commandCalls: {},
   }
+
+  state.repositories.forEach((repository) => {
+    // The empty repository is the natural plan-authoring fixture (no plan yet);
+    // every other fixture keeps its dashboard so existing certification flows stay intact.
+    state.planStatuses[repository.id] = {
+      planExists: repository.id !== emptyRepository.id,
+      state: 'PlanAuthoring',
+    }
+    state.planStreamSubscribers[repository.id] = []
+  })
 
   state.repositories.forEach((repository) => {
     state.decisionContexts[repository.id] = createDecisionContext(repository)
@@ -4628,6 +4649,45 @@ function decideHandoff(
   return summary
 }
 
+function emitPlanEvent(state: MockState, repositoryId: string, event: PlanStreamEvent) {
+  const subscribers = state.planStreamSubscribers[repositoryId] ?? []
+  subscribers.forEach((notify) => notify(event))
+}
+
+function simulatePlanStream(
+  state: MockState,
+  repositoryId: string,
+  phase: 'WritePlan' | 'RevisePlan',
+) {
+  const plan =
+    phase === 'WritePlan'
+      ? '# Implementation Plan\n\n## Milestone 1\n- Establish the workspace\n- Wire the first vertical slice\n'
+      : '# Implementation Plan (revised)\n\n## Milestone 1\n- Split setup from migration\n- Add a verification gate\n'
+  const chunks = plan.match(/[^\n]*\n?/g)?.filter((chunk) => chunk.length > 0) ?? [plan]
+
+  emitPlanEvent(state, repositoryId, { type: 'turn-started', phase })
+
+  let cursor = 0
+  const pushNext = () => {
+    if (cursor >= chunks.length) {
+      emitPlanEvent(state, repositoryId, {
+        type: 'completed',
+        plan,
+        promptTokens: 1280,
+        outputTokens: 640,
+      })
+      state.planStatuses[repositoryId] = { planExists: true, state: 'PlanAuthoring' }
+      return
+    }
+
+    emitPlanEvent(state, repositoryId, { type: 'delta', text: chunks[cursor] })
+    cursor += 1
+    window.setTimeout(pushNext, 12)
+  }
+
+  window.setTimeout(pushNext, 12)
+}
+
 export function installDevTauriMock() {
   const searchParams = new URLSearchParams(window.location.search)
   if (searchParams.get('mock') !== 'workspace-certification') {
@@ -4654,6 +4714,27 @@ export function installDevTauriMock() {
           return clone(state.workspaces[getStringArg(args, 'repositoryId')])
         case 'preview_execution_context':
           return clone(createContextPreview(state, getStringArg(args, 'repositoryId')))
+        case 'get_plan_status': {
+          const repositoryId = getStringArg(args, 'repositoryId')
+          return clone(
+            state.planStatuses[repositoryId] ?? { planExists: false, state: 'PlanAuthoring' },
+          )
+        }
+        case 'write_plan': {
+          const repositoryId = getStringArg(args, 'repositoryId')
+          simulatePlanStream(state, repositoryId, 'WritePlan')
+          return { phase: 'WritePlan' }
+        }
+        case 'revise_plan': {
+          const repositoryId = getStringArg(args, 'repositoryId')
+          simulatePlanStream(state, repositoryId, 'RevisePlan')
+          return { phase: 'RevisePlan' }
+        }
+        case 'execute_plan': {
+          const repositoryId = getStringArg(args, 'repositoryId')
+          state.planStatuses[repositoryId] = { planExists: true, state: 'ExecutingPlan' }
+          return { phase: 'ExecutePlan' }
+        }
         case 'generate_operational_context_proposal':
           return clone(generateOperationalContextProposal(state, getStringArg(args, 'repositoryId')))
         case 'list_operational_context_proposals':
@@ -5151,6 +5232,20 @@ export function installDevTauriMock() {
         }
         default:
           throw new Error(`Unhandled mock command: ${cmd}`)
+      }
+    },
+  }
+
+  window.__COMMAND_CENTER_MOCK_PLAN_STREAM__ = {
+    subscribe: (repositoryId, onPlanEvent) => {
+      const subscribers = state.planStreamSubscribers[repositoryId] ?? []
+      subscribers.push(onPlanEvent)
+      state.planStreamSubscribers[repositoryId] = subscribers
+
+      return () => {
+        state.planStreamSubscribers[repositoryId] = (
+          state.planStreamSubscribers[repositoryId] ?? []
+        ).filter((notify) => notify !== onPlanEvent)
       }
     },
   }

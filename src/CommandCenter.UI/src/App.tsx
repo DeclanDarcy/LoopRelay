@@ -36,6 +36,7 @@ import { GeneratedHandoffReviewPanel } from './features/execution/GeneratedHando
 import { GitWorkflowPanel } from './features/execution/GitWorkflowPanel'
 import { GovernanceWorkspace } from './features/governance/GovernanceWorkspace'
 import { OperationalContextTab } from './features/operational-context/OperationalContextTab'
+import { PlanAuthoringScreen } from './features/planning/PlanAuthoringScreen'
 import { ReasoningTrajectoryTab } from './features/reasoning/ReasoningTrajectoryTab'
 import { SelectedRepositorySummary } from './features/repositories/SelectedRepositorySummary'
 import { WorkflowOperationsPanel } from './features/workflow/WorkflowPanels'
@@ -61,6 +62,7 @@ import {
   useExecutionSession,
   useExecutionTransparency,
   useGitStatus,
+  usePlanStatus,
   mergeExecutionEvents,
   useReasoningEvents,
   useReasoningCertification,
@@ -179,6 +181,11 @@ function App() {
     error: workflowError,
     refresh: refreshWorkflowProjection,
   } = useWorkflowProjection(selectedRepository?.repository.id ?? null)
+  const {
+    data: planStatus,
+    error: planStatusError,
+    refresh: refreshPlanStatus,
+  } = usePlanStatus(selectedRepository?.repository.id ?? null)
   const executionSummary =
     workspace?.executionSummary ??
     selectedRepository?.executionSummary ??
@@ -1394,6 +1401,12 @@ function App() {
   }, [workflowError])
 
   useEffect(() => {
+    if (planStatusError) {
+      setError(planStatusError)
+    }
+  }, [planStatusError])
+
+  useEffect(() => {
     if (artifactError) {
       setError(artifactError)
     }
@@ -1728,6 +1741,22 @@ function App() {
       {error ? <div className="notice error">{error}</div> : null}
       {message ? <div className="notice success">{message}</div> : null}
 
+      {selectedRepository && planStatus && !planStatus.planExists ? (
+        <section className="workspace-grid">
+          <Panel className="repository-details">
+            <PlanAuthoringScreen
+              key={selectedRepository.repository.id}
+              repositoryId={selectedRepository.repository.id}
+              repositoryName={selectedRepository.repository.name}
+              onPlanReady={() => void refreshPlanStatus()}
+              onExecuted={() => {
+                void refreshPlanStatus()
+                void loadRepositories()
+              }}
+            />
+          </Panel>
+        </section>
+      ) : (
       <section className="workspace-grid" aria-label="Repository workspace">
         <Panel className="repository-details" aria-label="Repository details">
           <SectionHeader
@@ -2166,6 +2195,7 @@ function App() {
           )}
         </Panel>
       </section>
+      )}
     </AppShell>
   )
 }

@@ -502,6 +502,49 @@ fn preview_execution_context(repository_id: String) -> Result<Value, String> {
 }
 
 #[tauri::command]
+fn get_plan_status(repository_id: String) -> Result<Value, String> {
+    backend_get_value(
+        &format!("/api/repositories/{repository_id}/plan/status"),
+        "plan status lookup failed",
+    )
+}
+
+#[tauri::command]
+fn write_plan(
+    repository_id: String,
+    roadmap: String,
+    specs: Vec<String>,
+    new_codebase: bool,
+) -> Result<Value, String> {
+    backend_post_json_value(
+        &format!("/api/repositories/{repository_id}/plan/write"),
+        &json!({
+            "roadmap": roadmap,
+            "specs": specs,
+            "newCodebase": new_codebase,
+        }),
+        "plan write failed",
+    )
+}
+
+#[tauri::command]
+fn revise_plan(repository_id: String, feedback: String) -> Result<Value, String> {
+    backend_post_json_value(
+        &format!("/api/repositories/{repository_id}/plan/revise"),
+        &json!({ "feedback": feedback }),
+        "plan revision failed",
+    )
+}
+
+#[tauri::command]
+fn execute_plan(repository_id: String) -> Result<Value, String> {
+    backend_post_value(
+        &format!("/api/repositories/{repository_id}/plan/execute"),
+        "plan execution failed",
+    )
+}
+
+#[tauri::command]
 fn generate_operational_context_proposal(repository_id: String) -> Result<Value, String> {
     let client = reqwest::blocking::Client::new();
     let response = client
@@ -2895,6 +2938,10 @@ fn main() {
             rotate_current_handoff,
             rotate_current_decisions,
             preview_execution_context,
+            get_plan_status,
+            write_plan,
+            revise_plan,
+            execute_plan,
             generate_operational_context_proposal,
             list_operational_context_proposals,
             get_operational_context_proposal,
