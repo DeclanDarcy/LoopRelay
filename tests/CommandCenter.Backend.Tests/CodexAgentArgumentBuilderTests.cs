@@ -19,28 +19,32 @@ public sealed class CodexAgentArgumentBuilderTests
             workingDirectory);
 
     [Fact]
-    public void OneShotBuildsExecArgsWithStdinAndWorkingDirectory()
+    public void OneShotBuildsExecJsonArgsWithStdinAndWorkingDirectory()
     {
         IReadOnlyList<string> args = CodexAgentArgumentBuilder.Build(
             Spec(canWrite: true, requiresApproval: false, AgentEffortLevel.Medium),
             AgentSessionMode.OneShot);
 
         Assert.Equal("exec", args[0]);
+        Assert.Contains("--json", args);
         Assert.Contains("--cd", args);
         Assert.Contains("/repo", args);
-        Assert.Contains("-", args);
+        Assert.Equal("-", args[^1]); // stdin prompt is the trailing positional
         Assert.Contains("workspace-write", args);
     }
 
     [Fact]
-    public void PersistentBuildsProtoArgsWithoutBareStdinMarker()
+    public void PersistentNoLongerUsesRemovedProtoSubcommand()
     {
+        // codex 0.139 removed `codex proto`; both modes now run `exec --json` (held-open
+        // multi-turn is a separate runtime concern via exec resume / app-server).
         IReadOnlyList<string> args = CodexAgentArgumentBuilder.Build(
             Spec(canWrite: true, requiresApproval: false, AgentEffortLevel.High),
             AgentSessionMode.Persistent);
 
-        Assert.Equal("proto", args[0]);
-        Assert.DoesNotContain("-", args.Skip(1));
+        Assert.Equal("exec", args[0]);
+        Assert.Contains("--json", args);
+        Assert.DoesNotContain("proto", args);
     }
 
     [Fact]

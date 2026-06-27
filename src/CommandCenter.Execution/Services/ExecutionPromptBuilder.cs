@@ -44,27 +44,62 @@ public sealed class ExecutionPromptBuilder : IExecutionPromptBuilder
         string? handoff = ContentForRole(context.Artifacts, "CurrentHandoff");
         string? decisions = ComposeDecisions(context.DecisionProjection);
 
+        string[] inputIdentities = OrderedArtifacts(context.Artifacts)
+            .Select(artifact => artifact.RelativePath)
+            .ToArray();
+
         // A prior handoff means we are continuing an in-flight milestone; otherwise this is a
         // first-milestone start (StartExecution has no handoff/decisions holes).
-        string text = handoff is not null
+        bool continuing = handoff is not null;
+        string text = continuing
             ? ContinueExecution.Render(plan, handoff, decisions)
             : StartExecution.Render(plan);
 
         return new ExecutionPrompt
         {
             Text = text,
+            Provenance = BuildProvenance(continuing, inputIdentities),
             Metadata = new ExecutionPromptMetadata
             {
                 GeneratedAt = DateTimeOffset.UtcNow,
                 RepositoryPath = context.Path,
-                IncludedArtifactPaths = OrderedArtifacts(context.Artifacts)
-                    .Select(artifact => artifact.RelativePath)
-                    .ToArray(),
+                IncludedArtifactPaths = inputIdentities,
                 TotalContextBytes = context.Diagnostics.TotalBytes,
                 TotalContextCharacters = context.Diagnostics.TotalCharacters,
                 DirtyRepository = context.Snapshot?.DirtyState.IsClean == false
             }
         };
+    }
+
+    // Records which canonical catalog prompt rendered this operational turn (name, generated type,
+    // content SourceHash), the role/phase it ran under, and the artifact identities it consumed and
+    // is directed to produce. Both Start and Continue operational turns write the current handoff,
+    // so it is the declared produced artifact.
+    private static PromptProvenance BuildProvenance(bool continuing, IReadOnlyList<string> inputIdentities)
+    {
+        string[] outputIdentities = [HandoffService.CurrentHandoffPath];
+
+        return continuing
+            ? new PromptProvenance
+            {
+                PromptName = nameof(ContinueExecution),
+                PromptType = typeof(ContinueExecution).FullName!,
+                SourceHash = ContinueExecution.SourceHash,
+                SessionRole = PromptSessionRole.OperationalExecution,
+                WorkflowPhase = "Continue",
+                InputArtifactIdentities = inputIdentities,
+                OutputArtifactIdentities = outputIdentities
+            }
+            : new PromptProvenance
+            {
+                PromptName = nameof(StartExecution),
+                PromptType = typeof(StartExecution).FullName!,
+                SourceHash = StartExecution.SourceHash,
+                SessionRole = PromptSessionRole.OperationalExecution,
+                WorkflowPhase = "Start",
+                InputArtifactIdentities = inputIdentities,
+                OutputArtifactIdentities = outputIdentities
+            };
     }
 
     private static string? ComposePlanContext(IReadOnlyList<LoadedArtifact> artifacts)

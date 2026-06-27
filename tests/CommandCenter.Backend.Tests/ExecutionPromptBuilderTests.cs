@@ -1,4 +1,5 @@
 using CommandCenter.Core.Artifacts;
+using CommandCenter.Core.Prompts;
 using CommandCenter.Core.Repositories;
 using CommandCenter.Decisions.Models;
 using CommandCenter.Decisions.Primitives;
@@ -110,6 +111,43 @@ public sealed class ExecutionPromptBuilderTests
         Assert.Equal(first.Text, second.Text);
         Assert.DoesNotContain("00000000-0000-0000-0000-000000000001", first.Text);
         Assert.DoesNotContain("2026-06-19", first.Text);
+    }
+
+    [Fact]
+    public void StartProvenanceRecordsCatalogPromptIdentityAndArtifacts()
+    {
+        ExecutionPrompt prompt = new ExecutionPromptBuilder().Build(CreateContext());
+
+        PromptProvenance provenance = Assert.IsType<PromptProvenance>(prompt.Provenance);
+        Assert.Equal(nameof(StartExecution), provenance.PromptName);
+        Assert.Equal(typeof(StartExecution).FullName, provenance.PromptType);
+        Assert.Equal(StartExecution.SourceHash, provenance.SourceHash);
+        Assert.Equal(PromptSessionRole.OperationalExecution, provenance.SessionRole);
+        Assert.Equal("Start", provenance.WorkflowPhase);
+        Assert.Equal(
+            [".agents/plan.md", ".agents/milestones/m2.md"],
+            provenance.InputArtifactIdentities);
+        // Both operational turns are directed to write the current handoff.
+        Assert.Equal([".agents/handoffs/handoff.md"], provenance.OutputArtifactIdentities);
+    }
+
+    [Fact]
+    public void ContinueProvenanceRecordsContinueCatalogPromptIdentity()
+    {
+        ExecutionPrompt prompt = new ExecutionPromptBuilder().Build(CreateContext(
+            optionalArtifacts:
+            [
+                Artifact("OperationalContext", ".agents/operational_context.md", "context content"),
+                Artifact("CurrentHandoff", ".agents/handoffs/handoff.md", "handoff content")
+            ]));
+
+        PromptProvenance provenance = Assert.IsType<PromptProvenance>(prompt.Provenance);
+        Assert.Equal(nameof(ContinueExecution), provenance.PromptName);
+        Assert.Equal(typeof(ContinueExecution).FullName, provenance.PromptType);
+        Assert.Equal(ContinueExecution.SourceHash, provenance.SourceHash);
+        Assert.Equal(PromptSessionRole.OperationalExecution, provenance.SessionRole);
+        Assert.Equal("Continue", provenance.WorkflowPhase);
+        Assert.Contains(".agents/handoffs/handoff.md", provenance.InputArtifactIdentities);
     }
 
     private static ExecutionDecisionProjection ProjectionWithGovernance()

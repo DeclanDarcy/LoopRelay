@@ -160,28 +160,38 @@ public sealed class AgentSession : IAgentSession
         {
             while (reader.TryRead(out string? line))
             {
-                if (mode == AgentSessionMode.Persistent)
+                // The boundary detector classifies every line in both modes: a real Codex turn
+                // emits a turn-completed event before the process stream ends, while a one-shot
+                // process that emits no boundary still terminates the turn on stream end below.
+                AgentLineInspection inspection = boundaryDetector.Inspect(line);
+
+                if (inspection.Classification == AgentLineClassification.TurnCompleted)
                 {
-                    AgentLineInspection inspection = boundaryDetector.Inspect(line);
-                    if (inspection.Classification == AgentLineClassification.TurnCompleted)
-                    {
-                        return (output.ToString(), inspection.Usage, true);
-                    }
+                    return (output.ToString(), inspection.Usage, true);
                 }
+
+                if (inspection.Classification == AgentLineClassification.Ignored)
+                {
+                    continue;
+                }
+
+                // Output text is the detector's extracted content (e.g. an agent-message event's
+                // text) when provided, otherwise the raw line (sentinel/plain-text streams).
+                string text = inspection.Content ?? line;
 
                 if (output.Length > 0)
                 {
                     output.Append('\n');
                 }
 
-                output.Append(line);
+                output.Append(text);
 
                 if (onChunk is not null)
                 {
                     await onChunk(new AgentStreamChunk(
                         turnIndex,
                         AgentProcessOutputStream.StandardOutput,
-                        line));
+                        text));
                 }
             }
         }

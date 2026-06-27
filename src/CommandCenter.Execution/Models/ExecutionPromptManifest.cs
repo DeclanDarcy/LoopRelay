@@ -1,8 +1,17 @@
+using CommandCenter.Core.Prompts;
+
 namespace CommandCenter.Execution.Models;
 
 public sealed class ExecutionPromptManifest
 {
     public const string NoProviderDivergenceSignalDiagnostic = "NoProviderDivergenceSignal";
+
+    /// <summary>
+    /// Provenance for the prompt this manifest records: the catalog prompt name, generated type,
+    /// <c>SourceHash</c>, session role, workflow phase, and consumed/produced artifact identities.
+    /// Null only for manifests written before provenance capture existed.
+    /// </summary>
+    public PromptProvenance? Provenance { get; init; }
 
     public Guid SessionId { get; init; }
 

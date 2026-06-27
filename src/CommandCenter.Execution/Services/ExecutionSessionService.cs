@@ -519,6 +519,7 @@ public sealed class ExecutionSessionService(
             SessionId = sessionId,
             GeneratedAt = prompt.Metadata.GeneratedAt,
             PromptText = prompt.Text,
+            Provenance = prompt.Provenance,
             RequestedArtifacts = requestedArtifacts,
             RequestedContextBytes = context.Diagnostics.TotalBytes,
             RequestedContextCharacters = context.Diagnostics.TotalCharacters,

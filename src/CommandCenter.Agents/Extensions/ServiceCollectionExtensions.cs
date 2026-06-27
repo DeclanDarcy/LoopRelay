@@ -17,7 +17,7 @@ public static class ServiceCollectionExtensions
     {
         services.TryAddSingleton<IProcessRunner, ProcessRunner>();
         services.TryAddSingleton<IAgentTokenEstimator, DeterministicAgentTokenEstimator>();
-        services.TryAddSingleton<IAgentTurnBoundaryDetector>(_ => new SentinelTurnBoundaryDetector());
+        services.TryAddSingleton<IAgentTurnBoundaryDetector, CodexEventTurnBoundaryDetector>();
         services.TryAddSingleton<IAgentExecutableResolver, EnvironmentAgentExecutableResolver>();
         services.TryAddSingleton<IAgentProcessLauncher, CodexAgentProcessLauncher>();
         services.TryAddSingleton<AgentSessionRegistry>();
