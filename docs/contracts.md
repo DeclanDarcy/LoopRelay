@@ -822,17 +822,17 @@ repository-dashboard.golden.json
   -> repository-dashboard.generated-artifact-freshness.json
 ```
 
-The generated TypeScript artifact is contract metadata, not a migrated UI consumer type. It records the Oracle-observed field paths, shape kinds, and TypeScript primitive categories needed to validate determinism and freshness before generating replacement consumer types. The artifact is protected by `ContractGeneratedArtifactPipelineTests`, which regenerates the IR and TypeScript metadata in memory during normal test runs and supports explicit refresh only when `COMMANDCENTER_UPDATE_GENERATED_CONTRACTS=1` is set.
+The generated TypeScript artifact now contains contract metadata and raw generated aliases for the `repository-dashboard` family. The metadata records the Oracle-observed field paths, shape kinds, and TypeScript primitive categories. The raw aliases, including `RepositoryDashboardGeneratedProjection`, are fixture-observed contract shapes generated from the same IR and verified against the Oracle fixture by the TypeScript consumer-verification pipeline. The artifact is protected by `ContractGeneratedArtifactPipelineTests`, which regenerates the IR and TypeScript artifact in memory during normal test runs and supports explicit refresh only when `COMMANDCENTER_UPDATE_GENERATED_CONTRACTS=1` is set.
 
 Current M1.2 pilot boundaries:
 
 - Source authority remains the accepted Oracle fixture and backend serialization path.
 - The IR contains only contract identity, contract name, root shape, observed fields, shape kinds, and TypeScript primitive categories.
-- Generated output lives under `src/CommandCenter.UI/src/contracts/generated/` and is not imported by product code yet.
-- Freshness verification now covers the generated metadata artifact through `repository-dashboard.generated-artifact-freshness.json`.
+- Generated output lives under `src/CommandCenter.UI/src/contracts/generated/`; raw aliases are verified as generated compile-time consumers but are not imported by product code yet.
+- Freshness verification now covers the generated TypeScript contract artifact through `repository-dashboard.generated-artifact-freshness.json`.
 - Manual TypeScript types, Rust mirrors, and dev Tauri mock payloads remain verified or transitional compatibility consumers until later migration slices.
 
-This pilot does not produce full generated TypeScript consumer aliases, Rust command metadata, mock data, command-body schemas, or contract versioning. If later generation requires concepts absent from M1.1, M1.1 must be reopened through decision governance rather than extending the IR ad hoc.
+This pilot does not produce production-ready TypeScript consumer aliases, Rust command metadata, mock data, command-body schemas, or contract versioning. The raw generated aliases are not schema-complete: enum-like semantic fields are represented as strings, and nullable fields reflect only the observed fixture value. If later generation requires concepts absent from M1.1, M1.1 must be reopened through decision governance rather than extending the IR ad hoc.
 
 ## Oracle Change Workflow
 

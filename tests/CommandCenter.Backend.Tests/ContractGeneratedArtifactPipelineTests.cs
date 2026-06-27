@@ -131,7 +131,7 @@ public sealed class ContractGeneratedArtifactPipelineTests
         ContractGeneratedArtifactFreshnessDrift drift = Assert.Single(verifier.Verify(repositoryRoot));
 
         Assert.Equal(ContractGeneratedArtifactFreshnessDriftKind.UnexpectedManualArtifactModification, drift.Kind);
-        Assert.Equal("generated-typescript-repository-dashboard-contract-metadata", drift.ArtifactId);
+        Assert.Equal("generated-typescript-repository-dashboard-contract", drift.ArtifactId);
     }
 
     private static DirectoryInfo FindRepositoryRoot()
@@ -171,9 +171,9 @@ public sealed class ContractGeneratedArtifactPipelineTests
             {
                 new
                 {
-                    artifactId = "generated-typescript-repository-dashboard-contract-metadata",
+                    artifactId = "generated-typescript-repository-dashboard-contract",
                     artifactPath = ToRepositoryRelativePath(artifactPath, repositoryRoot),
-                    artifactKind = "generated-typescript-contract-metadata",
+                    artifactKind = "generated-typescript-contract",
                     artifactSha256 = ComputeSha256(artifactPath)
                 }
             }

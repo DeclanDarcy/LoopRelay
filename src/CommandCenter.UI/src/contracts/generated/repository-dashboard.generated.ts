@@ -630,3 +630,149 @@ export const repositoryDashboardContractFields = [
     typeScriptType: 'string',
   },
 ] satisfies RepositoryDashboardContractField[]
+
+export type RepositoryDashboardGeneratedContract = RepositoryDashboardGeneratedProjection[]
+
+export type RepositoryDashboardGeneratedProjection = RepositoryDashboardGeneratedRootItem
+
+export type RepositoryDashboardGeneratedRootItem = {
+  repository: RepositoryDashboardGeneratedRootItemRepository
+  availability: string
+  readiness: string
+  executionState: string
+  activeExecutionSession: null
+  executionSummary: RepositoryDashboardGeneratedRootItemExecutionSummary
+  executionHistory: RepositoryDashboardGeneratedRootItemExecutionHistory[]
+  milestoneCount: number
+  hasCurrentHandoff: boolean
+  hasCurrentDecisions: boolean
+  continuitySummary: RepositoryDashboardGeneratedRootItemContinuitySummary
+  reasoningSummary: RepositoryDashboardGeneratedRootItemReasoningSummary
+  decisionSessionSummary: RepositoryDashboardGeneratedRootItemDecisionSessionSummary
+}
+
+export type RepositoryDashboardGeneratedRootItemRepository = {
+  id: string
+  name: string
+  path: string
+}
+
+export type RepositoryDashboardGeneratedRootItemExecutionSummary = {
+  sessionId: string
+  state: string
+  repositoryState: string
+  milestonePath: string
+  startedAt: string
+  completedAt: string
+  duration: string
+  acceptedAt: null
+  rejectedAt: null
+  decisionNote: null
+  lastActivityAt: string
+  providerName: string
+  providerExecutablePath: null
+  providerProcessId: null
+  providerStartedAt: null
+  handoffPath: string
+  commitSha: null
+  committedAt: null
+  commitMessage: null
+  preparationSnapshotId: string
+  pushAttemptedAt: null
+  pushedAt: null
+  pushedCommitSha: null
+  pushRemoteName: null
+  pushBranchName: null
+  failureReason: null
+}
+
+export type RepositoryDashboardGeneratedRootItemExecutionHistory = {
+  sessionId: string
+  state: string
+  repositoryState: string
+  milestonePath: string
+  startedAt: string
+  completedAt: string
+  duration: string
+  acceptedAt: null
+  rejectedAt: null
+  decisionNote: null
+  lastActivityAt: string
+  providerName: string
+  providerExecutablePath: null
+  providerProcessId: null
+  providerStartedAt: null
+  handoffPath: string
+  commitSha: null
+  committedAt: null
+  commitMessage: null
+  preparationSnapshotId: string
+  pushAttemptedAt: null
+  pushedAt: null
+  pushedCommitSha: null
+  pushRemoteName: null
+  pushBranchName: null
+  failureReason: null
+}
+
+export type RepositoryDashboardGeneratedRootItemContinuitySummary = {
+  operationalContextExists: boolean
+  operationalContextRevisionCount: number
+  operationalContextLastUpdatedAt: string
+  openQuestionCount: number
+  activeRiskCount: number
+  pendingProposalExists: boolean
+}
+
+export type RepositoryDashboardGeneratedRootItemReasoningSummary = {
+  eventCount: number
+  threadCount: number
+  relationshipCount: number
+  hypothesisEventCount: number
+  alternativeEventCount: number
+  contradictionEventCount: number
+  directionEventCount: number
+  decisionEvolutionEventCount: number
+  assumptionEvolutionEventCount: number
+  constraintEvolutionEventCount: number
+  evidenceEventCount: number
+  lastEventAt: string
+  lastThreadActivityAt: string
+  lastRelationshipAt: string
+  lastActivityAt: string
+  lastReconstructionAt: null
+  lastCertificationAt: null
+  certificationResult: null
+}
+
+export type RepositoryDashboardGeneratedRootItemDecisionSessionSummary = {
+  decisionSessionId: string
+  state: string
+  lifecycleDecision: string
+  transferEligibilityStatus: string
+  estimatedTokenCount: number
+  estimatedCacheTtl: string
+  cacheMissRisk: number
+  coherenceScore: number
+  transferPressure: number
+  healthDimensions: RepositoryDashboardGeneratedRootItemDecisionSessionSummaryHealthDimensions[]
+  recentTransferLineage: RepositoryDashboardGeneratedRootItemDecisionSessionSummaryRecentTransferLineage[]
+  diagnostics: string[]
+  generatedAt: string
+}
+
+export type RepositoryDashboardGeneratedRootItemDecisionSessionSummaryHealthDimensions = {
+  name: string
+  status: string
+  findings: string[]
+}
+
+export type RepositoryDashboardGeneratedRootItemDecisionSessionSummaryRecentTransferLineage = {
+  transferId: string
+  sourceSessionId: string
+  targetSessionId: null
+  continuityArtifactId: string
+  startedAt: string
+  completedAt: string
+  succeeded: boolean
+}

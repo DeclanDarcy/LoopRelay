@@ -165,11 +165,105 @@ internal static class ContractTypeScriptMetadataGenerator
         }
 
         builder.AppendLine("] satisfies RepositoryDashboardContractField[]");
-        return builder.ToString();
+        builder.AppendLine();
+        AppendGeneratedTypeAliases(builder, ir);
+        return builder.ToString().TrimEnd() + Environment.NewLine;
+    }
+
+    private static void AppendGeneratedTypeAliases(StringBuilder builder, ContractGenerationIr ir)
+    {
+        builder.AppendLine("export type RepositoryDashboardGeneratedContract = RepositoryDashboardGeneratedProjection[]");
+        builder.AppendLine();
+        builder.AppendLine("export type RepositoryDashboardGeneratedProjection = RepositoryDashboardGeneratedRootItem");
+        builder.AppendLine();
+
+        ContractGenerationShape rootItem = ir.RootShape.Kind == ContractGenerationShapeKind.Array && ir.RootShape.Items.Count > 0
+            ? ir.RootShape.Items[0]
+            : throw new InvalidOperationException("Repository dashboard generated aliases require an array root item shape.");
+
+        foreach ((string name, ContractGenerationShape shape) in EnumerateObjectTypes("RepositoryDashboardGeneratedRootItem", rootItem))
+        {
+            builder.AppendLine($"export type {name} = {{");
+            foreach (ContractGenerationProperty property in shape.Properties)
+            {
+                builder.AppendLine($"  {property.Name}: {ToGeneratedTypeScriptType(name, property.Name, property.Shape)}");
+            }
+
+            builder.AppendLine("}");
+            builder.AppendLine();
+        }
+    }
+
+    private static IEnumerable<(string Name, ContractGenerationShape Shape)> EnumerateObjectTypes(
+        string typeName,
+        ContractGenerationShape shape)
+    {
+        if (shape.Kind != ContractGenerationShapeKind.Object)
+        {
+            yield break;
+        }
+
+        yield return (typeName, shape);
+
+        foreach (ContractGenerationProperty property in shape.Properties)
+        {
+            foreach ((string childName, ContractGenerationShape childShape) in EnumerateObjectTypes(
+                ToGeneratedObjectTypeName(typeName, property.Name, property.Shape),
+                property.Shape))
+            {
+                yield return (childName, childShape);
+            }
+
+            if (property.Shape.Kind == ContractGenerationShapeKind.Array && property.Shape.Items.Count > 0)
+            {
+                foreach ((string childName, ContractGenerationShape childShape) in EnumerateObjectTypes(
+                    ToGeneratedObjectTypeName(typeName, property.Name, property.Shape.Items[0]),
+                    property.Shape.Items[0]))
+                {
+                    yield return (childName, childShape);
+                }
+            }
+        }
+    }
+
+    private static string ToGeneratedTypeScriptType(
+        string parentTypeName,
+        string propertyName,
+        ContractGenerationShape shape)
+    {
+        return shape.Kind switch
+        {
+            ContractGenerationShapeKind.Array when shape.Items.Count == 0 => "unknown[]",
+            ContractGenerationShapeKind.Array => $"{ToGeneratedTypeScriptType(parentTypeName, propertyName, shape.Items[0])}[]",
+            ContractGenerationShapeKind.Object => ToGeneratedObjectTypeName(parentTypeName, propertyName, shape),
+            ContractGenerationShapeKind.String => "string",
+            ContractGenerationShapeKind.Number => "number",
+            ContractGenerationShapeKind.Boolean => "boolean",
+            ContractGenerationShapeKind.Null => "null",
+            _ => throw new InvalidOperationException($"Unsupported contract shape kind {shape.Kind}.")
+        };
+    }
+
+    private static string ToGeneratedObjectTypeName(
+        string parentTypeName,
+        string propertyName,
+        ContractGenerationShape shape)
+    {
+        if (shape.Kind != ContractGenerationShapeKind.Object)
+        {
+            return ToGeneratedTypeScriptType(parentTypeName, propertyName, shape);
+        }
+
+        return parentTypeName + ToPascalCase(propertyName);
     }
 
     private static string ToCamelCase(string value)
     {
         return char.ToLowerInvariant(value[0]) + value[1..];
+    }
+
+    private static string ToPascalCase(string value)
+    {
+        return char.ToUpperInvariant(value[0]) + value[1..];
     }
 }

@@ -4,10 +4,10 @@
   "sourceSha256": "2A963417F723B7EC300AB0B768B05D99E2A9C237EE50195CA580A2865034834E",
   "artifacts": [
     {
-      "artifactId": "generated-typescript-repository-dashboard-contract-metadata",
+      "artifactId": "generated-typescript-repository-dashboard-contract",
       "artifactPath": "src/CommandCenter.UI/src/contracts/generated/repository-dashboard.generated.ts",
-      "artifactKind": "generated-typescript-contract-metadata",
-      "artifactSha256": "5765854E9EF7E370E02CE55510A8B4F61FC3171AB133104034EFB26161BD8175"
+      "artifactKind": "generated-typescript-contract",
+      "artifactSha256": "8A6BDF98A419C1884C15DBE7F9856B3BAB3851483215EF2BDE32DD24CD6450F4"
     }
   ]
 }

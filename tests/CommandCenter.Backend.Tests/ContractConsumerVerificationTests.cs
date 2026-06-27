@@ -80,6 +80,21 @@ public sealed class ContractConsumerVerificationTests
     }
 
     [Fact]
+    public void RepositoryDashboardGeneratedTypeScriptAliasMatchesGoldenFixture()
+    {
+        JsonElement backendDashboardItem = ReadRepositoryDashboardGoldenFixture()[0];
+        TypeScriptContractShapeProvider typeScriptShapes = ReadTypeScriptContractShapes();
+        ContractConsumerVerifier verifier = new(new ConsumerContractVerifierSpec(
+            "Generated TypeScript RepositoryDashboardGeneratedProjection",
+            "generated compile-time consumer",
+            typeScriptShapes.GetShape("RepositoryDashboardGeneratedProjection")));
+
+        ConsumerContractDrift[] drifts = verifier.Compare("$[]", backendDashboardItem).ToArray();
+
+        Assert.Empty(drifts);
+    }
+
+    [Fact]
     public void RepositoryDashboardDevTauriMockMatchesGoldenFixture()
     {
         JsonElement backendDashboardItem = ReadRepositoryDashboardGoldenFixture()[0];
@@ -249,10 +264,13 @@ public sealed class ContractConsumerVerificationTests
 
     private static TypeScriptContractShapeProvider ReadTypeScriptContractShapes()
     {
-        DirectoryInfo typesDirectory = FindRepositoryRoot()
+        DirectoryInfo repositoryRoot = FindRepositoryRoot();
+        DirectoryInfo typesDirectory = repositoryRoot
             .CombineDirectory("src", "CommandCenter.UI", "src", "types");
+        DirectoryInfo generatedContractsDirectory = repositoryRoot
+            .CombineDirectory("src", "CommandCenter.UI", "src", "contracts", "generated");
 
-        return TypeScriptContractShapeProvider.Parse(typesDirectory);
+        return TypeScriptContractShapeProvider.Parse([typesDirectory, generatedContractsDirectory]);
     }
 
     private static DevTauriMockShapeProvider ReadDevTauriMockShapes(TypeScriptContractShapeProvider typeScriptShapes)

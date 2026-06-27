@@ -244,12 +244,20 @@ internal sealed class TypeScriptContractShapeProvider(IReadOnlyDictionary<string
 {
     public static TypeScriptContractShapeProvider Parse(DirectoryInfo typesDirectory)
     {
+        return Parse([typesDirectory]);
+    }
+
+    public static TypeScriptContractShapeProvider Parse(IEnumerable<DirectoryInfo> typeDirectories)
+    {
         Dictionary<string, TypeScriptTypeDefinition> types = new(StringComparer.Ordinal);
-        foreach (FileInfo file in typesDirectory.EnumerateFiles("*.ts"))
+        foreach (DirectoryInfo typesDirectory in typeDirectories)
         {
-            foreach (TypeScriptTypeDefinition definition in ReadTypeDefinitions(File.ReadAllText(file.FullName)))
+            foreach (FileInfo file in typesDirectory.EnumerateFiles("*.ts"))
             {
-                types.Add(definition.Name, definition);
+                foreach (TypeScriptTypeDefinition definition in ReadTypeDefinitions(File.ReadAllText(file.FullName)))
+                {
+                    types.Add(definition.Name, definition);
+                }
             }
         }
 
@@ -323,6 +331,11 @@ internal sealed class TypeScriptContractShapeProvider(IReadOnlyDictionary<string
         if (typeExpression == "boolean")
         {
             return ConsumerContractShape.Primitive(ConsumerContractPrimitiveKind.Boolean);
+        }
+
+        if (typeExpression == "null")
+        {
+            return ConsumerContractShape.Any().AsNullable();
         }
 
         if (typeExpression == "unknown" || typeExpression == "Record<string, unknown>")
