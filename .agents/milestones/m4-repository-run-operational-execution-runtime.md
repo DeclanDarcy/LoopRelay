@@ -1,68 +1,31 @@
-# Phase 4 - Repository Run Boundary and Operational Execution Runtime
+# Phase 4 - Execute Plan and Operational Turns
 
-Goal: stop treating execution as a disconnected provider invocation and introduce the narrowest durable coordination object that can own execution progress, iteration, journal, and lifecycle. The initial implementation should model this as Repository Run, while preserving the option to collapse it into Repository Runtime if an independent run lifecycle proves unnecessary.
+Goal: implement Execute Plan exactly as the bridge from planning into operational execution.
 
 ## Implementation
 
-- [ ] Add an explicit architecture decision checkpoint for Repository Run before broad adoption:
-  - why it needs a distinct identity from Repository Runtime
-  - what lifecycle it owns independently
-  - which durable records it owns
-  - what would collapse into Repository Runtime if the boundary is not justified
-  - which contracts and migration path would preserve external behavior if it collapses
-- [ ] Add Repository Run models under `CommandCenter.RepositoryRuntime`:
-  - run id
-  - repository id
-  - lifecycle
-  - current phase
-  - iteration
-  - current owner
-  - current operational session id
-  - current handoff
-  - execution metadata
-  - run journal
-- [ ] Run lifecycle states:
-  - `Created`
-  - `Preparing`
-  - `Executing`
-  - `Waiting`
-  - `Completed`
-  - `Cancelled`
-  - `Failed`
-- [ ] Add append-only run journal persistence with plan reference, handoff references, execution metadata, lifecycle events, turn events, and milestone/progress records.
-- [ ] Route Start Execution through:
-  - endpoint
-  - Repository Runtime
-  - Repository Run
-  - Execution
-  - generated `StartExecution` prompt rendering
-  - Agent Runtime operational session
-- [ ] Route continued execution through generated `ContinueExecution` prompt rendering after the latest handoff, decisions, and operational context are assembled.
-- [ ] Execution remains the authority for context building, Git, operational prompt inputs, provider interaction, handoffs, commit, and push. `CommandCenter.Core.Prompts` remains the authority for prompt text.
-- [ ] Existing execution prompt builders become adapters over `StartExecution.Render(...)` and `ContinueExecution.Render(...)`.
-- [ ] Repository Run owns sequencing, iteration, lifecycle, current phase, and durable progress only if those responsibilities remain distinct from Repository Runtime coordination.
-- [ ] Persist prompt provenance in the run journal for every operational turn:
-  - `StartExecution` or `ContinueExecution`
-  - generated type
-  - `SourceHash`
-  - operational context artifact identity
-  - plan, handoff, and decision input identities
-  - produced handoff or execution artifact identity
-- [ ] Align execution streams with Repository Run events while preserving existing SSE/resource behavior.
-- [ ] Connect repository lifecycle transitions:
-  - `PlanReady` -> `ExecutingPlan`
-  - `ExecutingPlan` -> `Completed`
-  - failure and cancellation states remain explicit and recoverable.
-- [ ] Add run recovery from journal and execution records. Live processes are never recovered.
-- [ ] Add generated contracts for repository run, run lifecycle, run journal, execution readiness, execution metadata, prompt provenance, and stream events.
+- [ ] Close and dispose the held-open planning process.
+- [ ] Read `.agents/plan.md`.
+- [ ] Copy plan text to `.agents/operational_context.md`.
+- [ ] Store plan text in memory cache under `{repositoryId}:Plan` for the active run.
+- [ ] Run `ExtractMilestones.Text` as an Operational, ExtraHigh, one-shot Codex turn.
+- [ ] Stream milestone extraction output through the execution stream.
+- [ ] Verify milestone files exist under `.agents/milestones/m*.md` as produced by Codex.
+- [ ] Commit and push the planning/milestone artifacts using the existing Git services.
+- [ ] Set repository lifecycle to `ExecutingPlan`.
+- [ ] Run `StartExecution.Render(plan)` as an Operational, Medium, one-shot Codex turn.
+- [ ] Stream start-execution output through the execution stream.
+- [ ] On completion, verify `.agents/handoff.md` exists.
+- [ ] Read `.agents/handoff.md` into orchestrator state.
+- [ ] Move `.agents/handoff.md` to `.agents/handoffs/handoff.0001.md`.
+- [ ] Use a run-scoped monotonic four-digit counter for handoff rotation.
+- [ ] Do not transition to the existing `AwaitingAcceptance` gate for this flow; the human gate is the Decision Submit step.
+- [ ] Record prompt provenance for `ExtractMilestones` and `StartExecution`.
 
 ## Certification
 
-- [ ] One active run or active runtime conversation per repository is enforced, depending on the accepted Repository Run boundary.
-- [ ] Execution starts and advances through Repository Runtime.
-- [ ] Existing execution semantics remain intact.
-- [ ] Handoffs become run artifacts with provenance.
-- [ ] Operational turns use `StartExecution` for the first execution turn and `ContinueExecution` for subsequent turns.
-- [ ] No operational execution runtime path owns literal canonical prompt text.
-- [ ] Run recovery restores durable run state and projections.
-- [ ] Repository Run has explicit justification, or the implementation records a governed collapse plan into Repository Runtime before downstream phases depend on it.
+- [ ] Execute Plan performs planning-process closure, operational context copy, memory cache write, milestone extraction, commit/push, start execution, and first handoff rotation in order.
+- [ ] Start execution uses `StartExecution.Render(plan)`, not a literal or legacy prompt builder.
+- [ ] Handoff rotation produces `handoff.0001.md` and removes or replaces the live `.agents/handoff.md` according to the run-scoped protocol.
+- [ ] Failure at each multi-write boundary is recoverable without corrupting plan, operational context, handoff history, or Git state.
+- [ ] Tests cover missing plan, missing handoff, failed milestone extraction, failed commit/push, and stream terminal states.

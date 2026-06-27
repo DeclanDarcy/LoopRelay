@@ -1,77 +1,35 @@
 # Phase 0 - Runtime Foundation
 
-Goal: establish permanent runtime boundaries without changing observable product behavior.
+Goal: ratify the revised session-role invariant, extract shared process infrastructure, and establish generated prompt authority before product behavior changes.
 
 ## Implementation
 
 - [x] Add `src/CommandCenter.Agents` to the solution.
-- [ ] Move role-agnostic process abstractions and implementations from `CommandCenter.Execution` into `CommandCenter.Agents`:
-  - [x] `IProcessRunner`
-  - [x] `ProcessRunner`
-  - [x] process run/start result models
-  - [x] Codex executable resolution reviewed and intentionally kept in Execution because it returns Execution-owned provider models and structured provider errors.
-  - [x] `IAgentProcess`
-  - [x] provider/process lifecycle primitives beyond the initial process handle
-  - [x] stream/event primitives that are not execution-specific
-- [ ] Keep operational concepts in `CommandCenter.Execution`: Git, execution context, handoff, operational prompt inputs, execution session state, commit, push, and operational evidence. Execution must not own canonical prompt text.
-- [ ] Introduce shared runtime primitives:
-  - [x] `SessionIdentity`
-  - [x] `SessionRole`
-  - [x] `AgentSessionSpec`
-  - [x] `SandboxProfile`
-  - [x] `EffortProfile`
-  - [x] `AgentProcessState`
-  - [x] `AgentTurnState`
-- [ ] Add generated prompt infrastructure under `CommandCenter.Core.Prompts` using `Lib.Prompts`:
-  - [ ] Wire `Lib.Prompts` as an analyzer-only build dependency for `CommandCenter.Core`.
-  - [ ] Treat `src/CommandCenter.Core/Prompts/*.prompt` as the authored source of truth.
-  - [ ] Generate static prompt classes with `Template`, `SourceHash`, and `Render(...)`.
-  - [ ] Fail builds on malformed prompt placeholders through `PROMPT001`-`PROMPT004`.
-  - [ ] Certify prompt discovery so `PROMPT100` cannot be ignored accidentally.
-- [ ] Establish the canonical prompt catalog:
-  - [ ] Planning: `WritePlanAgainstCodebase`, `WritePlanForNewCodebase`, `RevisePlan`, `ExtractMilestones`.
-  - [ ] Operational execution: `StartExecution`, `ContinueExecution`.
-  - [ ] Decision sessions: `StartDecisionSession`, `StartDecisionSessionFromTransfer`, `GetNextDecisions`.
-  - [ ] Continuity: `ProduceOperationalDelta`, `UpdateOperationalContext`.
-- [ ] Add prompt selection and rendering adapters that call generated prompt classes from domain-owned inputs:
-  - [ ] Planning selects initial-plan, revision, and milestone-extraction prompts.
-  - [ ] Execution selects start and continuation prompts.
-  - [ ] DecisionSessions select start, transfer-start, and next-decision prompts.
-  - [ ] Continuity selects operational-delta and context-update prompts.
-- [ ] Existing literal prompt composition in Execution, Planning, DecisionSessions, Workflow, Continuity, Backend, UI, tests, and compatibility paths must become compatibility layers over generated prompt output or be removed.
-- [ ] Add prompt provenance models used by future runtime turns:
-  - prompt name
-  - generated type
-  - `SourceHash`
-  - session role
-  - workflow phase
-  - input artifact identities
-  - output artifact identities
-- [ ] Add initial repository lifecycle models in Core or a new runtime-neutral model package:
-  - `Idle`
-  - `PlanAuthoring`
-  - `PlanReady`
-  - `ExecutingPlan`
-  - `Completed`
-- [ ] Add first-class information records for Planning Intent, Plan, Plan Revision, and Repository Run Identity without changing existing markdown persistence.
-- [ ] Add architecture tests that prevent:
-  - `CommandCenter.Agents` referencing Execution, Decisions, Workflow, Continuity, Reasoning, Middle, Backend, or UI.
-  - DecisionSessions referencing operational Execution orchestration.
-  - Runtime objects owning domain semantic decisions.
-  - Runtime objects selecting or composing canonical prompt text.
-  - Canonical prompt text existing outside `src/CommandCenter.Core/Prompts/*.prompt` and generated `CommandCenter.Core.Prompts` output.
-  - UI-local semantic inference for runtime lifecycle, health, eligibility, recovery, and certification.
-- [ ] Harden persistence with a shared atomic JSON file writer used by application configuration, artifact store write paths where appropriate, execution session store, decision session repository, workflow repository, and continuity proposal store.
-- [ ] Centralize existing execution and continuity state transition validation before new runtime state is added.
+- [x] Preserve the already-started extraction of role-agnostic process primitives into `CommandCenter.Agents`, including `IProcessRunner`, `ProcessRunner`, process run/start result models, `IAgentProcess`, stream/event primitives, `SessionIdentity`, `SessionRole`, `AgentSessionSpec`, `SandboxProfile`, `EffortProfile`, `AgentProcessState`, and `AgentTurnState`.
+- [ ] Finish the extraction so `CommandCenter.Agents` owns only process spawning, streaming, lifecycle, session identity, role, sandbox, effort, working directory, and session handles.
+- [ ] Keep operational concepts in `CommandCenter.Execution`: Git, code mutation, commit, push, handoff creation, execution context, operational prompt input shaping, execution evidence, and execution session state.
+- [ ] Record the governing invariant: Operational Session and Decision Session are distinct roles; both are backed by real Codex processes; both use `CommandCenter.Agents`; DecisionSessions must not reference Execution operational orchestration.
+- [ ] Add or complete `Lib.Prompts` wiring for `CommandCenter.Core` as an analyzer-only dependency.
+- [ ] Treat `src/CommandCenter.Core/Prompts/*.prompt` as the only authored prompt source.
+- [ ] Certify the canonical prompt catalog:
+  - [ ] `WritePlanForNewCodebase.Text`
+  - [ ] `WritePlanAgainstCodebase.Text`
+  - [ ] `ExtractMilestones.Text`
+  - [ ] `ProduceOperationalDelta.Text`
+  - [ ] `UpdateOperationalContext.Text`
+  - [ ] `RevisePlan.Render(feedback)`
+  - [ ] `StartExecution.Render(plan)`
+  - [ ] `GetNextDecisions.Render(handoff)`
+  - [ ] `StartDecisionSession.Render(operationalContext)`
+  - [ ] `StartDecisionSessionFromTransfer.Render(operationalContext)`
+  - [ ] `ContinueExecution.Render(plan, handoff, decisions)`
+- [ ] Add prompt provenance models for prompt name, generated type, `SourceHash`, session role, workflow phase, input artifacts, and output artifacts.
+- [ ] Add architecture tests preventing prompt literals outside `.prompt` files/generated output and preventing `CommandCenter.Agents` from depending on Execution, DecisionSessions, Decisions, Workflow, Continuity, Backend, UI, or shell projects.
 
 ## Certification
 
-- [ ] Existing backend and UI behavior remains unchanged.
-- [ ] Execution still works through the existing public APIs.
-- [ ] DecisionSessions still compile without referencing operational Execution orchestration.
-- [ ] Architecture governance tests cover Agent Runtime boundaries, prompt authority, repository lifecycle ownership, and information authority.
-- [ ] Generated prompt classes compile and expose stable `Template`, `SourceHash`, and `Render(...)` APIs for every canonical prompt.
-- [ ] Prompt selection tests prove each session role and workflow phase uses the expected generated prompt.
-- [ ] Prompt provenance is captured for rendered prompts before any persistent agent runtime depends on it.
-- [ ] No literal canonical prompt strings remain outside authored `.prompt` files and generated code.
-- [ ] Contract fixtures and generated artifact freshness remain current.
+- [ ] Existing execution behavior remains unchanged through compatibility adapters.
+- [ ] Generated prompt classes compile and expose the expected signatures.
+- [ ] No runtime service selects or composes canonical prompt text outside generated prompt renderers.
+- [ ] DecisionSessions and Execution remain separate role/domain concepts.
+- [ ] Backend tests and architecture governance tests pass.

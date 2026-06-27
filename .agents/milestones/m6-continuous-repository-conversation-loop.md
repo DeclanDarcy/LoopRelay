@@ -1,51 +1,25 @@
-# Phase 6 - Continuous Repository Conversation Loop
+# Phase 6 - Decision Submit and Continuation Loop
 
-Goal: compose operational turns, decision turns, and human review into one continuous governed repository conversation. If Repository Run remains independent, it owns the conversation progression; if Repository Run collapses into Repository Runtime, the same conversation model moves intact under Repository Runtime.
+Goal: complete the repeated Submit -> ContinueExecution -> next handoff -> next decisions loop.
 
 ## Implementation
 
-- [ ] Add a unified turn model:
-  - `OperationalTurn`
-  - `DecisionTurn`
-  - `HumanReviewTurn`
-- [ ] Every turn has:
-  - identity
-  - owner
-  - start timestamp
-  - stream references
-  - completion condition
-  - transition result
-  - diagnostics
-- [ ] Add conversation state to the accepted progression owner, initially Repository Run:
-  - current turn
-  - previous turn
-  - iteration
-  - current owner
-  - conversation history
-  - checkpoint references
-- [ ] Implement deterministic transitions:
-  - operational execution starts with `StartExecution` or continues with `ContinueExecution`
-  - operational execution produces handoff
-  - handoff starts decision turn through `GetNextDecisions`
-  - decision output or structured proposal starts human review after Decisions-domain validation
-  - human submission advances continuation
-  - continuation starts next operational turn or completes the run
-- [ ] Record prompt provenance at every agent-owned turn in the conversation history:
-  - operational turn prompt name and `SourceHash`
-  - decision turn prompt name and `SourceHash`
-  - continuity prompt name and `SourceHash` when understanding evolves
-  - input artifact identities and produced artifact identities
-- [ ] Use `CommandCenter.Workflow` state machine and continuation services as the semantic workflow/progression authority. Repository Runtime coordinates only.
-- [ ] Persist conversation progress and checkpoints in the run journal.
-- [ ] Add continuous conversation stream that merges operational, decision, human review, lifecycle, and health events into one repository-centric timeline.
-- [ ] Add UI conversation timeline that presents planning, execution, decisions, and continuation as one flow while preserving turn identity and authority.
-- [ ] Add generated contracts for conversation state, turns, iteration, lifecycle, prompt provenance, stream events, and timeline projections.
+- [ ] Add `POST /api/repositories/{id}/decision/submit` with `{ decisions }`.
+- [ ] Persist edited decisions to `.agents/decisions/decisions.0001.md`, then `.0002.md`, using the run-scoped iteration counter.
+- [ ] Run `ContinueExecution.Render(MemoryCache.Get("{repositoryId}:Plan"), handoff, decisions)` as an Operational, Medium, one-shot Codex turn.
+- [ ] Stream continuation output through the execution stream.
+- [ ] On completion, verify `.agents/handoff.md`.
+- [ ] Read the new handoff into orchestrator state.
+- [ ] Move the handoff to `.agents/handoffs/handoff.0002.md`, then `.0003.md`, and so on.
+- [ ] Record prompt provenance for every `ContinueExecution` turn.
+- [ ] Return the UI to decision streaming after continuation and router evaluation.
+- [ ] Keep the only required human gate at decision review/submit.
+- [ ] Add a conversation projection that is specific to this flow: planning, operational output, decision output, editable decision, submit, continuation, and next decision. Do not broaden this into a repository knowledge platform.
 
 ## Certification
 
-- [ ] Runs advance through repeated operational/decision/human turns without hidden transitions.
-- [ ] The conversation loop never constructs prompt text outside generated prompt renderers.
-- [ ] Timeline and recovery projections preserve which generated prompt shaped each agent turn.
-- [ ] Human governance happens only at decision review/submit boundaries.
-- [ ] Recovery resumes from durable conversation state.
-- [ ] The UI presents one continuous repository conversation, not fragmented feature streams.
+- [ ] Submitted decisions are persisted before continuation starts.
+- [ ] Continuation uses the cached plan, latest handoff, and submitted decisions.
+- [ ] Each operational continuation produces and rotates the next handoff.
+- [ ] The UI can complete at least two decision/continuation iterations without leaving the Plan Authoring screen.
+- [ ] Recovery can identify the latest persisted decision and handoff sequence.

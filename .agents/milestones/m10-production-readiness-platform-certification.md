@@ -1,76 +1,35 @@
-# Phase 10 - Production Readiness and Platform Certification
+# Phase 10 - Hardening and Certification
 
-Goal: harden the complete platform for daily use.
+Goal: burn down the concrete risks called out by the design before enabling the flow by default.
 
 ## Implementation
 
-- [ ] Certify the full repository lifecycle:
-  - register/select repository
-  - plan
-  - execute
-  - decide
-  - review
-  - continue
-  - transfer/recover
-  - complete
-  - inspect historical knowledge
-- [ ] Harden runtime reliability:
-  - process stability
-  - resource cleanup
-  - per-repository isolation
-  - memory pressure behavior
-  - cancellation and shutdown
-  - long-lived sessions
-  - deterministic failure recovery
-- [ ] Complete ecosystem integration:
-  - Git
-  - filesystem
-  - Codex
-  - Tauri
-  - IDE-adjacent workflows
-  - repository discovery
-  - prompt generation through `Lib.Prompts`
-  - generated prompt provenance
-- [ ] Add production observability:
-  - repository activity
-  - conversation health
-  - runtime health
-  - session health
-  - prompt source-hash compatibility
-  - execution progress
-  - decision progress
-  - understanding evolution
-  - failure and recovery state
-- [ ] Add operational tooling:
-  - runtime diagnostics
-  - repository diagnostics
-  - session diagnostics
-  - recovery controls
-  - health dashboards
-  - export/support bundles
-- [ ] Complete documentation:
-  - architecture guide
-  - runtime guide
-  - prompt architecture guide
-  - information guide
-  - protocol guide
-  - user guide
-  - operator guide
-  - recovery guide
-  - extension guide
-- [ ] Complete release-path certification, including packaging and shell sidecar lifecycle.
-- [ ] Complete prompt release-path certification:
-  - `Lib.Prompts` analyzer wiring works from package or governed local project reference
-  - every canonical `.prompt` file is discovered during build
-  - generated `Template`, `SourceHash`, and `Render(...)` APIs are stable for consumers
-  - prompt source-hash drift is surfaced as diagnostics for historical artifacts
-  - no runtime path contains duplicated canonical prompt text
+- [ ] Validate the exact Codex effort config values for ExtraHigh and Medium.
+- [ ] Validate the strictest practical Decision sandbox: read-only, approvals never, and no MCP/tools where supported.
+- [ ] Validate persistent process behavior under long output, idle periods, repeated turns, cancellation, failed prompts, and application shutdown.
+- [ ] Add feature flags for:
+  - [ ] persistent planning process;
+  - [ ] persistent Decision process reuse;
+  - [ ] transfer-only Decision fallback;
+  - [ ] automatic commit/push after Execute Plan.
+- [ ] Decide and document whether automatic commit/push needs an explicit user confirmation gate before default enablement.
+- [ ] Add recovery tests around multi-write windows:
+  - [ ] specs written but plan missing;
+  - [ ] plan exists but milestones missing;
+  - [ ] operational context copied but commit failed;
+  - [ ] handoff exists but rotation failed;
+  - [ ] decisions persisted but continuation failed;
+  - [ ] operational delta exists but context update failed.
+- [ ] Add process leak detection and cleanup on repository deselection, cancellation, failure, and shutdown.
+- [ ] Keep deterministic decision services and token estimator as tested fallback behavior.
+- [ ] Add stress tests for repeated decision loops and transfer cycles.
 
 ## Certification
 
-- [ ] Full backend, frontend, E2E, shell, contract, architecture, stress, recovery, scalability, and governance suites pass.
-- [ ] Prompt generation, prompt selection, prompt provenance, source-hash drift, and no-literal-prompt governance suites pass.
-- [ ] Failure tests cover restart, session loss, transfer interruption, corrupted/partial context, repository reload, cancellation, and shutdown.
-- [ ] Runtime failures never corrupt repository understanding.
-- [ ] Prompt generation or prompt-source mismatch failures never corrupt plans, runs, decisions, operational context, or Repository Understanding.
-- [ ] Operational documentation matches implemented behavior and recovery paths.
+- [ ] Full backend tests pass.
+- [ ] Relevant UI build, lint, unit, and E2E tests pass.
+- [ ] Shell tests pass if shell or sidecar behavior changed.
+- [ ] Contract and architecture suites pass.
+- [ ] No failed or cancelled run leaves orphaned Codex processes.
+- [ ] No failed or cancelled run corrupts repository artifacts.
+- [ ] Feature flags and fallback paths are documented and tested.

@@ -1,82 +1,33 @@
-# Phase 12 - Adaptive Engineering Intelligence
+# Phase 12 - Deferred Non-Goals and Final Definition of Done
 
-Goal: add governed, evidence-backed intelligence that identifies opportunities, synthesizes knowledge, and recommends improvements without autonomous repository mutation.
+Goal: close the implementation against the original design and explicitly defer broader product expansion.
 
-## Implementation
+## Non-Goals For This Plan
 
-- [ ] Add `CommandCenter.Intelligence` or an equivalent bounded context once Repository Understanding and Knowledge Graph are certified.
-- [ ] Add first-class intelligence information:
-  - Opportunity
-  - Recommendation
-  - Trend
-  - Assessment
-  - Pattern
-  - Repository Insight
-  - Knowledge Synthesis
-- [ ] Add opportunity discovery from authoritative information:
-  - architectural inconsistencies
-  - repeated friction
-  - decision churn
-  - historical instability
-  - repository hotspots
-  - knowledge gaps
-  - planning deficiencies
-  - prompt effectiveness gaps
-  - documentation gaps
-  - governance gaps
-- [ ] Add knowledge synthesis:
-  - patterns
-  - lessons
-  - successful strategies
-  - repeated failures
-  - architecture evolution
-  - engineering practices
-- [ ] Add recommendation generation:
-  - architecture improvements
-  - planning improvements
-  - execution improvements
-  - prompt catalog improvements
-  - knowledge improvements
-  - repository organization
-  - documentation improvements
-  - governance improvements
-- [ ] Add trend analysis:
-  - architecture growth
-  - knowledge growth
-  - decision quality
-  - execution quality
-  - prompt outcome quality by prompt name and `SourceHash`
-  - understanding maturity
-  - repository stability
-  - engineering velocity
-- [ ] Add continuous repository assessment:
-  - current direction
-  - architectural health
-  - knowledge quality
-  - planning quality
-  - decision quality
-  - execution quality
-  - repository maturity
-- [ ] Add adaptive planning inputs that improve planning with repository history, decision history, execution outcomes, and engineering knowledge while preserving human planning authority.
-- [ ] Add prompt-informed intelligence only as observation and recommendation:
-  - compare outcomes by prompt identity and source hash
-  - identify prompts correlated with weak plans, unclear handoffs, decision churn, or context degradation
-  - recommend prompt changes as human-reviewed proposals
-  - never mutate `.prompt` files, runtime selection rules, plans, decisions, executions, or Repository Understanding autonomously
-- [ ] Add repository intelligence workspace:
-  - opportunities
-  - recommendations
-  - trends
-  - knowledge synthesis
-  - assessment
-  - future outlook
-- [ ] Add platform-wide learning only with explicit repository isolation, privacy boundaries, evidence lineage, and human-governed acceptance.
+- [ ] Do not build a Repository Knowledge platform as part of this flow.
+- [ ] Do not add adaptive engineering intelligence, opportunity discovery, recommendation generation, or platform-wide learning.
+- [ ] Do not add knowledge graph, lineage explorer, repository query surface, or trend analysis unless separately approved after this design is complete.
+- [ ] Do not let the UI infer lifecycle legality, decision validity, router behavior, prompt selection, or artifact authority.
+- [ ] Do not let prompts become semantic authority; they remain generated communication mechanisms.
+- [ ] Do not let the orchestrator become a domain service for Execution, Decisions, Continuity, Git, Workflow, or contracts.
 
-## Certification
+## Final Acceptance
 
-- [ ] Intelligence remains observational.
-- [ ] No intelligence service mutates repositories, decisions, plans, executions, operational context, or governance state autonomously.
-- [ ] No intelligence service mutates prompt templates or prompt selection rules autonomously.
-- [ ] Every opportunity and recommendation has evidence lineage.
-- [ ] Repository isolation is preserved.
-- [ ] Recommendation quality, trend accuracy, authority boundaries, contracts, and regression behavior are tested.
+- [ ] From a repository with no `.agents/plan.md`, Plan Authoring is shown.
+- [ ] Roadmap and Specs are written to `.agents/specs`.
+- [ ] Write Plan uses the correct generated prompt and creates `.agents/plan.md`.
+- [ ] Revise Plan uses `RevisePlan.Render(feedback)` in the same planning process.
+- [ ] Execute Plan closes planning, copies operational context, caches plan text, extracts milestones, commits/pushes, sets `ExecutingPlan`, starts execution, and rotates `handoff.0001.md`.
+- [ ] Decision session starts in a separate zero-permission Codex process.
+- [ ] `GetNextDecisions.Render(handoff)` streams proposed decisions that become editable after completion.
+- [ ] Submit persists edited decisions and runs `ContinueExecution.Render(plan, handoff, decisions)`.
+- [ ] Each continuation produces and rotates the next handoff.
+- [ ] Router `Continue` reuses the warm Decision process.
+- [ ] Router `Transfer` writes operational delta, rewrites operational context, starts a fresh Decision process, and resumes decision streaming.
+- [ ] All prompt text comes from generated `CommandCenter.Core.Prompts` classes.
+- [ ] Execution and DecisionSessions reach Codex only through `CommandCenter.Agents`.
+- [ ] Full certification commands and relevant contract/governance suites pass.
+
+## Completion Statement
+
+The design is complete when the user can stay on one repository screen from initial roadmap/spec authoring through repeated decision-mediated execution turns, with persistent planning and decision Codex processes where required, faithful artifact writes under `.agents`, generated prompt provenance for every agent turn, and router-driven reuse or transfer of the active Decision process.

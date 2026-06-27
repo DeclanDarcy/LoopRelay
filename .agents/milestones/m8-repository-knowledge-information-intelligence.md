@@ -1,74 +1,36 @@
-# Phase 8 - Repository Knowledge and Information Intelligence
+# Phase 8 - Contracts, Artifacts, and Provenance
 
-Goal: make Repository Knowledge first-class. Repository Knowledge is the broader durable body of repository information: Repository Understanding, history, evidence, knowledge graph, lineage, and queries. Repository Understanding remains the current, living view inside that knowledge body.
+Goal: harden the observable contracts and artifact semantics needed by the design. This is not a Repository Knowledge or adaptive intelligence milestone.
 
 ## Implementation
 
-- [ ] Establish Repository Knowledge as the named information layer:
-  - Repository Understanding: current living view
-  - Repository History: time-ordered evolution
-  - Repository Evidence: supporting artifacts and facts
-  - Knowledge Graph: relationships among durable information
-  - Information Lineage: provenance from intent through understanding
-  - Information Queries: governed exploration over authoritative facts
-  - Prompt Provenance: generated prompt identity, source hash, role, input artifacts, and output artifacts for agent-produced knowledge
-- [ ] Preserve the Phase 7 boundary: Repository Understanding is already canonical. This phase enriches the surrounding knowledge layer rather than reintroducing understanding as a new feature.
-- [ ] Promote durable information objects:
-  - Intent
-  - Plan
-  - Handoff
-  - Decision
-  - Operational Context
-  - Repository Understanding
-  - Evidence
-  - History Entry
-  - Knowledge Relationship
-  - Prompt Invocation
-- [ ] Treat Operational Context as the implementation artifact behind Repository Understanding.
-- [ ] Extend Reasoning Graph into a repository Knowledge Graph connecting intent, plans, runs, handoffs, decisions, understanding, artifacts, evidence, and history.
-- [ ] Connect prompt invocations into Repository Knowledge lineage:
-  - intent/spec artifacts to planning prompt to plan revision
-  - plan and operational context to execution prompt to handoff
-  - handoff to decision prompt to decision output/review
-  - decision session context to delta prompt to operational delta
-  - operational context plus delta to update prompt to Repository Understanding version
-- [ ] Add repository history as a continuous, queryable, repository-centric timeline:
-  - planning history
-  - execution history
-  - decision history
-  - understanding history
-  - transfer history
-  - knowledge evolution
-- [ ] Add end-to-end lineage:
-  - intent to plan
-  - plan to run
-  - run to handoff
-  - handoff to decision
-  - decision to understanding
-  - understanding to future decisions
-- [ ] Add information queries backed by authoritative information:
-  - why a decision was made
-  - how understanding changed
-  - what evidence supports a claim
-  - when a claim became true
-  - which assumptions remain
-  - which goals remain incomplete
-  - which prompt version shaped an agent-produced artifact
-  - whether a historical artifact was produced by a now-changed prompt source hash
-- [ ] Add information authority tests:
-  - Human owns intent and ratification.
-  - Planning runtime generates proposals and revisions but does not approve them.
-  - Decisions domain validates decisions.
-  - Continuity owns Repository Understanding.
-  - Reasoning owns Knowledge Graph semantics.
-- [ ] Add UI knowledge, history, evidence, lineage, and understanding-evolution explorers.
-- [ ] Add contracts for Repository Understanding, Knowledge Graph, Repository History, Information Lineage, Prompt Provenance, Information Query, and Evolution projections.
+- [ ] Add or update backend contract identities for:
+  - [ ] plan status;
+  - [ ] plan write/revise/execute commands;
+  - [ ] planning stream events;
+  - [ ] execution stream events used by this flow;
+  - [ ] decision stream events;
+  - [ ] decision submit;
+  - [ ] repository lifecycle state;
+  - [ ] prompt provenance records.
+- [ ] Generate or update TypeScript consumer types for the new contracts.
+- [ ] Add request-boundary tests for command payloads and structured errors.
+- [ ] Add stream contract tests for ordering, reconnect/replay behavior where supported, terminal events, and failure events.
+- [ ] Add artifact protocol tests for:
+  - [ ] `.agents/specs/roadmap.md`;
+  - [ ] `.agents/specs/s{n}.md`;
+  - [ ] `.agents/plan.md`;
+  - [ ] `.agents/operational_context.md`;
+  - [ ] `.agents/handoffs/handoff.000N.md`;
+  - [ ] `.agents/decisions/decisions.000N.md`;
+  - [ ] `.agents/operational_delta.md`.
+- [ ] Ensure every generated-prompt turn records prompt name, generated type, `SourceHash`, role, workflow phase, input artifact identities, and output artifact identities.
+- [ ] Keep decision output free text for the first implementation unless a canonical structured decision `.prompt` and contract are explicitly added.
+- [ ] Do not add knowledge graph, intelligence, query, or recommendation contracts in this phase.
 
 ## Certification
 
-- [ ] Repository Understanding is the primary representation of repository knowledge.
-- [ ] Repository Knowledge is the durable information layer that contains understanding, history, evidence, graph relationships, lineage, and queries.
-- [ ] Knowledge relationships are evidence-backed and queryable.
-- [ ] Information lineage is complete across planning, execution, decisions, and understanding.
-- [ ] Prompt provenance participates in lineage without making prompts semantic authority.
-- [ ] Repository intelligence explains current state without speculative conclusions.
+- [ ] Contract oracle, consumer verification, generated artifact freshness, generated pipeline, and request-boundary tests pass for touched contract families.
+- [ ] Artifact writes are durable and recoverable.
+- [ ] Prompt provenance is attached to planning, execution, decision, and transfer turns.
+- [ ] No UI type redefines backend-owned contract shapes.

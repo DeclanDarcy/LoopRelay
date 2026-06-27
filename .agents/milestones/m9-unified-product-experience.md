@@ -1,52 +1,26 @@
-# Phase 9 - Unified Product Experience
+# Phase 9 - Product Integration
 
-Goal: make the product a coherent projection of the certified Repository Knowledge architecture, so planning, execution, decisions, understanding, history, evidence, lineage, queries, and health feel like one repository experience.
+Goal: make the concrete Plan Authoring -> Execution -> Decision Loop feel like one repository workflow.
 
 ## Implementation
 
-- [ ] Promote repository lifecycle into primary navigation and workspace composition, but make Repository Knowledge the product's center and Repository Understanding the default living view.
-- [ ] Build a unified repository workspace that centers:
-  - current understanding
-  - repository knowledge
-  - current objective
-  - current plan
-  - current execution turn
-  - current decision review
-  - knowledge and evidence
-  - current health
-  - conversation timeline
-- [ ] Move diagnostics, reasoning internals, governance internals, continuity mechanics, contracts, and raw runtime health into secondary inspection surfaces.
-- [ ] Keep prompt template mechanics out of primary workflows while exposing prompt provenance in secondary diagnostics when it explains history, recovery, or compatibility.
-- [ ] Unify visible terminology:
-  - Repository
-  - Understanding
-  - Plan
-  - Execution
-  - Decision
-  - Knowledge
-  - History
-  - Health
-- [ ] Hide runtime/session/registry/provider/transfer terminology from primary workflows unless the user is inspecting diagnostics.
-- [ ] Hide prompt class names and source hashes from primary workflows unless the user is inspecting artifact lineage, provenance, or diagnostics.
-- [ ] Replace fragmented streams with one repository conversation timeline backed by typed backend projections.
-- [ ] Present operational context only as Repository Understanding in primary UI. Markdown and context mechanics remain implementation details.
-- [ ] Complete decision-first review surface:
-  - proposal
-  - evidence
-  - tradeoffs
-  - editable human revision
-  - submit
-  - history
-- [ ] Add knowledge, lineage, evidence, and understanding-evolution surfaces to the repository workspace without making them separate product silos.
-- [ ] Add provenance inspection that can show which generated prompt and `SourceHash` produced a plan revision, execution handoff, decision output, operational delta, or understanding update.
-- [ ] Add navigation and command palette flows that follow repository lifecycle and information needs, not project boundaries.
-- [ ] Add product contracts for repository lifecycle, conversation timeline, repository dashboard, navigation, repository understanding, knowledge, history, evidence, prompt provenance, and decision review.
+- [ ] Integrate `PlanAuthoringScreen` into the selected-repository workspace when `plan/status.planExists == false`.
+- [ ] Keep the same screen active through planning, revision, execution startup, decision review, submit, continuation, and next decision.
+- [ ] Add reusable stream views for planning, execution, and decision output while preserving distinct stream sources.
+- [ ] Show implementation diagnostics only in secondary details. Primary UI terminology is Repository, Plan, Execution, Decision, and Status.
+- [ ] Disable actions based on backend-owned state and local input completeness:
+  - [ ] Write Plan requires Roadmap text;
+  - [ ] Revise Plan requires Feedback text and an open planning session;
+  - [ ] Execute Plan requires verified `.agents/plan.md`;
+  - [ ] Submit requires editable decisions from a completed decision turn.
+- [ ] Add clipboard support for the plan Copy icon through Tauri clipboard or `navigator.clipboard`.
+- [ ] Present decision output as read-only while streaming and editable only after completion.
+- [ ] Keep prompt names, source hashes, session ids, and router mechanics out of the primary workflow unless shown in diagnostics.
+- [ ] Add E2E coverage for the full happy path with mocked or test-provider streams.
 
 ## Certification
 
-- [ ] Users can plan, execute, review decisions, continue, inspect understanding, inspect Repository Knowledge, and view history without leaving the repository workspace.
-- [ ] Runtime transitions are visible only as activity/health/progress, not implementation machinery.
-- [ ] Product surfaces render backend-owned information instead of reconstructing it in React.
-- [ ] Product surfaces never compose prompt text or infer prompt selection client-side.
-- [ ] UI characterization and E2E tests cover the complete repository lifecycle and the Repository Understanding-centered workspace.
-- [ ] Product terminology is consistent across components, empty states, buttons, headings, and diagnostics.
+- [ ] Users can author, revise, execute, review decisions, submit, and continue without navigating away from the workflow.
+- [ ] UI never composes prompt text or infers prompt selection.
+- [ ] UI handles stream failure, retry/reconnect if supported, cancelled turns, and missing artifacts.
+- [ ] Accessibility and layout checks cover the Roadmap/Specs editor, stream regions, editable decisions, and action buttons.

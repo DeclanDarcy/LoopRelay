@@ -1,59 +1,30 @@
 # Phase 1 - Persistent Agent Runtime
 
-Goal: make Codex-backed sessions interactive and reusable across multiple turns.
+Goal: make Codex-backed sessions reusable across multiple turns so planning revisions and decision reuse can run in a warm process.
 
 ## Implementation
 
-- [ ] Add `IAgentProcess` with operations for open, submit turn, stream output, observe turn completion, cancel, interrupt, dispose, and query health.
-- [ ] Add `IAgentRuntime` and an implementation that owns live process creation, stream subscription, prompt queueing, cancellation, interruption, disposal, and shutdown.
-- [ ] Add an `AgentSessionRegistry` keyed by `SessionIdentity`, with ownership, lookup, enumeration, removal, health, and disposal.
-- [ ] Add session stream support:
-  - turn start
-  - output
-  - diagnostics
-  - completion
-  - failure
-  - cancellation
-  - reconnect/replay metadata
-- [ ] Replace Execution's one-shot provider implementation with a compatibility adapter:
-  - open operational session
-  - submit one prompt
-  - stream output through existing monitoring
-  - dispose after completion
-  - preserve current API behavior
-- [ ] Improve process supervision:
-  - retain reader/exit tasks
-  - observe task failures
-  - replace fixed process-start delay with deterministic exit probing
-  - detect hung sessions, protocol violations, unexpected exits, cancellation, and timeout.
-- [ ] Add role-aware sandbox and effort handling to `AgentSessionSpec`.
-- [ ] Add prompt turn input support to Agent Runtime:
-  - rendered prompt text
-  - prompt name
-  - generated prompt type
-  - `SourceHash`
-  - session role
-  - workflow phase
-  - input artifact identities
-- [ ] Keep Agent Runtime prompt-neutral. It accepts rendered prompts and provenance, but never chooses templates, edits prompt text, formats domain payloads, or owns prompt semantics.
-- [ ] Add runtime diagnostics and metrics:
-  - session count
-  - prompt count
-  - prompt identities and source hashes by turn
-  - turn count
-  - lifetime
-  - current state
-  - failures
-  - cancellation/disposal reason
-- [ ] Add generated contracts and UI types for runtime status, session diagnostics, stream event payloads, prompt provenance, and turn completion where they cross backend boundaries.
+- [ ] Validate the Codex protocol that can support held-open interaction. Preferred route: Codex app-server, `codex proto`, or MCP/server session owned by `CommandCenter.Agents`.
+- [ ] Add `IAgentProcess` operations for open, `WritePromptAsync(text)`, per-turn stream subscription, turn completion, cancellation, interruption, health, and disposal.
+- [ ] Ensure persistent mode does not close stdin after the first prompt.
+- [ ] Add an `IAgentRuntime` implementation that owns process creation, prompt queueing, stream fan-out, turn state, cancellation, disposal, and shutdown.
+- [ ] Add an `AgentSessionRegistry` keyed by session id and repository id.
+- [ ] Support both lifetimes:
+  - [ ] one-shot process: prompt in, stream out, exit;
+  - [ ] held-open process: sequential prompts, per-turn completion, process retained.
+- [ ] Add role-aware sandbox and effort arguments to process launch:
+  - [ ] Operational: workspace-write, approvals off;
+  - [ ] Decision: read-only, approvals never, no MCP/tools where supported;
+  - [ ] ExtraHigh and Medium reasoning effort, with exact Codex values verified.
+- [ ] Preserve existing one-shot execution through a compatibility adapter over the new runtime.
+- [ ] Add transcript and token accounting hooks. Deterministic `(len + 3) / 4` estimates may remain as fallback until real accounting is available.
+- [ ] Document the governed fallback if persistence is infeasible: planning revision reruns one-shot with current plan plus feedback, and decision routing becomes transfer-only.
 
 ## Certification
 
-- [ ] Multiple prompts execute in the same live agent process.
-- [ ] Streaming continues across turns.
-- [ ] Existing one-shot execution remains behaviorally equivalent.
-- [ ] Session cleanup occurs on cancellation, failure, disposal, and application shutdown.
-- [ ] Concurrent sessions are isolated.
-- [ ] A persistent session can execute multiple generated-prompt turns while retaining distinct prompt provenance for each turn.
-- [ ] Agent Runtime tests prove prompts are opaque runtime inputs and no template selection happens inside the runtime layer.
-- [ ] Runtime tests cover long output, rapid prompts, cancellation, disposal, failure recovery, and registry ownership.
+- [ ] Two or more prompts can execute in the same live planning process.
+- [ ] Two or more decision prompts can execute in the same live Decision process.
+- [ ] Streaming emits ordered output and explicit turn completion for each prompt.
+- [ ] One-shot compatibility preserves existing provider behavior.
+- [ ] Session cleanup occurs on cancellation, failure, disposal, repository shutdown, and app shutdown.
+- [ ] Tests cover long output, rapid prompts, cancellation, unexpected exit, timeout, and concurrent repository isolation.

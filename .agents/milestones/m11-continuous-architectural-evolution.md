@@ -1,55 +1,32 @@
-# Phase 11 - Continuous Architectural Evolution
+# Phase 11 - Governance and Documentation
 
-Goal: make the platform safe to extend without foundational redesign.
+Goal: align architecture documentation, governance evidence, and rollback paths with the implemented design.
 
 ## Implementation
 
-- [ ] Add an explicit evolution framework for:
-  - architecture
-  - runtime
-  - protocol
-  - prompt catalog
-  - information
-  - capability
-  - product surface
-- [ ] Add capability lifecycle:
-  - proposal
-  - evaluation
-  - implementation
-  - certification
-  - integration
-  - retirement
-- [ ] Add extension boundaries for additional providers, runtimes, repository types, workflows, planning strategies, and reasoning strategies.
-- [ ] Add prompt evolution boundaries:
-  - new agent instructions require a new or revised canonical `.prompt` file
-  - changed prompt behavior requires source-hash impact review
-  - deprecated prompts require migration and historical-read compatibility
-  - runtime services may add selection rules but not inline prompt text
-- [ ] Add architectural drift detection:
-  - authority drift
-  - runtime drift
-  - protocol drift
-  - prompt drift
-  - information drift
-  - boundary erosion
-  - semantic duplication
-  - generated artifact bypass
-  - generated prompt bypass
-  - compatibility debt without retirement path
-- [ ] Add self-assessment services that observe, but never mutate:
-  - repository quality
-  - runtime quality
-  - knowledge quality
-  - understanding quality
-  - architecture quality
-  - operational quality
-- [ ] Strengthen governance so every architecture-affecting change maps to invariant, owner, evidence, mechanism, compatibility impact, rollback path, and baseline updates.
-- [ ] Strengthen prompt governance so every prompt-affecting change maps to prompt owner, generated type, source hash, consuming roles, input artifacts, output artifacts, compatibility impact, rollback path, and certification evidence.
+- [ ] Update architecture documentation for:
+  - [ ] `CommandCenter.Agents` as shared role-agnostic process runtime;
+  - [ ] Operational vs Decision session roles;
+  - [ ] generated prompt authority;
+  - [ ] repository-scoped orchestrator ownership;
+  - [ ] plan authoring lifecycle;
+  - [ ] handoff/decision artifact rotation;
+  - [ ] router reuse/transfer behavior.
+- [ ] Update contract documentation for all new endpoints, stream events, and structured errors.
+- [ ] Update prompt architecture documentation for the 11 canonical prompts and generated signatures.
+- [ ] Record governance evidence for the intentional divergence from current `HandoffService` behavior and `AwaitingAcceptance`.
+- [ ] Record rollback paths:
+  - [ ] disable Plan Authoring screen;
+  - [ ] disable persistent planning;
+  - [ ] disable Decision reuse and force transfer-only;
+  - [ ] disable automatic commit/push;
+  - [ ] return to existing execution/session endpoints.
+- [ ] Document compatibility impact for existing execution sessions, generated TypeScript artifacts, UI hooks, and tests.
+- [ ] Add or update architectural mechanism docs for prompt provenance and no-literal-prompt enforcement.
 
 ## Certification
 
-- [ ] Runtime, protocol, information, knowledge, and product models can evolve independently while preserving contracts.
-- [ ] Prompt catalog, prompt selection, and prompt provenance can evolve independently while preserving historical artifact readability.
-- [ ] New capabilities can be introduced through extension points, not structural rewrites.
-- [ ] Drift detection is continuously executable.
-- [ ] Human authority remains the gate for architectural and product evolution decisions.
+- [ ] Documentation matches implemented behavior.
+- [ ] Every architecture-affecting change has invariant, owner, evidence, compatibility impact, and rollback path.
+- [ ] Governance tests protect the new boundaries.
+- [ ] Known fallback behavior is explicit and does not masquerade as the full design.

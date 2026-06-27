@@ -1,60 +1,44 @@
-# Phase 3 - Planning Runtime
+# Phase 3 - Plan Authoring Workflow
 
-Goal: make planning a first-class, persistent, repository-scoped runtime conversation.
+Goal: implement the Write Plan and Revise Plan flow from the original design.
 
 ## Implementation
 
-- [ ] Introduce Planning Session models and persistence:
-  - session identity
-  - lifecycle
-  - conversation history
-  - current plan revision
-  - planning metadata
-  - artifacts consumed and produced
-- [ ] Add Planning Session coordination to Repository Runtime using a Planning session role, appropriate sandbox profile, and high reasoning effort profile.
-- [ ] Promote planning inputs into first-class information:
-  - Planning Intent
-  - Requirements Artifact
-  - Plan
-  - Plan Revision
-  - Planning Session
-  - Planning State
-- [ ] Preserve existing markdown artifacts and make them durable serialization, not UI-only documents.
-- [ ] Implement planning protocols:
-  - write initial plan from planning intent and requirements artifacts using `WritePlanForNewCodebase`
-  - write initial plan against an existing repository using `WritePlanAgainstCodebase`
-  - revise plan from human feedback using `RevisePlan`
-  - extract milestone files using `ExtractMilestones`
-  - preserve session context across revisions
-  - complete planning only when the user chooses
-- [ ] Preserve the intended plan-generation protocol:
-  - planning prompts read `.agents/specs` and roadmap inputs when present
-  - generated plans must be self-contained after source planning inputs are removed
-  - milestone extraction leaves `plan.md` milestone entries as relative `(See ./milestones/...)` pointers only
-  - `.agents/milestones/m*.md` files remain checkbox-trackable execution artifacts
-- [ ] Store prompt provenance on each plan revision and milestone extraction:
-  - prompt name
-  - generated type
-  - `SourceHash`
-  - planning input artifact identities
-  - produced plan or milestone artifact identities
-- [ ] Add planning streams with turn boundaries, replay, cancellation, reconnect, and completion.
-- [ ] Add backend planning endpoints through Repository Runtime commands.
-- [ ] Add UI planning workspace:
-  - requirements artifact editor
-  - plan viewer
-  - feedback editor
-  - live stream
-  - revision history
-  - readiness and Execute Plan action
-- [ ] Add generated contracts for planning lifecycle, session, commands, artifacts, prompt provenance, stream events, and plan revisions.
+- [ ] Add backend commands/endpoints:
+  - [ ] `POST /api/repositories/{id}/plan/write` with `{ roadmap, specs[], newCodebase }`;
+  - [ ] `POST /api/repositories/{id}/plan/revise` with `{ feedback }`;
+  - [ ] `GET /api/repositories/{id}/plan/stream`;
+  - [ ] `POST /api/repositories/{id}/plan/execute` as the handoff to Phase 4.
+- [ ] On Write Plan, persist:
+  - [ ] Roadmap -> `.agents/specs/roadmap.md`;
+  - [ ] each Spec -> `.agents/specs/s{index}.md`.
+- [ ] Open an Operational, ExtraHigh, held-open planning process.
+- [ ] Select the generated prompt:
+  - [ ] `WritePlanForNewCodebase.Text` when New Codebase is checked;
+  - [ ] `WritePlanAgainstCodebase.Text` when unchecked.
+- [ ] Stream the planning turn to the UI.
+- [ ] On turn completion, verify `.agents/plan.md` exists and render it.
+- [ ] Hold the planning process open for revisions.
+- [ ] On Revise Plan, submit `RevisePlan.Render(feedback)` to the same held-open planning process.
+- [ ] Record prompt provenance for initial plan and each revision.
+- [ ] Add `src/CommandCenter.UI/src/features/planning/PlanAuthoringScreen.tsx`.
+- [ ] Add UI controls:
+  - [ ] Roadmap textarea;
+  - [ ] unbounded Specs textareas plus Add Spec;
+  - [ ] New Codebase checkbox, default unchecked;
+  - [ ] Write Plan disabled until Roadmap has non-empty text;
+  - [ ] planning stream;
+  - [ ] rendered plan view;
+  - [ ] copy icon button with no text label;
+  - [ ] Feedback textarea;
+  - [ ] Revise Plan disabled until Feedback has non-empty text;
+  - [ ] Execute Plan button.
 
 ## Certification
 
-- [ ] A repository without an accepted plan enters Plan Authoring.
-- [ ] Planning can run indefinitely without triggering execution.
-- [ ] Plan revisions occur in the same persistent planning session.
-- [ ] Current plan and revision history are durable.
-- [ ] Plan and milestone artifacts are generated only through the canonical planning prompts or explicit human edits.
-- [ ] Prompt provenance is present for initial plans, revisions, and milestone extraction.
-- [ ] UI supports authoring, revision, cancellation, reload, and execution readiness.
+- [ ] A repository without `.agents/plan.md` enters Plan Authoring.
+- [ ] Roadmap/spec files are written before the initial planning prompt runs.
+- [ ] Plan revision reuses the warm planning process.
+- [ ] The UI does not compose prompt text or select prompt classes client-side.
+- [ ] Planning stream completion leads to a verified rendered plan.
+- [ ] Backend and UI tests cover write, revise, validation, stream completion, and missing-plan failure.
