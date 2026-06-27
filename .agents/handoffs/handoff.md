@@ -1,15 +1,14 @@
-# Handoff: After M0.4 Decision Governance Certification Slice 0057
+# Handoff: After M0.4 Decision Governance Acceptance Slice 0058
 
-Current milestone state: M0.4 is certified but not yet accepted or baselined.
+Current milestone state: M0.4 is accepted and baselined as a scoped Phase 0 architectural decision governance foundation. The next milestone is M1.1.
 
 New state from this slice:
 
-- Added `.agents/milestones/m0.4-decision-governance-certification-slice-0057.md`.
-- Marked the M0.4 certification report and exit criteria complete in `.agents/milestones/m0.4-decision-governance.md`.
-- Updated `docs/architectural-capabilities.md` to record scoped M0.4 certification.
-- Updated `docs/architectural-mechanisms.md` to record decision governance as certified with acceptance pending.
-- Updated `.agents/decisions/decisions.md` with the Slice 0057 evidence target only; no new decisions were added.
-- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0055.md`.
+- Added `.agents/milestones/m0.4-decision-governance-acceptance-baseline-slice-0058.md`.
+- Updated `docs/architectural-capabilities.md` to record M0.4 acceptance and baseline status.
+- Updated `docs/architectural-mechanisms.md` to record decision governance as accepted and baselined.
+- Updated `.agents/decisions/decisions.md` with Slice 0058 as an evidence target only; no new decisions were added.
+- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0056.md`.
 
 Verification:
 
@@ -19,10 +18,10 @@ Verification:
 
 High-leverage decisions currently relevant:
 
-- M0.4 certification is scoped to governance foundation readiness, not downstream acceptance or full enforcement breadth.
-- Compatibility and rollback governance are certified before broad migration starts, but compatibility derivation correctness, passive transport correctness, and retirement readiness remain later milestone claims.
-- Active governance artifact and evidence reachability guards are part of the certified foundation, but complete historical decision/evidence schema validation remains an accepted limitation.
+- M0.4 acceptance freezes governance as a Phase 0 foundation, not as complete architecture enforcement.
+- Future architecture-affecting work must satisfy decision, evidence, compatibility, regression, rollback, and durable documentation governance before acceptance.
+- Deferred governance depth remains intentional: historical corpus schema validation, automated decision quality review, compatibility correctness, passive transport, generated contracts, semantic authority, state ownership, controller/workspace architecture, runtime isolation, CI, and release-path certification belong to later milestones.
 
 Recommended next slice:
 
-- Add M0.4 acceptance and baseline closeout evidence that confirms downstream obligations, accepted limitations, rollback readiness, and durable documentation alignment; then move to M1.1 if no narrow acceptance blocker appears.
+- Start M1.1 with a canonical contract model inventory slice: define the durable contract identity/versioning model and map it against the existing M0.2 Oracle pilots before adding generation or broad consumer migration.

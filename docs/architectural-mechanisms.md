@@ -361,7 +361,7 @@ The invariant catalog is the canonical M0.3 mapping between architectural princi
 
 Introduced: Milestone 0.4.
 
-Status: certified as a Phase 0 architectural decision governance foundation with explicit enforcement limitations; baseline acceptance pending.
+Status: accepted and baselined as the Phase 0 architectural decision governance foundation with explicit enforcement limitations.
 
 Primary evidence:
 
@@ -376,6 +376,7 @@ Primary evidence:
 - `.agents/milestones/m0.4-authority-projection-watchlist-slice-0055.md`
 - `.agents/milestones/m0.4-compatibility-structure-governance-slice-0056.md`
 - `.agents/milestones/m0.4-decision-governance-certification-slice-0057.md`
+- `.agents/milestones/m0.4-decision-governance-acceptance-baseline-slice-0058.md`
 - `tests/CommandCenter.Backend.Tests/Architecture/ArchitecturalDecisionGovernanceTests.cs`
 
 Mechanism intent:
@@ -392,7 +393,8 @@ Mechanism intent:
 | Compatibility-structure governance guard | `ArchitecturalDecisionGovernanceTests.CompatibilityStructuresRemainGoverned` verifies `docs/compatibility-structure-governance.md` keeps compatibility fields, routes, commands, and mirrors classified with owner, consumers, replacement path, retirement condition, and reachable evidence; it also aligns bounded compatibility routes and shell compatibility structures with existing inventories. | This detects missing lifecycle metadata and stale route/shell compatibility inventory only. It does not prove compatibility correctness, derivation from authority, consumer migration completeness, or retirement readiness. |
 | Evidence package schema | `docs/architectural-evidence.md` defines required fields for evidence packages and evidence types. `ArchitecturalDecisionGovernanceTests.EvidenceModelDefinesPackageSchemaAndEvidenceTypes` verifies the schema and taxonomy remain present. | Individual evidence packages are not yet schema-validated mechanically. |
 | Decision record template | `.agents/decisions/decision-record-template.md` captures decision metadata, evidence, alternatives, compatibility impact, regression impact, rollback path, baseline updates, and follow-up. `ArchitecturalDecisionGovernanceTests.DecisionRecordTemplateCapturesGovernanceMetadata` verifies the template remains discoverable. | Active decision files are not yet required to conform to the template. |
-| Milestone certification review | `.agents/milestones/m0.4-decision-governance-certification-slice-0057.md` maps required outputs and exit criteria to current evidence, justified claims, unjustified claims, accepted limitations, verification, and rollback. | Certification is scoped to the governance foundation. Baseline acceptance remains a separate slice. |
+| Milestone certification review | `.agents/milestones/m0.4-decision-governance-certification-slice-0057.md` maps required outputs and exit criteria to current evidence, justified claims, unjustified claims, accepted limitations, verification, and rollback. | Certification is scoped to the governance foundation; later milestones remain responsible for deeper source-change detection and architecture-specific enforcement. |
+| Milestone acceptance baseline | `.agents/milestones/m0.4-decision-governance-acceptance-baseline-slice-0058.md` records formal acceptance of the scoped Phase 0 governance foundation and freezes the baseline with explicit deferrals. | Acceptance does not expand certified coverage beyond governance foundation readiness. Complete historical validation, automated decision quality review, compatibility correctness, passive transport, generated contracts, semantic authority restoration, state ownership, controller/workspace architecture, runtime isolation, CI enforcement, and release-path certification remain later work. |
 
 Governance rules:
 

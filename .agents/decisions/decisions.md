@@ -1,31 +1,37 @@
-# Decisions: 2026-06-27 M0.4 Acceptance Direction
+# Decisions: 2026-06-27 Phase 0 Completion and M1.1 Opening Boundary
 
-These decisions capture only newly authorized direction from the user response following M0.4 Decision Governance Certification Slice 0057.
+These decisions capture only newly authorized direction from the user response following M0.4 Decision Governance Acceptance Slice 0058.
 
 ## Authorized Decisions
 
-1. Accept M0.4 certification as complete.
-   - M0.4 is certified as a governance foundation, not as complete governance of the entire architecture.
-   - The certification boundary remains governance framework readiness rather than total governance coverage.
+1. Treat M0.4 as complete within its accepted scoped governance foundation boundary.
+   - M0.4 establishes governance for architectural evolution.
+   - M0.4 does not claim complete governance automation, full historical validation, compatibility correctness, passive transport, generated contracts, semantic authority restoration, state ownership, controller/workspace architecture, runtime isolation, CI enforcement, or release-path certification.
 
-2. Treat M0.4 as ready for formal acceptance.
-   - The next slice should produce the M0.4 acceptance and baseline closeout.
-   - Acceptance should follow the same disciplined acceptance pattern used for earlier Phase 0 milestones.
+2. Treat Phase 0 as complete.
+   - Phase 0 is accepted as the foundation sequence of verification substrate, Contract Oracle, architectural regression framework, and architectural decision governance.
+   - Each Phase 0 milestone remains scoped to its accepted foundation and explicit deferrals.
 
-3. Freeze the M0.4 governance baseline after acceptance.
-   - Governance mechanism expansion should stop unless acceptance identifies a narrow blocker.
-   - Future governance strengthening should happen through later milestone-specific evidence and decisions.
+3. Preserve the Phase 0 acceptance pattern for later milestones.
+   - Later milestones should continue to define the foundation or capability, protect it mechanically, certify within stated scope, accept it, and freeze a baseline.
+   - Future acceptance must not overstate what the milestone evidence proves.
 
-4. Structure the acceptance document around established and deferred governance.
-   - Established governance capabilities include architectural decisions, evidence, rollback, metadata validation, and governance traceability.
-   - Intentionally deferred governance includes semantic decision review, full historical validation, automatic governance inference, and comprehensive compatibility validation.
+4. Start M1.1 with a canonical contract model inventory focused on identity.
+   - M1.1 should answer what the canonical identity of each contract is.
+   - The first M1.1 slice should map contract identity, owning projection or command, canonical serialization, version identity, compatibility obligations, and current Oracle fixture.
 
-5. Move to M1.1 after M0.4 acceptance if no narrow acceptance blocker remains.
-   - M1.1 should shift from building governance and protection to using those protections while evolving architecture.
-   - Phase 0 should be treated as the foundation sequence of verification substrate, Contract Oracle, architectural regression framework, and architectural governance framework.
+5. Keep generation out of the first M1.1 slice.
+   - Generation, regeneration, SDKs, and consumer migration belong naturally to M1.2.
+   - The first M1.1 slice should preserve the boundary between contract identity/model definition and generated contract ecosystem implementation.
+
+## Evidence Targets
+
+- `.agents/milestones/m0.4-decision-governance-acceptance-baseline-slice-0058.md`
+- `docs/architectural-capabilities.md`
+- `docs/architectural-mechanisms.md`
 
 ## Next Authorized Sequence
 
-1. Stage Slice 0057 changes, handoff rotation, decision rotation, and this decision checkpoint.
+1. Stage Slice 0058 changes, handoff rotation, decision rotation, and this decision checkpoint.
 2. Commit and push to `origin/dev`.
 3. Stop executing after the push.
