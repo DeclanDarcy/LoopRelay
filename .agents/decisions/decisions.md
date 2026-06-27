@@ -1,34 +1,36 @@
-# Decisions: 2026-06-26 M0.2 Boundary and M0.3 Opening
+# Decisions: 2026-06-26 M0.3 Invariant Catalog Direction
 
-These decisions capture only newly authorized direction from the user response following Slice 0035.
+These decisions capture only newly authorized direction from the user response following Slice 0036.
 
 ## Authorized Decisions
 
-1. Accept the M0.2 milestone boundary as coherent and complete for its scoped purpose.
-   - M0.2 now has an accepted baseline rather than only accumulated implementation slices.
-   - The accepted boundary is the Phase 0 Contract Oracle foundation, not full contract-surface coverage.
+1. Accept the M0.3 opening skeleton as correctly scoped.
+   - The first M0.3 slice should remain a framework skeleton rather than immediately expanding the regression catalog.
+   - The current checks are accepted as framework checks: mechanism discoverability, mechanism metadata, and fixture output wiring.
 
-2. Do not reopen M0.2 unless there is a named uncovered property.
-   - Deferred coverage is not itself a reason to reopen M0.2.
-   - Later work should stay in later milestones unless a concrete M0.2 architectural claim is found unsupported.
+2. Treat architectural mechanisms as regression targets.
+   - M0.3 should protect the existence and integrity of mechanisms introduced by earlier milestones.
+   - Mechanism disappearance, unregistered mechanisms, or broken wiring are architectural drift.
 
-3. Treat the Contract Oracle as a complete Phase 0 architectural capability.
-   - The capability consists of authority definition, boundary taxonomy, field ownership, fixture governance, drift classification, consumer verification, artifact freshness, request-boundary verification, procedural change workflow, local certification, repeatability evidence, and acceptance baseline.
+3. Require architectural regressions to carry intent and remediation.
+   - Regression failures should explain the invariant that no longer holds.
+   - Regression failures should also explain the expected restoration path.
 
-4. Start M0.3 by building framework before scaling regressions.
-   - The first M0.3 slice should inventory existing architecture-facing tests and helpers.
-   - It should define regression namespaces, organization, and naming.
-   - It should introduce one small architectural regression, update `docs/architectural-mechanisms.md`, and verify the narrow test set plus `git diff --check`.
+4. Make the invariant catalog the canonical mapping for M0.3.
+   - The catalog should map invariant, protecting mechanism, owner, severity, evidence, drift model, current coverage, and enforcement strength.
+   - Later regression implementations should consume or align to this catalog rather than inventing disconnected classifications.
 
-5. Make the first M0.3 regression intentionally meta.
-   - The first regression should protect the existence or wiring of an architectural mechanism rather than adding another contract-property check.
-   - Candidate targets include Oracle fixture directory existence, Oracle fixture test discoverability, consumer verification infrastructure references, or freshness verifier wiring into the backend test project.
+5. Add enforcement strength to the invariant catalog.
+   - Enforcement strength distinguishes documentation, inventory, executable regression, runtime enforcement, and multiple-mechanism protection.
+   - This column should expose which architectural principles remain convention-based and which are mechanically enforced.
 
-6. Treat architectural mechanisms themselves as regression targets.
-   - M0.3 should establish the idea that drift detection protects the mechanisms that protect architecture.
-   - Later milestones can add more sophisticated architecture-specific regressions on top of that foundation.
+6. Protect the catalog with a catalog regression.
+   - The regression should verify required columns exist.
+   - It should verify required metadata is populated.
+   - Every invariant should have an owner.
+   - Every invariant should have an intended protecting mechanism.
 
 ## Next Authorized Sequence
 
-1. Stage, commit, and push Slice 0035 plus this decision checkpoint.
+1. Stage, commit, and push Slice 0036 plus this decision checkpoint.
 2. Stop executing after the push.

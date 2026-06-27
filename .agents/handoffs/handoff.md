@@ -1,33 +1,27 @@
-# Handoff: 2026-06-26 After M0.2 Acceptance Baseline Slice 0035
+# Handoff: 2026-06-26 After M0.3 Regression Framework Skeleton Slice 0036
 
-Current milestone state: Milestone 0.2 is accepted and baselined as a scoped Phase 0 Contract Oracle foundation with explicit deferrals. It is not accepted as full contract-surface coverage.
+Current milestone state: Milestone 0.3 is opened and in progress. The first slice installed a backend architecture-test skeleton and a meta-regression that treats existing M0.2 Oracle mechanisms as regression targets.
 
 New state from this slice:
 
-- Added `.agents/milestones/m0.2-oracle-acceptance-baseline-slice-0035.md`.
-- Updated `.agents/milestones/m0.2-contract-oracle.md` to record scoped acceptance status and mark the accepted foundation outputs/exit criteria complete with limitations.
-- Updated `docs/contracts.md`, `docs/architectural-mechanisms.md`, and `docs/architectural-capabilities.md` from certification-review wording to accepted-baseline wording.
-- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0035.md`.
-
-Accepted M0.2 baseline:
-
-- Contract authority is backend-owned projection and command-result shape after backend JSON serialization.
-- Fixture gating, drift classification, consumer verification, artifact freshness, request-boundary checks, and Oracle change governance are accepted Phase 0 protections.
-- Repository dashboard, repository workspace, and primary workflow projection are the locally certified pilots.
-- Full endpoint coverage, generated contracts, mechanical versioning, automatic regeneration, full dependency graph coverage, stream/error/body/query coverage, passive transport certification, and broad semantic reinterpretation detection remain deferred.
+- Added `tests/CommandCenter.Backend.Tests/Architecture/ArchitecturalRegressionFrameworkTests.cs`.
+- Added `.agents/milestones/m0.3-regression-framework-inventory-skeleton-slice-0036.md`.
+- Updated `docs/architectural-mechanisms.md` with initial M0.3 taxonomy, ownership, severity, drift model, and regression UX rules.
+- Updated `docs/architectural-capabilities.md` with the in-progress architectural regression framework capability.
+- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0036.md`.
 
 Verification:
 
-- No production code, fixtures, generated artifacts, verifier behavior, or consumer behavior changed.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter ArchitecturalRegressionFrameworkTests` passed: 3 passed, 0 failed, 0 skipped.
 - `git diff --check` passed with line-ending normalization warnings only.
 
 High-leverage decisions currently relevant:
 
-- Move to Milestone 0.3 next; do not reopen M0.2 unless a named uncovered property is discovered.
-- Decision lifecycle eligibility remains the preferred fourth Oracle family only if a future review requires deeper backend-owned eligibility semantics.
-- Generated contracts, mechanical versioning, and automatic regeneration stay in Milestone 1.2.
-- Passive transport and error-envelope preservation stay aligned with Milestone 1.3 and runtime isolation unless an earlier regression-framework need makes them necessary.
+- Keep M0.3 focused on framework shape before broad invariant coverage.
+- Architectural mechanisms are themselves regression targets; a verifier disappearing or losing fixture wiring is architectural drift.
+- Regression failures must explain protected architectural intent and a concrete remediation path.
+- This slice does not certify M0.3; broad invariant catalog, frontend regression area, shell classification, confidence model, and certification remain pending.
 
 Recommended next slice:
 
-- Start Milestone 0.3 with a regression framework inventory/skeleton slice. The first slice should identify existing architecture-facing tests and reusable assertion helpers, define where architectural regression tests live, add one small drift check that reuses current Oracle evidence, update `docs/architectural-mechanisms.md`, and run the narrow verifier for the new regression plus `git diff --check`.
+- Continue M0.3 with an invariant-catalog slice. Build a durable catalog that maps each core invariant to a planned executable mechanism, owner, severity, drift model, evidence requirement, and current coverage state, then add one small source/documentation regression that prevents the catalog from disappearing or omitting required columns.

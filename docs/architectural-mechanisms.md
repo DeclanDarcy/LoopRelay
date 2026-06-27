@@ -127,6 +127,39 @@ Mechanism intent:
 | Workflow artifact freshness | `.agents/milestones/m0.2-workflow-artifact-freshness-slice-0031.md` adds `workflow-instance.artifact-freshness.json` and `ContractGeneratedArtifactFreshnessTests.WorkflowInstanceTypeScriptContractArtifactMatchesFreshnessManifest`, tying the workflow golden fixture to `src/CommandCenter.UI/src/types/workflow.ts`. | This is still a Phase 0 verified manual artifact freshness check, not generated contract infrastructure. Dev mock workflow coverage, populated `decisionSession` coverage, and sibling workflow endpoint fixtures remain pending. |
 | Workflow pilot certification | `.agents/milestones/m0.2-workflow-oracle-certification-slice-0032.md` records local certification for the primary workflow projection fixture comparison, TypeScript consumer verification, request-boundary verification, artifact freshness verification, and full backend test suite. | Certification is limited to the primary workflow projection. Dev mock workflow coverage and populated `decisionSession` coverage are accepted initial-pilot gaps; sibling workflow endpoint fixtures remain pending. |
 
+## Architectural Regression Framework
+
+Introduced: Milestone 0.3.
+
+Status: initial inventory and backend architecture-test skeleton installed.
+
+Primary evidence:
+
+- `tests/CommandCenter.Backend.Tests/Architecture/ArchitecturalRegressionFrameworkTests.cs`
+- `.agents/milestones/m0.3-regression-framework-inventory-skeleton-slice-0036.md`
+
+Framework intent:
+
+| Regression area | Initial mechanism | Owner | Severity | Drift model |
+| --- | --- | --- | --- | --- |
+| Contract Oracle mechanisms | Backend architecture meta-regression discovers fixture drift, consumer verification, artifact freshness, request-boundary, and framework-wiring tests. | Backend architecture tests | Local build failure | Mechanism disappearance, fixture-copy drift, or unreviewed Oracle wiring drift. |
+| Authority, projection, transport, state, controller, workspace, presentation, runtime, governance, and evidence invariants | Planned executable regressions cataloged for later M0.3 slices before broad migration work depends on them. | Area-specific test surface selected by invariant | Severity to be assigned per invariant before implementation | Duplicate authority, projection impurity, transport responsibility growth, state duplication, composition creep, semantic leakage, unscoped failures, or governance bypass. |
+
+Initial regression taxonomy:
+
+| Category | Preferred mechanism | Current status |
+| --- | --- | --- |
+| Backend authority and projection invariants | C# unit, reflection, and endpoint integration tests | Planned after framework skeleton. |
+| Contract and Oracle invariants | Golden fixture comparison, consumer verification, freshness verification, request-boundary tests, and backend meta-regressions | Seeded by M0.2 and protected by the M0.3 skeleton. |
+| Transport invariants | Rust helper tests plus source scans for command classification and domain mirrors | Partially seeded by passive GET helper tests; full classification deferred. |
+| Frontend state, resource, controller, workspace, and presentation invariants | Vitest characterization, source scans, and later lint rules where stable | Planned after state and feature ownership inventory. |
+| Runtime isolation invariants | Endpoint tests, resource failure tests, workspace error boundary tests, and E2E characterization | Planned for runtime isolation milestones. |
+| Governance, evidence, and mechanism lifecycle invariants | Source/documentation scans and architecture-test catalog checks | Seeded by the framework skeleton. |
+
+Regression UX rule:
+
+Every architectural regression must name the protected architectural intent and give a concrete remediation path. The initial backend framework test enforces that rule for the registered mechanism catalog.
+
 ## Mechanism Lifecycle Rule
 
 A verifier can be treated as architectural protection only when its command or source, protected surface, known gaps, owner, and retirement criteria for any quarantine are recorded.
