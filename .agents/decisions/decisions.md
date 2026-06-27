@@ -1,37 +1,44 @@
-# Decisions: 2026-06-27 M1.1 Canonical Examples and Certification Direction
+# Decisions: 2026-06-27 M1.1 Certification Validation Direction
 
-These decisions capture only newly authorized direction from the user response following M1.1 Contract Evolution, Compatibility, and Governance Slice 0062.
+These decisions capture only newly authorized direction from the user response following M1.1 Canonical Contract Examples Slice 0063.
 
 ## Authorized Decisions
 
-1. Treat Slice 0062 as a valid semantic completion layer for M1.1 before canonical examples.
-   - The current M1.1 progression is contract identity, taxonomy, ownership, normalization, boundary semantics, evolution, compatibility, and governance.
-   - The milestone remains an architectural model rather than an implementation mechanism.
-   - M1.2 generation should remain downstream until M1.1 examples and certification validate that the model is closed.
+1. Treat M1.1 as having moved from architecture construction into architecture validation.
+   - Do not add new semantic primitives unless certification exposes a concrete model gap.
+   - The current M1.1 progression is contract identity, taxonomy, ownership, normalization, boundary semantics, evolution, compatibility, governance, and canonical conformance cases.
+   - M1.1 remains independent from generators, TypeScript, Rust, fixtures, and transport implementation.
 
-2. Preserve compatibility bridges as projections of backend authority.
-   - Compatibility bridges must derive from backend authority and must not invent meaning downstream.
-   - This invariant protects M1.2 generators, M1.3 shell passivity, M2.x semantic authority restoration, and M7 compatibility-layer retirement.
-   - A compatibility bridge cannot continue once the backend no longer emits the authoritative source needed to derive it.
+2. Certify architectural properties rather than document completion.
+   - Certification should validate completeness, closure, sufficiency, and determinism of the canonical contract model.
+   - Passing documentation review is insufficient if the model leaves ambiguous ownership, classification, compatibility, versioning, boundary, or governance interpretations.
 
-3. Treat canonical examples as conformance cases.
-   - Examples must instantiate the full model rather than serve as informal snippets.
-   - Each example family should demonstrate contract identity, category, authoritative source, ownership dimensions, normalization rules, stability classification, compatibility policy, version identity, consumer classes, and applicable governance constraints.
-   - If a family requires special rules outside the shared vocabulary, M1.1 is not yet complete.
+3. Preserve canonical examples as conformance cases.
+   - Examples answer whether each contract family can be fully described by the model.
+   - Examples must not authorize future implementation details or ossify incidental endpoint, fixture, TypeScript, Rust, shell, or mock behavior.
 
-4. Focus M1.1 certification on architectural closure rather than implementation progress.
-   - Certification should ask whether every existing contract family can be classified, every contract aspect has a single owner, all boundary responsibilities are accounted for, permitted evolution fits the evolution model, and compatibility obligations derive from the model.
-   - M1.2 is ready only if a generator would not need to invent architectural rules not already specified by M1.1.
+4. Treat governance traceability as an active certification input.
+   - The governance-link failure discovered during Slice 0063 is evidence that Phase 0 governance mechanisms protect later milestone claims.
+   - M1.1 certification should preserve reachable evidence links for decisions, capability claims, mechanisms, and slice evidence.
+
+5. Add model determinism as an explicit M1.1 certification criterion.
+   - For every existing contract family, the model should yield exactly one valid classification path through identity, category, ownership, normalization, boundary rules, evolution rules, compatibility rules, and governance.
+   - If multiple equally valid interpretations remain, M1.1 is not ready for M1.2 because the generator would be forced to encode architectural decisions.
+
+6. Use independent implementability as the sufficiency test for M1.1.
+   - M1.1 is ready for M1.2 only if an independent team could implement generated contracts using M1.1 without introducing new architectural concepts.
+   - Generation should become an implementation exercise, not a place to invent identity, ownership, compatibility, versioning, stability, or governance rules.
 
 ## Evidence Targets
 
-- `.agents/milestones/m1.1-contract-evolution-compatibility-governance-slice-0062.md`
+- `.agents/milestones/m1.1-canonical-contract-examples-slice-0063.md`
+- `.agents/milestones/m0.4-decision-governance-acceptance-baseline-slice-0058.md`
 - `docs/contracts.md`
 - `docs/architectural-capabilities.md`
 - `.agents/handoffs/handoff.md`
 
 ## Next Authorized Sequence
 
-1. Stage the M1.1 evolution/compatibility/governance slice, handoff rotation, decision rotation, and this decision checkpoint.
+1. Stage the M1.1 canonical examples slice, handoff rotation, decision rotation, and this certification-validation decision checkpoint.
 2. Commit and push to `origin/dev`.
 3. Stop executing after the push.

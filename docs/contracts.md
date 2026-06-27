@@ -379,6 +379,156 @@ Governance rules:
 - Request, response, error, and stream lifecycle changes must be governed independently because their compatibility risks differ.
 - Governance evidence may be procedural in M1.1, but M1.2 and later mechanisms must make generation, versioning, freshness, and drift checks executable.
 
+## Canonical Contract Examples
+
+These examples are conformance cases for the M1.1 model. They show how current contract families must be described before M1.2 generation can produce artifacts without inventing architectural rules. They are not fixture expansion, generated artifacts, endpoint certification, or consumer migration.
+
+Each example must be read through the identity, taxonomy, ownership, normalization, stability, compatibility, evolution, and governance models above. If a later implementation slice cannot classify a contract family using these dimensions, the model must be amended through governance before generation or migration proceeds.
+
+### Repository Contract Example
+
+| Dimension | Conformance case |
+| --- | --- |
+| Representative identity | Repository dashboard and repository workspace. |
+| Category | Public projection response. |
+| Authoritative source | Repository authority plus backend-owned execution, continuity, reasoning, artifact, and decision-session summary authorities composed by Middle projections. |
+| Shape owner | `RepositoryDashboardProjection[]` and `RepositoryWorkspaceProjection` producers. |
+| Serialization owner | Backend HTTP JSON serialization. |
+| Producer boundary | `GET /api/repositories` and `GET /api/repositories/{repositoryId}/workspace`, with Tauri commands acting as transport consumers. |
+| Version identity | Fixture baseline and unversioned pilot until M1.2 versioning exists. |
+| Normalization focus | Repository identifiers, paths, names, availability states, nullable summaries, ordered collections, and nested summary objects preserve backend JSON shape. |
+| Stability classification | Repository identity and summary field membership are identity-significant; UI grouping and labels are presentation-local. |
+| Compatibility policy | Rust mirrors, manual TypeScript types, and dev mocks are compatibility consumers. Known Rust `decisionSessionSummary` drift remains consumer drift, not Oracle truth. |
+| Governance constraint | Additive or renamed repository summary fields require compatibility review before fixture or artifact movement because manual consumers may not preserve unknown fields. |
+
+### Workflow Contract Example
+
+| Dimension | Conformance case |
+| --- | --- |
+| Representative identity | Primary workflow projection. |
+| Category | Public projection response with related diagnostics, health, and certification sibling contracts when those reports cross boundaries. |
+| Authoritative source | Workflow state machine, workflow projection service, gate, recovery, continuation, preparation, health, and certification authorities. |
+| Shape owner | `WorkflowInstance` for the primary projection; sibling command results or reports own their own identities. |
+| Serialization owner | Backend HTTP JSON serialization. |
+| Producer boundary | `GET /api/repositories/{repositoryId}/workflow`; Tauri `get_workflow_projection` remains passive through `serde_json::Value`. |
+| Version identity | Fixture baseline and unversioned pilot for the primary projection. |
+| Normalization focus | Stage, lifecycle state, eligibility booleans, ordered timeline, gate diagnostics, explicit nulls, empty diagnostic collections, and flattened compatibility fields. |
+| Stability classification | Stage, legality, eligibility, diagnostics, recovery, health, and certification facts are semantic and identity-significant when externally observable. |
+| Compatibility policy | Manual TypeScript workflow type is a verified compatibility artifact; absent dev mock coverage is a known gap, not an alternate authority. |
+| Governance constraint | UI may not infer lifecycle legality, retryability, recovery, or health from weak strings. Missing workflow semantics must be added upstream. |
+
+### Decision Contract Example
+
+| Dimension | Conformance case |
+| --- | --- |
+| Representative identity | Decision lifecycle eligibility, proposal browser/review, and decision governance or quality report contracts. |
+| Category | Public projection response, command request, command response, diagnostics, and certification depending on the boundary. |
+| Authoritative source | Decision discovery, candidate, proposal, review, refinement, resolution, governance, quality, execution influence, and certification services. |
+| Shape owner | Decision endpoint request DTOs, proposal/review projections, lifecycle eligibility projections, and certification report results. |
+| Serialization owner | Backend HTTP JSON serialization. |
+| Producer boundary | `DecisionEndpoints` routes and corresponding Tauri decision commands. |
+| Version identity | Unversioned pilot until fixtures and generated artifacts are introduced for each selected identity. |
+| Normalization focus | Decision identifiers, proposal lifecycle states, eligibility and blocked-state reasons, recommendation evidence, option comparison, lineage, ratings, findings, and certification results. |
+| Stability classification | Eligibility, blocked-state, recommendation rank, severity, review legality, and certification status are semantic facts, not presentation facts. |
+| Compatibility policy | Manual TypeScript unions and mock data may preserve shape temporarily; they may not define lifecycle legality or recommendation meaning. |
+| Governance constraint | Any new UI-local eligibility or severity computation is an authority violation unless explicitly classified as non-persistent preview behavior through governance. |
+
+### Execution Contract Example
+
+| Dimension | Conformance case |
+| --- | --- |
+| Representative identity | Execution context, execution session summary/status, execution command result, prompt manifest, handoff result, and execution event stream. |
+| Category | Public projection response, command request, command response, event, streaming event, and stream lifecycle where ordering or reconnection is observable. |
+| Authoritative source | Execution context, prompt building, provider execution, monitoring, handoff, recovery, Git status, commit, and push services. |
+| Shape owner | Execution endpoint request DTOs, command result projections, session projections, event records, and stream lifecycle producer. |
+| Serialization owner | Backend HTTP JSON serialization for request/response payloads; stream-specific serialization for event streams when applicable. |
+| Producer boundary | `ExecutionEndpoints` and `ExecutionSessionsEndpoints`, including stream routes and Tauri execution commands. |
+| Version identity | Unversioned pilot until fixture, stream trace, and generated artifact baselines exist. |
+| Normalization focus | Session identity, execution state, provider result state, prompt manifest references, transparency fields, ordered events, nullable handoff data, and Git action results. |
+| Stability classification | Status, retryability, terminal state, event ordering guarantees, and failure scope are identity-significant when observable. |
+| Compatibility policy | Rust request/result mirrors and manual TypeScript execution types are compatibility artifacts until generated or passively transported. |
+| Governance constraint | Stream event payload identity and stream lifecycle identity must be governed separately when reconnection, ordering, terminal, or retry behavior becomes observable. |
+
+### Reasoning Contract Example
+
+| Dimension | Conformance case |
+| --- | --- |
+| Representative identity | Reasoning graph, report, event, trace, query, reconstruction, materialization review, and certification contracts. |
+| Category | Public projection response, event, diagnostics, persistence-crossing contract, and certification depending on the boundary. |
+| Authoritative source | Reasoning event, thread, relationship, graph, trace, query, reconstruction, materialization review, and certification services. |
+| Shape owner | Reasoning projections, records, reports, and endpoint command results. |
+| Serialization owner | Backend HTTP JSON serialization for external projections and reports. |
+| Producer boundary | `ReasoningEndpoints` and corresponding Tauri reasoning commands. |
+| Version identity | Unversioned pilot until representative graph/report fixtures or traces exist. |
+| Normalization focus | Schema versions, reasoning record identity, thread and relationship identifiers, trace direction, boundary violation details, diagnostics, report history, and ordered graph elements. |
+| Stability classification | Schema version, relationship meaning, trace direction, boundary violation semantics, and certification status are identity-significant. |
+| Compatibility policy | Stored reasoning records become contracts only when exposed across runtime, generated-artifact, migration, or compatibility boundaries. |
+| Governance constraint | Persistence shape cannot silently become external contract authority; exposed reasoning records need explicit identity and compatibility review. |
+
+### Continuity Contract Example
+
+| Dimension | Conformance case |
+| --- | --- |
+| Representative identity | Continuity diagnostics, report history, operational-context proposal, compression, assimilation, and review command contracts. |
+| Category | Public projection response, command request, command response, diagnostics, and report contract. |
+| Authoritative source | Operational-context parsing, lifecycle, compression, semantic diff, diagnostics, and report services. |
+| Shape owner | Continuity endpoint projections, operational-context proposal projections, review request DTOs, and report command results. |
+| Serialization owner | Backend HTTP JSON serialization. |
+| Producer boundary | `ContinuityEndpoints` and `OperationalContextEndpoints`, with corresponding Tauri commands. |
+| Version identity | Unversioned pilot until diagnostics/report fixtures and generated artifacts exist. |
+| Normalization focus | Diagnostic groups, severity, trend, markdown content, semantic change summary, proposal state, null/empty report behavior, and ordered report history. |
+| Stability classification | Diagnostic severity, trend, proposal lifecycle, assimilation result, and report availability are semantic facts. |
+| Compatibility policy | Dev mock and manual TypeScript continuity shapes are compatibility consumers while verified or generated coverage is absent. |
+| Governance constraint | Presentation may format markdown and diagnostics, but it may not infer continuity severity, trend, or assimilation legality. |
+
+### Governance Contract Example
+
+| Dimension | Conformance case |
+| --- | --- |
+| Representative identity | Decision governance snapshot, decision-session governance snapshot, quality report, compatibility exception report, and architecture decision evidence report. |
+| Category | Diagnostics, certification, public projection response, and command response depending on the boundary. |
+| Authoritative source | Decision governance, decision-session lifecycle, transfer, recovery, metrics, economics, coherence, compatibility, and certification services. |
+| Shape owner | Governance projections, quality report results, certification report results, and endpoint command results. |
+| Serialization owner | Backend HTTP JSON serialization for backend-produced governance contracts. |
+| Producer boundary | `DecisionEndpoints`, `DecisionSessionEndpoints`, and future architecture-governance endpoints if exposed. |
+| Version identity | Unversioned pilot until representative governance fixtures or report baselines exist. |
+| Normalization focus | Finding identifiers, severity, evidence references, compatibility state, owner fields, reviewer/certifier identity, timestamps, and report status. |
+| Stability classification | Severity, compatibility state, approval state, certification result, and evidence sufficiency are semantic facts owned by governance services. |
+| Compatibility policy | Compatibility reports must describe bridges as upstream-derived or quarantined; they cannot bless downstream invented meaning. |
+| Governance constraint | Governance contracts must name evidence and rollback expectations because they can authorize changes to other contract identities. |
+
+### Health Contract Example
+
+| Dimension | Conformance case |
+| --- | --- |
+| Representative identity | Ping primitive, repository availability, workflow health, and runtime degradation surfaces. |
+| Category | Health and diagnostics. |
+| Authoritative source | Health/status authority for the specific boundary, repository availability authority, workflow health service, or runtime isolation owner. |
+| Shape owner | Health endpoint result, repository projection health fields, workflow health projection, or runtime failure envelope producer. |
+| Serialization owner | Backend HTTP JSON serialization unless the health surface is explicitly shell-owned. |
+| Producer boundary | Health/status endpoints, repository/workflow projection endpoints, or shell-owned readiness commands when classified separately. |
+| Version identity | Unversioned pilot until health fixtures and error-envelope baselines exist. |
+| Normalization focus | Availability state, degradation reason, retry guidance, timestamp, nullable detail, status code relationship, and diagnostic evidence. |
+| Stability classification | Availability, readiness, degradation, retryability, and health severity are semantic and identity-significant. |
+| Compatibility policy | Presentation labels, colors, and icons may change independently, but the typed health facts must remain backend-owned. |
+| Governance constraint | Transport must preserve health and error payloads without collapsing structured degradation data into string-only failures. |
+
+### Certification Contract Example
+
+| Dimension | Conformance case |
+| --- | --- |
+| Representative identity | Workflow certification, decision certification, reasoning certification, governance certification, and architecture evidence certification reports. |
+| Category | Certification, diagnostics, and command response depending on how the report is requested. |
+| Authoritative source | Certifying service or governance mechanism for the subject capability. |
+| Shape owner | Certification report projection or command result emitted by the certifying service. |
+| Serialization owner | Backend HTTP JSON serialization for backend-produced reports. |
+| Producer boundary | Certification endpoints, report commands, or future generated evidence export boundaries. |
+| Version identity | Unversioned pilot until certification report fixtures or evidence export baselines exist. |
+| Normalization focus | Capability identity, invariant, evidence package references, command results, known limits, certification result, acceptance state, reviewer/certifier, and rollback readiness. |
+| Stability classification | Certification result, evidence sufficiency, acceptance state, known limit, and rollback readiness are semantic facts. |
+| Compatibility policy | Evidence reports may reference generated outputs or test artifacts, but the report contract must preserve enough durable context for downstream review. |
+| Governance constraint | Certification cannot be inferred from passing tests alone; the contract must expose the evidence and known limits required by the architecture evidence model. |
+
 ## Initial Contract Identity Inventory
 
 This inventory seeds M1.1 from the already certified Phase 0 Oracle pilots. It deliberately does not introduce generation, broad endpoint coverage, or new runtime behavior.
