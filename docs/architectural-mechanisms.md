@@ -149,7 +149,7 @@ Mechanism intent:
 
 Introduced: Milestone 0.3.
 
-Status: initial inventory, backend architecture-test skeleton, frontend architecture-test area, invariant catalog, regression taxonomy, drift model, regression UX, and architectural confidence model installed.
+Status: certified as a framework-complete Phase 0 architectural regression foundation with explicit enforcement deferrals.
 
 Primary evidence:
 
@@ -164,6 +164,8 @@ Primary evidence:
 - `.agents/milestones/m0.3-regression-lifecycle-model-slice-0043.md`
 - `.agents/milestones/m0.3-regression-architecture-specification-slice-0044.md`
 - `.agents/milestones/m0.3-frontend-regression-skeleton-slice-0045.md`
+- `.agents/milestones/m0.3-shell-regression-classification-slice-0046.md`
+- `.agents/milestones/m0.3-regression-framework-certification-slice-0047.md`
 
 Framework intent:
 

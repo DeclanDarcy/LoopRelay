@@ -1,38 +1,36 @@
-# Decisions: 2026-06-26 M0.3 Certification Direction
+# Decisions: 2026-06-26 M0.3 Completion and M0.4 Opening Direction
 
-These decisions capture only newly authorized direction from the user response following Slice 0046.
+These decisions capture only newly authorized direction from the user response following Slice 0047.
 
 ## Authorized Decisions
 
-1. Accept Slice 0046 as the final framework-building slice for M0.3.
-   - The shell classification slice completes governance coverage across backend, frontend, and shell.
-   - Do not add more framework concepts before certification unless certification exposes a concrete gap.
+1. Accept M0.3 as complete as a governance framework.
+   - The accepted boundary is framework completeness, not enforcement completeness.
+   - M0.3 certifies the regression governance substrate, not broad executable coverage for every architectural invariant.
 
-2. Treat M0.3 as framework-complete but not enforcement-complete.
-   - The governance model exists across the major architectural surfaces.
-   - Broad architectural enforcement remains later milestone work.
+2. Preserve the distinction between planned inventory-level regressions and executable regressions.
+   - Inventory-level planned regressions are acceptable when their owning enforcement milestone has not begun.
+   - The capability matrix may say an invariant is known, governed, and planned without implying it is already executable.
 
-3. Preserve the current shell classification boundaries.
-   - Shell-owned responsibilities stay narrowly scoped to sidecar lifecycle, backend metadata/health, and native repository selection.
-   - Rust mirrors remain transitional compatibility with target state `Retired`.
+3. Preserve shell classification as governance, inventory, and migration planning.
+   - Shell classification does not certify passive transport.
+   - Shell classification does not authorize permanent Rust mirror retention.
+   - Typed transport errors, passive transport certification, and Rust mirror retirement remain M1.3 work.
 
-4. Preserve `ErrorResponse` as quarantined compatibility.
-   - Keep the quarantine until typed transport error preservation exists.
-   - Do not normalize `ErrorResponse` as a permanent shell architectural object.
+4. Proceed next with M0.4.
+   - M0.4 should establish trust in architectural governance after M0.1 verification, M0.2 contracts, and M0.3 architectural enforcement framework.
 
-5. Proceed next with M0.3 certification.
-   - The certification slice should map required outputs, implemented framework, executable guards, accepted limitations, and remaining blockers against M0.3 exit criteria.
-   - The certification package should mirror the M0.2 closeout pattern.
+5. Open M0.4 with definition before substantial executable checks.
+   - Begin with durable governance, evidence, and rollback documents.
+   - Initial metadata guards should verify that required governance metadata, evidence metadata, and rollback metadata exist.
+   - Follow the established pattern: define, guard, expand.
 
-6. Organize M0.3 certification around framework completeness rather than document completeness.
-   - Certification should show whether each framework area is coherent and protected.
-   - At minimum, map invariants, taxonomy, ownership, severity, drift model, confidence, lifecycle, failure UX, backend discoverability, frontend discoverability, and shell discoverability to status and evidence.
-
-7. Maintain the distinction between framework completeness and enforcement completeness in certification language.
-   - M0.3 primarily certifies the governance/regression framework.
-   - Later milestones expand enforcement breadth and implementation migrations.
+6. Explicitly distinguish governance artifacts from enforcement artifacts in M0.4.
+   - Governance artifacts authorize architectural change, including decision records, evidence packages, and rollback plans.
+   - Enforcement artifacts detect architectural drift, including the regression framework, Oracle, and freshness verification.
+   - M0.3 governs enforcement; M0.4 governs how enforcement itself evolves.
 
 ## Next Authorized Sequence
 
-1. Stage, commit, and push Slice 0046 plus this decision checkpoint.
+1. Stage, commit, and push Slice 0047 plus this decision checkpoint.
 2. Stop executing after the push.
