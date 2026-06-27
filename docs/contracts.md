@@ -871,6 +871,23 @@ Raw generated observed alias
 
 This policy keeps the generator transparent: it may project accepted schema facts, but it may not invent semantic domains, nullable unions, optional properties, ordering guarantees, identity meaning, or compatibility rules. If a production consumer needs a stronger type than the current IR can justify, the missing fact must be added to the canonical contract model or recorded as an explicit compatibility-wrapper responsibility before migration.
 
+### Repository Dashboard Schema Metadata Pilot
+
+The first governed schema metadata pilot extends the `repository-dashboard` generation IR and generated TypeScript metadata without changing production UI imports. The pilot is intentionally a metadata step between raw observed aliases and production consumer types.
+
+The metadata records explicit field facts for selected production-migration blockers:
+
+| Fact | Pilot coverage |
+| --- | --- |
+| Presence | Current selected paths are marked required; optional-by-contract remains unclaimed until a field is explicitly authorized as omitted. |
+| Nullability | Nullable fields that appeared as `null` in the single Oracle fixture are modeled as nullable contract facts rather than inferred as `null`-only TypeScript fields. |
+| Semantic enum domains | Repository availability, execution readiness, repository execution state, and decision-session lifecycle/transfer fields carry backend-owned enum domains and value sets. |
+| Identity roles | Repository id, decision-session id, and continuity artifact id paths carry opaque identity roles. |
+| Array ordering | Execution history, decision-session health dimensions, recent transfer lineage, and diagnostics are marked stable by projection for received-order preservation. |
+| String formats | Date/time and duration strings remain serialized strings but carry explicit format metadata for future generated production types or validators. |
+
+This pilot does not yet authorize production imports from `src/CommandCenter.UI/src/contracts/generated/repository-dashboard.generated.ts`. The generated raw aliases remain evidence-only until the generator emits production consumer types from governed metadata and the compatibility wrapper migration is separately verified.
+
 ## Oracle Change Workflow
 
 The Oracle change workflow governs how a detected contract drift becomes an accepted contract baseline. It is procedural during Milestone 0.2 so the review path is explicit before generation, regeneration, and lifecycle automation are introduced in later milestones.

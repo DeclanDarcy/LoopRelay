@@ -1,31 +1,32 @@
-# Handoff: After M1.2 Generated TypeScript Consumer Policy Slice 0070
+# Handoff: After M1.2 Repository Dashboard Schema Metadata Pilot Slice 0071
 
-Current milestone state: M1.2 now has repository-dashboard generation pipeline evidence, raw generated TypeScript alias evidence, and a governed TypeScript consumer migration policy. No production UI consumer migration has occurred.
+Current milestone state: M1.2 now has a repository-dashboard generation pipeline, raw generated TypeScript alias evidence, a governed TypeScript consumer migration policy, and the first governed schema metadata pilot. No production UI consumer migration has occurred.
 
 New state from this slice:
 
-- Added `Generated TypeScript Consumer Policy` to `docs/contracts.md`.
-- Classified generated TypeScript outputs as raw observed aliases, production consumer types, and compatibility wrappers.
-- Defined the policy gate for nullable-by-contract, omitted-by-contract, semantic enum domains, opaque identity, arbitrary text, array ordering, empty collections, and date/time or duration strings.
-- Recorded the repository-dashboard migration path as `Raw generated observed alias -> governed schema/nullability/semantic metadata -> generated production consumer type -> compatibility wrapper alias or adapter -> existing production consumers -> compatibility wrapper retirement evidence`.
-- Updated `.agents/milestones/m1.2-generated-contracts.md`, `docs/architectural-capabilities.md`, and `docs/architectural-mechanisms.md`.
-- Added `.agents/milestones/m1.2-generated-typescript-consumer-policy-slice-0070.md`.
-- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0066.md`.
+- Extended the generated contract IR with explicit field metadata for presence, nullability, semantic domain, enum values, identity role, array ordering, string format, and source.
+- Added `RepositoryDashboardGenerationMetadata` as the pilot metadata source for selected repository-dashboard migration blockers.
+- Regenerated `tests/CommandCenter.Backend.Tests/ContractFixtures/repository-dashboard.contract-ir.json` and `src/CommandCenter.UI/src/contracts/generated/repository-dashboard.generated.ts`.
+- Updated `repository-dashboard.generated-artifact-freshness.json` for the regenerated TypeScript artifact.
+- Added `RepositoryDashboardGenerationIrCarriesGovernedSchemaMetadata` to prove representative enum, nullability, identity, and ordering metadata.
+- Updated `docs/contracts.md`, `docs/architectural-capabilities.md`, `docs/architectural-mechanisms.md`, and `.agents/milestones/m1.2-generated-contracts.md`.
+- Added `.agents/milestones/m1.2-repository-dashboard-schema-metadata-pilot-slice-0071.md`.
+- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0067.md`.
 
 Verification:
 
-- Documentation/governance slice only. No generator, generated artifact, runtime, or production TypeScript source changed.
-- Reviewed current generated aliases and manual repository dashboard types for the Slice 0069 blockers: observed null-only fields, semantic string widening, manual semantic unions, and nullable manual fields not derivable from a single fixture variant.
-- First governance verification run built and ran 10 tests: 9 passed, 1 failed. The failing guard was `ReferentialGovernanceClaimsRemainReachable`, which expected active `.agents/decisions/decisions.md` to cite M0.4 governance evidence.
-- Governance repair rotated `.agents/decisions/decisions.md` to `.agents/decisions/decisions.0070.md`, created a new active decision checkpoint with `.agents/milestones/m0.4-active-governance-artifact-validation-slice-0053.md`, and reran `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~ArchitecturalDecisionGovernanceTests`: 10 passed, 0 failed, 0 skipped.
+- Regenerated artifacts through `COMMANDCENTER_UPDATE_GENERATED_CONTRACTS=1` and `ContractGeneratedArtifactPipelineTests`: 5 passed.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "FullyQualifiedName~ContractGeneratedArtifactPipelineTests|FullyQualifiedName~ContractGeneratedArtifactFreshnessTests|FullyQualifiedName~ContractConsumerVerificationTests"`: 23 passed.
+- `npm run build` in `src/CommandCenter.UI`: passed.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~ArchitecturalDecisionGovernanceTests`: 10 passed.
 
 High-leverage decisions currently relevant:
 
-- Raw generated aliases remain evidence-only and must not become production imports.
-- Production generated consumer types require explicit schema facts; one fixture cannot prove enum domains, nullability unions, optionality, identity meaning, or ordering semantics.
-- `src/CommandCenter.UI/src/types/repositories.ts` remains the repository-dashboard compatibility wrapper until the IR/schema model can express the needed facts directly.
-- The generator must stay transparent: it may project governed facts, but it may not invent compatibility policy or semantic strengthening.
+- The new metadata is a governed schema pilot, not permission to import generated raw aliases in production UI code.
+- `src/CommandCenter.UI/src/types/repositories.ts` remains the production compatibility wrapper until a generated production-consumer candidate is emitted and verified.
+- The generator may carry accepted metadata, but still must not infer enum domains, nullability unions, optionality, identity roles, ordering, or parsing behavior from fixtures alone.
+- Optional-by-contract remains unclaimed in this pilot; selected fields are currently modeled as required serialized fields.
 
 Recommended next slice:
 
-- Implement the first governed schema metadata pilot for `repository-dashboard`, starting with explicit nullable/omitted and semantic enum/alias metadata for the fields that currently block safe production TypeScript migration.
+- Emit a separate generated repository-dashboard production-consumer candidate from the governed metadata while keeping raw observed aliases and compatibility wrappers distinct, then verify it against the manual compatibility wrapper before any production import migration.

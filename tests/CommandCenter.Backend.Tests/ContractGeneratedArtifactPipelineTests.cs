@@ -40,7 +40,8 @@ public sealed class ContractGeneratedArtifactPipelineTests
         ContractGenerationIr ir = ContractGenerationIrBuilder.Build(
             "repository-dashboard",
             "Repository dashboard",
-            source.RootElement);
+            source.RootElement,
+            RepositoryDashboardGenerationMetadata.Fields);
         string actualIr = ContractGenerationIrSerializer.Serialize(ir);
         string actualTypeScript = ContractTypeScriptMetadataGenerator.Generate(ir);
 
@@ -76,11 +77,13 @@ public sealed class ContractGeneratedArtifactPipelineTests
         ContractGenerationIr firstIr = ContractGenerationIrBuilder.Build(
             "repository-dashboard",
             "Repository dashboard",
-            source.RootElement);
+            source.RootElement,
+            RepositoryDashboardGenerationMetadata.Fields);
         ContractGenerationIr secondIr = ContractGenerationIrBuilder.Build(
             "repository-dashboard",
             "Repository dashboard",
-            source.RootElement);
+            source.RootElement,
+            RepositoryDashboardGenerationMetadata.Fields);
 
         Assert.Equal(
             ContractGenerationIrSerializer.Serialize(firstIr),
@@ -88,6 +91,47 @@ public sealed class ContractGeneratedArtifactPipelineTests
         Assert.Equal(
             ContractTypeScriptMetadataGenerator.Generate(firstIr),
             ContractTypeScriptMetadataGenerator.Generate(secondIr));
+    }
+
+    [Fact]
+    public void RepositoryDashboardGenerationIrCarriesGovernedSchemaMetadata()
+    {
+        DirectoryInfo repositoryRoot = FindRepositoryRoot();
+        string sourcePath = repositoryRoot.Combine(
+            "tests",
+            "CommandCenter.Backend.Tests",
+            "ContractFixtures",
+            "repository-dashboard.golden.json");
+
+        using JsonDocument source = JsonDocument.Parse(File.ReadAllText(sourcePath));
+        ContractGenerationIr ir = ContractGenerationIrBuilder.Build(
+            "repository-dashboard",
+            "Repository dashboard",
+            source.RootElement,
+            RepositoryDashboardGenerationMetadata.Fields);
+
+        ContractGenerationFieldMetadata availability = Assert.Single(
+            ir.FieldMetadata,
+            metadata => metadata.Path == "$[].availability");
+        Assert.Equal("RepositoryAvailability", availability.SemanticDomain);
+        Assert.Equal(["Available", "Missing", "AccessDenied"], availability.DomainValues);
+        Assert.Equal(ContractGenerationNullability.NonNullable, availability.Nullability);
+
+        ContractGenerationFieldMetadata activeExecutionSession = Assert.Single(
+            ir.FieldMetadata,
+            metadata => metadata.Path == "$[].activeExecutionSession");
+        Assert.Equal("ExecutionSessionSummary", activeExecutionSession.SemanticDomain);
+        Assert.Equal(ContractGenerationNullability.Nullable, activeExecutionSession.Nullability);
+
+        ContractGenerationFieldMetadata repositoryId = Assert.Single(
+            ir.FieldMetadata,
+            metadata => metadata.Path == "$[].repository.id");
+        Assert.Equal("RepositoryId", repositoryId.IdentityRole);
+
+        ContractGenerationFieldMetadata executionHistory = Assert.Single(
+            ir.FieldMetadata,
+            metadata => metadata.Path == "$[].executionHistory");
+        Assert.Equal(ContractGenerationArrayOrdering.StableByProjection, executionHistory.ArrayOrdering);
     }
 
     [Fact]
