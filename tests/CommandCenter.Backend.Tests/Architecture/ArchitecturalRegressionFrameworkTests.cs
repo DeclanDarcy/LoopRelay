@@ -52,6 +52,18 @@ public sealed class ArchitecturalRegressionFrameworkTests
         "Escalation rule"
     ];
 
+    private static readonly string[] RequiredArchitecturalDriftColumns =
+    [
+        "Drift class",
+        "Architectural risk",
+        "Detection",
+        "Evidence",
+        "Owner",
+        "Severity",
+        "Remediation",
+        "Escalation rule"
+    ];
+
     private static readonly string[] RequiredInvariantCatalogEntries =
     [
         "Backend domain services compute semantic meaning.",
@@ -102,6 +114,19 @@ public sealed class ArchitecturalRegressionFrameworkTests
         "Local build failure",
         "CI failure",
         "Release blocker"
+    ];
+
+    private static readonly string[] RequiredArchitecturalDriftClasses =
+    [
+        "New authority",
+        "Duplicate authority",
+        "Transport responsibility growth",
+        "Projection impurity",
+        "Contract replication",
+        "State duplication",
+        "Composition growth",
+        "Dependency cycle",
+        "Semantic leakage"
     ];
 
     private static readonly ArchitecturalRegressionMechanism[] RequiredMechanisms =
@@ -292,6 +317,32 @@ public sealed class ArchitecturalRegressionFrameworkTests
                 Assert.True(
                     row.TryGetValue(column, out string? value) && HasAcceptedCatalogValue(value),
                     $"Regression severity row '{row["Severity"]}' must populate '{column}'. M0.3 severity describes architectural impact while local, CI, and release behavior describe execution policy; keep evidence, remediation, and escalation explicit.");
+            }
+        }
+    }
+
+    [Fact]
+    public void ArchitecturalDriftModelDefinesDetectionAndEvidence()
+    {
+        IReadOnlyList<IReadOnlyDictionary<string, string>> driftModel = ReadMechanismsDocumentTable(
+            "### Architectural Drift Model",
+            "Drift class",
+            RequiredArchitecturalDriftColumns);
+
+        foreach (string driftClass in RequiredArchitecturalDriftClasses)
+        {
+            Assert.Contains(
+                driftModel,
+                row => row["Drift class"] == driftClass);
+        }
+
+        foreach (IReadOnlyDictionary<string, string> row in driftModel)
+        {
+            foreach (string column in RequiredArchitecturalDriftColumns)
+            {
+                Assert.True(
+                    row.TryGetValue(column, out string? value) && HasAcceptedCatalogValue(value),
+                    $"Architectural drift row '{row["Drift class"]}' must populate '{column}'. M0.3 drift classes need risk, detection, evidence, owner, severity, remediation, and escalation metadata so future regressions produce architectural proof instead of isolated implementation failures.");
             }
         }
     }

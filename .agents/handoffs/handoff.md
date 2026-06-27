@@ -1,33 +1,30 @@
-# Handoff: 2026-06-26 After M0.3 Ownership And Severity Slice 0039
+# Handoff: 2026-06-26 After M0.3 Architectural Drift Model Slice 0040
 
-Current milestone state: Milestone 0.3 is in progress. Slice 0039 completed the regression ownership matrix and severity model, with executable metadata guards.
+Current milestone state: Milestone 0.3 is in progress. Slice 0040 completed the architectural drift model and added an executable metadata guard.
 
 New state from this slice:
 
-- Added `### Regression Ownership Matrix` to `docs/architectural-mechanisms.md`.
-- Ownership surfaces now cover backend, frontend, shell, cross-layer, Oracle, generated artifacts, build, and CI.
-- Added `### Regression Severity Model` to separate architectural impact from local, CI, and release execution behavior.
-- Ownership and severity rows now require evidence, remediation, and escalation rule metadata.
-- Extended `tests/CommandCenter.Backend.Tests/Architecture/ArchitecturalRegressionFrameworkTests.cs` with:
-  - `RegressionOwnershipMatrixDefinesResponsibleSurfaces`
-  - `RegressionSeverityModelSeparatesImpactFromExecutionPolicy`
-- Added `.agents/milestones/m0.3-regression-ownership-severity-slice-0039.md`.
-- Updated `.agents/milestones/m0.3-regression-framework.md` to mark ownership and severity outputs complete.
-- Updated `docs/architectural-capabilities.md` to record the ownership/severity guard as active M0.3 protection.
-- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0039.md`.
+- Added `### Architectural Drift Model` to `docs/architectural-mechanisms.md`.
+- Drift classes now cover new authority, duplicate authority, transport responsibility growth, projection impurity, contract replication, state duplication, composition growth, dependency cycle, and semantic leakage.
+- Each drift class now requires architectural risk, detection, evidence, owner, severity, remediation, and escalation rule metadata.
+- Extended `tests/CommandCenter.Backend.Tests/Architecture/ArchitecturalRegressionFrameworkTests.cs` with `ArchitecturalDriftModelDefinesDetectionAndEvidence`.
+- Updated `.agents/milestones/m0.3-regression-framework.md` to mark the architectural drift model output and exit criterion complete.
+- Added `.agents/milestones/m0.3-architectural-drift-model-slice-0040.md`.
+- Updated `docs/architectural-capabilities.md` to record the drift model guard as active M0.3 protection.
+- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0040.md`.
 
 Verification:
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter ArchitecturalRegressionFrameworkTests` passed: 7 passed, 0 failed, 0 skipped.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter ArchitecturalRegressionFrameworkTests` passed: 8 passed, 0 failed, 0 skipped.
 - `git diff --check` passed with line-ending normalization warnings only.
 
 High-leverage decisions currently relevant:
 
-- Regression ownership is now orthogonal to regression category. Category selects mechanism type; ownership routes responsibility and escalation.
-- Severity now describes architectural impact separately from local, CI, and release behavior. This preserves honest risk classification even when enforcement starts as inventory or quarantine.
-- Escalation rule is now required metadata for ownership and severity, so regression failures connect to local fix, milestone blocker, architectural decision, governance review, or release-blocking paths.
-- M0.3 still is not certified; this slice protects metadata, not the full regression framework.
+- Drift classes are architectural failure modes, not ordinary implementation bug labels. Each class must produce evidence that supports an architectural conclusion.
+- Detection and evidence remain separate. Detection is how drift is found; evidence is the proof future decisions, certification, or rollback can rely on.
+- Release-blocker drift can begin with weaker future inventory enforcement, but the severity model must still describe architectural impact honestly.
+- M0.3 still is not certified; this slice protects drift metadata, not full source-scan enforcement for every drift class.
 
 Recommended next slice:
 
-- Continue M0.3 with the architectural drift model slice. Define drift models for new authorities, duplicate authorities, transport responsibility growth, projection impurity, contract replication, state duplication, composition growth, dependency cycles, and semantic leakage, then add a guard that prevents drift-model rows from losing owner, evidence, remediation, and escalation metadata.
+- Continue M0.3 with the regression UX and failure-message slice. Strengthen the existing regression UX rule into a guarded specification that requires architectural intent, observed drift, owner, severity, evidence expectation, remediation path, and escalation guidance in failure messages.
