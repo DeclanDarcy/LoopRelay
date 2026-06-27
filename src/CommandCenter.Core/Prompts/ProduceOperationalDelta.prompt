@@ -1,0 +1,305 @@
+# Decision Session Context Extraction Prompt
+
+## Objective
+
+Analyze the complete decision-making session and extract every piece of information that should persist beyond the current session. The output will be used to update `operational_context.md`, which serves as the authoritative continuity document for future execution sessions.
+
+This is **not** a conversation summary.
+
+Instead, identify durable project state, accumulated knowledge, architectural evolution, and important decisions that materially affect future work.
+
+---
+
+# Extraction Principles
+
+* Preserve facts, not conversational flow.
+* Extract only information that changes future engineering decisions or execution.
+* Prefer explicit decisions over speculation.
+* Consolidate repeated discussions into a single authoritative statement.
+* Eliminate transient reasoning that did not affect outcomes.
+* Preserve rationale only when it materially explains why a decision exists.
+* Avoid implementation trivia unless it affects future work.
+* Do not preserve brainstorming that was explicitly rejected.
+* If uncertainty remains unresolved, record it as an open decision rather than inventing resolution.
+
+---
+
+# Produce the Following Sections
+
+## 1. Executive Session Outcome
+
+Provide a concise description of what the session ultimately accomplished.
+
+Include:
+
+* major objectives completed
+* roadmap evolution
+* architecture evolution
+* important design work
+* major planning completed
+
+Do not describe the conversation.
+
+Describe project progress.
+
+---
+
+## 2. Project Progress
+
+Identify all meaningful progress made.
+
+Examples:
+
+* milestones completed
+* roadmap updates
+* implementation completed
+* audits completed
+* certifications
+* infrastructure added
+* testing completed
+* documentation completed
+* research completed
+* prototypes completed
+
+For each item include:
+
+* what changed
+* why it matters
+* resulting project state
+
+---
+
+## 3. Durable Architectural Decisions
+
+Extract every architectural decision that should influence future implementation.
+
+Examples:
+
+* authority boundaries
+* ownership decisions
+* layering decisions
+* decomposition decisions
+* service boundaries
+* execution model
+* lifecycle model
+* persistence model
+* concurrency model
+* context model
+* adapter model
+* projection model
+* event sourcing decisions
+* orchestration strategy
+* platform strategy
+
+For each decision include:
+
+* decision
+* rationale (brief)
+* downstream implications
+
+---
+
+## 4. Updated Project Mental Model
+
+Identify how the understanding of the project evolved.
+
+Capture:
+
+* renamed concepts
+* clarified terminology
+* refined abstractions
+* changed responsibilities
+* new mental models
+* eliminated misconceptions
+
+Only include durable conceptual evolution.
+
+---
+
+## 5. Newly Established Invariants
+
+Extract every invariant established during the session.
+
+Examples:
+
+* must always...
+* never...
+* only...
+* authority rules
+* ordering guarantees
+* determinism guarantees
+* ownership guarantees
+* semantic preservation guarantees
+* certification requirements
+
+These should become long-term project rules.
+
+---
+
+## 6. Important Constraints
+
+Extract newly established constraints.
+
+Examples:
+
+* performance constraints
+* scalability constraints
+* UX constraints
+* platform constraints
+* compatibility constraints
+* security constraints
+* deployment constraints
+* operational constraints
+
+Only include constraints that materially affect future work.
+
+---
+
+## 7. New Components
+
+Identify newly introduced concepts, systems, modules, services, documents, or responsibilities.
+
+For each include:
+
+* purpose
+* owner
+* relationship to existing architecture
+
+---
+
+## 8. Evolution of Existing Components
+
+Identify existing systems whose responsibilities changed.
+
+Explain:
+
+* previous responsibility
+* updated responsibility
+* why the change occurred
+
+---
+
+## 9. Cross-Cutting Decisions
+
+Extract decisions that affect multiple subsystems.
+
+Examples:
+
+* naming conventions
+* ownership rules
+* governance
+* observability
+* persistence
+* context handling
+* dependency direction
+* layering
+* testing philosophy
+
+---
+
+## 10. Open Decisions
+
+Identify unresolved questions that remain after the session.
+
+For each include:
+
+* question
+* competing options
+* current leaning (if any)
+* blocking impact
+
+Do not invent uncertainty.
+
+---
+
+## 11. Risks
+
+Extract newly discovered project risks.
+
+Examples:
+
+* architectural risks
+* technical debt
+* scalability
+* coupling
+* correctness
+* maintainability
+* delivery
+
+Include any mitigation agreed upon.
+
+---
+
+## 12. Future Work Created
+
+Identify work that naturally follows from this session.
+
+Examples:
+
+* milestones
+* follow-up implementation
+* audits
+* research
+* cleanup
+* validation
+* testing
+* documentation
+
+Only include work directly implied by decisions made.
+
+---
+
+## 13. Operational Context Delta
+
+Produce a concise list of the exact additions or modifications that should be applied to `operational_context.md`.
+
+This should be organized as:
+
+### Add
+
+New durable information.
+
+### Update
+
+Existing information whose meaning changed.
+
+### Remove
+
+Information made obsolete by this session.
+
+### Preserve
+
+Important existing context that remains valid.
+
+---
+
+# Exclude
+
+Do **not** include:
+
+* conversational filler
+* explanations made only for discussion
+* rejected ideas
+* speculative possibilities
+* temporary debugging
+* implementation minutiae
+* repeated arguments
+* intermediate reasoning
+* step-by-step discussion history
+
+---
+
+# Quality Requirements
+
+The extraction should enable someone beginning a brand-new execution session to understand everything important that changed without reading the original decision session.
+
+Focus on:
+
+* durable knowledge
+* accumulated project understanding
+* architectural evolution
+* authoritative decisions
+* project state
+* future execution implications
+
+The resulting document should function as a high-signal continuity update suitable for incorporation into `operational_context.md`.

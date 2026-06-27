@@ -12,8 +12,8 @@ The plan is intentionally incremental. Every phase must leave the solution build
 
 The solution is a multi-project .NET backend with a React UI and a thin Tauri shell:
 
-- `src/CommandCenter.Core`: repositories, artifacts, configuration, planning projections, low-level repository-owned artifact access.
-- `src/CommandCenter.Execution`: operational execution sessions, context resolution, prompts, provider/process launch, Git, handoffs, monitoring, execution metadata.
+- `src/CommandCenter.Core`: repositories, artifacts, configuration, planning projections, low-level repository-owned artifact access, and the authored `.prompt` files generated into `CommandCenter.Core.Prompts`.
+- `src/CommandCenter.Execution`: operational execution sessions, context resolution, operational prompt input shaping, generated prompt adapters, provider/process launch, Git, handoffs, monitoring, execution metadata.
 - `src/CommandCenter.DecisionSessions`: decision session records, registry, metrics, economics, coherence, lifecycle policy, transfer eligibility, continuity artifacts, observability, certification, and recovery.
 - `src/CommandCenter.Decisions`: structured decision domain, generation, governance, certification, quality, lifecycle, evidence, proposals, refinement, and persistence.
 - `src/CommandCenter.Continuity`: operational context, context proposals, compression, understanding diffs, decision assimilation, diagnostics, reports, and context lifecycle.
@@ -39,6 +39,8 @@ Important existing capabilities to preserve:
 Known debt to burn down during the early phases:
 
 - Extract role-agnostic process/runtime infrastructure from `CommandCenter.Execution` into `CommandCenter.Agents`.
+- Replace all literal prompt construction with generated renderers from `CommandCenter.Core.Prompts`.
+- Preserve the authored prompt catalog as the prompt source of truth instead of recreating prompt text inside runtime, execution, decision, planning, or continuity services.
 - Replace truncate-then-write persistence with atomic temp-write plus replace semantics for repository and local JSON stores.
 - Centralize state transitions for execution, continuity, workflow, repository runtime, repository runs, decision runtime, and conversation turns.
 - Move long-lived runtime ownership out of stateless endpoint handlers.
@@ -57,7 +59,7 @@ Known debt to burn down during the early phases:
 7. Session role selects prompt, sandbox, effort, tools, permissions, and policy.
 8. Operational Session and Decision Session are different roles and different domain concepts, even when both use Agent Runtime.
 9. Repository Runtime must not compute execution, decision, continuity, reasoning, Git, workflow, contract, information, intelligence, or UI semantics.
-10. Execution owns operational semantics, Git, code mutation, handoffs, execution evidence, and operational prompts.
+10. Execution owns operational semantics, Git, code mutation, handoffs, execution evidence, and operational prompt input shaping. `CommandCenter.Core.Prompts` owns canonical prompt text.
 11. Decision Runtime owns live decision conversation behavior, but Decisions domain owns decision validity and durable decision semantics.
 12. Humans own intent, approval, ratification, edits, and the decision to start or continue execution.
 13. Continuity owns durable repository understanding and context evolution.
@@ -65,6 +67,26 @@ Known debt to burn down during the early phases:
 15. Intelligence is observational. Intelligence may identify opportunities, synthesize knowledge, assess trends, and recommend improvements, but it must never mutate repositories, plans, decisions, execution, operational context, governance state, or authority boundaries autonomously.
 16. Contracts describe externally observable backend-owned shapes and are never redefined by UI, Rust, mocks, tests, or generated TypeScript.
 17. Live process state is disposable. Durable state, journals, operational context, decisions, plans, history, and knowledge are recoverable.
+18. Prompt templates are authored repository source under `src/CommandCenter.Core/Prompts` and generated at build time into `CommandCenter.Core.Prompts` by `Lib.Prompts`.
+19. Generated prompt renderers are the only authority for prompt text. Runtime, Execution, DecisionSessions, Planning, Continuity, Workflow, UI, shell, tests, and compatibility adapters must not duplicate canonical prompt strings.
+20. Session role and workflow phase select the generated prompt. Agent Runtime receives rendered prompt text and prompt metadata; it never selects, edits, or semantically interprets prompts.
+21. Every agent turn that uses a generated prompt records prompt name, generated type, `SourceHash`, role, workflow phase, and the durable input artifacts used to render it.
+22. Prompt template changes are architecture-affecting communication changes. They require generated prompt build validation, prompt provenance impact review, and compatibility evidence for existing sessions, journals, artifacts, and tests.
+
+## Prompt Architecture
+
+`CommandCenter.Core.Prompts` is the canonical prompt API. The authored source files live in `src/CommandCenter.Core/Prompts/*.prompt`; `Lib.Prompts` consumes them as MSBuild `AdditionalFiles` and generates static prompt classes at compile time. Each generated class exposes `Template`, `SourceHash`, and `Render(...)`; malformed placeholder syntax fails the build through `PROMPT001`-`PROMPT004`.
+
+The generator is an analyzer-only dependency. It introduces no runtime parser, no runtime file lookup, and no embedded-resource prompt authority. Runtime services render prompts through generated methods and pass already-rendered text plus prompt provenance into Agent Runtime.
+
+The initial canonical prompt catalog is:
+
+- Planning: `WritePlanAgainstCodebase`, `WritePlanForNewCodebase`, `RevisePlan`, `ExtractMilestones`.
+- Operational execution: `StartExecution`, `ContinueExecution`.
+- Decision sessions: `StartDecisionSession`, `StartDecisionSessionFromTransfer`, `GetNextDecisions`.
+- Continuity: `ProduceOperationalDelta`, `UpdateOperationalContext`.
+
+Prompt placeholders accept string payloads. Domain services own the typed source information, serialize or format their authority-owned inputs into the prompt payloads, call the generated renderer, and record the input artifact identities. Prompt templates may instruct agents, but they do not become semantic authority for plans, executions, decisions, continuity, reasoning, Git, workflow, contracts, or UI behavior.
 
 ## Delivery Rules
 
@@ -73,6 +95,7 @@ Known debt to burn down during the early phases:
 - Prefer compatibility adapters over breaking existing endpoints during migration.
 - Every phase must pass the backend suite before being accepted.
 - Any externally observable contract change must update or add contract identity evidence, fixtures or generated artifacts, consumer verification, freshness manifests, and request-boundary checks where applicable.
+- Any prompt behavior change must update the authored `.prompt` file, preserve generated prompt provenance, and add or update prompt rendering, prompt selection, and no-literal-prompt governance coverage.
 - Any new architectural authority, invariant, compatibility exception, generated artifact exception, transport exception, or regression weakening must have decision evidence and documentation updates.
 - Prefer additive endpoint paths and UI surfaces until the replacement is certified.
 - Keep user-facing terminology repository-centered: Repository, Plan, Execution, Decision, Understanding, History, Health, Knowledge. Reserve runtime/session/registry/provider/transfer terms for diagnostics.
@@ -167,7 +190,9 @@ Repository communication is the umbrella for every durable or observable way the
 Rules:
 
 - Communication transports authority-owned facts; it does not become semantic authority.
-- Prompts are generated, named, versioned where needed, and tied to session role and information inputs.
+- Prompts are generated, named, source-hashed, versioned where needed, and tied to session role, workflow phase, and authority-owned information inputs.
+- Prompt text lives only in authored `.prompt` files and generated `CommandCenter.Core.Prompts` classes. Compatibility layers may adapt old call sites, but they must call generated renderers rather than own prompt literals.
+- Prompt invocation records must survive recovery: prompt name, generated type, `SourceHash`, session role, workflow phase, rendered input artifact identities, and output artifact references.
 - Streams expose ordered runtime facts, turn boundaries, lifecycle events, replay/reconnect metadata, and terminal states without leaking process handles or registry internals.
 - Journals preserve durable progress, lifecycle transitions, decisions, handoffs, context evolution, transfers, and recovery checkpoints.
 - Artifacts remain repository-owned durable records unless explicitly classified as local runtime metadata.
@@ -216,12 +241,14 @@ Rules:
 - Workspaces compose controllers and local interaction flow.
 - Presentation components render facts, labels, colors, icons, layout, and accessibility text only.
 - The application root owns repository selection, global shell state, navigation, and workspace composition only.
+- React never builds prompt text, infers prompt selection, or repairs prompt output. It sends user intent and edits to backend-owned prompt workflows.
 
 ### Documentation and Governance
 
 - Update `docs/architecture.md` when authority, ownership, or lifecycle changes.
 - Update `docs/contracts.md` and contract endpoint catalogs when a contract identity or compatibility path changes.
 - Update `docs/architectural-mechanisms.md` when a verifier is added, strengthened, weakened, quarantined, replaced, or retired.
+- Update prompt architecture documentation when prompt ownership, prompt catalog, prompt selection, or prompt provenance changes.
 - Add evidence for each phase certification with commands run, files changed, scope, known limits, compatibility impact, and rollback path.
 - Keep decisions, evidence, mechanisms, and capability documentation aligned before accepting a phase.
 
@@ -235,6 +262,7 @@ Each phase is complete only when:
 - Shell tests pass if shell or transport behavior changed.
 - Contract oracle, consumer verification, freshness, generated pipeline, and request-boundary checks pass for touched contract families.
 - Architecture governance tests protect new or changed invariants.
+- Generated prompt compilation, prompt rendering, prompt selection, prompt provenance, and no-literal-prompt governance tests pass for touched prompt workflows.
 - New runtime or lifecycle states have centralized transition tests.
 - Recovery behavior is tested from durable state.
 - Product behavior is characterized when user-facing behavior changes.

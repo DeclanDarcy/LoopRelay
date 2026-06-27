@@ -35,16 +35,26 @@ Goal: stop treating execution as a disconnected provider invocation and introduc
   - Repository Runtime
   - Repository Run
   - Execution
+  - generated `StartExecution` prompt rendering
   - Agent Runtime operational session
-- [ ] Execution remains the authority for context building, Git, operational prompts, provider interaction, handoffs, commit, and push.
+- [ ] Route continued execution through generated `ContinueExecution` prompt rendering after the latest handoff, decisions, and operational context are assembled.
+- [ ] Execution remains the authority for context building, Git, operational prompt inputs, provider interaction, handoffs, commit, and push. `CommandCenter.Core.Prompts` remains the authority for prompt text.
+- [ ] Existing execution prompt builders become adapters over `StartExecution.Render(...)` and `ContinueExecution.Render(...)`.
 - [ ] Repository Run owns sequencing, iteration, lifecycle, current phase, and durable progress only if those responsibilities remain distinct from Repository Runtime coordination.
+- [ ] Persist prompt provenance in the run journal for every operational turn:
+  - `StartExecution` or `ContinueExecution`
+  - generated type
+  - `SourceHash`
+  - operational context artifact identity
+  - plan, handoff, and decision input identities
+  - produced handoff or execution artifact identity
 - [ ] Align execution streams with Repository Run events while preserving existing SSE/resource behavior.
 - [ ] Connect repository lifecycle transitions:
   - `PlanReady` -> `ExecutingPlan`
   - `ExecutingPlan` -> `Completed`
   - failure and cancellation states remain explicit and recoverable.
 - [ ] Add run recovery from journal and execution records. Live processes are never recovered.
-- [ ] Add generated contracts for repository run, run lifecycle, run journal, execution readiness, execution metadata, and stream events.
+- [ ] Add generated contracts for repository run, run lifecycle, run journal, execution readiness, execution metadata, prompt provenance, and stream events.
 
 ## Certification
 
@@ -52,5 +62,7 @@ Goal: stop treating execution as a disconnected provider invocation and introduc
 - [ ] Execution starts and advances through Repository Runtime.
 - [ ] Existing execution semantics remain intact.
 - [ ] Handoffs become run artifacts with provenance.
+- [ ] Operational turns use `StartExecution` for the first execution turn and `ContinueExecution` for subsequent turns.
+- [ ] No operational execution runtime path owns literal canonical prompt text.
 - [ ] Run recovery restores durable run state and projections.
 - [ ] Repository Run has explicit justification, or the implementation records a governed collapse plan into Repository Runtime before downstream phases depend on it.

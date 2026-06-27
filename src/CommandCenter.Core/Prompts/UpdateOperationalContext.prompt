@@ -1,0 +1,225 @@
+# Operational Context Evolution Prompt
+
+## Inputs
+
+You are provided with two documents:
+
+1. **Current `operational_context.md`**
+
+   * This is the current authoritative operational context.
+   * At the beginning of a project it is effectively the complete implementation plan.
+   * Over time it evolves into the authoritative description of both the remaining work and everything learned while executing it.
+
+2. **Decision Session Context Extraction `operational_delta.md`**
+
+   * Produced by the agent that supervised every execution session handoff and participated in every intra-session decision since the last time `operational_context.md` was updated.
+   * Contains every durable fact, architectural decision, project update, and operational delta extracted from the completed decision-making session.
+
+Your task is to evolve `operational_context.md` into its next authoritative revision.
+
+---
+
+# Objective
+
+Update `operational_context.md` so it accurately represents the project's state immediately after the completed decision-making session.
+
+The updated document should become the primary context consumed by the next execution session.
+
+The resulting document should read as though it was written directly in its final form—not patched together from incremental edits.
+
+---
+
+# Guiding Philosophy
+
+Treat this as maintaining an evolving project knowledge base rather than applying textual edits.
+
+The goal is to maximize future execution quality.
+
+Every section should represent the project's current understanding.
+
+---
+
+# Update Rules
+
+## Preserve Existing Context
+
+Retain information that remains true.
+
+Do not rewrite sections merely because they can be written differently.
+
+Avoid unnecessary churn.
+
+---
+
+## Integrate New Knowledge
+
+Merge new information into the appropriate existing sections.
+
+Avoid appending "Session Updates" sections.
+
+The document should remain cohesive.
+
+---
+
+## Promote Durable Knowledge
+
+If a discussion produced new understanding, incorporate that understanding into the appropriate architecture or design sections.
+
+Do not preserve it merely as historical context.
+
+---
+
+## Update Plans
+
+If implementation progress occurred:
+
+* mark completed work appropriately
+* update milestone status
+* remove obsolete future work
+* adjust sequencing if decisions changed priorities
+
+The document should always describe the remaining work accurately.
+
+---
+
+## Update Architecture
+
+Where architectural decisions changed:
+
+* rewrite the architecture sections
+* update component responsibilities
+* revise ownership
+* revise boundaries
+* revise invariants
+* revise terminology
+
+Do not duplicate old and new versions.
+
+---
+
+## Update Mental Models
+
+Where project understanding evolved:
+
+Replace outdated descriptions.
+
+Do not preserve obsolete explanations.
+
+---
+
+## Preserve Important Rationale
+
+Retain rationale only where it helps future engineering decisions.
+
+Avoid historical narratives.
+
+---
+
+## Eliminate Obsolete Information
+
+Remove information that is no longer true.
+
+Examples:
+
+* superseded architecture
+* abandoned approaches
+* outdated assumptions
+* obsolete TODOs
+* completed investigations
+* resolved uncertainties
+
+---
+
+# Required Integration Areas
+
+Review every extracted item and determine whether it affects:
+
+* project overview
+* implementation strategy
+* roadmap
+* milestone status
+* architecture
+* system decomposition
+* terminology
+* authority model
+* lifecycle model
+* context model
+* execution model
+* persistence model
+* governance model
+* invariants
+* constraints
+* component responsibilities
+* future work
+* risks
+* assumptions
+* operational guidance
+
+Integrate into the most appropriate existing section.
+
+Never create redundant sections if the information belongs elsewhere.
+
+---
+
+# Conflict Resolution
+
+If the extraction conflicts with the existing document:
+
+1. Prefer newer authoritative decisions.
+2. Remove superseded information.
+3. Rewrite affected sections to reflect the new reality.
+4. Ensure no contradictory statements remain anywhere in the document.
+
+---
+
+# Maintain Document Quality
+
+The updated document should remain:
+
+* internally consistent
+* concise
+* technically precise
+* free of duplicated information
+* organized logically
+* easy to use as execution context
+
+Avoid accumulating historical sediment.
+
+---
+
+# Continuity Requirements
+
+After reading only the updated `operational_context.md`, a new execution session should understand:
+
+* what the project currently is
+* current architecture
+* major decisions
+* current terminology
+* project invariants
+* completed work
+* remaining work
+* current priorities
+* important constraints
+* project risks
+* architectural direction
+* operational expectations
+
+without needing to read the previous operational context or the decision session.
+
+---
+
+# Output Requirements
+
+Produce the **entire updated `operational_context.md`**, not a patch or diff.
+
+Do not include:
+
+* change logs
+* edit summaries
+* explanations
+* commentary
+* revision notes
+
+The output should be the complete replacement document ready to overwrite the existing `operational_context.md`.
+
+The final document should represent the authoritative operational state of the project immediately following the completed decision-making session.

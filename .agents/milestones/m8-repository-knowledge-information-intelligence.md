@@ -11,6 +11,7 @@ Goal: make Repository Knowledge first-class. Repository Knowledge is the broader
   - Knowledge Graph: relationships among durable information
   - Information Lineage: provenance from intent through understanding
   - Information Queries: governed exploration over authoritative facts
+  - Prompt Provenance: generated prompt identity, source hash, role, input artifacts, and output artifacts for agent-produced knowledge
 - [ ] Preserve the Phase 7 boundary: Repository Understanding is already canonical. This phase enriches the surrounding knowledge layer rather than reintroducing understanding as a new feature.
 - [ ] Promote durable information objects:
   - Intent
@@ -22,8 +23,15 @@ Goal: make Repository Knowledge first-class. Repository Knowledge is the broader
   - Evidence
   - History Entry
   - Knowledge Relationship
+  - Prompt Invocation
 - [ ] Treat Operational Context as the implementation artifact behind Repository Understanding.
 - [ ] Extend Reasoning Graph into a repository Knowledge Graph connecting intent, plans, runs, handoffs, decisions, understanding, artifacts, evidence, and history.
+- [ ] Connect prompt invocations into Repository Knowledge lineage:
+  - intent/spec artifacts to planning prompt to plan revision
+  - plan and operational context to execution prompt to handoff
+  - handoff to decision prompt to decision output/review
+  - decision session context to delta prompt to operational delta
+  - operational context plus delta to update prompt to Repository Understanding version
 - [ ] Add repository history as a continuous, queryable, repository-centric timeline:
   - planning history
   - execution history
@@ -45,6 +53,8 @@ Goal: make Repository Knowledge first-class. Repository Knowledge is the broader
   - when a claim became true
   - which assumptions remain
   - which goals remain incomplete
+  - which prompt version shaped an agent-produced artifact
+  - whether a historical artifact was produced by a now-changed prompt source hash
 - [ ] Add information authority tests:
   - Human owns intent and ratification.
   - Planning runtime generates proposals and revisions but does not approve them.
@@ -52,7 +62,7 @@ Goal: make Repository Knowledge first-class. Repository Knowledge is the broader
   - Continuity owns Repository Understanding.
   - Reasoning owns Knowledge Graph semantics.
 - [ ] Add UI knowledge, history, evidence, lineage, and understanding-evolution explorers.
-- [ ] Add contracts for Repository Understanding, Knowledge Graph, Repository History, Information Lineage, Information Query, and Evolution projections.
+- [ ] Add contracts for Repository Understanding, Knowledge Graph, Repository History, Information Lineage, Prompt Provenance, Information Query, and Evolution projections.
 
 ## Certification
 
@@ -60,4 +70,5 @@ Goal: make Repository Knowledge first-class. Repository Knowledge is the broader
 - [ ] Repository Knowledge is the durable information layer that contains understanding, history, evidence, graph relationships, lineage, and queries.
 - [ ] Knowledge relationships are evidence-backed and queryable.
 - [ ] Information lineage is complete across planning, execution, decisions, and understanding.
+- [ ] Prompt provenance participates in lineage without making prompts semantic authority.
 - [ ] Repository intelligence explains current state without speculative conclusions.

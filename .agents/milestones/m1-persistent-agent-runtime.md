@@ -27,15 +27,25 @@ Goal: make Codex-backed sessions interactive and reusable across multiple turns.
   - replace fixed process-start delay with deterministic exit probing
   - detect hung sessions, protocol violations, unexpected exits, cancellation, and timeout.
 - [ ] Add role-aware sandbox and effort handling to `AgentSessionSpec`.
+- [ ] Add prompt turn input support to Agent Runtime:
+  - rendered prompt text
+  - prompt name
+  - generated prompt type
+  - `SourceHash`
+  - session role
+  - workflow phase
+  - input artifact identities
+- [ ] Keep Agent Runtime prompt-neutral. It accepts rendered prompts and provenance, but never chooses templates, edits prompt text, formats domain payloads, or owns prompt semantics.
 - [ ] Add runtime diagnostics and metrics:
   - session count
   - prompt count
+  - prompt identities and source hashes by turn
   - turn count
   - lifetime
   - current state
   - failures
   - cancellation/disposal reason
-- [ ] Add generated contracts and UI types for runtime status, session diagnostics, stream event payloads, and turn completion where they cross backend boundaries.
+- [ ] Add generated contracts and UI types for runtime status, session diagnostics, stream event payloads, prompt provenance, and turn completion where they cross backend boundaries.
 
 ## Certification
 
@@ -44,4 +54,6 @@ Goal: make Codex-backed sessions interactive and reusable across multiple turns.
 - [ ] Existing one-shot execution remains behaviorally equivalent.
 - [ ] Session cleanup occurs on cancellation, failure, disposal, and application shutdown.
 - [ ] Concurrent sessions are isolated.
+- [ ] A persistent session can execute multiple generated-prompt turns while retaining distinct prompt provenance for each turn.
+- [ ] Agent Runtime tests prove prompts are opaque runtime inputs and no template selection happens inside the runtime layer.
 - [ ] Runtime tests cover long output, rapid prompts, cancellation, disposal, failure recovery, and registry ownership.
