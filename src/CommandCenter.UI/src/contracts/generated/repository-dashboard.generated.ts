@@ -640,6 +640,7 @@ export type RepositoryDashboardContractFieldMetadata = {
   identityRole?: string
   arrayOrdering?: 'semantic' | 'stableByProjection' | 'observational'
   stringFormat?: string
+  primitiveType?: 'string' | 'number' | 'boolean'
   source: string
 }
 
@@ -716,6 +717,28 @@ export const repositoryDashboardContractFieldMetadata = [
     source: 'M1.2 repository-dashboard governed schema metadata pilot',
   },
   {
+    path: '$[].executionSummary.state',
+    presence: 'required',
+    nullability: 'nonNullable',
+    semanticDomain: 'ExecutionSessionState',
+    domainValues: ['Created', 'Executing', 'Completed', 'Failed', 'Cancelled'],
+    source: 'M1.2 repository-dashboard governed schema metadata pilot',
+  },
+  {
+    path: '$[].executionSummary.milestonePath',
+    presence: 'required',
+    nullability: 'nullable',
+    semanticDomain: 'RepositoryRelativePath',
+    source: 'M1.2 repository-dashboard governed schema metadata pilot',
+  },
+  {
+    path: '$[].executionSummary.startedAt',
+    presence: 'required',
+    nullability: 'nullable',
+    stringFormat: 'date-time',
+    source: 'M1.2 repository-dashboard governed schema metadata pilot',
+  },
+  {
     path: '$[].executionSummary.completedAt',
     presence: 'required',
     nullability: 'nullable',
@@ -751,6 +774,13 @@ export const repositoryDashboardContractFieldMetadata = [
     source: 'M1.2 repository-dashboard governed schema metadata pilot',
   },
   {
+    path: '$[].executionSummary.lastActivityAt',
+    presence: 'required',
+    nullability: 'nullable',
+    stringFormat: 'date-time',
+    source: 'M1.2 repository-dashboard governed schema metadata pilot',
+  },
+  {
     path: '$[].executionSummary.providerExecutablePath',
     presence: 'required',
     nullability: 'nullable',
@@ -761,6 +791,7 @@ export const repositoryDashboardContractFieldMetadata = [
     path: '$[].executionSummary.providerProcessId',
     presence: 'required',
     nullability: 'nullable',
+    primitiveType: 'number',
     source: 'M1.2 repository-dashboard governed schema metadata pilot',
   },
   {
@@ -768,6 +799,13 @@ export const repositoryDashboardContractFieldMetadata = [
     presence: 'required',
     nullability: 'nullable',
     stringFormat: 'date-time',
+    source: 'M1.2 repository-dashboard governed schema metadata pilot',
+  },
+  {
+    path: '$[].executionSummary.handoffPath',
+    presence: 'required',
+    nullability: 'nullable',
+    semanticDomain: 'RepositoryRelativePath',
     source: 'M1.2 repository-dashboard governed schema metadata pilot',
   },
   {
@@ -789,6 +827,13 @@ export const repositoryDashboardContractFieldMetadata = [
     presence: 'required',
     nullability: 'nullable',
     semanticDomain: 'GitCommitMessage',
+    source: 'M1.2 repository-dashboard governed schema metadata pilot',
+  },
+  {
+    path: '$[].executionSummary.preparationSnapshotId',
+    presence: 'required',
+    nullability: 'nullable',
+    identityRole: 'ExecutionPreparationSnapshotId',
     source: 'M1.2 repository-dashboard governed schema metadata pilot',
   },
   {
@@ -834,6 +879,28 @@ export const repositoryDashboardContractFieldMetadata = [
     source: 'M1.2 repository-dashboard governed schema metadata pilot',
   },
   {
+    path: '$[].executionHistory[].state',
+    presence: 'required',
+    nullability: 'nonNullable',
+    semanticDomain: 'ExecutionSessionState',
+    domainValues: ['Created', 'Executing', 'Completed', 'Failed', 'Cancelled'],
+    source: 'M1.2 repository-dashboard governed schema metadata pilot',
+  },
+  {
+    path: '$[].executionHistory[].milestonePath',
+    presence: 'required',
+    nullability: 'nullable',
+    semanticDomain: 'RepositoryRelativePath',
+    source: 'M1.2 repository-dashboard governed schema metadata pilot',
+  },
+  {
+    path: '$[].executionHistory[].startedAt',
+    presence: 'required',
+    nullability: 'nullable',
+    stringFormat: 'date-time',
+    source: 'M1.2 repository-dashboard governed schema metadata pilot',
+  },
+  {
     path: '$[].executionHistory[].completedAt',
     presence: 'required',
     nullability: 'nullable',
@@ -869,6 +936,13 @@ export const repositoryDashboardContractFieldMetadata = [
     source: 'M1.2 repository-dashboard governed schema metadata pilot',
   },
   {
+    path: '$[].executionHistory[].lastActivityAt',
+    presence: 'required',
+    nullability: 'nullable',
+    stringFormat: 'date-time',
+    source: 'M1.2 repository-dashboard governed schema metadata pilot',
+  },
+  {
     path: '$[].executionHistory[].providerExecutablePath',
     presence: 'required',
     nullability: 'nullable',
@@ -879,6 +953,7 @@ export const repositoryDashboardContractFieldMetadata = [
     path: '$[].executionHistory[].providerProcessId',
     presence: 'required',
     nullability: 'nullable',
+    primitiveType: 'number',
     source: 'M1.2 repository-dashboard governed schema metadata pilot',
   },
   {
@@ -886,6 +961,13 @@ export const repositoryDashboardContractFieldMetadata = [
     presence: 'required',
     nullability: 'nullable',
     stringFormat: 'date-time',
+    source: 'M1.2 repository-dashboard governed schema metadata pilot',
+  },
+  {
+    path: '$[].executionHistory[].handoffPath',
+    presence: 'required',
+    nullability: 'nullable',
+    semanticDomain: 'RepositoryRelativePath',
     source: 'M1.2 repository-dashboard governed schema metadata pilot',
   },
   {
@@ -907,6 +989,13 @@ export const repositoryDashboardContractFieldMetadata = [
     presence: 'required',
     nullability: 'nullable',
     semanticDomain: 'GitCommitMessage',
+    source: 'M1.2 repository-dashboard governed schema metadata pilot',
+  },
+  {
+    path: '$[].executionHistory[].preparationSnapshotId',
+    presence: 'required',
+    nullability: 'nullable',
+    identityRole: 'ExecutionPreparationSnapshotId',
     source: 'M1.2 repository-dashboard governed schema metadata pilot',
   },
   {
@@ -1263,5 +1352,149 @@ export type RepositoryDashboardGeneratedRootItemDecisionSessionSummaryRecentTran
   continuityArtifactId: string
   startedAt: string
   completedAt: string
+  succeeded: boolean
+}
+
+export type RepositoryDashboardConsumerCandidateContract = RepositoryDashboardConsumerCandidateProjection[]
+
+export type RepositoryDashboardConsumerCandidateProjection = {
+  repository: RepositoryDashboardConsumerCandidateProjectionRepository
+  availability: 'Available' | 'Missing' | 'AccessDenied'
+  readiness: 'MissingPlan' | 'MissingMilestones' | 'Ready'
+  executionState: 'Ready' | 'Executing' | 'AwaitingAcceptance' | 'Accepted' | 'AwaitingCommit' | 'AwaitingPush' | 'Failed' | 'Cancelled'
+  activeExecutionSession: RepositoryDashboardConsumerCandidateExecutionSessionSummary | null
+  executionSummary: RepositoryDashboardConsumerCandidateExecutionSessionSummary | null
+  executionHistory: RepositoryDashboardConsumerCandidateProjectionExecutionHistory[]
+  milestoneCount: number
+  hasCurrentHandoff: boolean
+  hasCurrentDecisions: boolean
+  continuitySummary: RepositoryDashboardConsumerCandidateProjectionContinuitySummary
+  reasoningSummary: RepositoryDashboardConsumerCandidateProjectionReasoningSummary
+  decisionSessionSummary: RepositoryDashboardConsumerCandidateProjectionDecisionSessionSummary
+}
+
+export type RepositoryDashboardConsumerCandidateProjectionRepository = {
+  id: string
+  name: string
+  path: string
+}
+
+export type RepositoryDashboardConsumerCandidateExecutionSessionSummary = {
+  sessionId: string
+  state: 'Created' | 'Executing' | 'Completed' | 'Failed' | 'Cancelled'
+  repositoryState: string
+  milestonePath: string | null
+  startedAt: string | null
+  completedAt: string | null
+  duration: string | null
+  acceptedAt: string | null
+  rejectedAt: string | null
+  decisionNote: string | null
+  lastActivityAt: string | null
+  providerName: string
+  providerExecutablePath: string | null
+  providerProcessId: number | null
+  providerStartedAt: string | null
+  handoffPath: string | null
+  commitSha: string | null
+  committedAt: string | null
+  commitMessage: string | null
+  preparationSnapshotId: string | null
+  pushAttemptedAt: string | null
+  pushedAt: string | null
+  pushedCommitSha: string | null
+  pushRemoteName: string | null
+  pushBranchName: string | null
+  failureReason: string | null
+}
+
+export type RepositoryDashboardConsumerCandidateProjectionExecutionHistory = {
+  sessionId: string
+  state: 'Created' | 'Executing' | 'Completed' | 'Failed' | 'Cancelled'
+  repositoryState: string
+  milestonePath: string | null
+  startedAt: string | null
+  completedAt: string | null
+  duration: string | null
+  acceptedAt: string | null
+  rejectedAt: string | null
+  decisionNote: string | null
+  lastActivityAt: string | null
+  providerName: string
+  providerExecutablePath: string | null
+  providerProcessId: number | null
+  providerStartedAt: string | null
+  handoffPath: string | null
+  commitSha: string | null
+  committedAt: string | null
+  commitMessage: string | null
+  preparationSnapshotId: string | null
+  pushAttemptedAt: string | null
+  pushedAt: string | null
+  pushedCommitSha: string | null
+  pushRemoteName: string | null
+  pushBranchName: string | null
+  failureReason: string | null
+}
+
+export type RepositoryDashboardConsumerCandidateProjectionContinuitySummary = {
+  operationalContextExists: boolean
+  operationalContextRevisionCount: number
+  operationalContextLastUpdatedAt: string | null
+  openQuestionCount: number
+  activeRiskCount: number
+  pendingProposalExists: boolean
+}
+
+export type RepositoryDashboardConsumerCandidateProjectionReasoningSummary = {
+  eventCount: number
+  threadCount: number
+  relationshipCount: number
+  hypothesisEventCount: number
+  alternativeEventCount: number
+  contradictionEventCount: number
+  directionEventCount: number
+  decisionEvolutionEventCount: number
+  assumptionEvolutionEventCount: number
+  constraintEvolutionEventCount: number
+  evidenceEventCount: number
+  lastEventAt: string | null
+  lastThreadActivityAt: string | null
+  lastRelationshipAt: string | null
+  lastActivityAt: string | null
+  lastReconstructionAt: string | null
+  lastCertificationAt: string | null
+  certificationResult: string | null
+}
+
+export type RepositoryDashboardConsumerCandidateProjectionDecisionSessionSummary = {
+  decisionSessionId: string | null
+  state: 'Created' | 'Active' | 'TransferPending' | 'Transferred' | 'Retired' | null
+  lifecycleDecision: 'Continue' | 'Transfer' | null
+  transferEligibilityStatus: 'NotApplicable' | 'Eligible' | 'Blocked' | 'Deferred' | null
+  estimatedTokenCount: number | null
+  estimatedCacheTtl: string | null
+  cacheMissRisk: number | null
+  coherenceScore: number | null
+  transferPressure: number | null
+  healthDimensions: RepositoryDashboardConsumerCandidateProjectionDecisionSessionSummaryHealthDimensions[]
+  recentTransferLineage: RepositoryDashboardConsumerCandidateProjectionDecisionSessionSummaryRecentTransferLineage[]
+  diagnostics: string[]
+  generatedAt: string | null
+}
+
+export type RepositoryDashboardConsumerCandidateProjectionDecisionSessionSummaryHealthDimensions = {
+  name: string
+  status: string
+  findings: string[]
+}
+
+export type RepositoryDashboardConsumerCandidateProjectionDecisionSessionSummaryRecentTransferLineage = {
+  transferId: string
+  sourceSessionId: string
+  targetSessionId: string | null
+  continuityArtifactId: string | null
+  startedAt: string
+  completedAt: string | null
   succeeded: boolean
 }

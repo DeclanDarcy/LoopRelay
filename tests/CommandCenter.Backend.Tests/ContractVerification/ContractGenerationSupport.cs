@@ -25,6 +25,7 @@ internal sealed record ContractGenerationFieldMetadata(
     string? IdentityRole,
     ContractGenerationArrayOrdering? ArrayOrdering,
     string? StringFormat,
+    ContractGenerationPrimitiveType? PrimitiveType,
     string Source);
 
 internal sealed record ContractGenerationShape(
@@ -63,6 +64,13 @@ internal enum ContractGenerationArrayOrdering
     Semantic,
     StableByProjection,
     Observational
+}
+
+internal enum ContractGenerationPrimitiveType
+{
+    String,
+    Number,
+    Boolean
 }
 
 internal static class ContractGenerationIrBuilder
@@ -185,34 +193,52 @@ internal static class RepositoryDashboardGenerationMetadata
         RequiredNullable("$[].activeExecutionSession", semanticDomain: "ExecutionSessionSummary"),
         RequiredNullable("$[].executionSummary", semanticDomain: "ExecutionSessionSummary"),
         RequiredNonNullable("$[].executionHistory", arrayOrdering: ContractGenerationArrayOrdering.StableByProjection),
+        RequiredNonNullable(
+            "$[].executionSummary.state",
+            semanticDomain: "ExecutionSessionState",
+            domainValues: ["Created", "Executing", "Completed", "Failed", "Cancelled"]),
+        RequiredNullable("$[].executionSummary.milestonePath", semanticDomain: "RepositoryRelativePath"),
+        RequiredNullable("$[].executionSummary.startedAt", stringFormat: "date-time"),
         RequiredNullable("$[].executionSummary.completedAt", stringFormat: "date-time"),
         RequiredNullable("$[].executionSummary.duration", stringFormat: "duration"),
         RequiredNullable("$[].executionSummary.acceptedAt", stringFormat: "date-time"),
         RequiredNullable("$[].executionSummary.rejectedAt", stringFormat: "date-time"),
         RequiredNullable("$[].executionSummary.decisionNote", semanticDomain: "HumanAuthoredText"),
+        RequiredNullable("$[].executionSummary.lastActivityAt", stringFormat: "date-time"),
         RequiredNullable("$[].executionSummary.providerExecutablePath", semanticDomain: "ProviderExecutablePath"),
-        RequiredNullable("$[].executionSummary.providerProcessId"),
+        RequiredNullable("$[].executionSummary.providerProcessId", primitiveType: ContractGenerationPrimitiveType.Number),
         RequiredNullable("$[].executionSummary.providerStartedAt", stringFormat: "date-time"),
+        RequiredNullable("$[].executionSummary.handoffPath", semanticDomain: "RepositoryRelativePath"),
         RequiredNullable("$[].executionSummary.commitSha", semanticDomain: "GitCommitSha"),
         RequiredNullable("$[].executionSummary.committedAt", stringFormat: "date-time"),
         RequiredNullable("$[].executionSummary.commitMessage", semanticDomain: "GitCommitMessage"),
+        RequiredNullable("$[].executionSummary.preparationSnapshotId", identityRole: "ExecutionPreparationSnapshotId"),
         RequiredNullable("$[].executionSummary.pushAttemptedAt", stringFormat: "date-time"),
         RequiredNullable("$[].executionSummary.pushedAt", stringFormat: "date-time"),
         RequiredNullable("$[].executionSummary.pushedCommitSha", semanticDomain: "GitCommitSha"),
         RequiredNullable("$[].executionSummary.pushRemoteName", semanticDomain: "GitRemoteName"),
         RequiredNullable("$[].executionSummary.pushBranchName", semanticDomain: "GitBranchName"),
         RequiredNullable("$[].executionSummary.failureReason", semanticDomain: "ExecutionFailureReason"),
+        RequiredNonNullable(
+            "$[].executionHistory[].state",
+            semanticDomain: "ExecutionSessionState",
+            domainValues: ["Created", "Executing", "Completed", "Failed", "Cancelled"]),
+        RequiredNullable("$[].executionHistory[].milestonePath", semanticDomain: "RepositoryRelativePath"),
+        RequiredNullable("$[].executionHistory[].startedAt", stringFormat: "date-time"),
         RequiredNullable("$[].executionHistory[].completedAt", stringFormat: "date-time"),
         RequiredNullable("$[].executionHistory[].duration", stringFormat: "duration"),
         RequiredNullable("$[].executionHistory[].acceptedAt", stringFormat: "date-time"),
         RequiredNullable("$[].executionHistory[].rejectedAt", stringFormat: "date-time"),
         RequiredNullable("$[].executionHistory[].decisionNote", semanticDomain: "HumanAuthoredText"),
+        RequiredNullable("$[].executionHistory[].lastActivityAt", stringFormat: "date-time"),
         RequiredNullable("$[].executionHistory[].providerExecutablePath", semanticDomain: "ProviderExecutablePath"),
-        RequiredNullable("$[].executionHistory[].providerProcessId"),
+        RequiredNullable("$[].executionHistory[].providerProcessId", primitiveType: ContractGenerationPrimitiveType.Number),
         RequiredNullable("$[].executionHistory[].providerStartedAt", stringFormat: "date-time"),
+        RequiredNullable("$[].executionHistory[].handoffPath", semanticDomain: "RepositoryRelativePath"),
         RequiredNullable("$[].executionHistory[].commitSha", semanticDomain: "GitCommitSha"),
         RequiredNullable("$[].executionHistory[].committedAt", stringFormat: "date-time"),
         RequiredNullable("$[].executionHistory[].commitMessage", semanticDomain: "GitCommitMessage"),
+        RequiredNullable("$[].executionHistory[].preparationSnapshotId", identityRole: "ExecutionPreparationSnapshotId"),
         RequiredNullable("$[].executionHistory[].pushAttemptedAt", stringFormat: "date-time"),
         RequiredNullable("$[].executionHistory[].pushedAt", stringFormat: "date-time"),
         RequiredNullable("$[].executionHistory[].pushedCommitSha", semanticDomain: "GitCommitSha"),
@@ -260,7 +286,8 @@ internal static class RepositoryDashboardGenerationMetadata
         IReadOnlyList<string>? domainValues = null,
         string? identityRole = null,
         ContractGenerationArrayOrdering? arrayOrdering = null,
-        string? stringFormat = null)
+        string? stringFormat = null,
+        ContractGenerationPrimitiveType? primitiveType = null)
     {
         return Field(
             path,
@@ -269,7 +296,8 @@ internal static class RepositoryDashboardGenerationMetadata
             domainValues,
             identityRole,
             arrayOrdering,
-            stringFormat);
+            stringFormat,
+            primitiveType);
     }
 
     private static ContractGenerationFieldMetadata RequiredNullable(
@@ -278,7 +306,8 @@ internal static class RepositoryDashboardGenerationMetadata
         IReadOnlyList<string>? domainValues = null,
         string? identityRole = null,
         ContractGenerationArrayOrdering? arrayOrdering = null,
-        string? stringFormat = null)
+        string? stringFormat = null,
+        ContractGenerationPrimitiveType? primitiveType = null)
     {
         return Field(
             path,
@@ -287,7 +316,8 @@ internal static class RepositoryDashboardGenerationMetadata
             domainValues,
             identityRole,
             arrayOrdering,
-            stringFormat);
+            stringFormat,
+            primitiveType);
     }
 
     private static ContractGenerationFieldMetadata Field(
@@ -297,7 +327,8 @@ internal static class RepositoryDashboardGenerationMetadata
         IReadOnlyList<string>? domainValues,
         string? identityRole,
         ContractGenerationArrayOrdering? arrayOrdering,
-        string? stringFormat)
+        string? stringFormat,
+        ContractGenerationPrimitiveType? primitiveType)
     {
         return new ContractGenerationFieldMetadata(
             path,
@@ -308,6 +339,7 @@ internal static class RepositoryDashboardGenerationMetadata
             identityRole,
             arrayOrdering,
             stringFormat,
+            primitiveType,
             Source);
     }
 }
@@ -380,6 +412,7 @@ internal static class ContractTypeScriptMetadataGenerator
         builder.AppendLine("  identityRole?: string");
         builder.AppendLine("  arrayOrdering?: 'semantic' | 'stableByProjection' | 'observational'");
         builder.AppendLine("  stringFormat?: string");
+        builder.AppendLine("  primitiveType?: 'string' | 'number' | 'boolean'");
         builder.AppendLine("  source: string");
         builder.AppendLine("}");
         builder.AppendLine();
@@ -416,6 +449,11 @@ internal static class ContractTypeScriptMetadataGenerator
                 builder.AppendLine($"    stringFormat: '{metadata.StringFormat}',");
             }
 
+            if (metadata.PrimitiveType is not null)
+            {
+                builder.AppendLine($"    primitiveType: '{ToCamelCase(metadata.PrimitiveType.Value.ToString())}',");
+            }
+
             builder.AppendLine($"    source: '{metadata.Source}',");
             builder.AppendLine("  },");
         }
@@ -446,6 +484,223 @@ internal static class ContractTypeScriptMetadataGenerator
             builder.AppendLine("}");
             builder.AppendLine();
         }
+
+        AppendProductionConsumerCandidate(builder, ir);
+    }
+
+    private static void AppendProductionConsumerCandidate(StringBuilder builder, ContractGenerationIr ir)
+    {
+        ContractGenerationShape rootItem = ir.RootShape.Kind == ContractGenerationShapeKind.Array && ir.RootShape.Items.Count > 0
+            ? ir.RootShape.Items[0]
+            : throw new InvalidOperationException("Repository dashboard production consumer candidate requires an array root item shape.");
+        Dictionary<string, ContractGenerationFieldMetadata> metadataByPath = ir.FieldMetadata.ToDictionary(
+            metadata => metadata.Path,
+            StringComparer.Ordinal);
+        Dictionary<string, string> semanticObjectNames = BuildSemanticObjectNames(ir, metadataByPath);
+
+        builder.AppendLine("export type RepositoryDashboardConsumerCandidateContract = RepositoryDashboardConsumerCandidateProjection[]");
+        builder.AppendLine();
+        foreach ((string name, string path, ContractGenerationShape shape) in EnumerateConsumerCandidateObjectTypes(
+            "RepositoryDashboardConsumerCandidateProjection",
+            "$[]",
+            rootItem,
+            metadataByPath,
+            semanticObjectNames))
+        {
+            builder.AppendLine($"export type {name} = {{");
+            foreach (ContractGenerationProperty property in shape.Properties)
+            {
+                string propertyPath = $"{path}.{property.Name}";
+                string propertyName = property.Name;
+                ContractGenerationFieldMetadata? propertyMetadata = FindMetadata(metadataByPath, propertyPath);
+                string optionalMarker = propertyMetadata?.Presence == ContractGenerationPresence.Optional ? "?" : string.Empty;
+                builder.AppendLine($"  {propertyName}{optionalMarker}: {ToConsumerCandidateTypeScriptType(name, propertyPath, property.Shape, metadataByPath, semanticObjectNames)}");
+            }
+
+            builder.AppendLine("}");
+            builder.AppendLine();
+        }
+    }
+
+    private static Dictionary<string, string> BuildSemanticObjectNames(
+        ContractGenerationIr ir,
+        IReadOnlyDictionary<string, ContractGenerationFieldMetadata> metadataByPath)
+    {
+        Dictionary<string, string> names = new(StringComparer.Ordinal);
+        foreach (ContractGenerationField field in ir.Fields.Where(field => field.ShapeKind == ContractGenerationShapeKind.Object))
+        {
+            ContractGenerationFieldMetadata? metadata = FindMetadata(metadataByPath, field.Path);
+            if (!string.IsNullOrWhiteSpace(metadata?.SemanticDomain) && !names.ContainsKey(metadata.SemanticDomain))
+            {
+                names.Add(metadata.SemanticDomain, $"RepositoryDashboardConsumerCandidate{metadata.SemanticDomain}");
+            }
+        }
+
+        return names;
+    }
+
+    private static IEnumerable<(string Name, string Path, ContractGenerationShape Shape)> EnumerateConsumerCandidateObjectTypes(
+        string typeName,
+        string path,
+        ContractGenerationShape shape,
+        IReadOnlyDictionary<string, ContractGenerationFieldMetadata> metadataByPath,
+        IReadOnlyDictionary<string, string> semanticObjectNames)
+    {
+        if (shape.Kind != ContractGenerationShapeKind.Object)
+        {
+            yield break;
+        }
+
+        yield return (typeName, path, shape);
+
+        foreach (ContractGenerationProperty property in shape.Properties)
+        {
+            string propertyPath = $"{path}.{property.Name}";
+            string childName = ToConsumerCandidateObjectTypeName(typeName, property.Name, propertyPath, property.Shape, metadataByPath, semanticObjectNames);
+            foreach ((string descendantName, string descendantPath, ContractGenerationShape descendantShape) in EnumerateConsumerCandidateObjectTypes(
+                childName,
+                propertyPath,
+                property.Shape,
+                metadataByPath,
+                semanticObjectNames))
+            {
+                yield return (descendantName, descendantPath, descendantShape);
+            }
+
+            if (property.Shape.Kind == ContractGenerationShapeKind.Array && property.Shape.Items.Count > 0)
+            {
+                string itemPath = $"{propertyPath}[]";
+                string itemName = ToConsumerCandidateObjectTypeName(typeName, property.Name, itemPath, property.Shape.Items[0], metadataByPath, semanticObjectNames);
+                foreach ((string descendantName, string descendantPath, ContractGenerationShape descendantShape) in EnumerateConsumerCandidateObjectTypes(
+                    itemName,
+                    itemPath,
+                    property.Shape.Items[0],
+                    metadataByPath,
+                    semanticObjectNames))
+                {
+                    yield return (descendantName, descendantPath, descendantShape);
+                }
+            }
+        }
+    }
+
+    private static string ToConsumerCandidateTypeScriptType(
+        string parentTypeName,
+        string path,
+        ContractGenerationShape shape,
+        IReadOnlyDictionary<string, ContractGenerationFieldMetadata> metadataByPath,
+        IReadOnlyDictionary<string, string> semanticObjectNames)
+    {
+        ContractGenerationFieldMetadata? metadata = FindMetadata(metadataByPath, path);
+        string type = ToConsumerCandidateNonNullableType(parentTypeName, path, shape, metadataByPath, semanticObjectNames, metadata);
+        return metadata?.Nullability == ContractGenerationNullability.Nullable && type != "null"
+            ? $"{type} | null"
+            : type;
+    }
+
+    private static string ToConsumerCandidateNonNullableType(
+        string parentTypeName,
+        string path,
+        ContractGenerationShape shape,
+        IReadOnlyDictionary<string, ContractGenerationFieldMetadata> metadataByPath,
+        IReadOnlyDictionary<string, string> semanticObjectNames,
+        ContractGenerationFieldMetadata? metadata)
+    {
+        if (metadata?.DomainValues.Count > 0)
+        {
+            return string.Join(" | ", metadata.DomainValues.Select(value => $"'{value}'"));
+        }
+
+        if (metadata?.PrimitiveType is not null)
+        {
+            return ToConsumerCandidatePrimitiveType(metadata.PrimitiveType.Value);
+        }
+
+        return shape.Kind switch
+        {
+            ContractGenerationShapeKind.Array when shape.Items.Count == 0 => "unknown[]",
+            ContractGenerationShapeKind.Array => $"{ToConsumerCandidateTypeScriptType(parentTypeName, $"{path}[]", shape.Items[0], metadataByPath, semanticObjectNames)}[]",
+            ContractGenerationShapeKind.Object => ToConsumerCandidateObjectTypeName(parentTypeName, PathPropertyName(path), path, shape, metadataByPath, semanticObjectNames),
+            ContractGenerationShapeKind.String => "string",
+            ContractGenerationShapeKind.Number => "number",
+            ContractGenerationShapeKind.Boolean => "boolean",
+            ContractGenerationShapeKind.Null when TryGetSemanticObjectTypeName(metadata, semanticObjectNames, out string semanticTypeName) => semanticTypeName,
+            ContractGenerationShapeKind.Null when IsStringLikeMetadata(metadata) => "string",
+            ContractGenerationShapeKind.Null => "null",
+            _ => throw new InvalidOperationException($"Unsupported contract shape kind {shape.Kind}.")
+        };
+    }
+
+    private static string ToConsumerCandidatePrimitiveType(ContractGenerationPrimitiveType primitiveType)
+    {
+        return primitiveType switch
+        {
+            ContractGenerationPrimitiveType.String => "string",
+            ContractGenerationPrimitiveType.Number => "number",
+            ContractGenerationPrimitiveType.Boolean => "boolean",
+            _ => throw new InvalidOperationException($"Unsupported contract primitive type {primitiveType}.")
+        };
+    }
+
+    private static string ToConsumerCandidateObjectTypeName(
+        string parentTypeName,
+        string propertyName,
+        string path,
+        ContractGenerationShape shape,
+        IReadOnlyDictionary<string, ContractGenerationFieldMetadata> metadataByPath,
+        IReadOnlyDictionary<string, string> semanticObjectNames)
+    {
+        if (shape.Kind != ContractGenerationShapeKind.Object)
+        {
+            return ToConsumerCandidateTypeScriptType(parentTypeName, path, shape, metadataByPath, semanticObjectNames);
+        }
+
+        ContractGenerationFieldMetadata? metadata = FindMetadata(metadataByPath, path);
+        if (TryGetSemanticObjectTypeName(metadata, semanticObjectNames, out string semanticTypeName))
+        {
+            return semanticTypeName;
+        }
+
+        return parentTypeName + ToPascalCase(propertyName);
+    }
+
+    private static bool TryGetSemanticObjectTypeName(
+        ContractGenerationFieldMetadata? metadata,
+        IReadOnlyDictionary<string, string> semanticObjectNames,
+        out string semanticTypeName)
+    {
+        if (!string.IsNullOrWhiteSpace(metadata?.SemanticDomain)
+            && semanticObjectNames.TryGetValue(metadata.SemanticDomain, out string? matchedTypeName))
+        {
+            semanticTypeName = matchedTypeName;
+            return true;
+        }
+
+        semanticTypeName = string.Empty;
+        return false;
+    }
+
+    private static bool IsStringLikeMetadata(ContractGenerationFieldMetadata? metadata)
+    {
+        return !string.IsNullOrWhiteSpace(metadata?.StringFormat)
+            || !string.IsNullOrWhiteSpace(metadata?.SemanticDomain)
+            || !string.IsNullOrWhiteSpace(metadata?.IdentityRole);
+    }
+
+    private static ContractGenerationFieldMetadata? FindMetadata(
+        IReadOnlyDictionary<string, ContractGenerationFieldMetadata> metadataByPath,
+        string path)
+    {
+        return metadataByPath.TryGetValue(path, out ContractGenerationFieldMetadata? metadata)
+            ? metadata
+            : null;
+    }
+
+    private static string PathPropertyName(string path)
+    {
+        string trimmed = path.EndsWith("[]", StringComparison.Ordinal) ? path[..^2] : path;
+        int separator = trimmed.LastIndexOf('.');
+        return separator >= 0 ? trimmed[(separator + 1)..] : "Root";
     }
 
     private static IEnumerable<(string Name, ContractGenerationShape Shape)> EnumerateObjectTypes(

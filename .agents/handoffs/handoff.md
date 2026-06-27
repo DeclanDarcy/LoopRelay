@@ -1,32 +1,33 @@
-# Handoff: After M1.2 Repository Dashboard Schema Metadata Pilot Slice 0071
+# Handoff: After M1.2 Repository Dashboard Production Consumer Candidate Slice 0073
 
-Current milestone state: M1.2 now has a repository-dashboard generation pipeline, raw generated TypeScript alias evidence, a governed TypeScript consumer migration policy, and the first governed schema metadata pilot. No production UI consumer migration has occurred.
+Current milestone state: M1.2 now has repository-dashboard raw observed aliases, governed schema metadata, and a generated production-consumer candidate verified against the manual TypeScript compatibility wrapper. No production UI import migration has occurred.
 
 New state from this slice:
 
-- Extended the generated contract IR with explicit field metadata for presence, nullability, semantic domain, enum values, identity role, array ordering, string format, and source.
-- Added `RepositoryDashboardGenerationMetadata` as the pilot metadata source for selected repository-dashboard migration blockers.
-- Regenerated `tests/CommandCenter.Backend.Tests/ContractFixtures/repository-dashboard.contract-ir.json` and `src/CommandCenter.UI/src/contracts/generated/repository-dashboard.generated.ts`.
-- Updated `repository-dashboard.generated-artifact-freshness.json` for the regenerated TypeScript artifact.
-- Added `RepositoryDashboardGenerationIrCarriesGovernedSchemaMetadata` to prove representative enum, nullability, identity, and ordering metadata.
-- Updated `docs/contracts.md`, `docs/architectural-capabilities.md`, `docs/architectural-mechanisms.md`, and `.agents/milestones/m1.2-generated-contracts.md`.
-- Added `.agents/milestones/m1.2-repository-dashboard-schema-metadata-pilot-slice-0071.md`.
-- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0067.md`.
+- Added `RepositoryDashboardConsumerCandidateProjection` and related generated candidate types to `src/CommandCenter.UI/src/contracts/generated/repository-dashboard.generated.ts`.
+- Kept raw generated aliases, including `RepositoryDashboardGeneratedProjection`, as fixture-observed evidence-only aliases.
+- Extended generated contract metadata with `primitiveType` for fixture-null fields that need governed non-null primitive production unions.
+- Expanded repository-dashboard metadata for execution summary/history nullability, execution session state enum values, identity roles, repository-relative paths, and date/time or duration formats.
+- Added structural wrapper equivalence verification in `RepositoryDashboardProductionConsumerCandidateStructurallyMatchesCompatibilityWrapper`.
+- Added separate semantic compatibility verification in `RepositoryDashboardProductionConsumerCandidateCarriesSemanticCompatibilityMetadata`.
+- Regenerated `repository-dashboard.contract-ir.json`, `repository-dashboard.generated.ts`, and `repository-dashboard.generated-artifact-freshness.json`.
+- Updated `docs/contracts.md`, `docs/architectural-capabilities.md`, `docs/architectural-mechanisms.md`, `.agents/milestones/m1.2-generated-contracts.md`, and added `.agents/milestones/m1.2-repository-dashboard-production-consumer-candidate-slice-0073.md`.
+- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0068.md`.
 
 Verification:
 
 - Regenerated artifacts through `COMMANDCENTER_UPDATE_GENERATED_CONTRACTS=1` and `ContractGeneratedArtifactPipelineTests`: 5 passed.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "FullyQualifiedName~ContractGeneratedArtifactPipelineTests|FullyQualifiedName~ContractGeneratedArtifactFreshnessTests|FullyQualifiedName~ContractConsumerVerificationTests"`: 23 passed.
-- `npm run build` in `src/CommandCenter.UI`: passed.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~ArchitecturalDecisionGovernanceTests`: 10 passed.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "FullyQualifiedName~ContractGeneratedArtifactPipelineTests|FullyQualifiedName~ContractGeneratedArtifactFreshnessTests|FullyQualifiedName~ContractConsumerVerificationTests"`: 25 passed.
+- `npm run build` in `src/CommandCenter.UI`: passed, with the existing Vite chunk-size warning.
 
 High-leverage decisions currently relevant:
 
-- The new metadata is a governed schema pilot, not permission to import generated raw aliases in production UI code.
-- `src/CommandCenter.UI/src/types/repositories.ts` remains the production compatibility wrapper until a generated production-consumer candidate is emitted and verified.
-- The generator may carry accepted metadata, but still must not infer enum domains, nullability unions, optionality, identity roles, ordering, or parsing behavior from fixtures alone.
-- Optional-by-contract remains unclaimed in this pilot; selected fields are currently modeled as required serialized fields.
+- The generated production-consumer candidate is a replacement candidate only; it is not authorization for production UI imports.
+- `src/CommandCenter.UI/src/types/repositories.ts` remains the production compatibility wrapper until a migration slice changes imports or aliases with rollback evidence.
+- Raw observed aliases remain evidence-only and must not be strengthened by fixture inference.
+- Fixture-null production types now require governed primitive/object/string-like metadata; the generator should not infer production nullability or primitive kind from a single sampled `null`.
+- Optional-by-contract remains unclaimed; candidate properties remain required unless future metadata explicitly authorizes omission.
 
 Recommended next slice:
 
-- Emit a separate generated repository-dashboard production-consumer candidate from the governed metadata while keeping raw observed aliases and compatibility wrappers distinct, then verify it against the manual compatibility wrapper before any production import migration.
+- Add a narrow compatibility-wrapper bridge for repository dashboard: make `src/CommandCenter.UI/src/types/repositories.ts` alias or mechanically verify against `RepositoryDashboardConsumerCandidateProjection` while keeping existing product imports stable, then run UI build/lint/tests and backend contract verification before considering direct production imports.

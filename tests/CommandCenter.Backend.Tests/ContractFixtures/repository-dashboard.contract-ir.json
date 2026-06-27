@@ -1593,6 +1593,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1604,6 +1605,7 @@
       "identityRole": "RepositoryId",
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1615,6 +1617,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1626,6 +1629,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1641,6 +1645,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1656,6 +1661,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1676,6 +1682,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1687,6 +1694,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1698,6 +1706,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1709,6 +1718,49 @@
       "identityRole": null,
       "arrayOrdering": "StableByProjection",
       "stringFormat": null,
+      "primitiveType": null,
+      "source": "M1.2 repository-dashboard governed schema metadata pilot"
+    },
+    {
+      "path": "$[].executionSummary.state",
+      "presence": "Required",
+      "nullability": "NonNullable",
+      "semanticDomain": "ExecutionSessionState",
+      "domainValues": [
+        "Created",
+        "Executing",
+        "Completed",
+        "Failed",
+        "Cancelled"
+      ],
+      "identityRole": null,
+      "arrayOrdering": null,
+      "stringFormat": null,
+      "primitiveType": null,
+      "source": "M1.2 repository-dashboard governed schema metadata pilot"
+    },
+    {
+      "path": "$[].executionSummary.milestonePath",
+      "presence": "Required",
+      "nullability": "Nullable",
+      "semanticDomain": "RepositoryRelativePath",
+      "domainValues": [],
+      "identityRole": null,
+      "arrayOrdering": null,
+      "stringFormat": null,
+      "primitiveType": null,
+      "source": "M1.2 repository-dashboard governed schema metadata pilot"
+    },
+    {
+      "path": "$[].executionSummary.startedAt",
+      "presence": "Required",
+      "nullability": "Nullable",
+      "semanticDomain": null,
+      "domainValues": [],
+      "identityRole": null,
+      "arrayOrdering": null,
+      "stringFormat": "date-time",
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1720,6 +1772,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": "date-time",
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1731,6 +1784,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": "duration",
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1742,6 +1796,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": "date-time",
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1753,6 +1808,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": "date-time",
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1764,6 +1820,19 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
+      "source": "M1.2 repository-dashboard governed schema metadata pilot"
+    },
+    {
+      "path": "$[].executionSummary.lastActivityAt",
+      "presence": "Required",
+      "nullability": "Nullable",
+      "semanticDomain": null,
+      "domainValues": [],
+      "identityRole": null,
+      "arrayOrdering": null,
+      "stringFormat": "date-time",
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1775,6 +1844,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1786,6 +1856,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": "Number",
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1797,6 +1868,19 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": "date-time",
+      "primitiveType": null,
+      "source": "M1.2 repository-dashboard governed schema metadata pilot"
+    },
+    {
+      "path": "$[].executionSummary.handoffPath",
+      "presence": "Required",
+      "nullability": "Nullable",
+      "semanticDomain": "RepositoryRelativePath",
+      "domainValues": [],
+      "identityRole": null,
+      "arrayOrdering": null,
+      "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1808,6 +1892,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1819,6 +1904,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": "date-time",
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1830,6 +1916,19 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
+      "source": "M1.2 repository-dashboard governed schema metadata pilot"
+    },
+    {
+      "path": "$[].executionSummary.preparationSnapshotId",
+      "presence": "Required",
+      "nullability": "Nullable",
+      "semanticDomain": null,
+      "domainValues": [],
+      "identityRole": "ExecutionPreparationSnapshotId",
+      "arrayOrdering": null,
+      "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1841,6 +1940,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": "date-time",
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1852,6 +1952,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": "date-time",
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1863,6 +1964,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1874,6 +1976,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1885,6 +1988,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1896,6 +2000,49 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
+      "source": "M1.2 repository-dashboard governed schema metadata pilot"
+    },
+    {
+      "path": "$[].executionHistory[].state",
+      "presence": "Required",
+      "nullability": "NonNullable",
+      "semanticDomain": "ExecutionSessionState",
+      "domainValues": [
+        "Created",
+        "Executing",
+        "Completed",
+        "Failed",
+        "Cancelled"
+      ],
+      "identityRole": null,
+      "arrayOrdering": null,
+      "stringFormat": null,
+      "primitiveType": null,
+      "source": "M1.2 repository-dashboard governed schema metadata pilot"
+    },
+    {
+      "path": "$[].executionHistory[].milestonePath",
+      "presence": "Required",
+      "nullability": "Nullable",
+      "semanticDomain": "RepositoryRelativePath",
+      "domainValues": [],
+      "identityRole": null,
+      "arrayOrdering": null,
+      "stringFormat": null,
+      "primitiveType": null,
+      "source": "M1.2 repository-dashboard governed schema metadata pilot"
+    },
+    {
+      "path": "$[].executionHistory[].startedAt",
+      "presence": "Required",
+      "nullability": "Nullable",
+      "semanticDomain": null,
+      "domainValues": [],
+      "identityRole": null,
+      "arrayOrdering": null,
+      "stringFormat": "date-time",
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1907,6 +2054,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": "date-time",
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1918,6 +2066,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": "duration",
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1929,6 +2078,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": "date-time",
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1940,6 +2090,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": "date-time",
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1951,6 +2102,19 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
+      "source": "M1.2 repository-dashboard governed schema metadata pilot"
+    },
+    {
+      "path": "$[].executionHistory[].lastActivityAt",
+      "presence": "Required",
+      "nullability": "Nullable",
+      "semanticDomain": null,
+      "domainValues": [],
+      "identityRole": null,
+      "arrayOrdering": null,
+      "stringFormat": "date-time",
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1962,6 +2126,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1973,6 +2138,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": "Number",
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1984,6 +2150,19 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": "date-time",
+      "primitiveType": null,
+      "source": "M1.2 repository-dashboard governed schema metadata pilot"
+    },
+    {
+      "path": "$[].executionHistory[].handoffPath",
+      "presence": "Required",
+      "nullability": "Nullable",
+      "semanticDomain": "RepositoryRelativePath",
+      "domainValues": [],
+      "identityRole": null,
+      "arrayOrdering": null,
+      "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -1995,6 +2174,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2006,6 +2186,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": "date-time",
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2017,6 +2198,19 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
+      "source": "M1.2 repository-dashboard governed schema metadata pilot"
+    },
+    {
+      "path": "$[].executionHistory[].preparationSnapshotId",
+      "presence": "Required",
+      "nullability": "Nullable",
+      "semanticDomain": null,
+      "domainValues": [],
+      "identityRole": "ExecutionPreparationSnapshotId",
+      "arrayOrdering": null,
+      "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2028,6 +2222,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": "date-time",
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2039,6 +2234,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": "date-time",
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2050,6 +2246,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2061,6 +2258,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2072,6 +2270,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2083,6 +2282,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2094,6 +2294,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": "date-time",
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2105,6 +2306,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": "date-time",
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2116,6 +2318,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": "date-time",
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2127,6 +2330,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": "date-time",
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2138,6 +2342,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": "date-time",
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2149,6 +2354,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": "date-time",
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2160,6 +2366,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": "date-time",
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2171,6 +2378,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2182,6 +2390,7 @@
       "identityRole": "DecisionSessionId",
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2199,6 +2408,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2213,6 +2423,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2229,6 +2440,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2240,6 +2452,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2251,6 +2464,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": "duration",
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2262,6 +2476,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2273,6 +2488,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2284,6 +2500,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2295,6 +2512,7 @@
       "identityRole": null,
       "arrayOrdering": "StableByProjection",
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2306,6 +2524,7 @@
       "identityRole": null,
       "arrayOrdering": "StableByProjection",
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2317,6 +2536,7 @@
       "identityRole": null,
       "arrayOrdering": "StableByProjection",
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2328,6 +2548,7 @@
       "identityRole": "DecisionSessionId",
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2339,6 +2560,7 @@
       "identityRole": "ContinuityArtifactId",
       "arrayOrdering": null,
       "stringFormat": null,
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2350,6 +2572,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": "date-time",
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     },
     {
@@ -2361,6 +2584,7 @@
       "identityRole": null,
       "arrayOrdering": null,
       "stringFormat": "date-time",
+      "primitiveType": null,
       "source": "M1.2 repository-dashboard governed schema metadata pilot"
     }
   ]

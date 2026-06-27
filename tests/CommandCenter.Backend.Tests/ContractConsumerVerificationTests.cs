@@ -95,6 +95,51 @@ public sealed class ContractConsumerVerificationTests
     }
 
     [Fact]
+    public void RepositoryDashboardProductionConsumerCandidateStructurallyMatchesCompatibilityWrapper()
+    {
+        TypeScriptContractShapeProvider typeScriptShapes = ReadTypeScriptContractShapes();
+
+        AssertConsumerShapeEquivalent(
+            "$[]",
+            typeScriptShapes.GetShape("RepositoryDashboardProjection"),
+            typeScriptShapes.GetShape("RepositoryDashboardConsumerCandidateProjection"));
+    }
+
+    [Fact]
+    public void RepositoryDashboardProductionConsumerCandidateCarriesSemanticCompatibilityMetadata()
+    {
+        TypeScriptContractShapeProvider typeScriptShapes = ReadTypeScriptContractShapes();
+
+        AssertConsumerShapeEquivalent(
+            "$[].availability",
+            typeScriptShapes.GetPropertyShape("RepositoryDashboardProjection", "availability"),
+            typeScriptShapes.GetPropertyShape("RepositoryDashboardConsumerCandidateProjection", "availability"));
+        AssertConsumerShapeEquivalent(
+            "$[].executionSummary",
+            typeScriptShapes.GetPropertyShape("RepositoryDashboardProjection", "executionSummary"),
+            typeScriptShapes.GetPropertyShape("RepositoryDashboardConsumerCandidateProjection", "executionSummary"));
+        AssertConsumerShapeEquivalent(
+            "$[].activeExecutionSession",
+            typeScriptShapes.GetPropertyShape("RepositoryDashboardProjection", "activeExecutionSession"),
+            typeScriptShapes.GetPropertyShape("RepositoryDashboardConsumerCandidateProjection", "activeExecutionSession"));
+        AssertConsumerShapeEquivalent(
+            "$[].decisionSessionSummary.state",
+            typeScriptShapes.GetPropertyShape("RepositoryDashboardProjection", "decisionSessionSummary", "state"),
+            typeScriptShapes.GetPropertyShape("RepositoryDashboardConsumerCandidateProjection", "decisionSessionSummary", "state"));
+
+        string generatedSource = File.ReadAllText(FindRepositoryRoot().Combine(
+            "src",
+            "CommandCenter.UI",
+            "src",
+            "contracts",
+            "generated",
+            "repository-dashboard.generated.ts"));
+        Assert.Contains("availability: 'Available' | 'Missing' | 'AccessDenied'", generatedSource, StringComparison.Ordinal);
+        Assert.Contains("executionState: 'Ready' | 'Executing' | 'AwaitingAcceptance' | 'Accepted' | 'AwaitingCommit' | 'AwaitingPush' | 'Failed' | 'Cancelled'", generatedSource, StringComparison.Ordinal);
+        Assert.Contains("state: 'Created' | 'Active' | 'TransferPending' | 'Transferred' | 'Retired' | null", generatedSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void RepositoryDashboardDevTauriMockMatchesGoldenFixture()
     {
         JsonElement backendDashboardItem = ReadRepositoryDashboardGoldenFixture()[0];
@@ -279,6 +324,37 @@ public sealed class ContractConsumerVerificationTests
             .Combine("src", "CommandCenter.UI", "src", "devTauriMock.ts"));
 
         return DevTauriMockShapeProvider.Parse(source, typeScriptShapes);
+    }
+
+    private static void AssertConsumerShapeEquivalent(
+        string path,
+        ConsumerContractShape expected,
+        ConsumerContractShape actual)
+    {
+        Assert.Equal(expected.IsNullable, actual.IsNullable);
+
+        ConsumerContractShape nonNullableExpected = expected.WithoutNullability();
+        ConsumerContractShape nonNullableActual = actual.WithoutNullability();
+        Assert.Equal(nonNullableExpected.Kind, nonNullableActual.Kind);
+        Assert.Equal(nonNullableExpected.PrimitiveKind, nonNullableActual.PrimitiveKind);
+
+        if (nonNullableExpected.Kind == ConsumerContractShapeKind.Object)
+        {
+            Assert.Empty(nonNullableExpected.Properties.Keys.Except(nonNullableActual.Properties.Keys, StringComparer.Ordinal));
+            Assert.Empty(nonNullableActual.Properties.Keys.Except(nonNullableExpected.Properties.Keys, StringComparer.Ordinal));
+
+            foreach ((string name, ConsumerContractShape expectedProperty) in nonNullableExpected.Properties)
+            {
+                AssertConsumerShapeEquivalent($"{path}.{name}", expectedProperty, nonNullableActual.Properties[name]);
+            }
+        }
+
+        if (nonNullableExpected.Kind == ConsumerContractShapeKind.Array)
+        {
+            Assert.NotNull(nonNullableExpected.ItemShape);
+            Assert.NotNull(nonNullableActual.ItemShape);
+            AssertConsumerShapeEquivalent($"{path}[]", nonNullableExpected.ItemShape, nonNullableActual.ItemShape);
+        }
     }
 
     private static DirectoryInfo FindRepositoryRoot()

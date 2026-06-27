@@ -822,17 +822,17 @@ repository-dashboard.golden.json
   -> repository-dashboard.generated-artifact-freshness.json
 ```
 
-The generated TypeScript artifact now contains contract metadata and raw generated aliases for the `repository-dashboard` family. The metadata records the Oracle-observed field paths, shape kinds, and TypeScript primitive categories. The raw aliases, including `RepositoryDashboardGeneratedProjection`, are fixture-observed contract shapes generated from the same IR and verified against the Oracle fixture by the TypeScript consumer-verification pipeline. The artifact is protected by `ContractGeneratedArtifactPipelineTests`, which regenerates the IR and TypeScript artifact in memory during normal test runs and supports explicit refresh only when `COMMANDCENTER_UPDATE_GENERATED_CONTRACTS=1` is set.
+The generated TypeScript artifact now contains contract metadata, raw generated aliases, and a production-consumer candidate for the `repository-dashboard` family. The metadata records the Oracle-observed field paths, shape kinds, TypeScript primitive categories, and governed field facts needed by the candidate. The raw aliases, including `RepositoryDashboardGeneratedProjection`, are fixture-observed contract shapes generated from the same IR and verified against the Oracle fixture by the TypeScript consumer-verification pipeline. The candidate alias, `RepositoryDashboardConsumerCandidateProjection`, is generated from governed metadata and verified against the manual compatibility wrapper before production adoption. The artifact is protected by `ContractGeneratedArtifactPipelineTests`, which regenerates the IR and TypeScript artifact in memory during normal test runs and supports explicit refresh only when `COMMANDCENTER_UPDATE_GENERATED_CONTRACTS=1` is set.
 
 Current M1.2 pilot boundaries:
 
 - Source authority remains the accepted Oracle fixture and backend serialization path.
-- The IR contains only contract identity, contract name, root shape, observed fields, shape kinds, and TypeScript primitive categories.
-- Generated output lives under `src/CommandCenter.UI/src/contracts/generated/`; raw aliases are verified as generated compile-time consumers but are not imported by product code yet.
+- The IR contains contract identity, contract name, root shape, observed fields, shape kinds, TypeScript primitive categories, and governed field metadata for selected production-candidate facts.
+- Generated output lives under `src/CommandCenter.UI/src/contracts/generated/`; raw aliases and the production-consumer candidate are verified generated compile-time consumers but are not imported by product code yet.
 - Freshness verification now covers the generated TypeScript contract artifact through `repository-dashboard.generated-artifact-freshness.json`.
 - Manual TypeScript types, Rust mirrors, and dev Tauri mock payloads remain verified or transitional compatibility consumers until later migration slices.
 
-This pilot does not produce production-ready TypeScript consumer aliases, Rust command metadata, mock data, command-body schemas, or contract versioning. The raw generated aliases are not schema-complete: enum-like semantic fields are represented as strings, and nullable fields reflect only the observed fixture value. If later generation requires concepts absent from M1.1, M1.1 must be reopened through decision governance rather than extending the IR ad hoc.
+This pilot does not authorize production imports, Rust command metadata, mock data, command-body schemas, or contract versioning. The raw generated aliases are not schema-complete: enum-like semantic fields are represented as strings, and nullable fields reflect only the observed fixture value. The generated production-consumer candidate is emitted from governed metadata and verified against the manual compatibility wrapper; it remains a replacement candidate until a later migration slice proves production adoption and rollback. If later generation requires concepts absent from M1.1, M1.1 must be reopened through decision governance rather than extending the IR ad hoc.
 
 ## Generated TypeScript Consumer Policy
 
@@ -886,7 +886,7 @@ The metadata records explicit field facts for selected production-migration bloc
 | Array ordering | Execution history, decision-session health dimensions, recent transfer lineage, and diagnostics are marked stable by projection for received-order preservation. |
 | String formats | Date/time and duration strings remain serialized strings but carry explicit format metadata for future generated production types or validators. |
 
-This pilot does not yet authorize production imports from `src/CommandCenter.UI/src/contracts/generated/repository-dashboard.generated.ts`. The generated raw aliases remain evidence-only until the generator emits production consumer types from governed metadata and the compatibility wrapper migration is separately verified.
+This pilot does not authorize production imports from `src/CommandCenter.UI/src/contracts/generated/repository-dashboard.generated.ts`. The generated raw aliases remain evidence-only, and the generated `RepositoryDashboardConsumerCandidateProjection` is a replacement candidate only. `ContractConsumerVerificationTests.RepositoryDashboardProductionConsumerCandidateStructurallyMatchesCompatibilityWrapper` verifies fields, nesting, nullability, primitive kind, and collection shape against the manual `RepositoryDashboardProjection` compatibility wrapper. `ContractConsumerVerificationTests.RepositoryDashboardProductionConsumerCandidateCarriesSemanticCompatibilityMetadata` separately verifies representative semantic compatibility for enum domains, nullable summary references, and decision-session status/nullability before any production import migration.
 
 ## Oracle Change Workflow
 
