@@ -1,32 +1,28 @@
-# Handoff: After M0.4 Compatibility Structure Governance Slice 0056
+# Handoff: After M0.4 Decision Governance Certification Slice 0057
 
-Current milestone state: M0.4 is started but not certified.
+Current milestone state: M0.4 is certified but not yet accepted or baselined.
 
 New state from this slice:
 
-- Added `docs/compatibility-structure-governance.md`.
-- Added `ArchitecturalDecisionGovernanceTests.CompatibilityStructuresRemainGoverned`.
-- The guard validates compatibility field, route, command, and mirror inventory sections.
-- Each compatibility inventory row must include kind, owner, consumers, replacement path, retirement condition, and reachable evidence.
-- The guard aligns compatibility routes with the bounded compatibility route list from `BackendEndpointDispositionTests`.
-- The guard aligns compatibility command families and Rust mirror entries with `docs/shell-transport-classification.md`.
-- Updated `.agents/decisions/decisions.md` with the Slice 0056 evidence target.
-- Added `.agents/milestones/m0.4-compatibility-structure-governance-slice-0056.md`.
-- Updated `.agents/milestones/m0.4-decision-governance.md`, `docs/architectural-capabilities.md`, and `docs/architectural-mechanisms.md`.
-- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0054.md`.
+- Added `.agents/milestones/m0.4-decision-governance-certification-slice-0057.md`.
+- Marked the M0.4 certification report and exit criteria complete in `.agents/milestones/m0.4-decision-governance.md`.
+- Updated `docs/architectural-capabilities.md` to record scoped M0.4 certification.
+- Updated `docs/architectural-mechanisms.md` to record decision governance as certified with acceptance pending.
+- Updated `.agents/decisions/decisions.md` with the Slice 0057 evidence target only; no new decisions were added.
+- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0055.md`.
 
 Verification:
 
 - `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter ArchitecturalDecisionGovernanceTests` passed: 10 passed, 0 failed, 0 skipped.
 - `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "ArchitecturalRegressionFrameworkTests|ArchitecturalDecisionGovernanceTests"` passed: 24 passed, 0 failed, 0 skipped.
+- `git diff --check` passed with line-ending normalization warnings only.
 
 High-leverage decisions currently relevant:
 
-- Compatibility structures are governed as transitional architecture, not judged as intrinsically correct or incorrect.
-- The guard requires owner, consumers, replacement path, retirement condition, and evidence for compatibility fields, routes, commands, and mirrors.
-- The guard is inventory-level: it does not prove compatibility derivation, consumer migration completeness, passive transport correctness, or retirement readiness.
-- Shell compatibility command and mirror governance now depends on `docs/shell-transport-classification.md` staying aligned with the compatibility inventory.
+- M0.4 certification is scoped to governance foundation readiness, not downstream acceptance or full enforcement breadth.
+- Compatibility and rollback governance are certified before broad migration starts, but compatibility derivation correctness, passive transport correctness, and retirement readiness remain later milestone claims.
+- Active governance artifact and evidence reachability guards are part of the certified foundation, but complete historical decision/evidence schema validation remains an accepted limitation.
 
 Recommended next slice:
 
-- Continue M0.4 with certification preparation: add a decision governance certification report that maps all M0.4 required outputs and exit criteria to the current evidence, identifies any accepted limitations, and states whether M0.4 can be certified or what narrow blocker remains.
+- Add M0.4 acceptance and baseline closeout evidence that confirms downstream obligations, accepted limitations, rollback readiness, and durable documentation alignment; then move to M1.1 if no narrow acceptance blocker appears.

@@ -1,35 +1,31 @@
-# Decisions: 2026-06-27 M0.4 Certification Review Direction
+# Decisions: 2026-06-27 M0.4 Acceptance Direction
 
-These decisions capture only newly authorized direction from the user response following M0.4 Compatibility Structure Governance Slice 0056.
+These decisions capture only newly authorized direction from the user response following M0.4 Decision Governance Certification Slice 0057.
 
 ## Authorized Decisions
 
-1. Accept Slice 0056 as a correct M0.4 governance-strengthening step.
-   - Compatibility structures should be governed as transitional architecture rather than evaluated as inherently good or bad.
-   - Compatibility mechanisms may be necessary during architectural evolution.
-   - The architectural risk is unmanaged permanence without ownership, consumers, replacement path, retirement condition, and reachable evidence.
+1. Accept M0.4 certification as complete.
+   - M0.4 is certified as a governance foundation, not as complete governance of the entire architecture.
+   - The certification boundary remains governance framework readiness rather than total governance coverage.
 
-2. Preserve the limited certification claim for compatibility-structure governance.
-   - The guard proves compatibility inventory, required governance metadata, and reachable evidence.
-   - The guard does not prove derivation correctness, migration completeness, passive transport correctness, or retirement readiness.
-   - Those claims remain separate later architectural work.
+2. Treat M0.4 as ready for formal acceptance.
+   - The next slice should produce the M0.4 acceptance and baseline closeout.
+   - Acceptance should follow the same disciplined acceptance pattern used for earlier Phase 0 milestones.
 
-3. Treat M0.4 as ready for certification review rather than additional governance-concept expansion.
-   - The next slice should synthesize current M0.4 evidence against the milestone definition.
-   - The certification review should demonstrate that the governance framework satisfies its own milestone requirements.
-   - Certification should not broaden coverage beyond the evidence produced by M0.4.
+3. Freeze the M0.4 governance baseline after acceptance.
+   - Governance mechanism expansion should stop unless acceptance identifies a narrow blocker.
+   - Future governance strengthening should happen through later milestone-specific evidence and decisions.
 
-4. Organize M0.4 certification evidence into three groups.
-   - Governance foundation: decision governance, evidence model, rollback model, and templates.
-   - Governance enforcement: metadata guards, regression weakening guard, shell inventory validation, authority/projection watchlist, and compatibility governance.
-   - Governance limitations: historical corpus not fully validated, semantic decision quality not automatically assessed, and compatibility correctness not yet proven.
+4. Structure the acceptance document around established and deferred governance.
+   - Established governance capabilities include architectural decisions, evidence, rollback, metadata validation, and governance traceability.
+   - Intentionally deferred governance includes semantic decision review, full historical validation, automatic governance inference, and comprehensive compatibility validation.
 
-5. Continue toward M0.4 closeout with certification, evidence synthesis, and milestone acceptance.
-   - Required outputs, exit criteria, implemented mechanisms, executable guards, accepted limitations, and blockers should be explicit.
-   - If no narrow blocker remains, certification can support milestone acceptance as a separate step.
+5. Move to M1.1 after M0.4 acceptance if no narrow acceptance blocker remains.
+   - M1.1 should shift from building governance and protection to using those protections while evolving architecture.
+   - Phase 0 should be treated as the foundation sequence of verification substrate, Contract Oracle, architectural regression framework, and architectural governance framework.
 
 ## Next Authorized Sequence
 
-1. Stage Slice 0056 changes, handoff rotation, decision rotation, and this decision checkpoint.
+1. Stage Slice 0057 changes, handoff rotation, decision rotation, and this decision checkpoint.
 2. Commit and push to `origin/dev`.
 3. Stop executing after the push.
