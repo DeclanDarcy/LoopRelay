@@ -1279,7 +1279,6 @@ public sealed class DecisionGenerationServiceTests
                 "human-reviewer",
                 proposal.Recommendation!.OptionId));
         ExecutionDecisionProjection projection = await projectionService.BuildExecutionProjectionAsync(repository.Id);
-        ExecutionPrompt prompt = new ExecutionPromptBuilder().Build(CreateExecutionContext(repository, projection));
         HumanAuthoringBurdenReport burdenReport = await burdenService.GenerateReportAsync(repository.Id);
 
         Assert.Equal(DecisionState.Resolved, decision.State);
@@ -1290,8 +1289,6 @@ public sealed class DecisionGenerationServiceTests
         Assert.True(
             projection.Constraints.Any(item => item.DecisionId == decision.Id.Value) ||
             projection.Directives.Any(item => item.DecisionId == decision.Id.Value));
-        Assert.Contains(decision.Id.Value, prompt.Text, StringComparison.Ordinal);
-        Assert.Contains("## Governed Decision Projection", prompt.Text, StringComparison.Ordinal);
         HumanAuthoringBurdenSignal signal = Assert.Single(burdenReport.Signals);
         Assert.Equal(decision.Id.Value, signal.DecisionId);
         Assert.Equal(HumanAuthoringBurden.ReviewOnly, signal.Burden);
@@ -2673,54 +2670,6 @@ public sealed class DecisionGenerationServiceTests
             decisionRepository,
             new HealthyGovernanceService(repository.Id),
             store);
-    }
-
-    private static ExecutionContext CreateExecutionContext(
-        Repository repository,
-        ExecutionDecisionProjection projection)
-    {
-        const string planContent = "# Plan\n\nNeed to decide repository-backed persistence schema.";
-        const string milestoneContent = "# Milestone 9\n\nProject accepted decisions into execution.";
-        return new ExecutionContext
-        {
-            RepositoryId = repository.Id,
-            RepositoryName = repository.Name,
-            RepositoryPath = repository.Path,
-            MilestonePath = ".agents/milestones/m9-decision-consumption.md",
-            GeneratedAt = new DateTimeOffset(2026, 6, 23, 12, 0, 0, TimeSpan.Zero),
-            Artifacts =
-            [
-                Artifact("Plan", ".agents/plan.md", planContent),
-                Artifact("Milestone", ".agents/milestones/m9-decision-consumption.md", milestoneContent)
-            ],
-            RepositorySnapshot = new ExecutionRepositorySnapshot
-            {
-                Branch = "main",
-                DirtyState = new RepositoryDirtyState(),
-                CapturedAt = new DateTimeOffset(2026, 6, 23, 12, 0, 0, TimeSpan.Zero)
-            },
-            DecisionProjection = projection,
-            Diagnostics = new ExecutionContextDiagnostics
-            {
-                TotalBytes = planContent.Length + milestoneContent.Length,
-                TotalCharacters = planContent.Length + milestoneContent.Length,
-                WarningThresholdBytes = 128 * 1024,
-                HardLimitBytes = 512 * 1024
-            }
-        };
-    }
-
-    private static ExecutionContextArtifact Artifact(string role, string relativePath, string content)
-    {
-        return new ExecutionContextArtifact
-        {
-            Role = role,
-            RelativePath = relativePath,
-            Name = Path.GetFileName(relativePath),
-            Content = content,
-            ByteCount = content.Length,
-            CharacterCount = content.Length
-        };
     }
 
     private static DecisionOperationalContextAssimilationService CreateAssimilationService(

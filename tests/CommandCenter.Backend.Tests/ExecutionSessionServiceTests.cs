@@ -386,7 +386,7 @@ public sealed class ExecutionSessionServiceTests
             new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
 
         Assert.NotNull(provider.LastPrompt);
-        Assert.Contains("Produce or update `.agents/handoffs/handoff.md`", provider.LastPrompt.Text);
+        Assert.Contains("then write .agents/handoffs/handoff.md with:", provider.LastPrompt.Text);
         Assert.Equal(".agents/milestones/m2.md", provider.LastPrompt.Metadata.MilestonePath);
     }
 
@@ -669,7 +669,8 @@ public sealed class ExecutionSessionServiceTests
 
         Assert.NotNull(manifest);
         Assert.Equal(summary.SessionId, manifest.SessionId);
-        Assert.Contains("## Context Artifacts", manifest.PromptText);
+        Assert.Contains("start executing the first milestone", manifest.PromptText);
+        Assert.Contains("operational context", manifest.PromptText);
         Assert.Equal("DeliveredAsRequested", manifest.ProviderDeliveryStatus);
         Assert.Empty(manifest.ProviderAdjustments);
         Assert.Null(manifest.DivergenceReason);

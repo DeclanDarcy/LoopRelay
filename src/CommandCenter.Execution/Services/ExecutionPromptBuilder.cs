@@ -1,12 +1,25 @@
-using System.Text;
-using CommandCenter.Decisions.Models;
+using CommandCenter.Core.Prompts;
 using CommandCenter.Execution.Abstractions;
 using CommandCenter.Execution.Models;
 
 namespace CommandCenter.Execution.Services;
 
+/// <summary>
+/// Renders the operational execution prompt from the <c>CommandCenter.Core.Prompts</c> catalog —
+/// the single prompt authority. This is the catalog's first runtime consumer.
+/// <para>
+/// The previous literal/<see cref="System.Text.StringBuilder"/> composition (repository headers,
+/// instruction block, repository snapshot, context diagnostics, and the governed decision
+/// projection rendered inline) has been deleted: that prompt chrome is obsolete under the new
+/// architecture. Substantive context flows into the catalog holes — Plan/Milestone/OperationalContext
+/// compose the <c>{plan}</c> hole, with the current handoff and decisions filling their own holes on
+/// continuation. Structured diagnostics survive only in <see cref="ExecutionPromptMetadata"/> and the
+/// persisted prompt manifest, no longer concatenated into the prompt body.
+/// </para>
+/// </summary>
 public sealed class ExecutionPromptBuilder : IExecutionPromptBuilder
 {
+    // Canonical artifact ordering for the manifest's IncludedArtifactPaths.
     private static readonly string[] ArtifactRoleOrder =
     [
         "Plan",
@@ -16,35 +29,29 @@ public sealed class ExecutionPromptBuilder : IExecutionPromptBuilder
         "CurrentDecisions"
     ];
 
+    // Roles whose contents compose the catalog {plan} hole, in execution order.
+    private static readonly string[] PlanContextRoles =
+    [
+        "Plan",
+        "Milestone",
+        "OperationalContext"
+    ];
+
     public ExecutionPrompt Build(ExecutionContext context)
     {
-        var builder = new StringBuilder();
+        string? plan = ComposePlanContext(context.Artifacts);
+        string? handoff = ContentForRole(context.Artifacts, "CurrentHandoff");
+        string? decisions = ContentForRole(context.Artifacts, "CurrentDecisions");
 
-        builder.AppendLine("# Command Center Execution Prompt");
-        builder.AppendLine();
-        builder.AppendLine("## Repository");
-        builder.AppendLine($"Path: {context.RepositoryPath}");
-        builder.AppendLine($"Name: {context.RepositoryName}");
-        builder.AppendLine();
-        builder.AppendLine("## Selected Milestone");
-        builder.AppendLine(context.MilestonePath);
-        builder.AppendLine();
-        builder.AppendLine("## Instructions");
-        builder.AppendLine("- Work only inside the repository path shown above.");
-        builder.AppendLine("- Execute only the selected milestone slice.");
-        builder.AppendLine("- Produce or update `.agents/handoffs/handoff.md` before completing.");
-        builder.AppendLine("- Do not commit changes.");
-        builder.AppendLine("- Do not push changes.");
-        builder.AppendLine("- Leave handoff acceptance, commit, and push control to Command Center.");
-        builder.AppendLine();
-        AppendRepositorySnapshot(builder, context.RepositorySnapshot);
-        AppendContextDiagnostics(builder, context.Diagnostics);
-        AppendGovernedDecisions(builder, context.DecisionProjection);
-        AppendArtifacts(builder, context.Artifacts);
+        // A prior handoff means we are continuing an in-flight milestone; otherwise this is a
+        // first-milestone start (the StartExecution template has no handoff/decisions holes).
+        string text = handoff is not null
+            ? ContinueExecution.Render(plan, handoff, decisions)
+            : StartExecution.Render(plan);
 
         return new ExecutionPrompt
         {
-            Text = builder.ToString(),
+            Text = text,
             Metadata = new ExecutionPromptMetadata
             {
                 GeneratedAt = DateTimeOffset.UtcNow,
@@ -60,178 +67,20 @@ public sealed class ExecutionPromptBuilder : IExecutionPromptBuilder
         };
     }
 
-    private static void AppendGovernedDecisions(StringBuilder builder, ExecutionDecisionProjection? projection)
+    private static string? ComposePlanContext(IReadOnlyList<ExecutionContextArtifact> artifacts)
     {
-        builder.AppendLine("## Governed Decision Projection");
-        if (projection is null)
-        {
-            builder.AppendLine("Projection: unavailable");
-            builder.AppendLine();
-            return;
-        }
+        string[] sections = PlanContextRoles
+            .Select(role => ContentForRole(artifacts, role))
+            .Where(content => content is not null)
+            .Select(content => content!)
+            .ToArray();
 
-        AppendDecisionDiagnostics(builder, projection.Diagnostics);
-        AppendConflicts(builder, projection.Conflicts);
-        AppendConstraints(builder, projection.Constraints);
-        AppendDirectives(builder, projection.Directives);
-        AppendPriorities(builder, projection.Priorities);
-        AppendArchitectureRules(builder, projection.ArchitectureRules);
-        builder.AppendLine();
+        return sections.Length == 0 ? null : string.Join("\n\n", sections);
     }
 
-    private static void AppendDecisionDiagnostics(StringBuilder builder, IReadOnlyList<string> diagnostics)
+    private static string? ContentForRole(IReadOnlyList<ExecutionContextArtifact> artifacts, string role)
     {
-        builder.AppendLine("Diagnostics:");
-        if (diagnostics.Count == 0)
-        {
-            builder.AppendLine("- none");
-            return;
-        }
-
-        foreach (string diagnostic in diagnostics.Order(StringComparer.Ordinal))
-        {
-            builder.AppendLine($"- {diagnostic}");
-        }
-    }
-
-    private static void AppendConflicts(StringBuilder builder, IReadOnlyList<ExecutionDecisionConflict> conflicts)
-    {
-        builder.AppendLine("Conflicts:");
-        if (conflicts.Count == 0)
-        {
-            builder.AppendLine("- none");
-            return;
-        }
-
-        foreach (ExecutionDecisionConflict conflict in conflicts.OrderBy(conflict => conflict.Id, StringComparer.Ordinal))
-        {
-            builder.AppendLine($"- {conflict.DecisionId}: {conflict.Statement} conflicts with `{conflict.ConflictingExcerpt}`");
-        }
-    }
-
-    private static void AppendConstraints(StringBuilder builder, IReadOnlyList<ExecutionConstraint> constraints)
-    {
-        builder.AppendLine("Constraints:");
-        if (constraints.Count == 0)
-        {
-            builder.AppendLine("- none");
-            return;
-        }
-
-        foreach (ExecutionConstraint constraint in constraints.OrderBy(constraint => constraint.DecisionId, StringComparer.Ordinal))
-        {
-            builder.AppendLine($"- {constraint.DecisionId} ({constraint.ProjectionKind}, {constraint.Classification}): {constraint.Statement}");
-        }
-    }
-
-    private static void AppendDirectives(StringBuilder builder, IReadOnlyList<ExecutionDirective> directives)
-    {
-        builder.AppendLine("Directives:");
-        if (directives.Count == 0)
-        {
-            builder.AppendLine("- none");
-            return;
-        }
-
-        foreach (ExecutionDirective directive in directives.OrderBy(directive => directive.DecisionId, StringComparer.Ordinal))
-        {
-            builder.AppendLine($"- {directive.DecisionId} ({directive.ProjectionKind}, {directive.Classification}): {directive.Statement}");
-        }
-    }
-
-    private static void AppendPriorities(StringBuilder builder, IReadOnlyList<ExecutionDecisionPriority> priorities)
-    {
-        builder.AppendLine("Priorities:");
-        if (priorities.Count == 0)
-        {
-            builder.AppendLine("- none");
-            return;
-        }
-
-        foreach (ExecutionDecisionPriority priority in priorities
-            .OrderBy(priority => priority.Rank)
-            .ThenBy(priority => priority.DecisionId, StringComparer.Ordinal))
-        {
-            builder.AppendLine($"- P{priority.Rank} {priority.DecisionId} ({priority.ProjectionKind}, {priority.Classification}): {priority.Statement}");
-        }
-    }
-
-    private static void AppendArchitectureRules(StringBuilder builder, IReadOnlyList<ExecutionArchitectureRule> architectureRules)
-    {
-        builder.AppendLine("Architecture Rules:");
-        if (architectureRules.Count == 0)
-        {
-            builder.AppendLine("- none");
-            return;
-        }
-
-        foreach (ExecutionArchitectureRule rule in architectureRules.OrderBy(rule => rule.DecisionId, StringComparer.Ordinal))
-        {
-            builder.AppendLine($"- {rule.DecisionId} ({rule.ProjectionKind}, {rule.Classification}): {rule.Statement}");
-        }
-    }
-
-    private static void AppendRepositorySnapshot(StringBuilder builder, ExecutionRepositorySnapshot? snapshot)
-    {
-        builder.AppendLine("## Repository Snapshot");
-        if (snapshot is null)
-        {
-            builder.AppendLine("Git snapshot: unavailable");
-            builder.AppendLine();
-            return;
-        }
-
-        builder.AppendLine($"Branch: {snapshot.Branch}");
-        builder.AppendLine($"Working tree clean: {FormatBoolean(snapshot.DirtyState.IsClean)}");
-        AppendPathGroup(builder, "Staged paths", snapshot.DirtyState.StagedPaths);
-        AppendPathGroup(builder, "Modified paths", snapshot.DirtyState.ModifiedPaths);
-        AppendPathGroup(builder, "Deleted paths", snapshot.DirtyState.DeletedPaths);
-        AppendPathGroup(builder, "Renamed paths", snapshot.DirtyState.RenamedPaths);
-        AppendPathGroup(builder, "Untracked paths", snapshot.DirtyState.UntrackedPaths);
-        builder.AppendLine();
-    }
-
-    private static void AppendContextDiagnostics(StringBuilder builder, ExecutionContextDiagnostics diagnostics)
-    {
-        builder.AppendLine("## Context Diagnostics");
-        builder.AppendLine($"Total bytes: {diagnostics.TotalBytes}");
-        builder.AppendLine($"Total characters: {diagnostics.TotalCharacters}");
-        builder.AppendLine($"Warning threshold exceeded: {FormatBoolean(diagnostics.WarningThresholdExceeded)}");
-        builder.AppendLine($"Hard limit exceeded: {FormatBoolean(diagnostics.HardLimitExceeded)}");
-        AppendGovernedConflictDiagnostics(builder, diagnostics.GovernedConflicts);
-        AppendValueGroup(builder, "Missing optional artifacts", diagnostics.MissingOptionalArtifacts);
-        builder.AppendLine();
-    }
-
-    private static void AppendGovernedConflictDiagnostics(
-        StringBuilder builder,
-        IReadOnlyList<ExecutionGovernedConflictDiagnostic> governedConflicts)
-    {
-        builder.AppendLine("Governed conflict diagnostics:");
-        if (governedConflicts.Count == 0)
-        {
-            builder.AppendLine("- none");
-            return;
-        }
-
-        foreach (ExecutionGovernedConflictDiagnostic conflict in governedConflicts.OrderBy(conflict => conflict.Id, StringComparer.Ordinal))
-        {
-            builder.AppendLine(
-                $"- {conflict.DecisionId} [{conflict.Severity}]: {conflict.ConflictReason} Affects {conflict.AffectedContext}; resolve by: {conflict.RecommendedResolution}");
-        }
-    }
-
-    private static void AppendArtifacts(StringBuilder builder, IReadOnlyList<ExecutionContextArtifact> artifacts)
-    {
-        builder.AppendLine("## Context Artifacts");
-        foreach (ExecutionContextArtifact artifact in OrderedArtifacts(artifacts))
-        {
-            builder.AppendLine();
-            builder.AppendLine($"### {artifact.Role}: {artifact.RelativePath}");
-            builder.AppendLine("```text");
-            builder.AppendLine(artifact.Content);
-            builder.AppendLine("```");
-        }
+        return artifacts.FirstOrDefault(artifact => artifact.Role == role)?.Content;
     }
 
     private static IEnumerable<ExecutionContextArtifact> OrderedArtifacts(IReadOnlyList<ExecutionContextArtifact> artifacts)
@@ -242,30 +91,5 @@ public sealed class ExecutionPromptBuilder : IExecutionPromptBuilder
                 return index < 0 ? ArtifactRoleOrder.Length : index;
             })
             .ThenBy(artifact => artifact.RelativePath, StringComparer.Ordinal);
-    }
-
-    private static void AppendPathGroup(StringBuilder builder, string label, IReadOnlyList<string> paths)
-    {
-        AppendValueGroup(builder, label, paths.OrderBy(path => path, StringComparer.Ordinal).ToArray());
-    }
-
-    private static void AppendValueGroup(StringBuilder builder, string label, IReadOnlyList<string> values)
-    {
-        builder.AppendLine($"{label}:");
-        if (values.Count == 0)
-        {
-            builder.AppendLine("- none");
-            return;
-        }
-
-        foreach (string value in values)
-        {
-            builder.AppendLine($"- {value}");
-        }
-    }
-
-    private static string FormatBoolean(bool value)
-    {
-        return value ? "yes" : "no";
     }
 }

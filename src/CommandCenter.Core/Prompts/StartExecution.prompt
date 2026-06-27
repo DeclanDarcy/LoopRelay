@@ -1,6 +1,6 @@
 {plan}
 start executing the first milestone
-then write .agents/handoff.md with:
+then write .agents/handoffs/handoff.md with:
 - compact summary of current context capturing only new state introduced by this slice
 - recommendation for what the next slice of work should be
 - meaningful decisions that are currently relevant

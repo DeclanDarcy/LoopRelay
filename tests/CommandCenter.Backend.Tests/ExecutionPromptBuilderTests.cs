@@ -1,6 +1,4 @@
 using CommandCenter.Execution;
-using CommandCenter.Decisions.Models;
-using CommandCenter.Decisions.Primitives;
 using CommandCenter.Execution.Models;
 using CommandCenter.Execution.Services;
 
@@ -9,26 +7,30 @@ namespace CommandCenter.Backend.Tests;
 public sealed class ExecutionPromptBuilderTests
 {
     [Fact]
-    public void PromptIncludesRequiredInputsAndInstructions()
+    public void StartPromptRendersCatalogBodyWithComposedPlanContext()
     {
         ExecutionPrompt prompt = new ExecutionPromptBuilder().Build(CreateContext());
 
-        Assert.Contains(@"C:\repos\Project", prompt.Text);
-        Assert.Contains(".agents/milestones/m2.md", prompt.Text);
-        Assert.Contains("Plan: .agents/plan.md", prompt.Text);
+        // No prior handoff => the StartExecution catalog template is rendered.
+        Assert.Contains("start executing the first milestone", prompt.Text);
+        Assert.Contains("then write .agents/handoffs/handoff.md with:", prompt.Text);
+        Assert.DoesNotContain("continue executing the current milestone", prompt.Text);
+
+        // Plan + Milestone artifact contents compose the catalog {plan} hole.
         Assert.Contains("plan content", prompt.Text);
-        Assert.Contains("Milestone: .agents/milestones/m2.md", prompt.Text);
         Assert.Contains("milestone content", prompt.Text);
-        Assert.Contains("Branch: main", prompt.Text);
-        Assert.Contains("Work only inside the repository path shown above.", prompt.Text);
-        Assert.Contains("Produce or update `.agents/handoffs/handoff.md`", prompt.Text);
-        Assert.Contains("Do not commit changes.", prompt.Text);
-        Assert.Contains("Do not push changes.", prompt.Text);
-        Assert.Contains("Leave handoff acceptance, commit, and push control to Command Center.", prompt.Text);
+
+        // The obsolete literal chrome (headers, instruction block, inline diagnostics) is gone.
+        Assert.DoesNotContain("## Repository", prompt.Text);
+        Assert.DoesNotContain("## Context Artifacts", prompt.Text);
+        Assert.DoesNotContain("## Governed Decision Projection", prompt.Text);
+        Assert.DoesNotContain("Do not commit changes.", prompt.Text);
+
+        Assert.Equal(".agents/milestones/m2.md", prompt.Metadata.MilestonePath);
     }
 
     [Fact]
-    public void PromptIncludesOptionalArtifactsWhenPresent()
+    public void ContinuePromptFillsHandoffAndDecisionHolesWhenHandoffPresent()
     {
         ExecutionPrompt prompt = new ExecutionPromptBuilder().Build(CreateContext(
             optionalArtifacts:
@@ -38,19 +40,23 @@ public sealed class ExecutionPromptBuilderTests
                 Artifact("CurrentDecisions", ".agents/decisions/decisions.md", "decisions content")
             ]));
 
-        Assert.Contains("OperationalContext: .agents/operational_context.md", prompt.Text);
+        // A current handoff selects the ContinueExecution catalog template.
+        Assert.Contains("continue executing the current milestone", prompt.Text);
+        Assert.DoesNotContain("start executing the first milestone", prompt.Text);
+
+        // Operational context folds into {plan}; handoff and decisions fill their own holes.
         Assert.Contains("context content", prompt.Text);
-        Assert.Contains("CurrentHandoff: .agents/handoffs/handoff.md", prompt.Text);
         Assert.Contains("handoff content", prompt.Text);
-        Assert.Contains("CurrentDecisions: .agents/decisions/decisions.md", prompt.Text);
         Assert.Contains("decisions content", prompt.Text);
+
+        // Every delivered artifact is still tracked in the structured manifest metadata.
         Assert.Contains(".agents/operational_context.md", prompt.Metadata.IncludedArtifactPaths);
         Assert.Contains(".agents/handoffs/handoff.md", prompt.Metadata.IncludedArtifactPaths);
         Assert.Contains(".agents/decisions/decisions.md", prompt.Metadata.IncludedArtifactPaths);
     }
 
     [Fact]
-    public void PromptOrdersOperationalContextBetweenMilestoneAndHandoff()
+    public void MetadataOrdersIncludedArtifactPathsByRole()
     {
         ExecutionPrompt prompt = new ExecutionPromptBuilder().Build(CreateContext(
             optionalArtifacts:
@@ -69,147 +75,26 @@ public sealed class ExecutionPromptBuilderTests
                 ".agents/decisions/decisions.md"
             ],
             prompt.Metadata.IncludedArtifactPaths);
-        Assert.True(
-            prompt.Text.IndexOf("Milestone: .agents/milestones/m2.md", StringComparison.Ordinal) <
-            prompt.Text.IndexOf("OperationalContext: .agents/operational_context.md", StringComparison.Ordinal));
-        Assert.True(
-            prompt.Text.IndexOf("OperationalContext: .agents/operational_context.md", StringComparison.Ordinal) <
-            prompt.Text.IndexOf("CurrentHandoff: .agents/handoffs/handoff.md", StringComparison.Ordinal));
     }
 
     [Fact]
-    public void PromptReportsMissingOptionalArtifactsWithoutBlockingPromptCreation()
-    {
-        ExecutionPrompt prompt = new ExecutionPromptBuilder().Build(CreateContext());
-
-        Assert.Contains("Missing optional artifacts:", prompt.Text);
-        Assert.Contains(".agents/operational_context.md", prompt.Text);
-        Assert.Contains(".agents/handoffs/handoff.md", prompt.Text);
-        Assert.Contains(".agents/decisions/decisions.md", prompt.Text);
-    }
-
-    [Fact]
-    public void PromptIncludesGovernedDecisionProjectionBeforeRawDecisionArtifact()
-    {
-        ExecutionPrompt prompt = new ExecutionPromptBuilder().Build(CreateContext(
-            optionalArtifacts:
-            [
-                Artifact("CurrentDecisions", ".agents/decisions/decisions.md", "raw decisions content")
-            ],
-            decisionProjection: new ExecutionDecisionProjection(
-                Guid.Parse("00000000-0000-0000-0000-000000000001"),
-                DateTimeOffset.UtcNow,
-                [
-                    new ExecutionConstraint(
-                        "ECON-0001",
-                        "DEC-0001",
-                        "Architecture",
-                        "Use repository artifacts",
-                        DecisionClassification.Architectural,
-                        ExecutionProjectionKind.RepositoryConvention,
-                        [])
-                ],
-                [],
-                [],
-                [
-                    new ExecutionArchitectureRule(
-                        "EARC-0001",
-                        "DEC-0001",
-                        "Architecture",
-                        "Use repository artifacts",
-                        DecisionClassification.Architectural,
-                        ExecutionProjectionKind.RepositoryConvention,
-                        [])
-                ],
-                [],
-                [],
-                new ExecutionDecisionContext([], [], [], [], [], []))));
-
-        Assert.Contains("## Governed Decision Projection", prompt.Text);
-        Assert.Contains("- DEC-0001 (RepositoryConvention, Architectural): Use repository artifacts", prompt.Text);
-        Assert.Contains("Architecture Rules:", prompt.Text);
-        Assert.True(
-            prompt.Text.IndexOf("## Governed Decision Projection", StringComparison.Ordinal) <
-            prompt.Text.IndexOf("CurrentDecisions: .agents/decisions/decisions.md", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public void PromptRendersDecisionPrioritiesAndArchitectureRulesSeparately()
-    {
-        ExecutionPrompt prompt = new ExecutionPromptBuilder().Build(CreateContext(
-            decisionProjection: new ExecutionDecisionProjection(
-                Guid.Parse("00000000-0000-0000-0000-000000000001"),
-                DateTimeOffset.UtcNow,
-                [],
-                [],
-                [
-                    new ExecutionDecisionPriority(
-                        "EPRI-0001",
-                        "DEC-0002",
-                        "Priority",
-                        "Prioritize governance-safe execution before automation breadth.",
-                        DecisionClassification.Strategic,
-                        ExecutionProjectionKind.WorkflowPolicy,
-                        1,
-                        [])
-                ],
-                [
-                    new ExecutionArchitectureRule(
-                        "EARC-0001",
-                        "DEC-0001",
-                        "Architecture",
-                        "Use repository artifacts",
-                        DecisionClassification.Architectural,
-                        ExecutionProjectionKind.RepositoryConvention,
-                        [])
-                ],
-                [],
-                [],
-                new ExecutionDecisionContext([], [], [], [], [], []))));
-
-        Assert.Contains("Priorities:", prompt.Text);
-        Assert.Contains("- P1 DEC-0002 (WorkflowPolicy, Strategic): Prioritize governance-safe execution before automation breadth.", prompt.Text);
-        Assert.Contains("Architecture Rules:", prompt.Text);
-        Assert.Contains("- DEC-0001 (RepositoryConvention, Architectural): Use repository artifacts", prompt.Text);
-    }
-
-    [Fact]
-    public void PromptIncludesDirtyRepositoryDiagnostics()
+    public void MetadataFlagsDirtyRepository()
     {
         ExecutionPrompt prompt = new ExecutionPromptBuilder().Build(CreateContext(dirtyState: new RepositoryDirtyState
         {
             IsClean = false,
-            StagedPaths = ["z-staged.cs", "a-staged.cs"],
-            ModifiedPaths = ["src/changed.cs"],
-            DeletedPaths = ["src/deleted.cs"],
-            RenamedPaths = ["src/old.cs -> src/new.cs"],
-            UntrackedPaths = ["notes.md"]
+            ModifiedPaths = ["src/changed.cs"]
         }));
 
-        Assert.Contains("Working tree clean: no", prompt.Text);
-        Assert.Contains("- a-staged.cs", prompt.Text);
-        Assert.Contains("- z-staged.cs", prompt.Text);
-        Assert.Contains("- src/changed.cs", prompt.Text);
-        Assert.Contains("- src/deleted.cs", prompt.Text);
-        Assert.Contains("- src/old.cs -> src/new.cs", prompt.Text);
-        Assert.Contains("- notes.md", prompt.Text);
         Assert.True(prompt.Metadata.DirtyRepository);
     }
 
     [Fact]
-    public void PromptOutputIsStableForEquivalentContext()
+    public void PromptTextIsDeterministicAndCarriesNoTimestampOrIdentity()
     {
         var builder = new ExecutionPromptBuilder();
-        ExecutionPrompt first = builder.Build(CreateContext(dirtyState: new RepositoryDirtyState
-        {
-            IsClean = false,
-            ModifiedPaths = ["b.cs", "a.cs"]
-        }));
-        ExecutionPrompt second = builder.Build(CreateContext(dirtyState: new RepositoryDirtyState
-        {
-            IsClean = false,
-            ModifiedPaths = ["b.cs", "a.cs"]
-        }));
+        ExecutionPrompt first = builder.Build(CreateContext());
+        ExecutionPrompt second = builder.Build(CreateContext());
 
         Assert.Equal(first.Text, second.Text);
         Assert.DoesNotContain("00000000-0000-0000-0000-000000000001", first.Text);
@@ -218,8 +103,7 @@ public sealed class ExecutionPromptBuilderTests
 
     private static ExecutionContext CreateContext(
         IReadOnlyList<ExecutionContextArtifact>? optionalArtifacts = null,
-        RepositoryDirtyState? dirtyState = null,
-        ExecutionDecisionProjection? decisionProjection = null)
+        RepositoryDirtyState? dirtyState = null)
     {
         var artifacts = new List<ExecutionContextArtifact>
         {
@@ -245,7 +129,6 @@ public sealed class ExecutionPromptBuilderTests
                 DirtyState = dirtyState ?? new RepositoryDirtyState(),
                 CapturedAt = new DateTimeOffset(2026, 6, 19, 12, 0, 0, TimeSpan.Zero)
             },
-            DecisionProjection = decisionProjection,
             Diagnostics = new ExecutionContextDiagnostics
             {
                 TotalBytes = 27,
