@@ -1,3 +1,4 @@
+using CommandCenter.Agents.Abstractions;
 using CommandCenter.Agents.Services;
 using CommandCenter.Agents.Models;
 
@@ -44,7 +45,8 @@ public sealed class AgentRuntimeBoundaryTests
             typeof(SandboxProfile),
             typeof(EffortProfile),
             typeof(AgentProcessState),
-            typeof(AgentTurnState)
+            typeof(AgentTurnState),
+            typeof(IAgentProcess)
         ];
 
         foreach (Type primitiveType in primitiveTypes)
@@ -73,5 +75,23 @@ public sealed class AgentRuntimeBoundaryTests
 
         Assert.Equal("codex", spec.StartupOptions["provider"]);
         Assert.IsAssignableFrom<IReadOnlyDictionary<string, string>>(spec.StartupOptions);
+    }
+
+    [Fact]
+    public void AgentProcessBoundaryDoesNotExposeOperatingSystemProcessTypes()
+    {
+        Type[] exposedTypes = typeof(IAgentProcess)
+            .GetMembers()
+            .SelectMany(member => member switch
+            {
+                System.Reflection.PropertyInfo property => [property.PropertyType],
+                System.Reflection.MethodInfo method => method.GetParameters()
+                    .Select(parameter => parameter.ParameterType)
+                    .Append(method.ReturnType),
+                _ => []
+            })
+            .ToArray();
+
+        Assert.DoesNotContain(exposedTypes, type => type.FullName == "System.Diagnostics.Process");
     }
 }

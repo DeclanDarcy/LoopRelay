@@ -71,8 +71,7 @@ public sealed class ProcessRunner : IProcessRunner
             startInfo.ArgumentList.Add(argument);
         }
 
-        Process process = Process.Start(startInfo)
-                          ?? throw new InvalidOperationException($"Failed to start process: {fileName}");
+        AgentProcess process = StartAgentProcess(startInfo, fileName);
 
         if (onStandardOutput is not null)
         {
@@ -88,27 +87,31 @@ public sealed class ProcessRunner : IProcessRunner
         {
             _ = Task.Run(async () =>
             {
-                await process.WaitForExitAsync();
-                await onExit(process.ExitCode);
-                process.Dispose();
+                await process.ObserveExitAsync(onExit);
             });
         }
 
         if (standardInput is not null)
         {
-            await process.StandardInput.WriteAsync(standardInput);
-            await process.StandardInput.FlushAsync();
-            process.StandardInput.Close();
+            await process.WriteStandardInputAsync(standardInput);
         }
 
         await Task.Delay(ImmediateExitProbeDelay);
 
         return new ProcessStartResult
         {
-            ProcessId = process.Id,
+            ProcessId = process.ProcessId,
             HasExited = process.HasExited,
             ExitCode = process.HasExited ? process.ExitCode : null
         };
+    }
+
+    private static AgentProcess StartAgentProcess(ProcessStartInfo startInfo, string fileName)
+    {
+        Process process = Process.Start(startInfo)
+                          ?? throw new InvalidOperationException($"Failed to start process: {fileName}");
+
+        return new AgentProcess(process);
     }
 
     private static async Task ReadLinesAsync(StreamReader reader, Func<string, Task> onLine)
