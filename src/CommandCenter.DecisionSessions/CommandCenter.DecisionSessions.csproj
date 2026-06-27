@@ -7,6 +7,25 @@
     <UseExecutionContextAlias>false</UseExecutionContextAlias>
   </PropertyGroup>
 
+  <!--
+    REVISED INVARIANT (supersedes the archived epic-09 rule in
+    ".agents/archive/epics/09/plan.md": "Decision sessions are separate from
+    execution sessions. CommandCenter.DecisionSessions must not reference
+    CommandCenter.Execution"). Authoritative statement and migration: /refactor-plan.md.
+
+    A Decision Session is a distinct session ROLE from the Operational (Execution)
+    session, but BOTH are backed by a real codex process:
+      * DecisionSession != Operational — a decision session reasons over the
+        questions/issues an operational handoff raises and emits decisions; it
+        performs no coding, commit, or push work.
+      * A Decision Session MUST drive its own codex process execution.
+      * It must still NOT reference Execution's OPERATIONAL orchestration
+        (ExecutionSessionService, git/commit/push lifecycle). Instead it depends on
+        a shared, role-agnostic agent runtime (CommandCenter.Agents, extracted in
+        refactor-plan.md Phase 1) that both Execution and DecisionSessions consume.
+    TODO(refactor-plan Phase 3): add
+    <ProjectReference Include="..\CommandCenter.Agents\CommandCenter.Agents.csproj" />
+  -->
   <ItemGroup>
     <ProjectReference Include="..\CommandCenter.Core\CommandCenter.Core.csproj" />
     <ProjectReference Include="..\CommandCenter.Decisions\CommandCenter.Decisions.csproj" />
