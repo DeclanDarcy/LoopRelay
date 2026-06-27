@@ -12,7 +12,7 @@ Goal: establish permanent runtime boundaries without changing observable product
   - [x] Codex executable resolution reviewed and intentionally kept in Execution because it returns Execution-owned provider models and structured provider errors.
   - [x] `IAgentProcess`
   - [x] provider/process lifecycle primitives beyond the initial process handle
-  - stream/event primitives that are not execution-specific
+  - [x] stream/event primitives that are not execution-specific
 - [ ] Keep operational concepts in `CommandCenter.Execution`: Git, execution context, handoff, operational prompts, execution session state, commit, push, and operational evidence.
 - [ ] Introduce shared runtime primitives:
   - [x] `SessionIdentity`

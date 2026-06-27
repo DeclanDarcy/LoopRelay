@@ -46,6 +46,10 @@ public sealed class AgentRuntimeBoundaryTests
             typeof(EffortProfile),
             typeof(AgentProcessState),
             typeof(AgentTurnState),
+            typeof(AgentProcessEvent),
+            typeof(AgentProcessEventKind),
+            typeof(AgentProcessOutputStream),
+            typeof(AgentProcessEventStream),
             typeof(IAgentProcess),
             typeof(IAgentProcessSupervisor),
             typeof(AgentProcessSupervisionResult)

@@ -10,6 +10,8 @@ public interface IAgentProcessSupervisor : IAsyncDisposable
 
     Task<AgentProcessSupervisionResult> Completion { get; }
 
+    IReadOnlyList<AgentProcessEvent> Events { get; }
+
     Task<AgentProcessSupervisionResult> ObserveCompletionAsync(
         Func<int?, Task>? onExit = null,
         CancellationToken cancellationToken = default);

@@ -72,17 +72,28 @@ public sealed class ProcessRunner : IProcessRunner
         }
 
         AgentProcess process = StartAgentProcess(startInfo, fileName);
-        var supervisor = new AgentProcessSupervisor(process);
+        var eventStream = new AgentProcessEventStream();
+        var supervisor = new AgentProcessSupervisor(process, eventStream);
         process.StartCompletionObservation();
 
         if (onStandardOutput is not null)
         {
-            _ = Task.Run(() => ReadLinesAsync(process.StandardOutput, onStandardOutput));
+            _ = Task.Run(() => ReadLinesAsync(
+                process,
+                eventStream,
+                process.StandardOutput,
+                AgentProcessOutputStream.StandardOutput,
+                onStandardOutput));
         }
 
         if (onStandardError is not null)
         {
-            _ = Task.Run(() => ReadLinesAsync(process.StandardError, onStandardError));
+            _ = Task.Run(() => ReadLinesAsync(
+                process,
+                eventStream,
+                process.StandardError,
+                AgentProcessOutputStream.StandardError,
+                onStandardError));
         }
 
         if (onExit is not null)
@@ -116,10 +127,22 @@ public sealed class ProcessRunner : IProcessRunner
         return new AgentProcess(process);
     }
 
-    private static async Task ReadLinesAsync(StreamReader reader, Func<string, Task> onLine)
+    private static async Task ReadLinesAsync(
+        IAgentProcess process,
+        AgentProcessEventStream eventStream,
+        StreamReader reader,
+        AgentProcessOutputStream outputStream,
+        Func<string, Task> onLine)
     {
         while (await reader.ReadLineAsync() is { } line)
         {
+            eventStream.Record(
+                process.ProcessId,
+                AgentProcessEventKind.ProcessOutput,
+                process.State,
+                process.ExitCode,
+                outputStream,
+                line);
             await onLine(line);
         }
     }

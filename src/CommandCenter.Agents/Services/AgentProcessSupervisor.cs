@@ -7,14 +7,21 @@ public sealed class AgentProcessSupervisor : IAgentProcessSupervisor
 {
     private readonly IAgentProcess process;
     private readonly AgentProcessStateMachine stateMachine;
+    private readonly AgentProcessEventStream eventStream;
     private readonly Task<AgentProcessSupervisionResult> completion;
     private bool disposed;
 
-    public AgentProcessSupervisor(IAgentProcess process)
+    public AgentProcessSupervisor(IAgentProcess process, AgentProcessEventStream? eventStream = null)
     {
         this.process = process;
+        this.eventStream = eventStream ?? new AgentProcessEventStream();
         stateMachine = new AgentProcessStateMachine(process.State);
         ExitCode = process.ExitCode;
+        this.eventStream.Record(
+            process.ProcessId,
+            AgentProcessEventKind.ProcessStarted,
+            stateMachine.State,
+            process.ExitCode);
         completion = CompleteAsync();
     }
 
@@ -23,6 +30,8 @@ public sealed class AgentProcessSupervisor : IAgentProcessSupervisor
     public int? ExitCode { get; private set; }
 
     public Task<AgentProcessSupervisionResult> Completion => completion;
+
+    public IReadOnlyList<AgentProcessEvent> Events => eventStream.Events;
 
     public async Task<AgentProcessSupervisionResult> ObserveCompletionAsync(
         Func<int?, Task>? onExit = null,
@@ -59,6 +68,11 @@ public sealed class AgentProcessSupervisor : IAgentProcessSupervisor
         await process.DisposeAsync();
         ExitCode = process.ExitCode;
         stateMachine.TryTransitionTo(AgentProcessState.Canceled);
+        eventStream.RecordIfAbsent(
+            AgentProcessEventKind.ProcessCancelled,
+            process.ProcessId,
+            stateMachine.State,
+            ExitCode);
     }
 
     public async ValueTask DisposeAsync()
@@ -78,6 +92,11 @@ public sealed class AgentProcessSupervisor : IAgentProcessSupervisor
         if (State is not AgentProcessState.Disposed)
         {
             stateMachine.TryTransitionTo(AgentProcessState.Disposed);
+            eventStream.Record(
+                process.ProcessId,
+                AgentProcessEventKind.ProcessDisposed,
+                stateMachine.State,
+                ExitCode);
         }
     }
 
@@ -90,14 +109,42 @@ public sealed class AgentProcessSupervisor : IAgentProcessSupervisor
         catch
         {
             stateMachine.TryTransitionTo(AgentProcessState.Failed);
+            eventStream.Record(
+                process.ProcessId,
+                AgentProcessEventKind.ProcessFailed,
+                stateMachine.State,
+                process.ExitCode,
+                message: "Process completion failed.");
             throw;
         }
 
         ExitCode = process.ExitCode;
         stateMachine.TryTransitionTo(process.State);
+        RecordTerminalCompletionEvent();
 
         return new AgentProcessSupervisionResult(
             process.State,
             process.ExitCode);
+    }
+
+    private void RecordTerminalCompletionEvent()
+    {
+        switch (stateMachine.State)
+        {
+            case AgentProcessState.Exited:
+                eventStream.Record(
+                    process.ProcessId,
+                    AgentProcessEventKind.ProcessCompleted,
+                    stateMachine.State,
+                    ExitCode);
+                break;
+            case AgentProcessState.Canceled:
+                eventStream.RecordIfAbsent(
+                    AgentProcessEventKind.ProcessCancelled,
+                    process.ProcessId,
+                    stateMachine.State,
+                    ExitCode);
+                break;
+        }
     }
 }
