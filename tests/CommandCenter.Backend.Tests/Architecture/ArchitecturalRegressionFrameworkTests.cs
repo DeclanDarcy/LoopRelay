@@ -82,6 +82,16 @@ public sealed class ArchitecturalRegressionFrameworkTests
         "Certification use"
     ];
 
+    private static readonly string[] RequiredRegressionLifecycleColumns =
+    [
+        "Lifecycle state",
+        "Entry criteria",
+        "Required evidence",
+        "Allowed transitions",
+        "Decision requirement",
+        "Exit condition"
+    ];
+
     private static readonly string[] RequiredInvariantCatalogEntries =
     [
         "Backend domain services compute semantic meaning.",
@@ -167,6 +177,20 @@ public sealed class ArchitecturalRegressionFrameworkTests
         "Corroborated confidence",
         "Certified confidence",
         "Accepted baseline confidence"
+    ];
+
+    private static readonly string[] RequiredRegressionLifecycleStates =
+    [
+        "Inventory",
+        "Advisory",
+        "Guarded",
+        "Corroborated",
+        "Certified",
+        "Accepted",
+        "Quarantined",
+        "Weakened",
+        "Replaced",
+        "Retired"
     ];
 
     private static readonly ArchitecturalRegressionMechanism[] RequiredMechanisms =
@@ -284,6 +308,32 @@ public sealed class ArchitecturalRegressionFrameworkTests
                 Assert.True(
                     row.TryGetValue(column, out string? value) && HasAcceptedCatalogValue(value),
                     $"Architectural confidence row '{row["Confidence level"]}' must populate '{column}'. M0.3 confidence is based on mechanism strength, evidence quality, representative coverage breadth, freshness, and certification use; it must not collapse into test counts, pass percentages, severity, or detection confidence.");
+            }
+        }
+    }
+
+    [Fact]
+    public void RegressionLifecycleModelDefinesTransitionGovernance()
+    {
+        IReadOnlyList<IReadOnlyDictionary<string, string>> lifecycleModel = ReadMechanismsDocumentTable(
+            "### Regression Lifecycle Model",
+            "Lifecycle state",
+            RequiredRegressionLifecycleColumns);
+
+        foreach (string state in RequiredRegressionLifecycleStates)
+        {
+            Assert.Contains(
+                lifecycleModel,
+                row => row["Lifecycle state"] == state);
+        }
+
+        foreach (IReadOnlyDictionary<string, string> row in lifecycleModel)
+        {
+            foreach (string column in RequiredRegressionLifecycleColumns)
+            {
+                Assert.True(
+                    row.TryGetValue(column, out string? value) && HasAcceptedCatalogValue(value),
+                    $"Regression lifecycle row '{row["Lifecycle state"]}' must populate '{column}'. M0.3 lifecycle governance needs entry criteria, evidence, allowed transitions, decision requirements, and exit conditions so regressions cannot silently weaken, retire, quarantine, or replace architectural protection.");
             }
         }
     }
