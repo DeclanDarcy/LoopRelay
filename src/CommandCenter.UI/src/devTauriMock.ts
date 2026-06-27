@@ -1,4 +1,7 @@
 import type {
+  RepositoryDashboardConsumerCandidateProjection,
+} from './contracts/generated/repository-dashboard.generated'
+import type {
   Artifact,
   ArtifactInventory,
   ArtifactType,
@@ -64,7 +67,6 @@ import type {
   ReasoningTrace,
   ReasoningThread,
   Repository,
-  RepositoryDashboardProjection as DashboardEntry,
   RepositoryExecutionState,
   RepositoryGitStatus,
   RepositoryWorkspaceProjection as Workspace,
@@ -2779,7 +2781,7 @@ function seedCertificationSession(
   ]
 }
 
-function dashboardEntry(workspace: Workspace): DashboardEntry {
+function dashboardEntry(workspace: Workspace): RepositoryDashboardConsumerCandidateProjection {
   return {
     repository: workspace.repository,
     availability: workspace.availability,

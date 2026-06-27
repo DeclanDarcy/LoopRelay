@@ -890,6 +890,8 @@ This pilot does not authorize broad production imports from `src/CommandCenter.U
 
 The Slice 0074 compatibility bridge also narrows the repository decision-session summary wrapper aliases to generated candidate subtypes because dashboard and workspace consumers share `src/CommandCenter.UI/src/types/repositories.ts`. This is a compatibility-wrapper bridge, not wrapper retirement: production imports still target `../types`, and direct generated imports remain reserved for a later migration slice with rollback evidence.
 
+Slice 0075 extends the repository-dashboard generated-consumer bridge to the development mock boundary. `src/CommandCenter.UI/src/devTauriMock.ts` now types `dashboardEntry(workspace)` as `RepositoryDashboardConsumerCandidateProjection` imported from the generated repository-dashboard artifact while preserving the existing manual mock payload construction. `ContractConsumerVerificationTests.RepositoryDashboardDevTauriMockUsesGeneratedConsumerCandidateType` guards the bridge, and the existing dev mock Oracle shape-verification tests continue to compare the dashboard entry shape against the backend fixture. This is generated-candidate-typed mock verification, not generated mock artifact replacement.
+
 ## Oracle Change Workflow
 
 The Oracle change workflow governs how a detected contract drift becomes an accepted contract baseline. It is procedural during Milestone 0.2 so the review path is explicit before generation, regeneration, and lifecycle automation are introduced in later milestones.

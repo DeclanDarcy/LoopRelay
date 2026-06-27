@@ -179,6 +179,30 @@ public sealed class ContractConsumerVerificationTests
     }
 
     [Fact]
+    public void RepositoryDashboardDevTauriMockUsesGeneratedConsumerCandidateType()
+    {
+        string source = File.ReadAllText(FindRepositoryRoot()
+            .Combine("src", "CommandCenter.UI", "src", "devTauriMock.ts"));
+
+        Assert.Contains(
+            "RepositoryDashboardConsumerCandidateProjection",
+            source,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "from './contracts/generated/repository-dashboard.generated'",
+            source,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "function dashboardEntry(workspace: Workspace): RepositoryDashboardConsumerCandidateProjection",
+            source,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "RepositoryDashboardProjection as DashboardEntry",
+            source,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void RepositoryWorkspaceRustMirrorReportsKnownDecisionSessionSummaryOmission()
     {
         JsonElement backendWorkspace = ReadRepositoryWorkspaceGoldenFixture();
