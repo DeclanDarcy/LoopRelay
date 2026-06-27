@@ -21,12 +21,13 @@
       * A Decision Session MUST drive its own codex process execution.
       * It must still NOT reference Execution's OPERATIONAL orchestration
         (ExecutionSessionService, git/commit/push lifecycle). Instead it depends on
-        a shared, role-agnostic agent runtime (CommandCenter.Agents, extracted in
+        the shared, role-agnostic agent runtime (CommandCenter.Agents, extracted in
         refactor-plan.md Phase 1) that both Execution and DecisionSessions consume.
-    TODO(refactor-plan Phase 3): add
-    <ProjectReference Include="..\CommandCenter.Agents\CommandCenter.Agents.csproj" />
+        ACTIVATED below (refactor-plan Phase 3 wiring); the role-agnostic isolation
+        and this positive dependency are enforced by ArchitectureLayeringTests.
   -->
   <ItemGroup>
+    <ProjectReference Include="..\CommandCenter.Agents\CommandCenter.Agents.csproj" />
     <ProjectReference Include="..\CommandCenter.Core\CommandCenter.Core.csproj" />
     <ProjectReference Include="..\CommandCenter.Decisions\CommandCenter.Decisions.csproj" />
     <ProjectReference Include="..\CommandCenter.Reasoning\CommandCenter.Reasoning.csproj" />

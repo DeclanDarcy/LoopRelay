@@ -25,7 +25,7 @@ export function ExecutionHistoryPanel({ sessions, onOpenSession }: ExecutionHist
         {sessions.map((session) => {
           const rowContent = (
             <>
-              <span>{session.milestonePath ?? 'Milestone not recorded'}</span>
+              <span>{session.sessionId}</span>
               <small>
                 <StatusBadge status={repositoryExecutionStatus[session.repositoryState]} />
               </small>

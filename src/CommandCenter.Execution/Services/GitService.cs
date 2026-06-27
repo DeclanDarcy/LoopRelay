@@ -11,10 +11,10 @@ namespace CommandCenter.Execution.Services;
 
 public sealed class GitService(IProcessRunner processRunner) : IGitService
 {
-    public async Task<ExecutionRepositorySnapshot> GetSnapshotAsync(Repository repository)
+    public async Task<RepositorySnapshot> GetSnapshotAsync(Repository repository)
     {
         RepositoryGitStatus status = await GetStatusAsync(repository);
-        return new ExecutionRepositorySnapshot
+        return new RepositorySnapshot
         {
             Branch = status.Branch,
             DirtyState = status.DirtyState,
@@ -71,7 +71,7 @@ public sealed class GitService(IProcessRunner processRunner) : IGitService
             SessionId = session.Id,
             RepositoryId = session.RepositoryId,
             RepositoryPath = session.RepositoryPath,
-            ProposedMessage = BuildProposedCommitMessage(session.MilestonePath, scopeItems.Count),
+            ProposedMessage = BuildProposedCommitMessage(scopeItems.Count),
             ScopeItems = scopeItems,
             StatusSnapshot = snapshot,
             GeneratedAt = DateTimeOffset.UtcNow,
@@ -375,16 +375,10 @@ public sealed class GitService(IProcessRunner processRunner) : IGitService
         return paths;
     }
 
-    private static string BuildProposedCommitMessage(string milestonePath, int changedFileCount)
+    private static string BuildProposedCommitMessage(int changedFileCount)
     {
-        string milestoneName = Path.GetFileNameWithoutExtension(milestonePath);
-        if (string.IsNullOrWhiteSpace(milestoneName))
-        {
-            milestoneName = "Execute selected milestone";
-        }
-
         string fileLabel = changedFileCount == 1 ? "file" : "files";
-        return $"{milestoneName}\n\n- {changedFileCount} {fileLabel} changed";
+        return $"Execution changes\n\n- {changedFileCount} {fileLabel} changed";
     }
 
     private static string BuildSnapshotId(RepositoryGitStatus status)

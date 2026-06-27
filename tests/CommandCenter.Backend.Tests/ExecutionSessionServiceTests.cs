@@ -36,7 +36,7 @@ public sealed class ExecutionSessionServiceTests
 
         ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
             harness.Repository.Id,
-            new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
+            new ExecutionStartRequest());
 
         Assert.Equal(ExecutionSessionState.Executing, summary.State);
         Assert.Equal(RepositoryExecutionState.Executing, summary.RepositoryState);
@@ -53,24 +53,9 @@ public sealed class ExecutionSessionServiceTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             harness.SessionService.StartAsync(
                 harness.Repository.Id,
-                new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" }));
+                new ExecutionStartRequest()));
 
         Assert.Contains("launch is blocked", exception.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.Empty(await harness.Store.LoadAsync());
-    }
-
-    [Fact]
-    public async Task MissingMilestoneBlocksLaunch()
-    {
-        Harness harness = await CreateHarnessAsync();
-        await WriteAsync(harness.Repository, ".agents/plan.md", "plan");
-
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            harness.SessionService.StartAsync(
-                harness.Repository.Id,
-                new ExecutionStartRequest { MilestonePath = ".agents/milestones/missing.md" }));
-
-        Assert.Contains("missing", exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Empty(await harness.Store.LoadAsync());
     }
 
@@ -84,7 +69,7 @@ public sealed class ExecutionSessionServiceTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             harness.SessionService.StartAsync(
                 harness.Repository.Id,
-                new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" }));
+                new ExecutionStartRequest()));
 
         Assert.Contains("hard limit", exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Empty(await harness.Store.LoadAsync());
@@ -103,7 +88,7 @@ public sealed class ExecutionSessionServiceTests
 
         ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
             harness.Repository.Id,
-            new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
+            new ExecutionStartRequest());
         ExecutionSession session = (await harness.Store.LoadAsync()).Single(session => session.Id == summary.SessionId);
 
         Assert.False(session.RepositorySnapshot!.DirtyState.IsClean);
@@ -118,12 +103,12 @@ public sealed class ExecutionSessionServiceTests
 
         await harness.SessionService.StartAsync(
             harness.Repository.Id,
-            new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
+            new ExecutionStartRequest());
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             harness.SessionService.StartAsync(
                 harness.Repository.Id,
-                new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" }));
+                new ExecutionStartRequest()));
 
         Assert.Contains("active execution", exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Single(await harness.Store.LoadAsync());
@@ -138,7 +123,7 @@ public sealed class ExecutionSessionServiceTests
 
         ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
             harness.Repository.Id,
-            new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
+            new ExecutionStartRequest());
         ExecutionSession session = (await harness.Store.LoadAsync()).Single();
 
         Assert.Equal(ExecutionSessionState.Failed, summary.State);
@@ -158,7 +143,7 @@ public sealed class ExecutionSessionServiceTests
 
         ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
             harness.Repository.Id,
-            new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
+            new ExecutionStartRequest());
         ExecutionSession session = (await harness.Store.LoadAsync()).Single();
 
         Assert.Equal(ExecutionSessionState.Failed, summary.State);
@@ -175,7 +160,7 @@ public sealed class ExecutionSessionServiceTests
         await WriteReadyArtifactsAsync(harness.Repository);
         ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
             harness.Repository.Id,
-            new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
+            new ExecutionStartRequest());
 
         var reloadedService = new ExecutionSessionService(
             harness.ContextService,
@@ -216,7 +201,7 @@ public sealed class ExecutionSessionServiceTests
         await WriteReadyArtifactsAsync(harness.Repository);
         ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
             harness.Repository.Id,
-            new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
+            new ExecutionStartRequest());
         var reattachProvider = new FakeExecutionProvider
         {
             SupportsReattach = true,
@@ -258,7 +243,7 @@ public sealed class ExecutionSessionServiceTests
         await WriteReadyArtifactsAsync(harness.Repository);
         await harness.SessionService.StartAsync(
             harness.Repository.Id,
-            new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
+            new ExecutionStartRequest());
         var reloadedService = new ExecutionSessionService(
             harness.ContextService,
             new FileSystemExecutionSessionStore(harness.StorePath),
@@ -303,7 +288,7 @@ public sealed class ExecutionSessionServiceTests
 
         ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
             harness.Repository.Id,
-            new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
+            new ExecutionStartRequest());
         ExecutionSessionSummary? active = await harness.SessionService.GetActiveSessionAsync(harness.Repository.Id);
         ExecutionSessionSummary? repositorySummary = await harness.SessionService.GetRepositorySessionSummaryAsync(harness.Repository.Id);
 
@@ -326,7 +311,6 @@ public sealed class ExecutionSessionServiceTests
             Id = Guid.NewGuid(),
             RepositoryId = harness.Repository.Id,
             RepositoryPath = harness.Repository.Path,
-            MilestonePath = ".agents/milestones/m2.md",
             StartedAt = startedAt,
             CompletedAt = startedAt.AddMinutes(1),
             LastActivityAt = startedAt.AddMinutes(1),
@@ -339,7 +323,6 @@ public sealed class ExecutionSessionServiceTests
             PromptMetadata = new ExecutionPromptMetadata
             {
                 RepositoryPath = harness.Repository.Path,
-                MilestonePath = ".agents/milestones/m2.md",
                 IncludedArtifactPaths = [".agents/plan.md"]
             },
             FailureReason = "Existing failure."
@@ -367,7 +350,7 @@ public sealed class ExecutionSessionServiceTests
 
         ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
             harness.Repository.Id,
-            new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
+            new ExecutionStartRequest());
         ExecutionSession session = (await harness.Store.LoadAsync()).Single(session => session.Id == summary.SessionId);
 
         Assert.Equal("previous handoff", session.PreviousHandoffContent);
@@ -383,11 +366,10 @@ public sealed class ExecutionSessionServiceTests
 
         await harness.SessionService.StartAsync(
             harness.Repository.Id,
-            new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
+            new ExecutionStartRequest());
 
         Assert.NotNull(provider.LastPrompt);
         Assert.Contains("then write .agents/handoffs/handoff.md with:", provider.LastPrompt.Text);
-        Assert.Equal(".agents/milestones/m2.md", provider.LastPrompt.Metadata.MilestonePath);
     }
 
     [Fact]
@@ -499,7 +481,7 @@ public sealed class ExecutionSessionServiceTests
 
         ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
             harness.Repository.Id,
-            new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
+            new ExecutionStartRequest());
 
         string influencePath = Path.Combine(
             harness.Repository.Path,
@@ -589,7 +571,7 @@ public sealed class ExecutionSessionServiceTests
         await WriteReadyArtifactsAsync(harness.Repository);
         ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
             harness.Repository.Id,
-            new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
+            new ExecutionStartRequest());
 
         await using WebApplication app = Program.CreateApp(
             [],
@@ -638,7 +620,7 @@ public sealed class ExecutionSessionServiceTests
 
         ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
             harness.Repository.Id,
-            new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
+            new ExecutionStartRequest());
 
         IReadOnlyList<ExecutionSession> sessions = await new FileSystemExecutionSessionStore(harness.StorePath).LoadAsync();
         ExecutionSession session = sessions.Single(session => session.Id == summary.SessionId);
@@ -648,8 +630,7 @@ public sealed class ExecutionSessionServiceTests
         Assert.Equal(7890, session.ProviderProcessId);
         Assert.NotNull(session.ProviderStartedAt);
         Assert.NotNull(session.PromptMetadata);
-        Assert.Equal(".agents/milestones/m2.md", session.PromptMetadata.MilestonePath);
-        Assert.Equal([".agents/plan.md", ".agents/milestones/m2.md"], session.PromptMetadata.IncludedArtifactPaths);
+        Assert.Equal([".agents/plan.md"], session.PromptMetadata.IncludedArtifactPaths);
     }
 
     [Fact]
@@ -661,7 +642,7 @@ public sealed class ExecutionSessionServiceTests
 
         ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
             harness.Repository.Id,
-            new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
+            new ExecutionStartRequest());
 
         IReadOnlyList<ExecutionSession> sessions = await new FileSystemExecutionSessionStore(harness.StorePath).LoadAsync();
         ExecutionSession session = sessions.Single(session => session.Id == summary.SessionId);
@@ -679,7 +660,6 @@ public sealed class ExecutionSessionServiceTests
         Assert.Equal(manifest.RequestedContextCharacters, manifest.DeliveredContextCharacters);
         Assert.Equal(".agents/operational_context.md", manifest.OperationalContextSourceDelivered);
         Assert.Null(manifest.HandoffSourceDelivered);
-        Assert.Equal(".agents/milestones/m2.md", manifest.MilestoneSourceDelivered);
 
         Assert.Contains(manifest.RequestedArtifacts, artifact =>
             artifact.Role == "CurrentHandoff" &&
@@ -762,7 +742,7 @@ public sealed class ExecutionSessionServiceTests
         await WriteReadyArtifactsAsync(harness.Repository);
         ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
             harness.Repository.Id,
-            new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
+            new ExecutionStartRequest());
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             harness.SessionService.AcceptAsync(summary.SessionId, new ExecutionAcceptanceRequest()));
@@ -777,7 +757,7 @@ public sealed class ExecutionSessionServiceTests
         await WriteReadyArtifactsAsync(harness.Repository);
         ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
             harness.Repository.Id,
-            new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
+            new ExecutionStartRequest());
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             harness.SessionService.RejectAsync(summary.SessionId, new ExecutionAcceptanceRequest()));
@@ -1022,7 +1002,6 @@ public sealed class ExecutionSessionServiceTests
             Id = Guid.NewGuid(),
             RepositoryId = harness.Repository.Id,
             RepositoryPath = harness.Repository.Path,
-            MilestonePath = ".agents/milestones/m7.md",
             StartedAt = firstStartedAt,
             CompletedAt = firstStartedAt.AddMinutes(1),
             LastActivityAt = firstStartedAt.AddMinutes(1),
@@ -1037,7 +1016,6 @@ public sealed class ExecutionSessionServiceTests
             Id = Guid.NewGuid(),
             RepositoryId = harness.Repository.Id,
             RepositoryPath = harness.Repository.Path,
-            MilestonePath = ".agents/milestones/m8.md",
             StartedAt = secondStartedAt,
             CompletedAt = secondStartedAt.AddMinutes(1),
             LastActivityAt = secondStartedAt.AddMinutes(1),
@@ -1053,7 +1031,6 @@ public sealed class ExecutionSessionServiceTests
 
         ExecutionSessionSummary summary = Assert.Single(history);
         Assert.Equal(secondSession.Id, summary.SessionId);
-        Assert.Equal(".agents/milestones/m8.md", summary.MilestonePath);
         Assert.Equal("second-sha", summary.PushedCommitSha);
     }
 
@@ -1072,15 +1049,12 @@ public sealed class ExecutionSessionServiceTests
             harness.SessionService,
             harness.MonitoringService,
             harness.Repository,
-            ".agents/milestones/m8-a.md",
             "handoff A",
             "provider output A");
 
         Assert.Equal(RepositoryExecutionState.Ready, first.RepositoryState);
         Assert.Null(await harness.SessionService.GetActiveSessionAsync(harness.Repository.Id));
         Assert.NotNull(providerA.LastPrompt);
-        Assert.Equal(".agents/milestones/m8-a.md", providerA.LastPrompt.Metadata.MilestonePath);
-        Assert.Contains("milestone A", providerA.LastPrompt.Text);
         Assert.Equal("initial handoff", await ReadAsync(harness.Repository, ".agents/handoffs/handoff.0001.md"));
         Assert.Equal("handoff A", await ReadAsync(harness.Repository, ".agents/handoffs/handoff.md"));
 
@@ -1103,7 +1077,6 @@ public sealed class ExecutionSessionServiceTests
             reloadedService,
             reloadedMonitoringService,
             harness.Repository,
-            ".agents/milestones/m8-b.md",
             "handoff B",
             "provider output B");
         IReadOnlyList<ExecutionSessionSummary> history = await reloadedService.GetRepositorySessionHistoryAsync(harness.Repository.Id);
@@ -1118,9 +1091,6 @@ public sealed class ExecutionSessionServiceTests
             executionEvent.Message == "provider output B");
         Assert.Contains(secondEvents, executionEvent => executionEvent.Type == ExecutionEventType.HandoffValidated);
         Assert.NotNull(providerB.LastPrompt);
-        Assert.Equal(".agents/milestones/m8-b.md", providerB.LastPrompt.Metadata.MilestonePath);
-        Assert.Contains("milestone B", providerB.LastPrompt.Text);
-        Assert.DoesNotContain("milestone A", providerB.LastPrompt.Text);
         Assert.Equal("initial handoff", await ReadAsync(harness.Repository, ".agents/handoffs/handoff.0001.md"));
         Assert.Equal("handoff A", await ReadAsync(harness.Repository, ".agents/handoffs/handoff.0002.md"));
         Assert.Equal("handoff B", await ReadAsync(harness.Repository, ".agents/handoffs/handoff.md"));
@@ -1164,7 +1134,6 @@ public sealed class ExecutionSessionServiceTests
             Id = Guid.NewGuid(),
             RepositoryId = repository.Id,
             RepositoryPath = repository.Path,
-            MilestonePath = ".agents/milestones/m5.md",
             StartedAt = DateTimeOffset.UtcNow.AddMinutes(-5),
             CompletedAt = DateTimeOffset.UtcNow.AddMinutes(-4),
             AcceptedAt = DateTimeOffset.UtcNow.AddMinutes(-3),
@@ -1299,7 +1268,6 @@ public sealed class ExecutionSessionServiceTests
             Id = Guid.NewGuid(),
             RepositoryId = repository.Id,
             RepositoryPath = repository.Path,
-            MilestonePath = ".agents/milestones/m5.md",
             StartedAt = DateTimeOffset.UtcNow.AddMinutes(-5),
             LastActivityAt = DateTimeOffset.UtcNow.AddMinutes(-2),
             State = ExecutionSessionState.Completed,
@@ -1371,7 +1339,7 @@ public sealed class ExecutionSessionServiceTests
             using var client = new HttpClient();
             HttpResponseMessage response = await client.PostAsJsonAsync(
                 app.Urls.Single() + $"/api/repositories/{repository.Id}/execution/start",
-                new ExecutionStartRequest { MilestonePath = ".agents/milestones/m2.md" });
+                new ExecutionStartRequest());
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             var summary = await response.Content.ReadFromJsonAsync<ExecutionSessionSummary>(new JsonSerializerOptions(JsonSerializerDefaults.Web)
@@ -1407,10 +1375,9 @@ public sealed class ExecutionSessionServiceTests
         Harness harness = await CreateHarnessAsync();
         await WriteReadyArtifactsAsync(harness.Repository);
         await WriteAsync(harness.Repository, ".agents/operational_context.md", "preview operational context");
-        string milestonePath = ".agents/milestones/m2.md";
 
-        ExecutionContext preview = await harness.ContextService.BuildContextAsync(harness.Repository.Id, milestonePath);
-        ExecutionContextArtifact previewOperationalContext = Assert.Single(
+        ExecutionContext preview = await harness.ContextService.BuildContextAsync(harness.Repository.Id);
+        CommandCenter.Core.Artifacts.LoadedArtifact previewOperationalContext = Assert.Single(
             preview.Artifacts,
             artifact => artifact.Role == "OperationalContext");
         Assert.Equal("preview operational context", previewOperationalContext.Content);
@@ -1419,7 +1386,7 @@ public sealed class ExecutionSessionServiceTests
 
         ExecutionSessionSummary summary = await harness.SessionService.StartAsync(
             harness.Repository.Id,
-            new ExecutionStartRequest { MilestonePath = milestonePath });
+            new ExecutionStartRequest());
         ExecutionSession session = (await harness.Store.LoadAsync()).Single(session => session.Id == summary.SessionId);
         ExecutionPromptManifest manifest = session.PromptManifest!;
         ExecutionPromptManifestArtifact deliveredOperationalContext = Assert.Single(
@@ -1460,7 +1427,6 @@ public sealed class ExecutionSessionServiceTests
                 Id = Guid.NewGuid(),
                 RepositoryId = repository.Id,
                 RepositoryPath = repository.Path,
-                MilestonePath = ".agents/milestones/m2.md",
                 StartedAt = DateTimeOffset.UtcNow.AddMinutes(-1),
                 LastActivityAt = DateTimeOffset.UtcNow.AddMinutes(-1),
                 State = ExecutionSessionState.Executing,
@@ -1472,7 +1438,6 @@ public sealed class ExecutionSessionServiceTests
                 PromptMetadata = new ExecutionPromptMetadata
                 {
                     RepositoryPath = repository.Path,
-                    MilestonePath = ".agents/milestones/m2.md",
                     IncludedArtifactPaths = [".agents/plan.md", ".agents/milestones/m2.md"]
                 }
             };
@@ -1527,8 +1492,8 @@ public sealed class ExecutionSessionServiceTests
             string repositoryPath = CreateGitRepositoryDirectory();
             var repositoryService = new RepositoryService(new ApplicationConfigurationStore(configurationPath));
             Repository repository = await repositoryService.RegisterAsync(repositoryPath);
-            ExecutionSession acceptSession = CreateAwaitingAcceptanceSession(repository, ".agents/milestones/m5-accept.md");
-            ExecutionSession rejectSession = CreateAwaitingAcceptanceSession(repository, ".agents/milestones/m5-reject.md");
+            ExecutionSession acceptSession = CreateAwaitingAcceptanceSession(repository);
+            ExecutionSession rejectSession = CreateAwaitingAcceptanceSession(repository);
             await new FileSystemExecutionSessionStore(storePath).SaveAsync([acceptSession, rejectSession]);
 
             await using WebApplication app = Program.CreateApp(
@@ -1624,17 +1589,16 @@ public sealed class ExecutionSessionServiceTests
         ExecutionSessionService sessionService,
         ExecutionMonitoringService monitoringService,
         Repository repository,
-        string milestonePath,
         string generatedHandoff,
         string providerOutput)
     {
         ExecutionSessionSummary started = await sessionService.StartAsync(
             repository.Id,
-            new ExecutionStartRequest { MilestonePath = milestonePath });
+            new ExecutionStartRequest());
         var duplicate = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             sessionService.StartAsync(
                 repository.Id,
-                new ExecutionStartRequest { MilestonePath = milestonePath }));
+                new ExecutionStartRequest()));
         Assert.Contains("active execution", duplicate.Message, StringComparison.OrdinalIgnoreCase);
 
         IExecutionProviderObserver observer = monitoringService.CreateProviderObserver(started.SessionId);
@@ -1674,7 +1638,7 @@ public sealed class ExecutionSessionServiceTests
 
     private static async Task<ExecutionSession> StoreAwaitingAcceptanceSessionAsync(Harness harness)
     {
-        ExecutionSession session = CreateAwaitingAcceptanceSession(harness.Repository, ".agents/milestones/m5.md");
+        ExecutionSession session = CreateAwaitingAcceptanceSession(harness.Repository);
         await harness.Store.SaveAsync([session]);
         return session;
     }
@@ -1686,7 +1650,6 @@ public sealed class ExecutionSessionServiceTests
             Id = Guid.NewGuid(),
             RepositoryId = harness.Repository.Id,
             RepositoryPath = harness.Repository.Path,
-            MilestonePath = ".agents/milestones/m6-git-lifecycle.md",
             StartedAt = DateTimeOffset.UtcNow.AddMinutes(-5),
             CompletedAt = DateTimeOffset.UtcNow.AddMinutes(-4),
             AcceptedAt = DateTimeOffset.UtcNow.AddMinutes(-3),
@@ -1736,7 +1699,6 @@ public sealed class ExecutionSessionServiceTests
             Id = Guid.NewGuid(),
             RepositoryId = harness.Repository.Id,
             RepositoryPath = harness.Repository.Path,
-            MilestonePath = ".agents/milestones/m6-git-lifecycle.md",
             StartedAt = DateTimeOffset.UtcNow.AddMinutes(-5),
             CompletedAt = DateTimeOffset.UtcNow.AddMinutes(-4),
             AcceptedAt = DateTimeOffset.UtcNow.AddMinutes(-3),
@@ -1763,7 +1725,6 @@ public sealed class ExecutionSessionServiceTests
             Id = session.Id,
             RepositoryId = session.RepositoryId,
             RepositoryPath = session.RepositoryPath,
-            MilestonePath = session.MilestonePath,
             StartedAt = session.StartedAt,
             CompletedAt = session.CompletedAt,
             AcceptedAt = session.AcceptedAt,
@@ -1797,7 +1758,7 @@ public sealed class ExecutionSessionServiceTests
         };
     }
 
-    private static ExecutionSession CreateAwaitingAcceptanceSession(Repository repository, string milestonePath)
+    private static ExecutionSession CreateAwaitingAcceptanceSession(Repository repository)
     {
         var sessionId = Guid.NewGuid();
         DateTimeOffset startedAt = DateTimeOffset.UtcNow.AddMinutes(-2);
@@ -1807,7 +1768,6 @@ public sealed class ExecutionSessionServiceTests
             Id = sessionId,
             RepositoryId = repository.Id,
             RepositoryPath = repository.Path,
-            MilestonePath = milestonePath,
             StartedAt = startedAt,
             CompletedAt = completedAt,
             LastActivityAt = completedAt,
@@ -1897,14 +1857,14 @@ public sealed class ExecutionSessionServiceTests
 
         public string? LastPushedCommitSha { get; private set; }
 
-        public Task<ExecutionRepositorySnapshot> GetSnapshotAsync(Repository repository)
+        public Task<RepositorySnapshot> GetSnapshotAsync(Repository repository)
         {
             if (failure is not null)
             {
                 throw new InvalidOperationException(failure);
             }
 
-            return Task.FromResult(new ExecutionRepositorySnapshot
+            return Task.FromResult(new RepositorySnapshot
             {
                 Branch = "main",
                 DirtyState = dirtyState ?? new RepositoryDirtyState(),
@@ -1942,7 +1902,7 @@ public sealed class ExecutionSessionServiceTests
                 SessionId = session.Id,
                 RepositoryId = session.RepositoryId,
                 RepositoryPath = session.RepositoryPath,
-                ProposedMessage = $"{Path.GetFileNameWithoutExtension(session.MilestonePath)}\n\n- 1 file changed",
+                ProposedMessage = "Execution changes\n\n- 1 file changed",
                 ScopeItems =
                 [
                     new CommitScopeItem
@@ -2025,9 +1985,9 @@ public sealed class ExecutionSessionServiceTests
         private int commitCount;
         private string currentSnapshotId = "snapshot-initial";
 
-        public Task<ExecutionRepositorySnapshot> GetSnapshotAsync(Repository repository)
+        public Task<RepositorySnapshot> GetSnapshotAsync(Repository repository)
         {
-            return Task.FromResult(new ExecutionRepositorySnapshot
+            return Task.FromResult(new RepositorySnapshot
             {
                 Branch = "main",
                 DirtyState = BuildDirtyState(),
@@ -2054,12 +2014,12 @@ public sealed class ExecutionSessionServiceTests
                 SessionId = session.Id,
                 RepositoryId = session.RepositoryId,
                 RepositoryPath = session.RepositoryPath,
-                ProposedMessage = $"{Path.GetFileNameWithoutExtension(session.MilestonePath)}\n\n- 1 file changed",
+                ProposedMessage = "Execution changes\n\n- 1 file changed",
                 ScopeItems =
                 [
                     new CommitScopeItem
                     {
-                        Path = $"src/{Path.GetFileNameWithoutExtension(session.MilestonePath)}.cs",
+                        Path = "src/change.cs",
                         ChangeType = CommitChangeType.Modified,
                         Origin = CommitChangeOrigin.ExecutionGenerated,
                         IsSelected = true

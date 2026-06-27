@@ -19,7 +19,6 @@ export type ExecutionSessionSummary = {
   sessionId: string
   state: ExecutionSessionState
   repositoryState: RepositoryExecutionState
-  milestonePath: string | null
   startedAt: string | null
   completedAt: string | null
   duration: string | null
@@ -138,7 +137,6 @@ export type ExecutionPromptManifest = {
 export type ExecutionPromptMetadata = {
   generatedAt: string
   repositoryPath: string
-  milestonePath: string
   includedArtifactPaths: string[]
 }
 
@@ -278,12 +276,11 @@ export type ExecutionContextDiagnostics = {
 }
 
 export type ExecutionContextPreview = {
-  repositoryId: string
-  repositoryName: string
-  repositoryPath: string
-  milestonePath: string
+  id: string
+  name: string
+  path: string
   generatedAt: string
   artifacts: ExecutionContextArtifact[]
-  repositorySnapshot: ExecutionRepositorySnapshot | null
+  snapshot: ExecutionRepositorySnapshot | null
   diagnostics: ExecutionContextDiagnostics
 }

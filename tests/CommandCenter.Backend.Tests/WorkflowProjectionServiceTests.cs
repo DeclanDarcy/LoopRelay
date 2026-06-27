@@ -4787,7 +4787,6 @@ public sealed class WorkflowProjectionServiceTests
                 SessionId = summary.SessionId,
                 State = summary.State,
                 RepositoryState = summary.RepositoryState,
-                MilestonePath = summary.MilestonePath,
                 StartedAt = summary.StartedAt,
                 CompletedAt = summary.CompletedAt,
                 Duration = summary.Duration,
@@ -4980,7 +4979,7 @@ public sealed class WorkflowProjectionServiceTests
 
     private sealed class GitServiceStub(TestFixture fixture) : IGitService
     {
-        public Task<ExecutionRepositorySnapshot> GetSnapshotAsync(Repository repository) => throw new NotSupportedException("Snapshot reads are not used by workflow projection.");
+        public Task<RepositorySnapshot> GetSnapshotAsync(Repository repository) => throw new NotSupportedException("Snapshot reads are not used by workflow projection.");
         public Task<RepositoryGitStatus> GetStatusAsync(Repository repository) => Task.FromResult(fixture.GitStatus);
         public Task<CommitPreparation> PrepareCommitAsync(Repository repository, ExecutionSession session) => throw new NotSupportedException("Mutating git methods are not used by workflow projection.");
         public Task<CommitStatusSnapshot> GetCommitStatusSnapshotAsync(Repository repository) => throw new NotSupportedException("Commit snapshots are not used by workflow projection.");

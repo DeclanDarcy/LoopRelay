@@ -2739,8 +2739,6 @@ function seedCertificationSession(
     sessionId,
     state: sessionState,
     repositoryState,
-    milestonePath:
-      '.agents/milestones/extremely-long-certification-milestone-name-for-responsive-layout-validation.md',
     startedAt: timestamp,
     completedAt: repositoryState === 'Executing' ? null : timestamp,
     duration: repositoryState === 'Executing' ? null : '00:03:24',
@@ -3480,16 +3478,10 @@ function createReasoningQueryResult(
   }
 }
 
-function createContextPreview(state: MockState, repositoryId: string, milestonePath: string): ExecutionContextPreview {
+function createContextPreview(state: MockState, repositoryId: string): ExecutionContextPreview {
   const workspace = state.workspaces[repositoryId]
   const artifactsForContext = [
     { role: 'Plan', artifact: workspace.artifactInventory.plan },
-    {
-      role: 'Milestone',
-      artifact:
-        workspace.artifactInventory.milestones.find((milestone) => milestone.relativePath === milestonePath) ??
-        null,
-    },
     { role: 'OperationalContext', artifact: workspace.artifactInventory.operationalContext },
     { role: 'CurrentHandoff', artifact: workspace.artifactInventory.currentHandoff },
     { role: 'CurrentDecisions', artifact: workspace.artifactInventory.currentDecisions },
@@ -3508,13 +3500,12 @@ function createContextPreview(state: MockState, repositoryId: string, milestoneP
   const totalBytes = artifactsWithContent.reduce((total, artifact) => total + artifact.byteCount, 0)
 
   return {
-    repositoryId,
-    repositoryName: workspace.repository.name,
-    repositoryPath: workspace.repository.path,
-    milestonePath,
+    id: repositoryId,
+    name: workspace.repository.name,
+    path: workspace.repository.path,
     generatedAt: new Date().toISOString(),
     artifacts: artifactsWithContent,
-    repositorySnapshot: {
+    snapshot: {
       branch: 'main',
       dirtyState: {
         stagedPaths: [],
@@ -3751,7 +3742,7 @@ function rotateCurrentArtifact(
   state.content[historicalArtifact.relativePath] = state.content[currentArtifact.relativePath]
 }
 
-function startExecution(state: MockState, repositoryId: string, milestonePath: string): ExecutionSessionSummary {
+function startExecution(state: MockState, repositoryId: string): ExecutionSessionSummary {
   const workspace = state.workspaces[repositoryId]
   if (!workspace) {
     throw new Error(`Repository was not found: ${repositoryId}`)
@@ -3761,7 +3752,7 @@ function startExecution(state: MockState, repositoryId: string, milestonePath: s
     throw new Error('Repository already has an active execution session.')
   }
 
-  const context = createContextPreview(state, repositoryId, milestonePath)
+  const context = createContextPreview(state, repositoryId)
   if (context.diagnostics.launchBlocked) {
     throw new Error('Execution launch is blocked.')
   }
@@ -3772,7 +3763,6 @@ function startExecution(state: MockState, repositoryId: string, milestonePath: s
     sessionId,
     state: 'Completed',
     repositoryState: 'AwaitingAcceptance',
-    milestonePath,
     startedAt: timestamp,
     completedAt: timestamp,
     duration: '00:00:01',
@@ -3829,7 +3819,6 @@ function createExecutionPromptManifest(state: MockState, sessionId: string): Exe
 
   const requestedArtifacts = [
     createManifestArtifact(state, 'Plan', workspace.artifactInventory.plan?.relativePath ?? '.agents/plan.md'),
-    createManifestArtifact(state, 'Milestone', session.milestonePath),
     createManifestArtifact(
       state,
       'OperationalContext',
@@ -3872,8 +3861,8 @@ function createExecutionPromptManifest(state: MockState, sessionId: string): Exe
     operationalContextSourceDelivered: workspace.artifactInventory.operationalContext?.relativePath ?? null,
     handoffSourceRequested: workspace.artifactInventory.currentHandoff?.relativePath ?? null,
     handoffSourceDelivered: workspace.artifactInventory.currentHandoff?.relativePath ?? null,
-    milestoneSourceRequested: session.milestonePath,
-    milestoneSourceDelivered: session.milestonePath,
+    milestoneSourceRequested: null,
+    milestoneSourceDelivered: null,
     providerDeliveryStatus: 'Delivered',
     providerAdjustments: [],
     divergenceReason: null,
@@ -3935,8 +3924,7 @@ function createExecutionTransparency(state: MockState, sessionId: string): Execu
     promptMetadata: {
       generatedAt: session.startedAt ?? new Date().toISOString(),
       repositoryPath: session.repositoryPath,
-      milestonePath: session.milestonePath ?? '',
-      includedArtifactPaths: ['.agents/plan.md', session.milestonePath ?? '.agents/milestones/m5.md'],
+      includedArtifactPaths: ['.agents/plan.md'],
     },
     recovery: {
       recoveryRan: Boolean(recoveryEvent),
@@ -4665,13 +4653,7 @@ export function installDevTauriMock() {
         case 'refresh_repository_workspace':
           return clone(state.workspaces[getStringArg(args, 'repositoryId')])
         case 'preview_execution_context':
-          return clone(
-            createContextPreview(
-              state,
-              getStringArg(args, 'repositoryId'),
-              getStringArg(args, 'milestonePath'),
-            ),
-          )
+          return clone(createContextPreview(state, getStringArg(args, 'repositoryId')))
         case 'generate_operational_context_proposal':
           return clone(generateOperationalContextProposal(state, getStringArg(args, 'repositoryId')))
         case 'list_operational_context_proposals':
@@ -5106,13 +5088,7 @@ export function installDevTauriMock() {
         case 'list_reasoning_certification_reports':
           return clone(state.reasoningCertificationReports[getStringArg(args, 'repositoryId')] ?? [])
         case 'start_execution':
-          return clone(
-            startExecution(
-              state,
-              getStringArg(args, 'repositoryId'),
-              getStringArg(args, 'milestonePath'),
-            ),
-          )
+          return clone(startExecution(state, getStringArg(args, 'repositoryId')))
         case 'get_active_execution': {
           const workspace = state.workspaces[getStringArg(args, 'repositoryId')]
           if (!workspace?.executionSummary) {

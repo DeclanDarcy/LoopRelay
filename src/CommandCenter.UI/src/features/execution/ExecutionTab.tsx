@@ -44,7 +44,6 @@ type ExecutionTabProps = {
   gitWorkflow: ReactNode
   handoffReview: ReactNode
   launchReadiness: string
-  onOpenWorkspaceMilestone: (milestonePath: string) => void
   onOpenWorkspaceExecutionContext: () => void
   onOpenWorkspaceWorkflow: () => void
   onOpenDecisions: () => void
@@ -75,14 +74,13 @@ export function ExecutionTab({
   gitWorkflow,
   handoffReview,
   launchReadiness,
-  onOpenWorkspaceMilestone,
   onOpenWorkspaceExecutionContext,
   onOpenWorkspaceWorkflow,
   onOpenDecisions,
   onOpenHandoffArtifact,
   onOpenWorkspaceGit,
 }: ExecutionTabProps) {
-  const title = execution?.milestonePath ?? selectedMilestonePath ?? 'Select a milestone'
+  const title = selectedMilestonePath ?? 'Select a milestone'
 
   return (
     <section
@@ -130,11 +128,6 @@ export function ExecutionTab({
               isTransparencyLoading={isExecutionTransparencyLoading}
               promptManifestError={executionPromptManifestError}
               transparencyError={executionTransparencyError}
-              onOpenMilestone={
-                execution.milestonePath
-                  ? () => onOpenWorkspaceMilestone(execution.milestonePath as string)
-                  : undefined
-              }
               onOpenHandoff={
                 execution.handoffPath
                   ? () => onOpenHandoffArtifact(execution.handoffPath as string)
@@ -245,7 +238,7 @@ function ContextDiagnosticsPanel({
     <Panel className="context-diagnostics-panel" aria-label="Context diagnostics">
       <SectionHeader
         eyebrow="Context Diagnostics"
-        title={executionContext?.milestonePath ?? 'Preview not built'}
+        title={executionContext?.name ?? 'Preview not built'}
         headingLevel={4}
         actions={
           <Button

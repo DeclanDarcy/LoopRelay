@@ -159,9 +159,9 @@ public sealed class WorkflowEndpointTests
 
     private sealed class FakeGitService : IGitService
     {
-        public Task<ExecutionRepositorySnapshot> GetSnapshotAsync(Repository repository)
+        public Task<RepositorySnapshot> GetSnapshotAsync(Repository repository)
         {
-            return Task.FromResult(new ExecutionRepositorySnapshot
+            return Task.FromResult(new RepositorySnapshot
             {
                 Branch = "main",
                 DirtyState = new RepositoryDirtyState(),

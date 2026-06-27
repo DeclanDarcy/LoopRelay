@@ -104,14 +104,6 @@
                   }
                 },
                 {
-                  "name": "milestonePath",
-                  "shape": {
-                    "kind": "String",
-                    "items": [],
-                    "properties": []
-                  }
-                },
-                {
                   "name": "startedAt",
                   "shape": {
                     "kind": "String",
@@ -317,14 +309,6 @@
                     },
                     {
                       "name": "repositoryState",
-                      "shape": {
-                        "kind": "String",
-                        "items": [],
-                        "properties": []
-                      }
-                    },
-                    {
-                      "name": "milestonePath",
                       "shape": {
                         "kind": "String",
                         "items": [],
@@ -1043,11 +1027,6 @@
       "typeScriptType": "string"
     },
     {
-      "path": "$[].executionSummary.milestonePath",
-      "shapeKind": "String",
-      "typeScriptType": "string"
-    },
-    {
       "path": "$[].executionSummary.startedAt",
       "shapeKind": "String",
       "typeScriptType": "string"
@@ -1179,11 +1158,6 @@
     },
     {
       "path": "$[].executionHistory[].repositoryState",
-      "shapeKind": "String",
-      "typeScriptType": "string"
-    },
-    {
-      "path": "$[].executionHistory[].milestonePath",
       "shapeKind": "String",
       "typeScriptType": "string"
     },

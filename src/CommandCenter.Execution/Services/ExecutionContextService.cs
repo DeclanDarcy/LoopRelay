@@ -20,20 +20,17 @@ public sealed class ExecutionContextService(
     private const string PlanPath = ".agents/plan.md";
     private const string OperationalContextPath = ".agents/operational_context.md";
     private const string CurrentHandoffPath = ".agents/handoffs/handoff.md";
-    private const string CurrentDecisionsPath = ".agents/decisions/decisions.md";
-    private const string MilestonesDirectory = ".agents/milestones";
 
-    public async Task<ExecutionContext> BuildContextAsync(Guid repositoryId, string milestonePath)
+    public async Task<ExecutionContext> BuildContextAsync(Guid repositoryId)
     {
         Repository repository = await GetRepositoryAsync(repositoryId);
         DateTimeOffset generatedAt = DateTimeOffset.UtcNow;
         var validationErrors = new List<string>();
         var governedConflicts = new List<ExecutionGovernedConflictDiagnostic>();
         var missingOptionalArtifacts = new List<string>();
-        var artifacts = new List<ExecutionContextArtifact>();
-        ExecutionRepositorySnapshot? snapshot = null;
+        var artifacts = new List<LoadedArtifact>();
+        RepositorySnapshot? snapshot = null;
         ExecutionDecisionProjection? decisionProjection = null;
-        string? milestoneContent = null;
 
         if (DetermineAvailability(repository) != RepositoryAvailability.Available)
         {
@@ -48,19 +45,8 @@ public sealed class ExecutionContextService(
 
         await AddRequiredArtifactAsync(repository, artifacts, "Plan", PlanPath, validationErrors);
 
-        string normalizedMilestonePath = NormalizeRelativePath(milestonePath);
-        if (!IsMilestonePath(repository, normalizedMilestonePath))
-        {
-            validationErrors.Add("Selected milestone path must stay within .agents/milestones.");
-        }
-        else
-        {
-            milestoneContent = await AddRequiredArtifactAsync(repository, artifacts, "Milestone", normalizedMilestonePath, validationErrors);
-        }
-
         await AddOptionalArtifactAsync(repository, artifacts, "OperationalContext", OperationalContextPath, missingOptionalArtifacts);
         await AddOptionalArtifactAsync(repository, artifacts, "CurrentHandoff", CurrentHandoffPath, missingOptionalArtifacts);
-        await AddOptionalArtifactAsync(repository, artifacts, "CurrentDecisions", CurrentDecisionsPath, missingOptionalArtifacts);
 
         try
         {
@@ -76,8 +62,7 @@ public sealed class ExecutionContextService(
             try
             {
                 decisionProjection = await decisionProjectionService.BuildExecutionProjectionAsync(
-                    repository.Id,
-                    milestoneContent: milestoneContent);
+                    repository.Id);
                 foreach (ExecutionDecisionConflict conflict in decisionProjection.Conflicts)
                 {
                     governedConflicts.Add(CreateGovernedConflictDiagnostic(conflict));
@@ -99,13 +84,12 @@ public sealed class ExecutionContextService(
 
         return new ExecutionContext
         {
-            RepositoryId = repository.Id,
-            RepositoryName = repository.Name,
-            RepositoryPath = repository.Path,
-            MilestonePath = normalizedMilestonePath,
+            Id = repository.Id,
+            Name = repository.Name,
+            Path = repository.Path,
             GeneratedAt = generatedAt,
             Artifacts = artifacts,
-            RepositorySnapshot = snapshot,
+            Snapshot = snapshot,
             DecisionProjection = decisionProjection,
             Diagnostics = diagnostics
         };
@@ -119,7 +103,7 @@ public sealed class ExecutionContextService(
 
     private async Task<string?> AddRequiredArtifactAsync(
         Repository repository,
-        List<ExecutionContextArtifact> artifacts,
+        List<LoadedArtifact> artifacts,
         string role,
         string relativePath,
         List<string> validationErrors)
@@ -144,7 +128,7 @@ public sealed class ExecutionContextService(
 
     private async Task AddOptionalArtifactAsync(
         Repository repository,
-        List<ExecutionContextArtifact> artifacts,
+        List<LoadedArtifact> artifacts,
         string role,
         string relativePath,
         List<string> missingOptionalArtifacts)
@@ -158,9 +142,9 @@ public sealed class ExecutionContextService(
         artifacts.Add(CreateArtifact(role, relativePath, await artifactService.LoadAsync(repository, relativePath)));
     }
 
-    private static ExecutionContextArtifact CreateArtifact(string role, string relativePath, string content)
+    private static LoadedArtifact CreateArtifact(string role, string relativePath, string content)
     {
-        return new ExecutionContextArtifact
+        return new LoadedArtifact
         {
             Role = role,
             RelativePath = relativePath,
@@ -172,7 +156,7 @@ public sealed class ExecutionContextService(
     }
 
     private static ExecutionContextDiagnostics BuildDiagnostics(
-        IReadOnlyList<ExecutionContextArtifact> artifacts,
+        IReadOnlyList<LoadedArtifact> artifacts,
         IReadOnlyList<string> validationErrors,
         IReadOnlyList<ExecutionGovernedConflictDiagnostic> governedConflicts,
         IReadOnlyList<string> missingOptionalArtifacts)
@@ -264,34 +248,6 @@ public sealed class ExecutionContextService(
         }
 
         return evidence;
-    }
-
-    private static bool IsMilestonePath(Repository repository, string relativePath)
-    {
-        if (string.IsNullOrWhiteSpace(relativePath) || Path.IsPathRooted(relativePath))
-        {
-            return false;
-        }
-
-        try
-        {
-            string milestonePath = ArtifactPath.ResolveRepositoryPath(repository, relativePath);
-            string milestonesRoot = ArtifactPath.ResolveRepositoryPath(repository, MilestonesDirectory);
-            string relativeToMilestones = Path.GetRelativePath(milestonesRoot, milestonePath);
-
-            return !relativeToMilestones.StartsWith("..", StringComparison.Ordinal) &&
-                !Path.IsPathRooted(relativeToMilestones) &&
-                relativePath.StartsWith($"{MilestonesDirectory}/", StringComparison.OrdinalIgnoreCase);
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-    }
-
-    private static string NormalizeRelativePath(string relativePath)
-    {
-        return relativePath.Replace('\\', '/').TrimStart('/');
     }
 
     private static RepositoryAvailability DetermineAvailability(Repository repository)

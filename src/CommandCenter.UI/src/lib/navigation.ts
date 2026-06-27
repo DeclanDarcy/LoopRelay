@@ -434,12 +434,11 @@ export function buildNavigationTargets({
         id: `execution-session-${session.sessionId}`,
         kind: 'execution-session',
         group: 'Execution Sessions',
-        label: session.milestonePath ?? session.sessionId,
+        label: session.sessionId,
         description: `${session.repositoryState} / ${session.state}`,
         repositoryId: workspace.repository.id,
         tab: 'execution',
         sectionId: 'execution-events',
-        milestonePath: session.milestonePath,
       }),
     )
   })
@@ -472,11 +471,10 @@ export function buildNavigationTargets({
         kind: 'discovery',
         group: 'Discovery',
         label: 'Current execution',
-        description: workspace.executionSummary.milestonePath ?? workspace.executionSummary.sessionId,
+        description: workspace.executionSummary.sessionId,
         repositoryId: workspace.repository.id,
         tab: 'execution',
         sectionId: 'execution-events',
-        milestonePath: workspace.executionSummary.milestonePath,
       }),
     )
   }

@@ -136,11 +136,6 @@ public sealed class ExecutionSessionService(
 
     public async Task<ExecutionSessionSummary> StartAsync(Guid repositoryId, ExecutionStartRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.MilestonePath))
-        {
-            throw new ArgumentException("Milestone path is required.", nameof(request));
-        }
-
         await gate.WaitAsync();
         try
         {
@@ -150,7 +145,7 @@ public sealed class ExecutionSessionService(
                 throw new InvalidOperationException("Repository already has an active execution session.");
             }
 
-            ExecutionContext context = await executionContextService.BuildContextAsync(repositoryId, request.MilestonePath);
+            ExecutionContext context = await executionContextService.BuildContextAsync(repositoryId);
             if (context.Diagnostics.LaunchBlocked)
             {
                 List<string> reasons = context.Diagnostics.ValidationErrors.ToList();
@@ -167,15 +162,14 @@ public sealed class ExecutionSessionService(
             var session = new ExecutionSession
             {
                 Id = Guid.NewGuid(),
-                RepositoryId = context.RepositoryId,
-                RepositoryPath = context.RepositoryPath,
-                MilestonePath = context.MilestonePath,
+                RepositoryId = context.Id,
+                RepositoryPath = context.Path,
                 StartedAt = startedAt,
                 LastActivityAt = startedAt,
                 State = ExecutionSessionState.Created,
                 RepositoryState = RepositoryExecutionState.Ready,
                 ProviderName = executionProvider.Name,
-                RepositorySnapshot = context.RepositorySnapshot,
+                RepositorySnapshot = context.Snapshot,
                 PreviousHandoffContent = context.Artifacts
                     .SingleOrDefault(artifact => artifact.Role == "CurrentHandoff")
                     ?.Content,
@@ -192,7 +186,7 @@ public sealed class ExecutionSessionService(
             if (context.DecisionProjection is not null && decisionInfluenceService is not null)
             {
                 await decisionInfluenceService.RecordExecutionInfluenceAsync(
-                    context.RepositoryId,
+                    context.Id,
                     session.Id,
                     context.DecisionProjection);
             }
@@ -263,7 +257,7 @@ public sealed class ExecutionSessionService(
                 Name = Path.GetFileName(session.RepositoryPath),
                 Path = session.RepositoryPath
             };
-            ExecutionRepositorySnapshot snapshot = await gitService.GetSnapshotAsync(repository);
+            RepositorySnapshot snapshot = await gitService.GetSnapshotAsync(repository);
             RepositoryExecutionState repositoryState = snapshot.DirtyState.IsClean
                 ? RepositoryExecutionState.Ready
                 : RepositoryExecutionState.AwaitingCommit;
@@ -461,7 +455,7 @@ public sealed class ExecutionSessionService(
                 throw;
             }
 
-            ExecutionRepositorySnapshot snapshot = await gitService.GetSnapshotAsync(repository);
+            RepositorySnapshot snapshot = await gitService.GetSnapshotAsync(repository);
             ExecutionSession pushedSession = session.WithPushResult(result, DateTimeOffset.UtcNow, snapshot);
             await ReplaceSessionAsync(sessions, pushedSession);
             await monitoringService.RecordPushAttemptedAsync(session.Id);
@@ -504,7 +498,7 @@ public sealed class ExecutionSessionService(
         ExecutionContext context,
         ExecutionPrompt prompt)
     {
-        bool dirtyRepository = context.RepositorySnapshot?.DirtyState.IsClean == false;
+        bool dirtyRepository = context.Snapshot?.DirtyState.IsClean == false;
         ExecutionPromptManifestArtifact[] deliveredArtifacts = context.Artifacts
             .Select(artifact => new ExecutionPromptManifestArtifact
             {
@@ -539,8 +533,6 @@ public sealed class ExecutionSessionService(
             OperationalContextSourceDelivered = FindDeliveredPath(context, "OperationalContext"),
             HandoffSourceRequested = ".agents/handoffs/handoff.md",
             HandoffSourceDelivered = FindDeliveredPath(context, "CurrentHandoff"),
-            MilestoneSourceRequested = context.MilestonePath,
-            MilestoneSourceDelivered = FindDeliveredPath(context, "Milestone"),
             ProviderDeliveryStatus = "DeliveredAsRequested",
             ProviderAdjustments = [],
             Diagnostics = [ExecutionPromptManifest.NoProviderDivergenceSignalDiagnostic]
@@ -554,7 +546,7 @@ public sealed class ExecutionSessionService(
         Dictionary<string, ExecutionPromptManifestArtifact> deliveredByPath = deliveredArtifacts
             .ToDictionary(artifact => artifact.RelativePath, StringComparer.OrdinalIgnoreCase);
 
-        return ExpectedArtifacts(context.MilestonePath)
+        return ExpectedArtifacts()
             .Select(expected =>
             {
                 if (deliveredByPath.TryGetValue(expected.RelativePath, out ExecutionPromptManifestArtifact? delivered))
@@ -572,13 +564,11 @@ public sealed class ExecutionSessionService(
             .ToArray();
     }
 
-    private static IReadOnlyList<(string Role, string RelativePath)> ExpectedArtifacts(string milestonePath) =>
+    private static IReadOnlyList<(string Role, string RelativePath)> ExpectedArtifacts() =>
     [
         ("Plan", ".agents/plan.md"),
-        ("Milestone", milestonePath),
         ("OperationalContext", ".agents/operational_context.md"),
-        ("CurrentHandoff", ".agents/handoffs/handoff.md"),
-        ("CurrentDecisions", ".agents/decisions/decisions.md")
+        ("CurrentHandoff", ".agents/handoffs/handoff.md")
     ];
 
     private static string? FindDeliveredPath(ExecutionContext context, string role)
@@ -661,7 +651,6 @@ file static class ExecutionSessionMutation
             Id = session.Id,
             RepositoryId = session.RepositoryId,
             RepositoryPath = session.RepositoryPath,
-            MilestonePath = session.MilestonePath,
             StartedAt = session.StartedAt,
             CompletedAt = completedAt ?? session.CompletedAt,
             AcceptedAt = session.AcceptedAt,
@@ -703,14 +692,13 @@ file static class ExecutionSessionMutation
         DateTimeOffset? rejectedAt = null,
         DateTimeOffset? lastActivityAt = null,
         string? decisionNote = null,
-        ExecutionRepositorySnapshot? repositorySnapshot = null)
+        RepositorySnapshot? repositorySnapshot = null)
     {
         return new ExecutionSession
         {
             Id = session.Id,
             RepositoryId = session.RepositoryId,
             RepositoryPath = session.RepositoryPath,
-            MilestonePath = session.MilestonePath,
             StartedAt = session.StartedAt,
             CompletedAt = session.CompletedAt,
             AcceptedAt = acceptedAt ?? session.AcceptedAt,
@@ -755,7 +743,6 @@ file static class ExecutionSessionMutation
             Id = session.Id,
             RepositoryId = session.RepositoryId,
             RepositoryPath = session.RepositoryPath,
-            MilestonePath = session.MilestonePath,
             StartedAt = session.StartedAt,
             CompletedAt = session.CompletedAt,
             AcceptedAt = session.AcceptedAt,
@@ -800,7 +787,6 @@ file static class ExecutionSessionMutation
             Id = session.Id,
             RepositoryId = session.RepositoryId,
             RepositoryPath = session.RepositoryPath,
-            MilestonePath = session.MilestonePath,
             StartedAt = session.StartedAt,
             CompletedAt = session.CompletedAt,
             AcceptedAt = session.AcceptedAt,
@@ -839,14 +825,13 @@ file static class ExecutionSessionMutation
         this ExecutionSession session,
         PushResult pushResult,
         DateTimeOffset lastActivityAt,
-        ExecutionRepositorySnapshot repositorySnapshot)
+        RepositorySnapshot repositorySnapshot)
     {
         return new ExecutionSession
         {
             Id = session.Id,
             RepositoryId = session.RepositoryId,
             RepositoryPath = session.RepositoryPath,
-            MilestonePath = session.MilestonePath,
             StartedAt = session.StartedAt,
             CompletedAt = session.CompletedAt,
             AcceptedAt = session.AcceptedAt,
@@ -891,7 +876,6 @@ file static class ExecutionSessionMutation
             Id = session.Id,
             RepositoryId = session.RepositoryId,
             RepositoryPath = session.RepositoryPath,
-            MilestonePath = session.MilestonePath,
             StartedAt = session.StartedAt,
             CompletedAt = session.CompletedAt,
             AcceptedAt = session.AcceptedAt,

@@ -225,7 +225,6 @@ public sealed class ExecutionHandoffServiceTests
                     Id = Guid.NewGuid(),
                     RepositoryId = Guid.NewGuid(),
                     RepositoryPath = repositoryPath,
-                    MilestonePath = ".agents/milestones/m4.md",
                     StartedAt = startedAt,
                     LastActivityAt = startedAt,
                     State = ExecutionSessionState.Executing,

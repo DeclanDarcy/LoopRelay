@@ -18,7 +18,6 @@ function executionSummary(overrides: Partial<ExecutionSessionSummary> = {}): Exe
     sessionId: 'session-alpha',
     state: 'Completed',
     repositoryState: 'AwaitingCommit',
-    milestonePath: '.agents/milestones/m0.md',
     startedAt: '2026-06-21T16:00:00.000Z',
     completedAt: '2026-06-21T16:20:00.000Z',
     duration: '00:20:00',

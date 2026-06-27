@@ -116,7 +116,7 @@ export function ExecutionContextPanel({
           </div>
 
           <ExecutionRepositorySnapshotPanel
-            repositorySnapshot={executionContext.repositorySnapshot}
+            repositorySnapshot={executionContext.snapshot}
           />
 
           <div className="artifact-diagnostics">

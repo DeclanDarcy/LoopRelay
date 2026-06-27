@@ -923,7 +923,6 @@ public sealed class OperationalContextGenerationTests
                     SessionId = Guid.NewGuid(),
                     State = ExecutionSessionState.Completed,
                     RepositoryState = RepositoryExecutionState.Ready,
-                    MilestonePath = ".agents/milestones/m8-long-horizon-certification.md",
                     StartedAt = DateTimeOffset.UtcNow.AddMinutes(-cycle),
                     CompletedAt = DateTimeOffset.UtcNow,
                     ProviderName = "fake"

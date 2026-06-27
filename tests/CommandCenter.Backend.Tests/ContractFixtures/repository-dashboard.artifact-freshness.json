@@ -1,7 +1,7 @@
 {
   "contractId": "repository-dashboard",
   "sourcePath": "tests/CommandCenter.Backend.Tests/ContractFixtures/repository-dashboard.golden.json",
-  "sourceSha256": "2A963417F723B7EC300AB0B768B05D99E2A9C237EE50195CA580A2865034834E",
+  "sourceSha256": "F0B30AC5D712434FE5B65C520023BB150BCA4A1C94788A2E0E3FBCADF100B3EE",
   "artifacts": [
     {
       "artifactId": "typescript-repository-dashboard-contract",

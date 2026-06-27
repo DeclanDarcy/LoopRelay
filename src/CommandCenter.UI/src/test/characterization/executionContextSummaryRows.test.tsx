@@ -11,13 +11,12 @@ function executionContextPreview(
   overrides: Partial<ExecutionContextPreview> = {},
 ): ExecutionContextPreview {
   return {
-    repositoryId: 'repo-alpha',
-    repositoryName: 'CommandCenter',
-    repositoryPath: 'C:\\kernritsu\\CommandCenter',
-    milestonePath: '.agents/milestones/m0-frontend-foundations.md',
+    id: 'repo-alpha',
+    name: 'CommandCenter',
+    path: 'C:\\kernritsu\\CommandCenter',
     generatedAt: '2026-06-21T17:00:00.000Z',
     artifacts: [],
-    repositorySnapshot: null,
+    snapshot: null,
     diagnostics: {
       totalBytes: 4096,
       totalCharacters: 2048,
@@ -64,7 +63,7 @@ describe('execution context summary row rendering characterization', () => {
           },
         })}
         operationalContextStatus="Preview stale"
-        launchStatus="Build an execution context for the selected milestone."
+        launchStatus="Build an execution context."
         sizeStatus="Hard limit"
       />,
     )
@@ -72,7 +71,7 @@ describe('execution context summary row rendering characterization', () => {
     expect(screen.getByText('Total: 131072 bytes')).toBeInTheDocument()
     expect(screen.getByText('Operational context: Preview stale')).toBeInTheDocument()
     expect(
-      screen.getByText('Launch: Build an execution context for the selected milestone.'),
+      screen.getByText('Launch: Build an execution context.'),
     ).toBeInTheDocument()
     expect(screen.getByText('Size: Hard limit')).toBeInTheDocument()
   })

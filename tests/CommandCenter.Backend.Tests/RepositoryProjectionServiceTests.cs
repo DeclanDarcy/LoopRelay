@@ -506,7 +506,6 @@ public sealed class RepositoryProjectionServiceTests
                     SessionId = sessionId,
                     State = ExecutionSessionState.Completed,
                     RepositoryState = RepositoryExecutionState.AwaitingAcceptance,
-                    MilestonePath = ".agents/milestones/m4.md",
                     StartedAt = DateTimeOffset.UtcNow.AddMinutes(-3),
                     CompletedAt = DateTimeOffset.UtcNow,
                     Duration = TimeSpan.FromMinutes(3),

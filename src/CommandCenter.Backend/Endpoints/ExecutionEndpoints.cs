@@ -17,12 +17,11 @@ public static class ExecutionEndpoints
     private static void MapGetExecutionContext(this IEndpointRouteBuilder app) =>
         app.MapGet("/api/repositories/{repositoryId:guid}/execution/context", async (
             Guid repositoryId,
-            string milestonePath,
             IExecutionContextService executionContextService) =>
         {
             try
             {
-                return Results.Ok(await executionContextService.BuildContextAsync(repositoryId, milestonePath));
+                return Results.Ok(await executionContextService.BuildContextAsync(repositoryId));
             }
             catch (KeyNotFoundException exception)
             {

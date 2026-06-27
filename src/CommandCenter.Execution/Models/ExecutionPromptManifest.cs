@@ -42,10 +42,6 @@ public sealed class ExecutionPromptManifest
 
     public string? HandoffSourceDelivered { get; init; }
 
-    public string? MilestoneSourceRequested { get; init; }
-
-    public string? MilestoneSourceDelivered { get; init; }
-
     public string ProviderDeliveryStatus { get; init; } = string.Empty;
 
     public IReadOnlyList<string> ProviderAdjustments { get; init; } = Array.Empty<string>();

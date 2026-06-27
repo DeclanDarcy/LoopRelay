@@ -221,13 +221,11 @@ describe('workspace certification mock', () => {
             typeof args === 'object' &&
             args !== null &&
             'repositoryId' in args &&
-            args.repositoryId === 'repo-alpha' &&
-            'milestonePath' in args &&
-            args.milestonePath === alternateMilestone.relativePath,
+            args.repositoryId === 'repo-alpha',
         ),
       ).toBe(true),
     )
-    expect(await screen.findByText('Continuity milestone.')).toBeInTheDocument()
+    expect(await screen.findByText('Execution context built.')).toBeInTheDocument()
   })
 
   it('keeps artifact save and rotation behind explicit artifact actions', async () => {
@@ -381,9 +379,7 @@ describe('workspace certification mock', () => {
             typeof args === 'object' &&
             args !== null &&
             'repositoryId' in args &&
-            args.repositoryId === 'repo-alpha' &&
-            'milestonePath' in args &&
-            args.milestonePath === '.agents/milestones/m5.md',
+            args.repositoryId === 'repo-alpha',
         ),
       ).toBe(true),
     )

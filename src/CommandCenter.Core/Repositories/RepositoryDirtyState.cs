@@ -1,5 +1,9 @@
-namespace CommandCenter.Execution.Models;
+namespace CommandCenter.Core.Repositories;
 
+/// <summary>
+/// The working-tree dirty state of a repository. Repository-scoped and reusable across the
+/// different kinds of Codex sessions — not execution-specific.
+/// </summary>
 public sealed class RepositoryDirtyState
 {
     public IReadOnlyList<string> StagedPaths { get; init; } = Array.Empty<string>();

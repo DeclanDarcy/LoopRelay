@@ -12,7 +12,6 @@ function sessionSummary(overrides: Partial<ExecutionSessionSummary> = {}): Execu
     sessionId: 'session-alpha',
     state: 'Completed',
     repositoryState: 'AwaitingCommit',
-    milestonePath: '.agents/milestones/m0.md',
     startedAt: '2026-06-21T16:00:00.000Z',
     completedAt: '2026-06-21T16:20:00.000Z',
     duration: '00:20:00',
@@ -52,14 +51,12 @@ describe('execution history panel rendering characterization', () => {
         sessions={[
           sessionSummary({
             sessionId: 'session-first',
-            milestonePath: '.agents/milestones/m1.md',
             repositoryState: 'AwaitingPush',
             commitSha: 'def5678',
             pushedAt: '2026-06-21T17:00:00.000Z',
           }),
           sessionSummary({
             sessionId: 'session-second',
-            milestonePath: null,
             repositoryState: 'Failed',
             startedAt: null,
             duration: null,
@@ -76,8 +73,8 @@ describe('execution history panel rendering characterization', () => {
 
     const rows = document.querySelectorAll('.execution-history-row')
     expect(Array.from(rows).map((row) => row.querySelector('span')?.textContent)).toEqual([
-      '.agents/milestones/m1.md',
-      'Milestone not recorded',
+      'session-first',
+      'session-second',
     ])
 
     expect(within(rows[0] as HTMLElement).getByText('Awaiting push')).toBeInTheDocument()
@@ -96,7 +93,7 @@ describe('execution history panel rendering characterization', () => {
 
     render(<ExecutionHistoryPanel sessions={[session]} onOpenSession={onOpenSession} />)
 
-    fireEvent.click(screen.getByRole('button', { name: /m0\.md/ }))
+    fireEvent.click(screen.getByRole('button', { name: /session-link/ }))
 
     expect(onOpenSession).toHaveBeenCalledTimes(1)
     expect(onOpenSession).toHaveBeenCalledWith(session)

@@ -323,7 +323,6 @@ public sealed class DecisionReasoningCaptureService(
             Transition = accepted ? "ExecutionHandoffAcceptedReasoningObserved" : "ExecutionHandoffRejectedReasoningObserved",
             RepositoryId = repository.Id,
             SessionId = session.Id,
-            session.MilestonePath,
             DecidedAt = decidedAt,
             session.DecisionNote,
             HandoffPath = handoffPath,
@@ -1024,11 +1023,10 @@ public sealed class DecisionReasoningCaptureService(
                 "Current Handoff"),
             ReasoningReferenceFactory.ExecutionOutput(
                 session.Id.ToString("D"),
-                $"Milestone: {session.MilestonePath}",
+                "Execution session output",
                 Fingerprint(new
                 {
                     session.Id,
-                    session.MilestonePath,
                     session.StartedAt,
                     session.CompletedAt,
                     session.AcceptedAt,
@@ -1068,7 +1066,7 @@ public sealed class DecisionReasoningCaptureService(
             handoffPath,
             $"Execution output {sourceAction}",
             string.IsNullOrWhiteSpace(session.DecisionNote)
-                ? $"Execution output for milestone {session.MilestonePath} was {sourceAction}."
+                ? $"Execution output was {sourceAction}."
                 : session.DecisionNote.Trim(),
             transitionFingerprint);
     }
@@ -1273,14 +1271,14 @@ public sealed class DecisionReasoningCaptureService(
         ExecutionSession session,
         string signal)
     {
-        return $"Execution output {signal} for {Path.GetFileNameWithoutExtension(session.MilestonePath)}";
+        return $"Execution output {signal} for session {session.Id:D}";
     }
 
     private static string ExecutionHandoffDecisionSummary(
         ExecutionSession session,
         string signal)
     {
-        return $"Execution output for milestone {session.MilestonePath} showed that {signal}.";
+        return $"Execution output for session {session.Id:D} showed that {signal}.";
     }
 
     private static string? NormalizeRelativePath(string? relativePath)

@@ -1,3 +1,5 @@
+using CommandCenter.Core.Repositories;
+
 namespace CommandCenter.Execution.Models;
 
 public sealed class RepositoryGitStatus

@@ -652,7 +652,6 @@ public sealed class DecisionReasoningCaptureServiceTests
             Id = Guid.NewGuid(),
             RepositoryId = repository.Id,
             RepositoryPath = repository.Path,
-            MilestonePath = ".agents/milestones/m2-cross-artifact-capture.md",
             StartedAt = startedAt,
             CompletedAt = startedAt.AddMinutes(5),
             LastActivityAt = startedAt.AddMinutes(5),
@@ -675,7 +674,6 @@ public sealed class DecisionReasoningCaptureServiceTests
             Id = Guid.NewGuid(),
             RepositoryId = repository.Id,
             RepositoryPath = repository.Path,
-            MilestonePath = ".agents/milestones/m2-cross-artifact-capture.md",
             StartedAt = startedAt,
             CompletedAt = startedAt.AddMinutes(5),
             LastActivityAt = decidedAt,
@@ -756,9 +754,9 @@ public sealed class DecisionReasoningCaptureServiceTests
 
     private sealed class FakeGitService : IGitService
     {
-        public Task<ExecutionRepositorySnapshot> GetSnapshotAsync(Repository repository)
+        public Task<RepositorySnapshot> GetSnapshotAsync(Repository repository)
         {
-            return Task.FromResult(new ExecutionRepositorySnapshot
+            return Task.FromResult(new RepositorySnapshot
             {
                 Branch = "main",
                 DirtyState = new RepositoryDirtyState

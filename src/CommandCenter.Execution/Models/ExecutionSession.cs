@@ -1,3 +1,4 @@
+using CommandCenter.Core.Repositories;
 using CommandCenter.Execution.Primitives;
 
 namespace CommandCenter.Execution.Models;
@@ -9,8 +10,6 @@ public sealed class ExecutionSession
     public Guid RepositoryId { get; init; }
 
     public string RepositoryPath { get; init; } = string.Empty;
-
-    public string MilestonePath { get; init; } = string.Empty;
 
     public DateTimeOffset StartedAt { get; init; }
 
@@ -42,7 +41,7 @@ public sealed class ExecutionSession
 
     public ExecutionPromptManifest? PromptManifest { get; init; }
 
-    public ExecutionRepositorySnapshot? RepositorySnapshot { get; init; }
+    public RepositorySnapshot? RepositorySnapshot { get; init; }
 
     public CommitPreparation? CommitPreparation { get; init; }
 
@@ -83,7 +82,6 @@ public sealed class ExecutionSession
             SessionId = Id,
             State = State,
             RepositoryState = RepositoryState,
-            MilestonePath = MilestonePath,
             StartedAt = StartedAt,
             CompletedAt = CompletedAt,
             Duration = Duration,

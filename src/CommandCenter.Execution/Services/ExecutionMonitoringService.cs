@@ -498,7 +498,6 @@ public sealed class ExecutionMonitoringService : IExecutionMonitoringService
             Id = session.Id,
             RepositoryId = session.RepositoryId,
             RepositoryPath = session.RepositoryPath,
-            MilestonePath = session.MilestonePath,
             StartedAt = session.StartedAt,
             CompletedAt = completedAt ?? session.CompletedAt,
             AcceptedAt = session.AcceptedAt,

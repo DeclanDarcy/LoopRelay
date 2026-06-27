@@ -208,7 +208,6 @@ public sealed class HandoffService(
             Id = session.Id,
             RepositoryId = session.RepositoryId,
             RepositoryPath = session.RepositoryPath,
-            MilestonePath = session.MilestonePath,
             StartedAt = session.StartedAt,
             CompletedAt = completedAt,
             AcceptedAt = session.AcceptedAt,

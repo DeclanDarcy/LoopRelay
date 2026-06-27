@@ -71,7 +71,6 @@ const executionSummary: ExecutionSessionSummary = {
   sessionId: 'session-1',
   state: 'Completed',
   repositoryState: 'AwaitingPush',
-  milestonePath: '.agents/milestones/m0.md',
   startedAt: '2026-06-21T15:00:00.000Z',
   completedAt: '2026-06-21T16:00:00.000Z',
   duration: '01:00:00',

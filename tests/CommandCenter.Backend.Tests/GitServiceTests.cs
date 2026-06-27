@@ -63,7 +63,7 @@ public sealed class GitServiceTests
             });
         var service = new GitService(runner);
 
-        ExecutionRepositorySnapshot snapshot = await service.GetSnapshotAsync(new Repository
+        RepositorySnapshot snapshot = await service.GetSnapshotAsync(new Repository
         {
             Id = Guid.NewGuid(),
             Name = "Repo",
@@ -119,8 +119,7 @@ public sealed class GitServiceTests
             Id = Guid.NewGuid(),
             RepositoryId = Guid.NewGuid(),
             RepositoryPath = CreateTemporaryDirectory(),
-            MilestonePath = ".agents/milestones/m6-git-lifecycle.md",
-            RepositorySnapshot = new ExecutionRepositorySnapshot
+            RepositorySnapshot = new RepositorySnapshot
             {
                 Branch = "main",
                 DirtyState = new RepositoryDirtyState
@@ -141,7 +140,7 @@ public sealed class GitServiceTests
             },
             session);
 
-        Assert.Equal("m6-git-lifecycle\n\n- 2 files changed", preparation.ProposedMessage);
+        Assert.Equal("Execution changes\n\n- 2 files changed", preparation.ProposedMessage);
         Assert.Equal(session.Id, preparation.SessionId);
         Assert.Equal(session.RepositoryId, preparation.RepositoryId);
         Assert.NotEqual(Guid.Empty, preparation.Id);
@@ -177,13 +176,12 @@ public sealed class GitServiceTests
             Id = Guid.NewGuid(),
             RepositoryId = repository.Id,
             RepositoryPath = repository.Path,
-            MilestonePath = ".agents/milestones/m6-git-lifecycle.md",
             StartedAt = DateTimeOffset.UtcNow.AddMinutes(-5),
             AcceptedAt = DateTimeOffset.UtcNow.AddMinutes(-1),
             State = ExecutionSessionState.Completed,
             RepositoryState = RepositoryExecutionState.AwaitingCommit,
             ProviderName = "fake",
-            RepositorySnapshot = new ExecutionRepositorySnapshot
+            RepositorySnapshot = new RepositorySnapshot
             {
                 Branch = "main",
                 DirtyState = new RepositoryDirtyState
@@ -304,9 +302,9 @@ public sealed class GitServiceTests
 
     private sealed class FakeGitService : IGitService
     {
-        public Task<ExecutionRepositorySnapshot> GetSnapshotAsync(Repository repository)
+        public Task<RepositorySnapshot> GetSnapshotAsync(Repository repository)
         {
-            return Task.FromResult(new ExecutionRepositorySnapshot
+            return Task.FromResult(new RepositorySnapshot
             {
                 Branch = "main",
                 DirtyState = new RepositoryDirtyState

@@ -90,11 +90,6 @@ export const repositoryDashboardContractFields = [
     typeScriptType: 'string',
   },
   {
-    path: '$[].executionSummary.milestonePath',
-    shapeKind: 'string',
-    typeScriptType: 'string',
-  },
-  {
     path: '$[].executionSummary.startedAt',
     shapeKind: 'string',
     typeScriptType: 'string',
@@ -226,11 +221,6 @@ export const repositoryDashboardContractFields = [
   },
   {
     path: '$[].executionHistory[].repositoryState',
-    shapeKind: 'string',
-    typeScriptType: 'string',
-  },
-  {
-    path: '$[].executionHistory[].milestonePath',
     shapeKind: 'string',
     typeScriptType: 'string',
   },
@@ -1255,7 +1245,6 @@ export type RepositoryDashboardGeneratedRootItemExecutionSummary = {
   sessionId: string
   state: string
   repositoryState: string
-  milestonePath: string
   startedAt: string
   completedAt: string
   duration: string
@@ -1284,7 +1273,6 @@ export type RepositoryDashboardGeneratedRootItemExecutionHistory = {
   sessionId: string
   state: string
   repositoryState: string
-  milestonePath: string
   startedAt: string
   completedAt: string
   duration: string
@@ -1399,7 +1387,6 @@ export type RepositoryDashboardConsumerCandidateExecutionSessionSummary = {
   sessionId: string
   state: 'Created' | 'Executing' | 'Completed' | 'Failed' | 'Cancelled'
   repositoryState: 'Ready' | 'Executing' | 'AwaitingAcceptance' | 'Accepted' | 'AwaitingCommit' | 'AwaitingPush' | 'Failed' | 'Cancelled'
-  milestonePath: string | null
   startedAt: string | null
   completedAt: string | null
   duration: string | null
@@ -1428,7 +1415,6 @@ export type RepositoryDashboardConsumerCandidateProjectionExecutionHistory = {
   sessionId: string
   state: 'Created' | 'Executing' | 'Completed' | 'Failed' | 'Cancelled'
   repositoryState: 'Ready' | 'Executing' | 'AwaitingAcceptance' | 'Accepted' | 'AwaitingCommit' | 'AwaitingPush' | 'Failed' | 'Cancelled'
-  milestonePath: string | null
   startedAt: string | null
   completedAt: string | null
   duration: string | null

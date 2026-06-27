@@ -21,22 +21,20 @@ namespace CommandCenter.Backend.Tests;
 public sealed class ExecutionContextServiceTests
 {
     [Fact]
-    public async Task ContextBuildsWithPlanAndSelectedMilestone()
+    public async Task ContextBuildsWithPlan()
     {
         Harness harness = await CreateHarnessAsync();
         await WriteAsync(harness.Repository, ".agents/plan.md", "plan");
         await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
 
         ExecutionContext context = await harness.ContextService.BuildContextAsync(
-            harness.Repository.Id,
-            ".agents/milestones/m1.md");
+            harness.Repository.Id);
 
         Assert.Empty(context.Diagnostics.ValidationErrors);
         Assert.False(context.Diagnostics.LaunchBlocked);
         Assert.Contains(context.Artifacts, artifact => artifact.Role == "Plan");
-        Assert.Contains(context.Artifacts, artifact => artifact.Role == "Milestone");
-        Assert.NotNull(context.RepositorySnapshot);
-        Assert.True(context.RepositorySnapshot.DirtyState.IsClean);
+        Assert.NotNull(context.Snapshot);
+        Assert.True(context.Snapshot.DirtyState.IsClean);
     }
 
     [Fact]
@@ -48,10 +46,9 @@ public sealed class ExecutionContextServiceTests
         await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
 
         ExecutionContext context = await harness.ContextService.BuildContextAsync(
-            harness.Repository.Id,
-            ".agents/milestones/m1.md");
+            harness.Repository.Id);
 
-        ExecutionContextArtifact artifact = Assert.Single(
+        CommandCenter.Core.Artifacts.LoadedArtifact artifact = Assert.Single(
             context.Artifacts,
             artifact => artifact.Role == "OperationalContext");
         Assert.Equal(".agents/operational_context.md", artifact.RelativePath);
@@ -68,10 +65,9 @@ public sealed class ExecutionContextServiceTests
         await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
 
         ExecutionContext context = await harness.ContextService.BuildContextAsync(
-            harness.Repository.Id,
-            ".agents/milestones/m1.md");
+            harness.Repository.Id);
 
-        ExecutionContextArtifact artifact = Assert.Single(
+        CommandCenter.Core.Artifacts.LoadedArtifact artifact = Assert.Single(
             context.Artifacts,
             artifact => artifact.Role == "OperationalContext");
         Assert.Equal(0, artifact.ByteCount);
@@ -88,13 +84,11 @@ public sealed class ExecutionContextServiceTests
         await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
 
         ExecutionContext context = await harness.ContextService.BuildContextAsync(
-            harness.Repository.Id,
-            ".agents/milestones/m1.md");
+            harness.Repository.Id);
 
         Assert.Empty(context.Diagnostics.ValidationErrors);
         Assert.Contains(".agents/operational_context.md", context.Diagnostics.MissingOptionalArtifacts);
         Assert.Contains(".agents/handoffs/handoff.md", context.Diagnostics.MissingOptionalArtifacts);
-        Assert.Contains(".agents/decisions/decisions.md", context.Diagnostics.MissingOptionalArtifacts);
     }
 
     [Fact]
@@ -104,40 +98,9 @@ public sealed class ExecutionContextServiceTests
         await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
 
         ExecutionContext context = await harness.ContextService.BuildContextAsync(
-            harness.Repository.Id,
-            ".agents/milestones/m1.md");
+            harness.Repository.Id);
 
         Assert.Contains(context.Diagnostics.ValidationErrors, error => error.Contains("plan", StringComparison.OrdinalIgnoreCase));
-        Assert.True(context.Diagnostics.LaunchBlocked);
-    }
-
-    [Fact]
-    public async Task MissingSelectedMilestoneFailsValidation()
-    {
-        Harness harness = await CreateHarnessAsync();
-        await WriteAsync(harness.Repository, ".agents/plan.md", "plan");
-        await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
-
-        ExecutionContext context = await harness.ContextService.BuildContextAsync(
-            harness.Repository.Id,
-            ".agents/milestones/missing.md");
-
-        Assert.Contains(context.Diagnostics.ValidationErrors, error => error.Contains("missing.md", StringComparison.OrdinalIgnoreCase));
-        Assert.True(context.Diagnostics.LaunchBlocked);
-    }
-
-    [Fact]
-    public async Task NonMilestonePathFailsValidation()
-    {
-        Harness harness = await CreateHarnessAsync();
-        await WriteAsync(harness.Repository, ".agents/plan.md", "plan");
-        await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
-
-        ExecutionContext context = await harness.ContextService.BuildContextAsync(
-            harness.Repository.Id,
-            ".agents/plan.md");
-
-        Assert.Contains(context.Diagnostics.ValidationErrors, error => error.Contains(".agents/milestones", StringComparison.OrdinalIgnoreCase));
         Assert.True(context.Diagnostics.LaunchBlocked);
     }
 
@@ -149,8 +112,7 @@ public sealed class ExecutionContextServiceTests
         await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
 
         ExecutionContext context = await harness.ContextService.BuildContextAsync(
-            harness.Repository.Id,
-            ".agents/milestones/m1.md");
+            harness.Repository.Id);
 
         Assert.True(context.Diagnostics.WarningThresholdExceeded);
         Assert.False(context.Diagnostics.HardLimitExceeded);
@@ -165,8 +127,7 @@ public sealed class ExecutionContextServiceTests
         await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
 
         ExecutionContext context = await harness.ContextService.BuildContextAsync(
-            harness.Repository.Id,
-            ".agents/milestones/m1.md");
+            harness.Repository.Id);
 
         Assert.True(context.Diagnostics.HardLimitExceeded);
         Assert.True(context.Diagnostics.LaunchBlocked);
@@ -181,8 +142,7 @@ public sealed class ExecutionContextServiceTests
         await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
 
         ExecutionContext context = await harness.ContextService.BuildContextAsync(
-            harness.Repository.Id,
-            ".agents/milestones/m1.md");
+            harness.Repository.Id);
 
         ExecutionContextArtifactDiagnostic diagnostic = Assert.Single(
             context.Diagnostics.ArtifactDiagnostics,
@@ -204,8 +164,7 @@ public sealed class ExecutionContextServiceTests
         await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
 
         ExecutionContext context = await harness.ContextService.BuildContextAsync(
-            harness.Repository.Id,
-            ".agents/milestones/m1.md");
+            harness.Repository.Id);
 
         ExecutionContextArtifactDiagnostic diagnostic = Assert.Single(
             context.Diagnostics.ArtifactDiagnostics,
@@ -228,13 +187,12 @@ public sealed class ExecutionContextServiceTests
         await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
 
         ExecutionContext context = await harness.ContextService.BuildContextAsync(
-            harness.Repository.Id,
-            ".agents/milestones/m1.md");
+            harness.Repository.Id);
 
         Assert.Empty(context.Diagnostics.ValidationErrors);
         Assert.False(context.Diagnostics.LaunchBlocked);
-        Assert.False(context.RepositorySnapshot!.DirtyState.IsClean);
-        Assert.Contains("src/file.cs", context.RepositorySnapshot.DirtyState.ModifiedPaths);
+        Assert.False(context.Snapshot!.DirtyState.IsClean);
+        Assert.Contains("src/file.cs", context.Snapshot.DirtyState.ModifiedPaths);
     }
 
     [Fact]
@@ -245,8 +203,7 @@ public sealed class ExecutionContextServiceTests
         await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
 
         ExecutionContext context = await harness.ContextService.BuildContextAsync(
-            harness.Repository.Id,
-            ".agents/milestones/m1.md");
+            harness.Repository.Id);
 
         Assert.Contains(context.Diagnostics.ValidationErrors, error => error.Contains("git unavailable", StringComparison.OrdinalIgnoreCase));
         Assert.True(context.Diagnostics.LaunchBlocked);
@@ -279,8 +236,7 @@ public sealed class ExecutionContextServiceTests
         await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
 
         ExecutionContext context = await harness.ContextService.BuildContextAsync(
-            harness.Repository.Id,
-            ".agents/milestones/m1.md");
+            harness.Repository.Id);
 
         Assert.NotNull(context.DecisionProjection);
         Assert.Equal("DEC-0001", Assert.Single(context.DecisionProjection.Directives).DecisionId);
@@ -319,8 +275,7 @@ public sealed class ExecutionContextServiceTests
         await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
 
         ExecutionContext context = await harness.ContextService.BuildContextAsync(
-            harness.Repository.Id,
-            ".agents/milestones/m1.md");
+            harness.Repository.Id);
 
         ExecutionGovernedConflictDiagnostic conflict = Assert.Single(context.Diagnostics.GovernedConflicts);
         Assert.Equal("conflict-1", conflict.Id);
@@ -361,7 +316,7 @@ public sealed class ExecutionContextServiceTests
             using var client = new HttpClient();
             HttpResponseMessage response = await client.GetAsync(
                 app.Urls.Single() +
-                $"/api/repositories/{repository.Id}/execution/context?milestonePath=.agents/milestones/m1.md");
+                $"/api/repositories/{repository.Id}/execution/context");
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             var context = await response.Content.ReadFromJsonAsync<Execution.Models.ExecutionContext>();
@@ -369,7 +324,7 @@ public sealed class ExecutionContextServiceTests
             Assert.Contains(context.Artifacts, artifact => artifact.RelativePath == ".agents/plan.md");
             Assert.Contains(context.Artifacts, artifact => artifact.RelativePath == ".agents/operational_context.md");
             Assert.Contains(context.Diagnostics.ArtifactDiagnostics, diagnostic => diagnostic.RelativePath == ".agents/operational_context.md");
-            Assert.NotNull(context.RepositorySnapshot);
+            Assert.NotNull(context.Snapshot);
         }
         finally
         {
@@ -426,14 +381,14 @@ public sealed class ExecutionContextServiceTests
 
     private sealed class FakeGitService(RepositoryDirtyState? dirtyState, string? failure) : IGitService
     {
-        public Task<ExecutionRepositorySnapshot> GetSnapshotAsync(Repository repository)
+        public Task<RepositorySnapshot> GetSnapshotAsync(Repository repository)
         {
             if (failure is not null)
             {
                 throw new InvalidOperationException(failure);
             }
 
-            return Task.FromResult(new ExecutionRepositorySnapshot
+            return Task.FromResult(new RepositorySnapshot
             {
                 Branch = "main",
                 DirtyState = dirtyState ?? new RepositoryDirtyState(),

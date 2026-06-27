@@ -176,15 +176,11 @@ function createWorkspaceProjection(): RepositoryWorkspaceProjection {
   }
 }
 
-function createExecutionContextPreview(
-  repositoryId = 'repo-alpha',
-  milestonePath = '.agents/milestones/m0.md',
-): ExecutionContextPreview {
+function createExecutionContextPreview(repositoryId = 'repo-alpha'): ExecutionContextPreview {
   return {
-    repositoryId,
-    repositoryName: 'AlphaRepo',
-    repositoryPath: 'C:\\workspace\\AlphaRepo',
-    milestonePath,
+    id: repositoryId,
+    name: 'AlphaRepo',
+    path: 'C:\\workspace\\AlphaRepo',
     generatedAt: '2026-01-01T00:00:00Z',
     artifacts: [
       {
@@ -196,7 +192,7 @@ function createExecutionContextPreview(
         characterCount: 6,
       },
     ],
-    repositorySnapshot: null,
+    snapshot: null,
     diagnostics: {
       totalBytes: 6,
       totalCharacters: 6,
@@ -285,8 +281,8 @@ function createExecutionPromptManifest(sessionId = 'session-alpha'): ExecutionPr
     operationalContextSourceDelivered: '.agents/operational_context.md',
     handoffSourceRequested: '.agents/handoffs/handoff.md',
     handoffSourceDelivered: null,
-    milestoneSourceRequested: '.agents/milestones/m5.md',
-    milestoneSourceDelivered: '.agents/milestones/m5.md',
+    milestoneSourceRequested: null,
+    milestoneSourceDelivered: null,
     providerDeliveryStatus: 'Delivered',
     providerAdjustments: [],
     divergenceReason: null,
@@ -300,8 +296,7 @@ function createExecutionTransparency(sessionId = 'session-alpha'): ExecutionSess
     promptMetadata: {
       generatedAt: '2026-01-01T00:00:30Z',
       repositoryPath: 'C:\\workspace\\AlphaRepo',
-      milestonePath: '.agents/milestones/m5.md',
-      includedArtifactPaths: ['.agents/plan.md', '.agents/milestones/m5.md'],
+      includedArtifactPaths: ['.agents/plan.md'],
     },
     recovery: {
       recoveryRan: true,
@@ -605,9 +600,7 @@ describe('projection hook characterization', () => {
     const invoke = vi.fn().mockResolvedValue(preview)
     installInvokeMock(invoke)
 
-    const { result } = renderHook(() =>
-      useExecutionContextPreview('repo-alpha', '.agents/milestones/m0.md'),
-    )
+    const { result } = renderHook(() => useExecutionContextPreview('repo-alpha'))
 
     expect(result.current.data).toBeNull()
     expect(invoke).not.toHaveBeenCalled()
@@ -620,32 +613,23 @@ describe('projection hook characterization', () => {
     expect(result.current.error).toBeNull()
     expect(invoke).toHaveBeenCalledWith('preview_execution_context', {
       repositoryId: 'repo-alpha',
-      milestonePath: '.agents/milestones/m0.md',
     }, undefined)
   })
 
-  it('keeps stale execution context previews visible across milestone changes until rebuilt or cleared', async () => {
-    const firstPreview = createExecutionContextPreview('repo-alpha', '.agents/milestones/m0.md')
-    const secondPreview = createExecutionContextPreview('repo-alpha', '.agents/milestones/m1.md')
+  it('keeps stale execution context previews visible until rebuilt or cleared', async () => {
+    const firstPreview = createExecutionContextPreview('repo-alpha')
+    const secondPreview = createExecutionContextPreview('repo-alpha')
     const invoke = vi
       .fn()
       .mockResolvedValueOnce(firstPreview)
       .mockResolvedValueOnce(secondPreview)
     installInvokeMock(invoke)
 
-    const { result, rerender } = renderHook(
-      ({ milestonePath }: { milestonePath: string | null }) =>
-        useExecutionContextPreview('repo-alpha', milestonePath),
-      { initialProps: { milestonePath: '.agents/milestones/m0.md' as string | null } },
-    )
+    const { result } = renderHook(() => useExecutionContextPreview('repo-alpha'))
 
     await act(async () => {
       await result.current.load()
     })
-    expect(result.current.data).toBe(firstPreview)
-
-    rerender({ milestonePath: '.agents/milestones/m1.md' })
-
     expect(result.current.data).toBe(firstPreview)
 
     await act(async () => {

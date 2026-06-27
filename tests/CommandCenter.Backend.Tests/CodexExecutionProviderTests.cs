@@ -107,7 +107,6 @@ public sealed class CodexExecutionProviderTests
             Metadata = new ExecutionPromptMetadata
             {
                 RepositoryPath = "repo",
-                MilestonePath = ".agents/milestones/m2.md",
                 IncludedArtifactPaths = [".agents/plan.md"],
                 TotalContextBytes = 11,
                 TotalContextCharacters = 11
@@ -120,8 +119,7 @@ public sealed class CodexExecutionProviderTests
         return new ExecutionSession
         {
             Id = Guid.NewGuid(),
-            RepositoryPath = repositoryPath,
-            MilestonePath = ".agents/milestones/m2.md"
+            RepositoryPath = repositoryPath
         };
     }
 

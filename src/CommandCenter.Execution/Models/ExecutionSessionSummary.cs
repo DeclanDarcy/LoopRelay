@@ -10,8 +10,6 @@ public sealed class ExecutionSessionSummary
 
     public RepositoryExecutionState RepositoryState { get; init; } = RepositoryExecutionState.Ready;
 
-    public string? MilestonePath { get; init; }
-
     public DateTimeOffset? StartedAt { get; init; }
 
     public DateTimeOffset? CompletedAt { get; init; }

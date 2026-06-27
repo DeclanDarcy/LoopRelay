@@ -42,7 +42,7 @@ export function ExecutionSessionPanel({
     <Panel className="execution-session-panel" aria-label="Execution session">
       <SectionHeader
         eyebrow={session.repositoryState === 'Executing' ? 'Active Execution' : 'Execution Session'}
-        title={session.milestonePath ?? 'Selected milestone'}
+        title={session.sessionId}
         headingLevel={4}
         actions={
           <div className="execution-session-actions">
@@ -184,7 +184,6 @@ function TransparencySection({ transparency, isLoading, error }: TransparencySec
           <h5>Prompt Metadata</h5>
           <div className="execution-rail-summary">
             <span>Generated: {formatDateTime(promptMetadata.generatedAt)}</span>
-            <span>Milestone: {promptMetadata.milestonePath}</span>
             <span>Included artifacts: {promptMetadata.includedArtifactPaths.length}</span>
           </div>
         </div>

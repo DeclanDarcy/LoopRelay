@@ -81,7 +81,6 @@ struct ExecutionSessionSummary {
     session_id: String,
     state: String,
     repository_state: String,
-    milestone_path: Option<String>,
     started_at: Option<String>,
     completed_at: Option<String>,
     duration: Option<String>,
@@ -311,12 +310,6 @@ struct OperationalContextProposalReviewRequest {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ExecutionStartRequest {
-    milestone_path: String,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
 struct ExecutionAcceptanceRequest {
     decision_note: Option<String>,
 }
@@ -494,16 +487,12 @@ fn rotate_current_decisions(
 }
 
 #[tauri::command]
-fn preview_execution_context(
-    repository_id: String,
-    milestone_path: String,
-) -> Result<Value, String> {
+fn preview_execution_context(repository_id: String) -> Result<Value, String> {
     let client = reqwest::blocking::Client::new();
     client
         .get(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/execution/context"
         ))
-        .query(&[("milestonePath", milestone_path)])
         .send()
         .map_err(|error| error.to_string())?
         .error_for_status()
@@ -2365,16 +2354,13 @@ fn run_decision_session_certification(repository_id: String) -> Result<Value, St
 }
 
 #[tauri::command]
-fn start_execution(
-    repository_id: String,
-    milestone_path: String,
-) -> Result<ExecutionSessionSummary, String> {
+fn start_execution(repository_id: String) -> Result<ExecutionSessionSummary, String> {
     let client = reqwest::blocking::Client::new();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/execution/start"
         ))
-        .json(&ExecutionStartRequest { milestone_path })
+        .json(&serde_json::json!({}))
         .send()
         .map_err(|error| error.to_string())?;
 

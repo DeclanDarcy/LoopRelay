@@ -34,15 +34,14 @@ export async function getExecutionStatus(backendUrl: string, sessionId: string) 
   return response.json() as Promise<ExecutionStatus>
 }
 
-export function previewExecutionContext(repositoryId: string, milestonePath: string) {
+export function previewExecutionContext(repositoryId: string) {
   return invokeCommand<ExecutionContextPreview>('preview_execution_context', {
     repositoryId,
-    milestonePath,
   })
 }
 
-export function startExecution(repositoryId: string, milestonePath: string) {
-  return invokeCommand<ExecutionSessionSummary>('start_execution', { repositoryId, milestonePath })
+export function startExecution(repositoryId: string) {
+  return invokeCommand<ExecutionSessionSummary>('start_execution', { repositoryId })
 }
 
 export function getExecutionPromptManifest(sessionId: string) {

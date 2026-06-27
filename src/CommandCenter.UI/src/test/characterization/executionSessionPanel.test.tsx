@@ -12,7 +12,6 @@ function sessionSummary(overrides: Partial<ExecutionSessionSummary> = {}): Execu
     sessionId: 'session-alpha',
     state: 'Executing',
     repositoryState: 'Executing',
-    milestonePath: '.agents/milestones/m0.md',
     startedAt: '2026-06-21T16:00:00.000Z',
     completedAt: null,
     duration: null,
@@ -82,8 +81,8 @@ function promptManifest(): ExecutionPromptManifest {
     operationalContextSourceDelivered: '.agents/operational_context.md',
     handoffSourceRequested: '.agents/handoffs/handoff.md',
     handoffSourceDelivered: null,
-    milestoneSourceRequested: '.agents/milestones/m0.md',
-    milestoneSourceDelivered: '.agents/milestones/m0.md',
+    milestoneSourceRequested: null,
+    milestoneSourceDelivered: null,
     providerDeliveryStatus: 'Delivered',
     providerAdjustments: [],
     divergenceReason: null,
@@ -97,8 +96,7 @@ function transparency(): ExecutionSessionTransparency {
     promptMetadata: {
       generatedAt: '2026-06-21T16:00:30.000Z',
       repositoryPath: 'C:\\workspace\\AlphaRepo',
-      milestonePath: '.agents/milestones/m0.md',
-      includedArtifactPaths: ['.agents/plan.md', '.agents/milestones/m0.md'],
+      includedArtifactPaths: ['.agents/plan.md'],
     },
     recovery: {
       recoveryRan: true,
@@ -147,7 +145,7 @@ describe('execution session panel rendering characterization', () => {
 
     expect(screen.getByRole('region', { name: 'Execution session' })).toBeInTheDocument()
     expect(screen.getByText('Active Execution')).toHaveClass('eyebrow')
-    expect(screen.getByRole('heading', { level: 4, name: '.agents/milestones/m0.md' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 4, name: 'session-alpha' })).toBeInTheDocument()
     expect(screen.getByText('Session: session-alpha')).toBeInTheDocument()
     expect(screen.getByText('Provider: codex')).toBeInTheDocument()
     expect(screen.getAllByText('Executing')[0]).toHaveClass('cc-badge', 'cc-badge-warning')
@@ -163,7 +161,6 @@ describe('execution session panel rendering characterization', () => {
         session={sessionSummary({
           state: 'Completed',
           repositoryState: 'AwaitingCommit',
-          milestonePath: null,
           providerName: '',
           providerExecutablePath: null,
           providerProcessId: null,
@@ -176,7 +173,7 @@ describe('execution session panel rendering characterization', () => {
     )
 
     expect(screen.getByText('Execution Session')).toHaveClass('eyebrow')
-    expect(screen.getByRole('heading', { level: 4, name: 'Selected milestone' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 4, name: 'session-alpha' })).toBeInTheDocument()
     expect(screen.getByText('Provider: Unknown')).toBeInTheDocument()
     expect(screen.getByText('Awaiting commit')).toHaveClass('cc-badge', 'cc-badge-warning')
     expect(screen.getByText('Duration: Not recorded')).toBeInTheDocument()

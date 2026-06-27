@@ -12,7 +12,6 @@ const executionSummary = {
   sessionId: 'session-1',
   state: 'Completed',
   repositoryState: 'AwaitingCommit',
-  milestonePath: '.agents/milestones/m7.md',
   startedAt: null,
   completedAt: null,
   duration: null,

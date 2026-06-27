@@ -245,7 +245,7 @@ function gitInteractionEvidence({
       id: `${execution.sessionId}-${mode}-session`,
       label: 'Execution session',
       detail: `${execution.state} | ${execution.repositoryState}`,
-      source: execution.milestonePath,
+      source: execution.sessionId,
     })
   }
 

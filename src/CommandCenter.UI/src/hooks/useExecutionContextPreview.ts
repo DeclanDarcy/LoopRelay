@@ -2,16 +2,13 @@ import { useCallback, useState } from 'react'
 import { formatError, previewExecutionContext } from '../api'
 import type { ExecutionContextPreview } from '../types'
 
-export function useExecutionContextPreview(
-  repositoryId: string | null,
-  milestonePath: string | null,
-) {
+export function useExecutionContextPreview(repositoryId: string | null) {
   const [data, setData] = useState<ExecutionContextPreview | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    if (!repositoryId || !milestonePath) {
+    if (!repositoryId) {
       setData(null)
       setIsLoading(false)
       return null
@@ -20,7 +17,7 @@ export function useExecutionContextPreview(
     setIsLoading(true)
     setError(null)
     try {
-      const nextPreview = await previewExecutionContext(repositoryId, milestonePath)
+      const nextPreview = await previewExecutionContext(repositoryId)
       setData(nextPreview)
       return nextPreview
     } catch (loadError) {
@@ -30,7 +27,7 @@ export function useExecutionContextPreview(
     } finally {
       setIsLoading(false)
     }
-  }, [milestonePath, repositoryId])
+  }, [repositoryId])
 
   return { data, setData, isLoading, error, load, refresh: load }
 }

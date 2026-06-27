@@ -153,7 +153,7 @@ function ExecutionHistorySummaryPanel({
         }
       />
       <div className="workspace-inspector-summary">
-        <span>Latest milestone: {latestSession.milestonePath ?? 'Milestone not recorded'}</span>
+        <span>Latest session: {latestSession.sessionId}</span>
         <span>Latest state: {repositoryExecutionStatus[latestSession.repositoryState].label}</span>
         <span>Last activity: {formatDateTime(latestSession.lastActivityAt)}</span>
         <span>Completed: {completedCount}</span>

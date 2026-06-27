@@ -237,7 +237,7 @@ function App() {
     isLoading: isContextLoading,
     error: executionContextError,
     load: loadExecutionContextPreview,
-  } = useExecutionContextPreview(selectedRepository?.repository.id ?? null, selectedMilestonePath)
+  } = useExecutionContextPreview(selectedRepository?.repository.id ?? null)
   const {
     data: continuityDiagnostics,
     setData: setContinuityDiagnostics,
@@ -415,8 +415,7 @@ function App() {
     : []
   const currentExecutionState = workspace?.executionState ?? selectedRepository?.executionState ?? 'Ready'
   const executionContextMatchesSelection =
-    executionContext?.repositoryId === selectedRepository?.repository.id &&
-    executionContext?.milestonePath === selectedMilestonePath
+    executionContext?.id === selectedRepository?.repository.id
   const executionContextOperationalContext = executionContextMatchesSelection
     ? executionContext?.artifacts.find((artifact) => artifact.role === 'OperationalContext') ?? null
     : null
@@ -437,7 +436,7 @@ function App() {
     workspace?.operationalContextProposalSummary.status ??
     'None'
   const canStartExecution =
-    Boolean(selectedRepository && workspace && selectedMilestonePath && executionContextMatchesSelection) &&
+    Boolean(selectedRepository && workspace && executionContextMatchesSelection) &&
     workspace?.readiness === 'Ready' &&
     currentExecutionState === 'Ready' &&
     !executionContext?.diagnostics.launchBlocked &&
@@ -452,7 +451,6 @@ function App() {
   const executionDisplay = pushedExecutionSummary
     ? {
         sessionId: pushedExecutionSummary.sessionId,
-        milestonePath: pushedExecutionSummary.milestonePath,
         state: selectedExecutionStatus?.state ?? pushedExecutionSummary.state,
         repositoryState: selectedExecutionStatus?.repositoryState ?? pushedExecutionSummary.repositoryState,
         startedAt: selectedExecutionStatus?.startedAt ?? pushedExecutionSummary.startedAt,
@@ -568,12 +566,8 @@ function App() {
       return `Repository readiness is ${executionReadinessStatus[workspace.readiness].label}.`
     }
 
-    if (!selectedMilestonePath) {
-      return 'Select a milestone.'
-    }
-
     if (!executionContext || !executionContextMatchesSelection) {
-      return 'Build an execution context for the selected milestone.'
+      return 'Build an execution context.'
     }
 
     if (activeExecutionSummary || currentExecutionState !== 'Ready') {
@@ -598,7 +592,6 @@ function App() {
     currentExecutionState,
     executionContext,
     executionContextMatchesSelection,
-    selectedMilestonePath,
     workspace,
   ])
 
@@ -1157,7 +1150,7 @@ function App() {
   }
 
   async function buildExecutionContext() {
-    if (!selectedRepository || !selectedMilestonePath) {
+    if (!selectedRepository) {
       return
     }
 
@@ -1170,7 +1163,7 @@ function App() {
   }
 
   async function startExecution() {
-    if (!selectedRepository || !selectedMilestonePath || !canStartExecution) {
+    if (!selectedRepository || !canStartExecution) {
       return
     }
 
@@ -1178,10 +1171,7 @@ function App() {
     setError(null)
     setMessage(null)
     try {
-      const session = await startExecutionCommand(
-        selectedRepository.repository.id,
-        selectedMilestonePath,
-      )
+      const session = await startExecutionCommand(selectedRepository.repository.id)
       setWorkspace((currentWorkspace) =>
         currentWorkspace && currentWorkspace.repository.id === selectedRepository.repository.id
           ? {
@@ -2148,7 +2138,6 @@ function App() {
                   />
                 }
                 launchReadiness={startExecutionBlockedReason}
-                onOpenWorkspaceMilestone={openWorkspaceExecutionContext}
                 onOpenWorkspaceExecutionContext={() => {
                   setActivePrimaryTab('workspace')
                   setSectionTarget('workspace-execution-context')

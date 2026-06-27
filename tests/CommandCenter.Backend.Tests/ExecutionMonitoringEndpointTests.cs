@@ -422,7 +422,6 @@ public sealed class ExecutionMonitoringEndpointTests
                     Id = Guid.NewGuid(),
                     RepositoryId = Guid.NewGuid(),
                     RepositoryPath = CreateTemporaryDirectory(),
-                    MilestonePath = ".agents/milestones/m3.md",
                     StartedAt = startedAt,
                     LastActivityAt = startedAt,
                     State = state,
@@ -492,9 +491,9 @@ public sealed class ExecutionMonitoringEndpointTests
 
     private sealed class FakeGitService : IGitService
     {
-        public Task<ExecutionRepositorySnapshot> GetSnapshotAsync(Repository repository)
+        public Task<RepositorySnapshot> GetSnapshotAsync(Repository repository)
         {
-            return Task.FromResult(new ExecutionRepositorySnapshot
+            return Task.FromResult(new RepositorySnapshot
             {
                 Branch = "main",
                 DirtyState = new RepositoryDirtyState(),

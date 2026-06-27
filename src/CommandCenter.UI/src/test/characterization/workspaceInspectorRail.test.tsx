@@ -126,7 +126,6 @@ const executionSummary: ExecutionSessionSummary = {
   sessionId: 'session-1',
   state: 'Completed',
   repositoryState: 'AwaitingPush',
-  milestonePath: '.agents/milestones/m3.md',
   startedAt: '2026-06-21T15:00:00.000Z',
   completedAt: '2026-06-21T16:00:00.000Z',
   duration: '01:00:00',
@@ -200,7 +199,7 @@ describe('WorkspaceInspectorRail', () => {
     expect(screen.queryByText('Which link anchors remain?')).not.toBeInTheDocument()
     expect(screen.queryByText('Inspector overreach.')).not.toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Execution history summary' })).toBeInTheDocument()
-    expect(screen.getByText('Latest milestone: .agents/milestones/m3.md')).toBeInTheDocument()
+    expect(screen.getByText('Latest session: session-1')).toBeInTheDocument()
     expect(screen.getByText('Latest state: Awaiting push')).toBeInTheDocument()
     expect(screen.getByText('Completed: 1')).toBeInTheDocument()
     expect(document.querySelectorAll('.execution-history-row')).toHaveLength(0)

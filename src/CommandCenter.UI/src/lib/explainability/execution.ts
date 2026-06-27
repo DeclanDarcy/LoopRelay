@@ -162,12 +162,6 @@ export function executionSessionSummaryToEvidence(
       detail: `${session.state} | ${session.repositoryState}`,
     },
     {
-      id: `${session.sessionId}-milestone`,
-      label: 'Milestone',
-      detail: session.milestonePath ?? 'Milestone not recorded',
-      source: session.milestonePath,
-    },
-    {
       id: `${session.sessionId}-provider`,
       label: 'Provider',
       detail: session.providerName || 'Provider not recorded',

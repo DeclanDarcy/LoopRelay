@@ -109,7 +109,6 @@ function sessionSummary(overrides: Partial<ExecutionSessionSummary> = {}): Execu
     sessionId: 'session-alpha',
     state: 'Completed',
     repositoryState: 'AwaitingAcceptance',
-    milestonePath: '.agents/milestones/m8-explainability-layer.md',
     startedAt: '2026-06-21T16:00:00.000Z',
     completedAt: '2026-06-21T16:20:00.000Z',
     duration: '00:20:00',
@@ -270,7 +269,6 @@ describe('execution explainability adapters', () => {
     expect(executionSessionSummaryToEvidence(session)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ label: 'Session state', detail: 'Completed | Failed' }),
-        expect.objectContaining({ label: 'Milestone', source: '.agents/milestones/m8-explainability-layer.md' }),
         expect.objectContaining({ label: 'Handoff', source: '.agents/handoffs/handoff.md' }),
         expect.objectContaining({ label: 'Commit', fingerprint: 'abc123' }),
       ]),

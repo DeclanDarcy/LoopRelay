@@ -1,3 +1,7 @@
+using CommandCenter.Core.Artifacts;
+using CommandCenter.Core.Repositories;
+using CommandCenter.Decisions.Models;
+using CommandCenter.Decisions.Primitives;
 using CommandCenter.Execution;
 using CommandCenter.Execution.Models;
 using CommandCenter.Execution.Services;
@@ -25,34 +29,43 @@ public sealed class ExecutionPromptBuilderTests
         Assert.DoesNotContain("## Context Artifacts", prompt.Text);
         Assert.DoesNotContain("## Governed Decision Projection", prompt.Text);
         Assert.DoesNotContain("Do not commit changes.", prompt.Text);
-
-        Assert.Equal(".agents/milestones/m2.md", prompt.Metadata.MilestonePath);
     }
 
     [Fact]
-    public void ContinuePromptFillsHandoffAndDecisionHolesWhenHandoffPresent()
+    public void StartPromptOmitsGovernedDecisionsBecauseStartHasNoDecisionsHole()
+    {
+        // Governance reaches the agent only through the {decisions} hole, which exists solely on
+        // ContinueExecution. A first-milestone Start therefore carries no decisions, by design.
+        ExecutionPrompt prompt = new ExecutionPromptBuilder().Build(
+            CreateContext(decisionProjection: ProjectionWithGovernance()));
+
+        Assert.Contains("start executing the first milestone", prompt.Text);
+        Assert.DoesNotContain("Constraints:", prompt.Text);
+        Assert.DoesNotContain("Use repository artifacts", prompt.Text);
+    }
+
+    [Fact]
+    public void ContinuePromptRendersGovernedProjectionIntoDecisionsHole()
     {
         ExecutionPrompt prompt = new ExecutionPromptBuilder().Build(CreateContext(
             optionalArtifacts:
             [
                 Artifact("OperationalContext", ".agents/operational_context.md", "context content"),
-                Artifact("CurrentHandoff", ".agents/handoffs/handoff.md", "handoff content"),
-                Artifact("CurrentDecisions", ".agents/decisions/decisions.md", "decisions content")
-            ]));
+                Artifact("CurrentHandoff", ".agents/handoffs/handoff.md", "handoff content")
+            ],
+            decisionProjection: ProjectionWithGovernance()));
 
         // A current handoff selects the ContinueExecution catalog template.
         Assert.Contains("continue executing the current milestone", prompt.Text);
         Assert.DoesNotContain("start executing the first milestone", prompt.Text);
 
-        // Operational context folds into {plan}; handoff and decisions fill their own holes.
+        // Operational context folds into {plan}; handoff fills {handoff}; the structured projection
+        // (NOT a raw decisions.md artifact) is rendered into {decisions}.
         Assert.Contains("context content", prompt.Text);
         Assert.Contains("handoff content", prompt.Text);
-        Assert.Contains("decisions content", prompt.Text);
-
-        // Every delivered artifact is still tracked in the structured manifest metadata.
-        Assert.Contains(".agents/operational_context.md", prompt.Metadata.IncludedArtifactPaths);
-        Assert.Contains(".agents/handoffs/handoff.md", prompt.Metadata.IncludedArtifactPaths);
-        Assert.Contains(".agents/decisions/decisions.md", prompt.Metadata.IncludedArtifactPaths);
+        Assert.Contains("Constraints:", prompt.Text);
+        Assert.Contains("- DEC-0001 (RepositoryConvention, Architectural): Use repository artifacts", prompt.Text);
+        Assert.Contains("Architecture Rules:", prompt.Text);
     }
 
     [Fact]
@@ -61,7 +74,6 @@ public sealed class ExecutionPromptBuilderTests
         ExecutionPrompt prompt = new ExecutionPromptBuilder().Build(CreateContext(
             optionalArtifacts:
             [
-                Artifact("CurrentDecisions", ".agents/decisions/decisions.md", "decisions content"),
                 Artifact("CurrentHandoff", ".agents/handoffs/handoff.md", "handoff content"),
                 Artifact("OperationalContext", ".agents/operational_context.md", "context content")
             ]));
@@ -71,8 +83,7 @@ public sealed class ExecutionPromptBuilderTests
                 ".agents/plan.md",
                 ".agents/milestones/m2.md",
                 ".agents/operational_context.md",
-                ".agents/handoffs/handoff.md",
-                ".agents/decisions/decisions.md"
+                ".agents/handoffs/handoff.md"
             ],
             prompt.Metadata.IncludedArtifactPaths);
     }
@@ -101,11 +112,44 @@ public sealed class ExecutionPromptBuilderTests
         Assert.DoesNotContain("2026-06-19", first.Text);
     }
 
-    private static ExecutionContext CreateContext(
-        IReadOnlyList<ExecutionContextArtifact>? optionalArtifacts = null,
-        RepositoryDirtyState? dirtyState = null)
+    private static ExecutionDecisionProjection ProjectionWithGovernance()
     {
-        var artifacts = new List<ExecutionContextArtifact>
+        return new ExecutionDecisionProjection(
+            Guid.Parse("00000000-0000-0000-0000-000000000001"),
+            new DateTimeOffset(2026, 6, 19, 12, 0, 0, TimeSpan.Zero),
+            [
+                new ExecutionConstraint(
+                    "ECON-0001",
+                    "DEC-0001",
+                    "Architecture",
+                    "Use repository artifacts",
+                    DecisionClassification.Architectural,
+                    ExecutionProjectionKind.RepositoryConvention,
+                    [])
+            ],
+            [],
+            [],
+            [
+                new ExecutionArchitectureRule(
+                    "EARC-0001",
+                    "DEC-0001",
+                    "Architecture",
+                    "Use repository artifacts",
+                    DecisionClassification.Architectural,
+                    ExecutionProjectionKind.RepositoryConvention,
+                    [])
+            ],
+            [],
+            [],
+            new ExecutionDecisionContext([], [], [], [], [], []));
+    }
+
+    private static ExecutionContext CreateContext(
+        IReadOnlyList<LoadedArtifact>? optionalArtifacts = null,
+        RepositoryDirtyState? dirtyState = null,
+        ExecutionDecisionProjection? decisionProjection = null)
+    {
+        var artifacts = new List<LoadedArtifact>
         {
             Artifact("Plan", ".agents/plan.md", "plan content"),
             Artifact("Milestone", ".agents/milestones/m2.md", "milestone content")
@@ -117,18 +161,18 @@ public sealed class ExecutionPromptBuilderTests
 
         return new ExecutionContext
         {
-            RepositoryId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
-            RepositoryName = "Project",
-            RepositoryPath = @"C:\repos\Project",
-            MilestonePath = ".agents/milestones/m2.md",
+            Id = Guid.Parse("00000000-0000-0000-0000-000000000001"),
+            Name = "Project",
+            Path = @"C:\repos\Project",
             GeneratedAt = new DateTimeOffset(2026, 6, 19, 12, 0, 0, TimeSpan.Zero),
             Artifacts = artifacts,
-            RepositorySnapshot = new ExecutionRepositorySnapshot
+            Snapshot = new RepositorySnapshot
             {
                 Branch = "main",
                 DirtyState = dirtyState ?? new RepositoryDirtyState(),
                 CapturedAt = new DateTimeOffset(2026, 6, 19, 12, 0, 0, TimeSpan.Zero)
             },
+            DecisionProjection = decisionProjection,
             Diagnostics = new ExecutionContextDiagnostics
             {
                 TotalBytes = 27,
@@ -136,15 +180,15 @@ public sealed class ExecutionPromptBuilderTests
                 WarningThresholdBytes = 128 * 1024,
                 HardLimitBytes = 512 * 1024,
                 MissingOptionalArtifacts = optionalArtifacts is null
-                    ? [".agents/operational_context.md", ".agents/handoffs/handoff.md", ".agents/decisions/decisions.md"]
+                    ? [".agents/operational_context.md", ".agents/handoffs/handoff.md"]
                     : []
             }
         };
     }
 
-    private static ExecutionContextArtifact Artifact(string role, string relativePath, string content)
+    private static LoadedArtifact Artifact(string role, string relativePath, string content)
     {
-        return new ExecutionContextArtifact
+        return new LoadedArtifact
         {
             Role = role,
             RelativePath = relativePath,

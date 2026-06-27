@@ -185,11 +185,10 @@ public sealed class OperationalContextGenerationService(
         foreach (ExecutionSessionSummary session in inputSet.ExecutionHistory.Take(5))
         {
             string status = session.State.ToString();
-            string? milestone = string.IsNullOrWhiteSpace(session.MilestonePath) ? "unknown milestone" : session.MilestonePath;
             AddUnique(
                 recentChanges,
                 OperationalContextItemKind.RecentChange,
-                $"Recent execution for `{milestone}` is recorded with state `{status}`.",
+                $"Recent execution `{session.SessionId:D}` is recorded with state `{status}`.",
                 null);
         }
 
@@ -386,7 +385,7 @@ public sealed class OperationalContextGenerationService(
     {
         string executionHistoryContent = string.Join(
             Environment.NewLine,
-            inputSet.ExecutionHistory.Select(session => $"{session.SessionId}|{session.State}|{session.MilestonePath}|{session.CompletedAt:O}"));
+            inputSet.ExecutionHistory.Select(session => $"{session.SessionId}|{session.State}|{session.CompletedAt:O}"));
         string planningContent = string.Join(
             Environment.NewLine,
             inputSet.MilestonePaths.Prepend($"PlanningReadiness={inputSet.PlanningReadiness}").Prepend($"HasPlan={inputSet.HasPlan}"));
