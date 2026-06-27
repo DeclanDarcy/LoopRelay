@@ -1,39 +1,35 @@
-# Decisions: 2026-06-26 Milestone 0.2 Certification Posture
+# Decisions: 2026-06-26 Milestone 0.2 Acceptance Transition
 
-These decisions capture only newly authorized direction from the user response following Slice 0033.
+These decisions capture only newly authorized direction from the user response following Slice 0034.
 
 ## Authorized Decisions
 
-1. Stop adding Contract Oracle evidence by default after Slice 0033.
-   - The architectural question has shifted from whether the Oracle architecture repeats to whether current evidence is sufficient to certify Milestone 0.2.
-   - Further contract-family coverage now requires a specific uncovered architectural property.
+1. Treat Milestone 0.2 as transitioning from implementation to acceptance.
+   - The accepted claim is not "M0.2 is finished" in an unqualified sense.
+   - The accepted claim is that the Oracle foundation is certification-ready with accepted limitations.
 
-2. Do not automatically add a fourth contract family.
-   - Repository dashboard, repository workspace, and primary workflow projection already form a materially different progression: baseline read model, aggregate read model, and rich semantic lifecycle.
-   - More samples are not justified unless certification analysis identifies a concrete gap.
+2. Accept the architectural conclusion that the Oracle design is reusable.
+   - The supporting evidence is the complete Oracle subsystem exercised across repository dashboard, repository workspace, and primary workflow projection without architectural redesign.
+   - The subsystem includes inventory, boundary taxonomy, ownership model, fixtures, drift classification, consumer verification, artifact freshness, request-boundary verification, governance, certification, repeatability evidence, and certification review.
 
-3. Treat Slice 0033 as the cross-family repeatability synthesis checkpoint.
-   - The supported claim is one Oracle architecture reused across three independently certified pilots.
-   - This is stronger than treating the work as three isolated successful pilots.
+3. Keep generated contracts, mechanical versioning, and broad contract-surface coverage outside Milestone 0.2.
+   - These are intentionally deferred responsibilities of later milestones, not M0.2 omissions.
 
-4. Make the next slice evidence-driven Milestone 0.2 certification analysis.
-   - For every required M0.2 output and exit criterion, classify status as `Certified`, `Partial (accepted limitation)`, or `Blocker`.
-   - Every partial entry must explain why the limitation does not invalidate certification.
+4. Keep workflow dev mock coverage, populated `decisionSession` fixture variants, and broader workflow endpoint coverage as accepted pilot limitations.
+   - These are not certification blockers for the M0.2 foundation.
 
-5. Explicitly separate justified architectural claims from unjustified claims in the certification artifact.
-   - Justified claims should include backend serialized JSON as Oracle authority, repeatable Oracle lifecycle, reusable consumer verification, reusable artifact freshness, reusable request-boundary verification, and no new Oracle mechanisms required for successive pilots.
-   - Unjustified claims should include full contract-surface protection, global certification if not yet complete, and generated contract lifecycle, which remains reserved for Milestone 1.2.
+5. Characterize M0.2 acceptance as a certified foundation with explicit deferrals.
+   - Certified foundation: Oracle architecture, governance, lifecycle, repeatability, and three locally certified pilots.
+   - Deferred intentionally: full coverage, generated ecosystem, automatic regeneration, contract versioning, and complete contract catalog.
 
-6. Keep decision lifecycle eligibility as the preferred fourth family only if certification identifies a genuine backend-owned eligibility-semantics gap.
-   - It is the right next candidate if additional evidence is needed because it stresses semantic authority, compatibility-sensitive booleans, and downstream inference risk.
-   - It should not be added for breadth alone.
+6. Move the next slice to formal Milestone 0.2 acceptance and baseline update.
+   - The baseline should be frozen after acceptance.
+   - After that, work should move to Milestone 0.3.
 
-7. Keep error envelope coverage aligned with later passive transport or runtime isolation work unless Milestone 0.2 certification shows Oracle governance over failure contracts is insufficient.
-
-8. Treat current remaining M0.2 work as certification analysis rather than implementation unless the certification artifact identifies a blocker.
+7. Do not add more implementation work to M0.2 by default.
+   - Additional Oracle work should arise from M1.x requirements or genuine defects, not from reluctance to close M0.2.
 
 ## Next Authorized Sequence
 
-1. Stage, commit, and push Slice 0033 plus this decision checkpoint.
+1. Stage, commit, and push Slice 0034 plus this decision checkpoint.
 2. Stop executing after the push.
-3. In the next work slice, produce the Milestone 0.2 certification artifact described above.
