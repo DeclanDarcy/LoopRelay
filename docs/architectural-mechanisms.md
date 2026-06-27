@@ -139,6 +139,9 @@ Primary evidence:
 - `.agents/milestones/m0.3-regression-framework-inventory-skeleton-slice-0036.md`
 - `.agents/milestones/m0.3-invariant-catalog-slice-0037.md`
 - `.agents/milestones/m0.3-regression-taxonomy-slice-0038.md`
+- `.agents/milestones/m0.3-regression-ownership-severity-slice-0039.md`
+- `.agents/milestones/m0.3-architectural-drift-model-slice-0040.md`
+- `.agents/milestones/m0.3-regression-ux-slice-0041.md`
 
 Framework intent:
 
@@ -212,9 +215,25 @@ Architectural drift classes describe how an invariant can erode before it become
 | Dependency cycle | Layer, feature, controller, workspace, or test dependencies form cycles that let downstream surfaces influence upstream authority. | Project reference graph, TypeScript import graph, Rust module graph, and architecture dependency scan. | Dependency evidence with cycle path, layer boundary, affected authority or contract, and proposed dependency inversion. | Cross-layer architecture tests | CI failure | Break the cycle through an allowed abstraction, generated contract boundary, resource/action primitive, or controller contract. | Escalate to governance review required when breaking the cycle requires changing an ownership or layer boundary. |
 | Semantic leakage | UI, shell, transport, presentation utilities, tests, docs, or mocks infer architectural semantics from weak strings or presentation labels. | Semantic-keyword source scan, presentation vocabulary test, mock comparison, and consumer verification against authoritative fields. | Authority or presentation evidence with inferred semantic, source field, missing backend authority field, consumer impact, and replacement path. | Frontend or cross-layer architecture tests | Release blocker | Add the semantic field to the owning backend projection or relabel the behavior as non-authoritative preview and remove persistence. | Escalate to architectural decision required when downstream semantic inference is requested as durable behavior. |
 
-Regression UX rule:
+### Regression UX Specification
 
-Every architectural regression must name the protected architectural intent and give a concrete remediation path. The initial backend framework test enforces that rule for the registered mechanism catalog.
+Architectural regression failures are decision inputs, not generic test failures. A failure message must explain what architectural claim was protected, what drift was observed, what evidence should be reviewed, who owns the response, and how the slice should proceed if the failure is not repaired locally.
+
+Required failure-message fields:
+
+| Field | Required content | Why it matters | Example signal |
+| --- | --- | --- | --- |
+| Invariant | The protected architectural rule or capability. | Keeps the failure tied to an architecture claim rather than an isolated assertion. | Contracts describe externally observable projection shape through the canonical Oracle. |
+| Architectural intent | Why the invariant exists and which boundary it protects. | Explains the architecture consequence of ignoring the failure. | Prevents backend response shape from drifting independently of Oracle evidence. |
+| Observed drift | The concrete mismatch, missing metadata, forbidden dependency, duplicate computation, or unscoped failure. | Gives the owner a falsifiable defect to inspect. | Fixture path `/status` changed type from string to object. |
+| Owner | The responsible regression surface or architecture owner. | Routes triage to the surface that can repair or quarantine the drift. | Oracle, shell architecture tests, frontend architecture tests, or governance architecture tests. |
+| Severity | Architectural impact, independent from where the verifier runs. | Prevents enforcement strength from weakening the stated risk. | Release blocker, CI failure, local build failure, compatibility warning, or advisory warning. |
+| Detection confidence | Confidence in the detection mechanism, not confidence in the architectural decision. | Separates source-scan or inventory uncertainty from reflection, fixture, and executable comparison results. | High for fixture comparison, medium for source scan, low for documentation inventory. |
+| Evidence expectation | The evidence package, fixture diff, command output, owner map, or runtime observation needed to support the conclusion. | Makes the failure usable for certification, acceptance, rollback, and future decisions. | Contract evidence with fixture hash, serialized diff, consumer category, and compatibility classification. |
+| Remediation path | The preferred repair, approved compatibility path, or quarantine requirement. | Keeps failure handling aligned with the architecture program instead of ad hoc fixes. | Refresh through the Oracle workflow, regenerate artifacts, or quarantine with owner and retirement criteria. |
+| Escalation guidance | The governance, milestone-blocker, release-blocker, or rollback rule that applies when local remediation is not possible. | Prevents unresolved drift from continuing silently. | Escalate to governance review required when shell code must remain domain-shaped. |
+
+The initial backend framework tests enforce this specification for the durable UX table and for the registered mechanism catalog. Later executable regressions may format these fields differently, but they must preserve the same information content.
 
 ### Architectural Invariant Catalog
 

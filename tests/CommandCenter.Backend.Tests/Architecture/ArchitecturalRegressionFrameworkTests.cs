@@ -64,6 +64,14 @@ public sealed class ArchitecturalRegressionFrameworkTests
         "Escalation rule"
     ];
 
+    private static readonly string[] RequiredRegressionUxColumns =
+    [
+        "Field",
+        "Required content",
+        "Why it matters",
+        "Example signal"
+    ];
+
     private static readonly string[] RequiredInvariantCatalogEntries =
     [
         "Backend domain services compute semantic meaning.",
@@ -127,6 +135,19 @@ public sealed class ArchitecturalRegressionFrameworkTests
         "Composition growth",
         "Dependency cycle",
         "Semantic leakage"
+    ];
+
+    private static readonly string[] RequiredRegressionUxFields =
+    [
+        "Invariant",
+        "Architectural intent",
+        "Observed drift",
+        "Owner",
+        "Severity",
+        "Detection confidence",
+        "Evidence expectation",
+        "Remediation path",
+        "Escalation guidance"
     ];
 
     private static readonly ArchitecturalRegressionMechanism[] RequiredMechanisms =
@@ -193,6 +214,32 @@ public sealed class ArchitecturalRegressionFrameworkTests
             Assert.False(string.IsNullOrWhiteSpace(mechanism.Severity));
             Assert.False(string.IsNullOrWhiteSpace(mechanism.Intent));
             Assert.False(string.IsNullOrWhiteSpace(mechanism.Remediation));
+        }
+    }
+
+    [Fact]
+    public void RegressionUxSpecificationDefinesStructuredFailureMessages()
+    {
+        IReadOnlyList<IReadOnlyDictionary<string, string>> uxSpecification = ReadMechanismsDocumentTable(
+            "### Regression UX Specification",
+            "Field",
+            RequiredRegressionUxColumns);
+
+        foreach (string field in RequiredRegressionUxFields)
+        {
+            Assert.Contains(
+                uxSpecification,
+                row => row["Field"] == field);
+        }
+
+        foreach (IReadOnlyDictionary<string, string> row in uxSpecification)
+        {
+            foreach (string column in RequiredRegressionUxColumns)
+            {
+                Assert.True(
+                    row.TryGetValue(column, out string? value) && HasAcceptedCatalogValue(value),
+                    $"Regression UX field '{row["Field"]}' must populate '{column}'. Architectural regression failures need invariant, intent, observed drift, owner, severity, detection confidence, evidence expectation, remediation, and escalation guidance so failures can support evidence, certification, rollback, and governance decisions.");
+            }
         }
     }
 
