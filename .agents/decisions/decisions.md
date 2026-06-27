@@ -1,57 +1,48 @@
-# Decisions: 2026-06-27 M1.2 Generated Raw Alias Boundary And IR Schema Direction
+# Decisions: 2026-06-27 M1.2 Generated TypeScript Consumer Policy Governance Repair
 
-These decisions capture only newly authorized direction from the user response after M1.2 generated raw TypeScript alias Slice 0069.
+These decisions capture only newly authorized direction from the user response after M1.2 generated TypeScript consumer policy Slice 0070.
 
 ## Authorized Decisions
 
-1. Treat Slice 0069 as valuable negative architectural evidence.
-   - The raw generated TypeScript aliases are accepted as deterministic generated shape evidence.
-   - The rejected direct production wrapper migration is accepted as evidence that the current IR is insufficient for production consumer-safe semantic types.
-   - The most important result is the preserved boundary: the generator stopped before overclaiming semantic knowledge.
+1. Treat the Slice 0070 TypeScript consumer policy as the correct M1.2 architectural boundary.
+   - Single fixture observation is not a production consumer contract.
+   - Raw generated aliases remain evidence-only.
+   - Production generated aliases require explicit schema facts.
+   - `src/CommandCenter.UI/src/types/repositories.ts` remains the repository-dashboard compatibility wrapper until those facts exist.
 
-2. Preserve the current dependency chain.
-   - The accepted chain is Canonical Contract Model -> Oracle Observation -> IR -> Generated Raw Shape -> Compatibility Layer -> Production Consumer.
-   - Raw generated aliases may represent observed structure.
-   - Production consumers must not depend on raw observed aliases until semantic contract information is explicit and governed.
+2. Treat the governance verifier failure as a real blocker.
+   - The failing `ReferentialGovernanceClaimsRemainReachable` test must not be ignored.
+   - The active M1.2 decision checkpoint must satisfy the established M0.4 reachability rule when durable contract policy changes.
+   - The required governance evidence link is `.agents/milestones/m0.4-active-governance-artifact-validation-slice-0053.md`.
 
-3. Keep semantic information out of observational inference.
-   - Enum domains must not be inferred from fixture-observed strings.
-   - Contract nullability must not be inferred from one observed fixture value.
-   - Future collection semantics, identifier semantics, and arbitrary text semantics must be explicit model concepts before generated consumer types can claim them.
+3. Authorize a narrow decision-governance repair before schema metadata work.
+   - Rotate the prior active decision checkpoint to the next numbered decision file.
+   - Create this active decision checkpoint for the M1.2 generated TypeScript consumer policy and governance repair.
+   - Re-run `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~ArchitecturalDecisionGovernanceTests`.
+   - Proceed to the repository-dashboard schema metadata pilot only after governance verification passes.
 
-4. Keep `src/CommandCenter.UI/src/types/repositories.ts` as the compatibility wrapper.
-   - The manual dashboard type remains the production compatibility layer.
-   - The compatibility layer is the visible place for semantic strengthening until the IR can express the semantics directly.
-   - The wrapper must not become hidden generator logic or dispersed consumer-side adaptation.
-
-5. Authorize the next slice to define governed IR schema/nullability and semantic alias policy.
-   - The next slice should model the distinction between structural properties and semantic properties.
-   - Candidate concepts include enum domain, nullable by contract, omitted by contract, array ordering semantics, opaque identity, and arbitrary text.
-   - Do not attempt another production consumer migration before this policy exists.
-
-6. Publish the checkpoint.
-   - Rotate `.agents/decisions/decisions.md` to the next numbered decisions file.
-   - Create a new active decisions checkpoint containing only this newly authorized M1.2 direction.
-   - Stage the completed M1.2 Slice 0069 work plus this decision rotation, commit, push to `origin/dev`, and stop executing.
+4. Publish the checkpoint.
+   - Stage only the completed M1.2 Slice 0070 policy work, the handoff rotation/update, and this decision rotation.
+   - Do not stage unrelated `src/CommandCenter.DecisionSessions/CommandCenter.DecisionSessions.csproj` or `refactor-plan.md` changes.
+   - Commit and push to `origin/dev`.
+   - Stop executing after the push.
 
 ## Evidence Targets
 
-- `.agents/milestones/m1.2-generated-raw-typescript-alias-slice-0069.md`
+- `.agents/milestones/m1.2-generated-typescript-consumer-policy-slice-0070.md`
 - `.agents/handoffs/handoff.md`
-- `.agents/handoffs/handoff.0065.md`
-- `.agents/decisions/decisions.0069.md`
+- `.agents/handoffs/handoff.0066.md`
+- `.agents/decisions/decisions.0070.md`
+- `.agents/decisions/decisions.md`
+- `.agents/milestones/m0.4-active-governance-artifact-validation-slice-0053.md`
 - `docs/contracts.md`
 - `docs/architectural-capabilities.md`
 - `docs/architectural-mechanisms.md`
-- `tests/CommandCenter.Backend.Tests/ContractGeneratedArtifactPipelineTests.cs`
-- `tests/CommandCenter.Backend.Tests/ContractConsumerVerificationTests.cs`
-- `tests/CommandCenter.Backend.Tests/ContractVerification/ContractGenerationSupport.cs`
-- `tests/CommandCenter.Backend.Tests/ContractVerification/ContractConsumerVerificationSupport.cs`
-- `tests/CommandCenter.Backend.Tests/ContractFixtures/repository-dashboard.generated-artifact-freshness.json`
-- `src/CommandCenter.UI/src/contracts/generated/repository-dashboard.generated.ts`
+- `.agents/milestones/m1.2-generated-contracts.md`
 
 ## Next Authorized Sequence
 
-1. Stage only the completed M1.2 Slice 0069 work and this decision rotation.
-2. Commit and push to `origin/dev`.
-3. Stop executing after the push.
+1. Re-run the focused governance verifier.
+2. Stage only the completed M1.2 Slice 0070 policy work, handoff rotation/update, and decision rotation.
+3. Commit and push to `origin/dev`.
+4. Stop executing after the push.

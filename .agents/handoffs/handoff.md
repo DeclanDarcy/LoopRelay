@@ -1,31 +1,31 @@
-# Handoff: After M1.2 Generated Raw TypeScript Alias Slice 0069
+# Handoff: After M1.2 Generated TypeScript Consumer Policy Slice 0070
 
-Current milestone state: M1.2 now has deterministic repository-dashboard generation for metadata plus raw TypeScript aliases. No production UI consumer migration has occurred.
+Current milestone state: M1.2 now has repository-dashboard generation pipeline evidence, raw generated TypeScript alias evidence, and a governed TypeScript consumer migration policy. No production UI consumer migration has occurred.
 
 New state from this slice:
 
-- Extended `ContractTypeScriptMetadataGenerator` to emit `RepositoryDashboardGeneratedContract`, `RepositoryDashboardGeneratedProjection`, and generated nested raw TypeScript aliases.
-- Updated `src/CommandCenter.UI/src/contracts/generated/repository-dashboard.generated.ts`.
-- Renamed the generated freshness artifact identity to `generated-typescript-repository-dashboard-contract`.
-- Extended TypeScript consumer verification to parse generated contract files and resolve `null`-only generated fields.
-- Added `RepositoryDashboardGeneratedTypeScriptAliasMatchesGoldenFixture`.
-- Added `.agents/milestones/m1.2-generated-raw-typescript-alias-slice-0069.md`.
-- Updated `.agents/milestones/m1.2-generated-contracts.md`, `docs/contracts.md`, `docs/architectural-capabilities.md`, and `docs/architectural-mechanisms.md`.
-- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0065.md`.
+- Added `Generated TypeScript Consumer Policy` to `docs/contracts.md`.
+- Classified generated TypeScript outputs as raw observed aliases, production consumer types, and compatibility wrappers.
+- Defined the policy gate for nullable-by-contract, omitted-by-contract, semantic enum domains, opaque identity, arbitrary text, array ordering, empty collections, and date/time or duration strings.
+- Recorded the repository-dashboard migration path as `Raw generated observed alias -> governed schema/nullability/semantic metadata -> generated production consumer type -> compatibility wrapper alias or adapter -> existing production consumers -> compatibility wrapper retirement evidence`.
+- Updated `.agents/milestones/m1.2-generated-contracts.md`, `docs/architectural-capabilities.md`, and `docs/architectural-mechanisms.md`.
+- Added `.agents/milestones/m1.2-generated-typescript-consumer-policy-slice-0070.md`.
+- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0066.md`.
 
 Verification:
 
-- `$env:COMMANDCENTER_UPDATE_GENERATED_CONTRACTS='1'; dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~ContractGeneratedArtifactPipelineTests; Remove-Item Env:COMMANDCENTER_UPDATE_GENERATED_CONTRACTS` passed: 4 passed, 0 failed, 0 skipped.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "FullyQualifiedName~ContractGeneratedArtifactPipelineTests|FullyQualifiedName~ContractGeneratedArtifactFreshnessTests|FullyQualifiedName~ContractConsumerVerificationTests"` passed: 22 passed, 0 failed, 0 skipped.
-- `Set-Location src/CommandCenter.UI; npm run build` passed. Vite emitted the existing large chunk warning.
+- Documentation/governance slice only. No generator, generated artifact, runtime, or production TypeScript source changed.
+- Reviewed current generated aliases and manual repository dashboard types for the Slice 0069 blockers: observed null-only fields, semantic string widening, manual semantic unions, and nullable manual fields not derivable from a single fixture variant.
+- First governance verification run built and ran 10 tests: 9 passed, 1 failed. The failing guard was `ReferentialGovernanceClaimsRemainReachable`, which expected active `.agents/decisions/decisions.md` to cite M0.4 governance evidence.
+- Governance repair rotated `.agents/decisions/decisions.md` to `.agents/decisions/decisions.0070.md`, created a new active decision checkpoint with `.agents/milestones/m0.4-active-governance-artifact-validation-slice-0053.md`, and reran `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~ArchitecturalDecisionGovernanceTests`: 10 passed, 0 failed, 0 skipped.
 
 High-leverage decisions currently relevant:
 
-- Generated raw aliases are fixture-observed contract shapes, not schema-complete production consumer types.
-- A direct production wrapper migration was rejected because the current IR lacks governed nullability unions and semantic enum alias mapping.
-- Manual dashboard TypeScript types remain verified compatibility consumers until M1.2 defines schema/nullability and compatibility-wrapper retirement rules.
-- Generator transparency remains important: generated aliases must stay pure projections of the IR unless M1.1 is reopened through governance.
+- Raw generated aliases remain evidence-only and must not become production imports.
+- Production generated consumer types require explicit schema facts; one fixture cannot prove enum domains, nullability unions, optionality, identity meaning, or ordering semantics.
+- `src/CommandCenter.UI/src/types/repositories.ts` remains the repository-dashboard compatibility wrapper until the IR/schema model can express the needed facts directly.
+- The generator must stay transparent: it may project governed facts, but it may not invent compatibility policy or semantic strengthening.
 
 Recommended next slice:
 
-- Define the M1.2 schema/nullability and semantic alias policy for generated TypeScript consumers, then update the repository-dashboard IR/generator so `RepositoryDashboardProjection` can migrate through `Generated Type -> Compatibility Alias -> Existing Consumers` without widening semantic enums to plain `string` or narrowing fixture-observed nullable fields incorrectly.
+- Implement the first governed schema metadata pilot for `repository-dashboard`, starting with explicit nullable/omitted and semantic enum/alias metadata for the fields that currently block safe production TypeScript migration.

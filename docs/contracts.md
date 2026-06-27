@@ -834,6 +834,43 @@ Current M1.2 pilot boundaries:
 
 This pilot does not produce production-ready TypeScript consumer aliases, Rust command metadata, mock data, command-body schemas, or contract versioning. The raw generated aliases are not schema-complete: enum-like semantic fields are represented as strings, and nullable fields reflect only the observed fixture value. If later generation requires concepts absent from M1.1, M1.1 must be reopened through decision governance rather than extending the IR ad hoc.
 
+## Generated TypeScript Consumer Policy
+
+Generated TypeScript output has two distinct categories until the schema model is complete:
+
+| Category | Source | Allowed use | Forbidden use |
+| --- | --- | --- | --- |
+| Raw observed alias | Oracle fixture through the current generation IR. | Deterministic evidence, freshness verification, consumer-shape comparison, and generator transparency checks. | Production UI imports, semantic enum claims, nullable union claims, compatibility retirement, or runtime validation claims. |
+| Production consumer type | Governed contract schema with explicit structural and semantic property metadata. | Replacement target for compatibility wrappers after consumer verification and migration evidence. | Inferring missing schema facts from one fixture, generator-specific exceptions, or hidden downstream strengthening. |
+| Compatibility wrapper | Manual or transforming TypeScript artifact tied to an upstream contract identity. | Transitional production imports, semantic strengthening that is visible and verified, and consumer migration staging. | Becoming permanent contract authority or hiding schema policy inside ad hoc adapters. |
+
+Production consumer generation requires explicit policy for each field:
+
+| Property concept | Rule |
+| --- | --- |
+| Structural JSON kind | May be observed from Oracle fixtures but must remain tied to the accepted contract identity and serialization authority. |
+| Nullable by contract | Must be explicit before a generated production type may emit `T | null`; a single non-null or null fixture value is not sufficient evidence. |
+| Omitted by contract | Must be explicit before a generated production type may mark a property optional; absence in one fixture is not enough to distinguish omission from an unexercised variant. |
+| Semantic enum domain | Must come from backend-owned model metadata, schema policy, or governed contract evidence; it must not be inferred from observed strings. |
+| Opaque identity | Must be modeled as an identity-like string only when the contract owner identifies the field as an opaque id or reference. |
+| Arbitrary text | Remains plain `string` unless a backend authority exposes a stronger semantic domain. |
+| Array ordering | Must identify whether order is semantic, stable-by-projection, or observational only before consumers may rely on it beyond rendering the received order. |
+| Empty collection | Empty arrays are preserved as arrays; they do not prove item shape unless schema or another governed fixture variant supplies it. |
+| Date/time and duration strings | Remain serialized strings until the contract schema identifies the format and parsing responsibility. |
+
+The approved migration path for the repository dashboard family is:
+
+```text
+Raw generated observed alias
+  -> governed schema/nullability/semantic metadata
+  -> generated production consumer type
+  -> compatibility wrapper alias or adapter
+  -> existing production consumers
+  -> compatibility wrapper retirement evidence
+```
+
+This policy keeps the generator transparent: it may project accepted schema facts, but it may not invent semantic domains, nullable unions, optional properties, ordering guarantees, identity meaning, or compatibility rules. If a production consumer needs a stronger type than the current IR can justify, the missing fact must be added to the canonical contract model or recorded as an explicit compatibility-wrapper responsibility before migration.
+
 ## Oracle Change Workflow
 
 The Oracle change workflow governs how a detected contract drift becomes an accepted contract baseline. It is procedural during Milestone 0.2 so the review path is explicit before generation, regeneration, and lifecycle automation are introduced in later milestones.
