@@ -72,6 +72,8 @@ public sealed class ProcessRunner : IProcessRunner
         }
 
         AgentProcess process = StartAgentProcess(startInfo, fileName);
+        var supervisor = new AgentProcessSupervisor(process);
+        process.StartCompletionObservation();
 
         if (onStandardOutput is not null)
         {
@@ -87,7 +89,7 @@ public sealed class ProcessRunner : IProcessRunner
         {
             _ = Task.Run(async () =>
             {
-                await process.ObserveExitAsync(onExit);
+                await supervisor.ObserveCompletionAsync(onExit);
             });
         }
 

@@ -8,10 +8,11 @@ internal sealed class AgentProcess(Process process) : IAgentProcess
 {
     private readonly TaskCompletionSource completion =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-    public int ProcessId => process.Id;
+    private bool disposed;
 
     public AgentProcessState State { get; private set; } = AgentProcessState.Running;
+
+    public int ProcessId => process.Id;
 
     public int? ExitCode { get; private set; }
 
@@ -30,30 +31,9 @@ internal sealed class AgentProcess(Process process) : IAgentProcess
 
     internal StreamReader StandardError => process.StandardError;
 
-    public async Task ObserveExitAsync(Func<int?, Task>? onExit)
+    public void StartCompletionObservation()
     {
-        try
-        {
-            await process.WaitForExitAsync();
-            CaptureExitStateIfAvailable();
-
-            if (onExit is not null)
-            {
-                await onExit(ExitCode);
-            }
-
-            completion.TrySetResult();
-        }
-        catch (Exception exception)
-        {
-            State = AgentProcessState.Failed;
-            completion.TrySetException(exception);
-            throw;
-        }
-        finally
-        {
-            process.Dispose();
-        }
+        _ = Task.Run(ObserveExitAsync);
     }
 
     public async Task WriteStandardInputAsync(string standardInput, CancellationToken cancellationToken = default)
@@ -65,6 +45,13 @@ internal sealed class AgentProcess(Process process) : IAgentProcess
 
     public async ValueTask DisposeAsync()
     {
+        if (disposed)
+        {
+            return;
+        }
+
+        disposed = true;
+
         if (!process.HasExited)
         {
             process.Kill(entireProcessTree: true);
@@ -73,6 +60,29 @@ internal sealed class AgentProcess(Process process) : IAgentProcess
 
         process.Dispose();
         await ValueTask.CompletedTask;
+    }
+
+    private async Task ObserveExitAsync()
+    {
+        try
+        {
+            await process.WaitForExitAsync();
+            CaptureExitStateIfAvailable();
+            completion.TrySetResult();
+        }
+        catch (Exception exception)
+        {
+            State = AgentProcessState.Failed;
+            completion.TrySetException(exception);
+        }
+        finally
+        {
+            if (!disposed)
+            {
+                disposed = true;
+                process.Dispose();
+            }
+        }
     }
 
     private void CaptureExitStateIfAvailable()

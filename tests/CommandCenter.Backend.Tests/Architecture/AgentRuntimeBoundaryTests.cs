@@ -46,7 +46,9 @@ public sealed class AgentRuntimeBoundaryTests
             typeof(EffortProfile),
             typeof(AgentProcessState),
             typeof(AgentTurnState),
-            typeof(IAgentProcess)
+            typeof(IAgentProcess),
+            typeof(IAgentProcessSupervisor),
+            typeof(AgentProcessSupervisionResult)
         ];
 
         foreach (Type primitiveType in primitiveTypes)
