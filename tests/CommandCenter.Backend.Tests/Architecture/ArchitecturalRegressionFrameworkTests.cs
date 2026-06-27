@@ -29,6 +29,29 @@ public sealed class ArchitecturalRegressionFrameworkTests
         "Remediation"
     ];
 
+    private static readonly string[] RequiredRegressionOwnershipColumns =
+    [
+        "Surface",
+        "Primary owner",
+        "Regression scope",
+        "Default severity",
+        "Evidence",
+        "Remediation",
+        "Escalation rule"
+    ];
+
+    private static readonly string[] RequiredRegressionSeverityColumns =
+    [
+        "Severity",
+        "Architectural meaning",
+        "Local behavior",
+        "CI behavior",
+        "Release behavior",
+        "Evidence",
+        "Remediation",
+        "Escalation rule"
+    ];
+
     private static readonly string[] RequiredInvariantCatalogEntries =
     [
         "Backend domain services compute semantic meaning.",
@@ -58,6 +81,27 @@ public sealed class ArchitecturalRegressionFrameworkTests
         "Passive transport",
         "Runtime isolation",
         "Documentation and metadata validation"
+    ];
+
+    private static readonly string[] RequiredRegressionOwnershipSurfaces =
+    [
+        "Backend",
+        "Frontend",
+        "Shell",
+        "Cross-layer",
+        "Oracle",
+        "Generated artifacts",
+        "Build",
+        "CI"
+    ];
+
+    private static readonly string[] RequiredRegressionSeverities =
+    [
+        "Advisory warning",
+        "Compatibility warning",
+        "Local build failure",
+        "CI failure",
+        "Release blocker"
     ];
 
     private static readonly ArchitecturalRegressionMechanism[] RequiredMechanisms =
@@ -196,6 +240,58 @@ public sealed class ArchitecturalRegressionFrameworkTests
                 Assert.True(
                     row.TryGetValue(column, out string? value) && HasAcceptedCatalogValue(value),
                     $"Regression taxonomy row '{row["Category"]}' must populate '{column}'. M0.3 needs category, preferred mechanism, minimum mechanism, execution phase, owner, severity, evidence, drift, and remediation metadata so future invariants choose the right protection instead of adding ad hoc checks.");
+            }
+        }
+    }
+
+    [Fact]
+    public void RegressionOwnershipMatrixDefinesResponsibleSurfaces()
+    {
+        IReadOnlyList<IReadOnlyDictionary<string, string>> ownership = ReadMechanismsDocumentTable(
+            "### Regression Ownership Matrix",
+            "Surface",
+            RequiredRegressionOwnershipColumns);
+
+        foreach (string surface in RequiredRegressionOwnershipSurfaces)
+        {
+            Assert.Contains(
+                ownership,
+                row => row["Surface"] == surface);
+        }
+
+        foreach (IReadOnlyDictionary<string, string> row in ownership)
+        {
+            foreach (string column in RequiredRegressionOwnershipColumns)
+            {
+                Assert.True(
+                    row.TryGetValue(column, out string? value) && HasAcceptedCatalogValue(value),
+                    $"Regression ownership row '{row["Surface"]}' must populate '{column}'. M0.3 needs owner, scope, severity, evidence, remediation, and escalation metadata so failing regressions route to the right architectural response.");
+            }
+        }
+    }
+
+    [Fact]
+    public void RegressionSeverityModelSeparatesImpactFromExecutionPolicy()
+    {
+        IReadOnlyList<IReadOnlyDictionary<string, string>> severityModel = ReadMechanismsDocumentTable(
+            "### Regression Severity Model",
+            "Severity",
+            RequiredRegressionSeverityColumns);
+
+        foreach (string severity in RequiredRegressionSeverities)
+        {
+            Assert.Contains(
+                severityModel,
+                row => row["Severity"] == severity);
+        }
+
+        foreach (IReadOnlyDictionary<string, string> row in severityModel)
+        {
+            foreach (string column in RequiredRegressionSeverityColumns)
+            {
+                Assert.True(
+                    row.TryGetValue(column, out string? value) && HasAcceptedCatalogValue(value),
+                    $"Regression severity row '{row["Severity"]}' must populate '{column}'. M0.3 severity describes architectural impact while local, CI, and release behavior describe execution policy; keep evidence, remediation, and escalation explicit.");
             }
         }
     }
