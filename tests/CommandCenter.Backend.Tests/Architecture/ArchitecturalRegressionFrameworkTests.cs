@@ -92,6 +92,16 @@ public sealed class ArchitecturalRegressionFrameworkTests
         "Exit condition"
     ];
 
+    private static readonly string[] RequiredRegressionArchitectureSpecificationColumns =
+    [
+        "Specification area",
+        "Combines",
+        "Required metadata",
+        "Minimum mechanism",
+        "Evidence output",
+        "Certification use"
+    ];
+
     private static readonly string[] RequiredInvariantCatalogEntries =
     [
         "Backend domain services compute semantic meaning.",
@@ -191,6 +201,17 @@ public sealed class ArchitecturalRegressionFrameworkTests
         "Weakened",
         "Replaced",
         "Retired"
+    ];
+
+    private static readonly string[] RequiredRegressionArchitectureSpecificationAreas =
+    [
+        "Invariant definition",
+        "Mechanism selection",
+        "Ownership and severity",
+        "Drift classification",
+        "Failure UX",
+        "Confidence and lifecycle",
+        "Certification mapping"
     ];
 
     private static readonly ArchitecturalRegressionMechanism[] RequiredMechanisms =
@@ -334,6 +355,32 @@ public sealed class ArchitecturalRegressionFrameworkTests
                 Assert.True(
                     row.TryGetValue(column, out string? value) && HasAcceptedCatalogValue(value),
                     $"Regression lifecycle row '{row["Lifecycle state"]}' must populate '{column}'. M0.3 lifecycle governance needs entry criteria, evidence, allowed transitions, decision requirements, and exit conditions so regressions cannot silently weaken, retire, quarantine, or replace architectural protection.");
+            }
+        }
+    }
+
+    [Fact]
+    public void RegressionArchitectureSpecificationDefinesFrameworkComposition()
+    {
+        IReadOnlyList<IReadOnlyDictionary<string, string>> specification = ReadMechanismsDocumentTable(
+            "### Regression Architecture Specification",
+            "Specification area",
+            RequiredRegressionArchitectureSpecificationColumns);
+
+        foreach (string area in RequiredRegressionArchitectureSpecificationAreas)
+        {
+            Assert.Contains(
+                specification,
+                row => row["Specification area"] == area);
+        }
+
+        foreach (IReadOnlyDictionary<string, string> row in specification)
+        {
+            foreach (string column in RequiredRegressionArchitectureSpecificationColumns)
+            {
+                Assert.True(
+                    row.TryGetValue(column, out string? value) && HasAcceptedCatalogValue(value),
+                    $"Regression architecture specification row '{row["Specification area"]}' must populate '{column}'. M0.3 needs the invariant catalog, taxonomy, ownership, severity, drift, UX, confidence, and lifecycle metadata to compose into one usable framework before future milestones add or certify regressions.");
             }
         }
     }

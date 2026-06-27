@@ -1,31 +1,30 @@
-# Handoff: 2026-06-26 After M0.3 Regression Lifecycle Slice 0043
+# Handoff: 2026-06-26 After M0.3 Regression Architecture Specification Slice 0044
 
-Current milestone state: Milestone 0.3 is in progress. Slice 0043 completed the regression lifecycle model and added an executable metadata guard.
+Current milestone state: Milestone 0.3 is in progress. Slice 0044 completed the regression architecture specification and added an executable metadata guard.
 
 New state from this slice:
 
-- Added `### Regression Lifecycle Model` to `docs/architectural-mechanisms.md`.
-- Defined normal lifecycle progression: Inventory -> Advisory -> Guarded -> Corroborated -> Certified -> Accepted.
-- Defined governed exception or terminal states: Quarantined, Weakened, Replaced, and Retired.
-- Lifecycle state is separate from severity and architectural confidence.
-- Guarded or stronger regressions cannot weaken, retire, quarantine, or be replaced without decision and evidence.
-- Added `RegressionLifecycleModelDefinesTransitionGovernance` to `tests/CommandCenter.Backend.Tests/Architecture/ArchitecturalRegressionFrameworkTests.cs`.
-- Updated `.agents/milestones/m0.3-regression-framework.md` to mark the regression lifecycle model complete.
-- Added `.agents/milestones/m0.3-regression-lifecycle-model-slice-0043.md`.
-- Updated `docs/architectural-capabilities.md` to record the lifecycle model guard as active M0.3 protection.
-- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0043.md`.
+- Added `### Regression Architecture Specification` to `docs/architectural-mechanisms.md`.
+- Defined the framework-complete metadata contract for architectural regressions: invariant, mechanism class, owner, severity, drift class, failure UX, confidence claim, lifecycle state, evidence output, and certification use.
+- Added specification areas for invariant definition, mechanism selection, ownership and severity, drift classification, failure UX, confidence and lifecycle, and certification mapping.
+- Clarified that framework metadata is separate from mechanism implementations such as fixture comparisons, consumer verification, freshness checks, source scans, reflection tests, shell tests, UI tests, runtime characterization, and E2E paths.
+- Added `RegressionArchitectureSpecificationDefinesFrameworkComposition` to `tests/CommandCenter.Backend.Tests/Architecture/ArchitecturalRegressionFrameworkTests.cs`.
+- Updated `.agents/milestones/m0.3-regression-framework.md` to mark the regression architecture specification complete and close satisfied exit criteria.
+- Added `.agents/milestones/m0.3-regression-architecture-specification-slice-0044.md`.
+- Updated `docs/architectural-capabilities.md` to record the specification guard as active M0.3 protection.
+- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0044.md`.
 
 Verification:
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter ArchitecturalRegressionFrameworkTests` passed: 11 passed, 0 failed, 0 skipped.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter ArchitecturalRegressionFrameworkTests` passed: 12 passed, 0 failed, 0 skipped.
 
 High-leverage decisions currently relevant:
 
-- Lifecycle is governance maturity, not severity and not confidence.
-- Inventory and advisory states can guide work, but they cannot certify a milestone by themselves.
-- Guarded or stronger protection now requires explicit evidence and decision governance before weakening, replacement, retirement, or quarantine.
-- Accepted baseline protection must name revalidation triggers so old confidence is not reused after protected surfaces change.
+- A regression is framework-complete only when metadata and implementation are both explicit; implementation alone is not enough for certification.
+- Metadata defines the architectural claim; verifier implementations prove only their scoped claim.
+- No regression may certify beyond its evidence, coverage breadth, confidence level, and lifecycle state.
+- Guarded-or-stronger changes to scope, mechanism, owner, severity, lifecycle, confidence, evidence obligation, or certification use require lifecycle governance.
 
 Recommended next slice:
 
-- Continue M0.3 with the regression architecture specification. Consolidate how invariant catalog, taxonomy, ownership, severity, drift, UX, confidence, and lifecycle metadata combine into a usable framework for adding future regressions, then add a metadata guard for the specification.
+- Continue M0.3 with the frontend regression area and/or shell regression classification. The highest-leverage next step is to add the missing UI characterization/regression area skeleton and a minimal guard that makes the frontend architecture-test location discoverable without yet enforcing broad UI architecture rules.

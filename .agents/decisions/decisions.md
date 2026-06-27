@@ -1,31 +1,40 @@
-# Decisions: 2026-06-26 M0.3 Regression Architecture Specification Direction
+# Decisions: 2026-06-26 M0.3 Frontend Regression Skeleton Direction
 
-These decisions capture only newly authorized direction from the user response following Slice 0043.
+These decisions capture only newly authorized direction from the user response following Slice 0044.
 
 ## Authorized Decisions
 
-1. Accept the M0.3 regression lifecycle model slice as correctly scoped.
-   - Lifecycle expresses governance maturity.
-   - Lifecycle is independent of severity and architectural confidence.
-   - A regression may be critical in severity, low in confidence, and still inventory-stage in lifecycle.
+1. Accept the M0.3 regression architecture specification slice as a good synthesis slice.
+   - The regression framework model is now largely defined.
+   - Subsequent M0.3 work should increasingly focus on expanding enforcement rather than inventing new governance concepts.
 
-2. Keep lifecycle transitions governed.
-   - Guarded-or-stronger regressions require explicit decision and evidence before weakening, replacement, retirement, or quarantine.
-   - Lifecycle transitions are architectural governance events, not simple implementation edits.
+2. Preserve the separation between regression framework metadata and verifier implementations.
+   - Metadata includes invariants, taxonomy, ownership, severity, drift, confidence, lifecycle, UX, and governance.
+   - Implementations include reflection, fixture comparison, consumer verification, freshness, request-boundary checks, and future mechanisms.
+   - The metadata layer is the stable governance layer that future regression implementations plug into.
 
-3. Keep accepted baseline protection conditional on explicit revalidation triggers.
-   - Accepted baseline protection must not become permanent by default.
-   - Revalidation triggers include architecture changes, mechanism replacement, contract evolution, and framework evolution.
+3. Keep certification bounded by evidence.
+   - A regression cannot certify beyond its evidence, coverage breadth, confidence level, and lifecycle state.
+   - Strong severity, many tests, or broad-looking coverage do not imply architectural certainty by themselves.
 
-4. Proceed next with the M0.3 regression architecture specification slice.
-   - The specification should synthesize the invariant catalog, taxonomy, ownership, severity, drift model, failure UX, confidence model, and lifecycle model.
-   - The specification should become the architectural reference for expanding executable regression coverage.
+4. Keep regression evolution governed.
+   - Changes to scope, mechanism, owner, severity, lifecycle, confidence, evidence obligations, or certification use require lifecycle governance.
 
-5. Distinguish framework metadata from framework implementations in the regression architecture specification.
-   - Framework metadata includes taxonomy, ownership, lifecycle, confidence, severity, and escalation.
-   - Framework implementations include fixture comparisons, consumer verification, freshness verification, source scans, reflection, and runtime integration.
+5. Proceed next with a minimal frontend regression skeleton.
+   - The first frontend slice should establish location, discovery, naming, organization, and registration.
+   - It should intentionally avoid introducing many frontend architecture rules.
+   - It should mirror the backend framework's incremental start.
+
+6. Make the frontend skeleton conceptually parallel to the backend architecture-test structure.
+   - Backend architecture tests and frontend architecture tests should have uniform governance, even when their implementations differ.
+   - Later rules should be reasoned about consistently across implementation languages.
+
+7. Classify natural ownership of future regression categories.
+   - Backend: contract authority, projection purity, serialization, and Oracle.
+   - Frontend: presentation purity, controller and workspace boundaries, consumer verification, and resource ownership.
+   - Cross-layer: transport, generated artifacts, and contract consistency.
 
 ## Next Authorized Sequence
 
-1. Stage, commit, and push Slice 0043 plus this decision checkpoint.
+1. Stage, commit, and push Slice 0044 plus this decision checkpoint.
 2. Stop executing after the push.

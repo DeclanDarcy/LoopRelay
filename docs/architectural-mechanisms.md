@@ -143,6 +143,8 @@ Primary evidence:
 - `.agents/milestones/m0.3-architectural-drift-model-slice-0040.md`
 - `.agents/milestones/m0.3-regression-ux-slice-0041.md`
 - `.agents/milestones/m0.3-architectural-confidence-model-slice-0042.md`
+- `.agents/milestones/m0.3-regression-lifecycle-model-slice-0043.md`
+- `.agents/milestones/m0.3-regression-architecture-specification-slice-0044.md`
 
 Framework intent:
 
@@ -285,6 +287,30 @@ Lifecycle transition rules:
 - Accepted regressions must name revalidation triggers so baseline confidence is not reused after protected surfaces change.
 - A replacement must prove equal or stronger protection, or explicitly record the narrower accepted claim.
 - A quarantine must include an owner, risk, affected invariant, affected consumers, retirement condition, and revalidation command.
+
+### Regression Architecture Specification
+
+The regression architecture specification defines how the M0.3 framework parts compose into a repeatable process for adding, strengthening, certifying, accepting, replacing, or retiring architectural regressions. It is the bridge between durable architectural invariants and concrete verifier implementations.
+
+A regression is framework-complete only when it has an invariant, mechanism class, owner, severity, drift class, failure UX, confidence claim, lifecycle state, evidence output, and certification use. Mechanism implementations may differ by surface, but the metadata contract is shared across backend tests, frontend tests, shell tests, source scans, fixture comparisons, generated-artifact checks, and runtime or E2E characterization.
+
+| Specification area | Combines | Required metadata | Minimum mechanism | Evidence output | Certification use |
+| --- | --- | --- | --- | --- | --- |
+| Invariant definition | Core invariant, affected layer, authority or state owner, consumer set, and architectural capability. | Invariant text, capability, owner, affected files or routes, consumers, known gaps, rollback path, and durable documentation impact. | Inventory entry in the architectural invariant catalog with owner, severity, drift model, coverage, and enforcement strength. | Inventory evidence naming observed surfaces, uncertainty, owner, affected consumers, and next strengthening path. | Establishes scope for future regression work; cannot certify a milestone until paired with guarded or governed protection. |
+| Mechanism selection | Regression taxonomy, surface ownership, verifier execution phase, and implementation type. | Category, preferred mechanism, minimum acceptable mechanism, command or source, execution phase, owner, known limitations, and replacement path. | The weakest acceptable mechanism named by the taxonomy, with explicit strengthening path when the preferred mechanism is deferred. | Mechanism evidence linking verifier type, command, protected surface, failure mode, and known limits. | Allows slices to justify why a source scan, fixture test, reflection test, UI test, Rust test, or E2E path is sufficient for the scoped claim. |
+| Ownership and severity | Ownership matrix, severity model, affected capability, and escalation rule. | Primary owner, triage owner, default severity, local or CI behavior, release behavior, escalation trigger, and remediation path. | Populated ownership and severity metadata before the regression is treated as protection. | Ownership evidence with responsible surface, architectural impact, consumer impact, and escalation or governance trigger. | Prevents failed regressions from becoming unowned implementation noise and identifies when acceptance must stop. |
+| Drift classification | Architectural drift model, protected invariant, producer and consumer boundaries, and compatibility obligations. | Drift class, observed or expected drift, affected authority, boundary, duplicate or missing surface, detection method, and compatibility impact. | Drift model entry plus at least inventory evidence for new drift classes; executable detection for guarded or stronger lifecycle states. | Drift evidence with observed change, detection result, owner, risk, remediation, and affected consumers. | Maps failures to architectural risk so regressions support governance decisions instead of isolated test failures. |
+| Failure UX | Regression UX specification, severity, detection confidence, evidence expectation, and remediation. | Invariant, architectural intent, observed drift, owner, severity, detection confidence, evidence expectation, remediation path, and escalation guidance. | Structured failure message or evidence record that includes all required UX fields. | Failure evidence that explains what changed, why it matters architecturally, who owns it, and how to repair or govern it. | Makes verifier failures usable for evidence packages, rollback decisions, and milestone certification review. |
+| Confidence and lifecycle | Architectural confidence model, regression lifecycle model, evidence freshness, and transition governance. | Confidence level, lifecycle state, entry criteria, allowed transitions, decision requirement, revalidation triggers, and stale-evidence conditions. | Inventory or advisory metadata for planned checks; guarded metadata for executable protection; decision evidence for exceptions. | Confidence and lifecycle evidence naming mechanism strength, coverage breadth, freshness, limits, and transition authorization. | Determines whether a regression can support slice certification, milestone certification, acceptance, or only planning. |
+| Certification mapping | Invariant catalog, mechanism evidence, decision records, capability matrix, durable docs, and rollback policy. | Exit criterion, supporting regressions, evidence package, known limits, compatibility obligations, rollback path, docs updated, and baseline impact. | At least one guarded or governed protection per certified invariant, plus explicit accepted limitations for deferred coverage. | Certification evidence linking commands, artifacts, fixture diffs, decisions, compatibility review, rollback, and reference documentation. | Provides the checklist for milestone certification and acceptance without redefining architecture inside evidence files. |
+
+Specification rules:
+
+- A future regression starts with the invariant catalog, chooses its mechanism through the taxonomy, assigns owner and severity through the ownership and severity models, classifies drift, formats failure output through the UX specification, and reports confidence and lifecycle state before certification.
+- Framework metadata is distinct from mechanism implementation. Metadata defines the architectural claim; implementations are fixture comparisons, consumer verification, freshness checks, source scans, reflection tests, shell tests, UI tests, runtime characterization, or E2E paths.
+- No regression may certify more than its evidence, coverage breadth, confidence level, and lifecycle state allow.
+- A guarded or stronger regression that changes invariant scope, mechanism, owner, severity, lifecycle, confidence, evidence obligation, or certification use must follow lifecycle transition governance.
+- Certification must map each claimed invariant to evidence, known limits, compatibility obligations, rollback path, and durable documentation alignment.
 
 ### Architectural Invariant Catalog
 
