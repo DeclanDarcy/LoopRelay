@@ -357,6 +357,37 @@ The invariant catalog is the canonical M0.3 mapping between architectural princi
 | Projection, authority, and presentation taxonomies remain distinct. | Taxonomy source scans, naming rules, and role-purity tests. | Cross-layer architecture tests | CI failure | Taxonomy evidence mapping roles, owners, and allowed dependencies. | Naming or dependency changes blur authority, projection, renderer, controller, or workspace roles. | Planned for M5.1, M5.2, and M5.3. | Inventory |
 | Architectural mechanisms cannot disappear, weaken, or lose fixture wiring silently. | Backend mechanism meta-regression and lifecycle checks. | Backend architecture tests | Local build failure | Mechanism evidence with command/source, protected surface, owner, known gaps, and retirement criteria. | Accepted verifier is removed, unregistered, loses required metadata, or stops copying fixtures. | Active for M0.2 Oracle mechanisms and this catalog. | Multiple-mechanism protection |
 
+## Decision Governance
+
+Introduced: Milestone 0.4.
+
+Status: introduced as a guarded definition slice; certification pending.
+
+Primary evidence:
+
+- `docs/architecture-decision-governance.md`
+- `docs/architectural-evidence.md`
+- `.agents/decisions/decision-record-template.md`
+- `.agents/milestones/m0.4-governance-definition-slice-0050.md`
+- `tests/CommandCenter.Backend.Tests/Architecture/ArchitecturalDecisionGovernanceTests.cs`
+
+Mechanism intent:
+
+| Governance mechanism | Current protection | Remaining gap |
+| --- | --- | --- |
+| Decision class catalog | `docs/architecture-decision-governance.md` defines decision classes, minimum evidence, required regression or guard, and durable documentation obligations. `ArchitecturalDecisionGovernanceTests.DecisionGovernanceDocumentDefinesRequiredDecisionClasses` verifies the catalog remains present and populated. | Source-change detection for ungoverned architecture-affecting edits remains later M0.4 work. |
+| Mechanism lifecycle approval | `docs/architecture-decision-governance.md` defines approval and evidence requirements for adding, strengthening, weakening, quarantining, replacing, and retiring mechanisms. `ArchitecturalDecisionGovernanceTests.DecisionGovernanceDocumentDefinesMechanismLifecycleApproval` verifies the lifecycle table remains present and populated. | The guard verifies metadata, not every future mechanism change. Later slices must add checks for disabled or weakened regressions. |
+| Evidence package schema | `docs/architectural-evidence.md` defines required fields for evidence packages and evidence types. `ArchitecturalDecisionGovernanceTests.EvidenceModelDefinesPackageSchemaAndEvidenceTypes` verifies the schema and taxonomy remain present. | Individual evidence packages are not yet schema-validated mechanically. |
+| Decision record template | `.agents/decisions/decision-record-template.md` captures decision metadata, evidence, alternatives, compatibility impact, regression impact, rollback path, baseline updates, and follow-up. `ArchitecturalDecisionGovernanceTests.DecisionRecordTemplateCapturesGovernanceMetadata` verifies the template remains discoverable. | Active decision files are not yet required to conform to the template. |
+
+Governance rules:
+
+- Architecture-affecting implementation cannot be accepted by implementation alone.
+- Decision records must link evidence, compatibility impact, regression impact, rollback, and baseline updates.
+- Evidence packages must state scoped claims and known limits so certification does not imply broader enforcement than the proof supports.
+- Mechanism weakening, quarantine, replacement, or retirement requires explicit decision governance once a guard is guarded or stronger.
+- Emergency exceptions are temporary implementation variances, not architecture redefinitions.
+
 ## Mechanism Lifecycle Rule
 
 A verifier can be treated as architectural protection only when its command or source, protected surface, known gaps, owner, and retirement criteria for any quarantine are recorded.

@@ -1,27 +1,31 @@
-# Handoff: 2026-06-26 After M0.3 Regression Framework Certification Slice 0047
+# Handoff: 2026-06-26 After M0.4 Governance Definition Slice 0050
 
-Current milestone state: Milestone 0.3 is certified as a framework-complete Phase 0 architectural regression foundation with explicit enforcement deferrals. Milestone 0.4 is the next milestone.
+Current milestone state: M0.4 is started but not certified.
 
 New state from this slice:
 
-- Added `.agents/milestones/m0.3-regression-framework-certification-slice-0047.md`.
-- Marked `.agents/milestones/m0.3-regression-framework.md` regression framework certification complete.
-- Updated `docs/architectural-capabilities.md` to record M0.3 certification and status.
-- Updated `docs/architectural-mechanisms.md` to record certified framework status and Slice 0046/0047 evidence.
-- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0047.md`.
+- Added `docs/architecture-decision-governance.md`.
+- Added `docs/architectural-evidence.md`.
+- Added `.agents/decisions/decision-record-template.md`.
+- Added `tests/CommandCenter.Backend.Tests/Architecture/ArchitecturalDecisionGovernanceTests.cs`.
+- Added `.agents/milestones/m0.4-governance-definition-slice-0050.md`.
+- Updated `.agents/milestones/m0.4-decision-governance.md` for completed definition/guard outputs.
+- Updated `docs/architectural-capabilities.md` to introduce the architectural decision governance capability.
+- Updated `docs/architectural-mechanisms.md` to describe the guarded governance mechanism.
+- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0048.md`.
 
 Verification:
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter ArchitecturalRegressionFrameworkTests` passed: 14 passed, 0 failed, 0 skipped.
-- `git diff --check` passed after the documentation edits with line-ending normalization warnings only.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter ArchitecturalDecisionGovernanceTests` passed: 4 passed, 0 failed, 0 skipped.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter "ArchitecturalRegressionFrameworkTests|ArchitecturalDecisionGovernanceTests"` passed: 18 passed, 0 failed, 0 skipped.
+- `git diff --check` passed with line-ending normalization warnings only.
 
 High-leverage decisions currently relevant:
 
-- M0.3 certification is framework completeness, not broad enforcement completeness.
-- Inventory-level planned regressions are acceptable where their owning enforcement milestone has not started.
-- Shell command-family classification remains a starting point for M1.3 passive transport work; it does not certify passive transport or authorize permanent Rust mirrors.
-- M0.4 should install decision governance, evidence package rules, rollback policy, exception handling, and governance certification before architecture-changing migrations resume.
+- M0.4 is definition-guarded, not certified.
+- Architecture-affecting implementation still cannot be accepted by implementation alone; decision records must link evidence, compatibility impact, regression impact, rollback, and baseline updates.
+- The new governance guard verifies required metadata exists; it does not yet detect every ungoverned source edit or validate all active decision/evidence files.
 
 Recommended next slice:
 
-- Start M0.4 decision governance. Define durable governance/evidence/rollback documents, add the first executable metadata checks for decision and evidence records, update the capability matrix, and produce an initial M0.4 governance/evidence slice.
+- Continue M0.4 by adding ungoverned-change detection for the highest-risk surfaces: new shell response mirrors, disabled/weakened architecture regressions, new compatibility fields without a decision record, and active decision/evidence schema validation.

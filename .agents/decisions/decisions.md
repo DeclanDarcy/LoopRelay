@@ -1,36 +1,30 @@
-# Decisions: 2026-06-26 M0.3 Completion and M0.4 Opening Direction
+# Decisions: 2026-06-26 M0.4 Enforcement Ordering
 
-These decisions capture only newly authorized direction from the user response following Slice 0047.
+These decisions capture only newly authorized direction from the user response following M0.4 Governance Definition Slice 0050.
 
 ## Authorized Decisions
 
-1. Accept M0.3 as complete as a governance framework.
-   - The accepted boundary is framework completeness, not enforcement completeness.
-   - M0.3 certifies the regression governance substrate, not broad executable coverage for every architectural invariant.
+1. Accept the opening M0.4 slice as the correct governance foundation.
+   - The accepted posture is durable governance artifacts first, then mechanical verification of their existence, then broader enforcement.
+   - The initial M0.4 tests are intentionally metadata-existence guards rather than complete governance enforcement.
 
-2. Preserve the distinction between planned inventory-level regressions and executable regressions.
-   - Inventory-level planned regressions are acceptable when their owning enforcement milestone has not begun.
-   - The capability matrix may say an invariant is known, governed, and planned without implying it is already executable.
+2. Treat the core M0.4 architectural outcome as explicit governance over architecture-affecting implementation.
+   - Architecture-affecting implementation cannot rely solely on implementation changes for acceptance.
+   - Decision records must connect implementation changes to evidence, compatibility impact, regression impact, rollback, and baseline updates.
 
-3. Preserve shell classification as governance, inventory, and migration planning.
-   - Shell classification does not certify passive transport.
-   - Shell classification does not authorize permanent Rust mirror retention.
-   - Typed transport errors, passive transport certification, and Rust mirror retirement remain M1.3 work.
+3. Continue M0.4 enforcement in descending architectural risk.
+   - First: disabled or weakened architectural regression detection.
+   - Second: new shell response mirror detection.
+   - Third: compatibility fields without decision records.
+   - Fourth: active decision and evidence schema validation.
 
-4. Proceed next with M0.4.
-   - M0.4 should establish trust in architectural governance after M0.1 verification, M0.2 contracts, and M0.3 architectural enforcement framework.
-
-5. Open M0.4 with definition before substantial executable checks.
-   - Begin with durable governance, evidence, and rollback documents.
-   - Initial metadata guards should verify that required governance metadata, evidence metadata, and rollback metadata exist.
-   - Follow the established pattern: define, guard, expand.
-
-6. Explicitly distinguish governance artifacts from enforcement artifacts in M0.4.
-   - Governance artifacts authorize architectural change, including decision records, evidence packages, and rollback plans.
-   - Enforcement artifacts detect architectural drift, including the regression framework, Oracle, and freshness verification.
-   - M0.3 governs enforcement; M0.4 governs how enforcement itself evolves.
+4. Distinguish governance failure classes in reporting.
+   - Missing governance means an architecture-affecting change lacks a required decision or evidence package.
+   - Invalid governance means a decision or evidence package exists but lacks required metadata, evidence, rollback, compatibility, regression, or baseline fields.
+   - These categories should remain separate because they imply different remediation paths.
 
 ## Next Authorized Sequence
 
-1. Stage, commit, and push Slice 0047 plus this decision checkpoint.
-2. Stop executing after the push.
+1. Stage the current M0.4 slice, handoff rotation, and this decision checkpoint.
+2. Commit and push to `origin/dev`.
+3. Stop executing after the push.
