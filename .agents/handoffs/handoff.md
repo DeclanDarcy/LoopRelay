@@ -1,31 +1,31 @@
-# Handoff: Phase 0 Runtime Foundation Slice
+# Handoff: Phase 0 Runtime Primitives Slice
 
-Current milestone state: Phase 0 Runtime Foundation is active. This slice added the initial `CommandCenter.Agents` assembly and moved the role-agnostic process runner boundary out of `CommandCenter.Execution`.
+Current milestone state: Phase 0 Runtime Foundation is active. This slice introduced the first immutable, role-agnostic runtime primitive models in `CommandCenter.Agents`.
 
 New state introduced:
 
-- Added `src/CommandCenter.Agents` to `CommandCenter.slnx`.
-- Moved `IProcessRunner`, `ProcessRunner`, `ProcessRunResult`, and `ProcessStartResult` into `CommandCenter.Agents`.
-- Updated Execution DI, Git service, Codex execution provider, and affected tests to consume process infrastructure from Agents.
-- Added `AgentRuntimeBoundaryTests` to prevent `CommandCenter.Agents` from referencing Execution, Decisions, DecisionSessions, Workflow, Continuity, Reasoning, Middle, Backend, or UI.
-- Updated `.agents/milestones/m0-runtime-foundation.md` to mark the Agents project and process-runner extraction subitems complete. The broader role-agnostic runtime extraction remains open.
-- Restored active governance artifacts from archived Epic 11 evidence because backend governance tests require reachable `.agents/decisions/decisions.md`, `decision-record-template.md`, M0.4 evidence files, and the M0.2 workflow fixture classification evidence link.
-- No active `.agents/handoffs/handoff.md` existed at slice start, and `.agents/handoffs` had no rotated handoff files, so no handoff rotation was performed before creating this file.
+- Added `SessionIdentity`, `SessionRole`, `AgentSessionSpec`, `SandboxProfile`, `EffortProfile`, `AgentProcessState`, and `AgentTurnState` under `src/CommandCenter.Agents/Models`.
+- Kept the primitives information-only: no repository, workflow, decision, Git, execution, provider, process-supervision, or continuity semantics were added.
+- `AgentSessionSpec` snapshots startup options into a read-only dictionary so callers cannot mutate the spec through the original options dictionary.
+- Extended `AgentRuntimeBoundaryTests` to verify the primitives remain in the Agents assembly and that `AgentSessionSpec` snapshots startup options.
+- Updated `.agents/milestones/m0-runtime-foundation.md` to mark the shared runtime primitive subitems complete.
+- Added `.agents/milestones/m0.4-referential-governance-validation-slice-0054.md` to active decision evidence links so the existing governance test can verify active decisions cite reachable governance evidence.
+- Rotated the previous active handoff to `.agents/handoffs/handoff.0001.md`.
 
 Verification:
 
 - `dotnet build CommandCenter.slnx` passed.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~AgentRuntimeBoundaryTests` passed.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~ArchitecturalDecisionGovernanceTests` passed after restoring active governance artifacts.
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 836 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~AgentRuntimeBoundaryTests` passed: 3 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~ArchitecturalDecisionGovernanceTests` passed: 10 tests.
+- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj` passed: 838 tests.
 
 Current limits:
 
-- `CodexExecutableResolver` remains in Execution pending a semantic review of whether executable resolution is role-agnostic or operationally Codex/execution-specific.
-- Provider/process lifecycle primitives and stream/event primitives are not yet extracted.
-- Runtime primitive models such as `SessionIdentity`, `SessionRole`, `AgentSessionSpec`, sandbox, effort, process state, and turn state have not been introduced.
-- UI, shell, and contract checks were not run because this slice touched backend/runtime assembly boundaries and active governance artifacts only.
+- `CodexExecutableResolver` remains in Execution pending the already-authorized review now that `SessionRole` exists.
+- `IAgentProcess`, process supervision, stream/event primitives, and `IAgentRuntime` have not been introduced.
+- No Execution consumer has been migrated to the new session spec yet.
+- UI, shell, and contract checks were not run because this slice changed backend runtime primitives, tests, and governance notes only.
 
 Next suggested slice:
 
-- Continue Phase 0 with a focused runtime-primitives slice: define the minimal `SessionIdentity`, `SessionRole`, `AgentSessionSpec`, `SandboxProfile`, `EffortProfile`, `AgentProcessState`, and `AgentTurnState` models in `CommandCenter.Agents`, add boundary tests for those models, and then review whether `CodexExecutableResolver` can move without giving Agents operational semantics.
+- Continue Phase 0 with a focused process-abstraction slice: review `CodexExecutableResolver`, move only role-agnostic executable discovery if it has no operational semantics, then introduce `IAgentProcess` over the existing process runner primitives with boundary tests before adding any persistent `IAgentRuntime`.

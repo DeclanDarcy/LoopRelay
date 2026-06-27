@@ -14,13 +14,13 @@ Goal: establish permanent runtime boundaries without changing observable product
   - stream/event primitives that are not execution-specific
 - [ ] Keep operational concepts in `CommandCenter.Execution`: Git, execution context, handoff, operational prompts, execution session state, commit, push, and operational evidence.
 - [ ] Introduce shared runtime primitives:
-  - `SessionIdentity`
-  - `SessionRole`
-  - `AgentSessionSpec`
-  - `SandboxProfile`
-  - `EffortProfile`
-  - `AgentProcessState`
-  - `AgentTurnState`
+  - [x] `SessionIdentity`
+  - [x] `SessionRole`
+  - [x] `AgentSessionSpec`
+  - [x] `SandboxProfile`
+  - [x] `EffortProfile`
+  - [x] `AgentProcessState`
+  - [x] `AgentTurnState`
 - [ ] Add generated prompt infrastructure under `CommandCenter.Core.Prompts` with named prompt builders for planning, execution, decisions, transfer, operational deltas, and context updates. Existing literal prompt composition in Execution must become a compatibility layer over generated prompt output.
 - [ ] Add initial repository lifecycle models in Core or a new runtime-neutral model package:
   - `Idle`

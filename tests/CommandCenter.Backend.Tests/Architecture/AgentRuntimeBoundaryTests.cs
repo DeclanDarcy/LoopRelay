@@ -1,4 +1,5 @@
 using CommandCenter.Agents.Services;
+using CommandCenter.Agents.Models;
 
 namespace CommandCenter.Backend.Tests.Architecture;
 
@@ -30,5 +31,47 @@ public sealed class AgentRuntimeBoundaryTests
         {
             Assert.DoesNotContain(forbiddenReference, actualReferences);
         }
+    }
+
+    [Fact]
+    public void RuntimePrimitivesStayInAgentsAssembly()
+    {
+        Type[] primitiveTypes =
+        [
+            typeof(SessionIdentity),
+            typeof(SessionRole),
+            typeof(AgentSessionSpec),
+            typeof(SandboxProfile),
+            typeof(EffortProfile),
+            typeof(AgentProcessState),
+            typeof(AgentTurnState)
+        ];
+
+        foreach (Type primitiveType in primitiveTypes)
+        {
+            Assert.Same(typeof(ProcessRunner).Assembly, primitiveType.Assembly);
+        }
+    }
+
+    [Fact]
+    public void AgentSessionSpecTakesImmutableStartupOptionSnapshot()
+    {
+        Dictionary<string, string> startupOptions = new(StringComparer.Ordinal)
+        {
+            ["provider"] = "codex"
+        };
+
+        AgentSessionSpec spec = new(
+            SessionIdentity.New(),
+            SessionRole.OperationalExecution,
+            new SandboxProfile("workspace-write", CanWriteWorkspace: true, CanAccessNetwork: false, RequiresApproval: true),
+            new EffortProfile(AgentEffortLevel.Medium),
+            workingDirectory: "C:\\repo",
+            startupOptions);
+
+        startupOptions["provider"] = "other";
+
+        Assert.Equal("codex", spec.StartupOptions["provider"]);
+        Assert.IsAssignableFrom<IReadOnlyDictionary<string, string>>(spec.StartupOptions);
     }
 }
