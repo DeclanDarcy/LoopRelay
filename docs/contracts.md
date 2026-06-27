@@ -185,6 +185,113 @@ Consumer rules:
 - Presentation consumers may adapt display, but missing backend semantics must be fixed in the owning projection rather than inferred in React.
 - Compatibility consumers are allowed only while they have an explicit retirement path or blocking condition.
 
+## Contract Stability Model
+
+Contract stability defines which externally observable properties are part of contract identity and which properties may vary without redefining the contract. Stability is distinct from versioning and compatibility: versioning names a lifecycle state, compatibility describes consumer obligations, and stability decides whether an observable change is identity-significant.
+
+Stability classes:
+
+| Stability class | Definition | Identity impact |
+| --- | --- | --- |
+| Identity-bearing | Property or behavior that consumers may rely on as part of the contract's architectural meaning. | Changing it requires a governed contract change and may require a new identity or version. |
+| Additive stable | New optional field, enum member, diagnostic item, metadata entry, or collection member that preserves existing meaning. | May remain the same identity only after compatibility review and fixture or artifact evidence. |
+| Observational metadata | Evidence, timestamps, hashes, durations, counts, trace identifiers, or diagnostic details that describe production or verification context without changing product meaning. | Does not create a new identity when shape and nullability remain governed and consumers treat it as metadata. |
+| Intentionally unstable | Runtime ordering, transient progress, elapsed time, volatile diagnostic text, or environment-specific values explicitly marked unstable. | Does not create a new identity when instability is documented and consumers do not depend on exact values. |
+| Compatibility transitional | Deprecated field, alias, mirror, command, or route kept for a named consumer during migration. | Remains in the current identity until retired; removal requires deprecation evidence and consumer migration proof. |
+| Breaking | Field removal, requiredness change, type-kind change, semantic reassignment, enum narrowing, status/null/empty behavior change, error-envelope loss, request argument change, or stream lifecycle change. | Requires governance and either a new identity, new version, or explicit compatibility bridge. |
+
+Identity-bearing properties include:
+
+- contract category, producer boundary, owning authority, serialization authority, and request/response/event/error role;
+- field names, field JSON value kinds, required versus optional presence, explicit nullability, collection shape, and nested object structure;
+- enum domain and semantic meaning, including lifecycle, health, severity, eligibility, retryability, certification, and recovery values;
+- request argument names, route/query/body location, requiredness, accepted primitive kinds, and command body structure;
+- response success shape, structured error envelope shape, status semantics, and null/empty semantics;
+- stream payload shape when streamed, plus ordering, terminal, retry, and reconnection semantics when a stream lifecycle identity exists.
+
+Properties that may change without changing identity:
+
+- additional optional fields after compatibility review;
+- additional enum values only when the consumer contract explicitly requires unknown-value tolerance or a compatibility decision names affected consumers;
+- additional diagnostic or evidence entries when consumers are required to preserve or render them generically;
+- non-semantic ordering where the contract explicitly states ordering is unstable;
+- observational timestamps, durations, trace ids, hashes, and environment paths when consumers do not use them as semantic facts.
+
+Stability rules:
+
+- Do not equate every JSON value change with a contract identity change. Fixtures observe shape and representative values; stability decides architectural significance.
+- Do not treat fixture approval as permission to weaken identity-bearing semantics. The authority and compatibility review must precede fixture movement.
+- A value may be observational metadata only when the producer documents it as such and consumers are not using it for eligibility, severity, health, lifecycle, recovery, certification, or recommendation decisions.
+- Intentionally unstable values must be isolated so generators, fixtures, and regressions can ignore or normalize only the unstable portion without ignoring identity-bearing shape.
+- Compatibility fields are stable while present. Their deprecation path may be temporary, but consumers may rely on the documented compatibility behavior until removal is accepted.
+
+## Contract Normalization Rules
+
+Normalization defines the canonical serialized representation that producers emit and consumers may depend on. These rules describe the model before M1.2 generation; they do not introduce a generator or broaden fixture coverage by themselves.
+
+| Topic | Canonical representation | Allowed producer variation | Consumer guarantee | Compatibility evolution |
+| --- | --- | --- | --- | --- |
+| Identifiers | Stable strings for external ids; GUID-backed ids use canonical string form at JSON boundaries. | Backend may store richer id types internally. Route ids, body ids, and response ids must serialize consistently for the same identity. | Consumers treat ids as opaque equality keys unless the contract states a typed semantic role. | Changing id kind, formatting, or scope is breaking unless a new field or compatibility alias is provided. |
+| Names | JSON property names follow the backend serialization authority. Contract names use stable architectural identity names, not C# or TypeScript implementation names. | Internal type names may differ from external property names. | Consumers depend on serialized property names, not implementation symbols. | Renames require additive replacement, deprecation, consumer migration, and removal evidence. |
+| Enums | Semantic enums serialize as strings from backend authority. Values are domain facts, not presentation labels. | Producers may use internal enum types or validated strings if the authority owns the domain. | Consumers may switch on known values only within the documented enum domain and must not invent semantic fallbacks. | New values require compatibility review; removed, renamed, or semantically reassigned values are breaking. |
+| Dates and times | Instants crossing external boundaries serialize as explicit date/time strings under backend JSON configuration. Date-only, duration, and elapsed-time values must be named as such. | Internal storage may use domain-specific time types. | Consumers preserve the serialized value and may display it, but cannot infer lifecycle or freshness semantics unless exposed separately. | Changing time zone, precision, or instant/date/duration meaning is breaking unless a new field carries the new meaning. |
+| Optional values | Absence, explicit `null`, empty string, empty object, and empty array are distinct contract states. | A producer may omit optional fields only when the accepted contract identity says omission is allowed. | Consumers may rely on the documented distinction and transport must preserve it. | Changing omitted to null, null to omitted, empty to null, or null to empty is breaking unless compatibility evidence proves no consumer depends on the distinction. |
+| Collections | Arrays represent ordered or unordered collections as documented by the projection owner. Empty arrays represent known empty collections. | Producers may choose internal collection types. | Consumers may rely on array shape and item kind; ordering is semantic only when the contract says it is. | Item shape changes follow nested field rules; ordering changes are breaking only for semantic ordering contracts. |
+| Metadata | Metadata is auxiliary context that must not carry hidden domain meaning. Metadata fields must be named so consumers know whether values are observational, diagnostic, evidence, or compatibility data. | Producers may add metadata when it is clearly non-authoritative or authority-owned. | Consumers may render or preserve metadata but cannot promote it to semantic authority. | New metadata is additive when it remains optional and non-semantic; semantic metadata requires authority and compatibility review. |
+| Ordering | Semantic ordering must be produced by backend authority and documented. Non-semantic ordering must be marked unstable or fixture-only. | Producers may emit deterministic internal order for convenience only when it is not documented as semantic. | Consumers may not infer rank, priority, recency, or recommendation order from undocumented order. | Making order semantic requires a contract change; removing semantic order is breaking. |
+| Evidence | Evidence items include source, basis, confidence, trace, or verification context and must remain attached to the authority that produced the conclusion. | Producers may include richer evidence entries as optional additive metadata. | Consumers may display or link evidence, but the conclusion remains in the authoritative field. | Removing evidence required for certification or governance is breaking for that contract category. |
+| Diagnostics | Diagnostics serialize typed severity, code/category, message, source, affected target, and recovery guidance when available. | Diagnostic prose may vary when code/category/severity remain stable and the contract marks prose as observational. | Consumers must use typed diagnostic fields for behavior and presentation mapping; they may not parse prose for meaning. | Severity/code/category changes require authority review; additional findings are additive. |
+| Compatibility fields | Compatibility fields derive from authoritative structure and carry owner, consumer list, replacement path, retirement condition, and regression evidence. | Producers may expose aliases only while compatibility ownership exists. | Consumers may rely on the field until its documented retirement condition is met. | Removal requires deprecation evidence, migrated consumers, rollback path, and regression protection. |
+| Error envelopes | Structured errors preserve status, error text, boundary violation details, nulls, and unknown fields across transport. | Boundary-specific producers may add details if the envelope remains structured. | Consumers receive typed failure context instead of string-only loss. | Dropping structured error data, changing status meaning, or flattening errors is breaking. |
+| Streams | Stream event payloads follow event contract normalization; lifecycle semantics are separate when observable. | Transport may frame events, but payload semantics remain backend-owned. | Consumers may depend on payload shape and documented lifecycle semantics only. | Ordering, retry, terminal, or reconnection changes require stream lifecycle governance when observable. |
+
+Normalization rules:
+
+- Backend JSON serialization is the default normalization authority for externally observable backend contracts.
+- Shell-owned commands may define their own normalization only when classified as shell-owned and documented as a separate contract identity.
+- Generated artifacts must encode these normalization rules mechanically in M1.2; until then, verified manual artifacts are compatibility consumers.
+- Consumers must preserve unknown fields when acting as transport or compatibility relays and must declare lossiness when transforming into local view models.
+- A normalization exception requires a decision record naming the invariant, affected identity, consumers, compatibility path, and rollback rule.
+
+## Boundary Semantics
+
+Boundary semantics define what each architectural boundary may transform after normalization. They prevent contract ownership from moving downstream during generation, transport migration, resource extraction, controller extraction, and presentation normalization.
+
+| Boundary | May transform | Must preserve | Must not do |
+| --- | --- | --- | --- |
+| Domain to projection | Domain facts into authoritative read models, command results, diagnostics, eligibility, recovery, health, and certification conclusions. | Semantic meaning, lifecycle legality, source facts, and authority ownership. | Serialize for a specific client or embed presentation-only labels as authority. |
+| Projection to contract | Backend-owned shape into externally observable serialized shape under normalization rules. | Field membership, null/empty semantics, enum meaning, collection semantics, compatibility fields, and structured errors. | Add downstream convenience meaning or drop authority fields without governance. |
+| Contract to transport | Request, response, status, nulls, empty values, unknown fields, and structured error payloads. | Exact contract payload and boundary failure context. | Parse domain meaning, collapse errors, coerce null/omitted/empty values, or become compatibility authority. |
+| Transport to resource | Payload delivery into loading, refresh, invalidation, stale-response, mutation, and error mechanics. | Contract data, structured failures, request identity, repository identity, and stale-response ordering. | Infer eligibility, severity, health, lifecycle, recovery, certification, or recommendation rank. |
+| Resource to controller | Resource state into feature action sequencing and feature view models. | Authoritative backend facts and typed resource failure states. | Create new backend semantics or duplicate mutable authority across features. |
+| Controller to workspace | Feature view models and actions into workspace composition and local interaction flow. | Feature ownership, controller boundaries, and scoped failure behavior. | Cross-wire unrelated workspace state or make the workspace root a semantic authority. |
+| Workspace to presentation | Typed facts into layout, labels, icons, colors, grouping, accessibility text, and local affordances. | Authoritative semantic fields and local interaction state ownership. | Parse weak strings or infer missing backend meaning from display text, order, labels, or style. |
+
+Request boundary rules:
+
+- Route, query, body, header, and command arguments are separate request surfaces even when one endpoint handles them.
+- Requiredness, nullability, defaulting, and validation ownership must be explicit for each request field.
+- Client wrappers may adapt naming from TypeScript call style to Tauri command arguments, but they may not add fields, defaults, or semantic validation not owned by the backend or shell-owned command.
+- Backend request DTOs and route constraints own accepted request shape for backend-owned routes.
+
+Response boundary rules:
+
+- Success response shape, no-content semantics, explicit null response, empty collections, and partial data must be documented as distinct states when observable.
+- A command response that reports eligibility, skipped work, partial success, or recovery guidance must expose those facts as typed backend-owned fields.
+- Compatibility aliases in responses must be derived upstream and protected until retired.
+
+Error boundary rules:
+
+- Error envelopes are contracts when structured error data crosses a boundary.
+- Transport must preserve structured error payloads and status context without reducing them to message-only failures.
+- Runtime boundaries may add local failure context only outside the authoritative backend error payload or in a documented wrapper field.
+
+Stream boundary rules:
+
+- Event payload contracts and stream lifecycle contracts are distinct.
+- Ordering, terminal events, retry behavior, reconnection cursor semantics, heartbeat behavior, and partial replay are lifecycle semantics when observable.
+- A stream consumer may not infer lifecycle guarantees from transport framing unless the lifecycle identity documents them.
+
 ## Initial Contract Identity Inventory
 
 This inventory seeds M1.1 from the already certified Phase 0 Oracle pilots. It deliberately does not introduce generation, broad endpoint coverage, or new runtime behavior.

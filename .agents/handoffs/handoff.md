@@ -1,13 +1,13 @@
-# Handoff: After M1.1 Contract Taxonomy and Ownership Slice 0060
+# Handoff: After M1.1 Contract Normalization and Boundaries Slice 0061
 
-Current milestone state: M1.1 is still in progress. The completed slice extends contract identity into taxonomy, projection-contract relationship rules, ownership dimensions, and consumer classes. M1.1 is not certified or accepted.
+Current milestone state: M1.1 is still in progress. The completed slice extends the canonical contract model from identity, taxonomy, ownership, and consumer classes into stability, normalization, and boundary semantics. M1.1 is not certified or accepted.
 
 New state from this slice:
 
-- Added `.agents/milestones/m1.1-contract-taxonomy-ownership-slice-0060.md`.
-- Updated `docs/contracts.md` with contract category taxonomy, projection-to-contract relationship rules, allowed/forbidden transformations, a contract ownership matrix, and the consumer model.
-- Updated `docs/architectural-capabilities.md` to record M1.1 taxonomy/ownership progress and remaining gaps.
-- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0058.md`.
+- Added `.agents/milestones/m1.1-contract-normalization-boundaries-slice-0061.md`.
+- Updated `docs/contracts.md` with contract stability classes, identity-bearing versus non-identity-bearing change rules, normalization rules, and request/response/error/stream boundary semantics.
+- Updated `docs/architectural-capabilities.md` to record M1.1 normalization and boundary progress.
+- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0059.md`.
 
 Verification:
 
@@ -17,10 +17,10 @@ Verification:
 High-leverage decisions currently relevant:
 
 - M1.1 remains model-first: generation, fixture expansion, shell migration, TypeScript migration, and dev mock generation are still downstream.
-- Contract categories now distinguish public/internal projections, command requests/responses, events, notifications, streaming events, stream lifecycle, persistence/configuration crossing boundaries, diagnostics, health, certification, error envelopes, and compatibility artifacts.
-- Ownership is now explicit across semantics, shape, serialization, compatibility, versioning, evolution, deprecation, and consumers.
-- Manual Rust mirrors, manual TypeScript types, and dev Tauri mocks are compatibility or verified consumers only; they do not define contract identity, shape, semantics, serialization, or versioning.
+- Stability is now separate from versioning and compatibility. A JSON value change is not automatically a contract identity change; identity impact depends on whether the changed property is identity-bearing, additive stable, observational metadata, intentionally unstable, compatibility transitional, or breaking.
+- Normalization now constrains later generated artifacts across identifiers, names, enums, dates/times, optional/null/omitted values, collections, metadata, ordering, evidence, diagnostics, compatibility fields, error envelopes, and streams.
+- Boundary semantics now explicitly prevent transport, resources, controllers, workspaces, and presentation from adding semantic meaning downstream.
 
 Recommended next slice:
 
-- Continue M1.1 with normalization and boundary semantics: identifiers, enums, dates, optional/null/omitted values, collections, names, metadata, ordering, evidence, diagnostics, compatibility fields, request boundaries, response boundaries, error envelopes, and stream boundaries.
+- Continue M1.1 with evolution, compatibility, and governance models, then use the completed model to produce canonical examples for repository, workflow, decision, execution, reasoning, continuity, governance, health, and certification contracts.
