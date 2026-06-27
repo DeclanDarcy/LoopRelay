@@ -131,7 +131,7 @@ Mechanism intent:
 
 Introduced: Milestone 0.3.
 
-Status: initial inventory, backend architecture-test skeleton, invariant catalog, and regression taxonomy installed.
+Status: initial inventory, backend architecture-test skeleton, invariant catalog, regression taxonomy, drift model, regression UX, and architectural confidence model installed.
 
 Primary evidence:
 
@@ -142,6 +142,7 @@ Primary evidence:
 - `.agents/milestones/m0.3-regression-ownership-severity-slice-0039.md`
 - `.agents/milestones/m0.3-architectural-drift-model-slice-0040.md`
 - `.agents/milestones/m0.3-regression-ux-slice-0041.md`
+- `.agents/milestones/m0.3-architectural-confidence-model-slice-0042.md`
 
 Framework intent:
 
@@ -234,6 +235,28 @@ Required failure-message fields:
 | Escalation guidance | The governance, milestone-blocker, release-blocker, or rollback rule that applies when local remediation is not possible. | Prevents unresolved drift from continuing silently. | Escalate to governance review required when shell code must remain domain-shaped. |
 
 The initial backend framework tests enforce this specification for the durable UX table and for the registered mechanism catalog. Later executable regressions may format these fields differently, but they must preserve the same information content.
+
+### Architectural Confidence Model
+
+Architectural confidence describes how trustworthy the evidence is for an architectural claim. It is not a probability that the architecture is correct, not a count of tests, not a code-coverage percentage, not implementation quality, not severity, and not detection confidence.
+
+Confidence rises when a claim is protected by stronger mechanisms, higher-quality evidence, independent corroboration, representative coverage breadth, and fresh verification. A narrow executable regression can provide higher confidence for its scoped invariant than a broad inventory with many unverified entries. Percentage-style scoring is forbidden because it hides evidence quality and can turn unprotected gaps into false precision.
+
+| Confidence level | Mechanism quality | Evidence quality | Coverage breadth | Freshness | Certification use |
+| --- | --- | --- | --- | --- | --- |
+| Inventory confidence | Documented inventory, source scan, or reviewed matrix with named owner and strengthening path. | Inventory evidence names observed surfaces, known gaps, uncertainty, owner, and next mechanism. | Representative only for the inventoried surfaces; no claim beyond the listed files, routes, or consumers. | Fresh only for the slice that produced or revalidated the inventory. | May support planning and advisory warnings; cannot certify or accept a milestone by itself. |
+| Guarded confidence | One executable verifier protects the scoped invariant through reflection, fixture comparison, source scan, unit test, integration test, or script. | Verification evidence includes command, protected invariant, observed behavior, failure mode, and known limits. | Narrow but explicit; valid for the protected fixture, command, route, component, or helper family. | Fresh when the guarding verifier ran in the current slice or accepted baseline. | May certify a scoped slice when the invariant and limits match the certification claim. |
+| Corroborated confidence | Two or more independent mechanisms protect the same claim across producer, transport, generated artifact, consumer, runtime, or documentation surfaces. | Evidence packages agree across independent commands or artifacts and record any compatibility exceptions. | Representative across at least one producer-consumer path or one cross-layer workflow, with explicit uncovered surfaces. | Fresh when all required corroborating checks ran or were accepted with unchanged baseline evidence. | May support milestone certification for the represented path, not for untested families. |
+| Certified confidence | The milestone exit criteria map each relevant invariant to executable or governed protection, evidence, known limits, and rollback path. | Certification evidence links decisions, commands, fixture or artifact diffs, runtime observations when relevant, and durable docs. | Broad enough for the milestone claim and explicit about accepted limitations or quarantines. | Fresh at certification time and stale when protected mechanisms, owners, fixtures, or consumers change without revalidation. | Required for milestone certification; cannot be used for acceptance until downstream compatibility and rollback obligations are satisfied. |
+| Accepted baseline confidence | Certified evidence has also passed downstream acceptance, compatibility review, rollback readiness, and durable documentation update. | Baseline evidence records certification result, compatibility obligations, rollback path, accepted deferrals, and reference-doc alignment. | Matches the accepted architecture claim and names all deferred capability gaps. | Fresh until a protected surface changes, a mechanism weakens, or an accepted deferral reaches its retirement condition. | Required for baseline updates, publication, and later milestones that depend on the claim. |
+
+Confidence reporting rules:
+
+- Report confidence as a named level with evidence and limits, not as a numeric score or percentage.
+- Keep architectural confidence separate from severity; a release-blocking invariant can have only inventory confidence until a strong mechanism exists.
+- Keep architectural confidence separate from detection confidence; detection confidence describes the detector, while architectural confidence describes the evidence supporting the claim.
+- Do not increase confidence merely because more tests exist. Increase it only when mechanism quality, evidence quality, independent corroboration, representative breadth, or freshness improves.
+- Do not use accepted baseline confidence after a mechanism weakens, a protected surface changes, or an accepted deferral expires without revalidation.
 
 ### Architectural Invariant Catalog
 

@@ -72,6 +72,16 @@ public sealed class ArchitecturalRegressionFrameworkTests
         "Example signal"
     ];
 
+    private static readonly string[] RequiredArchitecturalConfidenceColumns =
+    [
+        "Confidence level",
+        "Mechanism quality",
+        "Evidence quality",
+        "Coverage breadth",
+        "Freshness",
+        "Certification use"
+    ];
+
     private static readonly string[] RequiredInvariantCatalogEntries =
     [
         "Backend domain services compute semantic meaning.",
@@ -148,6 +158,15 @@ public sealed class ArchitecturalRegressionFrameworkTests
         "Evidence expectation",
         "Remediation path",
         "Escalation guidance"
+    ];
+
+    private static readonly string[] RequiredArchitecturalConfidenceLevels =
+    [
+        "Inventory confidence",
+        "Guarded confidence",
+        "Corroborated confidence",
+        "Certified confidence",
+        "Accepted baseline confidence"
     ];
 
     private static readonly ArchitecturalRegressionMechanism[] RequiredMechanisms =
@@ -239,6 +258,32 @@ public sealed class ArchitecturalRegressionFrameworkTests
                 Assert.True(
                     row.TryGetValue(column, out string? value) && HasAcceptedCatalogValue(value),
                     $"Regression UX field '{row["Field"]}' must populate '{column}'. Architectural regression failures need invariant, intent, observed drift, owner, severity, detection confidence, evidence expectation, remediation, and escalation guidance so failures can support evidence, certification, rollback, and governance decisions.");
+            }
+        }
+    }
+
+    [Fact]
+    public void ArchitecturalConfidenceModelDefinesEvidenceQualityLevels()
+    {
+        IReadOnlyList<IReadOnlyDictionary<string, string>> confidenceModel = ReadMechanismsDocumentTable(
+            "### Architectural Confidence Model",
+            "Confidence level",
+            RequiredArchitecturalConfidenceColumns);
+
+        foreach (string level in RequiredArchitecturalConfidenceLevels)
+        {
+            Assert.Contains(
+                confidenceModel,
+                row => row["Confidence level"] == level);
+        }
+
+        foreach (IReadOnlyDictionary<string, string> row in confidenceModel)
+        {
+            foreach (string column in RequiredArchitecturalConfidenceColumns)
+            {
+                Assert.True(
+                    row.TryGetValue(column, out string? value) && HasAcceptedCatalogValue(value),
+                    $"Architectural confidence row '{row["Confidence level"]}' must populate '{column}'. M0.3 confidence is based on mechanism strength, evidence quality, representative coverage breadth, freshness, and certification use; it must not collapse into test counts, pass percentages, severity, or detection confidence.");
             }
         }
     }
