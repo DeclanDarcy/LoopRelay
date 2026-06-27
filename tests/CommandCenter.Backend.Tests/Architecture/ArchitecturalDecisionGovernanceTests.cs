@@ -102,6 +102,16 @@ public sealed class ArchitecturalDecisionGovernanceTests
         "## Rollback"
     ];
 
+    private static readonly string[] RequiredAuthorityProjectionWatchlistHeadings =
+    [
+        "## Detection Scope",
+        "## Exclusions",
+        "## Accepted Exceptions",
+        "## Authority-Like File Inventory",
+        "## Projection-Like File Inventory",
+        "## Non-Claims"
+    ];
+
     private static readonly ArchitectureRegressionBypassPattern[] ArchitectureRegressionBypassPatterns =
     [
         new(
@@ -430,6 +440,45 @@ public sealed class ArchitecturalDecisionGovernanceTests
         AssertReachableGovernanceEvidenceLinks(repositoryRoot, mechanisms, "docs/architectural-mechanisms.md");
     }
 
+    [Fact]
+    public void AuthorityAndProjectionLikeFileNamesRemainGoverned()
+    {
+        DirectoryInfo repositoryRoot = FindRepositoryRoot();
+        string watchlistPath = Path.Combine(
+            repositoryRoot.FullName,
+            "docs",
+            "authority-projection-governance-watchlist.md");
+
+        Assert.True(
+            File.Exists(watchlistPath),
+            "M0.4 requires a governance watchlist before new authority-like or projection-like source files can be accepted.");
+
+        string watchlist = File.ReadAllText(watchlistPath);
+        foreach (string heading in RequiredAuthorityProjectionWatchlistHeadings)
+        {
+            Assert.Contains(heading, watchlist);
+        }
+
+        string[] actualWatchedFiles = EnumerateAuthorityProjectionLikeSourceFiles(repositoryRoot)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        string[] governedFiles = ExtractRepositoryRelativeLinks(
+                watchlist,
+                @"(?:src|tests/CommandCenter\.Backend\.Tests)/[^`\s|)]+\.(?:cs|ts|tsx|rs)")
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        string[] ungovernedFiles = actualWatchedFiles.Except(governedFiles, StringComparer.Ordinal).ToArray();
+        string[] staleGovernedFiles = governedFiles.Except(actualWatchedFiles, StringComparer.Ordinal).ToArray();
+
+        Assert.True(
+            ungovernedFiles.Length == 0,
+            $"New authority-like or projection-like source file names require governance before acceptance. Add an explicit authority/projection watchlist entry, scope, owner rationale, and evidence before landing new named artifacts. Ungoverned files: {string.Join(", ", ungovernedFiles)}");
+        Assert.True(
+            staleGovernedFiles.Length == 0,
+            $"docs/authority-projection-governance-watchlist.md contains authority/projection watchlist entries that no longer exist. Retire or update the governed entry with evidence. Stale files: {string.Join(", ", staleGovernedFiles)}");
+    }
+
     private static IReadOnlyList<IReadOnlyDictionary<string, string>> ReadTable(
         string relativePath,
         string heading,
@@ -576,11 +625,45 @@ public sealed class ArchitecturalDecisionGovernanceTests
         }
     }
 
+    private static IEnumerable<string> EnumerateAuthorityProjectionLikeSourceFiles(DirectoryInfo repositoryRoot)
+    {
+        string[] roots =
+        [
+            Path.Combine(repositoryRoot.FullName, "src"),
+            Path.Combine(repositoryRoot.FullName, "tests", "CommandCenter.Backend.Tests")
+        ];
+        HashSet<string> acceptedExtensions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ".cs",
+            ".ts",
+            ".tsx",
+            ".rs"
+        };
+
+        foreach (string root in roots)
+        {
+            foreach (string file in Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories))
+            {
+                string extension = Path.GetExtension(file);
+                string fileName = Path.GetFileNameWithoutExtension(file);
+                if (!acceptedExtensions.Contains(extension)
+                    || (fileName.IndexOf("Authority", StringComparison.OrdinalIgnoreCase) < 0
+                        && fileName.IndexOf("Projection", StringComparison.OrdinalIgnoreCase) < 0))
+                {
+                    continue;
+                }
+
+                yield return Path.GetRelativePath(repositoryRoot.FullName, file).Replace('\\', '/');
+            }
+        }
+    }
+
     private static bool EvidenceReferencesGovernedArtifact(string evidence)
     {
         return evidence.Contains(".agents/decisions/", StringComparison.Ordinal)
             || evidence.Contains("docs/architectural-capabilities.md", StringComparison.Ordinal)
             || evidence.Contains("docs/architectural-mechanisms.md", StringComparison.Ordinal)
+            || evidence.Contains("docs/authority-projection-governance-watchlist.md", StringComparison.Ordinal)
             || evidence.Contains("docs/architecture-decision-governance.md", StringComparison.Ordinal)
             || evidence.Contains("docs/architectural-evidence.md", StringComparison.Ordinal);
     }
