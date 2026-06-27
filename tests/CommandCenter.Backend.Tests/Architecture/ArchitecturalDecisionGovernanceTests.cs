@@ -374,6 +374,62 @@ public sealed class ArchitecturalDecisionGovernanceTests
         }
     }
 
+    [Fact]
+    public void ReferentialGovernanceClaimsRemainReachable()
+    {
+        DirectoryInfo repositoryRoot = FindRepositoryRoot();
+        string activeDecision = File.ReadAllText(Path.Combine(
+            repositoryRoot.FullName,
+            ".agents",
+            "decisions",
+            "decisions.md"));
+        string capabilities = File.ReadAllText(Path.Combine(repositoryRoot.FullName, "docs", "architectural-capabilities.md"));
+        string mechanisms = File.ReadAllText(Path.Combine(repositoryRoot.FullName, "docs", "architectural-mechanisms.md"));
+
+        string[] governanceEvidenceFiles = Directory.GetFiles(
+                Path.Combine(repositoryRoot.FullName, ".agents", "milestones"),
+                "m0.4-*-slice-*.md",
+                SearchOption.TopDirectoryOnly)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.NotEmpty(governanceEvidenceFiles);
+
+        string[] activeDecisionEvidenceLinks = ExtractRepositoryRelativeLinks(
+                activeDecision,
+                @".agents/milestones/m0\.4-[^`\s)]+\.md")
+            .ToArray();
+
+        Assert.NotEmpty(activeDecisionEvidenceLinks);
+        foreach (string linkedPath in activeDecisionEvidenceLinks)
+        {
+            Assert.True(
+                File.Exists(Path.Combine(repositoryRoot.FullName, linkedPath)),
+                $"Active decision checkpoint must cite reachable governance evidence. Missing: {linkedPath}");
+        }
+
+        foreach (string evidenceFile in governanceEvidenceFiles)
+        {
+            string relativePath = Path.GetRelativePath(repositoryRoot.FullName, evidenceFile).Replace('\\', '/');
+            string evidence = File.ReadAllText(evidenceFile);
+
+            Assert.True(
+                EvidenceReferencesGovernedArtifact(evidence),
+                $"{relativePath} must reference the decision, capability, or mechanism artifact it supports so governance evidence remains traceable.");
+            Assert.Contains(
+                relativePath,
+                capabilities,
+                StringComparison.Ordinal);
+            Assert.Contains(
+                relativePath,
+                mechanisms,
+                StringComparison.Ordinal);
+        }
+
+        AssertReachableGovernanceEvidenceLinks(repositoryRoot, capabilities, "docs/architectural-capabilities.md");
+        AssertReachableGovernanceEvidenceLinks(repositoryRoot, mechanisms, "docs/architectural-mechanisms.md");
+    }
+
     private static IReadOnlyList<IReadOnlyDictionary<string, string>> ReadTable(
         string relativePath,
         string heading,
@@ -491,6 +547,42 @@ public sealed class ArchitecturalDecisionGovernanceTests
         Assert.NotEmpty(names);
 
         return names;
+    }
+
+    private static IEnumerable<string> ExtractRepositoryRelativeLinks(string source, string relativePathPattern)
+    {
+        return Regex.Matches(source, $"`(?<path>{relativePathPattern})`|(?<path>{relativePathPattern})")
+            .Select(match => match.Groups["path"].Value)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.Ordinal);
+    }
+
+    private static void AssertReachableGovernanceEvidenceLinks(
+        DirectoryInfo repositoryRoot,
+        string source,
+        string sourceName)
+    {
+        string[] links = ExtractRepositoryRelativeLinks(
+                source,
+                @".agents/milestones/m0\.4-[^`\s)]+\.md")
+            .ToArray();
+
+        Assert.NotEmpty(links);
+        foreach (string linkedPath in links)
+        {
+            Assert.True(
+                File.Exists(Path.Combine(repositoryRoot.FullName, linkedPath)),
+                $"{sourceName} claims M0.4 governance evidence that does not exist: {linkedPath}");
+        }
+    }
+
+    private static bool EvidenceReferencesGovernedArtifact(string evidence)
+    {
+        return evidence.Contains(".agents/decisions/", StringComparison.Ordinal)
+            || evidence.Contains("docs/architectural-capabilities.md", StringComparison.Ordinal)
+            || evidence.Contains("docs/architectural-mechanisms.md", StringComparison.Ordinal)
+            || evidence.Contains("docs/architecture-decision-governance.md", StringComparison.Ordinal)
+            || evidence.Contains("docs/architectural-evidence.md", StringComparison.Ordinal);
     }
 
     private static bool HasAcceptedCatalogValue(string? value)

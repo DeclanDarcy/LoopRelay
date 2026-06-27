@@ -1,28 +1,35 @@
-# Decisions: 2026-06-26 M0.4 Referential Governance Validation Direction
+# Decisions: 2026-06-26 M0.4 Unguarded Change Detection Direction
 
-These decisions capture only newly authorized direction from the user response following M0.4 Active Governance Artifact Validation Slice 0053.
+These decisions capture only newly authorized direction from the user response following M0.4 Referential Governance Validation Slice 0054.
 
 ## Authorized Decisions
 
-1. Accept Slice 0053 as a correct M0.4 governance-strengthening step.
-   - Active governance artifacts should have a mechanically enforced structural floor.
-   - Decision-governance mechanism evidence links should be checked for reachability.
+1. Accept Slice 0054 as a correct M0.4 governance-strengthening step.
+   - Governance should protect relationships between architectural claims and supporting evidence.
+   - Capability and mechanism claims should require reachable evidence packages.
+   - Active governance checkpoints should remain linked to relevant governance evidence.
 
-2. Preserve the limited certification claim for Slice 0053.
-   - The guard proves active artifact structure, required sections, and reachable evidence links for decision-governance mechanisms.
-   - The guard does not prove full historical corpus validation, bidirectional governance graph validation, or complete capability/mechanism traceability.
+2. Preserve the limited certification claim for Slice 0054.
+   - The guard proves reachable governance references, active checkpoint linkage, and capability/mechanism traceability.
+   - The guard does not prove decision correctness, evidence sufficiency, or complete historical graph validation.
 
-3. Continue M0.4 with referential governance validation.
-   - Active decision checkpoints should cite relevant governance evidence.
-   - Governance evidence should reference the decision, capability, or mechanism it supports.
-   - Capability and mechanism docs should not claim a governance guard without reachable evidence.
+3. Continue M0.4 with narrow unguarded architectural change detection.
+   - Prioritize new authority/projection-like names before compatibility-field detection.
+   - New authority/projection-like artifacts should not appear silently without corresponding governance.
+   - The detector should remain heuristic, scoped, and explicitly limited.
 
-4. Keep referential governance validation scoped to graph integrity.
-   - The check should prove required relationships exist.
-   - The check should not judge whether an authorized decision is substantively good.
+4. Follow authority/projection detection with compatibility-field governance.
+   - New compatibility fields should require reachable governance before acceptance.
+   - The guard should protect against long-lived architectural debt without judging whether the compatibility field is correct.
+
+5. Require explicit false-positive boundaries for heuristic governance detectors.
+   - Each detector should document detection scope.
+   - Each detector should document exclusions.
+   - Each detector should inventory accepted exceptions.
+   - Each detector should state what it intentionally does not claim.
 
 ## Next Authorized Sequence
 
-1. Stage Slice 0053 changes, handoff rotation, decision rotation, and this decision checkpoint.
+1. Stage Slice 0054 changes, handoff rotation, decision rotation, and this decision checkpoint.
 2. Commit and push to `origin/dev`.
 3. Stop executing after the push.
