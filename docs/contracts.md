@@ -292,6 +292,93 @@ Stream boundary rules:
 - Ordering, terminal events, retry behavior, reconnection cursor semantics, heartbeat behavior, and partial replay are lifecycle semantics when observable.
 - A stream consumer may not infer lifecycle guarantees from transport framing unless the lifecycle identity documents them.
 
+## Contract Evolution Model
+
+Contract evolution is the governed change process for one contract identity. It describes what changed, whether identity changes, whether existing consumers remain compatible, whether version state changes, and what evidence is required before the Oracle, generated artifacts, verified artifacts, or compatibility consumers move.
+
+Evolution operations:
+
+| Operation | Identity impact | Compatibility impact | Version impact | Consumer action | Required governance and evidence |
+| --- | --- | --- | --- | --- | --- |
+| Additive field | Same identity when optional, normalized, authority-owned, and reviewed. | Compatible only when existing consumers tolerate unknown fields or the compatibility record names affected consumers. | Baseline or minor-compatible version update once versioning exists. | Generated consumers regenerate; verified consumers refresh or record reviewed additive tolerance. | Authority owner, consumer list, fixture action, artifact action, rollback path, and additive-field evidence. |
+| Deprecated field | Same identity while the field remains present and derives from authority-owned structure. | Compatible during the documented deprecation window. | Deprecation marker or compatibility lifecycle update. | Consumers migrate to the replacement field before retirement. | Compatibility owner, replacement path, retirement condition, affected consumers, regression proving derivation, and rollback path. |
+| Removed field | Breaking for any identity-bearing or compatibility field. | Incompatible unless all consumers are migrated or a bridge remains. | Breaking version or new identity unless removal is proven non-observable. | Consumers must migrate or retire before removal is accepted. | Deprecation completion evidence, migrated-consumer evidence, fixture retirement/update, artifact regeneration, and rollback plan. |
+| Renamed field | Breaking unless implemented as additive replacement plus deprecated alias. | Compatible only while both names are emitted or consumers are migrated. | Compatibility lifecycle update first; breaking version only after alias retirement if required. | Consumers move from old name to new name through the documented path. | Rename decision, alias derivation evidence, consumer migration list, retirement condition, and tests for old and new names during transition. |
+| Semantic reinterpretation | Usually identity-bearing and breaking even when JSON shape is unchanged. | Incompatible when consumers use the old meaning. | Breaking version or new identity when the old and new meanings cannot coexist. | Consumers must be reviewed for meaning, not only shape. | Authority decision, semantic diff evidence, consumer behavior review, fixture rationale, and rollback to prior meaning. |
+| Representation normalization | Same identity only when meaning, requiredness, nullability, and consumer guarantees remain equivalent. | Compatible only when consumers tolerate both forms or a bridge exists. | Baseline update or breaking version depending on observable effect. | Consumers may need parser or generated artifact updates. | Normalization decision, before/after serialized evidence, compatibility review, and transport preservation proof. |
+| Contract split | New identities for the split outputs unless each output preserves the original complete contract. | Incompatible for consumers expecting the original aggregate unless an aggregate compatibility contract remains. | New version or new identities. | Consumers choose the new identity or remain on a compatibility aggregate. | Source authority mapping, consumer routing plan, compatibility aggregate owner, fixtures for each output, and rollback to original aggregate. |
+| Contract merge | New identity unless one contract becomes a pure additive extension of another accepted identity. | Incompatible when field ownership, null semantics, ordering, or lifecycle obligations differ. | New version or new identity. | Consumers must validate that merged semantics do not change feature behavior. | Authority composition record, source identity mapping, conflict resolution evidence, fixtures, and rollback to separate contracts. |
+| Projection split | Contract identity may stay stable only when the externally observable shape and authority obligations remain unchanged. | Compatible when producer boundary preserves the accepted shape. | No version change for preserved contract; new identities for new exposed shapes. | Consumers should not observe internal projection split unless adopting new identities. | Projection ownership evidence, aggregation or forwarding proof, fixture stability, and regression against downstream shape drift. |
+| Projection aggregation | New identity when aggregation creates a new externally observable read model. | Compatible only if existing identities remain available or consumers migrate. | New identity or versioned aggregate. | Consumers migrate only after aggregation authority and source projections are documented. | Aggregation authority, source projection list, conflict rules, fixture evidence, and rollback to source contracts. |
+| Compatibility-only alias | Same identity while alias derives from authority-owned structure and has a retirement path. | Compatible for named consumers only. | Compatibility lifecycle update, not a semantic version by itself. | Named consumers migrate to the authoritative field. | Owner, consumer list, replacement path, retirement condition, derivation regression, and removal evidence. |
+
+Evolution rules:
+
+- Classify the operation before changing fixtures, generated artifacts, verified artifacts, shell mirrors, TypeScript types, or mocks.
+- Shape-compatible changes can still be breaking when they reinterpret semantics, null/empty states, status meaning, lifecycle legality, recovery guidance, severity, health, eligibility, certification, or stream lifecycle behavior.
+- Additive changes are not automatically accepted. They need compatibility evidence because verified manual consumers, Rust mirrors, dev mocks, and presentation code may not preserve unknown fields.
+- A projection refactor is not a contract change when the same authority-owned serialized shape and obligations remain intact.
+- A contract identity may be split, merged, or versioned only through a decision that names affected consumers and the rollback path.
+
+## Contract Compatibility Model
+
+Compatibility is the obligation to keep existing consumers valid while a contract evolves. It is separate from identity and stability: an identity can remain the same while a consumer becomes stale, and a breaking identity change can be made temporarily compatible through a governed bridge.
+
+Compatibility states:
+
+| State | Meaning | Acceptance rule |
+| --- | --- | --- |
+| Compatible baseline | Existing consumers, fixtures, and verified artifacts match the accepted contract identity. | May be accepted with current Oracle, consumer, freshness, and request-boundary evidence. |
+| Reviewed additive | Producer emits an additive field or value that has been reviewed but not yet adopted everywhere. | Requires affected-consumer inventory, fixture or reviewed-addition evidence, and artifact action. |
+| Bridged compatibility | A deprecated field, alias, route, command, or mirror keeps old consumers working while the authoritative replacement exists. | Requires owner, consumer list, replacement path, retirement condition, derivation regression, and rollback rule. |
+| Consumer-stale | Downstream artifact or mirror no longer matches Oracle truth. | Oracle truth must not weaken; migrate, regenerate, refresh, or quarantine the consumer. |
+| Incompatible accepted | A breaking change is accepted because consumers are migrated, retired, or intentionally versioned. | Requires decision evidence, migrated-consumer proof, version or identity action, and rollback readiness. |
+| Quarantined exception | Compatibility cannot be resolved in the slice but is bounded and tracked. | Requires owner, reason, risk, retirement criteria, compensating regression, and follow-up milestone. |
+
+Compatibility obligations:
+
+- Every compatibility field, alias, route, command, mirror, or manual artifact must name its owner, consumers, replacement path, retirement condition, evidence location, and rollback path.
+- A compatibility bridge must derive from authoritative structure. A bridge that invents meaning is an authority violation, not a compatibility mechanism.
+- Verified manual artifacts are compatibility consumers until generated artifacts replace them. Their freshness and consumer verification protect the current baseline but do not make them contract authority.
+- Dev mocks are compatibility consumers and development fixtures. They may preserve contract shape for local development but must not become independent product truth.
+- Shell Rust mirrors are transitional compatibility artifacts unless the command is explicitly shell-owned. Passive transport must preserve backend JSON without interpreting domain meaning.
+- Compatibility removal is complete only after consumers are migrated or retired, regressions prove the replacement path, and rollback behavior is documented.
+
+Compatibility review questions:
+
+- Which contract identity and evolution operation are involved?
+- Which producer boundary emits the change?
+- Which generated, verified, observational, transforming, testing, presentation, and compatibility consumers are affected?
+- Does the change alter request shape, response shape, error envelope, stream payload, stream lifecycle, null/empty semantics, ordering, or semantic meaning?
+- Can old and new consumers coexist through an upstream-derived bridge?
+- Which fixture, artifact freshness manifest, consumer verifier, request-boundary verifier, or architecture regression proves the accepted state?
+
+## Contract Governance Model
+
+Contract governance is the decision path that prevents contract authority from moving downstream while M1.1 remains model-first and before M1.2 generation exists.
+
+Governance sequence:
+
+1. Identify the contract identity, category, owner, producer boundary, serialization authority, and consumer set.
+2. Classify the observed or planned change using the stability model and evolution operation table.
+3. Decide whether the change preserves identity, requires a version action, or requires a new identity.
+4. Review compatibility impact for generated, verified, observational, transforming, testing, presentation, and compatibility consumers.
+5. Choose fixture, artifact, request-boundary, stream, or error-envelope actions.
+6. Record decision evidence, rollback path, and affected durable documentation.
+7. Update producers before downstream consumers when the backend authority is changing.
+8. Refresh generated or verified consumers only after the accepted contract baseline is established.
+9. Run the relevant Oracle, consumer verification, artifact freshness, request-boundary, and architecture-regression mechanisms.
+10. Update capability, evidence, and handoff records with known limits and next work.
+
+Governance rules:
+
+- Contract decisions must identify semantic owner, shape owner, serialization owner, compatibility owner when applicable, evolution owner, affected consumers, evidence package, and rollback path.
+- A fixture update without authority and compatibility evidence is not an accepted contract change.
+- A generated artifact, Rust mirror, TypeScript type, dev mock, hook, controller, workspace, or presentation component may not authorize a contract change.
+- A shell-owned command can define a contract only when classified as shell-owned and documented separately from backend-owned transport.
+- Request, response, error, and stream lifecycle changes must be governed independently because their compatibility risks differ.
+- Governance evidence may be procedural in M1.1, but M1.2 and later mechanisms must make generation, versioning, freshness, and drift checks executable.
+
 ## Initial Contract Identity Inventory
 
 This inventory seeds M1.1 from the already certified Phase 0 Oracle pilots. It deliberately does not introduce generation, broad endpoint coverage, or new runtime behavior.
