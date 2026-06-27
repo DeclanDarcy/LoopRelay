@@ -370,6 +370,7 @@ Primary evidence:
 - `.agents/decisions/decision-record-template.md`
 - `.agents/milestones/m0.4-governance-definition-slice-0050.md`
 - `.agents/milestones/m0.4-regression-weakening-guard-slice-0051.md`
+- `.agents/milestones/m0.4-shell-mirror-governance-slice-0052.md`
 - `tests/CommandCenter.Backend.Tests/Architecture/ArchitecturalDecisionGovernanceTests.cs`
 
 Mechanism intent:
@@ -379,6 +380,7 @@ Mechanism intent:
 | Decision class catalog | `docs/architecture-decision-governance.md` defines decision classes, minimum evidence, required regression or guard, and durable documentation obligations. `ArchitecturalDecisionGovernanceTests.DecisionGovernanceDocumentDefinesRequiredDecisionClasses` verifies the catalog remains present and populated. | Source-change detection for ungoverned architecture-affecting edits remains later M0.4 work. |
 | Mechanism lifecycle approval | `docs/architecture-decision-governance.md` defines approval and evidence requirements for adding, strengthening, weakening, quarantining, replacing, and retiring mechanisms. `ArchitecturalDecisionGovernanceTests.DecisionGovernanceDocumentDefinesMechanismLifecycleApproval` verifies the lifecycle table remains present and populated. | The guard verifies metadata, not every future mechanism change. Later slices must add checks for disabled or weakened regressions. |
 | Architecture-regression bypass guard | `ArchitecturalDecisionGovernanceTests.ArchitectureRegressionTestsAreNotDisabledOrFocused` scans backend and frontend architecture regression test homes for xUnit `Skip` and Vitest `.skip` or `.only` bypasses. | This is initial regression-weakening enforcement only; broader source-change detection for removed guards, narrowed assertions, shell mirrors, compatibility fields, and active decision/evidence validation remains later M0.4 work. |
+| Shell Rust struct classification guard | `ArchitecturalDecisionGovernanceTests.ShellRustStructsRemainClassifiedInTransportInventory` compares Rust structs in `src/CommandCenter.Shell/src/main.rs` with the Rust Mirror Inventory in `docs/shell-transport-classification.md`. New unclassified structs and stale inventory entries fail governance. | This detects inventory bypass and stale classifications. It does not yet prove each classified struct has the correct current or target state, nor does it retire existing mirrors. |
 | Evidence package schema | `docs/architectural-evidence.md` defines required fields for evidence packages and evidence types. `ArchitecturalDecisionGovernanceTests.EvidenceModelDefinesPackageSchemaAndEvidenceTypes` verifies the schema and taxonomy remain present. | Individual evidence packages are not yet schema-validated mechanically. |
 | Decision record template | `.agents/decisions/decision-record-template.md` captures decision metadata, evidence, alternatives, compatibility impact, regression impact, rollback path, baseline updates, and follow-up. `ArchitecturalDecisionGovernanceTests.DecisionRecordTemplateCapturesGovernanceMetadata` verifies the template remains discoverable. | Active decision files are not yet required to conform to the template. |
 

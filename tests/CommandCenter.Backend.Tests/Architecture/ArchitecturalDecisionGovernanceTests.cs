@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace CommandCenter.Backend.Tests.Architecture;
 
 public sealed class ArchitecturalDecisionGovernanceTests
@@ -241,6 +243,47 @@ public sealed class ArchitecturalDecisionGovernanceTests
         }
     }
 
+    [Fact]
+    public void ShellRustStructsRemainClassifiedInTransportInventory()
+    {
+        DirectoryInfo repositoryRoot = FindRepositoryRoot();
+        string shellSourcePath = Path.Combine(
+            repositoryRoot.FullName,
+            "src",
+            "CommandCenter.Shell",
+            "src",
+            "main.rs");
+        string classificationPath = Path.Combine(
+            repositoryRoot.FullName,
+            "docs",
+            "shell-transport-classification.md");
+
+        string shellSource = File.ReadAllText(shellSourcePath);
+        string classification = File.ReadAllText(classificationPath);
+
+        string[] rustStructs = Regex.Matches(
+                shellSource,
+                @"(?:^|\n)struct\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*(?:\{|;|\()",
+                RegexOptions.Singleline)
+            .Select(match => match.Groups["name"].Value)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        string[] classifiedStructs = ReadRustMirrorInventoryStructNames(classification)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        string[] unclassified = rustStructs.Except(classifiedStructs, StringComparer.Ordinal).ToArray();
+        string[] staleClassification = classifiedStructs.Except(rustStructs, StringComparer.Ordinal).ToArray();
+
+        Assert.True(
+            unclassified.Length == 0,
+            $"Shell Rust structs must be classified in docs/shell-transport-classification.md before they can become accepted transport, compatibility, request, or shell-owned surfaces. Unclassified structs: {string.Join(", ", unclassified)}. M0.4 treats new shell response mirrors as transport responsibility growth requiring governance evidence.");
+        Assert.True(
+            staleClassification.Length == 0,
+            $"docs/shell-transport-classification.md must stay aligned with src/CommandCenter.Shell/src/main.rs so mirror retirement and compatibility obligations remain traceable. Stale classifications: {string.Join(", ", staleClassification)}.");
+    }
+
     private static IReadOnlyList<IReadOnlyDictionary<string, string>> ReadTable(
         string relativePath,
         string heading,
@@ -319,6 +362,45 @@ public sealed class ArchitecturalDecisionGovernanceTests
             .Split('|')
             .Select(value => value.Trim())
             .ToArray();
+    }
+
+    private static IReadOnlyList<string> ReadRustMirrorInventoryStructNames(string classification)
+    {
+        string[] lines = classification.Split('\n');
+        int headingIndex = Array.FindIndex(lines, line => line.Trim() == "## Rust Mirror Inventory");
+
+        Assert.True(
+            headingIndex >= 0,
+            "docs/shell-transport-classification.md must define '## Rust Mirror Inventory'.");
+
+        int headerIndex = Array.FindIndex(
+            lines,
+            headingIndex,
+            line => line.StartsWith("| Rust struct or group |", StringComparison.Ordinal));
+
+        Assert.True(
+            headerIndex > headingIndex,
+            "The Rust Mirror Inventory must use a markdown table whose first column is 'Rust struct or group'.");
+
+        List<string> names = [];
+        for (int i = headerIndex + 2; i < lines.Length; i++)
+        {
+            string line = lines[i];
+            if (!line.StartsWith("|", StringComparison.Ordinal))
+            {
+                break;
+            }
+
+            string firstColumn = SplitMarkdownTableRow(line)[0];
+            foreach (Match match in Regex.Matches(firstColumn, "`(?<name>[A-Za-z_][A-Za-z0-9_]*)`"))
+            {
+                names.Add(match.Groups["name"].Value);
+            }
+        }
+
+        Assert.NotEmpty(names);
+
+        return names;
     }
 
     private static bool HasAcceptedCatalogValue(string? value)
