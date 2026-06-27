@@ -15,4 +15,10 @@ public interface IAgentProcess : IAsyncDisposable
     Task Completion { get; }
 
     Task WriteStandardInputAsync(string standardInput, CancellationToken cancellationToken = default);
+
+    Task WritePromptAsync(string text, CancellationToken cancellationToken = default);
+
+    Task CompleteInputAsync(CancellationToken cancellationToken = default);
+
+    IAsyncEnumerable<string> ReadOutputLinesAsync(CancellationToken cancellationToken = default);
 }

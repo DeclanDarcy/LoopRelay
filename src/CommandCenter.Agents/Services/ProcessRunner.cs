@@ -119,6 +119,36 @@ public sealed class ProcessRunner : IProcessRunner
         };
     }
 
+    public Task<IAgentProcess> StartInteractiveAsync(
+        string fileName,
+        IReadOnlyList<string> arguments,
+        string workingDirectory,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = fileName,
+            WorkingDirectory = workingDirectory,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        foreach (string argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        AgentProcess process = StartAgentProcess(startInfo, fileName);
+        process.StartCompletionObservation();
+
+        return Task.FromResult<IAgentProcess>(process);
+    }
+
     private static AgentProcess StartAgentProcess(ProcessStartInfo startInfo, string fileName)
     {
         Process process = Process.Start(startInfo)

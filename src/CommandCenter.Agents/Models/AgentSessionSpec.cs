@@ -6,6 +6,7 @@ public sealed record AgentSessionSpec
 {
     public AgentSessionSpec(
         SessionIdentity sessionId,
+        string repositoryId,
         SessionRole role,
         SandboxProfile sandbox,
         EffortProfile effort,
@@ -13,6 +14,7 @@ public sealed record AgentSessionSpec
         IReadOnlyDictionary<string, string>? startupOptions = null)
     {
         SessionId = sessionId;
+        RepositoryId = repositoryId;
         Role = role;
         Sandbox = sandbox;
         Effort = effort;
@@ -22,6 +24,8 @@ public sealed record AgentSessionSpec
     }
 
     public SessionIdentity SessionId { get; }
+
+    public string RepositoryId { get; }
 
     public SessionRole Role { get; }
 

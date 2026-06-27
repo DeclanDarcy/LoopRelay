@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using CommandCenter.Agents.Abstractions;
 using CommandCenter.Agents.Models;
 using CommandCenter.Agents.Services;
@@ -122,6 +123,23 @@ public sealed class AgentProcessSupervisorTests
         public Task WriteStandardInputAsync(string standardInput, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
+        }
+
+        public Task WritePromptAsync(string text, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task CompleteInputAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public async IAsyncEnumerable<string> ReadOutputLinesAsync(
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await Task.CompletedTask;
+            yield break;
         }
 
         public ValueTask DisposeAsync()

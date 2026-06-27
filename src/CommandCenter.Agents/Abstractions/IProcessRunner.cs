@@ -14,4 +14,10 @@ public interface IProcessRunner
         Func<string, Task>? onStandardOutput = null,
         Func<string, Task>? onStandardError = null,
         Func<int?, Task>? onExit = null);
+
+    Task<IAgentProcess> StartInteractiveAsync(
+        string fileName,
+        IReadOnlyList<string> arguments,
+        string workingDirectory,
+        CancellationToken cancellationToken = default);
 }

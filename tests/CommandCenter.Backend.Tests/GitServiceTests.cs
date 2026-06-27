@@ -437,6 +437,15 @@ public sealed class GitServiceTests
         {
             throw new NotSupportedException();
         }
+
+        public Task<IAgentProcess> StartInteractiveAsync(
+            string fileName,
+            IReadOnlyList<string> arguments,
+            string workingDirectory,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
     }
 
     private sealed record ProcessCall(
