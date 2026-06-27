@@ -85,6 +85,23 @@ public sealed class ArchitecturalDecisionGovernanceTests
         "## Follow-Up"
     ];
 
+    private static readonly string[] RequiredDecisionCheckpointHeadings =
+    [
+        "## Authorized Decisions",
+        "## Next Authorized Sequence"
+    ];
+
+    private static readonly string[] RequiredGovernanceEvidenceHeadings =
+    [
+        "## Objective",
+        "## Capability",
+        "## Invariant",
+        "## Changes",
+        "## Verification",
+        "## Known Limits",
+        "## Rollback"
+    ];
+
     private static readonly ArchitectureRegressionBypassPattern[] ArchitectureRegressionBypassPatterns =
     [
         new(
@@ -282,6 +299,79 @@ public sealed class ArchitecturalDecisionGovernanceTests
         Assert.True(
             staleClassification.Length == 0,
             $"docs/shell-transport-classification.md must stay aligned with src/CommandCenter.Shell/src/main.rs so mirror retirement and compatibility obligations remain traceable. Stale classifications: {string.Join(", ", staleClassification)}.");
+    }
+
+    [Fact]
+    public void ActiveGovernanceArtifactsKeepRequiredStructureAndEvidenceLinks()
+    {
+        DirectoryInfo repositoryRoot = FindRepositoryRoot();
+        string activeDecisionPath = Path.Combine(
+            repositoryRoot.FullName,
+            ".agents",
+            "decisions",
+            "decisions.md");
+
+        Assert.True(
+            File.Exists(activeDecisionPath),
+            ".agents/decisions/decisions.md must exist so newly authorized architectural decisions remain visible before rotation.");
+
+        string activeDecision = File.ReadAllText(activeDecisionPath);
+        Assert.StartsWith("# Decisions:", activeDecision, StringComparison.Ordinal);
+        foreach (string heading in RequiredDecisionCheckpointHeadings)
+        {
+            Assert.Contains(heading, activeDecision);
+        }
+
+        string milestoneDirectory = Path.Combine(repositoryRoot.FullName, ".agents", "milestones");
+        string[] governanceEvidenceFiles = Directory.GetFiles(
+                milestoneDirectory,
+                "m0.4-*-slice-*.md",
+                SearchOption.TopDirectoryOnly)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.NotEmpty(governanceEvidenceFiles);
+
+        foreach (string evidenceFile in governanceEvidenceFiles)
+        {
+            string evidence = File.ReadAllText(evidenceFile);
+            foreach (string heading in RequiredGovernanceEvidenceHeadings)
+            {
+                Assert.Contains(
+                    heading,
+                    evidence,
+                    StringComparison.Ordinal);
+            }
+
+            Assert.Contains(
+                "dotnet test",
+                evidence,
+                StringComparison.Ordinal);
+        }
+
+        string mechanisms = File.ReadAllText(Path.Combine(repositoryRoot.FullName, "docs", "architectural-mechanisms.md"));
+        string[] linkedGovernanceEvidence = Regex.Matches(
+                mechanisms,
+                @"`(?<path>\.agents/milestones/m0\.4-[^`]+\.md)`")
+            .Select(match => match.Groups["path"].Value)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        foreach (string evidenceFile in governanceEvidenceFiles)
+        {
+            string relativePath = Path.GetRelativePath(repositoryRoot.FullName, evidenceFile).Replace('\\', '/');
+            Assert.Contains(
+                relativePath,
+                linkedGovernanceEvidence);
+        }
+
+        foreach (string linkedPath in linkedGovernanceEvidence)
+        {
+            Assert.True(
+                File.Exists(Path.Combine(repositoryRoot.FullName, linkedPath)),
+                $"Decision governance mechanism evidence link must resolve to a file: {linkedPath}");
+        }
     }
 
     private static IReadOnlyList<IReadOnlyDictionary<string, string>> ReadTable(
