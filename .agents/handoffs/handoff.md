@@ -1,43 +1,31 @@
-# Handoff: 2026-06-26 After Workflow Oracle Certification Slice 0032
+# Handoff: 2026-06-26 After Oracle Repeatability Evidence Slice 0033
 
-Current milestone state: Milestone 0.2 remains active and uncertified at milestone level. The primary workflow projection pilot is now locally certified.
+Current milestone state: Milestone 0.2 remains active and uncertified at milestone level, but it now has cross-family repeatability evidence across three locally certified pilots.
 
 New state from this slice:
 
-- Added `.agents/milestones/m0.2-workflow-oracle-certification-slice-0032.md`.
-- Updated `docs/contracts.md`, `docs/architectural-mechanisms.md`, and `docs/architectural-capabilities.md` to record local workflow Oracle certification.
-- Added the workflow instance row to the contract artifact freshness coverage table in `docs/contracts.md`.
-- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0032.md`.
+- Added `.agents/milestones/m0.2-oracle-repeatability-evidence-slice-0033.md`.
+- Updated `docs/contracts.md`, `docs/architectural-mechanisms.md`, and `docs/architectural-capabilities.md` to record three-family Oracle lifecycle repeatability.
+- Rotated prior `.agents/handoffs/handoff.md` to `.agents/handoffs/handoff.0033.md`.
 
 Verification:
 
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~ContractOracleFixtureTests`
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~ContractConsumerVerificationTests`
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~ContractGeneratedArtifactFreshnessTests`
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj --filter FullyQualifiedName~ContractRequestBoundaryTests`
-- `npm run test -- src/test/characterization/workflowContractFixture.test.ts`
-- `dotnet test tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj`
+- No production code or verifier behavior changed.
+- Ran `rg` checks for stale two-family repeatability wording.
+- Ran `git diff --check`.
 
 Results:
 
-- Focused backend Oracle families passed sequentially: 6 fixture tests, 11 backend consumer-verification tests, 6 artifact freshness tests, and 9 request-boundary tests.
-- Targeted UI workflow TypeScript verifier passed: 1 test.
-- Full backend project passed: 802 tests.
-- Initial parallel backend Oracle test execution hit build-output file locks, matching the known serialized .NET execution quarantine; sequential reruns passed.
-
-Accepted workflow pilot gaps:
-
-- No dev mock workflow handler verification.
-- No populated `decisionSession` workflow fixture variant.
-- No sibling workflow endpoint fixtures.
-- Workflow TypeScript verification still uses a manual Phase 0 contract artifact, not generated Milestone 1.2 output.
+- Stale wording check passed after documentation cleanup.
+- `git diff --check` passed; Git reported only existing line-ending normalization warnings for edited docs.
 
 High-leverage decisions currently relevant:
 
-- Dev mock workflow coverage and populated `decisionSession` coverage are accepted gaps for certifying the initial primary workflow pilot, not blockers to pilot certification.
-- Workflow certification should be framed as Oracle repeatability across a richer semantic contract family, not as global Milestone 0.2 certification.
-- The first failed parallel test attempt reinforces the existing serialized .NET verifier quarantine; do not use parallel `dotnet test` processes for certification evidence unless output isolation is introduced.
+- Do not automatically add a fourth representative contract family. The next slice should first perform milestone-level certification review using the three-family evidence.
+- Treat decision lifecycle eligibility as the preferred fourth family only if certification review finds backend-owned eligibility semantics are still underrepresented.
+- Treat error envelope as important but better aligned with failure representation, runtime isolation, and passive transport evidence unless Milestone 0.2 certification specifically needs it.
+- Keep workflow dev mock handler coverage, populated `decisionSession` workflow coverage, and sibling workflow endpoint fixtures as accepted initial-pilot gaps, not blockers to the repeatability claim.
 
 Recommended next slice:
 
-- Record cross-family Oracle repeatability evidence across repository dashboard, repository workspace, and primary workflow projection. Use it to decide whether Milestone 0.2 needs one more representative family, preferably error envelope or decision lifecycle eligibility, before moving toward milestone-level certification.
+- Start Milestone 0.2 certification review. Produce a certification artifact that maps each Milestone 0.2 required output and exit criterion to the current evidence, then classifies each item as certified, partial with accepted limitation, or blocker. Only add decision lifecycle eligibility coverage if that review identifies a concrete unmet property rather than a breadth-only gap.
