@@ -208,6 +208,63 @@ describe('executionRunReducer', () => {
     expect(failed.status).toBe('Failed')
   })
 
+  it('treats a second ContinueExecution run-started as a fresh run, resetting prior output', () => {
+    // After decisions are submitted the server reuses the execution stream for the continuation
+    // turn. The machine must start it clean rather than appending to the first run's output.
+    const firstRun = drive(initialExecutionRunState, [
+      { kind: 'event', event: { type: 'run-started', phase: 'ExecutePlan' } },
+      { kind: 'event', event: { type: 'delta', phase: 'StartExecution', text: 'first run output' } },
+      { kind: 'event', event: { type: 'milestones-extracted', count: 3 } },
+      {
+        kind: 'event',
+        event: {
+          type: 'completed',
+          commitSha: 'abc',
+          milestoneCount: 3,
+          handoffPath: '.agents/handoffs/handoff.0001.md',
+          promptTokens: 1,
+          outputTokens: 1,
+        },
+      },
+    ])
+
+    expect(firstRun.status).toBe('Completed')
+
+    const continuation = drive(firstRun, [
+      { kind: 'event', event: { type: 'run-started', phase: 'ContinueExecution' } },
+      { kind: 'event', event: { type: 'phase', phase: 'ContinueExecution' } },
+      { kind: 'event', event: { type: 'delta', phase: 'ContinueExecution', text: 'continuation' } },
+    ])
+
+    expect(continuation.status).toBe('Running')
+    expect(continuation.phase).toBe('ContinueExecution')
+    expect(continuation.streamedText).toBe('continuation')
+    expect(continuation.milestoneCount).toBeNull()
+    expect(continuation.completion).toBeNull()
+  })
+
+  it('completes a ContinueExecution continuation run with its rotated handoff', () => {
+    const continuation = drive(initialExecutionRunState, [
+      { kind: 'event', event: { type: 'run-started', phase: 'ContinueExecution' } },
+      { kind: 'event', event: { type: 'handoff-rotated', sequence: 2, path: '.agents/handoffs/handoff.0002.md' } },
+      {
+        kind: 'event',
+        event: {
+          type: 'completed',
+          commitSha: 'def',
+          milestoneCount: 3,
+          handoffPath: '.agents/handoffs/handoff.0002.md',
+          promptTokens: 5,
+          outputTokens: 2,
+        },
+      },
+    ])
+
+    expect(continuation.status).toBe('Completed')
+    expect(continuation.handoff).toEqual({ sequence: 2, path: '.agents/handoffs/handoff.0002.md' })
+    expect(continuation.completion?.handoffPath).toBe('.agents/handoffs/handoff.0002.md')
+  })
+
   it('clears all run state on reset', () => {
     const failed = drive(initialExecutionRunState, [
       { kind: 'event', event: { type: 'run-started', phase: 'ExecutePlan' } },

@@ -14,6 +14,9 @@ describe('decisionRunReducer', () => {
     expect(initialDecisionRunState.editableDecisions).toBeNull()
     expect(initialDecisionRunState.completion).toBeNull()
     expect(initialDecisionRunState.submittedPath).toBeNull()
+    expect(initialDecisionRunState.submittedNumberedPath).toBeNull()
+    expect(initialDecisionRunState.submittedSequence).toBeNull()
+    expect(initialDecisionRunState.iteration).toBe(0)
     expect(initialDecisionRunState.failure).toBeNull()
   })
 
@@ -118,7 +121,7 @@ describe('decisionRunReducer', () => {
     expect(next.editableDecisions).toBe('reviewer edited text')
   })
 
-  it('reaches the Submitted terminal state with the persisted path', () => {
+  it('records the persisted path and closes the gate on submitted', () => {
     const next = drive(initialDecisionRunState, [
       { kind: 'event', event: { type: 'run-started', phase: 'DecisionRun' } },
       { kind: 'event', event: { type: 'review-ready', decisions: 'decisions' } },
@@ -128,7 +131,40 @@ describe('decisionRunReducer', () => {
 
     expect(next.status).toBe('Submitted')
     expect(next.submittedPath).toBe('.agents/decisions/decisions.md')
-    expect(next.editableDecisions).toBe('edited decisions')
+    // The captured edit is preserved for display; the editable gate is closed.
+    expect(next.editableDecisions).toBeNull()
+  })
+
+  it('surfaces the rotated numbered submission path and sequence when the loop reports them', () => {
+    const next = drive(initialDecisionRunState, [
+      { kind: 'event', event: { type: 'run-started', phase: 'DecisionRun' } },
+      { kind: 'event', event: { type: 'review-ready', decisions: 'decisions' } },
+      {
+        kind: 'event',
+        event: {
+          type: 'submitted',
+          path: '.agents/decisions/decisions.md',
+          sequence: 1,
+          numberedPath: '.agents/decisions/decisions.0001.md',
+        },
+      },
+    ])
+
+    expect(next.submittedSequence).toBe(1)
+    expect(next.submittedNumberedPath).toBe('.agents/decisions/decisions.0001.md')
+  })
+
+  it('marks the optimistic Submitting state when the reviewer submits', () => {
+    const next = drive(initialDecisionRunState, [
+      { kind: 'event', event: { type: 'run-started', phase: 'DecisionRun' } },
+      { kind: 'event', event: { type: 'review-ready', decisions: 'decisions' } },
+      { kind: 'edit', decisions: 'edited decisions' },
+      { kind: 'submit' },
+    ])
+
+    // Submit optimistically closes the gate and waits for the backend confirmation.
+    expect(next.status).toBe('Submitting')
+    expect(next.editableDecisions).toBeNull()
   })
 
   it('surfaces a failed event with phase, reason, and detail', () => {
@@ -165,22 +201,66 @@ describe('decisionRunReducer', () => {
     expect(next.streamedText).toBe('early chunk')
   })
 
-  it('does not reopen the review gate after submission', () => {
-    const submitted = drive(initialDecisionRunState, [
+  it('starts the first decision turn at iteration 1', () => {
+    const next = decisionRunReducer(initialDecisionRunState, {
+      kind: 'event',
+      event: { type: 'run-started', phase: 'DecisionRun' },
+    })
+
+    expect(next.iteration).toBe(1)
+  })
+
+  it('reopens the review gate when the next decision run auto-starts after submit', () => {
+    // Submit is no longer terminal: the server runs a continuation turn and auto-starts the next
+    // decision run, which arrives as a fresh run-started and reopens the human-review gate.
+    const afterSubmit = drive(initialDecisionRunState, [
       { kind: 'event', event: { type: 'run-started', phase: 'DecisionRun' } },
       { kind: 'event', event: { type: 'review-ready', decisions: 'first' } },
-      { kind: 'edit', decisions: 'edited' },
+      { kind: 'edit', decisions: 'edited first' },
       { kind: 'event', event: { type: 'submitted', path: '.agents/decisions/decisions.md' } },
     ])
 
-    const afterLate = decisionRunReducer(submitted, {
+    const nextRun = drive(afterSubmit, [
+      { kind: 'event', event: { type: 'run-started', phase: 'DecisionRun' } },
+    ])
+
+    // The next run resets the streamed output and reopens streaming, advancing the iteration.
+    expect(nextRun.status).toBe('Running')
+    expect(nextRun.iteration).toBe(2)
+    expect(nextRun.streamedText).toBe('')
+    expect(nextRun.editableDecisions).toBeNull()
+    expect(nextRun.submittedPath).toBeNull()
+
+    const secondReview = decisionRunReducer(nextRun, {
       kind: 'event',
       event: { type: 'review-ready', decisions: 'second' },
     })
 
-    expect(afterLate.status).toBe('Submitted')
-    expect(afterLate.editableDecisions).toBe('edited')
-    expect(afterLate.proposedDecisions).toBe('first')
+    expect(secondReview.status).toBe('Completed')
+    expect(secondReview.editableDecisions).toBe('second')
+    expect(secondReview.proposedDecisions).toBe('second')
+  })
+
+  it('drives two full review/submit iterations on one run machine', () => {
+    const firstSubmit = drive(initialDecisionRunState, [
+      { kind: 'event', event: { type: 'run-started', phase: 'DecisionRun' } },
+      { kind: 'event', event: { type: 'review-ready', decisions: 'proposal one' } },
+      { kind: 'submit' },
+      { kind: 'event', event: { type: 'submitted', path: '.agents/decisions/decisions.md' } },
+    ])
+
+    expect(firstSubmit.iteration).toBe(1)
+
+    const secondSubmit = drive(firstSubmit, [
+      // The auto-started continuation decision run.
+      { kind: 'event', event: { type: 'run-started', phase: 'DecisionRun' } },
+      { kind: 'event', event: { type: 'review-ready', decisions: 'proposal two' } },
+      { kind: 'submit' },
+      { kind: 'event', event: { type: 'submitted', path: '.agents/decisions/decisions.md' } },
+    ])
+
+    expect(secondSubmit.status).toBe('Submitted')
+    expect(secondSubmit.iteration).toBe(2)
   })
 
   it('does not let a late non-terminal frame clobber a failed run', () => {

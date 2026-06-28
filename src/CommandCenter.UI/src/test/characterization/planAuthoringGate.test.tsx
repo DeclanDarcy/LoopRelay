@@ -79,7 +79,7 @@ describe('App plan-authoring gate', () => {
     expect(screen.queryByLabelText('Repository workspace')).not.toBeInTheDocument()
   })
 
-  it('runs execution then the decision review gate before navigating to the workspace', async () => {
+  it('runs execution, the decision review gate, then loops on submit until the user leaves', async () => {
     renderWithWorkspaceCertification(<App />)
     await selectEmptyRepository()
     await screen.findByRole('region', { name: 'Plan authoring' })
@@ -107,7 +107,13 @@ describe('App plan-authoring gate', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Generate decisions' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Submit decisions' }))
 
-    // Only once the decisions are persisted does the app navigate to the workspace.
+    // Submit is no longer a navigation: the server runs the continuation turn and reopens the gate
+    // for the next turn. The app stays on the authoring screen, not the workspace.
+    await screen.findByText(/Turn 2/)
+    expect(screen.queryByLabelText('Repository workspace')).not.toBeInTheDocument()
+
+    // Only an explicit exit leaves the loop for the workspace.
+    fireEvent.click(await screen.findByRole('button', { name: 'Go to workspace' }))
     expect(await screen.findByLabelText('Repository workspace')).toBeInTheDocument()
     await waitFor(() => {
       expect(screen.queryByRole('region', { name: 'Plan authoring' })).not.toBeInTheDocument()

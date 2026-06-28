@@ -2,18 +2,25 @@
 // streams these events over SSE; the UI only renders them — it never composes prompt
 // text, selects prompt classes, or replicates the backend's orchestration logic.
 
-export type ExecutionRunPhase = 'ExecutePlan' | 'ExtractMilestones' | 'StartExecution'
+// ContinueExecution is the m6 continuation turn: after decisions are submitted the server reuses
+// the execution stream vocabulary to run the next handoff turn, so the same machine renders it.
+export type ExecutionRunPhase =
+  | 'ExecutePlan'
+  | 'ExtractMilestones'
+  | 'StartExecution'
+  | 'ContinueExecution'
 
 export type ExecutionRunLifecycleState = 'ExecutingPlan'
 
 export type ExecutionRunStartedEvent = {
   type: 'run-started'
-  phase: 'ExecutePlan'
+  // ExecutePlan is the first run; ContinueExecution is each post-submit continuation run.
+  phase: 'ExecutePlan' | 'ContinueExecution'
 }
 
 export type ExecutionRunPhaseEvent = {
   type: 'phase'
-  phase: 'ExtractMilestones' | 'StartExecution'
+  phase: 'ExtractMilestones' | 'StartExecution' | 'ContinueExecution'
 }
 
 export type ExecutionRunDeltaEvent = {

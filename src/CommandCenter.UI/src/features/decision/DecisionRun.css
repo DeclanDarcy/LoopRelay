@@ -144,7 +144,15 @@
 
 .cc-decision-review-actions {
   display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
   margin-top: 4px;
+}
+
+/* The turn counter rides the Decisions eyebrow once the continuation loop is past its first turn,
+   so the reviewer always knows which iteration they are reviewing. */
+.cc-decision-turn {
+  color: var(--accent-fg);
 }
 
 .cc-decision-submitted {
@@ -155,6 +163,14 @@
   border: 1px solid var(--accent-muted);
   border-radius: var(--radius-12);
   background: var(--accent-subtle);
+}
+
+/* The "Continuing" eyebrow carries a live dot: submission is a handoff to the next turn, not an
+   end, so the surface stays active rather than reading as a terminal confirmation. */
+.cc-decision-continuing-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
 }
 
 .cc-decision-submitted-reason {

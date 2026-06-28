@@ -4759,6 +4759,50 @@ function simulateExecutionStream(state: MockState, repositoryId: string) {
   window.setTimeout(pushNext, 12)
 }
 
+// The post-submit continuation turn. It reuses the execution-stream vocabulary but reports the
+// ContinueExecution phase and rotates the next handoff. `sequence` advances per iteration so the
+// loop produces distinct handoff paths. onComplete fires once the run finishes, so the caller can
+// chain the auto-started next decision run.
+function simulateContinuationStream(
+  state: MockState,
+  repositoryId: string,
+  sequence: number,
+  onComplete: () => void,
+) {
+  const handoffPath = `.agents/handoffs/handoff.${String(sequence).padStart(4, '0')}.md`
+  const commitSha = `c0ntinu3${sequence}`
+  const frames: ExecutionRunEvent[] = [
+    { type: 'run-started', phase: 'ContinueExecution' },
+    { type: 'phase', phase: 'ContinueExecution' },
+    { type: 'delta', phase: 'ContinueExecution', text: 'Applying submitted decisions…\n' },
+    { type: 'delta', phase: 'ContinueExecution', text: 'Running the next turn…\n' },
+    { type: 'committed', commitSha, pushed: true },
+    { type: 'handoff-rotated', sequence, path: handoffPath },
+    {
+      type: 'completed',
+      commitSha,
+      milestoneCount: 3,
+      handoffPath,
+      promptTokens: 3800,
+      outputTokens: 1600,
+    },
+  ]
+
+  let cursor = 0
+  const pushNext = () => {
+    if (cursor >= frames.length) {
+      onComplete()
+      return
+    }
+
+    emitExecutionEvent(state, repositoryId, frames[cursor])
+    cursor += 1
+    window.setTimeout(pushNext, 12)
+  }
+
+  window.setTimeout(pushNext, 12)
+}
+
 function emitDecisionEvent(state: MockState, repositoryId: string, event: DecisionRunEvent) {
   const subscribers = state.decisionStreamSubscribers[repositoryId] ?? []
   subscribers.forEach((notify) => notify(event))
@@ -4798,13 +4842,31 @@ function simulateDecisionStream(state: MockState, repositoryId: string) {
   window.setTimeout(pushNext, 12)
 }
 
+// Tracks how many submissions each repository has confirmed, so the continuation loop can rotate
+// distinct numbered submission and handoff paths across iterations.
+const decisionSubmitSequences: Record<string, number> = {}
+
 function simulateDecisionSubmit(state: MockState, repositoryId: string) {
-  // The edited decisions are persisted; the backend confirms with a submitted frame carrying the
-  // repository-owned path. This is what closes the human-review gate.
+  // Submit is no longer terminal. The backend confirms with a `submitted` frame carrying the live
+  // canonical path plus the rotated numbered submission path, then runs the ContinueExecution turn
+  // on the execution stream, then auto-starts the next decision run on the decision stream. The
+  // chain lets the loop complete two or more full iterations without leaving the screen.
+  const sequence = (decisionSubmitSequences[repositoryId] ?? 0) + 1
+  decisionSubmitSequences[repositoryId] = sequence
+  const numberedPath = `.agents/decisions/decisions.${String(sequence).padStart(4, '0')}.md`
+
   window.setTimeout(() => {
     emitDecisionEvent(state, repositoryId, {
       type: 'submitted',
       path: '.agents/decisions/decisions.md',
+      sequence,
+      numberedPath,
+    })
+
+    // The continuation turn streams on the execution stream; when it completes the server auto-
+    // starts the next decision run, returning to the human-review gate.
+    simulateContinuationStream(state, repositoryId, sequence, () => {
+      simulateDecisionStream(state, repositoryId)
     })
   }, 12)
 }
@@ -4816,6 +4878,10 @@ export function installDevTauriMock() {
   }
 
   const state = createInitialState()
+  // Reset the per-repository submission counters so each fresh install starts the loop at turn 1.
+  for (const key of Object.keys(decisionSubmitSequences)) {
+    delete decisionSubmitSequences[key]
+  }
   window.__COMMAND_CENTER_MOCK_STATE__ = state
   window.__TAURI_INTERNALS__ = {
     callbacks: {},

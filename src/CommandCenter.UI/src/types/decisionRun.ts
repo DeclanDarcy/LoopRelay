@@ -42,7 +42,12 @@ export type DecisionRunReviewReadyEvent = {
 
 export type DecisionRunSubmittedEvent = {
   type: 'submitted'
+  // The live canonical decisions path the submission persisted to.
   path: string
+  // The rotated numbered submission path and its sequence, present once the loop is running.
+  // Optional so a single-shot submit (no continuation) still type-checks.
+  sequence?: number
+  numberedPath?: string
 }
 
 export type DecisionRunFailedEvent = {
@@ -62,7 +67,15 @@ export type DecisionRunEvent =
   | DecisionRunSubmittedEvent
   | DecisionRunFailedEvent
 
-export type DecisionRunStatus = 'Idle' | 'Running' | 'Completed' | 'Submitted' | 'Failed'
+// The submit no longer ends the run: after Submitted the server runs a continuation turn and
+// auto-starts the next decision run, so the machine loops back to Running. Only Failed is terminal.
+export type DecisionRunStatus =
+  | 'Idle'
+  | 'Running'
+  | 'Completed'
+  | 'Submitting'
+  | 'Submitted'
+  | 'Failed'
 
 export type DecisionRunDiagnostics = {
   sandbox: string
@@ -91,5 +104,12 @@ export type DecisionRunState = {
   completion: DecisionRunCompletion | null
   // The persisted decisions path, set once a submit succeeds.
   submittedPath: string | null
+  // The rotated numbered submission path the most recent submit produced, when the loop reports it.
+  submittedNumberedPath: string | null
+  // The rotated submission sequence the most recent submit produced, when the loop reports it.
+  submittedSequence: number | null
+  // Which decision turn the human is on, starting at 1 for the first proposal. Each auto-started
+  // continuation decision run increments this so the surface can show the iteration.
+  iteration: number
   failure: { phase: string | null; reason: string; detail: string | null } | null
 }

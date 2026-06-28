@@ -41,7 +41,9 @@ export function PlanAuthoringScreen({
 
   const isTurnRunning = state.status === 'Planning' || state.status === 'Revising'
   const isExecuting = state.status === 'Executing'
-  const { state: executionState } = useExecutionStream(repositoryId, isExecuting)
+  // The execution stream stays subscribed for the whole continuation loop, not just the first
+  // run: after decisions are submitted the server reuses it for the ContinueExecution turn.
+  const { state: executionState } = useExecutionStream(repositoryId, isExecuting || decisionPhase)
   const {
     state: decisionState,
     generateDecisions,
@@ -49,6 +51,9 @@ export function PlanAuthoringScreen({
     submitReviewedDecisions,
   } = useDecisionStream(repositoryId, decisionPhase)
   const inputsDisabled = isTurnRunning || isExecuting || decisionPhase
+  // A continuation turn is streaming on the execution stream when, inside the decision phase, the
+  // execution run is live again. While it streams the execution surface takes the foreground.
+  const continuationRunning = decisionPhase && executionState.status === 'Running'
   const canWrite = roadmap.trim().length > 0 && !inputsDisabled
   const hasPlan = state.plan !== null
   const canRevise = feedback.trim().length > 0 && hasPlan && !inputsDisabled
@@ -61,20 +66,14 @@ export function PlanAuthoringScreen({
   }, [isSessionActive, onSessionActiveChange])
 
   // The screen stays mounted through the whole execution run so the user can watch each phase
-  // stream in. When the run completes, the decision phase begins in place rather than navigating.
+  // stream in. When the FIRST run completes, the decision phase begins in place rather than
+  // navigating. Continuation runs (inside the decision phase) keep the phase open — they are
+  // driven by the server and return to the decision stream automatically.
   useEffect(() => {
     if (isExecuting && executionState.status === 'Completed') {
       setDecisionPhase(true)
     }
   }, [executionState.status, isExecuting])
-
-  // Navigation to the workspace only happens once the human-review gate closes — that is, after
-  // the reviewer submits the decisions and the backend confirms they were persisted.
-  useEffect(() => {
-    if (decisionPhase && decisionState.status === 'Submitted') {
-      onExecuted?.()
-    }
-  }, [decisionPhase, decisionState.status, onExecuted])
 
   const writePlanNow = () => {
     if (!canWrite) {
@@ -158,11 +157,12 @@ export function PlanAuthoringScreen({
         <PlanStreamView text={state.streamedText} turnPhase={state.turnPhase} />
       ) : null}
 
-      {isExecuting ? (
+      {isExecuting || continuationRunning ? (
         <ExecutionStreamView
           state={executionState}
           onDismissFailure={() => {
             // Return to the plan controls. The plan is preserved, so reset lands on PlanReady.
+            setDecisionPhase(false)
             dismissFailure()
           }}
         />
@@ -174,6 +174,12 @@ export function PlanAuthoringScreen({
           onGenerate={() => void generateDecisions()}
           onEditDecisions={editDecisions}
           onSubmitDecisions={(decisions) => void submitReviewedDecisions(decisions)}
+          onFinish={() => {
+            // The reviewer explicitly leaves the continuation loop for the workspace. This is the
+            // only navigation away — submitting alone keeps the loop running.
+            setDecisionPhase(false)
+            onExecuted?.()
+          }}
           onDismissFailure={() => {
             // Leave the decision phase and return to the plan controls. The plan is preserved.
             setDecisionPhase(false)

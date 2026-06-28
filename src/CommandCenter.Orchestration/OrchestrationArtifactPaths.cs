@@ -26,6 +26,22 @@ public static class OrchestrationArtifactPaths
     /// </summary>
     public const string Decisions = ".agents/decisions/decisions.md";
 
+    /// <summary>Directory holding the live <c>decisions.md</c> and its rotated submission history (m6).</summary>
+    public const string DecisionsDirectory = ".agents/decisions";
+
+    /// <summary>
+    /// Glob matching the rotated decision submissions (<c>decisions.0001.md</c>, ...) but NOT the live
+    /// <c>decisions.md</c> (single-dot) — symmetric with <see cref="HistoricalHandoffSearchPattern"/>.
+    /// </summary>
+    public const string HistoricalDecisionSearchPattern = "decisions.*.md";
+
+    /// <summary>
+    /// Rotated decision submission path: <c>decisions.0001.md</c>, <c>decisions.0002.md</c>, ... Each human
+    /// Submit persists a numbered copy for history/recovery alongside rewriting the live <see cref="Decisions"/>
+    /// the next continuation reads (run-scoped 4-digit counter, m6).
+    /// </summary>
+    public static string HistoricalDecision(int sequence) => $".agents/decisions/decisions.{sequence:0000}.md";
+
     /// <summary>Directory the milestone-extraction turn writes <c>m*.md</c> files into (m4).</summary>
     public const string MilestonesDirectory = ".agents/milestones";
 

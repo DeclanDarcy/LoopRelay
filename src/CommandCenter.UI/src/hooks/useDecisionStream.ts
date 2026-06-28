@@ -113,8 +113,9 @@ export function useDecisionStream(repositoryId: string | null, active: boolean) 
     dispatch({ kind: 'edit', decisions })
   }, [])
 
-  // Submitting persists the (possibly edited) decisions through the human-review gate. The
-  // backend confirms with a `submitted` SSE frame, which lands the terminal state.
+  // Submitting persists the (possibly edited) decisions through the human-review gate. The gate
+  // closes optimistically; the backend confirms with a `submitted` SSE frame, then runs the
+  // continuation turn and auto-starts the next decision run, which reopens the gate.
   const submitReviewedDecisions = useCallback(async (decisions: string) => {
     const targetRepositoryId = repositoryIdRef.current
     if (!targetRepositoryId) {
@@ -122,6 +123,7 @@ export function useDecisionStream(repositoryId: string | null, active: boolean) 
     }
 
     setError(null)
+    dispatch({ kind: 'submit' })
     try {
       await submitDecisions(targetRepositoryId, decisions)
     } catch (submitError) {

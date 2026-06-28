@@ -81,6 +81,12 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
     // by the single active decision run (serialized by decisionState), so a volatile read/write is enough.
     private volatile bool decisionSeeded;
 
+    // The flow-specific conversation projection (m6): an append-only transcript of the loop's turns. Guarded
+    // by its own lock because it is appended from background runs (planning/execution/decision) and read by
+    // the GET /conversation endpoint concurrently.
+    private readonly List<ConversationEntry> conversation = new();
+    private int conversationSequence;
+
     private volatile bool disposed;
 
     public RepositoryOrchestrator(
@@ -157,6 +163,21 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
 
     public PromptProvenance? LastDecisionProvenance =>
         decisionProvenance.Count > 0 ? decisionProvenance[^1] : null;
+
+    /// <summary>
+    /// The flow-specific conversation projection (m6): an ordered, append-only transcript of the loop's turns
+    /// (planning, operational output, decision output, submit, continuation). A snapshot copy, safe to enumerate.
+    /// </summary>
+    public ConversationProjection Conversation
+    {
+        get
+        {
+            lock (conversation)
+            {
+                return new ConversationProjection(conversation.ToArray());
+            }
+        }
+    }
 
     /// <summary>
     /// Reports plan existence + lifecycle state from the durable artifact, NOT from any live handle —
@@ -328,10 +349,15 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
     }
 
     /// <summary>
-    /// The human review gate (m5): persist the reviewed/edited decisions the operator submits. This is the ONLY
-    /// way captured decision output crosses into operational authority — it writes the canonical
-    /// <c>.agents/decisions/decisions.md</c> every downstream consumer reads, so the next execution turn picks
-    /// up the human-approved governance. Nothing here runs an agent or touches Git.
+    /// The human review gate + continuation driver (m5 gate, m6 loop): persist the reviewed/edited decisions
+    /// the operator submits, then continue operational execution. This is the ONLY way captured decision output
+    /// crosses into operational authority. It persists a rotated, numbered submission (<c>decisions.000N.md</c>)
+    /// for history/recovery AND rewrites the canonical <c>.agents/decisions/decisions.md</c> every downstream
+    /// consumer + the next continuation reads, THEN launches a background <c>ContinueExecution</c> run over the
+    /// cached plan, latest handoff, and these decisions (streamed to <see cref="ExecutionStream"/>). The
+    /// continuation is an operational execution run, so it claims the repository-wide run gate up front (a 409
+    /// if a planning turn or another execution/continuation run holds it) BEFORE any persistence, so a rejected
+    /// submit leaves no half-written state. Persistence always completes before the continuation turn runs.
     /// </summary>
     public async Task BeginSubmitDecisionsAsync(Repository repository, string decisions, CancellationToken cancellationToken = default)
     {
@@ -341,10 +367,37 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
             throw new ArgumentException("Decisions text is required to submit decisions.", nameof(decisions));
         }
 
-        string decisionsPath = ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.Decisions);
-        await artifactStore.WriteAsync(decisionsPath, decisions).ConfigureAwait(false);
-        RecordDecisions(decisions);
-        TryPublishDecision("submitted", new { path = OrchestrationArtifactPaths.Decisions });
+        ClaimExecutionRun();
+        try
+        {
+            // Persist BEFORE the continuation starts (certification): a numbered submission for recovery plus
+            // the live canonical decisions.md the ContinueExecution turn and every downstream consumer read.
+            int sequence = await NextDecisionSequenceAsync(repository).ConfigureAwait(false);
+            string numberedRelative = OrchestrationArtifactPaths.HistoricalDecision(sequence);
+            await artifactStore.WriteAsync(
+                ArtifactPath.ResolveRepositoryPath(repository, numberedRelative), decisions).ConfigureAwait(false);
+            await artifactStore.WriteAsync(
+                ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.Decisions), decisions).ConfigureAwait(false);
+            RecordDecisions(decisions);
+            AdvanceIteration();
+            AppendConversation(ConversationEntryKind.Submit, $"Submitted decisions #{sequence}.", numberedRelative);
+
+            // path stays the live canonical path (back-compat with the m5 contract); the rotated submission is
+            // additive (numberedPath/sequence) so the UI can show recovery state.
+            TryPublishDecision("submitted", new
+            {
+                path = OrchestrationArtifactPaths.Decisions,
+                numberedPath = numberedRelative,
+                sequence,
+            });
+
+            await LaunchContinuationRunAsync(repository, decisions).ConfigureAwait(false);
+        }
+        catch
+        {
+            ReleaseExecutionRun();
+            throw;
+        }
     }
 
     public void RecordPlan(string plan)
@@ -625,6 +678,7 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
 
             string plan = await artifactStore.ReadAsync(planPath).ConfigureAwait(false) ?? string.Empty;
             RecordPlan(plan);
+            AppendConversation(ConversationEntryKind.Planning, $"Plan authored ({phase}).", OrchestrationArtifactPaths.Plan);
             PlanningStream.Publish("completed", Serialize(new
             {
                 plan,
@@ -813,6 +867,7 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
                 handoff).ConfigureAwait(false);
             await artifactStore.DeleteAsync(livePath).ConfigureAwait(false);
             ExecutionStream.Publish("handoff-rotated", Serialize(new { sequence, path = rotatedRelative }));
+            AppendConversation(ConversationEntryKind.OperationalOutput, $"Start execution produced handoff #{sequence}.", rotatedRelative);
 
             ExecutionStream.Publish("completed", Serialize(new
             {
@@ -856,6 +911,221 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
         catch (InvalidOperationException)
         {
             // Stream already completed during teardown; nothing left to notify.
+        }
+    }
+
+    // ---- Continuation Loop (m6) ----
+
+    // Mirrors LaunchExecutionRunAsync: assigns executionRun + captures the lifetime token UNDER the gate with a
+    // fresh disposed re-check, so the continuation is never launched after DisposeAsync flips disposed, and one
+    // launched before it is always visible to the dispose drain.
+    private async Task LaunchContinuationRunAsync(Repository repository, string decisions)
+    {
+        await gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            ObjectDisposedException.ThrowIf(disposed, this);
+            CancellationToken token = lifetimeCts.Token;
+            executionRun = Task.Run(() => RunContinuationAsync(repository, decisions, token));
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private async Task RunContinuationAsync(Repository repository, string decisions, CancellationToken cancellationToken)
+    {
+        bool continued = false;
+        try
+        {
+            ExecutionStream.Publish("run-started", Serialize(new { phase = "ContinueExecution" }));
+
+            // The cached plan under the reserved {repositoryId}:Plan slot (m4 cached it at Execute Plan), with a
+            // fall back to the live plan artifact so a restarted orchestrator still continues against the plan.
+            string plan = await ResolvePlanAsync(repository).ConfigureAwait(false);
+
+            // The latest execution handoff, resolved from DISK (restart-safe): live handoff.md else newest rotated.
+            (string? handoff, string? handoffPath) = await ReadLatestHandoffAsync(repository).ConfigureAwait(false);
+            if (handoff is null)
+            {
+                ExecutionStream.Publish("failed", Serialize(new
+                {
+                    phase = "ContinueExecution",
+                    reason = "No execution handoff is available to continue from; execute a plan first.",
+                }));
+                return;
+            }
+
+            // Continue operational execution — Operational, Medium, one-shot. Writes the next live handoff.
+            ExecutionStream.Publish("phase", Serialize(new { phase = "ContinueExecution" }));
+            AgentTurnResult continuation = await agentRuntime.RunOneShotAsync(
+                BuildOperationalSpec(repository, AgentEffortLevel.Medium, identifier: null),
+                ContinueExecution.Render(plan, handoff, decisions),
+                chunk => PublishExecutionDelta("ContinueExecution", chunk),
+                cancellationToken).ConfigureAwait(false);
+            executionProvenance.Add(BuildContinueExecutionProvenance(handoffPath!));
+            if (continuation.State != AgentTurnState.Completed)
+            {
+                ExecutionStream.Publish("failed", Serialize(new
+                {
+                    phase = "ContinueExecution",
+                    reason = DescribeExecutionFailure(continuation.State, "continue execution"),
+                    detail = continuation.Output,
+                }));
+                return;
+            }
+
+            // Verify + read the new live handoff, then rotate it to the NEXT handoff.000N.md. The sequence is
+            // computed from DISK (newest rotated + 1), so the loop survives a restart without clobbering history.
+            string livePath = ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.LiveHandoff);
+            if (!await artifactStore.ExistsAsync(livePath).ConfigureAwait(false))
+            {
+                ExecutionStream.Publish("failed", Serialize(new
+                {
+                    phase = "ContinueExecution",
+                    reason = "Continue execution completed but .agents/handoffs/handoff.md was not written.",
+                }));
+                return;
+            }
+
+            string newHandoff = await artifactStore.ReadAsync(livePath).ConfigureAwait(false) ?? string.Empty;
+            RecordHandoff(newHandoff);
+
+            int sequence = await NextHandoffSequenceAsync(repository).ConfigureAwait(false);
+            string rotatedRelative = OrchestrationArtifactPaths.HistoricalHandoff(sequence);
+            await artifactStore.WriteAsync(
+                ArtifactPath.ResolveRepositoryPath(repository, rotatedRelative), newHandoff).ConfigureAwait(false);
+            await artifactStore.DeleteAsync(livePath).ConfigureAwait(false);
+            ExecutionStream.Publish("handoff-rotated", Serialize(new { sequence, path = rotatedRelative }));
+            AppendConversation(ConversationEntryKind.Continuation, $"Continuation produced handoff #{sequence}.", rotatedRelative);
+
+            ExecutionStream.Publish("completed", Serialize(new
+            {
+                handoffPath = rotatedRelative,
+                promptTokens = continuation.Usage.PromptTokens,
+                outputTokens = continuation.Usage.OutputTokens,
+            }));
+            continued = true;
+        }
+        catch (OperationCanceledException)
+        {
+            // Disposing (lifetime cancelled). The stream is about to Complete(); do not publish into it.
+        }
+        catch (Exception exception)
+        {
+            TryPublishExecutionFailed(exception.Message);
+        }
+        finally
+        {
+            ReleaseExecutionRun();
+        }
+
+        // Router evaluation (m6 = reuse the warm Decision process; m7 adds Transfer). After a SUCCESSFUL
+        // continuation, route the next decision turn so the UI returns to decision streaming without leaving
+        // the Plan Authoring screen. Runs on the INDEPENDENT decision gate, AFTER the execution gate is released.
+        if (continued && !cancellationToken.IsCancellationRequested)
+        {
+            await StartNextDecisionRunAsync(repository).ConfigureAwait(false);
+        }
+    }
+
+    // The m6 router seam: for now it always reuses the warm Decision process (m7 introduces Transfer). Best
+    // effort — swallows a claim conflict (a decision run is already active) and disposal so a continuation that
+    // raced teardown or an already-running decision run never faults the continuation task.
+    private async Task StartNextDecisionRunAsync(Repository repository)
+    {
+        try
+        {
+            await BeginDecisionRunAsync(repository).ConfigureAwait(false);
+        }
+        catch (ObjectDisposedException)
+        {
+            // Orchestrator torn down between continuation success and the follow-up launch.
+        }
+        catch (InvalidOperationException)
+        {
+            // A decision run is already active, or the operational context vanished — nothing to start.
+        }
+    }
+
+    // The cached plan per the spec's ContinueExecution.Render(MemoryCache.Get("{repositoryId}:Plan"), ...): the
+    // reserved active-run slot first, then the in-process CachedPlan, then the live plan artifact so a restarted
+    // orchestrator continues against the real plan rather than an empty string.
+    private async Task<string> ResolvePlanAsync(Repository repository)
+    {
+        if (memoryCache.TryGetValue(OrchestrationCacheKeys.PlanRun(RepositoryId), out ActiveRunSnapshot? snapshot) &&
+            snapshot?.Plan is { Length: > 0 } cachedPlan)
+        {
+            return cachedPlan;
+        }
+
+        if (CachedPlan is { Length: > 0 })
+        {
+            return CachedPlan;
+        }
+
+        string planPath = ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.Plan);
+        return await artifactStore.ReadAsync(planPath).ConfigureAwait(false) ?? string.Empty;
+    }
+
+    // Next rotated decision number = (highest existing decisions.000N.md) + 1, computed from DISK so a restarted
+    // orchestrator (in-memory state lost) continues the sequence rather than clobbering decisions.0001.md. This
+    // is the recovery anchor for "latest persisted decision sequence".
+    private async Task<int> NextDecisionSequenceAsync(Repository repository)
+    {
+        IReadOnlyList<string> existing = await artifactStore.ListAsync(
+            ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.DecisionsDirectory),
+            OrchestrationArtifactPaths.HistoricalDecisionSearchPattern).ConfigureAwait(false);
+        return HighestSequence(existing) + 1;
+    }
+
+    // Next rotated handoff number = (highest existing handoff.000N.md) + 1, from DISK (restart-safe). m4's
+    // first rotation uses an in-memory counter under its one-way re-execution guard; the continuation loop must
+    // read disk so it never clobbers the history the previous run (or a previous process) already rotated.
+    private async Task<int> NextHandoffSequenceAsync(Repository repository)
+    {
+        IReadOnlyList<string> existing = await artifactStore.ListAsync(
+            ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.HandoffsDirectory),
+            OrchestrationArtifactPaths.HistoricalHandoffSearchPattern).ConfigureAwait(false);
+        return HighestSequence(existing) + 1;
+    }
+
+    // Parses the zero-padded 4-digit sequence out of each rotated file name (handoff.0007.md / decisions.0007.md
+    // -> 7) and returns the max, or 0 when none exist. The penultimate dot-segment is the number for both schemes.
+    private static int HighestSequence(IReadOnlyList<string> rotatedPaths)
+    {
+        int highest = 0;
+        foreach (string path in rotatedPaths)
+        {
+            string fileName = Path.GetFileName(path);
+            string[] parts = fileName.Split('.');
+            if (parts.Length >= 3 && int.TryParse(parts[^2], out int sequence) && sequence > highest)
+            {
+                highest = sequence;
+            }
+        }
+
+        return highest;
+    }
+
+    private static PromptProvenance BuildContinueExecutionProvenance(string handoffPath) =>
+        new()
+        {
+            PromptName = nameof(ContinueExecution),
+            PromptType = typeof(ContinueExecution).FullName!,
+            SourceHash = ContinueExecution.SourceHash,
+            SessionRole = PromptSessionRole.OperationalExecution,
+            WorkflowPhase = "ContinueExecution",
+            InputArtifactIdentities = new[] { OrchestrationArtifactPaths.Plan, handoffPath, OrchestrationArtifactPaths.Decisions },
+            OutputArtifactIdentities = new[] { OrchestrationArtifactPaths.LiveHandoff },
+        };
+
+    private void AppendConversation(ConversationEntryKind kind, string summary, string? reference)
+    {
+        lock (conversation)
+        {
+            conversation.Add(new ConversationEntry(++conversationSequence, kind, IterationCounter, summary, reference));
         }
     }
 
@@ -983,6 +1253,7 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
             }));
 
             // The output becomes editable user content ONLY now, after the turn completed (review gate).
+            AppendConversation(ConversationEntryKind.DecisionOutput, "Decisions proposed and ready for review.", handoffPath);
             DecisionStream.Publish("review-ready", Serialize(new { decisions }));
         }
         catch (OperationCanceledException)

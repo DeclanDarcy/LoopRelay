@@ -41,6 +41,7 @@ public sealed class BackendEndpointDispositionTests
         Assert.Contains(dispositions, disposition => disposition.Family == EndpointFamily.Execution);
         Assert.Contains(dispositions, disposition => disposition.Family == EndpointFamily.Reasoning);
         Assert.Contains(dispositions, disposition => disposition.Family == EndpointFamily.Continuity);
+        Assert.Contains(dispositions, disposition => disposition.Family == EndpointFamily.Conversation);
         Assert.Contains(dispositions, disposition => disposition.Family == EndpointFamily.Artifacts);
     }
 
@@ -161,6 +162,11 @@ public sealed class BackendEndpointDispositionTests
             return EndpointFamily.Continuity;
         }
 
+        if (pattern.StartsWith("/api/repositories/{repositoryId:guid}/conversation", StringComparison.Ordinal))
+        {
+            return EndpointFamily.Conversation;
+        }
+
         if (pattern.StartsWith("/api/repositories/{repositoryId:guid}/reasoning", StringComparison.Ordinal))
         {
             return EndpointFamily.Reasoning;
@@ -207,6 +213,7 @@ public sealed class BackendEndpointDispositionTests
         Execution,
         OperationalContext,
         Continuity,
+        Conversation,
         Reasoning
     }
 

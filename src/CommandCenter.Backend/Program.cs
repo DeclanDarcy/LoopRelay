@@ -82,6 +82,7 @@ public static class Program
         app.MapExecutionSessionsEndpoints();
         app.MapDecisionEndpoints();
         app.MapDecisionRuntimeEndpoints();
+        app.MapConversationEndpoints();
         app.MapReasoningEndpoints();
         app.MapDecisionSessionEndpoints();
         app.MapWorkflowEndpoints();

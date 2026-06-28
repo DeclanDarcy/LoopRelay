@@ -7,6 +7,9 @@ type DecisionRuntimeViewProps = {
   onGenerate: () => void
   onEditDecisions: (decisions: string) => void
   onSubmitDecisions: (decisions: string) => void
+  // Leave the continuation loop and go to the workspace. The loop otherwise runs indefinitely,
+  // so this is the reviewer's explicit exit — the only way navigation happens.
+  onFinish?: () => void
   onDismissFailure?: () => void
 }
 
@@ -27,29 +30,46 @@ const PHASE_LABEL: Record<string, string> = {
   GetNextDecisions: 'Proposing decisions',
 }
 
+// Ordinal label for the current decision turn, used only once the loop is past its first turn so
+// the reviewer can see which iteration they are reviewing.
+function iterationLabel(iteration: number): string | null {
+  if (iteration <= 1) {
+    return null
+  }
+
+  return `Turn ${iteration}`
+}
+
 export function DecisionRuntimeView({
   state,
   onGenerate,
   onEditDecisions,
   onSubmitDecisions,
+  onFinish,
   onDismissFailure,
 }: DecisionRuntimeViewProps) {
   const steps = resolveSteps(state)
   const isRunning = state.status === 'Running'
   const phaseLabel = state.phase ? PHASE_LABEL[state.phase] ?? 'Working' : 'Working'
-  // The gate is open once the captured decisions become editable, until they are persisted.
-  const reviewOpen = state.editableDecisions !== null && state.status !== 'Submitted'
+  // The gate is open once the captured decisions become editable, until they are submitted.
+  const reviewOpen = state.editableDecisions !== null
   const isIdle = state.status === 'Idle'
   const canSubmit = reviewOpen && (state.editableDecisions ?? '').trim().length > 0
+  // After submit the gate is closed while the server runs the continuation turn (streamed on the
+  // execution stream) and auto-starts the next decision run; the loop reopens the gate then.
+  const isContinuing = state.status === 'Submitting' || state.status === 'Submitted'
+  const turnLabel = iterationLabel(state.iteration)
 
   return (
     <section className="cc-decision" aria-label="Decision runtime">
       <header className="cc-decision-masthead">
-        <span className="cc-plan-eyebrow">Decisions</span>
+        <span className="cc-plan-eyebrow">
+          Decisions{turnLabel ? <span className="cc-decision-turn"> · {turnLabel}</span> : null}
+        </span>
         <h2 className="cc-decision-title">Propose and review decisions</h2>
         <p className="cc-decision-lede">
           The agent proposes decisions from the operational context. Review the captured text,
-          edit it, then submit to persist your decisions.
+          edit it, then submit. Each submission runs the next turn and proposes again.
         </p>
       </header>
 
@@ -90,7 +110,7 @@ export function DecisionRuntimeView({
         </p>
       ) : null}
 
-      {state.status !== 'Failed' && state.status !== 'Idle' ? (
+      {state.status !== 'Failed' && state.status !== 'Idle' && !isContinuing ? (
         <section
           className={`cc-plan-document${isRunning ? ' cc-plan-document-live' : ''}`}
           aria-label="Proposed decisions output"
@@ -145,16 +165,28 @@ export function DecisionRuntimeView({
             >
               Submit decisions
             </Button>
+            {onFinish ? (
+              <Button type="button" variant="secondary" onClick={onFinish}>
+                Go to workspace
+              </Button>
+            ) : null}
           </div>
         </div>
       ) : null}
 
-      {state.status === 'Submitted' ? (
+      {isContinuing ? (
         <section className="cc-decision-submitted" role="status" aria-label="Decisions submitted">
-          <span className="cc-plan-eyebrow">Submitted</span>
-          <p className="cc-decision-submitted-reason">Decisions persisted.</p>
-          {state.submittedPath ? (
-            <code className="cc-decision-path">{state.submittedPath}</code>
+          <span className="cc-plan-eyebrow cc-decision-continuing-eyebrow">
+            <span className="cc-plan-phase-dot" aria-hidden="true" />
+            Continuing
+          </span>
+          <p className="cc-decision-submitted-reason">
+            Decisions persisted. Running the next turn, then proposing again.
+          </p>
+          {state.submittedNumberedPath ?? state.submittedPath ? (
+            <code className="cc-decision-path">
+              {state.submittedNumberedPath ?? state.submittedPath}
+            </code>
           ) : null}
         </section>
       ) : null}
@@ -187,7 +219,7 @@ function resolveSteps(state: DecisionRunState) {
   const seeded = state.diagnostics?.seeded === true
   const proposed = state.completion !== null || state.proposedDecisions !== null
   const reviewReady = state.editableDecisions !== null
-  const submitted = state.status === 'Submitted'
+  const submitted = state.status === 'Submitting' || state.status === 'Submitted'
 
   const stepState = (done: boolean, active: boolean): StepState => {
     if (done) {

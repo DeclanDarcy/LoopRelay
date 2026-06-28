@@ -241,7 +241,7 @@ public sealed class RepositoryOrchestratorDecisionTests
     }
 
     [Fact]
-    public async Task Submitting_decisions_persists_them_to_the_canonical_artifact()
+    public async Task Submitting_decisions_persists_a_numbered_submission_and_the_live_artifact()
     {
         var runtime = new FakeAgentRuntime();
         var store = new FakeArtifactStore();
@@ -251,11 +251,19 @@ public sealed class RepositoryOrchestratorDecisionTests
         Task<List<OrchestratorStreamEvent>> drain = DrainUntilAsync(orchestrator.DecisionStream, "submitted");
         await orchestrator.BeginSubmitDecisionsAsync(repository, "REVIEWED DECISIONS");
         List<OrchestratorStreamEvent> events = await drain;
+        // Drain the continuation the submit launched (it fails fast here — no handoff to continue from).
+        await orchestrator.ExecutionRunTask;
 
+        // The human-approved decisions land BOTH as a numbered submission (history/recovery) and as the live
+        // canonical artifact every downstream consumer + the next continuation reads.
+        Assert.Equal("REVIEWED DECISIONS", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.HistoricalDecision(1))));
         Assert.Equal("REVIEWED DECISIONS", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.Decisions)));
         Assert.Equal("REVIEWED DECISIONS", orchestrator.CurrentDecisions);
+
         OrchestratorStreamEvent submitted = events.Single(e => e.Type == "submitted");
-        Assert.Equal(OrchestrationArtifactPaths.Decisions, Field(submitted, "path"));
+        Assert.Equal(OrchestrationArtifactPaths.Decisions, Field(submitted, "path")); // back-compat: live canonical path
+        Assert.Equal(OrchestrationArtifactPaths.HistoricalDecision(1), Field(submitted, "numberedPath"));
+        Assert.Equal(1, IntField(submitted, "sequence"));
     }
 
     [Fact]
@@ -463,4 +471,7 @@ public sealed class RepositoryOrchestratorDecisionTests
 
     private static bool BoolField(OrchestratorStreamEvent streamEvent, string property) =>
         JsonDocument.Parse(streamEvent.Data).RootElement.GetProperty(property).GetBoolean();
+
+    private static int IntField(OrchestratorStreamEvent streamEvent, string property) =>
+        JsonDocument.Parse(streamEvent.Data).RootElement.GetProperty(property).GetInt32();
 }

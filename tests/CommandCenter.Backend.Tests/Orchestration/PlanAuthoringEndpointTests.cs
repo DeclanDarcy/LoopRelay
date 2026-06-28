@@ -247,6 +247,28 @@ public sealed class PlanAuthoringEndpointTests
         Assert.DoesNotContain("\"one\"", body); // seq 1 was acknowledged, never replayed
     }
 
+    [Fact]
+    public async Task Conversation_for_an_unknown_repository_returns_not_found()
+    {
+        await using PlanAuthoringTestServer server = await PlanAuthoringTestServer.StartAsync();
+
+        HttpResponseMessage response = await server.Client.GetAsync(server.ConversationRoute(Guid.NewGuid()));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Conversation_for_a_known_repository_returns_an_empty_timeline()
+    {
+        await using PlanAuthoringTestServer server = await PlanAuthoringTestServer.StartAsync();
+
+        HttpResponseMessage response = await server.Client.GetAsync(server.ConversationRoute(server.RegisteredRepositoryId));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        string body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("\"entries\":[]", body); // camelCase projection with no turns yet
+    }
+
     private static async Task<string> ReadStreamUntilAsync(
         HttpResponseMessage response,
         Func<string, bool> done,
@@ -323,6 +345,9 @@ public sealed class PlanAuthoringEndpointTests
 
         public string DecisionRoute(Guid repositoryId, string verb) =>
             $"/api/repositories/{repositoryId:D}/decision/{verb}";
+
+        public string ConversationRoute(Guid repositoryId) =>
+            $"/api/repositories/{repositoryId:D}/conversation";
 
         public async ValueTask DisposeAsync()
         {

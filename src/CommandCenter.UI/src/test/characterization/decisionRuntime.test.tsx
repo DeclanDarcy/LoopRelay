@@ -60,7 +60,7 @@ describe('DecisionRuntimeView surface', () => {
     )
   })
 
-  it('shows a confirmation after the edited decisions are submitted', async () => {
+  it('confirms submission and shows the rotated path while the continuation turn runs', async () => {
     await renderToDecisionPhase()
 
     fireEvent.click(await screen.findByRole('button', { name: 'Generate decisions' }))
@@ -68,11 +68,12 @@ describe('DecisionRuntimeView surface', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Submit decisions' }))
 
+    // Submit is no longer terminal: the gate closes and the surface shows the continuation handoff,
+    // carrying the rotated numbered submission path rather than ending the run.
     const confirmation = await screen.findByRole('status', { name: 'Decisions submitted' })
     expect(confirmation).toHaveTextContent('Decisions persisted.')
-    expect(confirmation).toHaveTextContent('.agents/decisions/decisions.md')
-    // The gate is closed once submission lands.
-    expect(screen.queryByRole('textbox', { name: 'Decisions' })).not.toBeInTheDocument()
+    // The rotated path lands once the backend confirms the submission.
+    expect(await screen.findByText('.agents/decisions/decisions.0001.md')).toBeInTheDocument()
   })
 
   it('renders a decision-run failure with phase, reason, detail, and a way back', () => {
@@ -87,6 +88,9 @@ describe('DecisionRuntimeView surface', () => {
       editableDecisions: null,
       completion: null,
       submittedPath: null,
+      submittedNumberedPath: null,
+      submittedSequence: null,
+      iteration: 1,
       failure: { phase: 'GetNextDecisions', reason: 'Agent process exited', detail: 'exit 1' },
     }
     const onDismissFailure = vi.fn()
@@ -120,6 +124,9 @@ describe('DecisionRuntimeView surface', () => {
       editableDecisions: null,
       completion: null,
       submittedPath: null,
+      submittedNumberedPath: null,
+      submittedSequence: null,
+      iteration: 1,
       failure: { phase: null, reason: 'boom', detail: null },
     }
 

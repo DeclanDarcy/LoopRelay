@@ -9,6 +9,9 @@ export const initialDecisionRunState: DecisionRunState = {
   editableDecisions: null,
   completion: null,
   submittedPath: null,
+  submittedNumberedPath: null,
+  submittedSequence: null,
+  iteration: 0,
   failure: null,
 }
 
@@ -16,6 +19,9 @@ export type DecisionRunAction =
   | { kind: 'event'; event: DecisionRunEvent }
   // The reviewer edits the captured decisions in place before submitting them.
   | { kind: 'edit'; decisions: string }
+  // The reviewer submits the edited decisions; the gate closes optimistically while the backend
+  // persists them and starts the continuation turn.
+  | { kind: 'submit' }
   | { kind: 'reset' }
 
 export function decisionRunReducer(
@@ -33,6 +39,14 @@ export function decisionRunReducer(
       }
 
       return { ...state, editableDecisions: action.decisions }
+    case 'submit':
+      // Submitting optimistically closes the gate while the backend persists the decisions and
+      // runs the continuation turn. Ignore submit unless the gate is actually open.
+      if (state.editableDecisions === null || isTerminal(state)) {
+        return state
+      }
+
+      return { ...state, status: 'Submitting', phase: null, editableDecisions: null }
     case 'event':
       return reduceEvent(state, action.event)
     default:
@@ -43,11 +57,14 @@ export function decisionRunReducer(
 function reduceEvent(state: DecisionRunState, event: DecisionRunEvent): DecisionRunState {
   switch (event.type) {
     case 'run-started':
-      // Begin a fresh run. Re-entry resets accumulated output and any prior review buffer.
+      // Begin a fresh run. Re-entry resets accumulated output and any prior review buffer. In the
+      // continuation loop this is also the auto-started next decision run, so it advances the
+      // iteration and reopens streaming after a submit.
       return {
         ...initialDecisionRunState,
         status: 'Running',
         phase: 'DecisionRun',
+        iteration: state.iteration + 1,
       }
     case 'diagnostics':
       // The sandbox config is validated and logged here; the seed turn itself is not streamed.
@@ -82,9 +99,10 @@ function reduceEvent(state: DecisionRunState, event: DecisionRunEvent): Decision
         },
       }
     case 'review-ready':
-      // The human review gate opens. The captured text becomes editable for the first time;
-      // the editable buffer is prefilled with it and left for the reviewer to change.
-      if (state.status === 'Submitted' || state.status === 'Failed') {
+      // The human review gate opens. The captured text becomes editable; the editable buffer is
+      // prefilled with it and left for the reviewer to change. A failed run never reopens, but a
+      // submitted/submitting run does — that is the continuation loop's next review gate.
+      if (state.status === 'Failed') {
         return state
       }
 
@@ -97,13 +115,22 @@ function reduceEvent(state: DecisionRunState, event: DecisionRunEvent): Decision
         editableDecisions: event.decisions,
       }
     case 'submitted':
-      // The edited decisions were persisted. This is terminal.
+      // The edited decisions were persisted. This is NOT terminal in the continuation loop: the
+      // server runs a continuation turn then auto-starts the next decision run (a fresh
+      // run-started). The gate stays closed until that next run reopens it.
+      if (state.status === 'Failed') {
+        return state
+      }
+
       return {
         ...state,
         status: 'Submitted',
         phase: null,
         failure: null,
+        editableDecisions: null,
         submittedPath: event.path,
+        submittedNumberedPath: event.numberedPath ?? null,
+        submittedSequence: event.sequence ?? null,
       }
     case 'failed':
       // Failure always wins, regardless of the phase it arrives in.
@@ -122,13 +149,15 @@ function reduceEvent(state: DecisionRunState, event: DecisionRunEvent): Decision
   }
 }
 
+// Only Failed is terminal in the continuation loop. Submitted and Submitting are transient: the
+// machine loops back to Running when the next decision run auto-starts.
 function isTerminal(state: DecisionRunState): boolean {
-  return state.status === 'Submitted' || state.status === 'Failed'
+  return state.status === 'Failed'
 }
 
-// A non-terminal event keeps the run live without overwriting a terminal status. Completed is
-// not terminal here: the run only ends at Submitted or Failed, so a diagnostics/phase frame
-// replayed after completion may legitimately reassert Running.
+// A non-terminal event keeps the run live without overwriting a terminal status. Completed,
+// Submitting, and Submitted are not terminal here: only Failed ends the machine, so a
+// diagnostics/phase frame replayed mid-loop may legitimately reassert Running.
 function runningGuard(state: DecisionRunState): DecisionRunState {
   if (isTerminal(state)) {
     return state

@@ -23,6 +23,7 @@ const PHASE_LABEL: Record<string, string> = {
   ExecutePlan: 'Starting run',
   ExtractMilestones: 'Extracting milestones',
   StartExecution: 'Starting execution',
+  ContinueExecution: 'Continuing execution',
 }
 
 export function ExecutionStreamView({ state, onDismissFailure }: ExecutionStreamViewProps) {
