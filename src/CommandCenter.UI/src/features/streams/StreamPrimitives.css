@@ -1,0 +1,261 @@
+/* Shared stream primitives. The plan, execution, and decision surfaces all render the same three
+   structural pieces — a live output panel, an ordered phase rail, and a recoverable-failure
+   surface — so the markup and these styles are extracted here under neutral cc-stream-* names.
+   Declarations mirror the original cc-plan-* / cc-execution-* / cc-decision-* blocks so the
+   surfaces look unchanged. */
+
+/* ── Output panel ──────────────────────────────────────────────────────────
+   The streamed output reads as a living draft: a bordered, inset document with a header rail
+   carrying the eyebrow and the live phase pill (or the completed-turn token summary). */
+.cc-stream-panel {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-12);
+  background: var(--bg-inset);
+  overflow: hidden;
+  box-shadow: var(--shadow-panel);
+}
+
+.cc-stream-panel-live {
+  border-color: var(--accent-muted);
+}
+
+.cc-stream-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-1);
+}
+
+.cc-stream-eyebrow {
+  font: var(--font-caption);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fg-subtle);
+}
+
+.cc-stream-tokens {
+  font: var(--font-mono-small);
+  color: var(--fg-faint);
+}
+
+.cc-stream-phase-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-muted);
+  color: var(--accent-fg);
+  font: var(--font-caption);
+  letter-spacing: 0.04em;
+}
+
+.cc-stream-phase-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-emphasis);
+  animation: cc-stream-pulse 1.4s ease-in-out infinite;
+}
+
+.cc-stream-output {
+  margin: 0;
+  padding: 18px 20px;
+  font: var(--font-mono-small);
+  color: var(--fg-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-height: 96px;
+  max-height: 460px;
+  overflow-y: auto;
+}
+
+.cc-stream-caret {
+  display: inline-block;
+  width: 7px;
+  height: 1.05em;
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  background: var(--accent-emphasis);
+  animation: cc-stream-blink 1s steps(2, start) infinite;
+}
+
+/* ── Phase timeline ────────────────────────────────────────────────────────
+   A vertical phase rail. The run is a real ordered sequence, so the steps carry progress —
+   a connecting line threads them, each marker states pending / active / done. */
+.cc-stream-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.cc-stream-step {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 10px 0;
+  padding-left: 4px;
+}
+
+/* The rail connecting one marker to the next, drawn from the marker centre downward. */
+.cc-stream-step:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 28px;
+  bottom: -10px;
+  width: 1px;
+  background: var(--border-default);
+}
+
+.cc-stream-step-done:not(:last-child)::before {
+  background: var(--accent-muted);
+}
+
+.cc-stream-step-marker {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  width: 21px;
+  height: 21px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--border-default);
+  background: var(--surface-1);
+  color: var(--accent-fg);
+}
+
+.cc-stream-step-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--fg-faint);
+}
+
+.cc-stream-step-active .cc-stream-step-marker {
+  border-color: var(--accent-emphasis);
+}
+
+.cc-stream-step-active .cc-stream-step-dot {
+  background: var(--accent-emphasis);
+  animation: cc-stream-pulse 1.4s ease-in-out infinite;
+}
+
+.cc-stream-step-done .cc-stream-step-marker {
+  border-color: var(--accent-muted);
+  background: var(--accent-subtle);
+}
+
+.cc-stream-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.cc-stream-step-label {
+  font: var(--font-body);
+  color: var(--fg-muted);
+}
+
+.cc-stream-step-active .cc-stream-step-label,
+.cc-stream-step-done .cc-stream-step-label {
+  color: var(--fg-default);
+}
+
+.cc-stream-step-note {
+  font: var(--font-mono-small);
+  color: var(--fg-faint);
+  word-break: break-word;
+}
+
+/* ── Failure surface ───────────────────────────────────────────────────────
+   A recoverable failure: a danger-tinted alert naming what failed, the reason, an optional
+   detail block, and an optional dismiss action back to the prior surface. */
+.cc-stream-failure {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border: 1px solid var(--status-danger-muted);
+  background: var(--status-danger-subtle);
+  border-radius: var(--radius-12);
+}
+
+.cc-stream-failure-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cc-stream-failure-eyebrow {
+  color: var(--status-danger-fg);
+}
+
+.cc-stream-failure-reason {
+  margin: 0;
+  font: var(--font-body);
+  color: var(--status-danger-fg);
+}
+
+.cc-stream-failure-detail {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-6);
+  background: var(--status-danger-muted);
+  color: var(--fg-default);
+  font: var(--font-mono-small);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+@keyframes cc-stream-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes cc-stream-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.78);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cc-stream-caret {
+    animation: none;
+    opacity: 0.85;
+  }
+
+  .cc-stream-phase-dot,
+  .cc-stream-step-active .cc-stream-step-dot {
+    animation: none;
+  }
+}

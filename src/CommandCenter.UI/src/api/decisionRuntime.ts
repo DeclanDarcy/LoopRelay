@@ -1,4 +1,5 @@
 import type { DecisionRunEvent } from '../types'
+import { createTransportController, type StreamTransportOptions } from './planning'
 import { invokeCommand } from './tauri'
 
 // The decision run mirrors the execution run: the POSTs reach the backend through Tauri proxy
@@ -21,15 +22,24 @@ export function subscribeToDecisionRunEvents(
   backendUrl: string,
   repositoryId: string,
   onDecisionEvent: (event: DecisionRunEvent) => void,
+  options?: StreamTransportOptions,
 ) {
   const eventSource = new EventSource(
     `${backendUrl}/api/repositories/${repositoryId}/decision/stream`,
   )
 
-  eventSource.addEventListener('run-started', () => {
+  const controller = createTransportController(options)
+  const on = (type: string, handle: (event: MessageEvent) => void) => {
+    eventSource.addEventListener(type, (event) => controller.gate(event, handle))
+  }
+
+  // Note: `route`/`transferred`/`numberedPath` are not parsed here — the decision transfer and
+  // numbered-path surface is mock-only until the backend producer is wired (pre-existing wire gap,
+  // predates m9). Do not add parsing in this pass.
+  on('run-started', () => {
     onDecisionEvent({ type: 'run-started', phase: 'DecisionRun' })
   })
-  eventSource.addEventListener('diagnostics', (event) => {
+  on('diagnostics', (event) => {
     const data = JSON.parse(event.data) as { sandbox: string; approvals: string; seeded: boolean }
     onDecisionEvent({
       type: 'diagnostics',
@@ -38,15 +48,15 @@ export function subscribeToDecisionRunEvents(
       seeded: data.seeded,
     })
   })
-  eventSource.addEventListener('phase', (event) => {
+  on('phase', (event) => {
     const data = JSON.parse(event.data) as { phase: 'GetNextDecisions' }
     onDecisionEvent({ type: 'phase', phase: data.phase })
   })
-  eventSource.addEventListener('delta', (event) => {
+  on('delta', (event) => {
     const data = JSON.parse(event.data) as { text: string }
     onDecisionEvent({ type: 'delta', text: data.text })
   })
-  eventSource.addEventListener('completed', (event) => {
+  on('completed', (event) => {
     const data = JSON.parse(event.data) as { promptTokens: number; outputTokens: number }
     onDecisionEvent({
       type: 'completed',
@@ -54,26 +64,22 @@ export function subscribeToDecisionRunEvents(
       outputTokens: data.outputTokens,
     })
   })
-  eventSource.addEventListener('review-ready', (event) => {
+  on('review-ready', (event) => {
     const data = JSON.parse(event.data) as { decisions: string }
     onDecisionEvent({ type: 'review-ready', decisions: data.decisions })
   })
-  eventSource.addEventListener('submitted', (event) => {
+  on('submitted', (event) => {
     const data = JSON.parse(event.data) as { path: string }
     onDecisionEvent({ type: 'submitted', path: data.path })
   })
-  eventSource.addEventListener('failed', (event) => {
+  on('failed', (event) => {
     const data = JSON.parse(event.data) as { phase?: string; reason: string; detail?: string }
     onDecisionEvent({ type: 'failed', phase: data.phase, reason: data.reason, detail: data.detail })
   })
 
-  eventSource.onerror = () => {
-    if (eventSource.readyState === EventSource.CLOSED) {
-      return
-    }
-  }
+  controller.attach(eventSource)
 
   return {
-    close: () => eventSource.close(),
+    close: () => controller.dispose(),
   } satisfies DecisionRunEventSubscription
 }

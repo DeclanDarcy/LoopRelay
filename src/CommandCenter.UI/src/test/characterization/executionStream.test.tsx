@@ -35,15 +35,32 @@ describe('ExecutionStreamView surface', () => {
     expect(screen.getByRole('list', { name: 'Execution phases' })).toBeInTheDocument()
   })
 
-  it('shows the milestone count, commit sha, and rotated handoff path on completion', async () => {
+  it('shows the milestone count and commit sha as a product result on completion', async () => {
     await renderToPlanReady()
 
     fireEvent.click(screen.getByRole('button', { name: 'Execute Plan' }))
 
     const result = await screen.findByRole('group', { name: 'Execution result' })
     expect(result).toHaveTextContent('3')
+    // The commit sha is a product-meaningful result and stays in the primary summary.
     expect(result).toHaveTextContent('a1b2c3d4e5')
-    expect(result).toHaveTextContent('.agents/handoffs/handoff.0001.md')
+    // The handoff is confirmed in human terms; the raw path moved to the Diagnostics disclosure.
+    expect(result).toHaveTextContent('Handoff recorded')
+    expect(result).not.toHaveTextContent('.agents/handoffs/handoff.0001.md')
+  })
+
+  it('keeps the raw handoff path in a secondary Diagnostics disclosure, closed by default', async () => {
+    await renderToPlanReady()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Execute Plan' }))
+    await screen.findByRole('group', { name: 'Execution result' })
+
+    const diagnostics = screen.getByLabelText('Execution diagnostics')
+    expect(diagnostics).toBeInTheDocument()
+    // Diagnostics is secondary: a closed-by-default details disclosure, not the primary flow.
+    expect(diagnostics).not.toHaveAttribute('open')
+    // The raw filesystem path lives only inside Diagnostics.
+    expect(diagnostics).toHaveTextContent('.agents/handoffs/handoff.0001.md')
   })
 
   it('does not call onExecuted when the run completes — the decision review gate runs first', async () => {

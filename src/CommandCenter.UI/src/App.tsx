@@ -1758,6 +1758,8 @@ function App() {
               key={selectedRepository.repository.id}
               repositoryId={selectedRepository.repository.id}
               repositoryName={selectedRepository.repository.name}
+              planExists={planStatus.planExists}
+              refreshPlanStatus={refreshPlanStatus}
               onSessionActiveChange={setIsAuthoringSessionActive}
               onExecuted={() => {
                 setIsAuthoringSessionActive(false)

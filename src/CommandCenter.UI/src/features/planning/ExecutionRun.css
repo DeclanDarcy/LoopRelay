@@ -1,3 +1,5 @@
+/* Execution-run surface. The shared timeline / output / failure styles live in
+   features/streams/StreamPrimitives.css under cc-stream-*; only execution-specific rules remain. */
 .cc-execution {
   display: flex;
   flex-direction: column;
@@ -23,101 +25,6 @@
   max-width: 60ch;
   font: var(--font-small);
   color: var(--fg-muted);
-}
-
-/* Signature: a vertical phase rail. The run is a real ordered sequence, so the steps
-   carry progress — a connecting line threads them, each marker states pending/active/done. */
-.cc-execution-timeline {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-.cc-execution-step {
-  position: relative;
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  padding: 10px 0;
-  padding-left: 4px;
-}
-
-/* The rail connecting one marker to the next, drawn from the marker centre downward. */
-.cc-execution-step:not(:last-child)::before {
-  content: '';
-  position: absolute;
-  left: 14px;
-  top: 28px;
-  bottom: -10px;
-  width: 1px;
-  background: var(--border-default);
-}
-
-.cc-execution-step-done:not(:last-child)::before {
-  background: var(--accent-muted);
-}
-
-.cc-execution-step-marker {
-  position: relative;
-  z-index: 1;
-  flex-shrink: 0;
-  width: 21px;
-  height: 21px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  border: 1px solid var(--border-default);
-  background: var(--surface-1);
-  color: var(--accent-fg);
-}
-
-.cc-execution-step-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--fg-faint);
-}
-
-.cc-execution-step-active .cc-execution-step-marker {
-  border-color: var(--accent-emphasis);
-}
-
-.cc-execution-step-active .cc-execution-step-dot {
-  background: var(--accent-emphasis);
-  animation: cc-execution-pulse 1.4s ease-in-out infinite;
-}
-
-.cc-execution-step-done .cc-execution-step-marker {
-  border-color: var(--accent-muted);
-  background: var(--accent-subtle);
-}
-
-.cc-execution-step-body {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  padding-top: 2px;
-}
-
-.cc-execution-step-label {
-  font: var(--font-body);
-  color: var(--fg-muted);
-}
-
-.cc-execution-step-active .cc-execution-step-label,
-.cc-execution-step-done .cc-execution-step-label {
-  color: var(--fg-default);
-}
-
-.cc-execution-step-note {
-  font: var(--font-mono-small);
-  color: var(--fg-faint);
-  word-break: break-word;
 }
 
 .cc-execution-summary {
@@ -159,25 +66,53 @@
   word-break: break-all;
 }
 
+.cc-execution-handoff-confirm {
+  font: var(--font-body);
+  color: var(--fg-default);
+}
+
 .cc-execution-empty {
   font: var(--font-small);
   color: var(--fg-faint);
 }
 
-@keyframes cc-execution-pulse {
-  0%,
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.45;
-    transform: scale(0.7);
-  }
+/* Diagnostics: a secondary disclosure for implementation detail (the raw handoff path). Closed by
+   default, it sits below the product result so it never competes with the primary reading flow. */
+.cc-execution-diagnostics {
+  margin: 0;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .cc-execution-step-active .cc-execution-step-dot {
-    animation: none;
-  }
+.cc-execution-diagnostics-summary {
+  cursor: pointer;
+  width: fit-content;
+}
+
+.cc-execution-diagnostics-summary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--accent-emphasis);
+  border-radius: var(--radius-6);
+}
+
+.cc-execution-diagnostics-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 0 0;
+}
+
+.cc-execution-diagnostics-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cc-execution-diagnostics-item dt {
+  font: var(--font-caption);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fg-subtle);
+}
+
+.cc-execution-diagnostics-item dd {
+  margin: 0;
 }

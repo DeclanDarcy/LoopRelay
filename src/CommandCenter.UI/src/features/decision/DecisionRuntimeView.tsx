@@ -1,4 +1,6 @@
 import { Button } from '../../components/design'
+import { PhaseTimeline, StreamFailurePanel, StreamOutputPanel } from '../streams'
+import type { PhaseStep } from '../streams'
 import type { DecisionRunState } from '../../types'
 import './DecisionRun.css'
 
@@ -11,15 +13,20 @@ type DecisionRuntimeViewProps = {
   // so this is the reviewer's explicit exit — the only way navigation happens.
   onFinish?: () => void
   onDismissFailure?: () => void
+  // Client-only transport signals (not on the frozen run state): the browser is retrying a dropped
+  // stream, or it gave up. Reconnecting shows in the output pill; a give-up surfaces as a
+  // recoverable failure instead of an indefinite spinner. A cancelled turn maps to transportFailed.
+  isReconnecting?: boolean
+  transportFailed?: boolean
 }
 
-type StepState = 'pending' | 'active' | 'done'
-
 // The run is a genuine ordered sequence, so the surface is a timeline rather than a card grid:
-// seed the session, propose decisions, open the review gate, then persist the human's edit.
+// prepare the session, propose decisions, open the review gate, then persist the human's edit.
 // Each step's state is derived from the streamed run — it encodes progress, it doesn't decorate.
 const PHASE_STEPS = [
-  { key: 'Seed', label: 'Seed decision session' },
+  // Product term: the session is prepared before proposing. The raw sandbox config is
+  // implementation detail and lives in Diagnostics, not the primary step.
+  { key: 'Seed', label: 'Prepare decision session' },
   { key: 'Propose', label: 'Propose decisions' },
   { key: 'Review', label: 'Open review gate' },
   { key: 'Submit', label: 'Persist decisions' },
@@ -47,10 +54,17 @@ export function DecisionRuntimeView({
   onSubmitDecisions,
   onFinish,
   onDismissFailure,
+  isReconnecting = false,
+  transportFailed = false,
 }: DecisionRuntimeViewProps) {
   const steps = resolveSteps(state)
   const isRunning = state.status === 'Running'
-  const phaseLabel = state.phase ? PHASE_LABEL[state.phase] ?? 'Working' : 'Working'
+  // While reconnecting, the output pill reads "Reconnecting" rather than the live phase label.
+  const phaseLabel = isReconnecting
+    ? 'Reconnecting'
+    : state.phase
+      ? PHASE_LABEL[state.phase] ?? 'Working'
+      : 'Working'
   // The gate is open once the captured decisions become editable, until they are submitted.
   const reviewOpen = state.editableDecisions !== null
   const isIdle = state.status === 'Idle'
@@ -62,11 +76,23 @@ export function DecisionRuntimeView({
   // The continuation router is handing the session off to a fresh one. Surfaced only while the run
   // is live; review-ready (or a failure) resolves the transfer and the reducer lowers the flag.
   const isTransferring = state.transferring && state.status === 'Running'
+  // The raw persisted decisions path is implementation detail (Diagnostics only). Prefer the rotated
+  // numbered path when present; guard empty/whitespace so a malformed frame renders nothing.
+  const submittedPath = resolveSubmittedPath(state)
+  // Diagnostics are implementation/router mechanics: the validated sandbox config, the in-flight
+  // session transfer, and the raw persisted path. They live in a secondary disclosure, never the
+  // primary reading flow.
+  const hasDiagnostics = state.diagnostics !== null || isTransferring || submittedPath !== null
+  // A transport give-up takes over the surface as a recoverable failure, but only while the run is
+  // still Running: a late drop after the decisions were submitted (Submitting/Submitted) keeps the
+  // Continuing banner, and an own-reported Failed surface wins. This is also where a lost/aborted
+  // turn surfaces.
+  const showTransportFailure = transportFailed && state.status === 'Running'
 
   return (
     <section className="cc-decision" aria-label="Decision runtime">
       <header className="cc-decision-masthead">
-        <span className="cc-plan-eyebrow">
+        <span className="cc-stream-eyebrow">
           Decisions{turnLabel ? <span className="cc-decision-turn"> · {turnLabel}</span> : null}
         </span>
         <h2 className="cc-decision-title">Propose and review decisions</h2>
@@ -84,66 +110,61 @@ export function DecisionRuntimeView({
         </div>
       ) : null}
 
-      {!isIdle ? (
-        <ol className="cc-decision-timeline" aria-label="Decision phases">
-          {steps.map((step) => (
-            <li
-              key={step.key}
-              className={`cc-decision-step cc-decision-step-${step.state}`}
-              aria-current={step.state === 'active' ? 'step' : undefined}
+      {!isIdle ? <PhaseTimeline ariaLabel="Decision phases" steps={steps} /> : null}
+
+      {hasDiagnostics ? (
+        <details className="cc-decision-diagnostics-disclosure" aria-label="Decision diagnostics">
+          <summary className="cc-stream-eyebrow cc-decision-diagnostics-summary">
+            Diagnostics
+          </summary>
+          {state.diagnostics ? (
+            <p className="cc-decision-diagnostics" aria-label="Sandbox diagnostics">
+              Sandbox{' '}
+              <code className="cc-decision-diagnostics-value">{state.diagnostics.sandbox}</code> ·
+              approvals{' '}
+              <code className="cc-decision-diagnostics-value">{state.diagnostics.approvals}</code> ·{' '}
+              {state.diagnostics.seeded ? 'session seeded' : 'session not seeded'}
+            </p>
+          ) : null}
+          {isTransferring ? (
+            <p
+              className="cc-decision-transfer"
+              role="status"
+              aria-label="Transferring decision session"
             >
-              <span className="cc-decision-step-marker" aria-hidden="true">
-                {step.state === 'done' ? <CheckGlyph /> : <span className="cc-decision-step-dot" />}
-              </span>
-              <span className="cc-decision-step-body">
-                <span className="cc-decision-step-label">{step.label}</span>
-                {step.note ? <span className="cc-decision-step-note">{step.note}</span> : null}
-              </span>
-            </li>
-          ))}
-        </ol>
+              <span className="cc-stream-phase-dot" aria-hidden="true" />
+              Transferring decision session…
+            </p>
+          ) : null}
+          {submittedPath ? (
+            <p className="cc-decision-diagnostics" aria-label="Persisted decisions path">
+              Persisted to <code className="cc-decision-path">{submittedPath}</code>
+            </p>
+          ) : null}
+        </details>
       ) : null}
 
-      {state.diagnostics ? (
-        <p className="cc-decision-diagnostics" aria-label="Sandbox diagnostics">
-          Sandbox <code className="cc-decision-diagnostics-value">{state.diagnostics.sandbox}</code>{' '}
-          · approvals{' '}
-          <code className="cc-decision-diagnostics-value">{state.diagnostics.approvals}</code> ·{' '}
-          {state.diagnostics.seeded ? 'session seeded' : 'session not seeded'}
-        </p>
+      {state.status !== 'Failed' &&
+      state.status !== 'Idle' &&
+      !isContinuing &&
+      !showTransportFailure ? (
+        <StreamOutputPanel
+          ariaLabel="Proposed decisions output"
+          streamedText={state.streamedText}
+          live={isRunning}
+          phaseLabel={phaseLabel}
+          tokens={state.completion}
+        />
       ) : null}
 
-      {isTransferring ? (
-        <p className="cc-decision-transfer" role="status" aria-label="Transferring decision session">
-          <span className="cc-plan-phase-dot" aria-hidden="true" />
-          Transferring decision session…
-        </p>
-      ) : null}
-
-      {state.status !== 'Failed' && state.status !== 'Idle' && !isContinuing ? (
-        <section
-          className={`cc-plan-document${isRunning ? ' cc-plan-document-live' : ''}`}
-          aria-label="Proposed decisions output"
-        >
-          <header className="cc-plan-document-head">
-            <span className="cc-plan-eyebrow">Output</span>
-            {isRunning ? (
-              <span className="cc-plan-phase-pill" aria-live="polite">
-                <span className="cc-plan-phase-dot" aria-hidden="true" />
-                {phaseLabel}…
-              </span>
-            ) : state.completion ? (
-              <span className="cc-plan-tokens">
-                {state.completion.promptTokens.toLocaleString()} in ·{' '}
-                {state.completion.outputTokens.toLocaleString()} out
-              </span>
-            ) : null}
-          </header>
-          <pre className="cc-plan-stream" aria-live="polite" aria-atomic="false">
-            {state.streamedText}
-            {isRunning ? <span className="cc-plan-caret" aria-hidden="true" /> : null}
-          </pre>
-        </section>
+      {showTransportFailure ? (
+        <StreamFailurePanel
+          ariaLabel="Decision connection lost"
+          eyebrow="Decision connection lost"
+          reason="The connection to the decision stream dropped and could not be restored. The run may still be progressing on the backend."
+          onDismiss={onDismissFailure}
+          dismissLabel="Back to plan"
+        />
       ) : null}
 
       {reviewOpen ? (
@@ -186,52 +207,41 @@ export function DecisionRuntimeView({
 
       {isContinuing ? (
         <section className="cc-decision-submitted" role="status" aria-label="Decisions submitted">
-          <span className="cc-plan-eyebrow cc-decision-continuing-eyebrow">
-            <span className="cc-plan-phase-dot" aria-hidden="true" />
+          <span className="cc-stream-eyebrow cc-decision-continuing-eyebrow">
+            <span className="cc-stream-phase-dot" aria-hidden="true" />
             Continuing
           </span>
           <p className="cc-decision-submitted-reason">
             Decisions persisted. Running the next turn, then proposing again.
           </p>
-          {state.submittedNumberedPath ?? state.submittedPath ? (
-            <code className="cc-decision-path">
-              {state.submittedNumberedPath ?? state.submittedPath}
-            </code>
-          ) : null}
         </section>
       ) : null}
 
       {state.status === 'Failed' && state.failure ? (
-        <section className="cc-plan-failure" role="alert" aria-label="Decision run failed">
-          <div className="cc-plan-failure-body">
-            <span className="cc-plan-eyebrow cc-plan-failure-eyebrow">
-              {state.failure.phase
-                ? `Decision run failed: ${state.failure.phase}`
-                : 'Decision run failed'}
-            </span>
-            <p className="cc-plan-failure-reason">{state.failure.reason}</p>
-            {state.failure.detail ? (
-              <pre className="cc-plan-failure-detail">{state.failure.detail}</pre>
-            ) : null}
-          </div>
-          {onDismissFailure ? (
-            <Button type="button" variant="secondary" onClick={onDismissFailure}>
-              Back to plan
-            </Button>
-          ) : null}
-        </section>
+        <StreamFailurePanel
+          ariaLabel="Decision run failed"
+          eyebrow={
+            state.failure.phase
+              ? `Decision run failed: ${state.failure.phase}`
+              : 'Decision run failed'
+          }
+          reason={state.failure.reason}
+          detail={state.failure.detail}
+          onDismiss={onDismissFailure}
+          dismissLabel="Back to plan"
+        />
       ) : null}
     </section>
   )
 }
 
-function resolveSteps(state: DecisionRunState) {
+function resolveSteps(state: DecisionRunState): PhaseStep[] {
   const seeded = state.diagnostics?.seeded === true
   const proposed = state.completion !== null || state.proposedDecisions !== null
   const reviewReady = state.editableDecisions !== null
   const submitted = state.status === 'Submitting' || state.status === 'Submitted'
 
-  const stepState = (done: boolean, active: boolean): StepState => {
+  const stepState = (done: boolean, active: boolean): PhaseStep['state'] => {
     if (done) {
       return 'done'
     }
@@ -243,7 +253,9 @@ function resolveSteps(state: DecisionRunState) {
     {
       ...PHASE_STEPS[0],
       state: stepState(seeded, !seeded),
-      note: state.diagnostics ? state.diagnostics.sandbox : null,
+      // The raw sandbox config is implementation detail (Diagnostics only); the primary note
+      // confirms the session is ready in human terms.
+      note: seeded ? 'Session ready' : null,
     },
     {
       ...PHASE_STEPS[1],
@@ -261,21 +273,22 @@ function resolveSteps(state: DecisionRunState) {
     {
       ...PHASE_STEPS[3],
       state: submitted ? 'done' : reviewReady ? 'active' : 'pending',
-      note: submitted ? state.submittedPath : null,
+      // The raw persisted path is implementation detail (Diagnostics only). The primary note is a
+      // human confirmation that the decisions were persisted.
+      note: submitted ? 'Decisions persisted' : null,
     },
-  ] as Array<(typeof PHASE_STEPS)[number] & { state: StepState; note: string | null }>
+  ]
 }
 
-function CheckGlyph() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-      <path
-        d="M2.5 6.5L5 9L9.5 3.5"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
+// The persisted decisions path is implementation detail surfaced in Diagnostics only. Prefer the
+// rotated numbered path when the loop reports it, and guard empty/whitespace the same way the
+// execution handoff path is guarded, so a malformed submit frame renders nothing rather than an
+// empty code block.
+function resolveSubmittedPath(state: DecisionRunState): string | null {
+  const path = state.submittedNumberedPath ?? state.submittedPath
+  if (path === null || path.trim().length === 0) {
+    return null
+  }
+
+  return path
 }

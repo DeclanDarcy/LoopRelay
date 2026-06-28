@@ -29,6 +29,10 @@ export function useDecisionStream(repositoryId: string | null, active: boolean) 
   const [state, dispatch] = useReducer(decisionRunReducer, initialDecisionRunState)
   const [backendUrl, setBackendUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Client-only transport state, kept off the frozen run-state type: the browser is retrying a
+  // dropped stream (isReconnecting) or gave up (transportFailed). Any received frame clears both.
+  const [isReconnecting, setIsReconnecting] = useState(false)
+  const [transportFailed, setTransportFailed] = useState(false)
   const repositoryIdRef = useRef(repositoryId)
 
   useEffect(() => {
@@ -58,6 +62,8 @@ export function useDecisionStream(repositoryId: string | null, active: boolean) 
   useEffect(() => {
     dispatch({ kind: 'reset' })
     setError(null)
+    setIsReconnecting(false)
+    setTransportFailed(false)
 
     if (!repositoryId || !backendUrl || !active) {
       return
@@ -83,7 +89,17 @@ export function useDecisionStream(repositoryId: string | null, active: boolean) 
       }
     }
 
-    const subscription = subscribeToDecisionRunEvents(backendUrl, repositoryId, handle)
+    const subscription = subscribeToDecisionRunEvents(backendUrl, repositoryId, handle, {
+      onReconnecting: () => isCurrent && setIsReconnecting(true),
+      onError: () => isCurrent && setTransportFailed(true),
+      // Any successfully received frame means the stream is live again: clear both flags.
+      onActive: () => {
+        if (isCurrent) {
+          setIsReconnecting(false)
+          setTransportFailed(false)
+        }
+      },
+    })
     return () => {
       isCurrent = false
       subscription.close()
@@ -133,5 +149,13 @@ export function useDecisionStream(repositoryId: string | null, active: boolean) 
     }
   }, [])
 
-  return { state, error, generateDecisions, editDecisions, submitReviewedDecisions }
+  return {
+    state,
+    error,
+    isReconnecting,
+    transportFailed,
+    generateDecisions,
+    editDecisions,
+    submitReviewedDecisions,
+  }
 }

@@ -27,6 +27,10 @@ export function usePlanStream(repositoryId: string | null) {
   const [state, dispatch] = useReducer(planAuthoringReducer, initialPlanAuthoringState)
   const [backendUrl, setBackendUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Client-only transport state, kept off the frozen run-state type: the browser is retrying a
+  // dropped stream (isReconnecting) or gave up (transportFailed). Any received frame clears both.
+  const [isReconnecting, setIsReconnecting] = useState(false)
+  const [transportFailed, setTransportFailed] = useState(false)
   const repositoryIdRef = useRef(repositoryId)
 
   useEffect(() => {
@@ -56,6 +60,8 @@ export function usePlanStream(repositoryId: string | null) {
   useEffect(() => {
     dispatch({ kind: 'reset' })
     setError(null)
+    setIsReconnecting(false)
+    setTransportFailed(false)
 
     if (!repositoryId || !backendUrl) {
       return
@@ -81,7 +87,17 @@ export function usePlanStream(repositoryId: string | null) {
       }
     }
 
-    const subscription = subscribeToPlanEvents(backendUrl, repositoryId, handle)
+    const subscription = subscribeToPlanEvents(backendUrl, repositoryId, handle, {
+      onReconnecting: () => isCurrent && setIsReconnecting(true),
+      onError: () => isCurrent && setTransportFailed(true),
+      // Any successfully received frame means the stream is live again: clear both flags.
+      onActive: () => {
+        if (isCurrent) {
+          setIsReconnecting(false)
+          setTransportFailed(false)
+        }
+      },
+    })
     return () => {
       isCurrent = false
       subscription.close()
@@ -152,5 +168,14 @@ export function usePlanStream(repositoryId: string | null) {
     dispatch({ kind: 'reset' })
   }, [])
 
-  return { state, error, submitWrite, submitRevise, submitExecute, dismissFailure }
+  return {
+    state,
+    error,
+    isReconnecting,
+    transportFailed,
+    submitWrite,
+    submitRevise,
+    submitExecute,
+    dismissFailure,
+  }
 }
