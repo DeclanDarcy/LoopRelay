@@ -30,6 +30,7 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
     private readonly IMemoryCache memoryCache;
     private readonly IPlanArtifactPublisher planArtifactPublisher;
     private readonly IDecisionSessionRouter decisionSessionRouter;
+    private readonly OrchestrationFeatureFlags flags;
 
     // Serializes session open/close and the dispose handoff so an in-flight EnsureSession can never
     // leak a handle past disposal. NOT disposed (avoids a Release-vs-Dispose ObjectDisposedException).
@@ -104,7 +105,8 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
         IArtifactStore artifactStore,
         IMemoryCache memoryCache,
         IPlanArtifactPublisher planArtifactPublisher,
-        IDecisionSessionRouter decisionSessionRouter)
+        IDecisionSessionRouter decisionSessionRouter,
+        OrchestrationFeatureFlags? flags = null)
     {
         RepositoryId = repositoryId;
         this.agentRuntime = agentRuntime;
@@ -112,6 +114,8 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
         this.memoryCache = memoryCache;
         this.planArtifactPublisher = planArtifactPublisher;
         this.decisionSessionRouter = decisionSessionRouter;
+        // A null/default-constructed flags object reproduces today's behavior byte-for-byte (m10, additive only).
+        this.flags = flags ?? new OrchestrationFeatureFlags();
     }
 
     public string RepositoryId { get; }
@@ -232,9 +236,19 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
         try
         {
             await PersistPlanInputsAsync(repository, request).ConfigureAwait(false);
-            IAgentSession session = await EnsurePlanningSessionAsync(repository, cancellationToken).ConfigureAwait(false);
             (string promptText, PromptProvenance provenance) = BuildWritePlan(request);
-            await LaunchPlanningTurnAsync(session, repository, promptText, provenance, "WritePlan").ConfigureAwait(false);
+
+            // m10 flag (a): with the persistent planning process DISABLED, the planning turn runs as a fresh
+            // one-shot (no held-open process). The default (enabled) keeps today's warm-process path byte-for-byte.
+            if (!flags.PersistentPlanningProcessEnabled)
+            {
+                await LaunchPlanningOneShotAsync(repository, promptText, provenance, "WritePlan").ConfigureAwait(false);
+            }
+            else
+            {
+                IAgentSession session = await EnsurePlanningSessionAsync(repository, cancellationToken).ConfigureAwait(false);
+                await LaunchPlanningTurnAsync(session, repository, promptText, provenance, "WritePlan").ConfigureAwait(false);
+            }
         }
         catch
         {
@@ -261,9 +275,25 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
         try
         {
             (string promptText, PromptProvenance provenance) = BuildRevisePlan(request.Feedback);
-            // Pass no session: the warm planning process is captured under the gate INSIDE the launch,
-            // so a concurrent ExecutePlan/Dispose cannot tear it down between a null-check and the turn.
-            await LaunchPlanningTurnAsync(session: null, repository, promptText, provenance, "RevisePlan").ConfigureAwait(false);
+
+            // m10 flag (a): with the persistent planning process DISABLED there is NO warm session to revise.
+            // CHOSEN REVISE SEMANTICS: re-run RevisePlan.Render(feedback) as its own one-shot. The prior plan was
+            // persisted to .agents/plan.md by the preceding (one-shot) Write turn, and the RevisePlan prompt reads
+            // that artifact from the workspace, so the revision still operates against the freshly persisted plan —
+            // it simply does so in a fresh process instead of a held-open conversation. The streamed frame sequence
+            // (turn-started/delta/completed/failed) is IDENTICAL to the warm path, so the UI contract is unchanged.
+            // (Default/persistent mode keeps the warm-session-required behavior: BeginRevisePlanAsync below still
+            // throws "no warm planning session" via LaunchPlanningTurnAsync when no process is open.)
+            if (!flags.PersistentPlanningProcessEnabled)
+            {
+                await LaunchPlanningOneShotAsync(repository, promptText, provenance, "RevisePlan").ConfigureAwait(false);
+            }
+            else
+            {
+                // Pass no session: the warm planning process is captured under the gate INSIDE the launch,
+                // so a concurrent ExecutePlan/Dispose cannot tear it down between a null-check and the turn.
+                await LaunchPlanningTurnAsync(session: null, repository, promptText, provenance, "RevisePlan").ConfigureAwait(false);
+            }
         }
         catch
         {
@@ -520,14 +550,18 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
         DecisionStream.Complete();
         memoryCache.Remove(OrchestrationCacheKeys.PlanRun(RepositoryId));
 
+        // Single-sited teardown (m10): close through the runtime so the held-open session is deregistered from
+        // AgentSessionRegistry AND disposed, rather than disposed directly (which left a dead registry entry the
+        // shutdown re-disposed). The gate-guarded null-then-capture above still guarantees each handle is closed
+        // at most once.
         if (planning is not null)
         {
-            await planning.DisposeAsync().ConfigureAwait(false);
+            await agentRuntime.CloseSessionAsync(planning).ConfigureAwait(false);
         }
 
         if (decision is not null)
         {
-            await decision.DisposeAsync().ConfigureAwait(false);
+            await agentRuntime.CloseSessionAsync(decision).ConfigureAwait(false);
         }
 
         lifetimeCts.Dispose();
@@ -580,7 +614,8 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
 
         if (planning is not null)
         {
-            await planning.DisposeAsync().ConfigureAwait(false);
+            // Single-sited teardown (m10): deregister from AgentSessionRegistry AND dispose (see CloseSessionAsync).
+            await agentRuntime.CloseSessionAsync(planning).ConfigureAwait(false);
         }
     }
 
@@ -605,7 +640,8 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
 
         if (decision is not null)
         {
-            await decision.DisposeAsync().ConfigureAwait(false);
+            // Single-sited teardown (m10): deregister from AgentSessionRegistry AND dispose (see CloseSessionAsync).
+            await agentRuntime.CloseSessionAsync(decision).ConfigureAwait(false);
         }
     }
 
@@ -666,39 +702,10 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
 
             AgentTurnResult result = await session.RunTurnAsync(
                 promptText,
-                chunk =>
-                {
-                    if (chunk.Stream == AgentProcessOutputStream.StandardOutput && !string.IsNullOrEmpty(chunk.Content))
-                    {
-                        PlanningStream.Publish("delta", Serialize(new { text = chunk.Content }));
-                    }
-
-                    return Task.CompletedTask;
-                },
+                PublishPlanningDelta,
                 cancellationToken).ConfigureAwait(false);
 
-            if (result.State != AgentTurnState.Completed)
-            {
-                PlanningStream.Publish("failed", Serialize(new { reason = DescribeTerminalState(result.State), detail = result.Output }));
-                return;
-            }
-
-            string planPath = ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.Plan);
-            if (!await artifactStore.ExistsAsync(planPath).ConfigureAwait(false))
-            {
-                PlanningStream.Publish("failed", Serialize(new { reason = "Planning turn completed but .agents/plan.md was not written." }));
-                return;
-            }
-
-            string plan = await artifactStore.ReadAsync(planPath).ConfigureAwait(false) ?? string.Empty;
-            RecordPlan(plan);
-            AppendConversation(ConversationEntryKind.Planning, $"Plan authored ({phase}).", OrchestrationArtifactPaths.Plan);
-            PlanningStream.Publish("completed", Serialize(new
-            {
-                plan,
-                promptTokens = result.Usage.PromptTokens,
-                outputTokens = result.Usage.OutputTokens,
-            }));
+            await FinishPlanningTurnAsync(result, repository, phase).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -712,6 +719,104 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
         {
             ReleasePlanningTurn();
         }
+    }
+
+    // m10 flag (a): one-shot planning launch. Mirrors LaunchPlanningTurnAsync's atomic assign-under-gate +
+    // disposed re-check, but binds NO held-open session (there is none in one-shot mode) — the run opens a fresh
+    // one-shot process itself.
+    private async Task LaunchPlanningOneShotAsync(
+        Repository repository,
+        string promptText,
+        PromptProvenance provenance,
+        string phase)
+    {
+        await gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            ObjectDisposedException.ThrowIf(disposed, this);
+            planningProvenance.Add(provenance);
+            CancellationToken token = lifetimeCts.Token;
+            planningTurn = Task.Run(() => RunPlanningOneShotAsync(repository, promptText, phase, token));
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    // m10 flag (a): the one-shot planning run. Runs the planning prompt via agentRuntime.RunOneShotAsync against
+    // a fresh planning spec (BuildPlanningSpec) instead of a held-open turn, then routes through the SAME
+    // FinishPlanningTurnAsync so the PlanningStream frame sequence (turn-started/delta/completed/failed) is
+    // byte-identical to the warm path and the UI contract is unchanged.
+    private async Task RunPlanningOneShotAsync(
+        Repository repository,
+        string promptText,
+        string phase,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            PlanningStream.Publish("turn-started", Serialize(new { phase }));
+
+            AgentTurnResult result = await agentRuntime.RunOneShotAsync(
+                BuildPlanningSpec(repository),
+                promptText,
+                PublishPlanningDelta,
+                cancellationToken).ConfigureAwait(false);
+
+            await FinishPlanningTurnAsync(result, repository, phase).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Disposing (lifetime cancelled). The stream is about to Complete(); do not publish into it.
+        }
+        catch (Exception exception)
+        {
+            TryPublishFailed(exception.Message);
+        }
+        finally
+        {
+            ReleasePlanningTurn();
+        }
+    }
+
+    private Task PublishPlanningDelta(AgentStreamChunk chunk)
+    {
+        if (chunk.Stream == AgentProcessOutputStream.StandardOutput && !string.IsNullOrEmpty(chunk.Content))
+        {
+            PlanningStream.Publish("delta", Serialize(new { text = chunk.Content }));
+        }
+
+        return Task.CompletedTask;
+    }
+
+    // Shared post-turn handling for BOTH the warm and one-shot planning paths, so their PlanningStream frames are
+    // identical: emit failed on a non-completed turn, failed when the plan artifact is missing, else record + emit
+    // completed. Kept verbatim from the original warm RunPlanningTurnAsync body.
+    private async Task FinishPlanningTurnAsync(AgentTurnResult result, Repository repository, string phase)
+    {
+        if (result.State != AgentTurnState.Completed)
+        {
+            PlanningStream.Publish("failed", Serialize(new { reason = DescribeTerminalState(result.State), detail = result.Output }));
+            return;
+        }
+
+        string planPath = ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.Plan);
+        if (!await artifactStore.ExistsAsync(planPath).ConfigureAwait(false))
+        {
+            PlanningStream.Publish("failed", Serialize(new { reason = "Planning turn completed but .agents/plan.md was not written." }));
+            return;
+        }
+
+        string plan = await artifactStore.ReadAsync(planPath).ConfigureAwait(false) ?? string.Empty;
+        RecordPlan(plan);
+        AppendConversation(ConversationEntryKind.Planning, $"Plan authored ({phase}).", OrchestrationArtifactPaths.Plan);
+        PlanningStream.Publish("completed", Serialize(new
+        {
+            plan,
+            promptTokens = result.Usage.PromptTokens,
+            outputTokens = result.Usage.OutputTokens,
+        }));
     }
 
     private void TryPublishFailed(string reason)
@@ -826,22 +931,35 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
             ExecutionStream.Publish("milestones-extracted", Serialize(new { count = milestones.Count }));
 
             // 2) Commit + push the planning/milestone artifacts.
-            PlanPublicationResult publication = await planArtifactPublisher.PublishAsync(
-                repository,
-                "Author plan and extract milestones",
-                BuildPublicationPaths(repository, milestones),
-                cancellationToken).ConfigureAwait(false);
-            if (!publication.Succeeded)
+            // m10 flag (d) + DECISION (item #5/#6): AutomaticCommitPushAfterExecuteEnabled defaults TRUE, preserving
+            // today's auto commit+push and the 202 fire-and-forget Execute Plan contract. A SYNCHRONOUS user-
+            // confirmation gate is INTENTIONALLY NOT added in m10 — it would break that 202 contract — so this flag
+            // is the off-switch: set it false to disable auto commit/push and let a human commit/push manually.
+            // When disabled, the publish block AND the `committed` frame are skipped, the run proceeds to
+            // StartExecution with NO commit, and the terminal `completed` frame carries a null commitSha (the frame
+            // shape is unchanged: a null/empty commitSha is the additive signal that commit/push was skipped).
+            // Scoped to this Execute Plan run only; the continuation path (RunContinuationAsync) never commits today.
+            string? commitSha = null;
+            if (flags.AutomaticCommitPushAfterExecuteEnabled)
             {
-                ExecutionStream.Publish("failed", Serialize(new
+                PlanPublicationResult publication = await planArtifactPublisher.PublishAsync(
+                    repository,
+                    "Author plan and extract milestones",
+                    BuildPublicationPaths(repository, milestones),
+                    cancellationToken).ConfigureAwait(false);
+                if (!publication.Succeeded)
                 {
-                    phase = "Publish",
-                    reason = $"Committing the plan and milestones failed: {publication.FailureReason}",
-                }));
-                return;
-            }
+                    ExecutionStream.Publish("failed", Serialize(new
+                    {
+                        phase = "Publish",
+                        reason = $"Committing the plan and milestones failed: {publication.FailureReason}",
+                    }));
+                    return;
+                }
 
-            ExecutionStream.Publish("committed", Serialize(new { commitSha = publication.CommitSha, pushed = publication.Pushed }));
+                commitSha = publication.CommitSha;
+                ExecutionStream.Publish("committed", Serialize(new { commitSha = publication.CommitSha, pushed = publication.Pushed }));
+            }
 
             // 3) Lifecycle crosses to ExecutingPlan (derived from plan existence; emitted for the UI).
             ExecutionStream.Publish("lifecycle", Serialize(new { state = nameof(PlanLifecycleState.ExecutingPlan) }));
@@ -891,7 +1009,10 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
 
             ExecutionStream.Publish("completed", Serialize(new
             {
-                commitSha = publication.CommitSha,
+                // commitSha is null when auto commit/push is disabled (m10 flag d) — same frame shape, additive
+                // null signal that a human must commit/push. With the flag at its default (enabled) it carries the
+                // real publication sha exactly as before.
+                commitSha,
                 milestoneCount = milestones.Count,
                 handoffPath = rotatedRelative,
                 promptTokens = extract.Usage.PromptTokens + start.Usage.PromptTokens,
@@ -1071,6 +1192,17 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
         catch
         {
             route = DecisionRoute.Continue;
+        }
+
+        // m10 flag (c): the transfer-only fallback FORCES Transfer after the router evaluates (the router still
+        // runs, so its inputs are recorded), bypassing the threshold verdict. The default (false) leaves the
+        // router's decision intact. The forced Transfer is NOT unconditional: the eligibility downgrade below
+        // (unseeded -> Continue) and the TryClaimExecutionRun deferral inside RunDecisionAsync still apply, so an
+        // unseeded or contended process still degrades safely to warm reuse — this only changes the VERDICT, not
+        // the safety gates.
+        if (flags.TransferOnlyDecisionFallbackEnabled)
+        {
+            route = DecisionRoute.Transfer;
         }
 
         // Eligibility (m7): only Transfer (recycle) when there is a PRIMED Decision process to extract a delta
@@ -1369,6 +1501,19 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
         }
         finally
         {
+            // m10 flag (b): with decision-process reuse DISABLED, each run is fully self-contained — open, seed,
+            // propose, then CLOSE — so no Decision process is held between runs and the NEXT run starts unseeded and
+            // re-seeds (the EnsureSessionAsync warm fast-path is never hit, and the Transfer eligibility downgrade
+            // forces Continue since each run begins unseeded). Skip the close on cancellation: DisposeAsync owns
+            // teardown then, and closing here would double-handle the handle. Closing INSIDE the decisionState gate
+            // (still held until ReleaseDecisionRun below) keeps it serialized against the next run. The default
+            // (reuse enabled) leaves the process held open exactly as before.
+            if (!flags.PersistentDecisionProcessReuseEnabled && !cancellationToken.IsCancellationRequested)
+            {
+                await CloseDecisionSessionAsync().ConfigureAwait(false);
+                decisionSeeded = false;
+            }
+
             ReleaseDecisionRun();
         }
     }

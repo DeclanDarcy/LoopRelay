@@ -15,6 +15,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace CommandCenter.Backend.Tests;
 
+[Collection("ProcessEnvironment")]
 public sealed class ReasoningCertificationServiceTests
 {
     private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();

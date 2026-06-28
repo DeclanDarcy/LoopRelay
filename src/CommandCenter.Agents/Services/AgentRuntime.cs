@@ -27,6 +27,19 @@ public sealed class AgentRuntime(
         return session;
     }
 
+    public async ValueTask CloseSessionAsync(IAgentSession session)
+    {
+        // Single-sited teardown (m10): deregister from the registry AND dispose, so a held-open session is owned
+        // in exactly one place. RemoveAsync both removes the entry and disposes the stored session; if the session
+        // is not (or no longer) registered — already removed, or never added — fall back to disposing it directly
+        // so it is still disposed exactly once.
+        var key = new AgentSessionKey(session.RepositoryId, session.SessionId);
+        if (!await registry.RemoveAsync(key).ConfigureAwait(false))
+        {
+            await session.DisposeAsync().ConfigureAwait(false);
+        }
+    }
+
     public async Task<AgentTurnResult> RunOneShotAsync(
         AgentSessionSpec spec,
         string prompt,

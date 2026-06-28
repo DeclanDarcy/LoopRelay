@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace CommandCenter.Backend.Tests;
 
+[Collection("ProcessEnvironment")]
 public sealed class WorkflowEndpointTests
 {
     private static readonly WorkflowRoute[] Routes =

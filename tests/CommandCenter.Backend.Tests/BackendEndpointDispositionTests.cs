@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace CommandCenter.Backend.Tests;
 
+[Collection("ProcessEnvironment")]
 public sealed class BackendEndpointDispositionTests
 {
     [Fact]

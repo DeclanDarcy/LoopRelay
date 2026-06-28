@@ -93,6 +93,55 @@ public sealed class RepositoryOrchestratorExecutionTests
             () => orchestrator.BeginExecutePlanAsync(OrchestrationTestFactory.Repository()));
     }
 
+    // m10 (A): StartExecution opens its operational one-shot at Effort.Level == Medium with NO identifier override
+    // (the governed medium tier), captured from the FakeAgentRuntime one-shot specs. ExtractMilestones stays xhigh.
+    [Fact]
+    public async Task Start_execution_one_shot_opens_with_medium_effort_and_no_identifier()
+    {
+        var runtime = new FakeAgentRuntime();
+        var store = new FakeArtifactStore();
+        Repository repository = OrchestrationTestFactory.Repository();
+        RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store);
+
+        await WritePlanAsync(orchestrator, runtime, store, repository);
+        ScriptMilestoneExtraction(runtime, store, repository, "m1.md");
+        ScriptStartExecution(runtime, store, repository, "HANDOFF V1");
+
+        await orchestrator.BeginExecutePlanAsync(repository);
+        await orchestrator.ExecutionRunTask;
+
+        // [0] = ExtractMilestones (xhigh), [1] = StartExecution (medium, no identifier).
+        Assert.Equal("xhigh", runtime.OneShotSpecs[0].Effort.Identifier);
+        Assert.Equal(AgentEffortLevel.Medium, runtime.OneShotSpecs[1].Effort.Level);
+        Assert.Null(runtime.OneShotSpecs[1].Effort.Identifier);
+    }
+
+    // m10 (A): the ContinueExecution continuation one-shot likewise opens at Effort.Level == Medium with no
+    // identifier — the same governed medium tier StartExecution uses.
+    [Fact]
+    public async Task Continue_execution_one_shot_opens_with_medium_effort_and_no_identifier()
+    {
+        var runtime = new FakeAgentRuntime();
+        var store = new FakeArtifactStore();
+        Repository repository = OrchestrationTestFactory.Repository();
+        RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store);
+
+        // Minimal continuation pre-state: cached plan, operational context (decision gate), first rotated handoff.
+        orchestrator.RecordPlan(PlanBody);
+        await store.WriteAsync(Resolve(repository, OrchestrationArtifactPaths.OperationalContext), "CONTEXT");
+        await store.WriteAsync(Resolve(repository, OrchestrationArtifactPaths.HistoricalHandoff(1)), "HANDOFF ONE");
+        runtime.OneShotTurns.Enqueue(new FakeOneShotTurn(Effect: () =>
+            store.WriteAsync(Resolve(repository, OrchestrationArtifactPaths.LiveHandoff), "HANDOFF TWO")));
+
+        await orchestrator.BeginSubmitDecisionsAsync(repository, "DECISIONS ONE");
+        await orchestrator.ExecutionRunTask;
+
+        // The continuation one-shot (the first/only one-shot here) opened at medium with no identifier.
+        Assert.Equal(AgentEffortLevel.Medium, runtime.OneShotSpecs[0].Effort.Level);
+        Assert.Null(runtime.OneShotSpecs[0].Effort.Identifier);
+        Assert.Equal(ContinueExecution.Render(PlanBody, "HANDOFF ONE", "DECISIONS ONE"), runtime.OneShotPrompts[0]);
+    }
+
     [Fact]
     public async Task Execute_plan_is_rejected_while_a_planning_turn_is_running()
     {

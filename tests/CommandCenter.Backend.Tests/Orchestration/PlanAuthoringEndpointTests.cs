@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
+using System.Text.RegularExpressions;
 using CommandCenter.Backend;
 using CommandCenter.Core.Configuration;
 using CommandCenter.Core.Repositories;
@@ -16,6 +17,7 @@ namespace CommandCenter.Backend.Tests.Orchestration;
 /// (409). The streaming happy path is unit-tested in <see cref="RepositoryOrchestratorPlanningTests"/>;
 /// route registration is asserted by the endpoint-disposition governance test.
 /// </summary>
+[Collection("ProcessEnvironment")]
 public sealed class PlanAuthoringEndpointTests
 {
     [Fact]
@@ -101,14 +103,17 @@ public sealed class PlanAuthoringEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, server.PlanRoute(server.RegisteredRepositoryId, "stream"));
         request.Headers.TryAddWithoutValidation("Last-Event-ID", "1");
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        // 60s (not a tight behavioural bound — a healthy replay completes in <100ms): cold-start
+        // headroom so the very first full-suite run's JIT/thread-pool warmup cannot trip the live-HTTP
+        // SSE-replay read before the deterministic frames arrive. Assertions are unchanged.
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         using HttpResponseMessage response =
             await server.Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         string body = await ReadStreamUntilAsync(
             response,
-            text => text.Contains("id: 2") && text.Contains("id: 3"),
+            ReplayFramesTwoAndThreeComplete,
             cts.Token);
 
         Assert.Contains("id: 2", body);
@@ -143,14 +148,17 @@ public sealed class PlanAuthoringEndpointTests
         using var request = new HttpRequestMessage(
             HttpMethod.Get, $"/api/repositories/{server.RegisteredRepositoryId:D}/execution/stream");
         request.Headers.TryAddWithoutValidation("Last-Event-ID", "1");
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        // 60s (not a tight behavioural bound — a healthy replay completes in <100ms): cold-start
+        // headroom so the very first full-suite run's JIT/thread-pool warmup cannot trip the live-HTTP
+        // SSE-replay read before the deterministic frames arrive. Assertions are unchanged.
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         using HttpResponseMessage response =
             await server.Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         string body = await ReadStreamUntilAsync(
             response,
-            text => text.Contains("id: 2") && text.Contains("id: 3"),
+            ReplayFramesTwoAndThreeComplete,
             cts.Token);
 
         Assert.Contains("id: 2", body);
@@ -230,14 +238,17 @@ public sealed class PlanAuthoringEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, server.DecisionRoute(server.RegisteredRepositoryId, "stream"));
         request.Headers.TryAddWithoutValidation("Last-Event-ID", "1");
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        // 60s (not a tight behavioural bound — a healthy replay completes in <100ms): cold-start
+        // headroom so the very first full-suite run's JIT/thread-pool warmup cannot trip the live-HTTP
+        // SSE-replay read before the deterministic frames arrive. Assertions are unchanged.
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         using HttpResponseMessage response =
             await server.Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         string body = await ReadStreamUntilAsync(
             response,
-            text => text.Contains("id: 2") && text.Contains("id: 3"),
+            ReplayFramesTwoAndThreeComplete,
             cts.Token);
 
         Assert.Contains("id: 2", body);
@@ -269,6 +280,15 @@ public sealed class PlanAuthoringEndpointTests
         Assert.Contains("\"entries\":[]", body); // camelCase projection with no turns yet
     }
 
+    /// <summary>
+    /// Reads an SSE response, accumulating frames until <paramref name="done"/> is satisfied or the
+    /// caller's <paramref name="cancellationToken"/> (the 20s test deadline) fires. A single
+    /// <see cref="StreamReader.ReadAsync(Memory{char},CancellationToken)"/> can split anywhere — including
+    /// immediately after a frame's <c>id:</c> header but before its <c>data:</c> line — so the
+    /// <paramref name="done"/> predicate MUST key off a fully terminated frame (its trailing blank line),
+    /// never a bare <c>id:</c> marker, or the loop can stop with a half-received final frame under load.
+    /// The returned body is unchanged on the happy path; assertions against it are untouched.
+    /// </summary>
     private static async Task<string> ReadStreamUntilAsync(
         HttpResponseMessage response,
         Func<string, bool> done,
@@ -301,6 +321,19 @@ public sealed class PlanAuthoringEndpointTests
 
         return builder.ToString();
     }
+
+    // True once the SSE body carries the fully terminated frames for sequences 2 and 3 — i.e. each frame's
+    // id/event/data block ends with the blank-line separator. Keying off the blank-line terminator (not a
+    // bare "id: 3") guarantees the reader does not stop after a read that split between the id: header and
+    // the data: payload of the final frame, which is what produced the load-only "three"-missing flake.
+    private static bool ReplayFramesTwoAndThreeComplete(string body) =>
+        FrameComplete(body, 2) && FrameComplete(body, 3);
+
+    private static bool FrameComplete(string body, long sequence) =>
+        Regex.IsMatch(
+            body,
+            $@"(?ms)^id:\s*{sequence}\nevent:[^\n]*\ndata:[^\n]*\n\n",
+            RegexOptions.None);
 
     private sealed class PlanAuthoringTestServer : IAsyncDisposable
     {

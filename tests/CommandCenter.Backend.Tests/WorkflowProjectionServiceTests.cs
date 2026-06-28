@@ -27,6 +27,7 @@ using Microsoft.Extensions.Options;
 
 namespace CommandCenter.Backend.Tests;
 
+[Collection("ProcessEnvironment")]
 public sealed class WorkflowProjectionServiceTests
 {
     [Fact]

@@ -41,19 +41,23 @@ public sealed class RepositoryOrchestratorRegistry : IAsyncDisposable
     private readonly IMemoryCache memoryCache;
     private readonly IPlanArtifactPublisher planArtifactPublisher;
     private readonly IDecisionSessionRouter decisionSessionRouter;
+    private readonly OrchestrationFeatureFlags flags;
 
     public RepositoryOrchestratorRegistry(
         IAgentRuntime agentRuntime,
         IArtifactStore artifactStore,
         IMemoryCache memoryCache,
         IPlanArtifactPublisher planArtifactPublisher,
-        IDecisionSessionRouter decisionSessionRouter)
+        IDecisionSessionRouter decisionSessionRouter,
+        OrchestrationFeatureFlags? flags = null)
     {
         this.agentRuntime = agentRuntime;
         this.artifactStore = artifactStore;
         this.memoryCache = memoryCache;
         this.planArtifactPublisher = planArtifactPublisher;
         this.decisionSessionRouter = decisionSessionRouter;
+        // A null/default-constructed flags object reproduces today's behavior byte-for-byte (m10, additive only).
+        this.flags = flags ?? new OrchestrationFeatureFlags();
     }
 
     public int Count => orchestrators.Count;
@@ -66,7 +70,7 @@ public sealed class RepositoryOrchestratorRegistry : IAsyncDisposable
             return orchestrators.GetOrAdd(
                 repositoryId,
                 id => new Lazy<RepositoryOrchestrator>(
-                    () => new RepositoryOrchestrator(id, agentRuntime, artifactStore, memoryCache, planArtifactPublisher, decisionSessionRouter),
+                    () => new RepositoryOrchestrator(id, agentRuntime, artifactStore, memoryCache, planArtifactPublisher, decisionSessionRouter, flags),
                     LazyThreadSafetyMode.ExecutionAndPublication)).Value;
         }
         finally

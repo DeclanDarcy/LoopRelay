@@ -106,4 +106,63 @@ public sealed class CodexAgentArgumentBuilderTests
 
         Assert.Contains("model_reasoning_effort=\"xhigh\"", args);
     }
+
+    // m10 (A) Medium-value certification: AgentEffortLevel.Medium with no identifier maps to "medium" — the tier
+    // StartExecution/ContinueExecution run at. (The exec-path "xhigh" and isolated-protocol "high" are already
+    // pinned; this completes the level map's middle rung.)
+    [Fact]
+    public void MediumEffortMapsToMediumReasoningConfig()
+    {
+        IReadOnlyList<string> args = CodexAgentArgumentBuilder.Build(
+            Spec(canWrite: true, requiresApproval: false, AgentEffortLevel.Medium),
+            AgentSessionMode.OneShot);
+
+        Assert.Contains("model_reasoning_effort=\"medium\"", args);
+    }
+
+    // m10 (A) no-MCP/no-tools regression guard for the EXEC path: the only -c config keys present are
+    // approval_policy + model_reasoning_effort + whatever explicit StartupOptions the caller passes. No
+    // tools/web_search/include_plan_tool surface is ever injected by the builder.
+    [Fact]
+    public void ExecArgsCarryNoToolsWebSearchOrPlanToolConfigKeys()
+    {
+        IReadOnlyList<string> args = CodexAgentArgumentBuilder.Build(
+            Spec(canWrite: true, requiresApproval: false, AgentEffortLevel.Medium),
+            AgentSessionMode.OneShot);
+
+        // Every -c key is one of the two governed defaults — nothing else.
+        var configKeys = new List<string>();
+        for (int i = 0; i < args.Count - 1; i++)
+        {
+            if (args[i] == "-c")
+            {
+                configKeys.Add(args[i + 1].Split('=')[0]);
+            }
+        }
+
+        Assert.Equal(new[] { "approval_policy", "model_reasoning_effort" }, configKeys);
+        Assert.DoesNotContain(args, a => a.Contains("tools", StringComparison.Ordinal));
+        Assert.DoesNotContain(args, a => a.Contains("web_search", StringComparison.Ordinal));
+        Assert.DoesNotContain(args, a => a.Contains("include_plan_tool", StringComparison.Ordinal));
+        Assert.DoesNotContain(args, a => a.Contains("mcp", StringComparison.Ordinal));
+    }
+
+    // m10 (A): explicit StartupOptions ARE emitted as additional -c keys (so the guard above is a real constraint,
+    // not vacuous) — and ONLY those the caller passed.
+    [Fact]
+    public void ExplicitStartupOptionsAreEmittedAsAdditionalConfigKeys()
+    {
+        var spec = new AgentSessionSpec(
+            SessionIdentity.New(),
+            "repo-1",
+            SessionRole.OperationalExecution,
+            new SandboxProfile("sandbox", CanWriteWorkspace: true, CanAccessNetwork: false, RequiresApproval: false),
+            new EffortProfile(AgentEffortLevel.Medium),
+            workingDirectory: "/repo",
+            startupOptions: new Dictionary<string, string> { ["model"] = "\"gpt-5\"" });
+
+        IReadOnlyList<string> args = CodexAgentArgumentBuilder.Build(spec, AgentSessionMode.OneShot);
+
+        Assert.Contains("model=\"gpt-5\"", args);
+    }
 }

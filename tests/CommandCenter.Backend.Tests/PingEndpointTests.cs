@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Builder;
 
 namespace CommandCenter.Backend.Tests;
 
+[Collection("ProcessEnvironment")]
 public sealed class PingEndpointTests
 {
     [Fact]

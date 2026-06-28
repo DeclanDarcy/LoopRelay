@@ -20,6 +20,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace CommandCenter.Backend.Tests;
 
+[Collection("ProcessEnvironment")]
 public sealed class DecisionGenerationServiceTests
 {
     [Fact]
@@ -964,6 +965,60 @@ public sealed class DecisionGenerationServiceTests
         Assert.Contains("- Score explanation:", packageMarkdown);
         Assert.Contains("#### Unknowns", packageMarkdown);
         Assert.Contains("#### Validation Warnings", packageMarkdown);
+    }
+
+    [Fact]
+    public async Task GenerateProposalIsFullyReproducibleForIdenticalInputs()
+    {
+        // m10 (D) determinism: the offline EndpointFamily.Decisions fallback authoring path is fully reproducible —
+        // generating twice over the SAME repository/candidate (identical inputs; the first is expired between runs so
+        // the second regenerates) yields byte-identical options, identical OptionEvaluations Score/ScoreExplanation,
+        // and the same TradeoffAnalysis ContextFingerprint. (Proposal IDs differ — PROP-0001 vs PROP-0002 — by
+        // design; equality is asserted over the input-derived CONTENT, not the monotonically issued id.)
+        DecisionProposal first = await GenerateOnFreshRepositoryAsync();
+        DecisionProposal second = await GenerateOnFreshRepositoryAsync();
+
+        var json = new JsonSerializerOptions { WriteIndented = false };
+
+        // Options are byte-identical (JSON-serialized) across the two runs.
+        Assert.Equal(JsonSerializer.Serialize(first.Options, json), JsonSerializer.Serialize(second.Options, json));
+
+        // Recommendation OptionEvaluations: Score + ScoreExplanation reproduce exactly, in the same order.
+        IReadOnlyList<OptionEvaluation> firstEvaluations = first.Recommendation!.OptionEvaluations;
+        IReadOnlyList<OptionEvaluation> secondEvaluations = second.Recommendation!.OptionEvaluations;
+        Assert.Equal(firstEvaluations.Count, secondEvaluations.Count);
+        Assert.Equal(
+            firstEvaluations.Select(e => (e.OptionId, e.Score, e.ScoreExplanation)),
+            secondEvaluations.Select(e => (e.OptionId, e.Score, e.ScoreExplanation)));
+
+        // ContextFingerprint reproducibility: building the generation context twice over the SAME repository's inputs
+        // (a pure read — no artifact mutation between the two builds) yields a byte-identical fingerprint, certifying
+        // the fingerprint is a deterministic function of the context content (a non-deterministic hash would differ).
+        Repository fingerprintRepo = CreateRepository();
+        DecisionCandidate fingerprintCandidate = CreateCandidate(fingerprintRepo.Id, DecisionCandidateState.Promoted);
+        var fingerprintStore = new FileSystemArtifactStore();
+        var fingerprintDecisionRepository = new FileSystemDecisionRepository(fingerprintStore);
+        await fingerprintDecisionRepository.SaveCandidateAsync(fingerprintRepo, fingerprintCandidate);
+        var contextService = new DecisionContextService(
+            new StubRepositoryService(fingerprintRepo), fingerprintStore, fingerprintDecisionRepository);
+
+        DecisionGenerationContext firstContext = await contextService.BuildGenerationContextAsync(fingerprintRepo.Id);
+        DecisionGenerationContext secondContext = await contextService.BuildGenerationContextAsync(fingerprintRepo.Id);
+        Assert.Equal(firstContext.Fingerprint, secondContext.Fingerprint);
+        Assert.False(string.IsNullOrWhiteSpace(firstContext.Fingerprint));
+    }
+
+    // Generates a proposal on a FRESH repository with identical candidate inputs and no prior artifacts, so two calls
+    // are over byte-identical inputs (the only difference, the repository Guid, must not affect generated content).
+    private static async Task<DecisionProposal> GenerateOnFreshRepositoryAsync()
+    {
+        Repository repository = CreateRepository();
+        DecisionCandidate candidate = CreateCandidate(repository.Id, DecisionCandidateState.Promoted);
+        var store = new FileSystemArtifactStore();
+        var decisionRepository = new FileSystemDecisionRepository(store);
+        await decisionRepository.SaveCandidateAsync(repository, candidate);
+        var service = CreateGenerationService(repository, store, decisionRepository);
+        return await service.GenerateProposalAsync(repository.Id, candidate.Id);
     }
 
     [Fact]

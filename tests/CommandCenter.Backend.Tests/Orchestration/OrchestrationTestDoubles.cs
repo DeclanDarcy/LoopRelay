@@ -63,12 +63,23 @@ internal sealed class FakeAgentRuntime : IAgentRuntime
     /// lets a test hold an execution run ACTIVE to observe the dispose drain.</summary>
     public Task? OneShotGate { get; set; }
 
+    /// <summary>Sessions closed through <see cref="CloseSessionAsync"/> (m10 single-sited teardown), in order.</summary>
+    public List<IAgentSession> ClosedSessions { get; } = new();
+
     public Task<IAgentSession> OpenSessionAsync(AgentSessionSpec spec, CancellationToken cancellationToken = default)
     {
         OpenedSpecs.Add(spec);
         var session = new FakeAgentSession(spec, this);
         Sessions.Add(session);
         return Task.FromResult<IAgentSession>(session);
+    }
+
+    public async ValueTask CloseSessionAsync(IAgentSession session)
+    {
+        // The fake holds no registry, so closing just disposes (matching the runtime's "not registered ->
+        // dispose directly" fallback). Recording the close lets a test assert single-sited teardown happened.
+        ClosedSessions.Add(session);
+        await session.DisposeAsync().ConfigureAwait(false);
     }
 
     public async Task<AgentTurnResult> RunOneShotAsync(
@@ -208,9 +219,26 @@ internal sealed class FakeArtifactStore : IArtifactStore
     /// <summary>When true, every path reports as existing regardless of writes (drives plan-status tests).</summary>
     public bool ExistsResult { get; set; }
 
+    /// <summary>
+    /// m10 recovery-window hook (additive, default-null => existing tests unaffected): when set and the predicate
+    /// matches the write path, <see cref="WriteAsync"/> throws an <see cref="IOException"/> BEFORE persisting, so a
+    /// test can model an intermediate store-write failure mid-rotation/mid-window. Modeled on the existing
+    /// PathFailingArtifactStore (OperationalContextGenerationTests).
+    /// </summary>
+    public Func<string, bool>? FailWriteOn { get; set; }
+
+    /// <summary>
+    /// m10 recovery-window hook (additive, default-null => existing tests unaffected): when set and the predicate
+    /// matches the delete path, <see cref="DeleteAsync"/> throws an <see cref="IOException"/> instead of removing the
+    /// file, so a test can model a failed delete (e.g. the live-handoff delete in a rotation block).
+    /// </summary>
+    public Func<string, bool>? FailDeleteOn { get; set; }
+
     public List<string> ExistsQueries { get; } = new();
 
     public List<string> WriteQueries { get; } = new();
+
+    public List<string> DeleteQueries { get; } = new();
 
     public List<string> ListQueries { get; } = new();
 
@@ -225,6 +253,13 @@ internal sealed class FakeArtifactStore : IArtifactStore
 
     public Task WriteAsync(string path, string content)
     {
+        // Recovery-window hook: fail BEFORE recording the write or mutating the file, so the path is neither queued
+        // nor persisted — exactly what a real store does when the OS rejects the write mid-window (default-null: no-op).
+        if (FailWriteOn is not null && FailWriteOn(path))
+        {
+            throw new IOException($"Configured write failure for {System.IO.Path.GetFileName(path)}.");
+        }
+
         WriteQueries.Add(path);
         files[path] = content;
         return Task.CompletedTask;
@@ -232,6 +267,15 @@ internal sealed class FakeArtifactStore : IArtifactStore
 
     public Task DeleteAsync(string path)
     {
+        DeleteQueries.Add(path);
+
+        // Recovery-window hook: fail the delete AFTER recording the attempt but WITHOUT removing the file, so the
+        // (e.g. live handoff) artifact stays readable — modeling a failed rotation delete (default-null: no-op).
+        if (FailDeleteOn is not null && FailDeleteOn(path))
+        {
+            throw new IOException($"Configured delete failure for {System.IO.Path.GetFileName(path)}.");
+        }
+
         files.Remove(path);
         return Task.CompletedTask;
     }
@@ -349,13 +393,15 @@ internal static class OrchestrationTestFactory
         FakeArtifactStore? store = null,
         MemoryCache? cache = null,
         IPlanArtifactPublisher? publisher = null,
-        IDecisionSessionRouter? router = null) =>
+        IDecisionSessionRouter? router = null,
+        OrchestrationFeatureFlags? flags = null) =>
         new(
             runtime ?? new FakeAgentRuntime(),
             store ?? new FakeArtifactStore(),
             cache ?? Cache(),
             publisher ?? new FakePlanArtifactPublisher(),
-            router ?? new FakeDecisionSessionRouter());
+            router ?? new FakeDecisionSessionRouter(),
+            flags ?? new OrchestrationFeatureFlags());
 
     public static RepositoryOrchestrator Orchestrator(
         string? repositoryId = null,
@@ -363,12 +409,14 @@ internal static class OrchestrationTestFactory
         FakeArtifactStore? store = null,
         MemoryCache? cache = null,
         IPlanArtifactPublisher? publisher = null,
-        IDecisionSessionRouter? router = null) =>
+        IDecisionSessionRouter? router = null,
+        OrchestrationFeatureFlags? flags = null) =>
         new(
             repositoryId ?? Guid.NewGuid().ToString("D"),
             runtime ?? new FakeAgentRuntime(),
             store ?? new FakeArtifactStore(),
             cache ?? Cache(),
             publisher ?? new FakePlanArtifactPublisher(),
-            router ?? new FakeDecisionSessionRouter());
+            router ?? new FakeDecisionSessionRouter(),
+            flags ?? new OrchestrationFeatureFlags());
 }

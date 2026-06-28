@@ -1,6 +1,7 @@
 using CommandCenter.Core.Projections;
 using CommandCenter.Core.Repositories;
 using CommandCenter.Middle.Projections;
+using CommandCenter.Orchestration.Services;
 
 namespace CommandCenter.Backend.Endpoints;
 
@@ -51,8 +52,20 @@ public static class RepositoriesEndpoints
         });
 
     private static void MapRemoveRepository(this IEndpointRouteBuilder app) =>
-        app.MapDelete("/api/repositories/{repositoryId:guid}", async (Guid repositoryId, IRepositoryService repositoryService) =>
+        app.MapDelete("/api/repositories/{repositoryId:guid}", async (
+            Guid repositoryId,
+            IRepositoryService repositoryService,
+            RepositoryOrchestratorRegistry orchestratorRegistry) =>
         {
+            // m10 removal teardown (additive): tear down any LIVE orchestrator for this repository — which disposes
+            // its held-open planning/decision codex processes — BEFORE rewriting config, so removing a repository
+            // never leaks a live process. RemoveAsync is best-effort/bounded (no-op if nothing is live), so the
+            // endpoint keeps its existing NoContent contract and response shape unchanged. The registry is keyed by
+            // the repository id formatted as "D", matching every other orchestrator endpoint.
+            // NOTE on "deselection": there is intentionally NO backend deselection endpoint — a pure UI re-select
+            // reuses the still-warm process by design. This teardown covers explicit removal (here) and app
+            // shutdown (OrchestratorShutdownHostedService) only; it does not exist to support deselection.
+            await orchestratorRegistry.RemoveAsync(repositoryId.ToString("D"));
             await repositoryService.RemoveAsync(repositoryId);
             return Results.NoContent();
         });

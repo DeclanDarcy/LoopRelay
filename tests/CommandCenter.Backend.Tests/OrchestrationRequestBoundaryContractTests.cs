@@ -27,6 +27,7 @@ namespace CommandCenter.Backend.Tests;
 /// which the helper prepends), the helper it delegates to, and — for body-carrying POSTs — the
 /// <c>json!({ ... })</c> request body it composes. These tests assert exactly that real shape.
 /// </remarks>
+[Collection("ProcessEnvironment")]
 public sealed class OrchestrationRequestBoundaryContractTests
 {
     // ------------------------------------------------------------------ GET plan/status
@@ -365,6 +366,7 @@ public sealed class OrchestrationRequestBoundaryContractTests
 /// body carrying a non-empty string <c>error</c> field. The harness mirrors
 /// <c>Orchestration.PlanAuthoringEndpointTests</c>.
 /// </summary>
+[Collection("ProcessEnvironment")]
 public sealed class OrchestrationErrorContractTests
 {
     [Fact]

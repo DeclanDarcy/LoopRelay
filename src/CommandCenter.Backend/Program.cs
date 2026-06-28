@@ -16,6 +16,7 @@ using CommandCenter.Continuity.Extensions;
 using CommandCenter.DecisionSessions.Extensions;
 using CommandCenter.Decisions.Extensions;
 using CommandCenter.Orchestration.Extensions;
+using CommandCenter.Orchestration.Services;
 using CommandCenter.Reasoning.Extensions;
 using CommandCenter.Workflow.Extensions;
 using CommandCenter.Workflow.Models;
@@ -47,6 +48,22 @@ public static class Program
         builder.Services.AddSingleton<IPlanningService, PlanningService>();
         builder.Services.AddExecution();
         builder.Services.AddOrchestration();
+        // m10: optionally override the orchestration feature flags from configuration. When the section is ABSENT
+        // (the common case) this binds onto a default OrchestrationFeatureFlags and replaces the singleton with an
+        // instance that is value-equal to the default — so behavior stays byte-identical to AddOrchestration's
+        // default registration. A present section flips individual flags (e.g. to disable auto commit/push).
+        var orchestrationFlagsSection = builder.Configuration.GetSection("CommandCenter:Orchestration");
+        if (orchestrationFlagsSection.Exists())
+        {
+            var defaults = new OrchestrationFeatureFlags();
+            var configured = new OrchestrationFeatureFlags(
+                orchestrationFlagsSection.GetValue("PersistentPlanningProcessEnabled", defaults.PersistentPlanningProcessEnabled),
+                orchestrationFlagsSection.GetValue("PersistentDecisionProcessReuseEnabled", defaults.PersistentDecisionProcessReuseEnabled),
+                orchestrationFlagsSection.GetValue("TransferOnlyDecisionFallbackEnabled", defaults.TransferOnlyDecisionFallbackEnabled),
+                orchestrationFlagsSection.GetValue("AutomaticCommitPushAfterExecuteEnabled", defaults.AutomaticCommitPushAfterExecuteEnabled));
+            builder.Services.AddSingleton(configured);
+        }
+
         builder.Services.Configure<WorkflowContinuationOptions>(
             builder.Configuration.GetSection("CommandCenter:Workflow"));
         builder.Services.AddWorkflow();
