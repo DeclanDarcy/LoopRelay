@@ -18,6 +18,14 @@ public static class OrchestrationArtifactPaths
     /// <summary>Operational context the plan text is copied to as Execute Plan crosses into execution (m4).</summary>
     public const string OperationalContext = ".agents/operational_context.md";
 
+    /// <summary>
+    /// The current governance decisions the human review gate persists (m5). This is the canonical path
+    /// every independent decisions consumer reads (<c>ArtifactService.GetCurrentDecisionsAsync</c>,
+    /// <c>DecisionContextService</c>, <c>ArtifactRotationService</c>, continuity), so the Decision Runtime
+    /// writes the human-approved decisions HERE — and only here — to feed the next execution turn.
+    /// </summary>
+    public const string Decisions = ".agents/decisions/decisions.md";
+
     /// <summary>Directory the milestone-extraction turn writes <c>m*.md</c> files into (m4).</summary>
     public const string MilestonesDirectory = ".agents/milestones";
 

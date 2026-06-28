@@ -37,6 +37,7 @@ public sealed class BackendEndpointDispositionTests
         Assert.Contains(dispositions, disposition => disposition.Family == EndpointFamily.Workflow);
         Assert.Contains(dispositions, disposition => disposition.Family == EndpointFamily.DecisionSessions);
         Assert.Contains(dispositions, disposition => disposition.Family == EndpointFamily.Decisions);
+        Assert.Contains(dispositions, disposition => disposition.Family == EndpointFamily.DecisionRuntime);
         Assert.Contains(dispositions, disposition => disposition.Family == EndpointFamily.Execution);
         Assert.Contains(dispositions, disposition => disposition.Family == EndpointFamily.Reasoning);
         Assert.Contains(dispositions, disposition => disposition.Family == EndpointFamily.Continuity);
@@ -138,6 +139,11 @@ public sealed class BackendEndpointDispositionTests
             return EndpointFamily.Decisions;
         }
 
+        if (pattern.StartsWith("/api/repositories/{repositoryId:guid}/decision/", StringComparison.Ordinal))
+        {
+            return EndpointFamily.DecisionRuntime;
+        }
+
         if (pattern.StartsWith("/api/repositories/{repositoryId:guid}/execution", StringComparison.Ordinal) ||
             pattern.StartsWith("/api/execution-sessions", StringComparison.Ordinal) ||
             pattern.StartsWith("/api/repositories/{repositoryId:guid}/git", StringComparison.Ordinal))
@@ -197,6 +203,7 @@ public sealed class BackendEndpointDispositionTests
         Workflow,
         DecisionSessions,
         Decisions,
+        DecisionRuntime,
         Execution,
         OperationalContext,
         Continuity,

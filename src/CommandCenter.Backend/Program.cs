@@ -81,6 +81,7 @@ public static class Program
         app.MapGitEndpoints();
         app.MapExecutionSessionsEndpoints();
         app.MapDecisionEndpoints();
+        app.MapDecisionRuntimeEndpoints();
         app.MapReasoningEndpoints();
         app.MapDecisionSessionEndpoints();
         app.MapWorkflowEndpoints();

@@ -11,6 +11,7 @@ import type {
   ContinuityReport,
   ContinuityTrend,
   Decision,
+  DecisionRunEvent,
   DecisionAssimilationRecommendation,
   DecisionCandidate,
   DecisionCertificationReport,
@@ -103,6 +104,7 @@ type MockState = {
   planStatuses: Record<string, PlanStatus>
   planStreamSubscribers: Record<string, ((event: PlanStreamEvent) => void)[]>
   executionStreamSubscribers: Record<string, ((event: ExecutionRunEvent) => void)[]>
+  decisionStreamSubscribers: Record<string, ((event: DecisionRunEvent) => void)[]>
   commandCalls: Record<string, number>
 }
 
@@ -125,12 +127,20 @@ type ExecutionStreamBridge = {
   ) => () => void
 }
 
+type DecisionStreamBridge = {
+  subscribe: (
+    repositoryId: string,
+    onDecisionEvent: (event: DecisionRunEvent) => void,
+  ) => () => void
+}
+
 declare global {
   interface Window {
     __TAURI_INTERNALS__?: TauriInternals
     __COMMAND_CENTER_MOCK_STATE__?: MockState
     __COMMAND_CENTER_MOCK_PLAN_STREAM__?: PlanStreamBridge
     __COMMAND_CENTER_MOCK_EXECUTION_STREAM__?: ExecutionStreamBridge
+    __COMMAND_CENTER_MOCK_DECISION_STREAM__?: DecisionStreamBridge
   }
 }
 
@@ -2693,6 +2703,7 @@ function createInitialState(): MockState {
     planStatuses: {},
     planStreamSubscribers: {},
     executionStreamSubscribers: {},
+    decisionStreamSubscribers: {},
     commandCalls: {},
   }
 
@@ -2705,6 +2716,7 @@ function createInitialState(): MockState {
     }
     state.planStreamSubscribers[repository.id] = []
     state.executionStreamSubscribers[repository.id] = []
+    state.decisionStreamSubscribers[repository.id] = []
   })
 
   state.repositories.forEach((repository) => {
@@ -4747,6 +4759,56 @@ function simulateExecutionStream(state: MockState, repositoryId: string) {
   window.setTimeout(pushNext, 12)
 }
 
+function emitDecisionEvent(state: MockState, repositoryId: string, event: DecisionRunEvent) {
+  const subscribers = state.decisionStreamSubscribers[repositoryId] ?? []
+  subscribers.forEach((notify) => notify(event))
+}
+
+// The proposed-decisions text the run lands on. review-ready exposes it as the editable buffer;
+// the captured deltas concatenate to the same content so the stream reads coherently.
+const PROPOSED_DECISIONS = [
+  '- Stream the decision run over SSE, consumed via EventSource directly.\n',
+  '- Seed the decision session before proposing, but do not stream the seed turn.\n',
+  '- Keep the decisions textarea editable only after review-ready.\n',
+]
+
+function simulateDecisionStream(state: MockState, repositoryId: string) {
+  // A realistic run: start, log the validated sandbox, propose decisions over deltas, complete,
+  // then open the human review gate with the full captured text. Submission is a separate path.
+  const frames: DecisionRunEvent[] = [
+    { type: 'run-started', phase: 'DecisionRun' },
+    { type: 'diagnostics', sandbox: 'read-only', approvals: 'never', seeded: true },
+    { type: 'phase', phase: 'GetNextDecisions' },
+    ...PROPOSED_DECISIONS.map((text): DecisionRunEvent => ({ type: 'delta', text })),
+    { type: 'completed', promptTokens: 3100, outputTokens: 1240 },
+    { type: 'review-ready', decisions: PROPOSED_DECISIONS.join('') },
+  ]
+
+  let cursor = 0
+  const pushNext = () => {
+    if (cursor >= frames.length) {
+      return
+    }
+
+    emitDecisionEvent(state, repositoryId, frames[cursor])
+    cursor += 1
+    window.setTimeout(pushNext, 12)
+  }
+
+  window.setTimeout(pushNext, 12)
+}
+
+function simulateDecisionSubmit(state: MockState, repositoryId: string) {
+  // The edited decisions are persisted; the backend confirms with a submitted frame carrying the
+  // repository-owned path. This is what closes the human-review gate.
+  window.setTimeout(() => {
+    emitDecisionEvent(state, repositoryId, {
+      type: 'submitted',
+      path: '.agents/decisions/decisions.md',
+    })
+  }, 12)
+}
+
 export function installDevTauriMock() {
   const searchParams = new URLSearchParams(window.location.search)
   if (searchParams.get('mock') !== 'workspace-certification') {
@@ -4795,6 +4857,24 @@ export function installDevTauriMock() {
           // ExecutingPlan once it completes (see simulateExecutionStream).
           simulateExecutionStream(state, repositoryId)
           return { phase: 'ExecutePlan' }
+        }
+        case 'decision_run': {
+          const repositoryId = getStringArg(args, 'repositoryId')
+          // The background run seeds the session then proposes decisions, streaming over the
+          // decision stream and opening the human-review gate (see simulateDecisionStream).
+          simulateDecisionStream(state, repositoryId)
+          return { phase: 'DecisionRun' }
+        }
+        case 'decision_submit': {
+          const repositoryId = getStringArg(args, 'repositoryId')
+          const decisions = getStringArg(args, 'decisions')
+          if (!decisions.trim()) {
+            throw new Error('Decisions text is required.')
+          }
+
+          // Persisting the edited decisions confirms over the stream with a submitted frame.
+          simulateDecisionSubmit(state, repositoryId)
+          return { phase: 'SubmitDecisions' }
         }
         case 'generate_operational_context_proposal':
           return clone(generateOperationalContextProposal(state, getStringArg(args, 'repositoryId')))
@@ -5321,6 +5401,20 @@ export function installDevTauriMock() {
         state.executionStreamSubscribers[repositoryId] = (
           state.executionStreamSubscribers[repositoryId] ?? []
         ).filter((notify) => notify !== onExecutionEvent)
+      }
+    },
+  }
+
+  window.__COMMAND_CENTER_MOCK_DECISION_STREAM__ = {
+    subscribe: (repositoryId, onDecisionEvent) => {
+      const subscribers = state.decisionStreamSubscribers[repositoryId] ?? []
+      subscribers.push(onDecisionEvent)
+      state.decisionStreamSubscribers[repositoryId] = subscribers
+
+      return () => {
+        state.decisionStreamSubscribers[repositoryId] = (
+          state.decisionStreamSubscribers[repositoryId] ?? []
+        ).filter((notify) => notify !== onDecisionEvent)
       }
     },
   }

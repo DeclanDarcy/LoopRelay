@@ -1,5 +1,6 @@
 export * from './artifacts'
 export * from './continuity'
+export * from './decisionRuntime'
 export * from './decisions'
 export * from './decisionSessions'
 export * from './execution'

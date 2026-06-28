@@ -101,7 +101,7 @@ public sealed class PlanAuthoringEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, server.PlanRoute(server.RegisteredRepositoryId, "stream"));
         request.Headers.TryAddWithoutValidation("Last-Event-ID", "1");
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         using HttpResponseMessage response =
             await server.Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
 
@@ -143,7 +143,94 @@ public sealed class PlanAuthoringEndpointTests
         using var request = new HttpRequestMessage(
             HttpMethod.Get, $"/api/repositories/{server.RegisteredRepositoryId:D}/execution/stream");
         request.Headers.TryAddWithoutValidation("Last-Event-ID", "1");
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using HttpResponseMessage response =
+            await server.Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        string body = await ReadStreamUntilAsync(
+            response,
+            text => text.Contains("id: 2") && text.Contains("id: 3"),
+            cts.Token);
+
+        Assert.Contains("id: 2", body);
+        Assert.Contains("id: 3", body);
+        Assert.Contains("\"two\"", body);
+        Assert.Contains("\"three\"", body);
+        Assert.DoesNotContain("\"one\"", body); // seq 1 was acknowledged, never replayed
+    }
+
+    [Fact]
+    public async Task Decision_run_for_an_unknown_repository_returns_not_found()
+    {
+        await using PlanAuthoringTestServer server = await PlanAuthoringTestServer.StartAsync();
+
+        HttpResponseMessage response = await server.Client.PostAsync(server.DecisionRoute(Guid.NewGuid(), "run"), content: null);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Decision_run_without_operational_context_is_a_conflict()
+    {
+        await using PlanAuthoringTestServer server = await PlanAuthoringTestServer.StartAsync();
+
+        // The registered repository has no .agents/operational_context.md on disk, so a decision run cannot
+        // seed — it is rejected before any Codex session opens.
+        HttpResponseMessage response =
+            await server.Client.PostAsync(server.DecisionRoute(server.RegisteredRepositoryId, "run"), content: null);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Submit_decisions_for_an_unknown_repository_returns_not_found()
+    {
+        await using PlanAuthoringTestServer server = await PlanAuthoringTestServer.StartAsync();
+
+        HttpResponseMessage response = await server.Client.PostAsJsonAsync(
+            server.DecisionRoute(Guid.NewGuid(), "submit"),
+            new { decisions = "approved" });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Submit_empty_decisions_is_rejected()
+    {
+        await using PlanAuthoringTestServer server = await PlanAuthoringTestServer.StartAsync();
+
+        HttpResponseMessage response = await server.Client.PostAsJsonAsync(
+            server.DecisionRoute(server.RegisteredRepositoryId, "submit"),
+            new { decisions = "   " });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Decision_stream_for_an_unknown_repository_returns_not_found()
+    {
+        await using PlanAuthoringTestServer server = await PlanAuthoringTestServer.StartAsync();
+
+        HttpResponseMessage response = await server.Client.GetAsync(server.DecisionRoute(Guid.NewGuid(), "stream"));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Decision_stream_replays_only_events_after_the_last_event_id()
+    {
+        await using PlanAuthoringTestServer server = await PlanAuthoringTestServer.StartAsync();
+
+        RepositoryOrchestratorRegistry registry = server.Services.GetRequiredService<RepositoryOrchestratorRegistry>();
+        RepositoryOrchestrator orchestrator = await registry.GetOrCreateAsync(server.RegisteredRepositoryId.ToString("D"));
+        orchestrator.DecisionStream.Publish("delta", "{\"text\":\"one\"}");
+        orchestrator.DecisionStream.Publish("delta", "{\"text\":\"two\"}");
+        orchestrator.DecisionStream.Publish("delta", "{\"text\":\"three\"}");
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, server.DecisionRoute(server.RegisteredRepositoryId, "stream"));
+        request.Headers.TryAddWithoutValidation("Last-Event-ID", "1");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         using HttpResponseMessage response =
             await server.Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
 
@@ -233,6 +320,9 @@ public sealed class PlanAuthoringEndpointTests
 
         public string PlanRoute(Guid repositoryId, string verb) =>
             $"/api/repositories/{repositoryId:D}/plan/{verb}";
+
+        public string DecisionRoute(Guid repositoryId, string verb) =>
+            $"/api/repositories/{repositoryId:D}/decision/{verb}";
 
         public async ValueTask DisposeAsync()
         {

@@ -99,6 +99,21 @@ public sealed class ArchitectureLayeringTests
             "CommandCenter.DecisionSessions must not reference Execution's operational orchestration.");
     }
 
+    [Fact]
+    public void DecisionRuntime_cannot_depend_on_execution_operational_orchestration_m5()
+    {
+        // m5 certification: the Decision Runtime reasons over the operational context and execution
+        // handoffs through neutral artifact reads + the shared Agents runtime ONLY. The Decision role
+        // must reach neither Execution's operational orchestration (commit/push, ExecutionSessionService)
+        // nor the composition root that drives operational turns — enforced at BOTH the compiled-manifest
+        // (reflection) and build-graph (.csproj) levels so a declared-but-unconsumed edge cannot slip in.
+        HashSet<string> decisionReferences = ReferencedCommandCenterAssemblies(DecisionSessionsAssembly);
+        Assert.DoesNotContain("CommandCenter.Execution", decisionReferences);
+        Assert.DoesNotContain("CommandCenter.Orchestration", decisionReferences);
+        Assert.False(HasActiveProjectReference("CommandCenter.DecisionSessions", "CommandCenter.Execution"));
+        Assert.False(HasActiveProjectReference("CommandCenter.DecisionSessions", "CommandCenter.Orchestration"));
+    }
+
     [Theory]
     [InlineData("CommandCenter.Agents")]
     [InlineData("CommandCenter.Execution")]

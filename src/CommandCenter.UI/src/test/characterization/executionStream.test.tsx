@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ExecutionStreamView } from '../../features/planning/ExecutionStreamView'
 import { PlanAuthoringScreen } from '../../features/planning/PlanAuthoringScreen'
@@ -46,7 +46,7 @@ describe('ExecutionStreamView surface', () => {
     expect(result).toHaveTextContent('.agents/handoffs/handoff.0001.md')
   })
 
-  it('calls onExecuted only after the run completes, not when execute is submitted', async () => {
+  it('does not call onExecuted when the run completes — the decision review gate runs first', async () => {
     installWorkspaceCertificationMock()
     let executedCount = 0
     render(
@@ -71,8 +71,10 @@ describe('ExecutionStreamView surface', () => {
     await screen.findByRole('region', { name: 'Plan execution' })
     expect(executedCount).toBe(0)
 
-    // Once the run completes, onExecuted fires exactly once.
-    await waitFor(() => expect(executedCount).toBe(1))
+    // When the run completes, the decision phase begins in place rather than navigating —
+    // onExecuted is deferred until the human-review gate closes (see decisionRuntime.test.tsx).
+    await screen.findByRole('region', { name: 'Decision runtime' })
+    expect(executedCount).toBe(0)
   })
 
   it('renders an execution failure with phase, reason, detail, and a way back to the plan', () => {

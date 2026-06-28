@@ -42,6 +42,12 @@ internal sealed class FakeAgentRuntime : IAgentRuntime
     /// <summary>Usage every turn reports.</summary>
     public AgentTokenUsage TurnUsage { get; set; } = new(10, 20);
 
+    /// <summary>Scripted HELD-OPEN session turns dequeued in order by each session's <see cref="FakeAgentSession.RunTurnAsync"/>
+    /// (m5 decision seed + GetNextDecisions, where the two turns need distinct state/output). When empty, a turn
+    /// falls back to the shared <see cref="TurnState"/>/<see cref="TurnOutput"/>/<see cref="ScriptedChunks"/> above
+    /// (back-compat with the m3 planning tests).</summary>
+    public Queue<FakeOneShotTurn> SessionTurns { get; } = new();
+
     /// <summary>Scripted one-shot turns dequeued in order by <see cref="RunOneShotAsync"/> (m4 milestone
     /// extraction + start execution). When empty, a one-shot completes with no output (back-compat).</summary>
     public Queue<FakeOneShotTurn> OneShotTurns { get; } = new();
@@ -152,23 +158,31 @@ internal sealed class FakeAgentSession : IAgentSession
             await runtime.TurnGate.ConfigureAwait(false);
         }
 
+        FakeOneShotTurn? scripted = runtime.SessionTurns.Count > 0 ? runtime.SessionTurns.Dequeue() : null;
+
         if (onChunk is not null)
         {
-            foreach (string chunk in runtime.ScriptedChunks)
+            foreach (string chunk in scripted?.Chunks ?? runtime.ScriptedChunks)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 await onChunk(new AgentStreamChunk(turnCount, AgentProcessOutputStream.StandardOutput, chunk));
             }
         }
 
-        if (runtime.OnTurn is not null)
+        if (scripted?.Effect is not null)
+        {
+            await scripted.Effect();
+        }
+        else if (runtime.OnTurn is not null)
         {
             await runtime.OnTurn();
         }
 
         cancellationToken.ThrowIfCancellationRequested();
         int index = turnCount++;
-        return new AgentTurnResult(index, runtime.TurnState, runtime.TurnOutput, runtime.TurnUsage);
+        return scripted is not null
+            ? new AgentTurnResult(index, scripted.State, scripted.Output, scripted.Usage ?? runtime.TurnUsage)
+            : new AgentTurnResult(index, runtime.TurnState, runtime.TurnOutput, runtime.TurnUsage);
     }
 
     public Task CancelAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;

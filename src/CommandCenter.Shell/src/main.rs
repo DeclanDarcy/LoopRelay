@@ -545,6 +545,23 @@ fn execute_plan(repository_id: String) -> Result<Value, String> {
 }
 
 #[tauri::command]
+fn decision_run(repository_id: String) -> Result<Value, String> {
+    backend_post_value(
+        &format!("/api/repositories/{repository_id}/decision/run"),
+        "decision run failed",
+    )
+}
+
+#[tauri::command]
+fn decision_submit(repository_id: String, decisions: String) -> Result<Value, String> {
+    backend_post_json_value(
+        &format!("/api/repositories/{repository_id}/decision/submit"),
+        &json!({ "decisions": decisions }),
+        "decision submission failed",
+    )
+}
+
+#[tauri::command]
 fn generate_operational_context_proposal(repository_id: String) -> Result<Value, String> {
     let client = reqwest::blocking::Client::new();
     let response = client
@@ -2942,6 +2959,8 @@ fn main() {
             write_plan,
             revise_plan,
             execute_plan,
+            decision_run,
+            decision_submit,
             generate_operational_context_proposal,
             list_operational_context_proposals,
             get_operational_context_proposal,

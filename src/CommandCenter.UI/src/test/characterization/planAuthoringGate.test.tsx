@@ -9,6 +9,7 @@ afterEach(() => {
   delete window.__TAURI_INTERNALS__
   delete window.__COMMAND_CENTER_MOCK_PLAN_STREAM__
   delete window.__COMMAND_CENTER_MOCK_EXECUTION_STREAM__
+  delete window.__COMMAND_CENTER_MOCK_DECISION_STREAM__
   window.history.pushState({}, '', '/')
 })
 
@@ -78,7 +79,7 @@ describe('App plan-authoring gate', () => {
     expect(screen.queryByLabelText('Repository workspace')).not.toBeInTheDocument()
   })
 
-  it('stays on the execution surface during the run, then navigates once it completes', async () => {
+  it('runs execution then the decision review gate before navigating to the workspace', async () => {
     renderWithWorkspaceCertification(<App />)
     await selectEmptyRepository()
     await screen.findByRole('region', { name: 'Plan authoring' })
@@ -97,7 +98,16 @@ describe('App plan-authoring gate', () => {
     // The screen stays mounted and shows the execution run, not the dead-end label.
     expect(await screen.findByRole('region', { name: 'Plan execution' })).toBeInTheDocument()
 
-    // Only once the run completes does the app navigate to the workspace.
+    // Decisions follow execution: when the run completes, the decision runtime appears in place
+    // and the app does NOT navigate yet — the human-review gate must run first.
+    await screen.findByRole('region', { name: 'Decision runtime' })
+    expect(screen.queryByLabelText('Repository workspace')).not.toBeInTheDocument()
+
+    // Propose decisions, then submit them through the review gate.
+    fireEvent.click(await screen.findByRole('button', { name: 'Generate decisions' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Submit decisions' }))
+
+    // Only once the decisions are persisted does the app navigate to the workspace.
     expect(await screen.findByLabelText('Repository workspace')).toBeInTheDocument()
     await waitFor(() => {
       expect(screen.queryByRole('region', { name: 'Plan authoring' })).not.toBeInTheDocument()

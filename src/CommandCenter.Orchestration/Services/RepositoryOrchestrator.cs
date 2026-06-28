@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.Json;
 using CommandCenter.Agents.Abstractions;
 using CommandCenter.Agents.Models;
@@ -39,6 +40,7 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
 
     private readonly List<PromptProvenance> planningProvenance = new();
     private readonly List<PromptProvenance> executionProvenance = new();
+    private readonly List<PromptProvenance> decisionProvenance = new();
 
     private IAgentSession? planningSession;
     private IAgentSession? decisionSession;
@@ -49,6 +51,9 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
 
     // The single in-flight Execute Plan run (m4). Same drain-before-complete contract as planningTurn.
     private volatile Task? executionRun;
+
+    // The single in-flight Decision Runtime run (m5). Same drain-before-complete contract as the others.
+    private volatile Task? decisionRun;
 
     // A SINGLE atomic gate over the repository: Idle | Planning | Executing. One CompareExchange both
     // claims the gate AND enforces mutual exclusion, so a planning turn and an execution run can never be
@@ -62,6 +67,19 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
 
     // Run-scoped monotonic counter behind the 4-digit handoff rotation (handoff.0001.md, 0002.md, ...).
     private int handoffSequence;
+
+    // A SEPARATE atomic gate for the Decision Runtime (m5), INDEPENDENT of runState. The decision process
+    // is zero-permission and read-only — it has no operational authority and cannot tear anything down — so
+    // a decision run is allowed to overlap a planning turn or an execution run (indeed the seed prompt is
+    // literally "execution is starting"). This gate only serializes decision runs against EACH OTHER and is
+    // what the dispose drain waits on. A single CompareExchange both claims the gate and rejects a second run.
+    private const int DecisionStateIdle = 0;
+    private const int DecisionStateActive = 1;
+    private int decisionState;
+
+    // True once the held-open decision process has received its StartDecisionSession seed turn. Touched only
+    // by the single active decision run (serialized by decisionState), so a volatile read/write is enough.
+    private volatile bool decisionSeeded;
 
     private volatile bool disposed;
 
@@ -110,11 +128,17 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
     /// <summary>True while an Execute Plan run (milestone extraction + start execution) is in progress (m4).</summary>
     public bool IsExecutionRunActive => Volatile.Read(ref runState) == RunStateExecuting;
 
+    /// <summary>True while a Decision Runtime run (seed + propose decisions) is in progress (m5).</summary>
+    public bool IsDecisionRunActive => Volatile.Read(ref decisionState) == DecisionStateActive;
+
     /// <summary>The in-flight planning turn, or a completed task when idle. Lets callers/tests await turn completion.</summary>
     public Task PlanningTurnTask => planningTurn ?? Task.CompletedTask;
 
     /// <summary>The in-flight Execute Plan run, or a completed task when idle. Lets callers/tests await it (m4).</summary>
     public Task ExecutionRunTask => executionRun ?? Task.CompletedTask;
+
+    /// <summary>The in-flight Decision Runtime run, or a completed task when idle. Lets callers/tests await it (m5).</summary>
+    public Task DecisionRunTask => decisionRun ?? Task.CompletedTask;
 
     /// <summary>Provenance recorded at issuance for the initial plan and every revision (m3).</summary>
     public IReadOnlyList<PromptProvenance> PlanningProvenance => planningProvenance;
@@ -127,6 +151,12 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
 
     public PromptProvenance? LastExecutionProvenance =>
         executionProvenance.Count > 0 ? executionProvenance[^1] : null;
+
+    /// <summary>Provenance recorded at issuance for the StartDecisionSession seed and GetNextDecisions turns (m5).</summary>
+    public IReadOnlyList<PromptProvenance> DecisionProvenance => decisionProvenance;
+
+    public PromptProvenance? LastDecisionProvenance =>
+        decisionProvenance.Count > 0 ? decisionProvenance[^1] : null;
 
     /// <summary>
     /// Reports plan existence + lifecycle state from the durable artifact, NOT from any live handle —
@@ -261,6 +291,62 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Decision Runtime (m5): make the held-open zero-permission Decision process propose decisions. The run
+    /// (on the orchestrator's lifetime) lazily SEEDS the process with <c>StartDecisionSession.Render(operational
+    /// context)</c> — a turn deliberately kept OFF the primary stream — then submits <c>GetNextDecisions.Render(
+    /// handoff)</c> to the SAME warm process, streaming its output to <see cref="DecisionStream"/> and capturing
+    /// it as the proposed decisions. The decisions become editable user content only when the turn completes
+    /// (a <c>review-ready</c> frame); nothing is persisted until a human submits. This method returns once the
+    /// run is launched. The Decision process has zero operational authority: it never commits, pushes, runs
+    /// execution, or writes artifacts — the only persistence is the human-gated <see cref="BeginSubmitDecisionsAsync"/>.
+    /// </summary>
+    public async Task BeginDecisionRunAsync(Repository repository, CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+
+        // Claim the decision gate FIRST, before any await — rejects a second concurrent decision run while
+        // leaving planning/execution untouched (decisions run on their own independent gate).
+        ClaimDecisionRun();
+        try
+        {
+            // Seeding needs the operational context. Require it up front so a premature run fails fast (409)
+            // instead of opening a process and failing mid-stream.
+            string operationalContextPath = ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.OperationalContext);
+            if (!await artifactStore.ExistsAsync(operationalContextPath).ConfigureAwait(false))
+            {
+                throw new InvalidOperationException("Cannot propose decisions: .agents/operational_context.md does not exist yet. Execute a plan first.");
+            }
+
+            await LaunchDecisionRunAsync(repository).ConfigureAwait(false);
+        }
+        catch
+        {
+            ReleaseDecisionRun();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// The human review gate (m5): persist the reviewed/edited decisions the operator submits. This is the ONLY
+    /// way captured decision output crosses into operational authority — it writes the canonical
+    /// <c>.agents/decisions/decisions.md</c> every downstream consumer reads, so the next execution turn picks
+    /// up the human-approved governance. Nothing here runs an agent or touches Git.
+    /// </summary>
+    public async Task BeginSubmitDecisionsAsync(Repository repository, string decisions, CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        if (string.IsNullOrWhiteSpace(decisions))
+        {
+            throw new ArgumentException("Decisions text is required to submit decisions.", nameof(decisions));
+        }
+
+        string decisionsPath = ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.Decisions);
+        await artifactStore.WriteAsync(decisionsPath, decisions).ConfigureAwait(false);
+        RecordDecisions(decisions);
+        TryPublishDecision("submitted", new { path = OrchestrationArtifactPaths.Decisions });
+    }
+
     public void RecordPlan(string plan)
     {
         CachedPlan = plan;
@@ -298,6 +384,7 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
         IAgentSession? decision;
         Task? turn;
         Task? execution;
+        Task? decisionRunDrain;
         await gate.WaitAsync().ConfigureAwait(false);
         try
         {
@@ -311,12 +398,13 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
             decision = decisionSession;
             planningSession = null;
             decisionSession = null;
-            // Capture under the gate: LaunchPlanningTurnAsync/LaunchExecutionRunAsync assign their tasks
-            // under the SAME gate with a disposed re-check, so an in-flight run is always seen here, and a
-            // run that would start after this point observes disposed==true and never launches (nothing to
-            // drain is missed).
+            // Capture under the gate: LaunchPlanningTurnAsync/LaunchExecutionRunAsync/LaunchDecisionRunAsync
+            // assign their tasks under the SAME gate with a disposed re-check, so an in-flight run is always
+            // seen here, and a run that would start after this point observes disposed==true and never
+            // launches (nothing to drain is missed).
             turn = planningTurn;
             execution = executionRun;
+            decisionRunDrain = decisionRun;
         }
         finally
         {
@@ -344,6 +432,18 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
             try
             {
                 await execution.ConfigureAwait(false);
+            }
+            catch
+            {
+                // Best-effort drain during teardown; the run's own failure path already reported it.
+            }
+        }
+
+        if (decisionRunDrain is not null)
+        {
+            try
+            {
+                await decisionRunDrain.ConfigureAwait(false);
             }
             catch
             {
@@ -417,6 +517,28 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
         if (planning is not null)
         {
             await planning.DisposeAsync().ConfigureAwait(false);
+        }
+    }
+
+    // Closes the held-open decision process (gate-guarded null-then-dispose, so Dispose and this can never
+    // both dispose the same handle). The next EnsureDecisionSessionAsync opens a fresh process.
+    private async Task CloseDecisionSessionAsync()
+    {
+        IAgentSession? decision;
+        await gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            decision = decisionSession;
+            decisionSession = null;
+        }
+        finally
+        {
+            gate.Release();
+        }
+
+        if (decision is not null)
+        {
+            await decision.DisposeAsync().ConfigureAwait(false);
         }
     }
 
@@ -736,6 +858,238 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
             // Stream already completed during teardown; nothing left to notify.
         }
     }
+
+    // ---- Decision Runtime (m5) ----
+
+    private void ClaimDecisionRun()
+    {
+        int previous = Interlocked.CompareExchange(ref decisionState, DecisionStateActive, DecisionStateIdle);
+        if (previous != DecisionStateIdle)
+        {
+            throw new InvalidOperationException("A decision run is already in progress for this repository.");
+        }
+    }
+
+    // CompareExchange (not Exchange) so a release only clears the gate it owns — a stray/duplicate release
+    // can never wipe a peer's claim.
+    private void ReleaseDecisionRun() => Interlocked.CompareExchange(ref decisionState, DecisionStateIdle, DecisionStateActive);
+
+    // Mirrors LaunchExecutionRunAsync: assigns decisionRun + captures the lifetime token UNDER the gate with a
+    // fresh disposed re-check, so a run is never launched after DisposeAsync flips disposed, and a run launched
+    // before it is always visible to the dispose drain.
+    private async Task LaunchDecisionRunAsync(Repository repository)
+    {
+        await gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            ObjectDisposedException.ThrowIf(disposed, this);
+            CancellationToken token = lifetimeCts.Token;
+            decisionRun = Task.Run(() => RunDecisionAsync(repository, token));
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private async Task RunDecisionAsync(Repository repository, CancellationToken cancellationToken)
+    {
+        try
+        {
+            DecisionStream.Publish("run-started", Serialize(new { phase = "DecisionRun" }));
+
+            IAgentSession session = await EnsureDecisionSessionAsync(repository, cancellationToken).ConfigureAwait(false);
+
+            // 1) Seed the held-open process ONCE with the operational context. The seed turn primes the
+            // session and is deliberately kept OFF the primary stream (its deltas are dropped); only its
+            // success/failure matters here.
+            if (!decisionSeeded)
+            {
+                string operationalContext = await artifactStore.ReadAsync(
+                    ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.OperationalContext))
+                    .ConfigureAwait(false) ?? string.Empty;
+
+                AgentTurnResult seed = await session.RunTurnAsync(
+                    StartDecisionSession.Render(operationalContext),
+                    onChunk: null,
+                    cancellationToken).ConfigureAwait(false);
+                decisionProvenance.Add(BuildStartDecisionSessionProvenance());
+                if (seed.State != AgentTurnState.Completed)
+                {
+                    DecisionStream.Publish("failed", Serialize(new
+                    {
+                        phase = "StartDecisionSession",
+                        reason = DescribeDecisionFailure(seed.State, "decision seeding"),
+                        detail = seed.Output,
+                    }));
+
+                    // The seed failed, so the held-open process is in an unknown state with a half-primed
+                    // conversation. Tear it down (decisionSeeded stays false) so the NEXT run opens a FRESH
+                    // process and re-seeds cleanly — rather than submitting a second seed into a poisoned
+                    // conversation. This keeps the "seed the held-open process ONCE" invariant true per session.
+                    await CloseDecisionSessionAsync().ConfigureAwait(false);
+                    return;
+                }
+
+                decisionSeeded = true;
+            }
+
+            // The validated, logged sandbox posture of the Decision process (zero operational authority).
+            DecisionStream.Publish("diagnostics", Serialize(new
+            {
+                sandbox = "read-only",
+                approvals = "never",
+                seeded = decisionSeeded,
+            }));
+
+            // 2) Resolve the latest execution handoff to reason over. None yet -> nothing to decide.
+            (string? handoff, string? handoffPath) = await ReadLatestHandoffAsync(repository).ConfigureAwait(false);
+            if (handoff is null)
+            {
+                DecisionStream.Publish("failed", Serialize(new
+                {
+                    phase = "GetNextDecisions",
+                    reason = "No execution handoff is available yet; run execution before proposing decisions.",
+                }));
+                return;
+            }
+
+            // 3) Propose decisions — streamed to the primary decision stream + captured as editable content.
+            DecisionStream.Publish("phase", Serialize(new { phase = "GetNextDecisions" }));
+            AgentTurnResult proposed = await session.RunTurnAsync(
+                GetNextDecisions.Render(handoff),
+                PublishDecisionDelta,
+                cancellationToken).ConfigureAwait(false);
+            decisionProvenance.Add(BuildGetNextDecisionsProvenance(handoffPath!));
+            if (proposed.State != AgentTurnState.Completed)
+            {
+                DecisionStream.Publish("failed", Serialize(new
+                {
+                    phase = "GetNextDecisions",
+                    reason = DescribeDecisionFailure(proposed.State, "decision proposal"),
+                    detail = proposed.Output,
+                }));
+                return;
+            }
+
+            // Capture the proposed decisions in transient run state (NOT persisted — that needs a human submit).
+            string decisions = proposed.Output;
+            RecordDecisions(decisions);
+
+            DecisionStream.Publish("completed", Serialize(new
+            {
+                promptTokens = proposed.Usage.PromptTokens,
+                outputTokens = proposed.Usage.OutputTokens,
+            }));
+
+            // The output becomes editable user content ONLY now, after the turn completed (review gate).
+            DecisionStream.Publish("review-ready", Serialize(new { decisions }));
+        }
+        catch (OperationCanceledException)
+        {
+            // Disposing (lifetime cancelled). The stream is about to Complete(); do not publish into it.
+        }
+        catch (Exception exception)
+        {
+            TryPublishDecisionFailed(exception.Message);
+        }
+        finally
+        {
+            ReleaseDecisionRun();
+        }
+    }
+
+    private Task PublishDecisionDelta(AgentStreamChunk chunk)
+    {
+        if (chunk.Stream == AgentProcessOutputStream.StandardOutput && !string.IsNullOrEmpty(chunk.Content))
+        {
+            DecisionStream.Publish("delta", Serialize(new { text = chunk.Content }));
+        }
+
+        return Task.CompletedTask;
+    }
+
+    // Reads the most recent execution handoff from DISK (restart-safe): the live handoff.md if it is still
+    // present, otherwise the highest-numbered rotated handoff.000N.md. Returns (content, repository-relative
+    // path) or (null, null) when none exists yet.
+    private async Task<(string? Handoff, string? Path)> ReadLatestHandoffAsync(Repository repository)
+    {
+        string livePath = ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.LiveHandoff);
+        if (await artifactStore.ExistsAsync(livePath).ConfigureAwait(false))
+        {
+            string live = await artifactStore.ReadAsync(livePath).ConfigureAwait(false) ?? string.Empty;
+            return (live, OrchestrationArtifactPaths.LiveHandoff);
+        }
+
+        IReadOnlyList<string> historical = await artifactStore.ListAsync(
+            ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.HandoffsDirectory),
+            OrchestrationArtifactPaths.HistoricalHandoffSearchPattern).ConfigureAwait(false);
+        if (historical.Count == 0)
+        {
+            return (null, null);
+        }
+
+        // The zero-padded 4-digit suffix makes ordinal max == newest.
+        string newestFullPath = historical.Max(StringComparer.Ordinal)!;
+        string content = await artifactStore.ReadAsync(newestFullPath).ConfigureAwait(false) ?? string.Empty;
+        return (content, ArtifactPath.ToRepositoryRelativePath(repository, newestFullPath));
+    }
+
+    private void TryPublishDecision<T>(string type, T data)
+    {
+        try
+        {
+            DecisionStream.Publish(type, Serialize(data));
+        }
+        catch (InvalidOperationException)
+        {
+            // Stream already completed during teardown; nothing left to notify.
+        }
+    }
+
+    private void TryPublishDecisionFailed(string reason)
+    {
+        try
+        {
+            DecisionStream.Publish("failed", Serialize(new { reason }));
+        }
+        catch (InvalidOperationException)
+        {
+            // Stream already completed during teardown; nothing left to notify.
+        }
+    }
+
+    // Phase-aware failure sentence for the DECISION stream — never the raw enum token.
+    private static string DescribeDecisionFailure(AgentTurnState state, string activity) => state switch
+    {
+        AgentTurnState.Failed => $"The {activity} run failed.",
+        AgentTurnState.Canceled => $"The {activity} run was cancelled.",
+        _ => $"The {activity} run ended in an unexpected state ({state}).",
+    };
+
+    private static PromptProvenance BuildStartDecisionSessionProvenance() =>
+        new()
+        {
+            PromptName = nameof(StartDecisionSession),
+            PromptType = typeof(StartDecisionSession).FullName!,
+            SourceHash = StartDecisionSession.SourceHash,
+            SessionRole = PromptSessionRole.Decision,
+            WorkflowPhase = "StartDecisionSession",
+            InputArtifactIdentities = new[] { OrchestrationArtifactPaths.OperationalContext },
+            OutputArtifactIdentities = Array.Empty<string>(),
+        };
+
+    private static PromptProvenance BuildGetNextDecisionsProvenance(string handoffPath) =>
+        new()
+        {
+            PromptName = nameof(GetNextDecisions),
+            PromptType = typeof(GetNextDecisions).FullName!,
+            SourceHash = GetNextDecisions.SourceHash,
+            SessionRole = PromptSessionRole.Decision,
+            WorkflowPhase = "GetNextDecisions",
+            InputArtifactIdentities = new[] { handoffPath },
+            OutputArtifactIdentities = new[] { OrchestrationArtifactPaths.Decisions },
+        };
 
     // The planning + milestone artifacts to commit. The well-known relative paths are constants; milestone
     // files (full paths from the store) are converted to repository-relative for staging.

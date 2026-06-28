@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Button } from '../../components/design'
-import { useExecutionStream, usePlanStream } from '../../hooks'
+import { useDecisionStream, useExecutionStream, usePlanStream } from '../../hooks'
+import { DecisionRuntimeView } from '../decision/DecisionRuntimeView'
 import { ExecutionStreamView } from './ExecutionStreamView'
 import { PlanFailureNotice } from './PlanFailureNotice'
 import { PlanStreamView } from './PlanStreamView'
@@ -32,13 +33,22 @@ export function PlanAuthoringScreen({
   const [specs, setSpecs] = useState<string[]>([])
   const [newCodebase, setNewCodebase] = useState(false)
   const [feedback, setFeedback] = useState('')
+  // Decisions follow execution: once the execution run completes the screen stays mounted and
+  // surfaces the decision runtime in place, so the human-review gate runs before navigation.
+  const [decisionPhase, setDecisionPhase] = useState(false)
   const { state, error, submitWrite, submitRevise, submitExecute, dismissFailure } =
     usePlanStream(repositoryId)
 
   const isTurnRunning = state.status === 'Planning' || state.status === 'Revising'
   const isExecuting = state.status === 'Executing'
   const { state: executionState } = useExecutionStream(repositoryId, isExecuting)
-  const inputsDisabled = isTurnRunning || isExecuting
+  const {
+    state: decisionState,
+    generateDecisions,
+    editDecisions,
+    submitReviewedDecisions,
+  } = useDecisionStream(repositoryId, decisionPhase)
+  const inputsDisabled = isTurnRunning || isExecuting || decisionPhase
   const canWrite = roadmap.trim().length > 0 && !inputsDisabled
   const hasPlan = state.plan !== null
   const canRevise = feedback.trim().length > 0 && hasPlan && !inputsDisabled
@@ -50,13 +60,21 @@ export function PlanAuthoringScreen({
     onSessionActiveChange?.(isSessionActive)
   }, [isSessionActive, onSessionActiveChange])
 
-  // The screen stays mounted through the whole execution run so the user can watch each
-  // phase stream in. Navigation to the workspace only happens once the run completes.
+  // The screen stays mounted through the whole execution run so the user can watch each phase
+  // stream in. When the run completes, the decision phase begins in place rather than navigating.
   useEffect(() => {
     if (isExecuting && executionState.status === 'Completed') {
+      setDecisionPhase(true)
+    }
+  }, [executionState.status, isExecuting])
+
+  // Navigation to the workspace only happens once the human-review gate closes — that is, after
+  // the reviewer submits the decisions and the backend confirms they were persisted.
+  useEffect(() => {
+    if (decisionPhase && decisionState.status === 'Submitted') {
       onExecuted?.()
     }
-  }, [executionState.status, isExecuting, onExecuted])
+  }, [decisionPhase, decisionState.status, onExecuted])
 
   const writePlanNow = () => {
     if (!canWrite) {
@@ -145,6 +163,20 @@ export function PlanAuthoringScreen({
           state={executionState}
           onDismissFailure={() => {
             // Return to the plan controls. The plan is preserved, so reset lands on PlanReady.
+            dismissFailure()
+          }}
+        />
+      ) : null}
+
+      {decisionPhase ? (
+        <DecisionRuntimeView
+          state={decisionState}
+          onGenerate={() => void generateDecisions()}
+          onEditDecisions={editDecisions}
+          onSubmitDecisions={(decisions) => void submitReviewedDecisions(decisions)}
+          onDismissFailure={() => {
+            // Leave the decision phase and return to the plan controls. The plan is preserved.
+            setDecisionPhase(false)
             dismissFailure()
           }}
         />
