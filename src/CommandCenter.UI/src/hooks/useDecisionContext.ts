@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { formatError, getDecisionContext } from '../api'
-import type { DecisionContextSnapshot } from '../types'
+import type { DecisionContext } from '../types'
 
 export function useDecisionContext(repositoryId: string | null) {
-  const [data, setData] = useState<DecisionContextSnapshot | null>(null)
+  const [data, setData] = useState<DecisionContext | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 

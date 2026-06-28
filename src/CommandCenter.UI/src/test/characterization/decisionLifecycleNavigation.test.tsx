@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DecisionLifecycleTab } from '../../features/decisions/DecisionLifecycleTab'
 import type {
   DecisionCandidate,
-  DecisionContextSnapshot,
+  DecisionContext,
   DecisionLifecycleEligibilityProjection,
   DecisionLifecycleEntityEligibility,
   DecisionProposal,
@@ -138,6 +138,10 @@ describe('DecisionLifecycleTab navigation', () => {
         onRefresh={vi.fn()}
       />,
     )
+
+    // The live DecisionContext exposes items at the top level; the summary must
+    // render its count without crashing on the (removed) snapshot wrapper.
+    expect(screen.getByText('1 context items')).toBeInTheDocument()
 
     await waitFor(() => {
       expect(within(screen.getByLabelText('Proposal viewer')).getByText('Workspace for PROP-0001')).toBeInTheDocument()
@@ -539,19 +543,24 @@ describe('DecisionLifecycleTab navigation', () => {
   })
 })
 
-function createContext(): DecisionContextSnapshot {
+// The GET /decisions/context endpoint returns a live DecisionContext (bare, no
+// snapshot wrapper); POST returns the persisted DecisionContextSnapshot. The tab
+// consumes the live context, so the fixture must match that shape.
+function createContext(): DecisionContext {
   return {
-    snapshotId: 'context-1',
     repositoryId: 'repo-alpha',
-    createdAt: '2026-06-22T17:00:00.000Z',
     fingerprint: 'context-fingerprint',
-    context: {
-      repositoryId: 'repo-alpha',
-      fingerprint: 'context-fingerprint',
-      items: [],
-      diagnostics: { sources: [], warnings: [] },
-      validation: { isValid: true, errors: [], warnings: [] },
-    },
+    items: [
+      {
+        id: 'context-goal',
+        kind: 'CurrentDecisionMarkdown',
+        title: 'Current decisions',
+        content: 'Decision lifecycle UI requires backend-owned state.',
+        required: false,
+        fingerprint: 'context-goal-fingerprint',
+        sources: [],
+      },
+    ],
     diagnostics: { sources: [], warnings: [] },
     validation: { isValid: true, errors: [], warnings: [] },
   }

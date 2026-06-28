@@ -5021,7 +5021,10 @@ export function installDevTauriMock() {
         case 'list_continuity_reports':
           return clone(state.continuityReports[getStringArg(args, 'repositoryId')] ?? [])
         case 'get_decision_context':
+          // GET returns the live context (bare DecisionContext), matching the backend.
+          return clone(state.decisionContexts[getStringArg(args, 'repositoryId')]?.context)
         case 'build_decision_context':
+          // POST returns the persisted snapshot (DecisionContextSnapshot).
           return clone(state.decisionContexts[getStringArg(args, 'repositoryId')])
         case 'list_decision_candidates':
           return clone(state.decisionCandidates[getStringArg(args, 'repositoryId')] ?? [])

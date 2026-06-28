@@ -4,7 +4,7 @@ import { DiagnosticList, InteractionPatternView } from '../../components/explain
 import type {
   Decision,
   DecisionCandidate,
-  DecisionContextSnapshot,
+  DecisionContext,
   DecisionGenerationDiagnostics,
   DecisionLifecycleActionEligibility,
   DecisionLifecycleEligibilityProjection,
@@ -45,7 +45,7 @@ import {
 } from '../../lib/explainability'
 
 type DecisionLifecycleTabProps = {
-  context: DecisionContextSnapshot | null
+  context: DecisionContext | null
   candidates: DecisionCandidate[]
   proposals: DecisionProposalBrowserItem[]
   selectedProposalStates: DecisionProposalState[]
@@ -265,7 +265,7 @@ export function DecisionLifecycleTab({
       {hasSelectedRepository ? (
         <div className="decision-lifecycle-grid">
           <div className="context-summary" aria-label="Decision lifecycle summary">
-            <span>{context?.context.items.length ?? 0} context items</span>
+            <span>{context?.items?.length ?? 0} context items</span>
             <span>{activeCandidateCount} active candidates</span>
             <span>{proposals.length} proposals</span>
             <span>{reviewableProposalCount} reviewable proposals</span>

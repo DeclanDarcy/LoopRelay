@@ -6,6 +6,7 @@ import type {
   DecisionCandidate,
   DecisionCandidateTransitionRequest,
   DecisionCertificationReport,
+  DecisionContext,
   DecisionContextSnapshot,
   DecisionEvidenceInspection,
   DecisionDiscoveryResult,
@@ -36,8 +37,10 @@ import type {
 } from '../types'
 import { invokeCommand } from './tauri'
 
+// GET returns the live context (bare DecisionContext); the POST build endpoint
+// below returns the persisted DecisionContextSnapshot.
 export function getDecisionContext(repositoryId: string) {
-  return invokeCommand<DecisionContextSnapshot>('get_decision_context', { repositoryId })
+  return invokeCommand<DecisionContext>('get_decision_context', { repositoryId })
 }
 
 export function buildDecisionContext(repositoryId: string) {
