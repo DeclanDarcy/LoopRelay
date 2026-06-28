@@ -232,6 +232,35 @@ public sealed class ExecutionSessionService(
         }
     }
 
+    public async Task<ExecutionSessionSummary> CancelAsync(Guid repositoryId, ExecutionCancellationRequest request)
+    {
+        await gate.WaitAsync();
+        try
+        {
+            // Only an in-progress (Executing) run is cancellable — this is the in-app escape hatch
+            // for a run that has wedged (e.g. a provider reattached after a restart but is hung).
+            // Terminal Failed/Cancelled sessions are already restartable and need no cancel.
+            ExecutionSession active = (await sessionStore.LoadAsync())
+                .Where(session => session.RepositoryId == repositoryId && IsActiveRepositoryState(session.RepositoryState))
+                .OrderByDescending(session => session.StartedAt)
+                .FirstOrDefault()
+                ?? throw new InvalidOperationException("Repository has no active execution session to cancel.");
+
+            string reason = string.IsNullOrWhiteSpace(request.Reason)
+                ? "Execution cancelled by operator."
+                : request.Reason.Trim();
+            await monitoringService.RecordCancellationAsync(active.Id, reason);
+
+            ExecutionSession cancelled = (await sessionStore.LoadAsync())
+                .FirstOrDefault(session => session.Id == active.Id) ?? active;
+            return cancelled.ToSummary();
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
     public async Task<ExecutionSession?> GetSessionAsync(Guid sessionId)
     {
         return (await sessionStore.LoadAsync()).FirstOrDefault(session => session.Id == sessionId);

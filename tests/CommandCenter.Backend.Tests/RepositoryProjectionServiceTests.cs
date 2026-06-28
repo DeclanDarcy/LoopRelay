@@ -755,6 +755,11 @@ public sealed class RepositoryProjectionServiceTests
             throw new NotSupportedException();
         }
 
+        public Task<ExecutionSessionSummary> CancelAsync(Guid repositoryId, ExecutionCancellationRequest request)
+        {
+            throw new NotSupportedException();
+        }
+
         public Task<ExecutionSession?> GetSessionAsync(Guid sessionId)
         {
             return Task.FromResult<ExecutionSession?>(null);
@@ -823,6 +828,11 @@ public sealed class RepositoryProjectionServiceTests
         }
 
         public Task<ExecutionSessionSummary> StartAsync(Guid requestedRepositoryId, ExecutionStartRequest request)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<ExecutionSessionSummary> CancelAsync(Guid requestedRepositoryId, ExecutionCancellationRequest request)
         {
             throw new NotSupportedException();
         }

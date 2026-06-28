@@ -424,6 +424,96 @@ describe('workspace certification mock', () => {
     )
   })
 
+  it('lets a repository whose last execution failed start a new execution', async () => {
+    // Regression: a failed (or cancelled) run left the repository stranded because canStartExecution
+    // required executionState === 'Ready'. A failed run must be restartable — the backend start
+    // guard only rejects an already-Executing repository.
+    installWorkspaceCertificationMock()
+
+    const invoke = window.__TAURI_INTERNALS__?.invoke
+    expect(invoke).toBeDefined()
+    if (!invoke) {
+      return
+    }
+
+    const invokeSpy = vi.fn(invoke)
+    window.__TAURI_INTERNALS__!.invoke = invokeSpy
+
+    render(<App />)
+
+    await screen.findAllByRole('heading', { name: 'AlphaRepo' })
+
+    // Select the repository whose last execution Failed.
+    fireEvent.click(screen.getByRole('button', { name: /CertificationFailed/ }))
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'CertificationFailed' })).toBeInTheDocument(),
+    )
+
+    const buildContextButton = await screen.findByRole('button', { name: 'Build Execution Context' })
+    await waitFor(() => expect(buildContextButton).not.toBeDisabled())
+    fireEvent.click(buildContextButton)
+
+    // Start Execution must become enabled even though the repository state is Failed.
+    const startButton = await screen.findByRole('button', { name: 'Start Execution' })
+    await waitFor(() => expect(startButton).toBeEnabled())
+
+    // Firing it invokes the backend start command for the failed repository.
+    fireEvent.click(startButton)
+    await waitFor(() =>
+      expect(
+        invokeSpy.mock.calls.some(
+          ([command, args]) =>
+            command === 'start_execution' &&
+            typeof args === 'object' &&
+            args !== null &&
+            'repositoryId' in args &&
+            args.repositoryId === 'repo-cert-failed',
+        ),
+      ).toBe(true),
+    )
+  })
+
+  it('lets an in-progress execution be cancelled from the workspace', async () => {
+    // Closes the "wedged Executing run with no in-app way out" gap: an active run exposes a Cancel
+    // Execution control that invokes the backend cancel command.
+    installWorkspaceCertificationMock()
+
+    const invoke = window.__TAURI_INTERNALS__?.invoke
+    expect(invoke).toBeDefined()
+    if (!invoke) {
+      return
+    }
+
+    const invokeSpy = vi.fn(invoke)
+    window.__TAURI_INTERNALS__!.invoke = invokeSpy
+
+    render(<App />)
+    await screen.findAllByRole('heading', { name: 'AlphaRepo' })
+
+    fireEvent.click(screen.getByRole('button', { name: /CertificationExecuting/ }))
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'CertificationExecuting' })).toBeInTheDocument(),
+    )
+
+    const cancelButton = await screen.findByRole('button', { name: 'Cancel Execution' })
+    await waitFor(() => expect(cancelButton).toBeEnabled())
+    expect(invokeSpy.mock.calls.some(([command]) => command === 'cancel_execution')).toBe(false)
+
+    fireEvent.click(cancelButton)
+    await waitFor(() =>
+      expect(
+        invokeSpy.mock.calls.some(
+          ([command, args]) =>
+            command === 'cancel_execution' &&
+            typeof args === 'object' &&
+            args !== null &&
+            'repositoryId' in args &&
+            args.repositoryId === 'repo-cert-executing',
+        ),
+      ).toBe(true),
+    )
+  })
+
   it('keeps commit preparation and commit execution behind explicit workflow actions', async () => {
     installWorkspaceCertificationMock()
 

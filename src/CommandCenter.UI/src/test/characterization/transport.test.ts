@@ -65,6 +65,7 @@ describe('transport boundary characterization', () => {
         historicalDecisions: [],
       },
       milestoneCount: 0,
+      milestoneProgress: { completedMilestoneCount: 0, totalMilestoneCount: 0, milestones: [] },
       hasPlan: false,
       hasOperationalContext: false,
       hasCurrentHandoff: false,

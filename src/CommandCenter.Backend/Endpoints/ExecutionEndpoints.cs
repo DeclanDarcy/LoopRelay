@@ -10,6 +10,7 @@ public static class ExecutionEndpoints
     {
         app.MapGetExecutionContext();
         app.MapStartExecution();
+        app.MapCancelExecution();
         app.MapGetActiveExecution();
         return app;
     }
@@ -50,6 +51,26 @@ public static class ExecutionEndpoints
             catch (ArgumentException exception)
             {
                 return Results.BadRequest(new { error = exception.Message });
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+    private static void MapCancelExecution(this IEndpointRouteBuilder app) =>
+        app.MapPost("/api/repositories/{repositoryId:guid}/execution/cancel", async (
+            Guid repositoryId,
+            ExecutionCancellationRequest request,
+            IExecutionSessionService executionSessionService) =>
+        {
+            try
+            {
+                return Results.Ok(await executionSessionService.CancelAsync(repositoryId, request));
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
             }
             catch (InvalidOperationException exception)
             {

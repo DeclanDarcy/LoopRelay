@@ -16,11 +16,14 @@ type ExecutionContextPanelProps = {
   isContextLoading: boolean
   canStartExecution: boolean
   isStartingExecution: boolean
+  canCancelExecution: boolean
+  isCancellingExecution: boolean
   startExecutionBlockedReason: string
   operationalContextExecutionStatus: string
   executionContextSizeStatus: string
   onBuildExecutionContext: () => void
   onStartExecution: () => void
+  onCancelExecution: () => void
 }
 
 export function ExecutionContextPanel({
@@ -29,11 +32,14 @@ export function ExecutionContextPanel({
   isContextLoading,
   canStartExecution,
   isStartingExecution,
+  canCancelExecution,
+  isCancellingExecution,
   startExecutionBlockedReason,
   operationalContextExecutionStatus,
   executionContextSizeStatus,
   onBuildExecutionContext,
   onStartExecution,
+  onCancelExecution,
 }: ExecutionContextPanelProps) {
   return (
     <Panel id={id} className="execution-context-panel" aria-label="Execution context preview">
@@ -61,6 +67,17 @@ export function ExecutionContextPanel({
             >
               {isStartingExecution ? 'Starting...' : 'Start Execution'}
             </button>
+            {canCancelExecution || isCancellingExecution ? (
+              <button
+                type="button"
+                className="secondary-action"
+                onClick={onCancelExecution}
+                disabled={!canCancelExecution}
+                title="Cancel the in-progress execution and return the repository to a startable state."
+              >
+                {isCancellingExecution ? 'Cancelling...' : 'Cancel Execution'}
+              </button>
+            ) : null}
           </div>
         }
       />

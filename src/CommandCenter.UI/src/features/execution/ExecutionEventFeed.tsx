@@ -1,7 +1,5 @@
 import { formatDateTime } from '../../lib'
-import { EmptyState, Panel, SectionHeader, StatusBadge } from '../../components/design'
-import { DiagnosticList } from '../../components/explainability'
-import { executionEventsToDiagnostics } from '../../lib/explainability'
+import { EmptyState, Panel, SectionHeader, StatusBadge, Tooltip } from '../../components/design'
 import { executionSessionStatus } from '../../lib/status'
 import type { ExecutionEvent } from '../../types'
 import type { ExecutionSessionSummary } from '../../types'
@@ -38,11 +36,6 @@ export function ExecutionEventFeed({
                 <span>{group.category}</span>
                 <span>{group.events.length} event{group.events.length === 1 ? '' : 's'}</span>
               </div>
-              <DiagnosticList
-                diagnostics={executionEventsToDiagnostics(group.events)}
-                title={`${group.category} Consequences`}
-                emptyLabel="No event consequences projected."
-              />
               {group.events.map((executionEvent) => (
                 <div
                   className="execution-event-row"
@@ -52,20 +45,55 @@ export function ExecutionEventFeed({
                   data-event-timestamp={executionEvent.timestamp}
                   key={executionEvent.sequence}
                 >
-                  <span className="execution-event-sequence">#{executionEvent.sequence}</span>
-                  <span className="execution-event-time">{formatDateTime(executionEvent.timestamp)}</span>
-                  <span className="execution-event-type">{executionEvent.type}</span>
-                  <span className="execution-event-provider">
-                    {session?.providerName || 'Provider not recorded'}
-                  </span>
-                  <span className="execution-event-status">
-                    {session ? <StatusBadge status={executionSessionStatus[session.state]} /> : 'Status not recorded'}
-                  </span>
-                  <span className="execution-event-session">
-                    {session?.sessionId ?? 'Session not recorded'}
-                  </span>
-                  <p className="execution-event-consequence">{eventConsequence(executionEvent)}</p>
-                  <pre>{executionEvent.message}</pre>
+                  {/* The message is the only always-visible content; every other detail (sequence,
+                      time, type, provider, status, session, consequence) lives in the tooltip so a
+                      long stream stays scannable. */}
+                  <Tooltip
+                    className="execution-event-tooltip"
+                    triggerLabel={`Event #${executionEvent.sequence} details`}
+                  >
+                    <dl className="execution-event-details">
+                      <div className="execution-event-detail">
+                        <dt>Sequence</dt>
+                        <dd className="execution-event-sequence">#{executionEvent.sequence}</dd>
+                      </div>
+                      <div className="execution-event-detail">
+                        <dt>Time</dt>
+                        <dd className="execution-event-time">{formatDateTime(executionEvent.timestamp)}</dd>
+                      </div>
+                      <div className="execution-event-detail">
+                        <dt>Type</dt>
+                        <dd className="execution-event-type">{executionEvent.type}</dd>
+                      </div>
+                      <div className="execution-event-detail">
+                        <dt>Provider</dt>
+                        <dd className="execution-event-provider">
+                          {session?.providerName || 'Provider not recorded'}
+                        </dd>
+                      </div>
+                      <div className="execution-event-detail">
+                        <dt>Status</dt>
+                        <dd className="execution-event-status">
+                          {session ? (
+                            <StatusBadge status={executionSessionStatus[session.state]} />
+                          ) : (
+                            'Status not recorded'
+                          )}
+                        </dd>
+                      </div>
+                      <div className="execution-event-detail">
+                        <dt>Session</dt>
+                        <dd className="execution-event-session">
+                          {session?.sessionId ?? 'Session not recorded'}
+                        </dd>
+                      </div>
+                      <div className="execution-event-detail">
+                        <dt>Consequence</dt>
+                        <dd className="execution-event-consequence">{eventConsequence(executionEvent)}</dd>
+                      </div>
+                    </dl>
+                  </Tooltip>
+                  <pre className="execution-event-message">{executionEvent.message}</pre>
                 </div>
               ))}
             </section>

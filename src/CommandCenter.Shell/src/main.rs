@@ -2451,6 +2451,24 @@ fn start_execution(repository_id: String) -> Result<ExecutionSessionSummary, Str
 }
 
 #[tauri::command]
+fn cancel_execution(repository_id: String) -> Result<ExecutionSessionSummary, String> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/execution/cancel"
+        ))
+        .json(&serde_json::json!({}))
+        .send()
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        return response.json().map_err(|error| error.to_string());
+    }
+
+    response_error(response, "execution cancel failed")
+}
+
+#[tauri::command]
 fn get_active_execution(repository_id: String) -> Result<ExecutionSessionSummary, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/execution/active"
@@ -3125,6 +3143,7 @@ fn main() {
             get_decision_session_certification_report,
             run_decision_session_certification,
             start_execution,
+            cancel_execution,
             get_active_execution,
             get_git_status,
             get_execution_git_eligibility,

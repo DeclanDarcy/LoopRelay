@@ -2026,6 +2026,11 @@ public sealed class OperationalContextGenerationTests
             throw new NotSupportedException();
         }
 
+        public Task<ExecutionSessionSummary> CancelAsync(Guid repositoryId, ExecutionCancellationRequest request)
+        {
+            throw new NotSupportedException();
+        }
+
         public Task<ExecutionSession?> GetSessionAsync(Guid sessionId)
         {
             return Task.FromResult<ExecutionSession?>(null);

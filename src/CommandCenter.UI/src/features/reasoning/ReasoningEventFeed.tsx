@@ -1,4 +1,4 @@
-import { EmptyState } from '../../components/design'
+import { EmptyState, Tooltip } from '../../components/design'
 import type { ReasoningEvent, ReasoningEventFamily } from '../../types'
 import { ReasoningDiagnosticGroups } from './ReasoningDiagnosticGroups'
 
@@ -34,68 +34,77 @@ export function ReasoningEventFeed({
         <div className="reasoning-event-feed">
           {filteredEvents.map((event) => (
             <article className="reasoning-event-row" key={event.id}>
-              <div className="reasoning-event-heading">
+              {/* Only the title + summary stay visible; classification, provenance, and the nested
+                  capture diagnostics collapse into the tooltip so the feed stays scannable. */}
+              <Tooltip className="reasoning-event-tooltip" triggerLabel={`${event.id} details`}>
+                <div className="reasoning-event-detail">
+                  <div className="reasoning-badge-row" aria-label={`${event.id} classification`}>
+                    <span>{event.family}</span>
+                    <span>{event.type}</span>
+                    <span>{formatDate(event.createdAt)}</span>
+                    <span>{event.captureProvenance.mode}</span>
+                  </div>
+                  {event.narrative.details ? <small>{event.narrative.details}</small> : null}
+                  <dl className="reasoning-provenance" aria-label={`${event.id} capture provenance`}>
+                    <div>
+                      <dt>Event</dt>
+                      <dd>{event.id}</dd>
+                    </div>
+                    <div>
+                      <dt>Capture</dt>
+                      <dd>{event.captureProvenance.sourceKind} by {event.captureProvenance.capturedBy}</dd>
+                    </div>
+                    <div>
+                      <dt>Reason</dt>
+                      <dd>{event.captureProvenance.captureReason}</dd>
+                    </div>
+                    {event.captureProvenance.sourceTransition ? (
+                      <div>
+                        <dt>Transition</dt>
+                        <dd>{event.captureProvenance.sourceTransition}</dd>
+                      </div>
+                    ) : null}
+                    {event.captureProvenance.sourceArtifact ? (
+                      <div>
+                        <dt>Source</dt>
+                        <dd>{event.captureProvenance.sourceArtifact}</dd>
+                      </div>
+                    ) : null}
+                    {event.captureProvenance.sourceTimestamp ? (
+                      <div>
+                        <dt>Source Time</dt>
+                        <dd>{formatDate(event.captureProvenance.sourceTimestamp)}</dd>
+                      </div>
+                    ) : null}
+                    {event.captureProvenance.duplicateSignal ? (
+                      <div>
+                        <dt>Duplicate Signal</dt>
+                        <dd>{event.captureProvenance.duplicateSignal}</dd>
+                      </div>
+                    ) : null}
+                    {event.captureProvenance.skipReason ? (
+                      <div>
+                        <dt>Skipped</dt>
+                        <dd>{event.captureProvenance.skipReason}</dd>
+                      </div>
+                    ) : null}
+                    {event.captureProvenance.existingEventReference ? (
+                      <div>
+                        <dt>Existing Event</dt>
+                        <dd>{event.captureProvenance.existingEventReference.id}</dd>
+                      </div>
+                    ) : null}
+                  </dl>
+                  <ReasoningDiagnosticGroups
+                    groups={event.captureProvenance.diagnosticGroups}
+                    label={`${event.id} capture diagnostics`}
+                  />
+                </div>
+              </Tooltip>
+              <div className="reasoning-event-primary">
                 <strong>{event.title}</strong>
-                <span>{event.id}</span>
+                <p>{event.narrative.summary}</p>
               </div>
-              <div className="reasoning-badge-row" aria-label={`${event.id} classification`}>
-                <span>{event.family}</span>
-                <span>{event.type}</span>
-                <span>{formatDate(event.createdAt)}</span>
-                <span>{event.captureProvenance.mode}</span>
-              </div>
-              <p>{event.narrative.summary}</p>
-              {event.narrative.details ? <small>{event.narrative.details}</small> : null}
-              <dl className="reasoning-provenance" aria-label={`${event.id} capture provenance`}>
-                <div>
-                  <dt>Capture</dt>
-                  <dd>{event.captureProvenance.sourceKind} by {event.captureProvenance.capturedBy}</dd>
-                </div>
-                <div>
-                  <dt>Reason</dt>
-                  <dd>{event.captureProvenance.captureReason}</dd>
-                </div>
-                {event.captureProvenance.sourceTransition ? (
-                  <div>
-                    <dt>Transition</dt>
-                    <dd>{event.captureProvenance.sourceTransition}</dd>
-                  </div>
-                ) : null}
-                {event.captureProvenance.sourceArtifact ? (
-                  <div>
-                    <dt>Source</dt>
-                    <dd>{event.captureProvenance.sourceArtifact}</dd>
-                  </div>
-                ) : null}
-                {event.captureProvenance.sourceTimestamp ? (
-                  <div>
-                    <dt>Source Time</dt>
-                    <dd>{formatDate(event.captureProvenance.sourceTimestamp)}</dd>
-                  </div>
-                ) : null}
-                {event.captureProvenance.duplicateSignal ? (
-                  <div>
-                    <dt>Duplicate Signal</dt>
-                    <dd>{event.captureProvenance.duplicateSignal}</dd>
-                  </div>
-                ) : null}
-                {event.captureProvenance.skipReason ? (
-                  <div>
-                    <dt>Skipped</dt>
-                    <dd>{event.captureProvenance.skipReason}</dd>
-                  </div>
-                ) : null}
-                {event.captureProvenance.existingEventReference ? (
-                  <div>
-                    <dt>Existing Event</dt>
-                    <dd>{event.captureProvenance.existingEventReference.id}</dd>
-                  </div>
-                ) : null}
-              </dl>
-              <ReasoningDiagnosticGroups
-                groups={event.captureProvenance.diagnosticGroups}
-                label={`${event.id} capture diagnostics`}
-              />
             </article>
           ))}
         </div>

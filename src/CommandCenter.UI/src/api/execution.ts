@@ -44,6 +44,10 @@ export function startExecution(repositoryId: string) {
   return invokeCommand<ExecutionSessionSummary>('start_execution', { repositoryId })
 }
 
+export function cancelExecution(repositoryId: string) {
+  return invokeCommand<ExecutionSessionSummary>('cancel_execution', { repositoryId })
+}
+
 export function getExecutionPromptManifest(sessionId: string) {
   return invokeCommand<ExecutionPromptManifest>('get_execution_prompt_manifest', { sessionId })
 }

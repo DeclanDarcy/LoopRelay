@@ -127,6 +127,7 @@ function createWorkspaceProjection(): RepositoryWorkspaceProjection {
       historicalDecisions: [],
     },
     milestoneCount: 0,
+    milestoneProgress: { completedMilestoneCount: 0, totalMilestoneCount: 0, milestones: [] },
     hasPlan: true,
     hasOperationalContext: false,
     hasCurrentHandoff: false,

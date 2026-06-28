@@ -1339,12 +1339,31 @@ button:focus-visible {
 
 .reasoning-event-row {
   min-width: 0;
-  display: grid;
+  display: flex;
+  align-items: flex-start;
   gap: 8px;
   padding: 10px 12px;
   border: 1px solid var(--surface-2);
   border-radius: var(--radius-6);
   background: var(--surface-1);
+}
+
+/* Title + summary are the row's always-visible primary content. */
+.reasoning-event-primary {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 4px;
+}
+
+.reasoning-event-tooltip {
+  flex: none;
+}
+
+.reasoning-event-detail {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
 }
 
 .reasoning-event-heading,
@@ -2385,7 +2404,8 @@ button:focus-visible {
   display: grid;
   gap: 3px;
   padding: 8px;
-  border-left: 3px solid var(--accent-muted);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
   background: var(--surface-1);
 }
 
@@ -3519,14 +3539,56 @@ button:focus-visible {
 
 .execution-event-row {
   min-width: 0;
-  display: grid;
-  grid-template-columns: auto minmax(150px, auto) auto minmax(120px, auto) auto minmax(160px, auto);
-  align-items: start;
+  display: flex;
+  align-items: flex-start;
   gap: 8px;
   padding: 8px;
   border: 1px solid var(--surface-2);
   border-radius: var(--radius-6);
   background: var(--surface-1);
+}
+
+/* The message is the row's primary, always-visible content. */
+.execution-event-message {
+  min-width: 0;
+  flex: 1;
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--fg-default);
+  font: 0.8rem/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.execution-event-tooltip {
+  flex: none;
+}
+
+/* Per-event detail, housed inside the tooltip rather than crowding the row. */
+.execution-event-details {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.execution-event-detail {
+  display: grid;
+  grid-template-columns: minmax(72px, auto) 1fr;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.execution-event-detail dt {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.execution-event-detail dd {
+  margin: 0;
 }
 
 .execution-event-sequence,
@@ -3548,7 +3610,6 @@ button:focus-visible {
 
 .execution-event-consequence {
   min-width: 0;
-  grid-column: 1 / -1;
   margin: 0;
   color: var(--fg-subtle);
   font-size: 0.82rem;
@@ -3556,14 +3617,64 @@ button:focus-visible {
   overflow-wrap: anywhere;
 }
 
-.execution-event-row pre {
-  min-width: 0;
-  grid-column: 1 / -1;
-  margin: 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+/* Generic hover/focus disclosure (design system). The bubble stays in the DOM and only
+   toggles visibility, so it is announced via aria-describedby and is deterministic to test. */
+.cc-tooltip {
+  position: relative;
+  display: inline-flex;
+}
+
+.cc-tooltip-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--fg-muted);
+  cursor: help;
+  line-height: 1;
+}
+
+.cc-tooltip-trigger:hover,
+.cc-tooltip-trigger:focus-visible {
   color: var(--fg-default);
-  font: 0.8rem/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+  border-color: var(--border-strong, var(--border-subtle));
+}
+
+.cc-tooltip-glyph {
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.cc-tooltip-bubble {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  min-width: 220px;
+  max-width: 360px;
+  max-height: 60vh;
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-6);
+  background: var(--surface-0, var(--surface-1));
+  box-shadow: var(--shadow-2, 0 8px 24px rgba(0, 0, 0, 0.28));
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.cc-tooltip:hover .cc-tooltip-bubble,
+.cc-tooltip:focus-within .cc-tooltip-bubble {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
 }
 
 .artifact-workspace {

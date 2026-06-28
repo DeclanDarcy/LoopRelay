@@ -16,7 +16,7 @@ describe('execution event feed rendering characterization', () => {
     expect(screen.getByText('No execution events recorded.')).toHaveClass('empty-state')
   })
 
-  it('renders event rows in provided order', () => {
+  it('keeps the message as each row primary content and moves every other detail into a tooltip', () => {
     const events: ExecutionEvent[] = [
       {
         sequence: 2,
@@ -39,22 +39,30 @@ describe('execution event feed rendering characterization', () => {
     render(<ExecutionEventFeed events={events} />)
 
     expect(screen.getByRole('heading', { level: 4, name: '2 events' })).toBeInTheDocument()
-    const rows = document.querySelectorAll('.execution-event-row')
-    expect(Array.from(rows).map((row) => within(row as HTMLElement).getByText(/^#/).textContent)).toEqual([
-      '#2',
-      '#7',
-    ])
-    expect(screen.getByText('stderr')).toBeInTheDocument()
-    expect(screen.getByText('stdout')).toBeInTheDocument()
-    expect(screen.getByLabelText('Provider execution events')).toBeInTheDocument()
-    expect(within(screen.getByLabelText('Provider execution events')).getByText('2 events')).toBeInTheDocument()
-    expect(screen.getAllByText('Provider emitted standard error output.')).not.toHaveLength(0)
-    expect(screen.getAllByText('Provider emitted standard output.')).not.toHaveLength(0)
-    expect(screen.getByText('Provider Consequences')).toBeInTheDocument()
-    expect(Array.from(document.querySelectorAll('pre')).map((node) => node.textContent)).toEqual([
+
+    const rows = Array.from(document.querySelectorAll('.execution-event-row')) as HTMLElement[]
+    expect(rows).toHaveLength(2)
+
+    // The message stays the row's primary, always-visible content, in provided order.
+    expect(rows.map((row) => row.querySelector('.execution-event-message')?.textContent)).toEqual([
       'Second event',
       'Seventh event',
     ])
+
+    // Every per-event detail now lives inside the row's tooltip — and the message does not.
+    const firstTooltip = within(rows[0]).getByRole('tooltip')
+    expect(within(firstTooltip).getByText('#2')).toBeInTheDocument()
+    expect(within(firstTooltip).getByText('stderr')).toBeInTheDocument()
+    expect(within(firstTooltip).getByText('Provider emitted standard error output.')).toHaveClass(
+      'execution-event-consequence',
+    )
+    expect(within(firstTooltip).getByText('Provider not recorded')).toBeInTheDocument()
+    expect(within(firstTooltip).getByText('Session not recorded')).toBeInTheDocument()
+    expect(firstTooltip.querySelector('.execution-event-message')).toBeNull()
+
+    // The details are reachable through a focusable, labelled trigger per row.
+    expect(within(rows[0]).getByRole('button', { name: 'Event #2 details' })).toBeInTheDocument()
+    expect(within(rows[1]).getByRole('button', { name: 'Event #7 details' })).toBeInTheDocument()
   })
 
   it('groups events by backend semantic category in first-seen order', () => {
@@ -90,16 +98,20 @@ describe('execution event feed rendering characterization', () => {
     expect(screen.getByLabelText('Launch execution events')).toBeInTheDocument()
     expect(screen.getByLabelText('Failure execution events')).toBeInTheDocument()
     expect(screen.getByLabelText('Handoff execution events')).toBeInTheDocument()
-    expect(screen.getAllByText('Provider execution began.').at(-1)).toHaveClass('execution-event-consequence')
-    expect(screen.getAllByText('Execution is failed or requires recovery before normal progression can continue.').at(-1)).toHaveClass(
+    // The consequence now renders exactly once per event — inside the row tooltip — now that the
+    // duplicate, always-expanded per-group "Consequences" card list has been removed.
+    expect(screen.getByText('Provider execution began.')).toHaveClass('execution-event-consequence')
+    expect(screen.getByText('Execution is failed or requires recovery before normal progression can continue.')).toHaveClass(
       'execution-event-consequence',
     )
-    expect(screen.getAllByText('Handoff passed validation and the repository is awaiting acceptance.').at(-1)).toHaveClass(
+    expect(screen.getByText('Handoff passed validation and the repository is awaiting acceptance.')).toHaveClass(
       'execution-event-consequence',
     )
-    expect(screen.getByText('Launch Consequences')).toBeInTheDocument()
-    expect(screen.getByText('Failure Consequences')).toBeInTheDocument()
-    expect(screen.getByText('Handoff Consequences')).toBeInTheDocument()
+    // Regression guard: the per-group consequence card list (which re-rendered every event as a
+    // stack of bordered cards above the rows) must not return — it duplicated the row detail.
+    expect(screen.queryByText('Launch Consequences')).not.toBeInTheDocument()
+    expect(screen.queryByText('Failure Consequences')).not.toBeInTheDocument()
+    expect(screen.queryByText('Handoff Consequences')).not.toBeInTheDocument()
     expect(Array.from(document.querySelectorAll('.execution-event-row')).map((row) => row.getAttribute('data-event-category'))).toEqual([
       'Launch',
       'Failure',
@@ -123,6 +135,8 @@ describe('execution event feed rendering characterization', () => {
 
     expect(screen.getByLabelText('Monitoring execution events')).toBeInTheDocument()
     expect(screen.getAllByText('Execution monitoring recorded activity.')).not.toHaveLength(0)
-    expect(document.querySelector('pre')).toHaveTextContent('Older event')
+    // The message remains the visible primary content even with no semantic metadata.
+    expect(document.querySelector('.execution-event-message')).toHaveTextContent('Older event')
+    expect(within(screen.getByRole('region', { name: 'Execution output' })).getByRole('tooltip')).toBeInTheDocument()
   })
 })

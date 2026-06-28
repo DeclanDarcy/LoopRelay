@@ -674,6 +674,35 @@ describe('reasoning trajectory tab', () => {
     )
   })
 
+  it('collapses each event to title + summary, with classification and provenance in a tooltip', () => {
+    renderTab()
+
+    const feed = screen.getByRole('region', { name: 'Reasoning event feed' })
+    const rows = Array.from(feed.querySelectorAll('.reasoning-event-row')) as HTMLElement[]
+    expect(rows).toHaveLength(2)
+
+    // Title + summary are the always-visible primary content, outside any tooltip.
+    const firstPrimary = rows[0].querySelector('.reasoning-event-primary') as HTMLElement
+    expect(within(firstPrimary).getByText('Event substrate can stay narrow')).toBeInTheDocument()
+    expect(
+      within(firstPrimary).getByText('Reasoning should begin as immutable events with provenance.'),
+    ).toBeInTheDocument()
+
+    // Classification, capture provenance, and the nested diagnostic groups all moved into the
+    // row's tooltip — and the summary did not.
+    const firstTooltip = within(rows[0]).getByRole('tooltip')
+    expect(within(firstTooltip).getByText('ManualCapture by codex')).toBeInTheDocument()
+    expect(within(firstTooltip).getByLabelText('EVT-0001 capture provenance')).toBeInTheDocument()
+    expect(within(firstTooltip).getByLabelText('EVT-0001 capture diagnostics')).toBeInTheDocument()
+    expect(
+      within(firstTooltip).queryByText('Reasoning should begin as immutable events with provenance.'),
+    ).not.toBeInTheDocument()
+
+    // Each event exposes a focusable, labelled details trigger.
+    expect(within(rows[0]).getByRole('button', { name: 'EVT-0001 details' })).toBeInTheDocument()
+    expect(within(rows[1]).getByRole('button', { name: 'EVT-0002 details' })).toBeInTheDocument()
+  })
+
   it('shows empty states for repositories with no reasoning records', () => {
     renderTab({
       events: [],

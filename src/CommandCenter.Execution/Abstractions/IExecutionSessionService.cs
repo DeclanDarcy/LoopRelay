@@ -17,6 +17,8 @@ public interface IExecutionSessionService
 
     Task<ExecutionSessionSummary> StartAsync(Guid repositoryId, ExecutionStartRequest request);
 
+    Task<ExecutionSessionSummary> CancelAsync(Guid repositoryId, ExecutionCancellationRequest request);
+
     Task<ExecutionSession?> GetSessionAsync(Guid sessionId);
 
     Task<ExecutionSessionSummary> AcceptAsync(Guid sessionId, ExecutionAcceptanceRequest request);

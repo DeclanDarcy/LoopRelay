@@ -3804,7 +3804,10 @@ function startExecution(state: MockState, repositoryId: string): ExecutionSessio
     throw new Error(`Repository was not found: ${repositoryId}`)
   }
 
-  if (workspace.executionState !== 'Ready') {
+  // Mirror the backend start guard (ExecutionSessionService.StartAsync / IsActiveRepositoryState):
+  // only an in-progress (Executing) run blocks a new start. A settled Failed/Cancelled run is
+  // restartable — the UI's canStartExecution allows it and so must this mock.
+  if (workspace.executionState === 'Executing') {
     throw new Error('Repository already has an active execution session.')
   }
 
@@ -3858,6 +3861,35 @@ function startExecution(state: MockState, repositoryId: string): ExecutionSessio
   workspace.executionHistory = [
     summary,
     ...workspace.executionHistory.filter((session) => session.sessionId !== sessionId),
+  ]
+  return summary
+}
+
+function cancelExecution(state: MockState, repositoryId: string): ExecutionSessionSummary {
+  const workspace = state.workspaces[repositoryId]
+  if (!workspace) {
+    throw new Error(`Repository was not found: ${repositoryId}`)
+  }
+
+  // Mirror the backend CancelAsync (IsActiveRepositoryState): only an in-progress run is cancellable.
+  if (workspace.executionState !== 'Executing' || !workspace.executionSummary) {
+    throw new Error('Repository has no active execution session to cancel.')
+  }
+
+  const timestamp = new Date().toISOString()
+  const summary: ExecutionSessionSummary = {
+    ...workspace.executionSummary,
+    state: 'Cancelled',
+    repositoryState: 'Cancelled',
+    completedAt: timestamp,
+    lastActivityAt: timestamp,
+    failureReason: 'Execution cancelled by operator.',
+  }
+  workspace.executionState = 'Cancelled'
+  workspace.executionSummary = summary
+  workspace.executionHistory = [
+    summary,
+    ...workspace.executionHistory.filter((session) => session.sessionId !== summary.sessionId),
   ]
   return summary
 }
@@ -5415,6 +5447,8 @@ export function installDevTauriMock() {
           return clone(state.reasoningCertificationReports[getStringArg(args, 'repositoryId')] ?? [])
         case 'start_execution':
           return clone(startExecution(state, getStringArg(args, 'repositoryId')))
+        case 'cancel_execution':
+          return clone(cancelExecution(state, getStringArg(args, 'repositoryId')))
         case 'get_active_execution': {
           const workspace = state.workspaces[getStringArg(args, 'repositoryId')]
           if (!workspace?.executionSummary) {

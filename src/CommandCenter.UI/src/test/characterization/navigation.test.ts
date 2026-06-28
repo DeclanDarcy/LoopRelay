@@ -130,6 +130,7 @@ const workspace = {
     currentDecisions: null,
     historicalDecisions: [],
   },
+  milestoneProgress: { completedMilestoneCount: 0, totalMilestoneCount: 0, milestones: [] },
   hasPlan: true,
   hasOperationalContext: true,
   operationalContextProposalSummary: proposalSummary,

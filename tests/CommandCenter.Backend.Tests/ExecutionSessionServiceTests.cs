@@ -45,6 +45,45 @@ public sealed class ExecutionSessionServiceTests
     }
 
     [Fact]
+    public async Task CancelMovesActiveExecutionToCancelledAndAllowsRestart()
+    {
+        Harness harness = await CreateHarnessAsync();
+        await WriteReadyArtifactsAsync(harness.Repository);
+
+        await harness.SessionService.StartAsync(harness.Repository.Id, new ExecutionStartRequest());
+        Assert.Equal(
+            RepositoryExecutionState.Executing,
+            await harness.SessionService.GetRepositoryStateAsync(harness.Repository.Id));
+
+        ExecutionSessionSummary cancelled = await harness.SessionService.CancelAsync(
+            harness.Repository.Id,
+            new ExecutionCancellationRequest());
+
+        Assert.Equal(ExecutionSessionState.Cancelled, cancelled.State);
+        Assert.Equal(RepositoryExecutionState.Cancelled, cancelled.RepositoryState);
+        Assert.Equal(
+            RepositoryExecutionState.Cancelled,
+            await harness.SessionService.GetRepositoryStateAsync(harness.Repository.Id));
+
+        // A cancelled repository is no longer active, so a fresh run can start.
+        ExecutionSessionSummary restarted = await harness.SessionService.StartAsync(
+            harness.Repository.Id,
+            new ExecutionStartRequest());
+        Assert.Equal(RepositoryExecutionState.Executing, restarted.RepositoryState);
+    }
+
+    [Fact]
+    public async Task CancelWithoutActiveExecutionThrows()
+    {
+        Harness harness = await CreateHarnessAsync();
+        await WriteReadyArtifactsAsync(harness.Repository);
+
+        // Nothing was started, so there is no active session to cancel.
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            harness.SessionService.CancelAsync(harness.Repository.Id, new ExecutionCancellationRequest()));
+    }
+
+    [Fact]
     public async Task MissingPlanBlocksLaunch()
     {
         Harness harness = await CreateHarnessAsync();

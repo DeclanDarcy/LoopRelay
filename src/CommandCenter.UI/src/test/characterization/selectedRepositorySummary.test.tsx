@@ -138,6 +138,7 @@ function workspaceProjection(
       historicalDecisions: [],
     },
     milestoneCount: 5,
+    milestoneProgress: { completedMilestoneCount: 0, totalMilestoneCount: 0, milestones: [] },
     hasPlan: true,
     hasOperationalContext: true,
     hasCurrentHandoff: false,

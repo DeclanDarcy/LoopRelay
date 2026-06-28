@@ -23,6 +23,7 @@ import {
   rotateCurrentHandoff,
   saveArtifactContent,
   selectRepositoryDirectory,
+  cancelExecution as cancelExecutionCommand,
   startExecution as startExecutionCommand,
   supersedeDecision,
 } from './api'
@@ -84,7 +85,7 @@ import {
   getAvailableArtifactPaths,
   buildNavigationTargets,
 } from './lib'
-import { executionReadinessStatus } from './lib/status'
+import { executionReadinessStatus, isStartableExecutionState, repositoryExecutionStatus } from './lib/status'
 import { useShellState } from './state/shellState'
 import type {
   CommitPreparation,
@@ -139,6 +140,7 @@ function App() {
     useState(false)
   const [isContinuityReportGenerating, setIsContinuityReportGenerating] = useState(false)
   const [isStartingExecution, setIsStartingExecution] = useState(false)
+  const [isCancellingExecution, setIsCancellingExecution] = useState(false)
   const [isGeneratedHandoffLoading, setIsGeneratedHandoffLoading] = useState(false)
   const [isAcceptingHandoff, setIsAcceptingHandoff] = useState(false)
   const [isRejectingHandoff, setIsRejectingHandoff] = useState(false)
@@ -442,12 +444,14 @@ function App() {
   const canStartExecution =
     Boolean(selectedRepository && workspace && executionContextMatchesSelection) &&
     workspace?.readiness === 'Ready' &&
-    currentExecutionState === 'Ready' &&
+    isStartableExecutionState(currentExecutionState) &&
     !executionContext?.diagnostics.launchBlocked &&
     !executionContext?.diagnostics.hardLimitExceeded &&
     executionContext?.diagnostics.validationErrors.length === 0 &&
     !activeExecutionSummary &&
     !isStartingExecution
+  // Only an in-progress run is cancellable — the in-app escape hatch for a wedged execution.
+  const canCancelExecution = currentExecutionState === 'Executing' && !isCancellingExecution
   const pushedExecutionSummary =
     latestPushAttemptSession?.sessionId === executionSummary?.sessionId
       ? latestPushAttemptSession
@@ -574,8 +578,8 @@ function App() {
       return 'Build an execution context.'
     }
 
-    if (activeExecutionSummary || currentExecutionState !== 'Ready') {
-      return 'Repository already has an active execution session.'
+    if (activeExecutionSummary || !isStartableExecutionState(currentExecutionState)) {
+      return `Finish the current execution first — it is ${repositoryExecutionStatus[currentExecutionState].label.toLowerCase()}.`
     }
 
     if (executionContext.diagnostics.launchBlocked) {
@@ -1194,6 +1198,35 @@ function App() {
     }
   }
 
+  async function cancelExecution() {
+    if (!selectedRepository || !canCancelExecution) {
+      return
+    }
+
+    setIsCancellingExecution(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const session = await cancelExecutionCommand(selectedRepository.repository.id)
+      setWorkspace((currentWorkspace) =>
+        currentWorkspace && currentWorkspace.repository.id === selectedRepository.repository.id
+          ? {
+              ...currentWorkspace,
+              executionState: session.repositoryState,
+              executionSummary: session,
+            }
+          : currentWorkspace,
+      )
+      setMessage(`Execution cancelled: ${session.sessionId}.`)
+      await loadRepositories()
+      await loadWorkspace(selectedRepository.repository.id)
+    } catch (cancelError) {
+      setError(formatError(cancelError))
+    } finally {
+      setIsCancellingExecution(false)
+    }
+  }
+
   async function refreshAfterHandoffDecision(summary: ExecutionSessionSummary, successMessage: string) {
     if (!selectedRepository) {
       return
@@ -1555,6 +1588,9 @@ function App() {
         isContextLoading={isContextLoading}
         canStartExecution={canStartExecution}
         isStartingExecution={isStartingExecution}
+        canCancelExecution={canCancelExecution}
+        isCancellingExecution={isCancellingExecution}
+        onCancelExecution={() => void cancelExecution()}
         startExecutionBlockedReason={startExecutionBlockedReason}
         operationalContextExecutionStatus={operationalContextExecutionStatus}
         executionContextSizeStatus={executionContextSizeStatus}

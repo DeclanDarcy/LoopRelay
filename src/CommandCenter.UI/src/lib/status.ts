@@ -41,6 +41,15 @@ export const repositoryExecutionStatus: Record<RepositoryExecutionState, StatusP
   Cancelled: status('Cancelled', 'danger'),
 }
 
+// A new execution can be started only from a settled state. Ready is the clean baseline; Failed and
+// Cancelled are terminal outcomes whose correct next action is to start again (the backend's start
+// guard only rejects an already-Executing repository, so it accepts a restart from these). The
+// in-progress states — Executing, AwaitingAcceptance, Accepted, AwaitingCommit, AwaitingPush — must
+// be resolved first and therefore block a new start.
+export function isStartableExecutionState(state: RepositoryExecutionState): boolean {
+  return state === 'Ready' || state === 'Failed' || state === 'Cancelled'
+}
+
 export const executionSessionStatus: Record<ExecutionSessionState, StatusPresentation> = {
   Created: status('Created', 'info'),
   Executing: status('Executing', 'warning'),

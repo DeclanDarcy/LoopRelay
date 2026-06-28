@@ -4738,6 +4738,8 @@ public sealed class WorkflowProjectionServiceTests
 
         public Task<ExecutionSessionSummary> StartAsync(Guid repositoryId, ExecutionStartRequest request) => throw new NotSupportedException("Mutating execution methods are not used by workflow projection.");
 
+        public Task<ExecutionSessionSummary> CancelAsync(Guid repositoryId, ExecutionCancellationRequest request) => throw new NotSupportedException("Mutating execution methods are not used by workflow projection.");
+
         public Task<ExecutionSession?> GetSessionAsync(Guid sessionId) => Task.FromResult<ExecutionSession?>(null);
 
         public Task<ExecutionSessionSummary> AcceptAsync(Guid sessionId, ExecutionAcceptanceRequest request) => throw new NotSupportedException("Mutating execution methods are not used by workflow projection.");
