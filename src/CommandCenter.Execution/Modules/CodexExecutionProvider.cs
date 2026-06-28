@@ -25,9 +25,14 @@ public sealed class CodexExecutionProvider(
 
         try
         {
+            // Text-mode `codex exec` (no --json): this path consumes stdout/stderr as opaque text and
+            // detects completion via process exit + handoff-file validation, so Codex's structured JSONL
+            // stream is neither parsed nor wanted here. Sandbox and approval are pinned explicitly rather
+            // than inherited from the user's ~/.codex/config.toml — danger-full-access is the deliberate
+            // (temporary) policy until workspace sandboxing is wired up.
             result = await processRunner.StartAsync(
                 executable.Path,
-                ["exec", "--cd", session.RepositoryPath, "-"],
+                ["exec", "--cd", session.RepositoryPath, "--sandbox", "danger-full-access", "-c", "approval_policy=\"never\"", "-"],
                 session.RepositoryPath,
                 prompt.Text,
                 observer.OnStdOutAsync,

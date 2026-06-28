@@ -11,7 +11,7 @@ namespace CommandCenter.Backend.Tests;
 public sealed class CodexExecutionProviderTests
 {
     [Fact]
-    public async Task LaunchesCodexExecFromRepositoryRootWithPromptOnStandardInput()
+    public async Task LaunchesTextModeCodexExecWithFullAccessSandboxAndNeverApproval()
     {
         string repositoryPath = CreateTemporaryDirectory();
         var processRunner = new RecordingProcessRunner(new ProcessStartResult
@@ -33,7 +33,9 @@ public sealed class CodexExecutionProviderTests
         Assert.Equal(1234, result.ProcessId);
         Assert.Equal("C:\\tools\\codex.exe", processRunner.FileName);
         Assert.Equal(repositoryPath, processRunner.WorkingDirectory);
-        Assert.Equal(["exec", "--cd", repositoryPath, "-"], processRunner.Arguments);
+        Assert.Equal(
+            ["exec", "--cd", repositoryPath, "--sandbox", "danger-full-access", "-c", "approval_policy=\"never\"", "-"],
+            processRunner.Arguments);
         Assert.Equal("prompt text", processRunner.StandardInput);
     }
 

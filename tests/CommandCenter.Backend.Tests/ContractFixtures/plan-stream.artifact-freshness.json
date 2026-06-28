@@ -7,7 +7,7 @@
       "artifactId": "typescript-plan-stream-contract",
       "artifactPath": "src/CommandCenter.UI/src/types/planning.ts",
       "artifactKind": "phase0-verified-contract-artifact",
-      "artifactSha256": "3EDF44BBE38E3504B7D81412694843DC11B2DA46201D110833FD7C3F861F17F5"
+      "artifactSha256": "A51DAF36B3ED7DE5282D6C0CD59DF8D0B8BB977F56CE1ACCDA220BC5E365548F"
     }
   ]
 }
