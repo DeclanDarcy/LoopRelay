@@ -1,6 +1,8 @@
+using CommandCenter.Core.Artifacts;
 using CommandCenter.Core.Repositories;
 using CommandCenter.DecisionSessions.Abstractions;
 using CommandCenter.DecisionSessions.Models;
+using CommandCenter.DecisionSessions.Persistence;
 using CommandCenter.DecisionSessions.Primitives;
 
 namespace CommandCenter.DecisionSessions.Services;
@@ -15,6 +17,27 @@ public sealed class DecisionSessionRecoveryService(
     IDecisionSessionLifecyclePolicy? lifecyclePolicy = null,
     IDecisionSessionEvidenceReader? evidenceReader = null) : IDecisionSessionRecoveryService
 {
+    /// <summary>
+    /// Hand-bumped version identifying the metrics/economics/coherence/lifecycle analysis formulas. Bump this
+    /// constant whenever any of those derived-snapshot formulas change so that warm-restart recovery rebuilds
+    /// snapshots stamped under an older formula version instead of skipping them.
+    /// </summary>
+    private const string AnalysisOptionsVersion = "decision-sessions.analysis.v1";
+
+    /// <summary>
+    /// Repository-relative SOURCE directories the evidence reader scans. The decision-session snapshot output
+    /// directory (.agents/decision-sessions) is deliberately NOT in this set: writing a snapshot must not bump
+    /// the probed source mtime, which would self-invalidate the warm-restart cache forever.
+    /// </summary>
+    private static readonly string[] SourceDirectories =
+    [
+        ArtifactPath.CombineRelative(".agents", "decisions"),
+        ArtifactPath.CombineRelative(".agents", "reasoning"),
+        ArtifactPath.CombineRelative(".agents", "operational_context")
+    ];
+
+    private const string OperationalContextCurrentRelativePath = ".agents/operational_context.md";
+
     public async Task<DecisionSessionDiagnostics> GetDiagnosticsAsync(Guid repositoryId)
     {
         DecisionSessionRecoveryResult result = await AssessAsync(repositoryId, persist: false);
@@ -156,42 +179,83 @@ public sealed class DecisionSessionRecoveryService(
         List<DecisionSessionRecoveryFinding> findings)
     {
         var diagnostics = new List<string>();
-        await RebuildSnapshotAsync(
-            "MetricsSnapshotRebuilt",
-            "Metrics snapshot was rebuilt from decision, reasoning, and continuity evidence.",
-            () => metricsService?.GetMetricsAsync(repository.Id),
-            findings,
-            diagnostics);
-        await RebuildSnapshotAsync(
-            "EconomicsSnapshotRebuilt",
-            "Economics snapshot was rebuilt from metrics evidence.",
-            () => economicsService?.GetEconomicsAsync(repository.Id),
-            findings,
-            diagnostics);
-        await RebuildSnapshotAsync(
-            "CoherenceSnapshotRebuilt",
-            "Coherence snapshot was rebuilt from metrics, economics, and reasoning graph evidence.",
-            () => coherenceService?.GetCoherenceAsync(repository.Id),
-            findings,
-            diagnostics);
+        DecisionSessionLifecycleSnapshot? policySnapshot;
 
-        DecisionSessionLifecycleSnapshot? policySnapshot = null;
-        if (activeSession is null)
+        if (await CanSkipDerivedRebuildAsync(repository))
         {
+            // Warm restart: source .agents evidence is unchanged since the last stamped rebuild, so the
+            // four count-derived snapshots (metrics/economics/coherence/lifecycle) are byte-for-byte current.
+            // Skip the expensive evidence rescans entirely and read the persisted lifecycle policy snapshot
+            // to feed transfer eligibility (one small file, no O(files) evidence scan).
             AddSkippedFinding(
-                "LifecyclePolicySnapshotNotRebuilt",
-                "Lifecycle policy snapshot was not rebuilt because no active decision session exists.",
+                "MetricsSnapshotNotRebuilt",
+                "Metrics snapshot was not rebuilt because source evidence is unchanged since the last stamped rebuild.",
                 findings,
                 diagnostics);
+            AddSkippedFinding(
+                "EconomicsSnapshotNotRebuilt",
+                "Economics snapshot was not rebuilt because source evidence is unchanged since the last stamped rebuild.",
+                findings,
+                diagnostics);
+            AddSkippedFinding(
+                "CoherenceSnapshotNotRebuilt",
+                "Coherence snapshot was not rebuilt because source evidence is unchanged since the last stamped rebuild.",
+                findings,
+                diagnostics);
+            AddSkippedFinding(
+                "LifecyclePolicySnapshotNotRebuilt",
+                "Lifecycle policy snapshot was not rebuilt because source evidence is unchanged since the last stamped rebuild.",
+                findings,
+                diagnostics);
+            policySnapshot = await sessionRepository.ReadLifecyclePolicySnapshotAsync(repository);
         }
         else
         {
-            policySnapshot = await RebuildSnapshotAsync(
-                "LifecyclePolicySnapshotRebuilt",
-                "Lifecycle policy snapshot was rebuilt from analysis evidence.",
-                () => lifecyclePolicy?.EvaluateAsync(repository.Id),
+            // Probe BEFORE rebuilding so the stamp reflects the source tree the rebuild consumed. If a source
+            // file changes during the rebuild, the stamp will be older than the next probe => next boot rebuilds
+            // (conservative; never serves stale data).
+            DateTimeOffset? sourceMaxWriteUtc = ProbeSourceMaxWriteUtc(repository);
+            await RebuildSnapshotAsync(
+                "MetricsSnapshotRebuilt",
+                "Metrics snapshot was rebuilt from decision, reasoning, and continuity evidence.",
+                () => metricsService?.GetMetricsAsync(repository.Id),
                 findings,
                 diagnostics);
+            await RebuildSnapshotAsync(
+                "EconomicsSnapshotRebuilt",
+                "Economics snapshot was rebuilt from metrics evidence.",
+                () => economicsService?.GetEconomicsAsync(repository.Id),
+                findings,
+                diagnostics);
+            await RebuildSnapshotAsync(
+                "CoherenceSnapshotRebuilt",
+                "Coherence snapshot was rebuilt from metrics, economics, and reasoning graph evidence.",
+                () => coherenceService?.GetCoherenceAsync(repository.Id),
+                findings,
+                diagnostics);
+
+            if (activeSession is null)
+            {
+                policySnapshot = null;
+                AddSkippedFinding(
+                    "LifecyclePolicySnapshotNotRebuilt",
+                    "Lifecycle policy snapshot was not rebuilt because no active decision session exists.",
+                    findings,
+                    diagnostics);
+            }
+            else
+            {
+                policySnapshot = await RebuildSnapshotAsync(
+                    "LifecyclePolicySnapshotRebuilt",
+                    "Lifecycle policy snapshot was rebuilt from analysis evidence.",
+                    () => lifecyclePolicy?.EvaluateAsync(repository.Id),
+                    findings,
+                    diagnostics);
+            }
+
+            // Stamp LAST: economics/coherence/lifecycle rebuilds each re-derive metrics and re-write the
+            // (unstamped) metrics snapshot, so the staleness stamp must be applied after they all complete.
+            await StampMetricsSnapshotAsync(repository, sourceMaxWriteUtc);
         }
 
         await RebuildTransferEligibilitySnapshotAsync(
@@ -204,6 +268,119 @@ public sealed class DecisionSessionRecoveryService(
             findings,
             diagnostics);
         return diagnostics;
+    }
+
+    /// <summary>
+    /// Decides whether the four count-derived snapshots can be left untouched on this boot. Returns true only
+    /// when the persisted metrics snapshot deserialized cleanly, carries a non-null source stamp equal to the
+    /// freshly probed source mtime, and carries the current analysis-options version. Any failure to read the
+    /// stamp (missing/corrupt/foreign snapshot) or an unprobeable source tree forces a full rebuild.
+    /// </summary>
+    private async Task<bool> CanSkipDerivedRebuildAsync(Repository repository)
+    {
+        // The metrics service is the head of the derived chain; if it is unavailable we have nothing to skip.
+        if (metricsService is null)
+        {
+            return false;
+        }
+
+        DateTimeOffset? probedSourceMaxWriteUtc = ProbeSourceMaxWriteUtc(repository);
+        if (probedSourceMaxWriteUtc is null)
+        {
+            return false;
+        }
+
+        DecisionSessionMetricsSnapshotStamp? stamp;
+        try
+        {
+            stamp = await sessionRepository.ReadMetricsSnapshotStampAsync(repository);
+        }
+        catch (DecisionSessionValidationException)
+        {
+            return false;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
+        }
+
+        if (stamp?.SourceMaxWriteUtc is null || stamp.AnalysisOptionsVersion is null)
+        {
+            return false;
+        }
+
+        return stamp.SourceMaxWriteUtc == probedSourceMaxWriteUtc &&
+            string.Equals(stamp.AnalysisOptionsVersion, AnalysisOptionsVersion, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Returns the maximum last-write timestamp over the SOURCE evidence directories/files only, using direct
+    /// System.IO. Returns null when none of the probed source locations exist (cannot determine freshness =>
+    /// caller must rebuild). The snapshot output directory is never probed, so snapshot writes cannot bump it.
+    /// </summary>
+    private static DateTimeOffset? ProbeSourceMaxWriteUtc(Repository repository)
+    {
+        DateTimeOffset? max = null;
+        bool sawAny = false;
+
+        foreach (string relativeDirectory in SourceDirectories)
+        {
+            string directory = ArtifactPath.ResolveRepositoryPath(repository, relativeDirectory);
+            if (!Directory.Exists(directory))
+            {
+                continue;
+            }
+
+            sawAny = true;
+            foreach (string file in Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories))
+            {
+                DateTimeOffset writeTime = File.GetLastWriteTimeUtc(file);
+                if (max is null || writeTime > max)
+                {
+                    max = writeTime;
+                }
+            }
+        }
+
+        string operationalContextCurrent = ArtifactPath.ResolveRepositoryPath(repository, OperationalContextCurrentRelativePath);
+        if (File.Exists(operationalContextCurrent))
+        {
+            sawAny = true;
+            DateTimeOffset writeTime = File.GetLastWriteTimeUtc(operationalContextCurrent);
+            if (max is null || writeTime > max)
+            {
+                max = writeTime;
+            }
+        }
+
+        if (!sawAny)
+        {
+            return null;
+        }
+
+        // An existing-but-empty source tree (directories present, no files) yields no timestamp; treat that as
+        // unprobeable so recovery rebuilds rather than skipping against an absent stamp comparison.
+        return max;
+    }
+
+    /// <summary>
+    /// Re-writes the metrics snapshot (just rebuilt by the metrics service, which persisted it unstamped) with
+    /// the warm-restart staleness stamp so the next boot can recognize an unchanged source tree and skip.
+    /// </summary>
+    private async Task StampMetricsSnapshotAsync(Repository repository, DateTimeOffset? sourceMaxWriteUtc)
+    {
+        if (sourceMaxWriteUtc is null)
+        {
+            return;
+        }
+
+        DecisionSessionMetricsSnapshot? snapshot = await sessionRepository.ReadMetricsSnapshotAsync(repository);
+        if (snapshot is null)
+        {
+            return;
+        }
+
+        await sessionRepository.WriteMetricsSnapshotAsync(repository, snapshot, sourceMaxWriteUtc, AnalysisOptionsVersion);
     }
 
     private async Task<T?> RebuildSnapshotAsync<T>(

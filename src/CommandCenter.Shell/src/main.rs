@@ -357,7 +357,7 @@ impl Drop for BackendProcess {
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn ping_backend() -> Result<String, String> {
     reqwest::blocking::get(format!("{BACKEND_URL}/api/ping"))
         .map_err(|error| error.to_string())?
@@ -365,11 +365,14 @@ fn ping_backend() -> Result<String, String> {
         .map_err(|error| error.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_backend_url() -> String {
     BACKEND_URL.to_string()
 }
 
+// Native folder picker must stay synchronous: rfd's modal dialog is main-thread-only.
+// Every other command is #[tauri::command(async)] so its blocking HTTP runs off the
+// event-loop thread and never freezes the webview.
 #[tauri::command]
 fn select_repository_directory() -> Option<String> {
     rfd::FileDialog::new()
@@ -378,7 +381,7 @@ fn select_repository_directory() -> Option<String> {
         .map(|path| path.display().to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_repositories() -> Result<Vec<RepositoryDashboardProjection>, String> {
     reqwest::blocking::get(format!("{BACKEND_URL}/api/repositories"))
         .map_err(|error| error.to_string())?
@@ -388,7 +391,7 @@ fn list_repositories() -> Result<Vec<RepositoryDashboardProjection>, String> {
         .map_err(|error| error.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn register_repository(path: String) -> Result<(), String> {
     let client = reqwest::blocking::Client::new();
     let response = client
@@ -410,7 +413,7 @@ fn register_repository(path: String) -> Result<(), String> {
     Err(message)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn remove_repository(repository_id: String) -> Result<(), String> {
     let client = reqwest::blocking::Client::new();
     client
@@ -423,7 +426,7 @@ fn remove_repository(repository_id: String) -> Result<(), String> {
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_repository_workspace(
     repository_id: String,
 ) -> Result<RepositoryWorkspaceProjection, String> {
@@ -437,7 +440,7 @@ fn get_repository_workspace(
     .map_err(|error| error.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn refresh_repository_workspace(
     repository_id: String,
 ) -> Result<RepositoryWorkspaceProjection, String> {
@@ -454,7 +457,7 @@ fn refresh_repository_workspace(
         .map_err(|error| error.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn load_artifact_content(repository_id: String, relative_path: String) -> Result<String, String> {
     let client = reqwest::blocking::Client::new();
     client
@@ -470,7 +473,7 @@ fn load_artifact_content(repository_id: String, relative_path: String) -> Result
         .map_err(|error| error.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn save_artifact_content(
     repository_id: String,
     relative_path: String,
@@ -493,19 +496,19 @@ fn save_artifact_content(
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn rotate_current_handoff(repository_id: String) -> Result<RepositoryWorkspaceProjection, String> {
     rotate_artifact(repository_id, "rotate-current-handoff")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn rotate_current_decisions(
     repository_id: String,
 ) -> Result<RepositoryWorkspaceProjection, String> {
     rotate_artifact(repository_id, "rotate-current-decisions")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn preview_execution_context(repository_id: String) -> Result<Value, String> {
     let client = reqwest::blocking::Client::new();
     client
@@ -520,7 +523,7 @@ fn preview_execution_context(repository_id: String) -> Result<Value, String> {
         .map_err(|error| error.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_plan_status(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/plan/status"),
@@ -528,7 +531,7 @@ fn get_plan_status(repository_id: String) -> Result<Value, String> {
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn write_plan(
     repository_id: String,
     roadmap: String,
@@ -546,7 +549,7 @@ fn write_plan(
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn revise_plan(repository_id: String, feedback: String) -> Result<Value, String> {
     backend_post_json_value(
         &format!("/api/repositories/{repository_id}/plan/revise"),
@@ -555,7 +558,7 @@ fn revise_plan(repository_id: String, feedback: String) -> Result<Value, String>
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn execute_plan(repository_id: String) -> Result<Value, String> {
     backend_post_value(
         &format!("/api/repositories/{repository_id}/plan/execute"),
@@ -563,7 +566,7 @@ fn execute_plan(repository_id: String) -> Result<Value, String> {
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn decision_run(repository_id: String) -> Result<Value, String> {
     backend_post_value(
         &format!("/api/repositories/{repository_id}/decision/run"),
@@ -571,7 +574,7 @@ fn decision_run(repository_id: String) -> Result<Value, String> {
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn decision_submit(repository_id: String, decisions: String) -> Result<Value, String> {
     backend_post_json_value(
         &format!("/api/repositories/{repository_id}/decision/submit"),
@@ -580,7 +583,7 @@ fn decision_submit(repository_id: String, decisions: String) -> Result<Value, St
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn generate_operational_context_proposal(repository_id: String) -> Result<Value, String> {
     let client = reqwest::blocking::Client::new();
     let response = client
@@ -597,7 +600,7 @@ fn generate_operational_context_proposal(repository_id: String) -> Result<Value,
     response_error(response, "operational-context proposal generation failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_operational_context_proposals(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/operational-context/proposals"
@@ -611,7 +614,7 @@ fn list_operational_context_proposals(repository_id: String) -> Result<Value, St
     response_error(response, "operational-context proposal listing failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_operational_context_proposal(
     repository_id: String,
     proposal_id: String,
@@ -628,7 +631,7 @@ fn get_operational_context_proposal(
     response_error(response, "operational-context proposal lookup failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn edit_operational_context_proposal(
     repository_id: String,
     proposal_id: String,
@@ -650,7 +653,7 @@ fn edit_operational_context_proposal(
     response_error(response, "operational-context proposal edit failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn accept_operational_context_proposal(
     repository_id: String,
     proposal_id: String,
@@ -672,7 +675,7 @@ fn accept_operational_context_proposal(
     response_error(response, "operational-context proposal accept failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn reject_operational_context_proposal(
     repository_id: String,
     proposal_id: String,
@@ -694,7 +697,7 @@ fn reject_operational_context_proposal(
     response_error(response, "operational-context proposal reject failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn promote_operational_context_proposal(
     repository_id: String,
     proposal_id: String,
@@ -714,7 +717,7 @@ fn promote_operational_context_proposal(
     response_error(response, "operational-context proposal promote failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_context(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/context"
@@ -728,7 +731,7 @@ fn get_decision_context(repository_id: String) -> Result<Value, String> {
     response_error(response, "decision context lookup failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn build_decision_context(repository_id: String) -> Result<Value, String> {
     let client = reqwest::blocking::Client::new();
     let response = client
@@ -745,7 +748,7 @@ fn build_decision_context(repository_id: String) -> Result<Value, String> {
     response_error(response, "decision context build failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_decision_candidates(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/candidates"
@@ -759,7 +762,7 @@ fn list_decision_candidates(repository_id: String) -> Result<Value, String> {
     response_error(response, "decision candidate listing failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_lifecycle_eligibility(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/decisions/lifecycle/eligibility"),
@@ -767,7 +770,7 @@ fn get_decision_lifecycle_eligibility(repository_id: String) -> Result<Value, St
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn discover_decisions(repository_id: String) -> Result<Value, String> {
     backend_post_value(
         &format!("/api/repositories/{repository_id}/decisions/discover"),
@@ -775,7 +778,7 @@ fn discover_decisions(repository_id: String) -> Result<Value, String> {
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn promote_decision_candidate(
     repository_id: String,
     candidate_id: String,
@@ -790,7 +793,7 @@ fn promote_decision_candidate(
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn dismiss_decision_candidate(
     repository_id: String,
     candidate_id: String,
@@ -805,7 +808,7 @@ fn dismiss_decision_candidate(
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn expire_decision_candidate(
     repository_id: String,
     candidate_id: String,
@@ -820,7 +823,7 @@ fn expire_decision_candidate(
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn mark_decision_candidate_duplicate(
     repository_id: String,
     candidate_id: String,
@@ -839,7 +842,7 @@ fn mark_decision_candidate_duplicate(
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_decision_proposals(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals"
@@ -853,7 +856,7 @@ fn list_decision_proposals(repository_id: String) -> Result<Value, String> {
     response_error(response, "decision proposal listing failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_decision_proposal_browser(
     repository_id: String,
     states: Vec<String>,
@@ -876,7 +879,7 @@ fn list_decision_proposal_browser(
     response_error(response, "decision proposal browser listing failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_proposal(repository_id: String, proposal_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/{proposal_id}"
@@ -890,7 +893,7 @@ fn get_decision_proposal(repository_id: String, proposal_id: String) -> Result<V
     response_error(response, "decision proposal lookup failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn generate_decision_proposal(
     repository_id: String,
     candidate_id: String,
@@ -901,7 +904,7 @@ fn generate_decision_proposal(
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_proposal_review(
     repository_id: String,
     proposal_id: String,
@@ -918,7 +921,7 @@ fn get_decision_proposal_review(
     response_error(response, "decision proposal review lookup failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn expire_decision_proposal(
     repository_id: String,
     proposal_id: String,
@@ -933,7 +936,7 @@ fn expire_decision_proposal(
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn discard_decision_proposal(
     repository_id: String,
     proposal_id: String,
@@ -948,7 +951,7 @@ fn discard_decision_proposal(
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn mark_decision_proposal_viewed(
     repository_id: String,
     proposal_id: String,
@@ -963,7 +966,7 @@ fn mark_decision_proposal_viewed(
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn mark_decision_proposal_needs_refinement(
     repository_id: String,
     proposal_id: String,
@@ -978,7 +981,7 @@ fn mark_decision_proposal_needs_refinement(
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn mark_decision_proposal_ready_for_resolution(
     repository_id: String,
     proposal_id: String,
@@ -993,7 +996,7 @@ fn mark_decision_proposal_ready_for_resolution(
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_proposal_lineage(
     repository_id: String,
     proposal_id: String,
@@ -1010,7 +1013,7 @@ fn get_decision_proposal_lineage(
     response_error(response, "decision proposal lineage lookup failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn refine_decision_proposal(
     repository_id: String,
     proposal_id: String,
@@ -1032,7 +1035,7 @@ fn refine_decision_proposal(
     response_error(response, "decision proposal refinement failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn analyze_decision_refinement(
     repository_id: String,
     proposal_id: String,
@@ -1054,7 +1057,7 @@ fn analyze_decision_refinement(
     response_error(response, "decision refinement analysis failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn regenerate_decision_refinement(
     repository_id: String,
     proposal_id: String,
@@ -1076,7 +1079,7 @@ fn regenerate_decision_refinement(
     response_error(response, "decision refinement regeneration failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn resolve_decision_proposal(
     repository_id: String,
     proposal_id: String,
@@ -1098,7 +1101,7 @@ fn resolve_decision_proposal(
     response_error(response, "decision proposal resolution failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn supersede_decision(
     repository_id: String,
     decision_id: String,
@@ -1111,7 +1114,7 @@ fn supersede_decision(
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn archive_decision(
     repository_id: String,
     decision_id: String,
@@ -1124,7 +1127,7 @@ fn archive_decision(
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_assimilation_recommendation(
     repository_id: String,
     decision_id: String,
@@ -1144,7 +1147,7 @@ fn get_decision_assimilation_recommendation(
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn propose_decision_operational_context_assimilation(
     repository_id: String,
     decision_id: String,
@@ -1169,7 +1172,7 @@ fn propose_decision_operational_context_assimilation(
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_option_comparison(
     repository_id: String,
     proposal_id: String,
@@ -1186,7 +1189,7 @@ fn get_decision_option_comparison(
     response_error(response, "decision option comparison lookup failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_evidence_inspection(
     repository_id: String,
     proposal_id: String,
@@ -1203,7 +1206,7 @@ fn get_decision_evidence_inspection(
     response_error(response, "decision evidence inspection lookup failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_decision_source_attributions(
     repository_id: String,
     proposal_id: String,
@@ -1220,7 +1223,7 @@ fn list_decision_source_attributions(
     response_error(response, "decision source attribution listing failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_governance(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/governance"
@@ -1234,7 +1237,7 @@ fn get_decision_governance(repository_id: String) -> Result<Value, String> {
     response_error(response, "decision governance lookup failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn generate_decision_governance_report(repository_id: String) -> Result<Value, String> {
     let client = reqwest::blocking::Client::new();
     let response = client
@@ -1251,7 +1254,7 @@ fn generate_decision_governance_report(repository_id: String) -> Result<Value, S
     response_error(response, "decision governance report generation failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_decision_governance_reports(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/governance/reports"
@@ -1265,7 +1268,7 @@ fn list_decision_governance_reports(repository_id: String) -> Result<Value, Stri
     response_error(response, "decision governance report listing failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_certification(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/certification"
@@ -1279,7 +1282,7 @@ fn get_decision_certification(repository_id: String) -> Result<Value, String> {
     response_error(response, "decision certification lookup failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn run_decision_certification(repository_id: String) -> Result<Value, String> {
     let client = reqwest::blocking::Client::new();
     let response = client
@@ -1296,7 +1299,7 @@ fn run_decision_certification(repository_id: String) -> Result<Value, String> {
     response_error(response, "decision certification run failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_decision_certification_reports(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/certification/reports"
@@ -1310,7 +1313,7 @@ fn list_decision_certification_reports(repository_id: String) -> Result<Value, S
     response_error(response, "decision certification report listing failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_generation_certification(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/generation-certification/current"
@@ -1324,7 +1327,7 @@ fn get_decision_generation_certification(repository_id: String) -> Result<Value,
     response_error(response, "decision generation certification lookup failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn run_decision_generation_certification(repository_id: String) -> Result<Value, String> {
     let client = reqwest::blocking::Client::new();
     let response = client
@@ -1341,7 +1344,7 @@ fn run_decision_generation_certification(repository_id: String) -> Result<Value,
     response_error(response, "decision generation certification run failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_decision_generation_certification_reports(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/generation-certification/reports"
@@ -1358,7 +1361,7 @@ fn list_decision_generation_certification_reports(repository_id: String) -> Resu
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn assess_decision_quality(repository_id: String, proposal_id: String) -> Result<Value, String> {
     let client = reqwest::blocking::Client::new();
     let response = client
@@ -1375,7 +1378,7 @@ fn assess_decision_quality(repository_id: String, proposal_id: String) -> Result
     response_error(response, "decision quality assessment failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_decision_quality_assessments(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/assessments"
@@ -1389,7 +1392,7 @@ fn list_decision_quality_assessments(repository_id: String) -> Result<Value, Str
     response_error(response, "decision quality assessment listing failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_quality_report(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/reports/current"
@@ -1403,7 +1406,7 @@ fn get_decision_quality_report(repository_id: String) -> Result<Value, String> {
     response_error(response, "decision quality report lookup failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn generate_decision_quality_report(repository_id: String) -> Result<Value, String> {
     let client = reqwest::blocking::Client::new();
     let response = client
@@ -1420,7 +1423,7 @@ fn generate_decision_quality_report(repository_id: String) -> Result<Value, Stri
     response_error(response, "decision quality report generation failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_decision_quality_reports(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/reports"
@@ -1434,7 +1437,7 @@ fn list_decision_quality_reports(repository_id: String) -> Result<Value, String>
     response_error(response, "decision quality report listing failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_quality_trend(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/trends/current"
@@ -1448,7 +1451,7 @@ fn get_decision_quality_trend(repository_id: String) -> Result<Value, String> {
     response_error(response, "decision quality trend lookup failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn generate_decision_quality_trend(repository_id: String) -> Result<Value, String> {
     let client = reqwest::blocking::Client::new();
     let response = client
@@ -1465,7 +1468,7 @@ fn generate_decision_quality_trend(repository_id: String) -> Result<Value, Strin
     response_error(response, "decision quality trend generation failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_decision_quality_trends(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/trends"
@@ -1479,7 +1482,7 @@ fn list_decision_quality_trends(repository_id: String) -> Result<Value, String> 
     response_error(response, "decision quality trend listing failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_execution_decision_projection(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/execution-projection"
@@ -1493,7 +1496,7 @@ fn get_execution_decision_projection(repository_id: String) -> Result<Value, Str
     response_error(response, "execution decision projection lookup failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_execution_decision_influence(
     repository_id: String,
     execution_id: String,
@@ -1510,7 +1513,7 @@ fn get_execution_decision_influence(
     response_error(response, "execution decision influence lookup failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_influence(repository_id: String, decision_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/influence/decisions/{decision_id}"
@@ -1524,7 +1527,7 @@ fn get_decision_influence(repository_id: String, decision_id: String) -> Result<
     response_error(response, "decision influence lookup failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_reasoning_events(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/events"
@@ -1538,7 +1541,7 @@ fn list_reasoning_events(repository_id: String) -> Result<Value, String> {
     response_error(response, "reasoning event listing failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_reasoning_event(repository_id: String, event_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/events/{event_id}"
@@ -1552,7 +1555,7 @@ fn get_reasoning_event(repository_id: String, event_id: String) -> Result<Value,
     response_error(response, "reasoning event lookup failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn create_reasoning_event(repository_id: String, command: Value) -> Result<Value, String> {
     let client = reqwest::blocking::Client::new();
     let response = client
@@ -1570,7 +1573,7 @@ fn create_reasoning_event(repository_id: String, command: Value) -> Result<Value
     response_error(response, "reasoning event creation failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_reasoning_manual_capture_templates(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/manual-captures/templates"
@@ -1584,7 +1587,7 @@ fn list_reasoning_manual_capture_templates(repository_id: String) -> Result<Valu
     response_error(response, "reasoning manual-capture template listing failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn capture_manual_reasoning(repository_id: String, command: Value) -> Result<Value, String> {
     let client = reqwest::blocking::Client::new();
     let response = client
@@ -1602,7 +1605,7 @@ fn capture_manual_reasoning(repository_id: String, command: Value) -> Result<Val
     response_error(response, "reasoning manual capture failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_reasoning_threads(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/threads"
@@ -1616,7 +1619,7 @@ fn list_reasoning_threads(repository_id: String) -> Result<Value, String> {
     response_error(response, "reasoning thread listing failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_reasoning_thread(repository_id: String, thread_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/threads/{thread_id}"
@@ -1630,7 +1633,7 @@ fn get_reasoning_thread(repository_id: String, thread_id: String) -> Result<Valu
     response_error(response, "reasoning thread lookup failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn create_reasoning_thread(repository_id: String, command: Value) -> Result<Value, String> {
     let client = reqwest::blocking::Client::new();
     let response = client
@@ -1648,7 +1651,7 @@ fn create_reasoning_thread(repository_id: String, command: Value) -> Result<Valu
     response_error(response, "reasoning thread creation failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn append_reasoning_thread_event(
     repository_id: String,
     thread_id: String,
@@ -1670,7 +1673,7 @@ fn append_reasoning_thread_event(
     response_error(response, "reasoning thread event append failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_reasoning_relationships(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/relationships"
@@ -1684,7 +1687,7 @@ fn list_reasoning_relationships(repository_id: String) -> Result<Value, String> 
     response_error(response, "reasoning relationship listing failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn create_reasoning_relationship(repository_id: String, command: Value) -> Result<Value, String> {
     let client = reqwest::blocking::Client::new();
     let response = client
@@ -1702,7 +1705,7 @@ fn create_reasoning_relationship(repository_id: String, command: Value) -> Resul
     response_error(response, "reasoning relationship creation failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_reasoning_graph(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/graph"
@@ -1716,7 +1719,7 @@ fn get_reasoning_graph(repository_id: String) -> Result<Value, String> {
     response_error(response, "reasoning graph lookup failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn trace_reasoning_backward(
     repository_id: String,
     kind: String,
@@ -1731,7 +1734,7 @@ fn trace_reasoning_backward(
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn trace_reasoning_forward(
     repository_id: String,
     kind: String,
@@ -1746,7 +1749,7 @@ fn trace_reasoning_forward(
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn query_reasoning(repository_id: String, query: Value) -> Result<Value, String> {
     let client = reqwest::blocking::Client::new();
     let response = client
@@ -1764,7 +1767,7 @@ fn query_reasoning(repository_id: String, query: Value) -> Result<Value, String>
     response_error(response, "reasoning query failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn reconstruct_reasoning(repository_id: String, query: Value) -> Result<Value, String> {
     let client = reqwest::blocking::Client::new();
     let response = client
@@ -1782,7 +1785,7 @@ fn reconstruct_reasoning(repository_id: String, query: Value) -> Result<Value, S
     response_error(response, "reasoning reconstruction failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn run_reasoning_reconstruction(repository_id: String, query: Value) -> Result<Value, String> {
     let client = reqwest::blocking::Client::new();
     let response = client
@@ -1800,7 +1803,7 @@ fn run_reasoning_reconstruction(repository_id: String, query: Value) -> Result<V
     response_error(response, "reasoning reconstruction run failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_reasoning_reconstructions(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/reconstructions"
@@ -1814,7 +1817,7 @@ fn list_reasoning_reconstructions(repository_id: String) -> Result<Value, String
     response_error(response, "reasoning reconstruction report listing failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_reasoning_materialization_review(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/materialization-review"
@@ -1828,7 +1831,7 @@ fn get_reasoning_materialization_review(repository_id: String) -> Result<Value, 
     response_error(response, "reasoning materialization review lookup failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn run_reasoning_materialization_review(
     repository_id: String,
     request: Value,
@@ -1849,7 +1852,7 @@ fn run_reasoning_materialization_review(
     response_error(response, "reasoning materialization review failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_reasoning_certification(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/certification"
@@ -1863,7 +1866,7 @@ fn get_reasoning_certification(repository_id: String) -> Result<Value, String> {
     response_error(response, "reasoning certification lookup failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn run_reasoning_certification(repository_id: String) -> Result<Value, String> {
     let client = reqwest::blocking::Client::new();
     let response = client
@@ -1880,7 +1883,7 @@ fn run_reasoning_certification(repository_id: String) -> Result<Value, String> {
     response_error(response, "reasoning certification run failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_reasoning_certification_reports(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/certification/reports"
@@ -1894,7 +1897,7 @@ fn list_reasoning_certification_reports(repository_id: String) -> Result<Value, 
     response_error(response, "reasoning certification report listing failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_continuity_diagnostics(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/continuity/diagnostics"
@@ -1908,7 +1911,7 @@ fn get_continuity_diagnostics(repository_id: String) -> Result<Value, String> {
     response_error(response, "continuity diagnostics lookup failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn generate_continuity_report(repository_id: String) -> Result<Value, String> {
     let client = reqwest::blocking::Client::new();
     let response = client
@@ -1925,7 +1928,7 @@ fn generate_continuity_report(repository_id: String) -> Result<Value, String> {
     response_error(response, "continuity report generation failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_continuity_reports(repository_id: String) -> Result<Value, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/continuity/reports"
@@ -1939,7 +1942,7 @@ fn list_continuity_reports(repository_id: String) -> Result<Value, String> {
     response_error(response, "continuity report listing failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_workflow_projection(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/workflow"),
@@ -1947,7 +1950,7 @@ fn get_workflow_projection(repository_id: String) -> Result<Value, String> {
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_workflow_diagnostics(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/workflow/diagnostics"),
@@ -1955,7 +1958,7 @@ fn get_workflow_diagnostics(repository_id: String) -> Result<Value, String> {
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_workflow_timeline(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/workflow/timeline"),
@@ -1963,7 +1966,7 @@ fn get_workflow_timeline(repository_id: String) -> Result<Value, String> {
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_workflow_history(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/workflow/history"),
@@ -1971,7 +1974,7 @@ fn get_workflow_history(repository_id: String) -> Result<Value, String> {
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_workflow_transitions(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/workflow/transitions"),
@@ -1979,7 +1982,7 @@ fn get_workflow_transitions(repository_id: String) -> Result<Value, String> {
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_workflow_gates(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/workflow/gates"),
@@ -1987,7 +1990,7 @@ fn get_workflow_gates(repository_id: String) -> Result<Value, String> {
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_workflow_gate_history(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/workflow/gates/history"),
@@ -1995,7 +1998,7 @@ fn get_workflow_gate_history(repository_id: String) -> Result<Value, String> {
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_workflow_recovery(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/workflow/recovery"),
@@ -2003,7 +2006,7 @@ fn get_workflow_recovery(repository_id: String) -> Result<Value, String> {
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn recover_workflow(repository_id: String) -> Result<Value, String> {
     backend_post_value(
         &format!("/api/repositories/{repository_id}/workflow/recover"),
@@ -2011,7 +2014,7 @@ fn recover_workflow(repository_id: String) -> Result<Value, String> {
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_workflow_execution(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/workflow/execution"),
@@ -2019,7 +2022,7 @@ fn get_workflow_execution(repository_id: String) -> Result<Value, String> {
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_workflow_handoff(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/workflow/handoff"),
@@ -2027,7 +2030,7 @@ fn get_workflow_handoff(repository_id: String) -> Result<Value, String> {
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_workflow_decisions(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/workflow/decisions"),
@@ -2035,7 +2038,7 @@ fn get_workflow_decisions(repository_id: String) -> Result<Value, String> {
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_workflow_operational_context(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/workflow/operational-context"),
@@ -2043,7 +2046,7 @@ fn get_workflow_operational_context(repository_id: String) -> Result<Value, Stri
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_workflow_git(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/workflow/git"),
@@ -2051,7 +2054,7 @@ fn get_workflow_git(repository_id: String) -> Result<Value, String> {
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_workflow_continuation_evaluation(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/workflow/continuation/evaluation"),
@@ -2059,7 +2062,7 @@ fn get_workflow_continuation_evaluation(repository_id: String) -> Result<Value, 
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn run_workflow_continuation(repository_id: String) -> Result<Value, String> {
     backend_post_value(
         &format!("/api/repositories/{repository_id}/workflow/continuation/run"),
@@ -2067,7 +2070,7 @@ fn run_workflow_continuation(repository_id: String) -> Result<Value, String> {
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_workflow_continuation_history(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/workflow/continuation/history"),
@@ -2075,7 +2078,7 @@ fn get_workflow_continuation_history(repository_id: String) -> Result<Value, Str
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_workflow_preparation_evaluation(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/workflow/preparation/evaluation"),
@@ -2083,7 +2086,7 @@ fn get_workflow_preparation_evaluation(repository_id: String) -> Result<Value, S
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn run_workflow_preparation(repository_id: String) -> Result<Value, String> {
     backend_post_value(
         &format!("/api/repositories/{repository_id}/workflow/preparation/run"),
@@ -2091,7 +2094,7 @@ fn run_workflow_preparation(repository_id: String) -> Result<Value, String> {
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_workflow_preparation_history(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/workflow/preparation/history"),
@@ -2099,7 +2102,7 @@ fn get_workflow_preparation_history(repository_id: String) -> Result<Value, Stri
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_workflow_health(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/workflow/health"),
@@ -2107,7 +2110,7 @@ fn get_workflow_health(repository_id: String) -> Result<Value, String> {
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_repository_workflow_report(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/workflow/reports/repository"),
@@ -2115,7 +2118,7 @@ fn get_repository_workflow_report(repository_id: String) -> Result<Value, String
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_workflow_progression_report(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/workflow/reports/progression"),
@@ -2123,7 +2126,7 @@ fn get_workflow_progression_report(repository_id: String) -> Result<Value, Strin
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_workflow_human_governance_report(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/workflow/reports/human-governance"),
@@ -2131,7 +2134,7 @@ fn get_workflow_human_governance_report(repository_id: String) -> Result<Value, 
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_workflow_readiness_report(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/workflow/reports/readiness"),
@@ -2139,7 +2142,7 @@ fn get_workflow_readiness_report(repository_id: String) -> Result<Value, String>
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_workflow_certification(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/workflow/certification"),
@@ -2147,7 +2150,7 @@ fn get_workflow_certification(repository_id: String) -> Result<Value, String> {
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn run_workflow_certification(repository_id: String) -> Result<Value, String> {
     backend_post_value(
         &format!("/api/repositories/{repository_id}/workflow/certification"),
@@ -2155,7 +2158,7 @@ fn run_workflow_certification(repository_id: String) -> Result<Value, String> {
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_decision_sessions(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/decision-sessions"),
@@ -2163,7 +2166,7 @@ fn list_decision_sessions(repository_id: String) -> Result<Value, String> {
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_active_decision_session(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/decision-sessions/active"),
@@ -2171,7 +2174,7 @@ fn get_active_decision_session(repository_id: String) -> Result<Value, String> {
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_session_diagnostics(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/decision-sessions/diagnostics"),
@@ -2179,7 +2182,7 @@ fn get_decision_session_diagnostics(repository_id: String) -> Result<Value, Stri
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_session_metrics(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/decision-sessions/analysis/metrics"),
@@ -2187,7 +2190,7 @@ fn get_decision_session_metrics(repository_id: String) -> Result<Value, String> 
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_session_statistics(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/decision-sessions/analysis/statistics"),
@@ -2195,7 +2198,7 @@ fn get_decision_session_statistics(repository_id: String) -> Result<Value, Strin
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_session_economics(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/decision-sessions/analysis/economics"),
@@ -2203,7 +2206,7 @@ fn get_decision_session_economics(repository_id: String) -> Result<Value, String
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_session_coherence(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/decision-sessions/analysis/coherence"),
@@ -2211,7 +2214,7 @@ fn get_decision_session_coherence(repository_id: String) -> Result<Value, String
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_session_analysis_diagnostics(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/decision-sessions/analysis/diagnostics"),
@@ -2219,7 +2222,7 @@ fn get_decision_session_analysis_diagnostics(repository_id: String) -> Result<Va
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_session_lifecycle_policy(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/decision-sessions/lifecycle/policy"),
@@ -2227,7 +2230,7 @@ fn get_decision_session_lifecycle_policy(repository_id: String) -> Result<Value,
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_session_lifecycle_policy_diagnostics(
     repository_id: String,
 ) -> Result<Value, String> {
@@ -2239,7 +2242,7 @@ fn get_decision_session_lifecycle_policy_diagnostics(
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_session_transfer_eligibility(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/decision-sessions/lifecycle/eligibility"),
@@ -2247,7 +2250,7 @@ fn get_decision_session_transfer_eligibility(repository_id: String) -> Result<Va
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_session_transfer_eligibility_diagnostics(
     repository_id: String,
 ) -> Result<Value, String> {
@@ -2259,7 +2262,7 @@ fn get_decision_session_transfer_eligibility_diagnostics(
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_session_lifecycle_projection(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/decision-sessions/lifecycle/projection"),
@@ -2267,7 +2270,7 @@ fn get_decision_session_lifecycle_projection(repository_id: String) -> Result<Va
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_session_lifecycle_history(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/decision-sessions/lifecycle/history"),
@@ -2275,7 +2278,7 @@ fn get_decision_session_lifecycle_history(repository_id: String) -> Result<Value
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_session_lifecycle_influence(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/decision-sessions/lifecycle/influence"),
@@ -2283,7 +2286,7 @@ fn get_decision_session_lifecycle_influence(repository_id: String) -> Result<Val
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_session_lifecycle_health(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/decision-sessions/lifecycle/health"),
@@ -2291,7 +2294,7 @@ fn get_decision_session_lifecycle_health(repository_id: String) -> Result<Value,
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_decision_session_continuity_artifacts(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/decision-sessions/continuity-artifacts"),
@@ -2299,7 +2302,7 @@ fn list_decision_session_continuity_artifacts(repository_id: String) -> Result<V
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_session_continuity_artifact(
     repository_id: String,
     artifact_id: String,
@@ -2312,7 +2315,7 @@ fn get_decision_session_continuity_artifact(
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_decision_session_transfers(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/decision-sessions/transfers"),
@@ -2320,7 +2323,7 @@ fn list_decision_session_transfers(repository_id: String) -> Result<Value, Strin
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_decision_session_transfer_history(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/decision-sessions/transfers/history"),
@@ -2328,7 +2331,7 @@ fn list_decision_session_transfer_history(repository_id: String) -> Result<Value
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_session_transfer_diagnostics(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/decision-sessions/transfers/diagnostics"),
@@ -2336,7 +2339,7 @@ fn get_decision_session_transfer_diagnostics(repository_id: String) -> Result<Va
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn execute_decision_session_transfer(repository_id: String) -> Result<Value, String> {
     backend_post_value(
         &format!("/api/repositories/{repository_id}/decision-sessions/transfers"),
@@ -2344,7 +2347,7 @@ fn execute_decision_session_transfer(repository_id: String) -> Result<Value, Str
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_session_recovery(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/decision-sessions/recovery"),
@@ -2352,7 +2355,7 @@ fn get_decision_session_recovery(repository_id: String) -> Result<Value, String>
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_decision_session_recovery_history(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/decision-sessions/recovery/history"),
@@ -2360,7 +2363,7 @@ fn list_decision_session_recovery_history(repository_id: String) -> Result<Value
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_session_recovery_diagnostics(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/decision-sessions/recovery/diagnostics"),
@@ -2368,7 +2371,7 @@ fn get_decision_session_recovery_diagnostics(repository_id: String) -> Result<Va
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn recover_decision_session(repository_id: String) -> Result<Value, String> {
     backend_post_value(
         &format!("/api/repositories/{repository_id}/decision-sessions/recovery"),
@@ -2376,7 +2379,7 @@ fn recover_decision_session(repository_id: String) -> Result<Value, String> {
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_session_workflow(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/decision-sessions/workflow"),
@@ -2384,7 +2387,7 @@ fn get_decision_session_workflow(repository_id: String) -> Result<Value, String>
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_session_workflow_summary(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/decision-sessions/workflow/summary"),
@@ -2392,7 +2395,7 @@ fn get_decision_session_workflow_summary(repository_id: String) -> Result<Value,
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_session_workflow_health(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/decision-sessions/workflow/health"),
@@ -2400,7 +2403,7 @@ fn get_decision_session_workflow_health(repository_id: String) -> Result<Value, 
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_session_workflow_influence(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/decision-sessions/workflow/influence"),
@@ -2408,7 +2411,7 @@ fn get_decision_session_workflow_influence(repository_id: String) -> Result<Valu
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_session_certification(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/decision-sessions/certification"),
@@ -2416,7 +2419,7 @@ fn get_decision_session_certification(repository_id: String) -> Result<Value, St
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_decision_session_certification_report(repository_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/repositories/{repository_id}/decision-sessions/certification/report"),
@@ -2424,7 +2427,7 @@ fn get_decision_session_certification_report(repository_id: String) -> Result<Va
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn run_decision_session_certification(repository_id: String) -> Result<Value, String> {
     backend_post_value(
         &format!("/api/repositories/{repository_id}/decision-sessions/certification"),
@@ -2432,7 +2435,7 @@ fn run_decision_session_certification(repository_id: String) -> Result<Value, St
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn start_execution(repository_id: String) -> Result<ExecutionSessionSummary, String> {
     let client = reqwest::blocking::Client::new();
     let response = client
@@ -2450,7 +2453,7 @@ fn start_execution(repository_id: String) -> Result<ExecutionSessionSummary, Str
     response_error(response, "execution start failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn cancel_execution(repository_id: String) -> Result<ExecutionSessionSummary, String> {
     let client = reqwest::blocking::Client::new();
     let response = client
@@ -2468,7 +2471,7 @@ fn cancel_execution(repository_id: String) -> Result<ExecutionSessionSummary, St
     response_error(response, "execution cancel failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_active_execution(repository_id: String) -> Result<ExecutionSessionSummary, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/execution/active"
@@ -2482,7 +2485,7 @@ fn get_active_execution(repository_id: String) -> Result<ExecutionSessionSummary
     response_error(response, "active execution lookup failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_git_status(repository_id: String) -> Result<RepositoryGitStatus, String> {
     let response = reqwest::blocking::get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/git/status"
@@ -2496,7 +2499,7 @@ fn get_git_status(repository_id: String) -> Result<RepositoryGitStatus, String> 
     response_error(response, "git status lookup failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn prepare_commit(session_id: String) -> Result<CommitPreparation, String> {
     let client = reqwest::blocking::Client::new();
     let response = client
@@ -2513,7 +2516,7 @@ fn prepare_commit(session_id: String) -> Result<CommitPreparation, String> {
     response_error(response, "commit preparation failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_execution_git_eligibility(
     session_id: String,
     commit_message: Option<String>,
@@ -2529,7 +2532,7 @@ fn get_execution_git_eligibility(
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn commit_execution(
     session_id: String,
     message: String,
@@ -2556,7 +2559,7 @@ fn commit_execution(
     response_error(response, "commit failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn push_execution(session_id: String) -> Result<PushAttemptResult, String> {
     let client = reqwest::blocking::Client::new();
     let response = client
@@ -2586,7 +2589,7 @@ fn push_execution(session_id: String) -> Result<PushAttemptResult, String> {
     Err(message)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_execution_session(session_id: String) -> Result<Value, String> {
     let response =
         reqwest::blocking::get(format!("{BACKEND_URL}/api/execution-sessions/{session_id}"))
@@ -2599,7 +2602,7 @@ fn get_execution_session(session_id: String) -> Result<Value, String> {
     response_error(response, "execution session lookup failed")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_execution_prompt_manifest(session_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/execution-sessions/{session_id}/prompt"),
@@ -2607,7 +2610,7 @@ fn get_execution_prompt_manifest(session_id: String) -> Result<Value, String> {
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_execution_transparency(session_id: String) -> Result<Value, String> {
     backend_get_value(
         &format!("/api/execution-sessions/{session_id}/transparency"),
@@ -2615,12 +2618,12 @@ fn get_execution_transparency(session_id: String) -> Result<Value, String> {
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn accept_execution_handoff(session_id: String) -> Result<ExecutionSessionSummary, String> {
     complete_handoff_decision(session_id, "accept")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn reject_execution_handoff(session_id: String) -> Result<ExecutionSessionSummary, String> {
     complete_handoff_decision(session_id, "reject")
 }

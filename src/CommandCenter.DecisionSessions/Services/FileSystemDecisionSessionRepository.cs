@@ -122,7 +122,11 @@ public sealed class FileSystemDecisionSessionRepository(IArtifactStore artifactS
         return document.Payload;
     }
 
-    public async Task WriteMetricsSnapshotAsync(Repository repository, DecisionSessionMetricsSnapshot snapshot)
+    public async Task WriteMetricsSnapshotAsync(
+        Repository repository,
+        DecisionSessionMetricsSnapshot snapshot,
+        DateTimeOffset? sourceMaxWriteUtc = null,
+        string? analysisOptionsVersion = null)
     {
         if (snapshot.RepositoryId != repository.Id || snapshot.Diagnostics.RepositoryId != repository.Id)
         {
@@ -134,9 +138,40 @@ public sealed class FileSystemDecisionSessionRepository(IArtifactStore artifactS
             repository.Id,
             snapshot.GeneratedAt,
             DateTimeOffset.UtcNow,
-            snapshot);
+            snapshot)
+        {
+            SourceMaxWriteUtc = sourceMaxWriteUtc,
+            AnalysisOptionsVersion = analysisOptionsVersion
+        };
         string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.MetricsSnapshotJson());
         await artifactStore.WriteAsync(path, JsonSerializer.Serialize(document, DecisionSessionJson.Options));
+    }
+
+    public async Task<DecisionSessionMetricsSnapshotStamp?> ReadMetricsSnapshotStampAsync(Repository repository)
+    {
+        string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.MetricsSnapshotJson());
+        string? json = await artifactStore.ReadAsync(path);
+        if (json is null)
+        {
+            return null;
+        }
+
+        DecisionSessionArtifactDocument<DecisionSessionMetricsSnapshot>? document =
+            JsonSerializer.Deserialize<DecisionSessionArtifactDocument<DecisionSessionMetricsSnapshot>>(
+                json,
+                DecisionSessionJson.Options);
+        if (document is null)
+        {
+            throw new DecisionSessionValidationException("Decision session metrics snapshot could not be deserialized.");
+        }
+
+        ValidateDocument(repository, document, "Decision session metrics snapshot");
+        if (document.Payload.RepositoryId != repository.Id || document.Payload.Diagnostics.RepositoryId != repository.Id)
+        {
+            throw new DecisionSessionValidationException("Decision session metrics snapshot belongs to a different repository.");
+        }
+
+        return new DecisionSessionMetricsSnapshotStamp(document.SourceMaxWriteUtc, document.AnalysisOptionsVersion);
     }
 
     public async Task<DecisionSessionEconomicsSnapshot?> ReadEconomicsSnapshotAsync(Repository repository)

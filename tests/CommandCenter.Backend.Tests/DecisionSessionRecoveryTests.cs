@@ -6,6 +6,8 @@ using CommandCenter.DecisionSessions.Models;
 using CommandCenter.DecisionSessions.Persistence;
 using CommandCenter.Decisions.Services;
 using CommandCenter.DecisionSessions.Services;
+using CommandCenter.Reasoning.Models;
+using CommandCenter.Reasoning.Persistence;
 using CommandCenter.Reasoning.Projections;
 using CommandCenter.Reasoning.Services;
 
@@ -144,6 +146,137 @@ public sealed class DecisionSessionRecoveryTests
         await hosted.StartAsync(CancellationToken.None);
 
         Assert.Contains(second.Id, recoveryService.RecoveredRepositories);
+    }
+
+    [Fact]
+    public async Task RecoverySkipsRebuildWhenSourceUnchangedButRebuildsWhenSourceChanges()
+    {
+        string repositoryPath = Path.Combine(Path.GetTempPath(), "CommandCenter.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(repositoryPath);
+        var repository = new Repository { Id = Guid.NewGuid(), Name = "repo", Path = repositoryPath };
+        var store = new FileSystemArtifactStore();
+        var repositoryService = new DecisionSessionTestRepositoryService(repository);
+        var sessionRepository = new FileSystemDecisionSessionRepository(store);
+        var registry = new DecisionSessionRegistry(repositoryService, sessionRepository);
+        var reasoningRepository = new FileSystemReasoningRepository(store, new ReasoningArtifactProjectionService());
+
+        DecisionSession created = await registry.CreateSessionAsync(repository.Id, "test");
+        await registry.ActivateSessionAsync(repository.Id, created.Id);
+
+        // Write one real source file so the source tree is probeable.
+        await reasoningRepository.CreateEventAsync(repository, EventCommand("Initial reasoning evidence."));
+
+        DecisionSessionRecoveryService recovery = CreateFileSystemRecoveryStack(
+            repository,
+            store,
+            repositoryService,
+            sessionRepository,
+            registry,
+            reasoningRepository);
+
+        // First recovery: stamps the derived snapshots from source evidence.
+        DecisionSessionRecoveryResult first = await recovery.RecoverAsync(repository.Id);
+        Assert.True(first.Succeeded);
+        Assert.Contains(first.Findings, finding => finding.Code == "MetricsSnapshotRebuilt");
+
+        // Second recovery with source untouched: the four count-derived snapshots are skipped, but transfer
+        // eligibility is always rebuilt.
+        DecisionSessionRecoveryResult second = await recovery.RecoverAsync(repository.Id);
+        Assert.True(second.Succeeded);
+        Assert.Contains(second.Findings, finding => finding.Code == "MetricsSnapshotNotRebuilt");
+        Assert.Contains(second.Findings, finding => finding.Code == "EconomicsSnapshotNotRebuilt");
+        Assert.Contains(second.Findings, finding => finding.Code == "CoherenceSnapshotNotRebuilt");
+        Assert.Contains(second.Findings, finding => finding.Code == "LifecyclePolicySnapshotNotRebuilt");
+        Assert.Contains(second.Findings, finding => finding.Code == "TransferEligibilitySnapshotRebuilt");
+        Assert.DoesNotContain(second.Findings, finding => finding.Code == "MetricsSnapshotRebuilt");
+
+        // Mutate a source file (write a new reasoning event) and force a strictly-later write time so the
+        // probe deterministically observes a changed source tree.
+        ReasoningEvent mutation = await reasoningRepository.CreateEventAsync(repository, EventCommand("New reasoning evidence."));
+        string mutationPath = ReasoningArtifactPaths.Resolve(repository, ReasoningArtifactPaths.EventJson(mutation.Id));
+        File.SetLastWriteTimeUtc(mutationPath, DateTime.UtcNow.AddHours(1));
+
+        DecisionSessionRecoveryResult third = await recovery.RecoverAsync(repository.Id);
+        Assert.True(third.Succeeded);
+        Assert.Contains(third.Findings, finding => finding.Code == "MetricsSnapshotRebuilt");
+        Assert.Contains(third.Findings, finding => finding.Code == "EconomicsSnapshotRebuilt");
+        Assert.Contains(third.Findings, finding => finding.Code == "CoherenceSnapshotRebuilt");
+        Assert.Contains(third.Findings, finding => finding.Code == "LifecyclePolicySnapshotRebuilt");
+
+        // Corrupt the metrics snapshot: recovery cannot read the stamp and must rebuild.
+        await store.WriteAsync(
+            DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.MetricsSnapshotJson()),
+            "{ not valid json");
+
+        DecisionSessionRecoveryResult fourth = await recovery.RecoverAsync(repository.Id);
+        Assert.True(fourth.Succeeded);
+        Assert.Contains(fourth.Findings, finding => finding.Code == "MetricsSnapshotRebuilt");
+    }
+
+    private static CreateReasoningEventCommand EventCommand(string title)
+    {
+        return new CreateReasoningEventCommand(
+            ReasoningEventFamily.DecisionEvolution,
+            ReasoningEventType.DecisionReframed,
+            title,
+            new ReasoningNarrative("The session evidence changed."),
+            [],
+            new ReasoningProvenance("test", "test"),
+            [],
+            ["decision-session"]);
+    }
+
+    private static DecisionSessionRecoveryService CreateFileSystemRecoveryStack(
+        Repository repository,
+        FileSystemArtifactStore store,
+        DecisionSessionTestRepositoryService repositoryService,
+        FileSystemDecisionSessionRepository sessionRepository,
+        DecisionSessionRegistry registry,
+        FileSystemReasoningRepository reasoningRepository)
+    {
+        var decisionRepository = new InMemoryDecisionRepository();
+        var contextStore = new FileSystemOperationalContextProposalStore(store);
+        var artifactService = new ArtifactService(store);
+        var evidenceReader = new DecisionSessionEvidenceReader(decisionRepository, reasoningRepository, contextStore, artifactService);
+        var metricsService = new DecisionSessionMetricsService(
+            repositoryService,
+            registry,
+            sessionRepository,
+            evidenceReader,
+            new DeterministicTokenEstimator(),
+            TimeProvider.System);
+        var economicsService = new DecisionSessionEconomicsService(
+            repositoryService,
+            sessionRepository,
+            metricsService,
+            new DecisionSessionEconomicsOptions(),
+            TimeProvider.System);
+        var graphService = new ReasoningGraphService(repositoryService, reasoningRepository, store);
+        var coherenceService = new DecisionSessionCoherenceService(
+            repositoryService,
+            sessionRepository,
+            metricsService,
+            economicsService,
+            graphService,
+            new DecisionSessionCoherenceOptions(),
+            TimeProvider.System);
+        var lifecyclePolicy = new DecisionSessionLifecyclePolicy(
+            repositoryService,
+            sessionRepository,
+            metricsService,
+            economicsService,
+            coherenceService,
+            new DecisionSessionLifecyclePolicyOptions(),
+            TimeProvider.System);
+        return new DecisionSessionRecoveryService(
+            repositoryService,
+            sessionRepository,
+            TimeProvider.System,
+            metricsService,
+            economicsService,
+            coherenceService,
+            lifecyclePolicy,
+            evidenceReader);
     }
 
     private static DecisionSessionTransfer CreateTransfer(

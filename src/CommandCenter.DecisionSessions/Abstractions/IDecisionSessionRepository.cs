@@ -18,7 +18,13 @@ public interface IDecisionSessionRepository
 
     Task<DecisionSessionMetricsSnapshot?> ReadMetricsSnapshotAsync(Repository repository);
 
-    Task WriteMetricsSnapshotAsync(Repository repository, DecisionSessionMetricsSnapshot snapshot);
+    Task<DecisionSessionMetricsSnapshotStamp?> ReadMetricsSnapshotStampAsync(Repository repository);
+
+    Task WriteMetricsSnapshotAsync(
+        Repository repository,
+        DecisionSessionMetricsSnapshot snapshot,
+        DateTimeOffset? sourceMaxWriteUtc = null,
+        string? analysisOptionsVersion = null);
 
     Task<DecisionSessionEconomicsSnapshot?> ReadEconomicsSnapshotAsync(Repository repository);
 
