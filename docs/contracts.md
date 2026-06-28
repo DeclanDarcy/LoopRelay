@@ -582,6 +582,71 @@ Phase 8 hardens the observable contracts the Plan Authoring -> Execution -> Deci
 | Execution run stream | Streaming event payload + lifecycle | Repository orchestrator execution stream | `ExecutionStream` merged events (`run-started`/`phase`/`delta`/`milestones-extracted`/`committed`/`lifecycle`/`handoff-rotated`/`completed`/`failed`) | `GET /api/repositories/{repositoryId}/execution/stream` (SSE) | Backend SSE / HTTP JSON | Fixture baseline (m8) | `ContractFixtures/execution-stream.golden.json` + `execution-stream.artifact-freshness.json`; consumer `ExecutionRun*Event` TS; lifecycle tests | Payload + lifecycle (intermediate ordering pinned, terminal/failure/replay) governed; verified TS run-event variants. |
 | Decision run stream | Streaming event payload + lifecycle | Repository orchestrator decision stream | `DecisionStream` merged events (`run-started`/`diagnostics`/`phase`/`transferred`/`delta`/`completed`/`review-ready`/`submitted`/`failed`) | `GET /api/repositories/{repositoryId}/decision/stream` (SSE) | Backend SSE / HTTP JSON | Fixture baseline (m8) | `ContractFixtures/decision-stream.golden.json` + `decision-stream.artifact-freshness.json`; consumer `DecisionRun*Event` TS; lifecycle tests (incl. Transfer + Submit scenarios) | Payload + lifecycle governed; all nine event types producer-bound; verified TS run-event variants. |
 
+### Loop command and acknowledgement contracts (m11 detail)
+
+The endpoint-level routing, families, status codes, and consumers for the ten loop endpoints plus the repository DELETE teardown are inventoried in `docs/contract-endpoint-catalog.md` (Orchestration Loop Endpoint Inventory). The implementation overview is in `docs/architecture.md` (Orchestration Loop Architecture, "Loop transport and contracts"); governance evidence is in `docs/orchestration-loop-governance.md`. This subsection records the serialized command, error, and stream-event shapes; it does not restate the route table.
+
+Every POST command (`plan/write`, `plan/revise`, `plan/execute`, `decision/run`, `decision/submit`) acknowledges with `202` and a `PlanRunAcknowledgement(string Phase)` body, then runs the turn in the background on the orchestrator lifetime token. The five phase wire strings are identity-bearing: `WritePlan`, `RevisePlan`, `ExecutePlan`, `DecisionRun`, `SubmitDecisions`. `GET plan/status` returns `PlanStatus { planExists, state }` where `state` is the `PlanLifecycleState` enum serialized as a string (`PlanAuthoring` / `ExecutingPlan`). `GET conversation` returns `ConversationProjection { entries[] }` of `ConversationEntry { sequence, kind, iteration, summary, reference }`, where `kind` is `ConversationEntryKind` (`Planning` / `OperationalOutput` / `DecisionOutput` / `Submit` / `Continuation`) and `summary`/`reference` are opaque (not contract-bound).
+
+### Orchestration structured error envelope (m11 detail)
+
+All faulted loop commands serialize a single backend-owned `{ error }` envelope under `JsonSerializerDefaults.Web`. The exception-to-status mapping is uniform across the loop endpoints:
+
+| Exception | HTTP status | Envelope |
+| --- | --- | --- |
+| `KeyNotFoundException` | `404` | `{ "error": <message> }` |
+| `ArgumentException` | `400` | `{ "error": <message> }` |
+| `InvalidOperationException` (incl. `ObjectDisposedException`, which derives from it) | `409` | `{ "error": <message> }` |
+
+`plan/execute` and `decision/run` accept no request body and therefore never raise `400`. A disposed orchestrator surfaces as a recoverable `409`, not an opaque `500`. This envelope is governed as the `Orchestration error envelope` identity in the table above and follows the catalog's error-envelope rule: transport must preserve the structured payload rather than collapse it to a message-only failure.
+
+### SSE stream event vocabularies and lifecycle (m11 detail)
+
+Each of the three streams (`plan/stream`, `execution/stream`, `decision/stream`) carries two governed contracts: the **event payload** (the per-event `data:` JSON shape) and the **stream lifecycle** (ordering, terminal events, failure, and `Last-Event-ID` replay). The transport frame is identical for all three: `id: <sequence>`, `event: <type>`, `data: <camelCase JSON>` lines emitted by `OrchestratorStreamChannel`, a single-producer/multi-subscriber broadcast with monotonic sequence ids and a bounded replay buffer. The `event:` name equals the payload's `type` discriminant. Property names follow `JsonSerializerDefaults.Web` (camelCase). The producer (`RepositoryOrchestrator`) and the m8-frozen TypeScript run-event types are both verified against these vocabularies.
+
+**Last-Event-ID replay contract.** A reconnecting client may send a `Last-Event-ID` header; the endpoint parses it (positive integer, else `0`) and replays buffered events with a sequence greater than that id before continuing live, so the replay/live boundary is exactly-once. Sequence ids are monotonic per stream. Replay is bounded by the channel's buffer capacity; a client that has fallen further behind than the buffer cannot fully replay.
+
+**Payload-vs-lifecycle distinction.** The event payload identity governs the field shape of each `type` variant. The stream lifecycle identity governs ordering and terminal semantics: `completed`/`failed` are terminal for a planning turn; `failed` is the single terminal failure variant on every stream; intermediate ordering (for example execution `run-started -> phase -> delta -> ... -> completed`) is pinned by the lifecycle tests, not by the payload contract alone. A consumer may not infer lifecycle guarantees from transport framing beyond what the lifecycle identity documents.
+
+Plan authoring stream (`PlanStreamEvent`) — four variants:
+
+| `type` | Payload fields |
+| --- | --- |
+| `turn-started` | `phase` (`PlanTurnPhase`: `WritePlan` / `RevisePlan`) |
+| `delta` | `text` |
+| `completed` | `plan`, `promptTokens`, `outputTokens` |
+| `failed` | `reason`, `detail?` |
+
+Execution run stream (`ExecutionRunEvent`) — nine variants:
+
+| `type` | Payload fields |
+| --- | --- |
+| `run-started` | `phase` (`ExecutePlan` / `ContinueExecution`) |
+| `phase` | `phase` (`ExtractMilestones` / `StartExecution` / `ContinueExecution`) |
+| `delta` | `phase`, `text` |
+| `milestones-extracted` | `count` |
+| `committed` | `commitSha` (nullable), `pushed` |
+| `lifecycle` | `state` (`ExecutionRunLifecycleState`: `ExecutingPlan`) |
+| `handoff-rotated` | `sequence`, `path` |
+| `completed` | `commitSha` (nullable), `milestoneCount`, `handoffPath`, `promptTokens`, `outputTokens` |
+| `failed` | `phase?`, `reason`, `detail?` |
+
+Decision run stream (`DecisionRunEvent`) — nine variants:
+
+| `type` | Payload fields |
+| --- | --- |
+| `run-started` | `phase` (`DecisionRun`), `route?` (`DecisionRunRoute`: `Continue` / `Transfer`) |
+| `diagnostics` | `sandbox`, `approvals`, `seeded` |
+| `phase` | `phase` (`GetNextDecisions` or a `DecisionRunTransferPhase`: `ProduceOperationalDelta` / `UpdateOperationalContext` / `StartDecisionSessionFromTransfer`) |
+| `transferred` | `operationalDelta`, `operationalContext` |
+| `delta` | `text` |
+| `completed` | `promptTokens`, `outputTokens` |
+| `review-ready` | `decisions` (the editable proposed-decisions text; persisted only by `decision/submit`) |
+| `submitted` | `path`, `sequence?`, `numberedPath?` |
+| `failed` | `phase?`, `reason`, `detail?` |
+
+The `commitSha`-nullable `committed`/`completed` execution frames keep their shape when m10's `AutomaticCommitPushAfterExecuteEnabled` flag is off (`commitSha = null`), so the frame contract is flag-stable. The `route` field on decision `run-started` is optional so an older server (no route) reads as `Continue`. These vocabularies are the verified TypeScript run-event types `PlanStreamEvent`, `ExecutionRunEvent`, and `DecisionRunEvent` (the m8-frozen, byte-pinned files under `src/CommandCenter.UI/src/types/`), bound as verified consumers in the table above.
+
 ## Initial Contract Relationship Matrix
 
 This matrix records contract families discovered in the first Milestone 0.2 inventory slice. Later slices must expand each family into endpoint-level and field-level entries before fixtures are certified.

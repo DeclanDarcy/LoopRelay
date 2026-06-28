@@ -409,3 +409,72 @@ Governance rules:
 A verifier can be treated as architectural protection only when its command or source, protected surface, known gaps, owner, and retirement criteria for any quarantine are recorded.
 
 Weakening, removing, or bypassing an accepted verifier requires a decision record and replacement or quarantine evidence.
+
+## Orchestration Loop Mechanisms
+
+Introduced: Milestones m0–m10 (`next` branch).
+
+Status: certified for the Plan Authoring → Execution → Decision loop; reproducibly green at the m10 hardening baseline.
+
+These mechanisms protect the orchestration loop subsystem (`CommandCenter.Agents`, `CommandCenter.Core.Prompts`, `CommandCenter.Orchestration`) that runs alongside the legacy execution-session subsystem. The loop's implementation overview is in `docs/architecture.md` (Orchestration Loop Architecture) and its durable evidence register — including every per-boundary guard, intentional divergence, and rollback path — is in `docs/orchestration-loop-governance.md`. The entries below add the executable-protection detail in this document's mechanism register; they refine and do not replace the Architectural Invariant Catalog row "Backend domain services compute semantic meaning" or the Layering boundaries recorded in the governance register's Test Coverage Map.
+
+Primary evidence:
+
+- `tests/CommandCenter.Backend.Tests/ArchitectureLayeringTests.cs` (hosts both `ArchitectureLayeringTests` and `PromptAuthorityTests`)
+- `src/CommandCenter.Core/Prompts/PromptProvenance.cs`
+- `src/CommandCenter.Orchestration/Services/RepositoryOrchestrator.cs`
+- `src/CommandCenter.Orchestration/OrchestrationArtifactPaths.cs`
+- `src/CommandCenter.Backend/Endpoints/PlanAuthoringEndpoints.cs`
+- `docs/orchestration-loop-governance.md` (evidence register and Governance Test Coverage Map)
+
+### No-Literal-Prompt Enforcement
+
+| Field | Value |
+| --- | --- |
+| Protected invariant | No production source re-types a canonical prompt body. Every agent turn is issued from a compile-time class generated from a `.prompt` template under `src/CommandCenter.Core/Prompts/`; production code never hand-composes prompt text. |
+| Guard command/source | `PromptAuthorityTests.Production_source_does_not_duplicate_canonical_prompt_text` (declared in `tests/CommandCenter.Backend.Tests/ArchitectureLayeringTests.cs`). It enumerates `*.cs` under `src/`, skips the catalog directory `src/CommandCenter.Core/Prompts`, any path under an `obj/` segment, and any `*.g.cs` generated file, then fails if any of eleven distinctive `CanonicalPromptMarkers` (verbatim fragments of canonical prompt bodies) appears in the remaining production source. |
+| Owner | Backend architecture tests; `CommandCenter.Core.Prompts` catalog is the authoring surface. |
+| Severity | Local build failure. |
+| Detection confidence | High — verbatim substring comparison of distinctive canonical fragments against compiled production source. |
+| Lifecycle state | Guarded. |
+| Drift model | A production source file re-introduces a canonical prompt body literal instead of rendering the generated catalog class (the regression that `ExecutionPromptBuilder` previously exhibited). |
+| Known limits | Scope is production `src/` only. Generated `*.g.cs` (in `obj/`) legitimately contains the text and is excluded; the catalog directory authors it and is excluded. Test-tree assertion literals are explicitly out of scope and tracked as a separate follow-up — this guard does not protect prompt text re-typed inside `tests/`. Detection is keyed to the eleven enumerated markers, not an exhaustive byte-diff of every template. |
+
+### Prompt Provenance Capture
+
+| Field | Value |
+| --- | --- |
+| Protected invariant | Every agent turn records a `PromptProvenance` so any turn is auditable back to the canonical catalog: the prompt name, generated type, build-time `SourceHash`, session role, workflow phase, and the repository-relative identities of the artifacts it consumed and was directed to produce are all captured at issuance. |
+| Guard command/source | `PromptProvenance` (`src/CommandCenter.Core/Prompts/PromptProvenance.cs`) — a sealed record with seven fields (`PromptName`, `PromptType`, `SourceHash`, `SessionRole`, `WorkflowPhase`, `InputArtifactIdentities`, `OutputArtifactIdentities`) and the `PromptSessionRole` enum (`Planning`, `OperationalExecution`, `Decision`, `Transfer`, `ContextUpdate`). `RepositoryOrchestrator` records provenance per turn into `planningProvenance` / `executionProvenance` / `decisionProvenance`, with one builder per canonical prompt (e.g. `BuildContinueExecutionProvenance`, `BuildStartExecutionProvenance`, `BuildGetNextDecisionsProvenance`). |
+| Owner | `CommandCenter.Core.Prompts` (the provenance type and the catalog `SourceHash`); `RepositoryOrchestrator` (per-turn capture). |
+| Severity | Local build failure. |
+| Detection confidence | High for the recorded fields (each is a required member; `SourceHash` is the catalog type's build-time content hash pinning the exact template text). |
+| Lifecycle state | Guarded. |
+| Drift model | A turn is issued without recorded provenance, or provenance loses the prompt identity / `SourceHash` / role / phase / artifact-identity linkage that makes a turn auditable to the catalog. |
+| Known limits | Artifacts are identified by repository-relative path — the only stable identity on `LoadedArtifact`/`Artifact` (neither carries an id or content hash today), so identity is path-based, not content-addressed. `PromptSessionRole` mirrors `CommandCenter.Agents.Models.SessionRole` by redeclaration (Core is the base layer and must not reference the Agents runtime); the two enums are kept aligned by convention, mapped only by a higher layer. The additive nullable `ExecutionPromptManifest.Provenance` wire field carries provenance downstream but no consumer is required to read it. |
+
+### Handoff and Decision Rotation Sequencing
+
+| Field | Value |
+| --- | --- |
+| Protected invariant | Rotated handoff and decision history is never clobbered and survives an orchestrator restart. The live `.agents/handoffs/handoff.md` and `.agents/decisions/decisions.md` rotate into 4-digit `handoff.NNNN.md` / `decisions.NNNN.md` history; the historical globs match only rotated files, never the live single-dot file. |
+| Guard command/source | A one-way re-execution guard in `RepositoryOrchestrator.BeginExecutePlanAsync`: if any historical handoff already exists (`HistoricalHandoffSearchPattern = "handoff.*.md"`), Execute Plan throws `InvalidOperationException` ("This plan has already been executed…"), which `PlanAuthoringEndpoints` (`POST /api/repositories/{repositoryId:guid}/plan/execute`) maps to `Results.Conflict` (HTTP 409); the normal acknowledgement is `202 Accepted`. Continuation rotations derive the next number from disk via `NextHandoffSequenceAsync` / `NextDecisionSequenceAsync` (`HighestSequence(existing) + 1`), not from in-memory state. All canonical paths are centralized in `OrchestrationArtifactPaths`. |
+| Owner | `RepositoryOrchestrator` (rotation and the re-execution guard) — explicitly not the legacy `HandoffService`; `OrchestrationArtifactPaths` (path/glob centralization). |
+| Severity | Release blocker — clobbered rotated history silently destroys repository-owned artifacts. |
+| Detection confidence | High for the re-execution guard (disk existence check) and the disk-derived sequence (parses the penultimate dot-segment of each rotated name and takes the max). |
+| Lifecycle state | Certified — protected by the one-way re-execution guard plus the recovery-window certification tests recorded in the governance register. |
+| Drift model | A second Execute Plan re-commits and overwrites the live handoff; or a restarted orchestrator (in-memory counter lost) restarts numbering at `0001` and clobbers existing rotated files; or the historical glob begins matching the live single-dot file. |
+| Known limits | The first rotation (Execute Plan) uses an in-memory counter under the one-way guard; only continuation rotations read disk. The guard is intentionally permissive about retries after an early-boundary failure that left no historical handoff, so a failed-then-retried run is allowed. The guard rejects re-execution of the same plan, not concurrent execution of distinct repositories (which the `runState` gate handles). |
+
+### Layering Isolation for the Loop
+
+| Field | Value |
+| --- | --- |
+| Protected invariant | `CommandCenter.Agents` and `CommandCenter.Core` are leaf projects (reference no other `CommandCenter.*`); `CommandCenter.DecisionSessions` is isolated from `CommandCenter.Execution`, `CommandCenter.Orchestration`, and every higher layer; and the live Decision loop takes no dependency on the deterministic `CommandCenter.Decisions` services. |
+| Guard command/source | `ArchitectureLayeringTests` (`tests/CommandCenter.Backend.Tests/ArchitectureLayeringTests.cs`) asserts isolation at two levels — reflection over the compiled assembly manifest (catches consumed forbidden references) and a `.csproj` build-graph scan via `HasActiveProjectReference` (catches declared-but-unconsumed references the compiler would prune). `Agents_is_role_agnostic_and_references_no_other_CommandCenter_project` and `Core_is_the_shared_center…` assert the leaves; `DecisionSessions_does_not_reference_operational_or_higher_layers`, `Forbidden_project_references_are_absent_from_the_build_graph`, and the m5 cert `DecisionRuntime_cannot_depend_on_execution_operational_orchestration_m5` assert Decision-role isolation from Execution/Orchestration. The live-loop ⊥ `CommandCenter.Decisions` posture is recorded as the Decision-router governance boundary in `docs/orchestration-loop-governance.md` (Known Fallback Behavior). |
+| Owner | Backend architecture tests; cross-layer architecture tests for the Decision-router boundary. |
+| Severity | Release blocker — a forbidden edge would let a downstream role or composition root influence upstream authority, or bind the live loop to the deterministic fallback it is meant to supersede. |
+| Detection confidence | High — reflection plus authoritative build-graph parsing; `XDocument.Load` discards XML comments so a commented-out `ProjectReference` is correctly not treated as an active edge. |
+| Lifecycle state | Certified — the m5 `DecisionRuntime ⊥ Execution` certification maps to milestone exit criteria. |
+| Drift model | `CommandCenter.Agents` or `CommandCenter.Core` gains a product-project reference (losing leaf/role-agnostic status); `CommandCenter.DecisionSessions` reaches Execution's operational orchestration or the composition root; or the live Decision loop takes a dependency on the deterministic `CommandCenter.Decisions` generation/scoring services. |
+| Known limits | Reflection only catches a forbidden reference whose types are actually consumed; the `.csproj` build-graph scan is the authoritative backstop for declared-but-unconsumed edges and must remain wired. The Decision-loop ⊥ `CommandCenter.Decisions` boundary is asserted as a governance/layering posture; `CommandCenter.Decisions` remains a tested deterministic fallback, not the live authority. |

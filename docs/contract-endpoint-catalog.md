@@ -399,6 +399,33 @@ Top-level field catalog:
 | `diagnostics` | `WorkflowProjectionDiagnostics` | Workflow projection/state-machine service | Backend JSON | TS, UI, tests | No | Yes | Yes | Projection inputs, selected state/gate, reasoning, unknown states, and conflicts. |
 | `decisionSession` | `WorkflowDecisionSessionProjection?` | Workflow decision-session service | Backend JSON object/null | TS, UI, tests | No | Yes | Yes | Nullable init-only governance/session projection; explicit null must be fixture-observed. |
 
+## Orchestration Loop Endpoint Inventory (m11)
+
+The Plan Authoring -> Execution -> Decision orchestration loop (milestones m0-m10) adds ten endpoints plus a repository-teardown side effect on the existing repository DELETE. The implementation overview is in `docs/architecture.md` (Orchestration Loop Architecture); the contract-identity, stream-event, and structured-error inventory is in `docs/contracts.md` (Orchestration Loop Contract Inventory); governance evidence is in `docs/orchestration-loop-governance.md`.
+
+These ten endpoints are not part of the 177-mapping baseline count above; they are the `next`-branch loop surface owned by `RepositoryOrchestrator` through `RepositoryOrchestratorRegistry`, and each is mapped under `/api/repositories/{repositoryId:guid}/`. The `EndpointFamily` column uses the classification asserted by `tests/CommandCenter.Backend.Tests/BackendEndpointDispositionTests.cs`: the new `Plan`, `DecisionRuntime`, and `Conversation` families are distinct from the legacy `Decisions` (`/decisions/`) and `DecisionSessions` (`/decision-sessions/`) families. The two SSE streams routed under `/execution` and the legacy `/execution-sessions` / `/git` routes all classify as the `Execution` family; the repository DELETE classifies as the `Repositories` family.
+
+| Method | Route (under `/api/repositories/{repositoryId:guid}`) | EndpointFamily | Success body / status | Error codes | Consumers |
+| --- | --- | --- | --- | --- | --- |
+| GET | `/plan/status` | Plan | `200` `PlanStatus` `{ planExists, state }` (`PlanLifecycleState`) | `404` repo not found | Tauri `get_plan_status`; TS `getPlanStatus` -> `PlanStatus`; Plan Authoring screen gate (`planExists == false`). |
+| POST | `/plan/write` | Plan | `202` Accepted, body `PlanRunAcknowledgement("WritePlan")` | `404` repo, `400` argument, `409` invalid-operation/disposed | Tauri `write_plan`; TS `writePlan`; output streams on `plan/stream`. |
+| POST | `/plan/revise` | Plan | `202` Accepted, body `PlanRunAcknowledgement("RevisePlan")` | `404` repo, `400` argument, `409` invalid-operation/disposed | Tauri `revise_plan`; TS `revisePlan`; output streams on `plan/stream`. |
+| POST | `/plan/execute` | Plan | `202` Accepted, body `PlanRunAcknowledgement("ExecutePlan")` | `404` repo, `409` invalid-operation/disposed (incl. one-way re-execution guard) | Tauri `execute_plan`; TS `executePlan`; output streams on `execution/stream`. |
+| GET | `/plan/stream` | Plan | SSE `text/event-stream` (`PlanStreamEvent`) | `404` repo (before stream opens) | TS `subscribeToPlanEvents` (`EventSource`); `PlanStreamEvent` run-event type. |
+| GET | `/execution/stream` | Execution | SSE `text/event-stream` (`ExecutionRunEvent`) | `404` repo (before stream opens) | TS `subscribeToExecutionRunEvents` (`EventSource`); `ExecutionRunEvent` run-event type. |
+| POST | `/decision/run` | DecisionRuntime | `202` Accepted, body `PlanRunAcknowledgement("DecisionRun")` | `404` repo, `409` invalid-operation/disposed | Tauri `decision_run`; TS `startDecisionRun`; output streams on `decision/stream`. |
+| POST | `/decision/submit` | DecisionRuntime | `202` Accepted, body `PlanRunAcknowledgement("SubmitDecisions")` | `404` repo, `400` argument, `409` invalid-operation/disposed | Tauri `decision_submit`; TS `submitDecisions`; human review gate (`BeginSubmitDecisionsAsync`). |
+| GET | `/decision/stream` | DecisionRuntime | SSE `text/event-stream` (`DecisionRunEvent`) | `404` repo (before stream opens) | TS `subscribeToDecisionRunEvents` (`EventSource`); `DecisionRunEvent` run-event type. |
+| GET | `/conversation` | Conversation | `200` `ConversationProjection` (`ConversationEntry[]`, `ConversationEntryKind`) | `404` repo | No UI consumer yet (no Tauri command, no TS wrapper); read-only loop timeline. |
+| DELETE | `/api/repositories/{repositoryId:guid}` | Repositories | `204` NoContent (response shape unchanged) | none modeled (best-effort teardown) | m10 teardown: `RepositoryOrchestratorRegistry.RemoveAsync` reaps any live orchestrator (closing held-open planning/decision processes) before config rewrite. |
+
+Shared contract notes for the loop surface:
+
+- **Command acknowledgement.** Every POST returns `202` with a `PlanRunAcknowledgement(string Phase)` body; the orchestrator runs the turn in the background on its lifetime token. The five phase wire strings are `WritePlan`, `RevisePlan`, `ExecutePlan`, `DecisionRun`, and `SubmitDecisions`. The TS API wrappers type the result loosely as `{ phase: string }`.
+- **Structured errors.** Faulted commands map exceptions to a single backend-owned `{ error }` envelope: `KeyNotFoundException -> 404`, `ArgumentException -> 400`, and `InvalidOperationException` (including `ObjectDisposedException`, which derives from it) `-> 409`. `plan/execute` and `decision/run` have no body and so never raise `400`. This mirrors the shared error envelope; consumers must preserve the structured payload per the catalog's error-envelope serialization rule.
+- **Stream contract.** The three SSE endpoints emit `id:` (monotonic sequence), `event:` (the event-type name), and `data:` (camelCase JSON) frames over `OrchestratorStreamChannel`, support `Last-Event-ID` replay, and respond `404` only before the stream opens. Their full event vocabularies are inventoried in `docs/contracts.md`.
+- **Request bodies.** `plan/write` carries `PlanWriteRequest { roadmap, specs[], newCodebase }`; `plan/revise` carries `PlanReviseRequest`; `decision/submit` carries `DecisionSubmitRequest { decisions }`. `plan/execute`, `decision/run`, and all GETs are bodyless.
+
 ## Remaining Catalog Work
 
 - Extend the repository workspace request-boundary pilot beyond the primary GET path to refresh and artifact rotation routes when those request shapes are selected for Oracle coverage.
