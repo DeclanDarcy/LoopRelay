@@ -41,4 +41,61 @@ describe('App plan-authoring gate', () => {
       expect(screen.queryByLabelText('Repository workspace')).not.toBeInTheDocument()
     })
   })
+
+  it('shows the repository workspace (not the authoring screen) when a plan already exists', async () => {
+    renderWithWorkspaceCertification(<App />)
+
+    // AlphaRepo is the default-selected fixture and has planExists === true.
+    expect(await screen.findByLabelText('Repository workspace')).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(screen.queryByRole('region', { name: 'Plan authoring' })).not.toBeInTheDocument()
+    })
+
+    expect(
+      screen.queryByRole('heading', { name: 'Author the implementation plan' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('keeps the authoring screen mounted at PlanReady so Revise and Execute stay reachable', async () => {
+    renderWithWorkspaceCertification(<App />)
+    await selectEmptyRepository()
+    await screen.findByRole('region', { name: 'Plan authoring' })
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Roadmap' }), {
+      target: { value: 'Ship the planning workflow.' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Write Plan' }))
+
+    // The plan stream completes; the screen must NOT unmount even though planExists is now true.
+    await screen.findByRole('region', { name: 'Rendered plan' })
+
+    expect(screen.getByRole('region', { name: 'Plan authoring' })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Feedback' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Revise Plan' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Execute Plan' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('Repository workspace')).not.toBeInTheDocument()
+  })
+
+  it('navigates to the repository workspace only after Execute', async () => {
+    renderWithWorkspaceCertification(<App />)
+    await selectEmptyRepository()
+    await screen.findByRole('region', { name: 'Plan authoring' })
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Roadmap' }), {
+      target: { value: 'Ship the planning workflow.' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Write Plan' }))
+    await screen.findByRole('region', { name: 'Rendered plan' })
+
+    // Still on the authoring screen before Execute.
+    expect(screen.queryByLabelText('Repository workspace')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Execute Plan' }))
+
+    expect(await screen.findByLabelText('Repository workspace')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByRole('region', { name: 'Plan authoring' })).not.toBeInTheDocument()
+    })
+  })
 })

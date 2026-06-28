@@ -151,6 +151,7 @@ function App() {
   const [latestPushAttemptSession, setLatestPushAttemptSession] =
     useState<ExecutionSessionSummary | null>(null)
   const [isAdding, setIsAdding] = useState(false)
+  const [isAuthoringSessionActive, setIsAuthoringSessionActive] = useState(false)
   const [removingRepositoryId, setRemovingRepositoryId] = useState<string | null>(null)
   const {
     data: repositories,
@@ -1406,6 +1407,13 @@ function App() {
     }
   }, [planStatusError])
 
+  // A planning session belongs to one repository. Clear the "active" latch when the
+  // selection changes so a warm session on a previous repo can't keep the authoring
+  // screen mounted for a different one.
+  useEffect(() => {
+    setIsAuthoringSessionActive(false)
+  }, [selectedRepository?.repository.id])
+
   useEffect(() => {
     if (artifactError) {
       setError(artifactError)
@@ -1741,15 +1749,18 @@ function App() {
       {error ? <div className="notice error">{error}</div> : null}
       {message ? <div className="notice success">{message}</div> : null}
 
-      {selectedRepository && planStatus && !planStatus.planExists ? (
+      {selectedRepository &&
+      planStatus &&
+      (!planStatus.planExists || isAuthoringSessionActive) ? (
         <section className="workspace-grid">
           <Panel className="repository-details">
             <PlanAuthoringScreen
               key={selectedRepository.repository.id}
               repositoryId={selectedRepository.repository.id}
               repositoryName={selectedRepository.repository.name}
-              onPlanReady={() => void refreshPlanStatus()}
+              onSessionActiveChange={setIsAuthoringSessionActive}
               onExecuted={() => {
+                setIsAuthoringSessionActive(false)
                 void refreshPlanStatus()
                 void loadRepositories()
               }}

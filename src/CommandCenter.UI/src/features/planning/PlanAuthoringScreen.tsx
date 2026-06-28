@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from '../../components/design'
 import { usePlanStream } from '../../hooks'
 import { PlanFailureNotice } from './PlanFailureNotice'
@@ -11,14 +11,20 @@ import './PlanAuthoring.css'
 type PlanAuthoringScreenProps = {
   repositoryId: string
   repositoryName: string
-  onPlanReady?: () => void
+  onSessionActiveChange?: (isActive: boolean) => void
   onExecuted?: () => void
 }
+
+// The authoring session owns an in-place lifecycle that must outlive the durable
+// `planExists` flag: once a plan is written the backend reports planExists=true, but the
+// user still needs the rendered plan, Revise, and Execute controls. These reducer states
+// mean "keep the authoring screen mounted regardless of planExists".
+const ACTIVE_SESSION_STATUSES = ['Planning', 'PlanReady', 'Revising', 'Executing'] as const
 
 export function PlanAuthoringScreen({
   repositoryId,
   repositoryName,
-  onPlanReady,
+  onSessionActiveChange,
   onExecuted,
 }: PlanAuthoringScreenProps) {
   const [roadmap, setRoadmap] = useState('')
@@ -27,7 +33,6 @@ export function PlanAuthoringScreen({
   const [feedback, setFeedback] = useState('')
   const { state, error, submitWrite, submitRevise, submitExecute, dismissFailure } =
     usePlanStream(repositoryId)
-  const lastReadyPlan = useRef<string | null>(null)
 
   const isTurnRunning = state.status === 'Planning' || state.status === 'Revising'
   const isExecuting = state.status === 'Executing'
@@ -37,12 +42,11 @@ export function PlanAuthoringScreen({
   const canRevise = feedback.trim().length > 0 && hasPlan && !inputsDisabled
   const canExecute = hasPlan && !inputsDisabled
 
+  const isSessionActive = (ACTIVE_SESSION_STATUSES as readonly string[]).includes(state.status)
+
   useEffect(() => {
-    if (state.status === 'PlanReady' && state.plan && state.plan !== lastReadyPlan.current) {
-      lastReadyPlan.current = state.plan
-      onPlanReady?.()
-    }
-  }, [onPlanReady, state.plan, state.status])
+    onSessionActiveChange?.(isSessionActive)
+  }, [isSessionActive, onSessionActiveChange])
 
   useEffect(() => {
     if (state.status === 'Executing') {
