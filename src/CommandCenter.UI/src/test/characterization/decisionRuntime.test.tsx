@@ -91,6 +91,7 @@ describe('DecisionRuntimeView surface', () => {
       submittedNumberedPath: null,
       submittedSequence: null,
       iteration: 1,
+      transferring: false,
       failure: { phase: 'GetNextDecisions', reason: 'Agent process exited', detail: 'exit 1' },
     }
     const onDismissFailure = vi.fn()
@@ -114,6 +115,109 @@ describe('DecisionRuntimeView surface', () => {
     expect(onDismissFailure).toHaveBeenCalledTimes(1)
   })
 
+  it('shows the transfer affordance while a Transfer-routed run is in flight', () => {
+    const transferringState: DecisionRunState = {
+      status: 'Running',
+      phase: 'DecisionRun',
+      streamedText: '',
+      diagnostics: null,
+      proposedDecisions: null,
+      editableDecisions: null,
+      completion: null,
+      submittedPath: null,
+      submittedNumberedPath: null,
+      submittedSequence: null,
+      iteration: 2,
+      transferring: true,
+      failure: null,
+    }
+
+    render(
+      <DecisionRuntimeView
+        state={transferringState}
+        onGenerate={() => undefined}
+        onEditDecisions={() => undefined}
+        onSubmitDecisions={() => undefined}
+      />,
+    )
+
+    expect(
+      screen.getByRole('status', { name: 'Transferring decision session' }),
+    ).toHaveTextContent('Transferring decision session…')
+  })
+
+  it('clears the transfer affordance once review-ready opens the gate', () => {
+    const reviewReadyState: DecisionRunState = {
+      status: 'Completed',
+      phase: null,
+      streamedText: '- proposed\n',
+      diagnostics: null,
+      proposedDecisions: '- proposed\n',
+      editableDecisions: '- proposed\n',
+      completion: { promptTokens: 10, outputTokens: 5 },
+      submittedPath: null,
+      submittedNumberedPath: null,
+      submittedSequence: null,
+      iteration: 2,
+      // review-ready lowered the flag in the reducer; the indicator must be gone.
+      transferring: false,
+      failure: null,
+    }
+
+    render(
+      <DecisionRuntimeView
+        state={reviewReadyState}
+        onGenerate={() => undefined}
+        onEditDecisions={() => undefined}
+        onSubmitDecisions={() => undefined}
+      />,
+    )
+
+    expect(
+      screen.queryByRole('status', { name: 'Transferring decision session' }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Decisions' })).toBeInTheDocument()
+  })
+
+  it('renders a transfer-step failure like any other phase failure', () => {
+    const failedState: DecisionRunState = {
+      status: 'Failed',
+      phase: null,
+      streamedText: '',
+      diagnostics: null,
+      proposedDecisions: null,
+      editableDecisions: null,
+      completion: null,
+      submittedPath: null,
+      submittedNumberedPath: null,
+      submittedSequence: null,
+      iteration: 2,
+      transferring: false,
+      failure: {
+        phase: 'ProduceOperationalDelta',
+        reason: 'Delta synthesis failed',
+        detail: 'no diff',
+      },
+    }
+
+    render(
+      <DecisionRuntimeView
+        state={failedState}
+        onGenerate={() => undefined}
+        onEditDecisions={() => undefined}
+        onSubmitDecisions={() => undefined}
+      />,
+    )
+
+    const failure = screen.getByRole('alert', { name: 'Decision run failed' })
+    expect(failure).toHaveTextContent('Decision run failed: ProduceOperationalDelta')
+    expect(failure).toHaveTextContent('Delta synthesis failed')
+    // The transfer affordance is gone once the run fails.
+    expect(
+      screen.queryByRole('status', { name: 'Transferring decision session' }),
+    ).not.toBeInTheDocument()
+  })
+
   it('does not show the editable gate while a failed state is active', () => {
     const failedState: DecisionRunState = {
       status: 'Failed',
@@ -127,6 +231,7 @@ describe('DecisionRuntimeView surface', () => {
       submittedNumberedPath: null,
       submittedSequence: null,
       iteration: 1,
+      transferring: false,
       failure: { phase: null, reason: 'boom', detail: null },
     }
 

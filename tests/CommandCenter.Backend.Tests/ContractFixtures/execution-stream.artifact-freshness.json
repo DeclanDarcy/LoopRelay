@@ -1,0 +1,13 @@
+{
+  "contractId": "execution-stream",
+  "sourcePath": "tests/CommandCenter.Backend.Tests/ContractFixtures/execution-stream.golden.json",
+  "sourceSha256": "7487C9FBC8F33EAFEE75838B72A8706768E66FEADDC12A45D9A0205A1088563E",
+  "artifacts": [
+    {
+      "artifactId": "typescript-execution-stream-contract",
+      "artifactPath": "src/CommandCenter.UI/src/types/executionRun.ts",
+      "artifactKind": "phase0-verified-contract-artifact",
+      "artifactSha256": "237D35D99989B1137455682F5FFDA34A19F1AAFC709A1384AB77830AE68C1D0C"
+    }
+  ]
+}

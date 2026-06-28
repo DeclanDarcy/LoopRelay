@@ -131,6 +131,18 @@
   color: var(--fg-muted);
 }
 
+/* The transfer affordance. On a Transfer-routed run the continuation router hands the session off
+   before proposing; this subtle live line names that, sitting with the run's other live state, and
+   clears the moment review-ready arrives. The Continue path never renders it. */
+.cc-decision-transfer {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font: var(--font-small);
+  color: var(--accent-fg);
+}
+
 .cc-decision-diagnostics-value {
   font: var(--font-mono-small);
   color: var(--accent-fg);

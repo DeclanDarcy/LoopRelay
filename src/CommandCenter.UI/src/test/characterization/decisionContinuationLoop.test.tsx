@@ -74,6 +74,30 @@ describe('Decision submit and continuation loop', () => {
     expect(container.querySelector('.cc-plan-screen')).toBe(screenRoot)
   })
 
+  it('surfaces the transfer affordance on the Transfer-routed continuation, then clears it at review', async () => {
+    await renderToFirstReview()
+
+    // The first turn is the warm Continue path: no transfer affordance is ever shown.
+    expect(
+      screen.queryByRole('status', { name: 'Transferring decision session' }),
+    ).not.toBeInTheDocument()
+
+    // Submit turn 1; the mock routes the auto-started turn-2 decision run as a Transfer.
+    fireEvent.click(screen.getByRole('button', { name: 'Submit decisions' }))
+
+    // The transfer affordance appears while turn 2's session is handed off.
+    await screen.findByRole('status', { name: 'Transferring decision session' })
+
+    // It resolves once the proposal arrives and the review gate reopens for turn 2.
+    await screen.findByText(/Turn 2/)
+    expect(await screen.findByRole('textbox', { name: 'Decisions' })).toBeEnabled()
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('status', { name: 'Transferring decision session' }),
+      ).not.toBeInTheDocument()
+    })
+  })
+
   it('does not navigate to the workspace on submit; only an explicit finish leaves the loop', async () => {
     let finishedCount = 0
     installWorkspaceCertificationMock()

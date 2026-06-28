@@ -1,0 +1,13 @@
+{
+  "contractId": "plan-stream",
+  "sourcePath": "tests/CommandCenter.Backend.Tests/ContractFixtures/plan-stream.golden.json",
+  "sourceSha256": "C214215F4762BFF2D0263CF232A5919B74C3DC8E0322D5F44DC8355692F756D8",
+  "artifacts": [
+    {
+      "artifactId": "typescript-plan-stream-contract",
+      "artifactPath": "src/CommandCenter.UI/src/types/planning.ts",
+      "artifactKind": "phase0-verified-contract-artifact",
+      "artifactSha256": "3EDF44BBE38E3504B7D81412694843DC11B2DA46201D110833FD7C3F861F17F5"
+    }
+  ]
+}

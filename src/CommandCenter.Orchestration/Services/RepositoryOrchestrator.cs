@@ -29,6 +29,7 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
     private readonly IArtifactStore artifactStore;
     private readonly IMemoryCache memoryCache;
     private readonly IPlanArtifactPublisher planArtifactPublisher;
+    private readonly IDecisionSessionRouter decisionSessionRouter;
 
     // Serializes session open/close and the dispose handoff so an in-flight EnsureSession can never
     // leak a handle past disposal. NOT disposed (avoids a Release-vs-Dispose ObjectDisposedException).
@@ -81,6 +82,14 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
     // by the single active decision run (serialized by decisionState), so a volatile read/write is enough.
     private volatile bool decisionSeeded;
 
+    // Observed token accounting (m7), the router's routing signal: tokens seen on the LIVE decision process
+    // (reset to 0 when it is recycled/closed, so it reflects pressure on the current process, not lifetime)
+    // and cumulative operational continuation tokens. ComputeRouterInputs surfaces these through RouterInputs
+    // and feeds them to the router; a deterministic content estimate is the fallback before any turn is
+    // observed. Interlocked because the continuation run and the decision run accumulate on different threads.
+    private int decisionSessionTokens;
+    private int operationalSessionTokens;
+
     // The flow-specific conversation projection (m6): an append-only transcript of the loop's turns. Guarded
     // by its own lock because it is appended from background runs (planning/execution/decision) and read by
     // the GET /conversation endpoint concurrently.
@@ -94,13 +103,15 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
         IAgentRuntime agentRuntime,
         IArtifactStore artifactStore,
         IMemoryCache memoryCache,
-        IPlanArtifactPublisher planArtifactPublisher)
+        IPlanArtifactPublisher planArtifactPublisher,
+        IDecisionSessionRouter decisionSessionRouter)
     {
         RepositoryId = repositoryId;
         this.agentRuntime = agentRuntime;
         this.artifactStore = artifactStore;
         this.memoryCache = memoryCache;
         this.planArtifactPublisher = planArtifactPublisher;
+        this.decisionSessionRouter = decisionSessionRouter;
     }
 
     public string RepositoryId { get; }
@@ -322,7 +333,7 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
     /// run is launched. The Decision process has zero operational authority: it never commits, pushes, runs
     /// execution, or writes artifacts — the only persistence is the human-gated <see cref="BeginSubmitDecisionsAsync"/>.
     /// </summary>
-    public async Task BeginDecisionRunAsync(Repository repository, CancellationToken cancellationToken = default)
+    public async Task BeginDecisionRunAsync(Repository repository, DecisionRoute route = DecisionRoute.Continue, CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
 
@@ -332,14 +343,14 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
         try
         {
             // Seeding needs the operational context. Require it up front so a premature run fails fast (409)
-            // instead of opening a process and failing mid-stream.
+            // instead of opening a process and failing mid-stream. (A Transfer reads it too, to reseed from.)
             string operationalContextPath = ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.OperationalContext);
             if (!await artifactStore.ExistsAsync(operationalContextPath).ConfigureAwait(false))
             {
                 throw new InvalidOperationException("Cannot propose decisions: .agents/operational_context.md does not exist yet. Execute a plan first.");
             }
 
-            await LaunchDecisionRunAsync(repository).ConfigureAwait(false);
+            await LaunchDecisionRunAsync(repository, route).ConfigureAwait(false);
         }
         catch
         {
@@ -589,6 +600,9 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
             gate.Release();
         }
 
+        // The next process is fresh, so its observed pressure starts from zero (m7).
+        Interlocked.Exchange(ref decisionSessionTokens, 0);
+
         if (decision is not null)
         {
             await decision.DisposeAsync().ConfigureAwait(false);
@@ -739,6 +753,12 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
     }
 
     private void ReleaseExecutionRun() => Interlocked.CompareExchange(ref runState, RunStateIdle, RunStateExecuting);
+
+    // Non-throwing variant of ClaimExecutionRun: returns whether the execution gate was claimed (false if a
+    // planning turn or another execution/continuation run already holds it). The Transfer path uses this to
+    // take the gate for its operational workspace-write ONLY when it is free, deferring to warm reuse otherwise.
+    private bool TryClaimExecutionRun() =>
+        Interlocked.CompareExchange(ref runState, RunStateExecuting, RunStateIdle) == RunStateIdle;
 
     // Mirrors LaunchPlanningTurnAsync: assigns executionRun + captures the lifetime token UNDER the gate
     // with a fresh disposed re-check, so a run is never launched after DisposeAsync flips disposed, and a
@@ -1006,6 +1026,10 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
                 promptTokens = continuation.Usage.PromptTokens,
                 outputTokens = continuation.Usage.OutputTokens,
             }));
+
+            // Observed accounting (m7): fold this continuation's tokens into cumulative operational pressure,
+            // the second half of the router's target signal.
+            Interlocked.Add(ref operationalSessionTokens, continuation.Usage.PromptTokens + continuation.Usage.OutputTokens);
             continued = true;
         }
         catch (OperationCanceledException)
@@ -1021,23 +1045,45 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
             ReleaseExecutionRun();
         }
 
-        // Router evaluation (m6 = reuse the warm Decision process; m7 adds Transfer). After a SUCCESSFUL
-        // continuation, route the next decision turn so the UI returns to decision streaming without leaving
-        // the Plan Authoring screen. Runs on the INDEPENDENT decision gate, AFTER the execution gate is released.
+        // Router evaluation (m7): after a SUCCESSFUL continuation + handoff rotation, consult the lifecycle
+        // router to Continue (reuse the warm Decision process) or Transfer (recycle it), then route the next
+        // decision turn so the UI returns to decision streaming without leaving the Plan Authoring screen.
+        // Runs on the INDEPENDENT decision gate, AFTER the execution gate is released.
         if (continued && !cancellationToken.IsCancellationRequested)
         {
-            await StartNextDecisionRunAsync(repository).ConfigureAwait(false);
+            await RouteNextDecisionRunAsync(repository).ConfigureAwait(false);
         }
     }
 
-    // The m6 router seam: for now it always reuses the warm Decision process (m7 introduces Transfer). Best
-    // effort — swallows a claim conflict (a decision run is already active) and disposal so a continuation that
-    // raced teardown or an already-running decision run never faults the continuation task.
-    private async Task StartNextDecisionRunAsync(Repository repository)
+    // The m7 router seam: route the next decision turn on decision-session token pressure — Continue (warm
+    // reuse) vs Transfer (recycle) — then launch the run on that route. Best effort — swallows a claim
+    // conflict (a decision run is already active) and disposal so a continuation that raced teardown or an
+    // already-running decision run never faults the continuation task. The router is pure/synchronous so it
+    // cannot throw, but the call is still guarded: a routing fault must never strand the loop, and reuse is
+    // the safe default. The Transfer route is additionally gated by eligibility (a primed Decision process).
+    private async Task RouteNextDecisionRunAsync(Repository repository)
     {
+        DecisionRoute route;
         try
         {
-            await BeginDecisionRunAsync(repository).ConfigureAwait(false);
+            route = decisionSessionRouter.Evaluate(ComputeRouterInputs());
+        }
+        catch
+        {
+            route = DecisionRoute.Continue;
+        }
+
+        // Eligibility (m7): only Transfer (recycle) when there is a PRIMED Decision process to extract a delta
+        // from. Recycling an unseeded process would extract a delta from an empty conversation and corrupt
+        // operational context, so an ineligible Transfer degrades to warm reuse — which then seeds the process.
+        if (route == DecisionRoute.Transfer && !decisionSeeded)
+        {
+            route = DecisionRoute.Continue;
+        }
+
+        try
+        {
+            await BeginDecisionRunAsync(repository, route).ConfigureAwait(false);
         }
         catch (ObjectDisposedException)
         {
@@ -1048,6 +1094,24 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
             // A decision run is already active, or the operational context vanished — nothing to start.
         }
     }
+
+    // The router's signal (m7): the live Decision process's OBSERVED token pressure where available, else a
+    // DETERMINISTIC estimate from the content it reasons over (latest handoff + decisions) — the accepted
+    // fallback until observed accounting is certified. Recorded into RouterInputs (the surfaced routing
+    // signal) and returned for the route decision.
+    private RouterInputs ComputeRouterInputs()
+    {
+        int observedDecision = Volatile.Read(ref decisionSessionTokens);
+        int decisionSignal = observedDecision > 0
+            ? observedDecision
+            : EstimateTokens(CurrentHandoff) + EstimateTokens(CurrentDecisions);
+        var inputs = new RouterInputs(decisionSignal, Volatile.Read(ref operationalSessionTokens));
+        RecordRouterInputs(inputs);
+        return inputs;
+    }
+
+    // Deterministic token estimate (~1 token per 4 characters), matching the runtime's deterministic estimator.
+    private static int EstimateTokens(string? text) => string.IsNullOrEmpty(text) ? 0 : (text.Length + 3) / 4;
 
     // The cached plan per the spec's ContinueExecution.Render(MemoryCache.Get("{repositoryId}:Plan"), ...): the
     // reserved active-run slot first, then the in-process CachedPlan, then the live plan artifact so a restarted
@@ -1147,14 +1211,14 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
     // Mirrors LaunchExecutionRunAsync: assigns decisionRun + captures the lifetime token UNDER the gate with a
     // fresh disposed re-check, so a run is never launched after DisposeAsync flips disposed, and a run launched
     // before it is always visible to the dispose drain.
-    private async Task LaunchDecisionRunAsync(Repository repository)
+    private async Task LaunchDecisionRunAsync(Repository repository, DecisionRoute route)
     {
         await gate.WaitAsync().ConfigureAwait(false);
         try
         {
             ObjectDisposedException.ThrowIf(disposed, this);
             CancellationToken token = lifetimeCts.Token;
-            decisionRun = Task.Run(() => RunDecisionAsync(repository, token));
+            decisionRun = Task.Run(() => RunDecisionAsync(repository, route, token));
         }
         finally
         {
@@ -1162,11 +1226,43 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
         }
     }
 
-    private async Task RunDecisionAsync(Repository repository, CancellationToken cancellationToken)
+    private async Task RunDecisionAsync(Repository repository, DecisionRoute route, CancellationToken cancellationToken)
     {
         try
         {
-            DecisionStream.Publish("run-started", Serialize(new { phase = "DecisionRun" }));
+            // A Transfer recycles the Decision process BEFORE proposing: extract an operational delta, rewrite
+            // operational context, close the old process, and seed a FRESH one from the rewritten context. The
+            // rewrite is an operational WORKSPACE WRITE, so the transfer claims the execution gate for its
+            // duration to stay mutually exclusive with a concurrent continuation (which also writes the
+            // workspace). If a continuation already holds the gate, the recycle is DEFERRED to warm reuse this
+            // round (Transfer retries on the next continuation). The effective route is resolved BEFORE the
+            // run-started frame so the stream announces the route that actually runs (a deferred Transfer reads
+            // as Continue), not the verdict. The gate is held across PrepareTransferAsync and released before the
+            // read-only proposal.
+            bool transferring = route == DecisionRoute.Transfer && TryClaimExecutionRun();
+            try
+            {
+                DecisionStream.Publish("run-started", Serialize(new
+                {
+                    phase = "DecisionRun",
+                    route = (transferring ? DecisionRoute.Transfer : DecisionRoute.Continue).ToString(),
+                }));
+
+                // On success PrepareTransferAsync leaves a freshly-seeded process (decisionSeeded == true), so the
+                // seed-once block below is skipped and the proposal runs against the new process. On failure it has
+                // published a failed frame and torn down any half-seeded process, so the run ends here.
+                if (transferring && !await PrepareTransferAsync(repository, cancellationToken).ConfigureAwait(false))
+                {
+                    return;
+                }
+            }
+            finally
+            {
+                if (transferring)
+                {
+                    ReleaseExecutionRun();
+                }
+            }
 
             IAgentSession session = await EnsureDecisionSessionAsync(repository, cancellationToken).ConfigureAwait(false);
 
@@ -1246,6 +1342,13 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
             string decisions = proposed.Output;
             RecordDecisions(decisions);
 
+            // Observed accounting (m7): fold this proposal's tokens into the live decision process's pressure
+            // and surface the router's target signal. (decisionSessionTokens resets when the process recycles.)
+            Interlocked.Add(ref decisionSessionTokens, proposed.Usage.PromptTokens + proposed.Usage.OutputTokens);
+            RecordRouterInputs(new RouterInputs(
+                Volatile.Read(ref decisionSessionTokens),
+                Volatile.Read(ref operationalSessionTokens)));
+
             DecisionStream.Publish("completed", Serialize(new
             {
                 promptTokens = proposed.Usage.PromptTokens,
@@ -1269,6 +1372,141 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
             ReleaseDecisionRun();
         }
     }
+
+    // ---- Transfer (m7): recycle the warm Decision process into a fresh one seeded from rewritten context ----
+
+    // The explicit Transfer sequence the lifecycle router selects when Decision-session pressure outweighs reuse.
+    // It runs INSIDE the decision run (on the decision gate) BEFORE the proposal, so on success it leaves a
+    // freshly-seeded process and the proposal proceeds against it. The phase markers stream so the UI can show
+    // the transfer is in progress, but the delta/rewrite/seed turn bodies are kept OFF the primary stream (only
+    // their captured output matters). Returns true when the fresh process is seeded and ready to propose, false
+    // when any step failed (a failed frame is already published and any half-built process is torn down).
+    private async Task<bool> PrepareTransferAsync(Repository repository, CancellationToken cancellationToken)
+    {
+        // 1) Extract the operational delta from the WARM Decision process and persist it.
+        DecisionStream.Publish("phase", Serialize(new { phase = "ProduceOperationalDelta" }));
+        IAgentSession warm = await EnsureDecisionSessionAsync(repository, cancellationToken).ConfigureAwait(false);
+        AgentTurnResult delta = await warm.RunTurnAsync(
+            ProduceOperationalDelta.Text, onChunk: null, cancellationToken).ConfigureAwait(false);
+        decisionProvenance.Add(BuildProduceOperationalDeltaProvenance());
+        if (delta.State != AgentTurnState.Completed)
+        {
+            DecisionStream.Publish("failed", Serialize(new
+            {
+                phase = "ProduceOperationalDelta",
+                reason = DescribeDecisionFailure(delta.State, "operational delta extraction"),
+                detail = delta.Output,
+            }));
+            return false;
+        }
+
+        await artifactStore.WriteAsync(
+            ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.OperationalDelta),
+            delta.Output).ConfigureAwait(false);
+
+        // 2) Close the old Decision process — the transfer recycles it. (Resets observed pressure to zero.)
+        await CloseDecisionSessionAsync().ConfigureAwait(false);
+        decisionSeeded = false;
+
+        // 3) Fold the delta into the next operational context revision — Operational, ExtraHigh, one-shot. The
+        // turn reads operational_context.md + operational_delta.md from the workspace and rewrites the context.
+        DecisionStream.Publish("phase", Serialize(new { phase = "UpdateOperationalContext" }));
+        AgentTurnResult rewrite = await agentRuntime.RunOneShotAsync(
+            BuildOperationalSpec(repository, AgentEffortLevel.High, "xhigh"),
+            UpdateOperationalContext.Text,
+            onChunk: null,
+            cancellationToken).ConfigureAwait(false);
+        decisionProvenance.Add(BuildUpdateOperationalContextProvenance());
+        if (rewrite.State != AgentTurnState.Completed)
+        {
+            DecisionStream.Publish("failed", Serialize(new
+            {
+                phase = "UpdateOperationalContext",
+                reason = DescribeDecisionFailure(rewrite.State, "operational context rewrite"),
+                detail = rewrite.Output,
+            }));
+            return false;
+        }
+
+        string contextPath = ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.OperationalContext);
+        if (!await artifactStore.ExistsAsync(contextPath).ConfigureAwait(false))
+        {
+            DecisionStream.Publish("failed", Serialize(new
+            {
+                phase = "UpdateOperationalContext",
+                reason = "Transfer left no .agents/operational_context.md to seed the next decision session from.",
+            }));
+            return false;
+        }
+
+        string newContext = await artifactStore.ReadAsync(contextPath).ConfigureAwait(false) ?? string.Empty;
+
+        // 4) Open a FRESH Decision process and seed it from the rewritten operational context.
+        DecisionStream.Publish("phase", Serialize(new { phase = "StartDecisionSessionFromTransfer" }));
+        IAgentSession fresh = await EnsureDecisionSessionAsync(repository, cancellationToken).ConfigureAwait(false);
+        AgentTurnResult seed = await fresh.RunTurnAsync(
+            StartDecisionSessionFromTransfer.Render(newContext), onChunk: null, cancellationToken).ConfigureAwait(false);
+        decisionProvenance.Add(BuildStartDecisionSessionFromTransferProvenance());
+        if (seed.State != AgentTurnState.Completed)
+        {
+            DecisionStream.Publish("failed", Serialize(new
+            {
+                phase = "StartDecisionSessionFromTransfer",
+                reason = DescribeDecisionFailure(seed.State, "transfer reseed"),
+                detail = seed.Output,
+            }));
+
+            // Tear down the half-seeded fresh process so the next run opens cleanly (process cleanup).
+            await CloseDecisionSessionAsync().ConfigureAwait(false);
+            return false;
+        }
+
+        decisionSeeded = true;
+        DecisionStream.Publish("transferred", Serialize(new
+        {
+            operationalDelta = OrchestrationArtifactPaths.OperationalDelta,
+            operationalContext = OrchestrationArtifactPaths.OperationalContext,
+        }));
+        return true;
+    }
+
+    private static PromptProvenance BuildProduceOperationalDeltaProvenance() =>
+        new()
+        {
+            PromptName = nameof(ProduceOperationalDelta),
+            PromptType = typeof(ProduceOperationalDelta).FullName!,
+            SourceHash = ProduceOperationalDelta.SourceHash,
+            SessionRole = PromptSessionRole.Transfer,
+            WorkflowPhase = "ProduceOperationalDelta",
+            // No input identities: the prompt renders no files — it extracts the delta from the in-process
+            // Decision conversation, not from operational_context.md. The delta artifact is its only output.
+            InputArtifactIdentities = Array.Empty<string>(),
+            OutputArtifactIdentities = new[] { OrchestrationArtifactPaths.OperationalDelta },
+        };
+
+    private static PromptProvenance BuildUpdateOperationalContextProvenance() =>
+        new()
+        {
+            PromptName = nameof(UpdateOperationalContext),
+            PromptType = typeof(UpdateOperationalContext).FullName!,
+            SourceHash = UpdateOperationalContext.SourceHash,
+            SessionRole = PromptSessionRole.ContextUpdate,
+            WorkflowPhase = "UpdateOperationalContext",
+            InputArtifactIdentities = new[] { OrchestrationArtifactPaths.OperationalContext, OrchestrationArtifactPaths.OperationalDelta },
+            OutputArtifactIdentities = new[] { OrchestrationArtifactPaths.OperationalContext },
+        };
+
+    private static PromptProvenance BuildStartDecisionSessionFromTransferProvenance() =>
+        new()
+        {
+            PromptName = nameof(StartDecisionSessionFromTransfer),
+            PromptType = typeof(StartDecisionSessionFromTransfer).FullName!,
+            SourceHash = StartDecisionSessionFromTransfer.SourceHash,
+            SessionRole = PromptSessionRole.Transfer,
+            WorkflowPhase = "StartDecisionSessionFromTransfer",
+            InputArtifactIdentities = new[] { OrchestrationArtifactPaths.OperationalContext },
+            OutputArtifactIdentities = Array.Empty<string>(),
+        };
 
     private Task PublishDecisionDelta(AgentStreamChunk chunk)
     {

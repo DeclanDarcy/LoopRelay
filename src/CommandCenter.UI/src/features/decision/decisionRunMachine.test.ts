@@ -6,6 +6,24 @@ function drive(state: DecisionRunState, actions: Parameters<typeof decisionRunRe
   return actions.reduce(decisionRunReducer, state)
 }
 
+// The three transfer phases plus the transferred confirmation, in emission order, as reducer
+// actions — the prelude a Transfer-routed run streams before the normal decision flow resumes.
+function transferPrelude(): Parameters<typeof decisionRunReducer>[1][] {
+  return [
+    { kind: 'event', event: { type: 'phase', phase: 'ProduceOperationalDelta' } },
+    { kind: 'event', event: { type: 'phase', phase: 'UpdateOperationalContext' } },
+    { kind: 'event', event: { type: 'phase', phase: 'StartDecisionSessionFromTransfer' } },
+    {
+      kind: 'event',
+      event: {
+        type: 'transferred',
+        operationalDelta: '.agents/operational_delta.md',
+        operationalContext: '.agents/operational_context.md',
+      },
+    },
+  ]
+}
+
 describe('decisionRunReducer', () => {
   it('starts Idle with no run output and a closed review gate', () => {
     expect(initialDecisionRunState.status).toBe('Idle')
@@ -261,6 +279,112 @@ describe('decisionRunReducer', () => {
 
     expect(secondSubmit.status).toBe('Submitted')
     expect(secondSubmit.iteration).toBe(2)
+  })
+
+  it('leaves the warm Continue route un-transferring and identical to the routeless path', () => {
+    const routeless = decisionRunReducer(initialDecisionRunState, {
+      kind: 'event',
+      event: { type: 'run-started', phase: 'DecisionRun' },
+    })
+    const continueRoute = decisionRunReducer(initialDecisionRunState, {
+      kind: 'event',
+      event: { type: 'run-started', phase: 'DecisionRun', route: 'Continue' },
+    })
+
+    expect(continueRoute.transferring).toBe(false)
+    // The Continue path must be byte-identical to today's routeless run-started result.
+    expect(continueRoute).toEqual(routeless)
+  })
+
+  it('raises the transfer flag on a Transfer-routed run-started', () => {
+    const next = decisionRunReducer(initialDecisionRunState, {
+      kind: 'event',
+      event: { type: 'run-started', phase: 'DecisionRun', route: 'Transfer' },
+    })
+
+    expect(next.status).toBe('Running')
+    expect(next.transferring).toBe(true)
+  })
+
+  it('keeps the labelled phase untouched while the transfer phases stream', () => {
+    const next = drive(initialDecisionRunState, [
+      { kind: 'event', event: { type: 'run-started', phase: 'DecisionRun', route: 'Transfer' } },
+      { kind: 'event', event: { type: 'phase', phase: 'ProduceOperationalDelta' } },
+      { kind: 'event', event: { type: 'phase', phase: 'UpdateOperationalContext' } },
+      { kind: 'event', event: { type: 'phase', phase: 'StartDecisionSessionFromTransfer' } },
+    ])
+
+    expect(next.transferring).toBe(true)
+    expect(next.status).toBe('Running')
+    // The proposing-phase label is never overwritten by a transfer phase.
+    expect(next.phase).toBe('DecisionRun')
+  })
+
+  it('raises the transfer flag on a phase event even without a Transfer-routed run-started', () => {
+    // Resilience: a transfer phase alone (e.g. run-started missed on replay) still flags the
+    // transfer without throwing or wedging the machine.
+    const next = decisionRunReducer(initialDecisionRunState, {
+      kind: 'event',
+      event: { type: 'phase', phase: 'ProduceOperationalDelta' },
+    })
+
+    expect(next.transferring).toBe(true)
+    expect(next.status).toBe('Running')
+  })
+
+  it('keeps the transfer flag raised through the transferred event', () => {
+    const next = drive(initialDecisionRunState, [
+      { kind: 'event', event: { type: 'run-started', phase: 'DecisionRun', route: 'Transfer' } },
+      { kind: 'event', event: { type: 'phase', phase: 'StartDecisionSessionFromTransfer' } },
+      {
+        kind: 'event',
+        event: {
+          type: 'transferred',
+          operationalDelta: '.agents/operational_delta.md',
+          operationalContext: '.agents/operational_context.md',
+        },
+      },
+    ])
+
+    // The proposal still streams next, so the indicator stays raised until review-ready.
+    expect(next.transferring).toBe(true)
+    expect(next.status).toBe('Running')
+  })
+
+  it('clears the transfer flag once review-ready resolves the transfer', () => {
+    const next = drive(initialDecisionRunState, [
+      { kind: 'event', event: { type: 'run-started', phase: 'DecisionRun', route: 'Transfer' } },
+      ...transferPrelude(),
+      { kind: 'event', event: { type: 'review-ready', decisions: 'transferred decisions' } },
+    ])
+
+    expect(next.transferring).toBe(false)
+    expect(next.status).toBe('Completed')
+    expect(next.editableDecisions).toBe('transferred decisions')
+  })
+
+  it('surfaces a transfer-step failure like any other phase failure and clears the flag', () => {
+    const next = drive(initialDecisionRunState, [
+      { kind: 'event', event: { type: 'run-started', phase: 'DecisionRun', route: 'Transfer' } },
+      { kind: 'event', event: { type: 'phase', phase: 'ProduceOperationalDelta' } },
+      {
+        kind: 'event',
+        event: {
+          type: 'failed',
+          phase: 'ProduceOperationalDelta',
+          reason: 'Delta synthesis failed',
+          detail: 'no diff',
+        },
+      },
+    ])
+
+    expect(next.status).toBe('Failed')
+    expect(next.transferring).toBe(false)
+    expect(next.failure).toEqual({
+      phase: 'ProduceOperationalDelta',
+      reason: 'Delta synthesis failed',
+      detail: 'no diff',
+    })
   })
 
   it('does not let a late non-terminal frame clobber a failed run', () => {

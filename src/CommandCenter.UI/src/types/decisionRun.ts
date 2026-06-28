@@ -7,9 +7,24 @@
 
 export type DecisionRunPhase = 'DecisionRun' | 'GetNextDecisions'
 
+// The continuation router either reuses the warm decision session (Continue) or hands it off to a
+// fresh one (Transfer). A Transfer inserts three preparatory phases before the proposal; Continue
+// is the unchanged warm path. The field is optional so an older server (no route) reads as Continue.
+export type DecisionRunRoute = 'Continue' | 'Transfer'
+
+// The phases a Transfer-routed run streams before the normal decision flow resumes. They are kept
+// distinct from DecisionRunPhase so the existing phase label and the warm Continue path are
+// untouched; the machine tracks "transferring" separately rather than widening `phase`.
+export type DecisionRunTransferPhase =
+  | 'ProduceOperationalDelta'
+  | 'UpdateOperationalContext'
+  | 'StartDecisionSessionFromTransfer'
+
 export type DecisionRunStartedEvent = {
   type: 'run-started'
   phase: 'DecisionRun'
+  // Present once the server reports the continuation route. Absent on the warm/legacy path.
+  route?: DecisionRunRoute
 }
 
 export type DecisionRunDiagnosticsEvent = {
@@ -21,7 +36,17 @@ export type DecisionRunDiagnosticsEvent = {
 
 export type DecisionRunPhaseEvent = {
   type: 'phase'
-  phase: 'GetNextDecisions'
+  // GetNextDecisions is the proposing phase; the three transfer phases stream only on a
+  // Transfer-routed run, ahead of the proposal.
+  phase: 'GetNextDecisions' | DecisionRunTransferPhase
+}
+
+// Emitted once a Transfer-routed run has produced the operational delta, updated the operational
+// context, and started a fresh decision session. The normal decision flow resumes after this.
+export type DecisionRunTransferredEvent = {
+  type: 'transferred'
+  operationalDelta: string
+  operationalContext: string
 }
 
 export type DecisionRunDeltaEvent = {
@@ -61,6 +86,7 @@ export type DecisionRunEvent =
   | DecisionRunStartedEvent
   | DecisionRunDiagnosticsEvent
   | DecisionRunPhaseEvent
+  | DecisionRunTransferredEvent
   | DecisionRunDeltaEvent
   | DecisionRunCompletedEvent
   | DecisionRunReviewReadyEvent
@@ -111,5 +137,10 @@ export type DecisionRunState = {
   // Which decision turn the human is on, starting at 1 for the first proposal. Each auto-started
   // continuation decision run increments this so the surface can show the iteration.
   iteration: number
+  // True while the continuation router is transferring the decision session: set on a
+  // Transfer-routed run-started, any of the three transfer phases, or the `transferred` event, and
+  // cleared once the proposal arrives (review-ready) or the run fails. The warm Continue path never
+  // sets it, so that path stays visually unchanged.
+  transferring: boolean
   failure: { phase: string | null; reason: string; detail: string | null } | null
 }

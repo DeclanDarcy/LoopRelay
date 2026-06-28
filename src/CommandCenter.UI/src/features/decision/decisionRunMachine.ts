@@ -1,4 +1,9 @@
-import type { DecisionRunEvent, DecisionRunPhase, DecisionRunState } from '../../types'
+import type {
+  DecisionRunEvent,
+  DecisionRunPhase,
+  DecisionRunState,
+  DecisionRunTransferPhase,
+} from '../../types'
 
 export const initialDecisionRunState: DecisionRunState = {
   status: 'Idle',
@@ -12,7 +17,20 @@ export const initialDecisionRunState: DecisionRunState = {
   submittedNumberedPath: null,
   submittedSequence: null,
   iteration: 0,
+  transferring: false,
   failure: null,
+}
+
+// The three preparatory phases a Transfer-routed run streams before the proposal. They flag the
+// transfer indicator but never become the labelled `phase`, so the Continue path is untouched.
+const TRANSFER_PHASES: readonly DecisionRunTransferPhase[] = [
+  'ProduceOperationalDelta',
+  'UpdateOperationalContext',
+  'StartDecisionSessionFromTransfer',
+]
+
+function isTransferPhase(phase: string): phase is DecisionRunTransferPhase {
+  return (TRANSFER_PHASES as readonly string[]).includes(phase)
 }
 
 export type DecisionRunAction =
@@ -59,12 +77,14 @@ function reduceEvent(state: DecisionRunState, event: DecisionRunEvent): Decision
     case 'run-started':
       // Begin a fresh run. Re-entry resets accumulated output and any prior review buffer. In the
       // continuation loop this is also the auto-started next decision run, so it advances the
-      // iteration and reopens streaming after a submit.
+      // iteration and reopens streaming after a submit. A Transfer-routed run raises the transfer
+      // indicator straight away; Continue (or a routeless legacy frame) leaves it down.
       return {
         ...initialDecisionRunState,
         status: 'Running',
         phase: 'DecisionRun',
         iteration: state.iteration + 1,
+        transferring: event.route === 'Transfer',
       }
     case 'diagnostics':
       // The sandbox config is validated and logged here; the seed turn itself is not streamed.
@@ -77,7 +97,20 @@ function reduceEvent(state: DecisionRunState, event: DecisionRunEvent): Decision
         },
       }
     case 'phase':
+      // The three transfer phases only flag the transfer indicator; they never become the labelled
+      // `phase`, so the proposing-phase label and the warm path are unchanged. GetNextDecisions is
+      // the normal proposing phase and flows through as before.
+      if (isTransferPhase(event.phase)) {
+        return isTerminal(state)
+          ? { ...state, transferring: true }
+          : { ...state, status: 'Running', transferring: true }
+      }
+
       return runningWithPhase(state, event.phase)
+    case 'transferred':
+      // The transfer finished its preparatory steps; the proposal still streams next, so the
+      // indicator stays raised until review-ready resolves it.
+      return runningGuard({ ...state, transferring: true })
     case 'delta':
       // Accumulate streamed output. A delta arriving before run-started still lands, so the
       // surface stays correct even if the run-started frame is missed on replay.
@@ -110,6 +143,8 @@ function reduceEvent(state: DecisionRunState, event: DecisionRunEvent): Decision
         ...state,
         status: 'Completed',
         phase: null,
+        // The proposal has arrived; any in-flight transfer is resolved.
+        transferring: false,
         failure: null,
         proposedDecisions: event.decisions,
         editableDecisions: event.decisions,
@@ -133,11 +168,14 @@ function reduceEvent(state: DecisionRunState, event: DecisionRunEvent): Decision
         submittedSequence: event.sequence ?? null,
       }
     case 'failed':
-      // Failure always wins, regardless of the phase it arrives in.
+      // Failure always wins, regardless of the phase it arrives in. A failure during a transfer
+      // step ends the run, so the indicator clears and the failure surface takes over. The phase
+      // string (including the transfer phases) is carried through unchanged.
       return {
         ...state,
         status: 'Failed',
         phase: null,
+        transferring: false,
         failure: {
           phase: event.phase ?? null,
           reason: event.reason,

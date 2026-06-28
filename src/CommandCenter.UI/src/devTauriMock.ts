@@ -4816,11 +4816,32 @@ const PROPOSED_DECISIONS = [
   '- Keep the decisions textarea editable only after review-ready.\n',
 ]
 
-function simulateDecisionStream(state: MockState, repositoryId: string) {
+// On a Transfer-routed run the continuation router hands the warm decision session off to a fresh
+// one: it produces the operational delta, updates the operational context, starts a new session,
+// then confirms with `transferred` before the normal decision flow resumes. These frames precede
+// the proposal; the Continue path emits none of them.
+const TRANSFER_PRELUDE: DecisionRunEvent[] = [
+  { type: 'phase', phase: 'ProduceOperationalDelta' },
+  { type: 'phase', phase: 'UpdateOperationalContext' },
+  { type: 'phase', phase: 'StartDecisionSessionFromTransfer' },
+  {
+    type: 'transferred',
+    operationalDelta: '.agents/operational_delta.md',
+    operationalContext: '.agents/operational_context.md',
+  },
+]
+
+function simulateDecisionStream(
+  state: MockState,
+  repositoryId: string,
+  route: 'Continue' | 'Transfer' = 'Continue',
+) {
   // A realistic run: start, log the validated sandbox, propose decisions over deltas, complete,
-  // then open the human review gate with the full captured text. Submission is a separate path.
+  // then open the human review gate with the full captured text. Submission is a separate path. A
+  // Transfer-routed run inserts the transfer prelude after run-started, before diagnostics.
   const frames: DecisionRunEvent[] = [
-    { type: 'run-started', phase: 'DecisionRun' },
+    { type: 'run-started', phase: 'DecisionRun', route },
+    ...(route === 'Transfer' ? TRANSFER_PRELUDE : []),
     { type: 'diagnostics', sandbox: 'read-only', approvals: 'never', seeded: true },
     { type: 'phase', phase: 'GetNextDecisions' },
     ...PROPOSED_DECISIONS.map((text): DecisionRunEvent => ({ type: 'delta', text })),
@@ -4864,9 +4885,12 @@ function simulateDecisionSubmit(state: MockState, repositoryId: string) {
     })
 
     // The continuation turn streams on the execution stream; when it completes the server auto-
-    // starts the next decision run, returning to the human-review gate.
+    // starts the next decision run, returning to the human-review gate. The router transfers the
+    // session on odd submissions so the loop exercises both a Transfer-routed continuation (turn 2)
+    // and a warm Continue continuation (turn 3) across two iterations.
+    const nextRoute = sequence % 2 === 1 ? 'Transfer' : 'Continue'
     simulateContinuationStream(state, repositoryId, sequence, () => {
-      simulateDecisionStream(state, repositoryId)
+      simulateDecisionStream(state, repositoryId, nextRoute)
     })
   }, 12)
 }

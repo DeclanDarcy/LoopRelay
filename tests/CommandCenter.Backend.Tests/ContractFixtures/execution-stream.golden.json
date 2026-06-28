@@ -1,0 +1,50 @@
+{
+  "stream": "execution",
+  "events": [
+    {
+      "type": "run-started",
+      "phase": "ExecutePlan"
+    },
+    {
+      "type": "phase",
+      "phase": "ExtractMilestones"
+    },
+    {
+      "type": "delta",
+      "phase": "StartExecution",
+      "text": "Execution chunk."
+    },
+    {
+      "type": "milestones-extracted",
+      "count": 2
+    },
+    {
+      "type": "committed",
+      "commitSha": "commit-sha-0001",
+      "pushed": true
+    },
+    {
+      "type": "lifecycle",
+      "state": "ExecutingPlan"
+    },
+    {
+      "type": "handoff-rotated",
+      "sequence": 1,
+      "path": ".agents/handoffs/handoff.0001.md"
+    },
+    {
+      "type": "completed",
+      "commitSha": "commit-sha-0001",
+      "milestoneCount": 2,
+      "handoffPath": ".agents/handoffs/handoff.0001.md",
+      "promptTokens": 10,
+      "outputTokens": 20
+    },
+    {
+      "type": "failed",
+      "phase": "StartExecution",
+      "reason": "The start execution run failed.",
+      "detail": "boom"
+    }
+  ]
+}

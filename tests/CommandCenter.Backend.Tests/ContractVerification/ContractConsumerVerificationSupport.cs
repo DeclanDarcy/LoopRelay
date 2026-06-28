@@ -299,8 +299,21 @@ internal sealed class TypeScriptContractShapeProvider(IReadOnlyDictionary<string
                 return ApplyNullability(ConsumerContractShape.Primitive(ConsumerContractPrimitiveKind.String), isNullable);
             }
 
-            Assert.Single(nonNullParts);
-            return ApplyNullability(ResolveType(nonNullParts[0], resolving), isNullable);
+            // A union whose arms are not ALL direct string literals may still be a single primitive: an arm can
+            // be a named type alias that itself resolves to a string-literal union (e.g.
+            // `'GetNextDecisions' | DecisionRunTransferPhase`, where DecisionRunTransferPhase is a 3-way
+            // string-literal union). Resolve every arm; if they all collapse to the SAME String primitive, the
+            // union is that String primitive — which is exactly what the producer emits (a plain string).
+            ConsumerContractShape[] resolvedParts = nonNullParts
+                .Select(part => ResolveType(part, resolving).WithoutNullability())
+                .ToArray();
+            if (resolvedParts.All(IsStringPrimitive))
+            {
+                return ApplyNullability(ConsumerContractShape.Primitive(ConsumerContractPrimitiveKind.String), isNullable);
+            }
+
+            Assert.Single(resolvedParts);
+            return ApplyNullability(resolvedParts[0], isNullable);
         }
 
         if (typeExpression.EndsWith("[]", StringComparison.Ordinal))
@@ -384,6 +397,14 @@ internal sealed class TypeScriptContractShapeProvider(IReadOnlyDictionary<string
 
     private static IReadOnlyList<TypeScriptTypeDefinition> ReadTypeDefinitions(string source)
     {
+        // The extraction regex delimits a type body by the NEXT `\nexport type`, so a `//` comment block that
+        // sits between two declarations is otherwise swallowed into the preceding body (breaking the union /
+        // object resolvers when the trailing comment text leaks into the type). Strip line and trailing `//`
+        // comments BEFORE extracting. These are TS type declarations, not arbitrary code: bodies are unions of
+        // string literals / type references and object shapes — none contain `//` inside a string literal — so a
+        // simple line/trailing-comment strip is safe here.
+        source = StripLineComments(source);
+
         MatchCollection matches = Regex.Matches(
             source,
             @"export\s+type\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?<body>.*?)(?=\nexport\s+type|\z)",
@@ -397,6 +418,23 @@ internal sealed class TypeScriptContractShapeProvider(IReadOnlyDictionary<string
             .ToArray();
     }
 
+    // Removes full-line `//` comments entirely and trims trailing `// ...` comments from each line, preserving
+    // the line structure (and the `\nexport type` delimiters) the extraction regex relies on. Type bodies never
+    // embed `//` inside a string literal, so a positional strip cannot corrupt a real type expression.
+    private static string StripLineComments(string source)
+    {
+        IEnumerable<string> lines = source
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Split('\n')
+            .Select(line =>
+            {
+                int comment = line.IndexOf("//", StringComparison.Ordinal);
+                return comment >= 0 ? line[..comment].TrimEnd() : line;
+            });
+
+        return string.Join('\n', lines);
+    }
+
     private static ConsumerContractShape ApplyNullability(ConsumerContractShape shape, bool isNullable)
     {
         return isNullable ? shape.AsNullable() : shape;
@@ -407,6 +445,12 @@ internal sealed class TypeScriptContractShapeProvider(IReadOnlyDictionary<string
         return typeExpression.Length >= 2
             && typeExpression.StartsWith("'", StringComparison.Ordinal)
             && typeExpression.EndsWith("'", StringComparison.Ordinal);
+    }
+
+    private static bool IsStringPrimitive(ConsumerContractShape shape)
+    {
+        return shape.Kind == ConsumerContractShapeKind.Primitive
+            && shape.PrimitiveKind == ConsumerContractPrimitiveKind.String;
     }
 
     private static string NormalizeTypeExpression(string typeExpression)

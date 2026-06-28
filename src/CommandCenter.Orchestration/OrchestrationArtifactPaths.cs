@@ -19,6 +19,13 @@ public static class OrchestrationArtifactPaths
     public const string OperationalContext = ".agents/operational_context.md";
 
     /// <summary>
+    /// The operational delta a Transfer extracts from the warm Decision process (<c>ProduceOperationalDelta</c>)
+    /// before recycling it — the input <c>UpdateOperationalContext</c> folds into the next
+    /// <see cref="OperationalContext"/> revision (m7).
+    /// </summary>
+    public const string OperationalDelta = ".agents/operational_delta.md";
+
+    /// <summary>
     /// The current governance decisions the human review gate persists (m5). This is the canonical path
     /// every independent decisions consumer reads (<c>ArtifactService.GetCurrentDecisionsAsync</c>,
     /// <c>DecisionContextService</c>, <c>ArtifactRotationService</c>, continuity), so the Decision Runtime

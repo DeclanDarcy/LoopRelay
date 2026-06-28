@@ -5,6 +5,7 @@ using CommandCenter.Agents.Models;
 using CommandCenter.Core.Artifacts;
 using CommandCenter.Core.Repositories;
 using CommandCenter.Orchestration.Abstractions;
+using CommandCenter.Orchestration.Models;
 using CommandCenter.Orchestration.Services;
 using Microsoft.Extensions.Caching.Memory;
 
@@ -280,6 +281,37 @@ internal sealed class FakeArtifactStore : IArtifactStore
     }
 }
 
+/// <summary>
+/// Scriptable decision-session router (m7). Returns <see cref="Route"/> by default; when <see cref="Routes"/>
+/// is non-empty it dequeues one route per call (so a test can route iteration 1 to Continue and iteration 2 to
+/// Transfer), falling back to <see cref="Route"/> once drained. Every <see cref="RouterInputs"/> it was asked
+/// to evaluate is recorded, and <see cref="Throw"/> forces a routing fault to exercise the degrade-to-Continue
+/// guard.
+/// </summary>
+internal sealed class FakeDecisionSessionRouter : IDecisionSessionRouter
+{
+    public DecisionRoute Route { get; set; } = DecisionRoute.Continue;
+
+    public Queue<DecisionRoute> Routes { get; } = new();
+
+    public List<RouterInputs> EvaluatedInputs { get; } = new();
+
+    public int EvaluateCount => EvaluatedInputs.Count;
+
+    public bool Throw { get; set; }
+
+    public DecisionRoute Evaluate(RouterInputs inputs)
+    {
+        EvaluatedInputs.Add(inputs);
+        if (Throw)
+        {
+            throw new InvalidOperationException("router fault");
+        }
+
+        return Routes.Count > 0 ? Routes.Dequeue() : Route;
+    }
+}
+
 /// <summary>Records each commit+push and returns a configurable result (default: success, pushed).</summary>
 internal sealed class FakePlanArtifactPublisher : IPlanArtifactPublisher
 {
@@ -316,23 +348,27 @@ internal static class OrchestrationTestFactory
         FakeAgentRuntime? runtime = null,
         FakeArtifactStore? store = null,
         MemoryCache? cache = null,
-        IPlanArtifactPublisher? publisher = null) =>
+        IPlanArtifactPublisher? publisher = null,
+        IDecisionSessionRouter? router = null) =>
         new(
             runtime ?? new FakeAgentRuntime(),
             store ?? new FakeArtifactStore(),
             cache ?? Cache(),
-            publisher ?? new FakePlanArtifactPublisher());
+            publisher ?? new FakePlanArtifactPublisher(),
+            router ?? new FakeDecisionSessionRouter());
 
     public static RepositoryOrchestrator Orchestrator(
         string? repositoryId = null,
         FakeAgentRuntime? runtime = null,
         FakeArtifactStore? store = null,
         MemoryCache? cache = null,
-        IPlanArtifactPublisher? publisher = null) =>
+        IPlanArtifactPublisher? publisher = null,
+        IDecisionSessionRouter? router = null) =>
         new(
             repositoryId ?? Guid.NewGuid().ToString("D"),
             runtime ?? new FakeAgentRuntime(),
             store ?? new FakeArtifactStore(),
             cache ?? Cache(),
-            publisher ?? new FakePlanArtifactPublisher());
+            publisher ?? new FakePlanArtifactPublisher(),
+            router ?? new FakeDecisionSessionRouter());
 }

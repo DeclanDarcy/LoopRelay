@@ -141,8 +141,8 @@ public sealed class RepositoryOrchestratorRegistryTests
         services.AddSingleton<IAgentRuntime>(new FakeAgentRuntime());
         services.AddSingleton<IArtifactStore>(new FakeArtifactStore());
         // The Git-backed publisher's IGitService lives in the Execution layer; in the full app
-        // AddExecution provides it. Here a fake stands in so the test stays scoped to AddOrchestration's
-        // own registrations (singleton registry + memory cache).
+        // AddExecution provides it. Here a fake stands in so the test stays scoped to AddOrchestration's own
+        // registrations (singleton registry + memory cache + the self-contained, registry-free router).
         services.AddSingleton<IPlanArtifactPublisher>(new FakePlanArtifactPublisher());
         services.AddOrchestration();
 

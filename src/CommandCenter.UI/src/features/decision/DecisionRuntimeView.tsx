@@ -59,6 +59,9 @@ export function DecisionRuntimeView({
   // execution stream) and auto-starts the next decision run; the loop reopens the gate then.
   const isContinuing = state.status === 'Submitting' || state.status === 'Submitted'
   const turnLabel = iterationLabel(state.iteration)
+  // The continuation router is handing the session off to a fresh one. Surfaced only while the run
+  // is live; review-ready (or a failure) resolves the transfer and the reducer lowers the flag.
+  const isTransferring = state.transferring && state.status === 'Running'
 
   return (
     <section className="cc-decision" aria-label="Decision runtime">
@@ -107,6 +110,13 @@ export function DecisionRuntimeView({
           · approvals{' '}
           <code className="cc-decision-diagnostics-value">{state.diagnostics.approvals}</code> ·{' '}
           {state.diagnostics.seeded ? 'session seeded' : 'session not seeded'}
+        </p>
+      ) : null}
+
+      {isTransferring ? (
+        <p className="cc-decision-transfer" role="status" aria-label="Transferring decision session">
+          <span className="cc-plan-phase-dot" aria-hidden="true" />
+          Transferring decision session…
         </p>
       ) : null}
 
