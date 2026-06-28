@@ -8,4 +8,10 @@ namespace CommandCenter.Orchestration;
 public static class OrchestrationArtifactPaths
 {
     public const string Plan = ".agents/plan.md";
+
+    /// <summary>Roadmap textarea, persisted before the initial planning prompt runs (m3).</summary>
+    public const string SpecsRoadmap = ".agents/specs/roadmap.md";
+
+    /// <summary>Repository-relative path of the <c>n</c>-th Spec textarea (1-based: <c>s1.md</c>, <c>s2.md</c>, ...).</summary>
+    public static string Spec(int index) => $".agents/specs/s{index}.md";
 }

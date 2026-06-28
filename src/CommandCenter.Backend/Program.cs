@@ -74,6 +74,7 @@ public static class Program
         app.MapArtifactsEndpoints();
         app.MapPlanningEndpoints();
         app.MapPlanStatusEndpoints();
+        app.MapPlanAuthoringEndpoints();
         app.MapOperationalContextEndpoints();
         app.MapContinuityEndpoints();
         app.MapExecutionEndpoints();
