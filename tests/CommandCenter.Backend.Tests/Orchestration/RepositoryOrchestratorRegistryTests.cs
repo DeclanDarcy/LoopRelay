@@ -1,5 +1,6 @@
 using CommandCenter.Agents.Abstractions;
 using CommandCenter.Core.Artifacts;
+using CommandCenter.Orchestration.Abstractions;
 using CommandCenter.Orchestration.Extensions;
 using CommandCenter.Orchestration.Services;
 using Microsoft.Extensions.Caching.Memory;
@@ -139,6 +140,10 @@ public sealed class RepositoryOrchestratorRegistryTests
         var services = new ServiceCollection();
         services.AddSingleton<IAgentRuntime>(new FakeAgentRuntime());
         services.AddSingleton<IArtifactStore>(new FakeArtifactStore());
+        // The Git-backed publisher's IGitService lives in the Execution layer; in the full app
+        // AddExecution provides it. Here a fake stands in so the test stays scoped to AddOrchestration's
+        // own registrations (singleton registry + memory cache).
+        services.AddSingleton<IPlanArtifactPublisher>(new FakePlanArtifactPublisher());
         services.AddOrchestration();
 
         // The registry is IAsyncDisposable-only; the container must be disposed asynchronously

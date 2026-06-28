@@ -287,34 +287,6 @@ public sealed class RepositoryOrchestratorPlanningTests
         Assert.Null(orchestrator.CachedPlan);
     }
 
-    [Fact]
-    public async Task Execute_plan_closes_the_warm_planning_session_when_a_plan_exists()
-    {
-        var runtime = new FakeAgentRuntime();
-        var store = new FakeArtifactStore();
-        Repository repository = OrchestrationTestFactory.Repository();
-        RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store);
-        runtime.OnTurn = () => store.WriteAsync(ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.Plan), "PLAN");
-
-        await orchestrator.BeginWritePlanAsync(repository, new PlanWriteRequest { Roadmap = "r" });
-        await orchestrator.PlanningTurnTask;
-        Assert.True(orchestrator.HasPlanningSession);
-
-        await orchestrator.ExecutePlanAsync(repository);
-
-        Assert.False(orchestrator.HasPlanningSession);
-        Assert.All(runtime.Sessions, session => Assert.True(session.Disposed));
-    }
-
-    [Fact]
-    public async Task Execute_plan_is_rejected_when_no_plan_exists()
-    {
-        RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator();
-
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => orchestrator.ExecutePlanAsync(OrchestrationTestFactory.Repository()));
-    }
-
     private static async Task<List<OrchestratorStreamEvent>> DrainAsync(OrchestratorStreamChannel stream, int expectedCount)
     {
         var events = new List<OrchestratorStreamEvent>();

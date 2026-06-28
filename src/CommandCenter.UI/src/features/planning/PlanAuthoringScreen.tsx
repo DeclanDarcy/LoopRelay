@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Button } from '../../components/design'
-import { usePlanStream } from '../../hooks'
+import { useExecutionStream, usePlanStream } from '../../hooks'
+import { ExecutionStreamView } from './ExecutionStreamView'
 import { PlanFailureNotice } from './PlanFailureNotice'
 import { PlanStreamView } from './PlanStreamView'
 import { RenderedPlanView } from './RenderedPlanView'
@@ -36,6 +37,7 @@ export function PlanAuthoringScreen({
 
   const isTurnRunning = state.status === 'Planning' || state.status === 'Revising'
   const isExecuting = state.status === 'Executing'
+  const { state: executionState } = useExecutionStream(repositoryId, isExecuting)
   const inputsDisabled = isTurnRunning || isExecuting
   const canWrite = roadmap.trim().length > 0 && !inputsDisabled
   const hasPlan = state.plan !== null
@@ -48,11 +50,13 @@ export function PlanAuthoringScreen({
     onSessionActiveChange?.(isSessionActive)
   }, [isSessionActive, onSessionActiveChange])
 
+  // The screen stays mounted through the whole execution run so the user can watch each
+  // phase stream in. Navigation to the workspace only happens once the run completes.
   useEffect(() => {
-    if (state.status === 'Executing') {
+    if (isExecuting && executionState.status === 'Completed') {
       onExecuted?.()
     }
-  }, [onExecuted, state.status])
+  }, [executionState.status, isExecuting, onExecuted])
 
   const writePlanNow = () => {
     if (!canWrite) {
@@ -136,7 +140,17 @@ export function PlanAuthoringScreen({
         <PlanStreamView text={state.streamedText} turnPhase={state.turnPhase} />
       ) : null}
 
-      {(state.status === 'PlanReady' || isExecuting) && state.plan ? (
+      {isExecuting ? (
+        <ExecutionStreamView
+          state={executionState}
+          onDismissFailure={() => {
+            // Return to the plan controls. The plan is preserved, so reset lands on PlanReady.
+            dismissFailure()
+          }}
+        />
+      ) : null}
+
+      {state.status === 'PlanReady' && state.plan ? (
         <>
           <RenderedPlanView plan={state.plan} tokens={state.tokens} />
 
@@ -168,7 +182,7 @@ export function PlanAuthoringScreen({
                 }}
                 disabled={!canRevise}
               >
-                {state.status === 'Revising' ? 'Revising plan…' : 'Revise Plan'}
+                Revise Plan
               </Button>
               <Button
                 type="button"
@@ -180,7 +194,7 @@ export function PlanAuthoringScreen({
                 }}
                 disabled={!canExecute}
               >
-                {isExecuting ? 'Executing plan…' : 'Execute Plan'}
+                Execute Plan
               </Button>
             </div>
           </div>

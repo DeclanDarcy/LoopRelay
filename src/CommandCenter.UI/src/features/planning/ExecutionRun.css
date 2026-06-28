@@ -1,0 +1,183 @@
+.cc-execution {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.cc-execution-masthead {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cc-execution-title {
+  margin: 0;
+  font: var(--font-h3);
+  letter-spacing: -0.01em;
+  color: var(--fg-default);
+  text-wrap: balance;
+}
+
+.cc-execution-lede {
+  margin: 0;
+  max-width: 60ch;
+  font: var(--font-small);
+  color: var(--fg-muted);
+}
+
+/* Signature: a vertical phase rail. The run is a real ordered sequence, so the steps
+   carry progress — a connecting line threads them, each marker states pending/active/done. */
+.cc-execution-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.cc-execution-step {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 10px 0;
+  padding-left: 4px;
+}
+
+/* The rail connecting one marker to the next, drawn from the marker centre downward. */
+.cc-execution-step:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 28px;
+  bottom: -10px;
+  width: 1px;
+  background: var(--border-default);
+}
+
+.cc-execution-step-done:not(:last-child)::before {
+  background: var(--accent-muted);
+}
+
+.cc-execution-step-marker {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  width: 21px;
+  height: 21px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--border-default);
+  background: var(--surface-1);
+  color: var(--accent-fg);
+}
+
+.cc-execution-step-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--fg-faint);
+}
+
+.cc-execution-step-active .cc-execution-step-marker {
+  border-color: var(--accent-emphasis);
+}
+
+.cc-execution-step-active .cc-execution-step-dot {
+  background: var(--accent-emphasis);
+  animation: cc-execution-pulse 1.4s ease-in-out infinite;
+}
+
+.cc-execution-step-done .cc-execution-step-marker {
+  border-color: var(--accent-muted);
+  background: var(--accent-subtle);
+}
+
+.cc-execution-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.cc-execution-step-label {
+  font: var(--font-body);
+  color: var(--fg-muted);
+}
+
+.cc-execution-step-active .cc-execution-step-label,
+.cc-execution-step-done .cc-execution-step-label {
+  color: var(--fg-default);
+}
+
+.cc-execution-step-note {
+  font: var(--font-mono-small);
+  color: var(--fg-faint);
+  word-break: break-word;
+}
+
+.cc-execution-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1px;
+  margin: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-12);
+  background: var(--border-subtle);
+  overflow: hidden;
+}
+
+.cc-execution-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  background: var(--bg-inset);
+}
+
+.cc-execution-summary-item dt {
+  font: var(--font-caption);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fg-subtle);
+}
+
+.cc-execution-summary-item dd {
+  margin: 0;
+  font: var(--font-body);
+  color: var(--fg-default);
+}
+
+.cc-execution-sha,
+.cc-execution-path {
+  font: var(--font-mono-small);
+  color: var(--accent-fg);
+  word-break: break-all;
+}
+
+.cc-execution-empty {
+  font: var(--font-small);
+  color: var(--fg-faint);
+}
+
+@keyframes cc-execution-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.7);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cc-execution-step-active .cc-execution-step-dot {
+    animation: none;
+  }
+}

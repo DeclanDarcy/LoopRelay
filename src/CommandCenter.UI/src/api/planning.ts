@@ -1,4 +1,4 @@
-import type { PlanStatus, PlanStreamEvent, PlanTurnPhase } from '../types'
+import type { ExecutionRunEvent, PlanStatus, PlanStreamEvent, PlanTurnPhase } from '../types'
 import { invokeCommand } from './tauri'
 
 export function getPlanStatus(repositoryId: string) {
@@ -70,4 +70,77 @@ export function subscribeToPlanEvents(
   return {
     close: () => eventSource.close(),
   } satisfies PlanEventSubscription
+}
+
+export type ExecutionRunEventSubscription = {
+  close: () => void
+}
+
+export function subscribeToExecutionRunEvents(
+  backendUrl: string,
+  repositoryId: string,
+  onExecutionEvent: (event: ExecutionRunEvent) => void,
+) {
+  const eventSource = new EventSource(
+    `${backendUrl}/api/repositories/${repositoryId}/execution/stream`,
+  )
+
+  eventSource.addEventListener('run-started', () => {
+    onExecutionEvent({ type: 'run-started', phase: 'ExecutePlan' })
+  })
+  eventSource.addEventListener('phase', (event) => {
+    const data = JSON.parse(event.data) as { phase: 'ExtractMilestones' | 'StartExecution' }
+    onExecutionEvent({ type: 'phase', phase: data.phase })
+  })
+  eventSource.addEventListener('delta', (event) => {
+    const data = JSON.parse(event.data) as { phase: string; text: string }
+    onExecutionEvent({ type: 'delta', phase: data.phase, text: data.text })
+  })
+  eventSource.addEventListener('milestones-extracted', (event) => {
+    const data = JSON.parse(event.data) as { count: number }
+    onExecutionEvent({ type: 'milestones-extracted', count: data.count })
+  })
+  eventSource.addEventListener('committed', (event) => {
+    const data = JSON.parse(event.data) as { commitSha: string | null; pushed: boolean }
+    onExecutionEvent({ type: 'committed', commitSha: data.commitSha, pushed: data.pushed })
+  })
+  eventSource.addEventListener('lifecycle', (event) => {
+    const data = JSON.parse(event.data) as { state: 'ExecutingPlan' }
+    onExecutionEvent({ type: 'lifecycle', state: data.state })
+  })
+  eventSource.addEventListener('handoff-rotated', (event) => {
+    const data = JSON.parse(event.data) as { sequence: number; path: string }
+    onExecutionEvent({ type: 'handoff-rotated', sequence: data.sequence, path: data.path })
+  })
+  eventSource.addEventListener('completed', (event) => {
+    const data = JSON.parse(event.data) as {
+      commitSha: string | null
+      milestoneCount: number
+      handoffPath: string
+      promptTokens: number
+      outputTokens: number
+    }
+    onExecutionEvent({
+      type: 'completed',
+      commitSha: data.commitSha,
+      milestoneCount: data.milestoneCount,
+      handoffPath: data.handoffPath,
+      promptTokens: data.promptTokens,
+      outputTokens: data.outputTokens,
+    })
+  })
+  eventSource.addEventListener('failed', (event) => {
+    const data = JSON.parse(event.data) as { phase?: string; reason: string; detail?: string }
+    onExecutionEvent({ type: 'failed', phase: data.phase, reason: data.reason, detail: data.detail })
+  })
+
+  eventSource.onerror = () => {
+    if (eventSource.readyState === EventSource.CLOSED) {
+      return
+    }
+  }
+
+  return {
+    close: () => eventSource.close(),
+  } satisfies ExecutionRunEventSubscription
 }

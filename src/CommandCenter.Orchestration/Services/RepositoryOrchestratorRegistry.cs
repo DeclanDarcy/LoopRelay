@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using CommandCenter.Agents.Abstractions;
 using CommandCenter.Core.Artifacts;
+using CommandCenter.Orchestration.Abstractions;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace CommandCenter.Orchestration.Services;
@@ -38,15 +39,18 @@ public sealed class RepositoryOrchestratorRegistry : IAsyncDisposable
     private readonly IAgentRuntime agentRuntime;
     private readonly IArtifactStore artifactStore;
     private readonly IMemoryCache memoryCache;
+    private readonly IPlanArtifactPublisher planArtifactPublisher;
 
     public RepositoryOrchestratorRegistry(
         IAgentRuntime agentRuntime,
         IArtifactStore artifactStore,
-        IMemoryCache memoryCache)
+        IMemoryCache memoryCache,
+        IPlanArtifactPublisher planArtifactPublisher)
     {
         this.agentRuntime = agentRuntime;
         this.artifactStore = artifactStore;
         this.memoryCache = memoryCache;
+        this.planArtifactPublisher = planArtifactPublisher;
     }
 
     public int Count => orchestrators.Count;
@@ -59,7 +63,7 @@ public sealed class RepositoryOrchestratorRegistry : IAsyncDisposable
             return orchestrators.GetOrAdd(
                 repositoryId,
                 id => new Lazy<RepositoryOrchestrator>(
-                    () => new RepositoryOrchestrator(id, agentRuntime, artifactStore, memoryCache),
+                    () => new RepositoryOrchestrator(id, agentRuntime, artifactStore, memoryCache, planArtifactPublisher),
                     LazyThreadSafetyMode.ExecutionAndPublication)).Value;
         }
         finally

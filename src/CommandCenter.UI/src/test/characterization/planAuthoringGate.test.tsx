@@ -8,6 +8,7 @@ afterEach(() => {
   delete window.__COMMAND_CENTER_MOCK_STATE__
   delete window.__TAURI_INTERNALS__
   delete window.__COMMAND_CENTER_MOCK_PLAN_STREAM__
+  delete window.__COMMAND_CENTER_MOCK_EXECUTION_STREAM__
   window.history.pushState({}, '', '/')
 })
 
@@ -77,7 +78,7 @@ describe('App plan-authoring gate', () => {
     expect(screen.queryByLabelText('Repository workspace')).not.toBeInTheDocument()
   })
 
-  it('navigates to the repository workspace only after Execute', async () => {
+  it('stays on the execution surface during the run, then navigates once it completes', async () => {
     renderWithWorkspaceCertification(<App />)
     await selectEmptyRepository()
     await screen.findByRole('region', { name: 'Plan authoring' })
@@ -93,6 +94,10 @@ describe('App plan-authoring gate', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Execute Plan' }))
 
+    // The screen stays mounted and shows the execution run, not the dead-end label.
+    expect(await screen.findByRole('region', { name: 'Plan execution' })).toBeInTheDocument()
+
+    // Only once the run completes does the app navigate to the workspace.
     expect(await screen.findByLabelText('Repository workspace')).toBeInTheDocument()
     await waitFor(() => {
       expect(screen.queryByRole('region', { name: 'Plan authoring' })).not.toBeInTheDocument()

@@ -19,6 +19,7 @@ public static class PlanAuthoringEndpoints
         app.MapRevisePlan();
         app.MapStreamPlan();
         app.MapExecutePlan();
+        app.MapStreamExecution();
         return app;
     }
 
@@ -88,7 +89,7 @@ public static class PlanAuthoringEndpoints
             {
                 Repository repository = await repositoryService.GetRepositoryAsync(repositoryId);
                 RepositoryOrchestrator orchestrator = await registry.GetOrCreateAsync(repository.Id.ToString("D"));
-                await orchestrator.ExecutePlanAsync(repository);
+                await orchestrator.BeginExecutePlanAsync(repository);
                 return Results.Accepted((string?)null, new PlanRunAcknowledgement("ExecutePlan"));
             }
             catch (KeyNotFoundException exception)
@@ -129,6 +130,48 @@ public static class PlanAuthoringEndpoints
             {
                 await foreach (OrchestratorStreamEvent streamEvent in
                     orchestrator.PlanningStream.SubscribeAsync(afterSequence, httpContext.RequestAborted))
+                {
+                    await httpContext.Response.WriteAsync($"id: {streamEvent.Sequence}\n", httpContext.RequestAborted);
+                    await httpContext.Response.WriteAsync($"event: {streamEvent.Type}\n", httpContext.RequestAborted);
+                    await httpContext.Response.WriteAsync($"data: {streamEvent.Data}\n\n", httpContext.RequestAborted);
+                    await httpContext.Response.Body.FlushAsync(httpContext.RequestAborted);
+                }
+            }
+            catch (OperationCanceledException) when (httpContext.RequestAborted.IsCancellationRequested)
+            {
+            }
+
+            return Results.Empty;
+        });
+
+    private static void MapStreamExecution(this IEndpointRouteBuilder app) =>
+        app.MapGet("/api/repositories/{repositoryId:guid}/execution/stream", async Task<IResult> (
+            Guid repositoryId,
+            HttpContext httpContext,
+            IRepositoryService repositoryService,
+            RepositoryOrchestratorRegistry registry) =>
+        {
+            Repository repository;
+            try
+            {
+                repository = await repositoryService.GetRepositoryAsync(repositoryId);
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+
+            RepositoryOrchestrator orchestrator = await registry.GetOrCreateAsync(repository.Id.ToString("D"));
+
+            httpContext.Response.Headers.CacheControl = "no-cache";
+            httpContext.Response.ContentType = "text/event-stream";
+
+            long afterSequence = ParseLastEventId(httpContext.Request.Headers["Last-Event-ID"]);
+
+            try
+            {
+                await foreach (OrchestratorStreamEvent streamEvent in
+                    orchestrator.ExecutionStream.SubscribeAsync(afterSequence, httpContext.RequestAborted))
                 {
                     await httpContext.Response.WriteAsync($"id: {streamEvent.Sequence}\n", httpContext.RequestAborted);
                     await httpContext.Response.WriteAsync($"event: {streamEvent.Type}\n", httpContext.RequestAborted);

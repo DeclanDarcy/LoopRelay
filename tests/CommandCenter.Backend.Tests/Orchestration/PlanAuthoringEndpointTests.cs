@@ -118,6 +118,48 @@ public sealed class PlanAuthoringEndpointTests
         Assert.DoesNotContain("\"one\"", body); // seq 1 was acknowledged, never replayed
     }
 
+    [Fact]
+    public async Task Execution_stream_for_an_unknown_repository_returns_not_found()
+    {
+        await using PlanAuthoringTestServer server = await PlanAuthoringTestServer.StartAsync();
+
+        HttpResponseMessage response = await server.Client.GetAsync(
+            $"/api/repositories/{Guid.NewGuid():D}/execution/stream");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Execution_stream_replays_only_events_after_the_last_event_id()
+    {
+        await using PlanAuthoringTestServer server = await PlanAuthoringTestServer.StartAsync();
+
+        RepositoryOrchestratorRegistry registry = server.Services.GetRequiredService<RepositoryOrchestratorRegistry>();
+        RepositoryOrchestrator orchestrator = await registry.GetOrCreateAsync(server.RegisteredRepositoryId.ToString("D"));
+        orchestrator.ExecutionStream.Publish("delta", "{\"text\":\"one\"}");
+        orchestrator.ExecutionStream.Publish("delta", "{\"text\":\"two\"}");
+        orchestrator.ExecutionStream.Publish("delta", "{\"text\":\"three\"}");
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get, $"/api/repositories/{server.RegisteredRepositoryId:D}/execution/stream");
+        request.Headers.TryAddWithoutValidation("Last-Event-ID", "1");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using HttpResponseMessage response =
+            await server.Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        string body = await ReadStreamUntilAsync(
+            response,
+            text => text.Contains("id: 2") && text.Contains("id: 3"),
+            cts.Token);
+
+        Assert.Contains("id: 2", body);
+        Assert.Contains("id: 3", body);
+        Assert.Contains("\"two\"", body);
+        Assert.Contains("\"three\"", body);
+        Assert.DoesNotContain("\"one\"", body); // seq 1 was acknowledged, never replayed
+    }
+
     private static async Task<string> ReadStreamUntilAsync(
         HttpResponseMessage response,
         Func<string, bool> done,

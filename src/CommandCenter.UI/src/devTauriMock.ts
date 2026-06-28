@@ -42,6 +42,7 @@ import type {
   ExecutionEvent,
   ExecutionGitActionEligibility,
   ExecutionPromptManifest,
+  ExecutionRunEvent,
   ExecutionSessionState,
   ExecutionSession,
   ExecutionSessionSummary,
@@ -101,6 +102,7 @@ type MockState = {
   reasoningCertificationReports: Record<string, ReasoningCertificationReport[]>
   planStatuses: Record<string, PlanStatus>
   planStreamSubscribers: Record<string, ((event: PlanStreamEvent) => void)[]>
+  executionStreamSubscribers: Record<string, ((event: ExecutionRunEvent) => void)[]>
   commandCalls: Record<string, number>
 }
 
@@ -116,11 +118,19 @@ type PlanStreamBridge = {
   subscribe: (repositoryId: string, onPlanEvent: (event: PlanStreamEvent) => void) => () => void
 }
 
+type ExecutionStreamBridge = {
+  subscribe: (
+    repositoryId: string,
+    onExecutionEvent: (event: ExecutionRunEvent) => void,
+  ) => () => void
+}
+
 declare global {
   interface Window {
     __TAURI_INTERNALS__?: TauriInternals
     __COMMAND_CENTER_MOCK_STATE__?: MockState
     __COMMAND_CENTER_MOCK_PLAN_STREAM__?: PlanStreamBridge
+    __COMMAND_CENTER_MOCK_EXECUTION_STREAM__?: ExecutionStreamBridge
   }
 }
 
@@ -2682,6 +2692,7 @@ function createInitialState(): MockState {
     reasoningCertificationReports: {},
     planStatuses: {},
     planStreamSubscribers: {},
+    executionStreamSubscribers: {},
     commandCalls: {},
   }
 
@@ -2693,6 +2704,7 @@ function createInitialState(): MockState {
       state: 'PlanAuthoring',
     }
     state.planStreamSubscribers[repository.id] = []
+    state.executionStreamSubscribers[repository.id] = []
   })
 
   state.repositories.forEach((repository) => {
@@ -4688,6 +4700,53 @@ function simulatePlanStream(
   window.setTimeout(pushNext, 12)
 }
 
+function emitExecutionEvent(state: MockState, repositoryId: string, event: ExecutionRunEvent) {
+  const subscribers = state.executionStreamSubscribers[repositoryId] ?? []
+  subscribers.forEach((notify) => notify(event))
+}
+
+function simulateExecutionStream(state: MockState, repositoryId: string) {
+  const handoffPath = '.agents/handoffs/handoff.0001.md'
+  const commitSha = 'a1b2c3d4e5'
+  // A realistic phased run: extract milestones, commit & push, start execution, rotate
+  // handoff, then complete. Deltas are streamed between the structural frames.
+  const frames: ExecutionRunEvent[] = [
+    { type: 'run-started', phase: 'ExecutePlan' },
+    { type: 'phase', phase: 'ExtractMilestones' },
+    { type: 'delta', phase: 'ExtractMilestones', text: 'Reading plan…\n' },
+    { type: 'delta', phase: 'ExtractMilestones', text: 'Splitting milestones…\n' },
+    { type: 'milestones-extracted', count: 3 },
+    { type: 'committed', commitSha, pushed: true },
+    { type: 'lifecycle', state: 'ExecutingPlan' },
+    { type: 'phase', phase: 'StartExecution' },
+    { type: 'delta', phase: 'StartExecution', text: 'Launching execution agent…\n' },
+    { type: 'delta', phase: 'StartExecution', text: 'Working the first milestone…\n' },
+    { type: 'handoff-rotated', sequence: 1, path: handoffPath },
+    {
+      type: 'completed',
+      commitSha,
+      milestoneCount: 3,
+      handoffPath,
+      promptTokens: 4200,
+      outputTokens: 1850,
+    },
+  ]
+
+  let cursor = 0
+  const pushNext = () => {
+    if (cursor >= frames.length) {
+      state.planStatuses[repositoryId] = { planExists: true, state: 'ExecutingPlan' }
+      return
+    }
+
+    emitExecutionEvent(state, repositoryId, frames[cursor])
+    cursor += 1
+    window.setTimeout(pushNext, 12)
+  }
+
+  window.setTimeout(pushNext, 12)
+}
+
 export function installDevTauriMock() {
   const searchParams = new URLSearchParams(window.location.search)
   if (searchParams.get('mock') !== 'workspace-certification') {
@@ -4732,7 +4791,9 @@ export function installDevTauriMock() {
         }
         case 'execute_plan': {
           const repositoryId = getStringArg(args, 'repositoryId')
-          state.planStatuses[repositoryId] = { planExists: true, state: 'ExecutingPlan' }
+          // The background run streams over the execution stream and lands the repository in
+          // ExecutingPlan once it completes (see simulateExecutionStream).
+          simulateExecutionStream(state, repositoryId)
           return { phase: 'ExecutePlan' }
         }
         case 'generate_operational_context_proposal':
@@ -5246,6 +5307,20 @@ export function installDevTauriMock() {
         state.planStreamSubscribers[repositoryId] = (
           state.planStreamSubscribers[repositoryId] ?? []
         ).filter((notify) => notify !== onPlanEvent)
+      }
+    },
+  }
+
+  window.__COMMAND_CENTER_MOCK_EXECUTION_STREAM__ = {
+    subscribe: (repositoryId, onExecutionEvent) => {
+      const subscribers = state.executionStreamSubscribers[repositoryId] ?? []
+      subscribers.push(onExecutionEvent)
+      state.executionStreamSubscribers[repositoryId] = subscribers
+
+      return () => {
+        state.executionStreamSubscribers[repositoryId] = (
+          state.executionStreamSubscribers[repositoryId] ?? []
+        ).filter((notify) => notify !== onExecutionEvent)
       }
     },
   }
