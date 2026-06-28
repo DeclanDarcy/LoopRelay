@@ -1180,14 +1180,16 @@ button:focus-visible {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .workspace-milestone-item {
   min-width: 0;
-  min-height: 68px;
   display: grid;
-  gap: 4px;
-  align-content: center;
+  gap: 6px;
+  align-content: start;
   padding: 10px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-6);
@@ -1196,10 +1198,12 @@ button:focus-visible {
   text-align: left;
 }
 
-.workspace-milestone-item.selected,
-.workspace-milestone-item:hover {
-  border-color: var(--accent-muted);
-  background: var(--accent-subtle);
+.workspace-milestone-head {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .workspace-milestone-item span,
@@ -1208,12 +1212,38 @@ button:focus-visible {
   overflow-wrap: anywhere;
 }
 
-.workspace-milestone-item span {
+.workspace-milestone-head span {
   color: var(--fg-default);
   font-weight: 750;
 }
 
 .workspace-milestone-item small {
+  color: var(--fg-subtle);
+  font: var(--font-mono-small);
+}
+
+.workspace-milestone-meter {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.workspace-milestone-meter-progress {
+  position: relative;
+  height: 8px;
+  border-radius: var(--radius-6);
+  background: var(--surface-1);
+  overflow: hidden;
+}
+
+.workspace-milestone-meter-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent-muted);
+}
+
+.workspace-milestone-meter-count {
   color: var(--fg-subtle);
   font: var(--font-mono-small);
 }

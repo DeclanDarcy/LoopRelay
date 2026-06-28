@@ -1,7 +1,7 @@
 import type { ContinuityDiagnostics } from '../types/continuity'
 import type { ExecutionReadiness, ExecutionSessionState, RepositoryExecutionState } from '../types/execution'
 import type { OperationalContextProposalStatus, OperationalContextReviewState } from '../types/operationalContext'
-import type { RepositoryAvailability } from '../types/repositories'
+import type { MilestoneProgress, RepositoryAvailability } from '../types/repositories'
 import type { WorkflowInstance, WorkflowProgressState } from '../types/workflow'
 
 export type StatusTone = 'neutral' | 'success' | 'warning' | 'danger' | 'info' | 'done'
@@ -72,6 +72,20 @@ export function continuityWarningStatus(diagnostics: Pick<ContinuityDiagnostics,
   }
 
   return status(`${diagnostics.continuityWarnings.length} warning${diagnostics.continuityWarnings.length === 1 ? '' : 's'}`, 'warning')
+}
+
+export function milestoneProgressStatus(
+  milestone: Pick<MilestoneProgress, 'isComplete' | 'completedTaskCount'>,
+) {
+  if (milestone.isComplete) {
+    return status('Complete', 'done')
+  }
+
+  if (milestone.completedTaskCount > 0) {
+    return status('In progress', 'warning')
+  }
+
+  return status('Not started', 'neutral')
 }
 
 const workflowProgressTone: Record<WorkflowProgressState, StatusTone> = {

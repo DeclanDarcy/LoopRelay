@@ -14,7 +14,6 @@ afterEach(() => {
 
 describe('workspace certification mock', () => {
   const findArtifactEditor = () => screen.findByRole('textbox', { name: 'Artifact markdown editor' })
-  const getExecutionMilestoneSelector = () => screen.getByRole('combobox', { name: 'Execution milestone' })
 
   it('renders the repository workspace using the dev Tauri mock', async () => {
     renderWithWorkspaceCertification(<App />)
@@ -199,19 +198,11 @@ describe('workspace certification mock', () => {
 
     render(<App />)
 
-    const milestoneSelector = await screen.findByRole('combobox', { name: 'Execution milestone' })
-    await waitFor(() => expect(milestoneSelector).toHaveValue('.agents/milestones/m5.md'))
+    const buildButton = await screen.findByRole('button', { name: 'Build Execution Context' })
+    await waitFor(() => expect(buildButton).not.toBeDisabled())
     expect(invokeSpy.mock.calls.some(([command]) => command === 'preview_execution_context')).toBe(false)
 
-    fireEvent.change(milestoneSelector, {
-      target: { value: alternateMilestone.relativePath },
-    })
-
-    await waitFor(() => expect(milestoneSelector).toHaveValue(alternateMilestone.relativePath))
-    await new Promise((resolve) => window.setTimeout(resolve, 0))
-    expect(invokeSpy.mock.calls.some(([command]) => command === 'preview_execution_context')).toBe(false)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Build Execution Context' }))
+    fireEvent.click(buildButton)
 
     await waitFor(() =>
       expect(
@@ -360,8 +351,7 @@ describe('workspace certification mock', () => {
     expect(invokeSpy.mock.calls.some(([command]) => command === 'accept_execution_handoff')).toBe(false)
     expect(invokeSpy.mock.calls.some(([command]) => command === 'reject_execution_handoff')).toBe(false)
 
-    await waitFor(() => expect(getExecutionMilestoneSelector()).toHaveValue('.agents/milestones/m5.md'))
-    const buildContextButton = screen.getByRole('button', { name: 'Build Execution Context' })
+    const buildContextButton = await screen.findByRole('button', { name: 'Build Execution Context' })
     await waitFor(() => expect(buildContextButton).not.toBeDisabled())
     fireEvent.click(buildContextButton)
     await waitFor(() => expect(screen.getByText('Launch: Ready')).toBeInTheDocument(), {
@@ -931,11 +921,9 @@ describe('workspace certification mock', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Workspace' }))
     const milestonesPanel = await screen.findByRole('region', { name: 'Workspace milestones' })
     await waitFor(() =>
-      expect(within(milestonesPanel).getByRole('button', { name: /m5\.md/ })).toBeInTheDocument(),
+      expect(within(milestonesPanel).getAllByRole('progressbar').length).toBeGreaterThan(0),
     )
-    fireEvent.click(within(milestonesPanel).getByRole('button', { name: /m5\.md/ }))
-
-    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled())
+    expect(within(milestonesPanel).queryByRole('button')).not.toBeInTheDocument()
     await new Promise((resolve) => window.setTimeout(resolve, 0))
     expect(commandCounts()).toEqual(beforeNavigation)
   })

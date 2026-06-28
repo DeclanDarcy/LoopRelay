@@ -332,6 +332,30 @@ public sealed class ContractOracleFixtureTests
                 ]
             },
             MilestoneCount = 2,
+            MilestoneProgress = new MilestoneProgressRollup
+            {
+                CompletedMilestoneCount = 1,
+                TotalMilestoneCount = 2,
+                Milestones =
+                [
+                    new MilestoneProgress
+                    {
+                        RelativePath = ".agents/milestones/m0.2-contract-oracle.md",
+                        Name = "m0.2-contract-oracle.md",
+                        CompletedTaskCount = 4,
+                        TotalTaskCount = 4,
+                        IsComplete = true
+                    },
+                    new MilestoneProgress
+                    {
+                        RelativePath = ".agents/milestones/m0.2-repository-workspace-fixture-slice-0020.md",
+                        Name = "m0.2-repository-workspace-fixture-slice-0020.md",
+                        CompletedTaskCount = 2,
+                        TotalTaskCount = 5,
+                        IsComplete = false
+                    }
+                ]
+            },
             HasPlan = true,
             HasOperationalContext = true,
             HasCurrentHandoff = true,

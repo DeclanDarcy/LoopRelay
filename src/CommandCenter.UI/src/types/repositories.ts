@@ -57,6 +57,20 @@ export type RepositoryDecisionSessionSummary =
 
 export type RepositoryDashboardProjection = RepositoryDashboardConsumerCandidateProjection
 
+export type MilestoneProgress = {
+  relativePath: string
+  name: string
+  completedTaskCount: number
+  totalTaskCount: number
+  isComplete: boolean
+}
+
+export type MilestoneProgressRollup = {
+  completedMilestoneCount: number
+  totalMilestoneCount: number
+  milestones: MilestoneProgress[]
+}
+
 export type RepositoryWorkspaceProjection = {
   repository: Repository
   availability: RepositoryAvailability
@@ -66,6 +80,7 @@ export type RepositoryWorkspaceProjection = {
   executionHistory: ExecutionSessionSummary[]
   artifactInventory: ArtifactInventory
   milestoneCount: number
+  milestoneProgress: MilestoneProgressRollup
   hasPlan: boolean
   hasOperationalContext: boolean
   hasCurrentHandoff: boolean

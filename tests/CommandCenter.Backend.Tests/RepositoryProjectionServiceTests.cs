@@ -473,6 +473,40 @@ public sealed class RepositoryProjectionServiceTests
     }
 
     [Fact]
+    public async Task WorkspaceProjectsMilestoneCheckboxProgress()
+    {
+        string repositoryPath = CreateGitRepositoryDirectory();
+        RepositoryService repositoryService = CreateRepositoryService();
+        Repository repository = await repositoryService.RegisterAsync(repositoryPath);
+        await WriteAsync(repository, ".agents/plan.md", "plan");
+        await WriteAsync(repository, ".agents/milestones/m1.md",
+            "# M1\n- [x] a\n- [x] b\n- [ ] c\n- [ ] d\n");
+        // m2: nested checked item counts; the fenced "- [ ]" must be ignored.
+        await WriteAsync(repository, ".agents/milestones/m2.md",
+            "# M2\n- [x] top\n  - [x] nested child\n- [x] another\n\n```text\n- [ ] inside a fence, ignored\n```\n");
+        RepositoryProjectionService projectionService = CreateProjectionService(repositoryService);
+
+        RepositoryWorkspaceProjection workspace = await projectionService.GetWorkspaceAsync(repository.Id);
+
+        MilestoneProgressRollup rollup = workspace.MilestoneProgress;
+        Assert.Equal(2, rollup.TotalMilestoneCount);
+        Assert.Equal(1, rollup.CompletedMilestoneCount);
+        Assert.Equal(2, rollup.Milestones.Count);
+
+        MilestoneProgress m1 = rollup.Milestones[0];
+        Assert.Equal(".agents/milestones/m1.md", m1.RelativePath);
+        Assert.Equal(2, m1.CompletedTaskCount);
+        Assert.Equal(4, m1.TotalTaskCount);
+        Assert.False(m1.IsComplete);
+
+        MilestoneProgress m2 = rollup.Milestones[1];
+        Assert.Equal(".agents/milestones/m2.md", m2.RelativePath);
+        Assert.Equal(3, m2.CompletedTaskCount);
+        Assert.Equal(3, m2.TotalTaskCount);
+        Assert.True(m2.IsComplete);
+    }
+
+    [Fact]
     public async Task DashboardAndWorkspaceProjectDefaultExecutionState()
     {
         string repositoryPath = CreateGitRepositoryDirectory();

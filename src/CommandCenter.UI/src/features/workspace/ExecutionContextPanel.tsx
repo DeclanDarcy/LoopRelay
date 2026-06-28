@@ -8,20 +8,17 @@ import { ExecutionContextMissingOptionalList } from '../execution/ExecutionConte
 import { ExecutionContextSummaryRows } from '../execution/ExecutionContextSummaryRows'
 import { ExecutionContextValidationList } from '../execution/ExecutionContextValidationList'
 import { ExecutionRepositorySnapshotPanel } from '../execution/ExecutionRepositorySnapshotPanel'
-import type { ExecutionContextPreview, PlanningMilestone } from '../../types'
+import type { ExecutionContextPreview } from '../../types'
 
 type ExecutionContextPanelProps = {
   id?: string
   executionContext: ExecutionContextPreview | null
-  milestoneOptions: PlanningMilestone[]
-  selectedMilestonePath: string | null
   isContextLoading: boolean
   canStartExecution: boolean
   isStartingExecution: boolean
   startExecutionBlockedReason: string
   operationalContextExecutionStatus: string
   executionContextSizeStatus: string
-  onSelectMilestone: (milestonePath: string | null) => void
   onBuildExecutionContext: () => void
   onStartExecution: () => void
 }
@@ -29,15 +26,12 @@ type ExecutionContextPanelProps = {
 export function ExecutionContextPanel({
   id,
   executionContext,
-  milestoneOptions,
-  selectedMilestonePath,
   isContextLoading,
   canStartExecution,
   isStartingExecution,
   startExecutionBlockedReason,
   operationalContextExecutionStatus,
   executionContextSizeStatus,
-  onSelectMilestone,
   onBuildExecutionContext,
   onStartExecution,
 }: ExecutionContextPanelProps) {
@@ -50,27 +44,11 @@ export function ExecutionContextPanel({
         headingLevel={4}
         actions={
           <div className="context-controls">
-            <select
-              aria-label="Execution milestone"
-              value={selectedMilestonePath ?? ''}
-              onChange={(event) => onSelectMilestone(event.target.value || null)}
-              disabled={milestoneOptions.length === 0 || isContextLoading}
-            >
-              {milestoneOptions.length === 0 ? (
-                <option value="">No milestones</option>
-              ) : (
-                milestoneOptions.map((milestone) => (
-                  <option key={milestone.relativePath} value={milestone.relativePath}>
-                    {milestone.name}
-                  </option>
-                ))
-              )}
-            </select>
             <button
               type="button"
               className="secondary-action"
               onClick={onBuildExecutionContext}
-              disabled={!selectedMilestonePath || isContextLoading}
+              disabled={isContextLoading}
             >
               {isContextLoading ? 'Building...' : 'Build Execution Context'}
             </button>
@@ -130,7 +108,7 @@ export function ExecutionContextPanel({
         </div>
       ) : (
         <EmptyState className="empty-state">
-          Build a context preview for a selected milestone.
+          Build a context preview for this repository.
         </EmptyState>
       )}
     </Panel>

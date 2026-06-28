@@ -103,7 +103,6 @@ function App() {
   const {
     selectedRepositoryId,
     selectedArtifactPath,
-    selectedMilestonePath,
     activePrimaryTab,
     isCommandPaletteOpen,
     sectionTarget,
@@ -111,8 +110,6 @@ function App() {
     reconcileRepositorySelection,
     selectArtifact: selectArtifactNavigation,
     reconcileSelectedArtifact: reconcileSelectedArtifactNavigation,
-    selectMilestone,
-    reconcileSelectedMilestone,
     clearRepositoryNavigation,
     setActivePrimaryTab,
     setIsCommandPaletteOpen,
@@ -412,7 +409,6 @@ function App() {
   const hasOperationalContextProposalDraftChanges =
     operationalContextProposal !== null &&
     operationalContextProposalDraft !== operationalContextCandidateContent
-  const milestoneOptions = workspace?.artifactInventory.milestones ?? []
   const selectedExecutionStatus = executionSummary
     ? executionSessionStatus?.sessionId === executionSessionId
       ? executionSessionStatus
@@ -636,10 +632,6 @@ function App() {
         selectArtifactNavigation(repositoryId, target.artifactPath)
       }
 
-      if (repositoryId && target.milestonePath) {
-        selectMilestone(repositoryId, target.milestonePath)
-      }
-
       const targetTab = target.tab ?? (target.sectionId ? getTabForSection(target.sectionId) : null)
       if (targetTab) {
         setActivePrimaryTab(targetTab)
@@ -651,7 +643,6 @@ function App() {
     },
     [
       selectArtifactNavigation,
-      selectMilestone,
       selectRepository,
       setActivePrimaryTab,
       setSectionTarget,
@@ -1382,14 +1373,12 @@ function App() {
     if (workspaceError) {
       if (selectedRepositoryId) {
         selectArtifactNavigation(selectedRepositoryId, null)
-        selectMilestone(selectedRepositoryId, null)
       }
       setExecutionContext(null)
       setError(workspaceError)
     }
   }, [
     selectArtifactNavigation,
-    selectMilestone,
     selectedRepositoryId,
     setExecutionContext,
     workspaceError,
@@ -1541,20 +1530,8 @@ function App() {
   }, [canReviewGeneratedHandoff, executionDisplay?.handoffPath, selectedRepository])
 
   useEffect(() => {
-    if (!workspace) {
-      if (selectedRepositoryId) {
-        selectMilestone(selectedRepositoryId, null)
-      }
-      return
-    }
-
-    const milestones = workspace.artifactInventory.milestones
-    reconcileSelectedMilestone(
-      workspace.repository.id,
-      milestones.map((milestone) => milestone.relativePath),
-    )
     setExecutionContext(null)
-  }, [reconcileSelectedMilestone, selectMilestone, selectedRepositoryId, setExecutionContext, workspace])
+  }, [setExecutionContext, workspace])
 
   useEffect(() => {
     if (!sectionTarget) {
@@ -1575,17 +1552,12 @@ function App() {
       <ExecutionContextPanel
         id={panelId}
         executionContext={executionContext}
-        milestoneOptions={milestoneOptions}
-        selectedMilestonePath={selectedMilestonePath}
         isContextLoading={isContextLoading}
         canStartExecution={canStartExecution}
         isStartingExecution={isStartingExecution}
         startExecutionBlockedReason={startExecutionBlockedReason}
         operationalContextExecutionStatus={operationalContextExecutionStatus}
         executionContextSizeStatus={executionContextSizeStatus}
-        onSelectMilestone={(milestonePath) =>
-          selectMilestone(selectedRepository.repository.id, milestonePath)
-        }
         onBuildExecutionContext={() => void buildExecutionContext()}
         onStartExecution={() => void startExecution()}
       />
@@ -1651,15 +1623,6 @@ function App() {
 
   const openContinuityWarnings = () => {
     openContinuitySection('continuity-warnings')
-  }
-
-  const openWorkspaceExecutionContext = (milestonePath: string) => {
-    if (selectedRepository) {
-      selectMilestone(selectedRepository.repository.id, milestonePath)
-    }
-
-    setActivePrimaryTab('workspace')
-    setSectionTarget('workspace-execution-context')
   }
 
   const openWorkspaceGit = () => {
@@ -1836,14 +1799,7 @@ function App() {
                 }
                 milestones={
                   workspace ? (
-                    <WorkspaceMilestonesPanel
-                      milestones={milestoneOptions}
-                      selectedMilestonePath={selectedMilestonePath}
-                      onSelectMilestone={(milestonePath) =>
-                        selectMilestone(selectedRepository.repository.id, milestonePath)
-                      }
-                      onOpenExecutionContext={openWorkspaceExecutionContext}
-                    />
+                    <WorkspaceMilestonesPanel rollup={workspace.milestoneProgress} />
                   ) : null
                 }
                 artifactWorkspace={
@@ -2120,7 +2076,6 @@ function App() {
                 isWorkflowLoading={isWorkflowLoading}
                 workflowError={workflowError}
                 currentExecutionState={currentExecutionState}
-                selectedMilestonePath={selectedMilestonePath}
                 contextPanel={activePrimaryTab === 'execution' ? renderExecutionContextPanel() : null}
                 gitWorkflow={
                   <GitWorkflowPanel

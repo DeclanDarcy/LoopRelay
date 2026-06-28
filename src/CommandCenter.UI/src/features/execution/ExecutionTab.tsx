@@ -39,7 +39,6 @@ type ExecutionTabProps = {
   isWorkflowLoading?: boolean
   workflowError?: string | null
   currentExecutionState: RepositoryExecutionState
-  selectedMilestonePath: string | null
   contextPanel: ReactNode
   gitWorkflow: ReactNode
   handoffReview: ReactNode
@@ -69,7 +68,6 @@ export function ExecutionTab({
   isWorkflowLoading = false,
   workflowError = null,
   currentExecutionState,
-  selectedMilestonePath,
   contextPanel,
   gitWorkflow,
   handoffReview,
@@ -80,7 +78,7 @@ export function ExecutionTab({
   onOpenHandoffArtifact,
   onOpenWorkspaceGit,
 }: ExecutionTabProps) {
-  const title = selectedMilestonePath ?? 'Select a milestone'
+  const title = 'Execution workspace'
 
   return (
     <section

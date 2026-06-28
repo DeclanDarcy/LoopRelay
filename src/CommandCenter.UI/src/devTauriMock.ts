@@ -260,6 +260,17 @@ function createWorkspace(repository: Repository, inventory: ArtifactInventory): 
     executionHistory: [],
     artifactInventory: inventory,
     milestoneCount: inventory.milestones.length,
+    milestoneProgress: {
+      completedMilestoneCount: 0,
+      totalMilestoneCount: inventory.milestones.length,
+      milestones: inventory.milestones.map((milestone) => ({
+        relativePath: milestone.relativePath,
+        name: milestone.name,
+        completedTaskCount: 0,
+        totalTaskCount: 0,
+        isComplete: false,
+      })),
+    },
     hasPlan: inventory.plan !== null,
     hasOperationalContext: inventory.operationalContext !== null,
     hasCurrentHandoff: inventory.currentHandoff !== null,

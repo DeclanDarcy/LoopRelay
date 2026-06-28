@@ -98,6 +98,7 @@ public sealed class RepositoryProjectionService(
         OperationalContextProjection operationalContext = await BuildOperationalContextProjectionAsync(repository, inventory);
         RepositoryReasoningSummary reasoningSummary = await BuildReasoningSummaryAsync(repository);
         RepositoryDecisionSessionSummary decisionSessionSummary = await BuildDecisionSessionSummaryAsync(repository);
+        MilestoneProgressRollup milestoneProgress = await BuildMilestoneProgressAsync(repository, inventory);
         return new RepositoryWorkspaceProjection
         {
             Repository = repository,
@@ -108,6 +109,7 @@ public sealed class RepositoryProjectionService(
             ExecutionHistory = await executionSessionService.GetRepositorySessionHistoryAsync(repository.Id),
             ArtifactInventory = inventory,
             MilestoneCount = inventory.Milestones.Count,
+            MilestoneProgress = milestoneProgress,
             HasPlan = inventory.Plan is not null,
             HasOperationalContext = inventory.OperationalContext is not null,
             HasCurrentHandoff = inventory.CurrentHandoff is not null,
@@ -117,6 +119,80 @@ public sealed class RepositoryProjectionService(
             ReasoningSummary = reasoningSummary,
             DecisionSessionSummary = decisionSessionSummary
         };
+    }
+
+    // Read-only milestone progress: read each milestone file and count its GitHub-style task
+    // checkboxes. Agents own milestone agency (they check the boxes); this only reports the state.
+    // Reads content via the already-injected artifactStore — the same pattern operational context uses.
+    private async Task<MilestoneProgressRollup> BuildMilestoneProgressAsync(
+        Repository repository,
+        ArtifactInventory inventory)
+    {
+        var milestones = new List<MilestoneProgress>(inventory.Milestones.Count);
+        foreach (Artifact milestone in inventory.Milestones)
+        {
+            string path = ArtifactPath.ResolveRepositoryPath(repository, milestone.RelativePath);
+            string content = await artifactStore.ReadAsync(path) ?? string.Empty;
+            (int completed, int total) = CountCheckboxes(content);
+            milestones.Add(new MilestoneProgress
+            {
+                RelativePath = milestone.RelativePath,
+                Name = milestone.Name,
+                CompletedTaskCount = completed,
+                TotalTaskCount = total,
+                IsComplete = total > 0 && completed == total
+            });
+        }
+
+        return new MilestoneProgressRollup
+        {
+            CompletedMilestoneCount = milestones.Count(milestone => milestone.IsComplete),
+            TotalMilestoneCount = milestones.Count,
+            Milestones = milestones
+        };
+    }
+
+    // Counts GitHub-flavored task-list items ("- [ ] " / "- [x] "), ignoring anything inside fenced
+    // code blocks. A task is an outdented/indented hyphen bullet, one space, "[", one mark char, "]",
+    // one space; checked when the mark is 'x' or 'X'. Nested items count individually.
+    private static (int Completed, int Total) CountCheckboxes(string content)
+    {
+        int completed = 0;
+        int total = 0;
+        bool insideFence = false;
+
+        foreach (ReadOnlySpan<char> rawLine in content.AsSpan().EnumerateLines())
+        {
+            ReadOnlySpan<char> line = rawLine.TrimStart();
+            if (line.StartsWith("```"))
+            {
+                insideFence = !insideFence;
+                continue;
+            }
+
+            if (insideFence || line.Length < 6)
+            {
+                continue;
+            }
+
+            if (line[0] != '-' || line[1] != ' ' || line[2] != '[' || line[4] != ']' || line[5] != ' ')
+            {
+                continue;
+            }
+
+            char mark = line[3];
+            if (mark == ' ')
+            {
+                total++;
+            }
+            else if (mark is 'x' or 'X')
+            {
+                total++;
+                completed++;
+            }
+        }
+
+        return (completed, total);
     }
 
     private async Task<RepositoryDecisionSessionSummary> BuildDecisionSessionSummaryAsync(Repository repository)

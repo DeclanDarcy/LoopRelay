@@ -46,8 +46,6 @@ export function useShellState() {
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<string | null>(null)
   const [selectedArtifactPathsByRepository, setSelectedArtifactPathsByRepository] =
     useState<RepositoryPathSelections>({})
-  const [selectedMilestonePathsByRepository, setSelectedMilestonePathsByRepository] =
-    useState<RepositoryPathSelections>({})
   const [activePrimaryTabsByRepository, setActivePrimaryTabsByRepository] =
     useState<RepositoryTabSelections>({})
   const [activePrimaryTab, setActivePrimaryTabState] = useState<PrimaryWorkspaceTab>('workspace')
@@ -56,9 +54,6 @@ export function useShellState() {
 
   const selectedArtifactPath = selectedRepositoryId
     ? selectedArtifactPathsByRepository[selectedRepositoryId] ?? null
-    : null
-  const selectedMilestonePath = selectedRepositoryId
-    ? selectedMilestonePathsByRepository[selectedRepositoryId] ?? null
     : null
 
   const selectRepository = useCallback(
@@ -101,26 +96,8 @@ export function useShellState() {
     )
   }, [])
 
-  const selectMilestone = useCallback((repositoryId: string, relativePath: string | null) => {
-    setSelectedMilestonePathsByRepository((currentSelections) =>
-      rememberPath(currentSelections, repositoryId, relativePath),
-    )
-  }, [])
-
-  const reconcileSelectedMilestone = useCallback(
-    (repositoryId: string, availablePaths: string[]) => {
-      setSelectedMilestonePathsByRepository((currentSelections) =>
-        reconcilePath(currentSelections, repositoryId, availablePaths),
-      )
-    },
-    [],
-  )
-
   const clearRepositoryNavigation = useCallback((repositoryId: string) => {
     setSelectedArtifactPathsByRepository((currentSelections) =>
-      rememberPath(currentSelections, repositoryId, null),
-    )
-    setSelectedMilestonePathsByRepository((currentSelections) =>
       rememberPath(currentSelections, repositoryId, null),
     )
     setSelectedRepositoryId((currentId) => (currentId === repositoryId ? null : currentId))
@@ -143,7 +120,6 @@ export function useShellState() {
     () => ({
       selectedRepositoryId,
       selectedArtifactPath,
-      selectedMilestonePath,
       activePrimaryTab,
       isCommandPaletteOpen,
       sectionTarget,
@@ -151,8 +127,6 @@ export function useShellState() {
       reconcileRepositorySelection,
       selectArtifact,
       reconcileSelectedArtifact,
-      selectMilestone,
-      reconcileSelectedMilestone,
       clearRepositoryNavigation,
       setActivePrimaryTab,
       setIsCommandPaletteOpen,
@@ -164,12 +138,9 @@ export function useShellState() {
       isCommandPaletteOpen,
       reconcileRepositorySelection,
       reconcileSelectedArtifact,
-      reconcileSelectedMilestone,
       selectArtifact,
-      selectMilestone,
       selectRepository,
       selectedArtifactPath,
-      selectedMilestonePath,
       selectedRepositoryId,
       setActivePrimaryTab,
       sectionTarget,

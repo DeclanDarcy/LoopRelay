@@ -1,8 +1,3 @@
-export type PlanningMilestone = {
-  relativePath: string
-  name: string
-}
-
 export type PlanPhase = 'PlanAuthoring' | 'ExecutingPlan'
 
 export type PlanTurnPhase = 'WritePlan' | 'RevisePlan'

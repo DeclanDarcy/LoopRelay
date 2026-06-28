@@ -218,6 +218,24 @@ struct ArtifactInventory {
 
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct MilestoneProgress {
+    relative_path: String,
+    name: String,
+    completed_task_count: i32,
+    total_task_count: i32,
+    is_complete: bool,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MilestoneProgressRollup {
+    completed_milestone_count: i32,
+    total_milestone_count: i32,
+    milestones: Vec<MilestoneProgress>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct RepositoryWorkspaceProjection {
     repository: Repository,
     availability: String,
@@ -227,6 +245,7 @@ struct RepositoryWorkspaceProjection {
     execution_history: Vec<ExecutionSessionSummary>,
     artifact_inventory: ArtifactInventory,
     milestone_count: i32,
+    milestone_progress: MilestoneProgressRollup,
     has_plan: bool,
     has_operational_context: bool,
     has_current_handoff: bool,

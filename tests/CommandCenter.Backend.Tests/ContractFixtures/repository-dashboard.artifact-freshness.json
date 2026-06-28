@@ -7,7 +7,7 @@
       "artifactId": "typescript-repository-dashboard-contract",
       "artifactPath": "src/CommandCenter.UI/src/types/repositories.ts",
       "artifactKind": "phase0-verified-contract-artifact",
-      "artifactSha256": "CE45833FCA2FB8DAEA93DF982E5B7564B1B94189C6F49954CDE90C2DDD46AD26"
+      "artifactSha256": "82C717CAF0BB083DD211354C25B4EABC26BA83586A39DAB799D626611D9D1D75"
     }
   ]
 }

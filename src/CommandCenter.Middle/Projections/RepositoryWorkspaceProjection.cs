@@ -27,6 +27,8 @@ public sealed class RepositoryWorkspaceProjection
 
     public int MilestoneCount { get; init; }
 
+    public MilestoneProgressRollup MilestoneProgress { get; init; } = new();
+
     public bool HasPlan { get; init; }
 
     public bool HasOperationalContext { get; init; }

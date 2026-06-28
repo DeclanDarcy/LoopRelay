@@ -140,6 +140,26 @@
     ]
   },
   "milestoneCount": 2,
+  "milestoneProgress": {
+    "completedMilestoneCount": 1,
+    "totalMilestoneCount": 2,
+    "milestones": [
+      {
+        "relativePath": ".agents/milestones/m0.2-contract-oracle.md",
+        "name": "m0.2-contract-oracle.md",
+        "completedTaskCount": 4,
+        "totalTaskCount": 4,
+        "isComplete": true
+      },
+      {
+        "relativePath": ".agents/milestones/m0.2-repository-workspace-fixture-slice-0020.md",
+        "name": "m0.2-repository-workspace-fixture-slice-0020.md",
+        "completedTaskCount": 2,
+        "totalTaskCount": 5,
+        "isComplete": false
+      }
+    ]
+  },
   "hasPlan": true,
   "hasOperationalContext": true,
   "hasCurrentHandoff": true,
