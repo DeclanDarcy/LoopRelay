@@ -416,9 +416,13 @@ function App() {
       ? executionSessionStatus
       : null
     : null
-  const selectedExecutionEvents = executionSummary
-    ? mergeExecutionEvents(selectedExecutionStatus?.recentEvents ?? [], streamedExecutionEvents)
-    : []
+  const selectedExecutionEvents = useMemo(
+    () =>
+      executionSummary
+        ? mergeExecutionEvents(selectedExecutionStatus?.recentEvents ?? [], streamedExecutionEvents)
+        : [],
+    [executionSummary, selectedExecutionStatus, streamedExecutionEvents],
+  )
   const currentExecutionState = workspace?.executionState ?? selectedRepository?.executionState ?? 'Ready'
   const executionContextMatchesSelection =
     executionContext?.id === selectedRepository?.repository.id
@@ -510,8 +514,10 @@ function App() {
     () => [...selectedCommitPaths].sort((left, right) => left.localeCompare(right)),
     [selectedCommitPaths],
   )
-  const selectedCommitScopeItems =
-    commitPreparation?.scopeItems.filter((item) => selectedCommitPaths.has(item.path)) ?? []
+  const selectedCommitScopeItems = useMemo(
+    () => commitPreparation?.scopeItems.filter((item) => selectedCommitPaths.has(item.path)) ?? [],
+    [commitPreparation, selectedCommitPaths],
+  )
   const commitPreparationSessionId = commitPreparation?.sessionId ?? null
   const isCommitPreparationCurrent =
     commitPreparationSessionId === executionSessionId &&

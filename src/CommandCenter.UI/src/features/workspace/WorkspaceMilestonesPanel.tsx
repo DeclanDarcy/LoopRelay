@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { EmptyState, Metric, Panel, SectionHeader, StatusBadge } from '../../components/design'
 import { milestoneProgressStatus } from '../../lib/status'
 import type { MilestoneProgressRollup } from '../../types'
@@ -6,7 +7,7 @@ type WorkspaceMilestonesPanelProps = {
   rollup: MilestoneProgressRollup
 }
 
-export function WorkspaceMilestonesPanel({ rollup }: WorkspaceMilestonesPanelProps) {
+function WorkspaceMilestonesPanelImpl({ rollup }: WorkspaceMilestonesPanelProps) {
   const { milestones, completedMilestoneCount, totalMilestoneCount } = rollup
 
   return (
@@ -68,3 +69,5 @@ export function WorkspaceMilestonesPanel({ rollup }: WorkspaceMilestonesPanelPro
     </Panel>
   )
 }
+
+export const WorkspaceMilestonesPanel = memo(WorkspaceMilestonesPanelImpl)

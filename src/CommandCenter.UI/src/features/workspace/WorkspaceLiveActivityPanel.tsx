@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Button, EmptyState, Panel, SectionHeader } from '../../components/design'
 import { formatDateTime } from '../../lib'
 import type { ExecutionEvent } from '../../types'
@@ -7,7 +8,7 @@ type WorkspaceLiveActivityPanelProps = {
   onOpenExecutionActivity?: () => void
 }
 
-export function WorkspaceLiveActivityPanel({
+function WorkspaceLiveActivityPanelImpl({
   events,
   onOpenExecutionActivity,
 }: WorkspaceLiveActivityPanelProps) {
@@ -49,3 +50,5 @@ export function WorkspaceLiveActivityPanel({
     </Panel>
   )
 }
+
+export const WorkspaceLiveActivityPanel = memo(WorkspaceLiveActivityPanelImpl)

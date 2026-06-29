@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { EmptyState, Tooltip } from '../../components/design'
 import type { ReasoningEvent, ReasoningEventFamily } from '../../types'
 import { ReasoningDiagnosticGroups } from './ReasoningDiagnosticGroups'
@@ -9,7 +10,7 @@ type ReasoningEventFeedProps = {
   isLoading: boolean
 }
 
-export function ReasoningEventFeed({
+function ReasoningEventFeedImpl({
   events,
   selectedThreadId,
   selectedFamilies,
@@ -125,3 +126,5 @@ function formatDate(value: string) {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
 }
+
+export const ReasoningEventFeed = memo(ReasoningEventFeedImpl)

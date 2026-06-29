@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { formatDateTime } from '../../lib'
 import { EmptyState, Panel, SectionHeader, StatusBadge, Tooltip } from '../../components/design'
 import { executionSessionStatus } from '../../lib/status'
@@ -11,7 +12,7 @@ type ExecutionEventFeedProps = {
   eyebrow?: string
 }
 
-export function ExecutionEventFeed({
+function ExecutionEventFeedImpl({
   events,
   session = null,
   ariaLabel = 'Execution output',
@@ -130,3 +131,5 @@ function eventCategory(executionEvent: ExecutionEvent) {
 function eventConsequence(executionEvent: ExecutionEvent) {
   return executionEvent.consequence?.trim() || 'Execution monitoring recorded activity.'
 }
+
+export const ExecutionEventFeed = memo(ExecutionEventFeedImpl)

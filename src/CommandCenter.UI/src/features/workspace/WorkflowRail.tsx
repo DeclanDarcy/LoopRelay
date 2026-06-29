@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import type { WorkflowInstance, WorkflowProgressState, WorkflowStage } from '../../types'
 
 type WorkflowRailProps = {
@@ -119,7 +120,7 @@ function buildWorkflowRailSteps(workflow: WorkflowInstance): WorkflowRailStep[] 
   ]
 }
 
-export function WorkflowRail({
+function WorkflowRailImpl({
   workflow,
   isLoading = false,
   error = null,
@@ -151,3 +152,5 @@ export function WorkflowRail({
     </div>
   )
 }
+
+export const WorkflowRail = memo(WorkflowRailImpl)

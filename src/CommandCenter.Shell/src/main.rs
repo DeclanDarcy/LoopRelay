@@ -4,13 +4,32 @@ use std::{
     env,
     path::PathBuf,
     process::{Child, Command},
-    sync::Mutex,
+    sync::{Mutex, OnceLock},
     thread,
     time::Duration,
 };
 use tauri::Manager;
 
 const BACKEND_URL: &str = "http://127.0.0.1:5000";
+
+/// Process-wide shared blocking HTTP client.
+///
+/// Every backend call reuses this single client so its connection pool and
+/// keep-alive survive across invokes. A repo-select fans out ~24 concurrent
+/// invokes to 127.0.0.1:5000; without a shared pool each one paid a fresh TCP
+/// setup. There is deliberately NO overall request timeout (some commands are
+/// legitimately slow and never had one) — only a short connect timeout.
+static HTTP_CLIENT: OnceLock<reqwest::blocking::Client> = OnceLock::new();
+
+fn http_client() -> &'static reqwest::blocking::Client {
+    HTTP_CLIENT.get_or_init(|| {
+        reqwest::blocking::Client::builder()
+            .pool_max_idle_per_host(32)
+            .connect_timeout(Duration::from_secs(5))
+            .build()
+            .unwrap_or_else(|_| reqwest::blocking::Client::new())
+    })
+}
 
 struct BackendProcess {
     child: Mutex<Option<Child>>,
@@ -359,7 +378,7 @@ impl Drop for BackendProcess {
 
 #[tauri::command(async)]
 fn ping_backend() -> Result<String, String> {
-    reqwest::blocking::get(format!("{BACKEND_URL}/api/ping"))
+    http_client().get(format!("{BACKEND_URL}/api/ping")).send()
         .map_err(|error| error.to_string())?
         .text()
         .map_err(|error| error.to_string())
@@ -383,7 +402,7 @@ fn select_repository_directory() -> Option<String> {
 
 #[tauri::command(async)]
 fn list_repositories() -> Result<Vec<RepositoryDashboardProjection>, String> {
-    reqwest::blocking::get(format!("{BACKEND_URL}/api/repositories"))
+    http_client().get(format!("{BACKEND_URL}/api/repositories")).send()
         .map_err(|error| error.to_string())?
         .error_for_status()
         .map_err(|error| error.to_string())?
@@ -393,7 +412,7 @@ fn list_repositories() -> Result<Vec<RepositoryDashboardProjection>, String> {
 
 #[tauri::command(async)]
 fn register_repository(path: String) -> Result<(), String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!("{BACKEND_URL}/api/repositories"))
         .json(&RegisterRepositoryRequest { path })
@@ -415,7 +434,7 @@ fn register_repository(path: String) -> Result<(), String> {
 
 #[tauri::command(async)]
 fn remove_repository(repository_id: String) -> Result<(), String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     client
         .delete(format!("{BACKEND_URL}/api/repositories/{repository_id}"))
         .send()
@@ -430,9 +449,9 @@ fn remove_repository(repository_id: String) -> Result<(), String> {
 fn get_repository_workspace(
     repository_id: String,
 ) -> Result<RepositoryWorkspaceProjection, String> {
-    reqwest::blocking::get(format!(
+    http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/workspace"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?
     .error_for_status()
     .map_err(|error| error.to_string())?
@@ -444,7 +463,7 @@ fn get_repository_workspace(
 fn refresh_repository_workspace(
     repository_id: String,
 ) -> Result<RepositoryWorkspaceProjection, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/refresh"
@@ -459,7 +478,7 @@ fn refresh_repository_workspace(
 
 #[tauri::command(async)]
 fn load_artifact_content(repository_id: String, relative_path: String) -> Result<String, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     client
         .get(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/artifacts/content"
@@ -479,7 +498,7 @@ fn save_artifact_content(
     relative_path: String,
     content: String,
 ) -> Result<(), String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     client
         .put(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/artifacts/content"
@@ -510,7 +529,7 @@ fn rotate_current_decisions(
 
 #[tauri::command(async)]
 fn preview_execution_context(repository_id: String) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     client
         .get(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/execution/context"
@@ -585,7 +604,7 @@ fn decision_submit(repository_id: String, decisions: String) -> Result<Value, St
 
 #[tauri::command(async)]
 fn generate_operational_context_proposal(repository_id: String) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/operational-context/generate"
@@ -602,9 +621,9 @@ fn generate_operational_context_proposal(repository_id: String) -> Result<Value,
 
 #[tauri::command(async)]
 fn list_operational_context_proposals(repository_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/operational-context/proposals"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -619,9 +638,9 @@ fn get_operational_context_proposal(
     repository_id: String,
     proposal_id: String,
 ) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/operational-context/proposals/{proposal_id}"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -637,7 +656,7 @@ fn edit_operational_context_proposal(
     proposal_id: String,
     content: String,
 ) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .put(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/operational-context/proposals/{proposal_id}/content"
@@ -659,7 +678,7 @@ fn accept_operational_context_proposal(
     proposal_id: String,
     review_note: Option<String>,
 ) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/operational-context/proposals/{proposal_id}/accept"
@@ -681,7 +700,7 @@ fn reject_operational_context_proposal(
     proposal_id: String,
     review_note: Option<String>,
 ) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/operational-context/proposals/{proposal_id}/reject"
@@ -702,7 +721,7 @@ fn promote_operational_context_proposal(
     repository_id: String,
     proposal_id: String,
 ) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/operational-context/proposals/{proposal_id}/promote"
@@ -719,9 +738,9 @@ fn promote_operational_context_proposal(
 
 #[tauri::command(async)]
 fn get_decision_context(repository_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/context"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -733,7 +752,7 @@ fn get_decision_context(repository_id: String) -> Result<Value, String> {
 
 #[tauri::command(async)]
 fn build_decision_context(repository_id: String) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/decisions/context"
@@ -750,9 +769,9 @@ fn build_decision_context(repository_id: String) -> Result<Value, String> {
 
 #[tauri::command(async)]
 fn list_decision_candidates(repository_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/candidates"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -844,9 +863,9 @@ fn mark_decision_candidate_duplicate(
 
 #[tauri::command(async)]
 fn list_decision_proposals(repository_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -861,7 +880,7 @@ fn list_decision_proposal_browser(
     repository_id: String,
     states: Vec<String>,
 ) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let mut request = client.get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/browser"
     ));
@@ -881,9 +900,9 @@ fn list_decision_proposal_browser(
 
 #[tauri::command(async)]
 fn get_decision_proposal(repository_id: String, proposal_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/{proposal_id}"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -909,9 +928,9 @@ fn get_decision_proposal_review(
     repository_id: String,
     proposal_id: String,
 ) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/{proposal_id}/review"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1001,9 +1020,9 @@ fn get_decision_proposal_lineage(
     repository_id: String,
     proposal_id: String,
 ) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/{proposal_id}/lineage"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1019,7 +1038,7 @@ fn refine_decision_proposal(
     proposal_id: String,
     request: Value,
 ) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/{proposal_id}/refinements"
@@ -1041,7 +1060,7 @@ fn analyze_decision_refinement(
     proposal_id: String,
     request: Value,
 ) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/{proposal_id}/refinements/analyze"
@@ -1063,7 +1082,7 @@ fn regenerate_decision_refinement(
     proposal_id: String,
     request: Value,
 ) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/{proposal_id}/refinements/regenerate"
@@ -1085,7 +1104,7 @@ fn resolve_decision_proposal(
     proposal_id: String,
     request: Value,
 ) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/{proposal_id}/resolve"
@@ -1132,9 +1151,9 @@ fn get_decision_assimilation_recommendation(
     repository_id: String,
     decision_id: String,
 ) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/{decision_id}/assimilation"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1153,7 +1172,7 @@ fn propose_decision_operational_context_assimilation(
     decision_id: String,
     request: Value,
 ) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/decisions/{decision_id}/assimilation/propose-operational-context"
@@ -1177,9 +1196,9 @@ fn get_decision_option_comparison(
     repository_id: String,
     proposal_id: String,
 ) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/{proposal_id}/options"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1194,9 +1213,9 @@ fn get_decision_evidence_inspection(
     repository_id: String,
     proposal_id: String,
 ) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/{proposal_id}/evidence"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1211,9 +1230,9 @@ fn list_decision_source_attributions(
     repository_id: String,
     proposal_id: String,
 ) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/{proposal_id}/sources"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1225,9 +1244,9 @@ fn list_decision_source_attributions(
 
 #[tauri::command(async)]
 fn get_decision_governance(repository_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/governance"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1239,7 +1258,7 @@ fn get_decision_governance(repository_id: String) -> Result<Value, String> {
 
 #[tauri::command(async)]
 fn generate_decision_governance_report(repository_id: String) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/decisions/governance/reports"
@@ -1256,9 +1275,9 @@ fn generate_decision_governance_report(repository_id: String) -> Result<Value, S
 
 #[tauri::command(async)]
 fn list_decision_governance_reports(repository_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/governance/reports"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1270,9 +1289,9 @@ fn list_decision_governance_reports(repository_id: String) -> Result<Value, Stri
 
 #[tauri::command(async)]
 fn get_decision_certification(repository_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/certification"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1284,7 +1303,7 @@ fn get_decision_certification(repository_id: String) -> Result<Value, String> {
 
 #[tauri::command(async)]
 fn run_decision_certification(repository_id: String) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/decisions/certification"
@@ -1301,9 +1320,9 @@ fn run_decision_certification(repository_id: String) -> Result<Value, String> {
 
 #[tauri::command(async)]
 fn list_decision_certification_reports(repository_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/certification/reports"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1315,9 +1334,9 @@ fn list_decision_certification_reports(repository_id: String) -> Result<Value, S
 
 #[tauri::command(async)]
 fn get_decision_generation_certification(repository_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/generation-certification/current"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1329,7 +1348,7 @@ fn get_decision_generation_certification(repository_id: String) -> Result<Value,
 
 #[tauri::command(async)]
 fn run_decision_generation_certification(repository_id: String) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/decisions/generation-certification"
@@ -1346,9 +1365,9 @@ fn run_decision_generation_certification(repository_id: String) -> Result<Value,
 
 #[tauri::command(async)]
 fn list_decision_generation_certification_reports(repository_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/generation-certification/reports"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1363,7 +1382,7 @@ fn list_decision_generation_certification_reports(repository_id: String) -> Resu
 
 #[tauri::command(async)]
 fn assess_decision_quality(repository_id: String, proposal_id: String) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/{proposal_id}/quality/assess"
@@ -1380,9 +1399,9 @@ fn assess_decision_quality(repository_id: String, proposal_id: String) -> Result
 
 #[tauri::command(async)]
 fn list_decision_quality_assessments(repository_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/assessments"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1394,9 +1413,9 @@ fn list_decision_quality_assessments(repository_id: String) -> Result<Value, Str
 
 #[tauri::command(async)]
 fn get_decision_quality_report(repository_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/reports/current"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1408,7 +1427,7 @@ fn get_decision_quality_report(repository_id: String) -> Result<Value, String> {
 
 #[tauri::command(async)]
 fn generate_decision_quality_report(repository_id: String) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/reports"
@@ -1425,9 +1444,9 @@ fn generate_decision_quality_report(repository_id: String) -> Result<Value, Stri
 
 #[tauri::command(async)]
 fn list_decision_quality_reports(repository_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/reports"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1439,9 +1458,9 @@ fn list_decision_quality_reports(repository_id: String) -> Result<Value, String>
 
 #[tauri::command(async)]
 fn get_decision_quality_trend(repository_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/trends/current"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1453,7 +1472,7 @@ fn get_decision_quality_trend(repository_id: String) -> Result<Value, String> {
 
 #[tauri::command(async)]
 fn generate_decision_quality_trend(repository_id: String) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/trends"
@@ -1470,9 +1489,9 @@ fn generate_decision_quality_trend(repository_id: String) -> Result<Value, Strin
 
 #[tauri::command(async)]
 fn list_decision_quality_trends(repository_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/trends"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1484,9 +1503,9 @@ fn list_decision_quality_trends(repository_id: String) -> Result<Value, String> 
 
 #[tauri::command(async)]
 fn get_execution_decision_projection(repository_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/execution-projection"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1501,9 +1520,9 @@ fn get_execution_decision_influence(
     repository_id: String,
     execution_id: String,
 ) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/influence/executions/{execution_id}"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1515,9 +1534,9 @@ fn get_execution_decision_influence(
 
 #[tauri::command(async)]
 fn get_decision_influence(repository_id: String, decision_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/influence/decisions/{decision_id}"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1529,9 +1548,9 @@ fn get_decision_influence(repository_id: String, decision_id: String) -> Result<
 
 #[tauri::command(async)]
 fn list_reasoning_events(repository_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/events"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1543,9 +1562,9 @@ fn list_reasoning_events(repository_id: String) -> Result<Value, String> {
 
 #[tauri::command(async)]
 fn get_reasoning_event(repository_id: String, event_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/events/{event_id}"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1557,7 +1576,7 @@ fn get_reasoning_event(repository_id: String, event_id: String) -> Result<Value,
 
 #[tauri::command(async)]
 fn create_reasoning_event(repository_id: String, command: Value) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/events"
@@ -1575,9 +1594,9 @@ fn create_reasoning_event(repository_id: String, command: Value) -> Result<Value
 
 #[tauri::command(async)]
 fn list_reasoning_manual_capture_templates(repository_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/manual-captures/templates"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1589,7 +1608,7 @@ fn list_reasoning_manual_capture_templates(repository_id: String) -> Result<Valu
 
 #[tauri::command(async)]
 fn capture_manual_reasoning(repository_id: String, command: Value) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/manual-captures"
@@ -1607,9 +1626,9 @@ fn capture_manual_reasoning(repository_id: String, command: Value) -> Result<Val
 
 #[tauri::command(async)]
 fn list_reasoning_threads(repository_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/threads"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1621,9 +1640,9 @@ fn list_reasoning_threads(repository_id: String) -> Result<Value, String> {
 
 #[tauri::command(async)]
 fn get_reasoning_thread(repository_id: String, thread_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/threads/{thread_id}"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1635,7 +1654,7 @@ fn get_reasoning_thread(repository_id: String, thread_id: String) -> Result<Valu
 
 #[tauri::command(async)]
 fn create_reasoning_thread(repository_id: String, command: Value) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/threads"
@@ -1657,7 +1676,7 @@ fn append_reasoning_thread_event(
     thread_id: String,
     event_id: String,
 ) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/threads/{thread_id}/events"
@@ -1675,9 +1694,9 @@ fn append_reasoning_thread_event(
 
 #[tauri::command(async)]
 fn list_reasoning_relationships(repository_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/relationships"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1689,7 +1708,7 @@ fn list_reasoning_relationships(repository_id: String) -> Result<Value, String> 
 
 #[tauri::command(async)]
 fn create_reasoning_relationship(repository_id: String, command: Value) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/relationships"
@@ -1707,9 +1726,9 @@ fn create_reasoning_relationship(repository_id: String, command: Value) -> Resul
 
 #[tauri::command(async)]
 fn get_reasoning_graph(repository_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/graph"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1751,7 +1770,7 @@ fn trace_reasoning_forward(
 
 #[tauri::command(async)]
 fn query_reasoning(repository_id: String, query: Value) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/queries"
@@ -1769,7 +1788,7 @@ fn query_reasoning(repository_id: String, query: Value) -> Result<Value, String>
 
 #[tauri::command(async)]
 fn reconstruct_reasoning(repository_id: String, query: Value) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/reconstructions"
@@ -1787,7 +1806,7 @@ fn reconstruct_reasoning(repository_id: String, query: Value) -> Result<Value, S
 
 #[tauri::command(async)]
 fn run_reasoning_reconstruction(repository_id: String, query: Value) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/reconstructions/reports"
@@ -1805,9 +1824,9 @@ fn run_reasoning_reconstruction(repository_id: String, query: Value) -> Result<V
 
 #[tauri::command(async)]
 fn list_reasoning_reconstructions(repository_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/reconstructions"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1819,9 +1838,9 @@ fn list_reasoning_reconstructions(repository_id: String) -> Result<Value, String
 
 #[tauri::command(async)]
 fn get_reasoning_materialization_review(repository_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/materialization-review"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1836,7 +1855,7 @@ fn run_reasoning_materialization_review(
     repository_id: String,
     request: Value,
 ) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/materialization-review"
@@ -1854,9 +1873,9 @@ fn run_reasoning_materialization_review(
 
 #[tauri::command(async)]
 fn get_reasoning_certification(repository_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/certification"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1868,7 +1887,7 @@ fn get_reasoning_certification(repository_id: String) -> Result<Value, String> {
 
 #[tauri::command(async)]
 fn run_reasoning_certification(repository_id: String) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/certification"
@@ -1885,9 +1904,9 @@ fn run_reasoning_certification(repository_id: String) -> Result<Value, String> {
 
 #[tauri::command(async)]
 fn list_reasoning_certification_reports(repository_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/certification/reports"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1899,9 +1918,9 @@ fn list_reasoning_certification_reports(repository_id: String) -> Result<Value, 
 
 #[tauri::command(async)]
 fn get_continuity_diagnostics(repository_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/continuity/diagnostics"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -1913,7 +1932,7 @@ fn get_continuity_diagnostics(repository_id: String) -> Result<Value, String> {
 
 #[tauri::command(async)]
 fn generate_continuity_report(repository_id: String) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/continuity/reports"
@@ -1930,9 +1949,9 @@ fn generate_continuity_report(repository_id: String) -> Result<Value, String> {
 
 #[tauri::command(async)]
 fn list_continuity_reports(repository_id: String) -> Result<Value, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/continuity/reports"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -2437,7 +2456,7 @@ fn run_decision_session_certification(repository_id: String) -> Result<Value, St
 
 #[tauri::command(async)]
 fn start_execution(repository_id: String) -> Result<ExecutionSessionSummary, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/execution/start"
@@ -2455,7 +2474,7 @@ fn start_execution(repository_id: String) -> Result<ExecutionSessionSummary, Str
 
 #[tauri::command(async)]
 fn cancel_execution(repository_id: String) -> Result<ExecutionSessionSummary, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/execution/cancel"
@@ -2473,9 +2492,9 @@ fn cancel_execution(repository_id: String) -> Result<ExecutionSessionSummary, St
 
 #[tauri::command(async)]
 fn get_active_execution(repository_id: String) -> Result<ExecutionSessionSummary, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/execution/active"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -2487,9 +2506,9 @@ fn get_active_execution(repository_id: String) -> Result<ExecutionSessionSummary
 
 #[tauri::command(async)]
 fn get_git_status(repository_id: String) -> Result<RepositoryGitStatus, String> {
-    let response = reqwest::blocking::get(format!(
+    let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/git/status"
-    ))
+    )).send()
     .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -2501,7 +2520,7 @@ fn get_git_status(repository_id: String) -> Result<RepositoryGitStatus, String> 
 
 #[tauri::command(async)]
 fn prepare_commit(session_id: String) -> Result<CommitPreparation, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/execution-sessions/{session_id}/git/prepare-commit"
@@ -2539,7 +2558,7 @@ fn commit_execution(
     selected_paths: Vec<String>,
     status_snapshot_id: String,
 ) -> Result<ExecutionSessionSummary, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/execution-sessions/{session_id}/git/commit"
@@ -2561,7 +2580,7 @@ fn commit_execution(
 
 #[tauri::command(async)]
 fn push_execution(session_id: String) -> Result<PushAttemptResult, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/execution-sessions/{session_id}/git/push"
@@ -2592,7 +2611,7 @@ fn push_execution(session_id: String) -> Result<PushAttemptResult, String> {
 #[tauri::command(async)]
 fn get_execution_session(session_id: String) -> Result<Value, String> {
     let response =
-        reqwest::blocking::get(format!("{BACKEND_URL}/api/execution-sessions/{session_id}"))
+        http_client().get(format!("{BACKEND_URL}/api/execution-sessions/{session_id}")).send()
             .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
@@ -2632,7 +2651,7 @@ fn rotate_artifact(
     repository_id: String,
     operation: &str,
 ) -> Result<RepositoryWorkspaceProjection, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/artifacts/{operation}"
@@ -2657,7 +2676,7 @@ fn complete_handoff_decision(
     session_id: String,
     operation: &str,
 ) -> Result<ExecutionSessionSummary, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!(
             "{BACKEND_URL}/api/execution-sessions/{session_id}/{operation}"
@@ -2682,7 +2701,7 @@ fn trace_reasoning(
     direction: &str,
     fallback: &str,
 ) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .get(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/trace/{direction}"
@@ -2734,7 +2753,7 @@ fn backend_get_value(path: &str, fallback: &str) -> Result<Value, String> {
 
 fn backend_get_value_from(base_url: &str, path: &str, fallback: &str) -> Result<Value, String> {
     let response =
-        reqwest::blocking::get(format!("{base_url}{path}")).map_err(|error| error.to_string())?;
+        http_client().get(format!("{base_url}{path}")).send().map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
         return response.json().map_err(|error| error.to_string());
@@ -2744,7 +2763,7 @@ fn backend_get_value_from(base_url: &str, path: &str, fallback: &str) -> Result<
 }
 
 fn backend_post_value(path: &str, fallback: &str) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!("{BACKEND_URL}{path}"))
         .send()
@@ -2762,7 +2781,7 @@ fn backend_post_json_value<T: Serialize>(
     body: &T,
     fallback: &str,
 ) -> Result<Value, String> {
-    let client = reqwest::blocking::Client::new();
+    let client = http_client();
     let response = client
         .post(format!("{BACKEND_URL}{path}"))
         .json(body)

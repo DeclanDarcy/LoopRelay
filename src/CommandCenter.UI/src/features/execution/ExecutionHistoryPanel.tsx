@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { formatDateTime, formatDuration } from '../../lib'
 import { Panel, SectionHeader, StatusBadge } from '../../components/design'
 import { DiagnosticList, EvidenceList } from '../../components/explainability'
@@ -13,7 +14,7 @@ type ExecutionHistoryPanelProps = {
   onOpenSession?: (session: ExecutionSessionSummary) => void
 }
 
-export function ExecutionHistoryPanel({ sessions, onOpenSession }: ExecutionHistoryPanelProps) {
+function ExecutionHistoryPanelImpl({ sessions, onOpenSession }: ExecutionHistoryPanelProps) {
   if (sessions.length === 0) {
     return null
   }
@@ -64,3 +65,5 @@ export function ExecutionHistoryPanel({ sessions, onOpenSession }: ExecutionHist
     </Panel>
   )
 }
+
+export const ExecutionHistoryPanel = memo(ExecutionHistoryPanelImpl)

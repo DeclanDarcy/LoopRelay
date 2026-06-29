@@ -73,10 +73,13 @@ public sealed class ContractRequestBoundaryTests
         string body = ExtractRustFunctionBody(source, "list_repositories");
 
         Assert.Contains("fn list_repositories() -> Result<Vec<RepositoryDashboardProjection>, String>", source, StringComparison.Ordinal);
-        Assert.Contains("reqwest::blocking::get(format!(\"{BACKEND_URL}/api/repositories\"))", body, StringComparison.Ordinal);
+        // list_repositories forwards a GET to /api/repositories with no body. Since the shared-client
+        // refactor, even GET commands go through http_client().get(...).send(), so ".send(" is no longer
+        // a body discriminator — absence of ".post("/".json(&" is what proves there is no request body.
+        Assert.Contains("http_client().get(format!(\"{BACKEND_URL}/api/repositories\"))", body, StringComparison.Ordinal);
         Assert.DoesNotContain("Client::new", body, StringComparison.Ordinal);
         Assert.DoesNotContain(".post(", body, StringComparison.Ordinal);
-        Assert.DoesNotContain(".send(", body, StringComparison.Ordinal);
+        Assert.DoesNotContain(".json(&", body, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -89,10 +92,12 @@ public sealed class ContractRequestBoundaryTests
         Assert.Contains("fn get_repository_workspace(", source, StringComparison.Ordinal);
         Assert.Contains("repository_id: String", source, StringComparison.Ordinal);
         Assert.Contains("\"{BACKEND_URL}/api/repositories/{repository_id}/workspace\"", body, StringComparison.Ordinal);
+        // GET via the shared client; absence of ".post("/".json(&" proves there is no request body
+        // (".send(" is no longer a body discriminator after the shared-client refactor — GETs use it too).
+        Assert.Contains("http_client().get(", body, StringComparison.Ordinal);
         Assert.DoesNotContain("Client::new", body, StringComparison.Ordinal);
         Assert.DoesNotContain(".post(", body, StringComparison.Ordinal);
         Assert.DoesNotContain(".json(&", body, StringComparison.Ordinal);
-        Assert.DoesNotContain(".send(", body, StringComparison.Ordinal);
     }
 
     [Fact]
