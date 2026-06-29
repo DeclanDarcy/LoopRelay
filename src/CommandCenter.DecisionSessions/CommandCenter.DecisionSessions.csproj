@@ -32,6 +32,13 @@
     <ProjectReference Include="..\CommandCenter.Decisions\CommandCenter.Decisions.csproj" />
     <ProjectReference Include="..\CommandCenter.Reasoning\CommandCenter.Reasoning.csproj" />
     <ProjectReference Include="..\CommandCenter.Continuity\CommandCenter.Continuity.csproj" />
+    <!--
+      The Derivation Cache persistence layer (refactor-lazy-sqlite.md). It is a base persistence
+      project over CommandCenter.Core only and references NO operational/composition layer, so this is a
+      clean downward edge that preserves the role-isolation invariants in ArchitectureLayeringTests.
+      Phase 2 consumes ISourceFingerprintProvider here to replace the fragile mtime staleness probe.
+    -->
+    <ProjectReference Include="..\CommandCenter.Persistence.Sqlite\CommandCenter.Persistence.Sqlite.csproj" />
   </ItemGroup>
 
   <ItemGroup>

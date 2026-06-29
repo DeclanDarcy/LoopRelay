@@ -14,14 +14,10 @@ public sealed class DecisionSessionObservabilityTests
         DateTimeOffset now = DateTimeOffset.UtcNow.AddMinutes(-10);
         DecisionSession active = await CreateActiveSessionAsync(harness, now.AddHours(-1));
         DecisionSessionFixtures fixtures = CreateFixtures(harness.Repository.Id, active, now);
-        await WriteSnapshotsAsync(harness, fixtures);
         await harness.RepositoryStore.WriteContinuityArtifactAsync(harness.Repository, fixtures.Artifact);
         await harness.RepositoryStore.WriteTransferAsync(harness.Repository, fixtures.Transfer);
         await harness.RepositoryStore.WriteRecoveryResultAsync(harness.Repository, fixtures.Recovery);
-        var service = new DecisionSessionObservabilityService(
-            harness.RepositoryService,
-            harness.RepositoryStore,
-            new FixedTimeProvider(now.AddMinutes(5)));
+        DecisionSessionObservabilityService service = CreateService(harness, fixtures, now.AddMinutes(5));
 
         DecisionSessionLifecycleProjection projection = await service.GetProjectionAsync(harness.Repository.Id);
 
@@ -72,14 +68,10 @@ public sealed class DecisionSessionObservabilityTests
         DateTimeOffset now = DateTimeOffset.UtcNow.AddMinutes(-10);
         DecisionSession active = await CreateActiveSessionAsync(harness, now.AddHours(-1));
         DecisionSessionFixtures fixtures = CreateFixtures(harness.Repository.Id, active, now);
-        await WriteSnapshotsAsync(harness, fixtures);
         await harness.RepositoryStore.WriteContinuityArtifactAsync(harness.Repository, fixtures.Artifact);
         await harness.RepositoryStore.WriteTransferAsync(harness.Repository, fixtures.Transfer);
         await harness.RepositoryStore.WriteRecoveryResultAsync(harness.Repository, fixtures.Recovery);
-        var service = new DecisionSessionObservabilityService(
-            harness.RepositoryService,
-            harness.RepositoryStore,
-            new FixedTimeProvider(now.AddMinutes(5)));
+        DecisionSessionObservabilityService service = CreateService(harness, fixtures, now.AddMinutes(5));
 
         DecisionSessionLifecycleHistory history = await service.GetHistoryAsync(harness.Repository.Id);
 
@@ -103,14 +95,10 @@ public sealed class DecisionSessionObservabilityTests
         DateTimeOffset now = DateTimeOffset.UtcNow.AddMinutes(-10);
         DecisionSession active = await CreateActiveSessionAsync(harness, now.AddHours(-1));
         DecisionSessionFixtures fixtures = CreateFixtures(harness.Repository.Id, active, now);
-        await WriteSnapshotsAsync(harness, fixtures);
         await harness.RepositoryStore.WriteContinuityArtifactAsync(harness.Repository, fixtures.Artifact);
         await harness.RepositoryStore.WriteTransferAsync(harness.Repository, fixtures.Transfer);
         await harness.RepositoryStore.WriteRecoveryResultAsync(harness.Repository, fixtures.Recovery);
-        var service = new DecisionSessionObservabilityService(
-            harness.RepositoryService,
-            harness.RepositoryStore,
-            new FixedTimeProvider(now.AddMinutes(5)));
+        DecisionSessionObservabilityService service = CreateService(harness, fixtures, now.AddMinutes(5));
 
         DecisionSessionInfluenceTrace trace = await service.GetInfluenceTraceAsync(harness.Repository.Id);
 
@@ -138,14 +126,10 @@ public sealed class DecisionSessionObservabilityTests
         DateTimeOffset now = DateTimeOffset.UtcNow.AddMinutes(-10);
         DecisionSession active = await CreateActiveSessionAsync(harness, now.AddHours(-1));
         DecisionSessionFixtures fixtures = CreateFixtures(harness.Repository.Id, active, now);
-        await WriteSnapshotsAsync(harness, fixtures);
         await harness.RepositoryStore.WriteContinuityArtifactAsync(harness.Repository, fixtures.Artifact);
         await harness.RepositoryStore.WriteTransferAsync(harness.Repository, fixtures.Transfer);
         await harness.RepositoryStore.WriteRecoveryResultAsync(harness.Repository, fixtures.Recovery);
-        var service = new DecisionSessionObservabilityService(
-            harness.RepositoryService,
-            harness.RepositoryStore,
-            new FixedTimeProvider(now.AddMinutes(5)));
+        DecisionSessionObservabilityService service = CreateService(harness, fixtures, now.AddMinutes(5));
 
         DecisionSessionHealthAssessment health = await service.GetHealthAsync(harness.Repository.Id);
 
@@ -164,16 +148,22 @@ public sealed class DecisionSessionObservabilityTests
     [Fact]
     public async Task ProjectionReportsCorruptDerivedSnapshotAsDiagnostics()
     {
+        // Phase 3 retarget (refactor-lazy-sqlite.md): metrics is computed on read, not read from a pre-warmed
+        // file, so an "unreadable" snapshot is modelled as the metrics provider raising a read failure. The
+        // invariant is unchanged: a failed metrics read yields a null Metrics snapshot plus the same
+        // "metrics snapshot could not be read" warning, and the projection stays valid.
         DecisionSessionTestHarness harness = DecisionSessionTestHarness.Create();
         DateTimeOffset now = DateTimeOffset.UtcNow.AddMinutes(-10);
         await CreateActiveSessionAsync(harness, now.AddHours(-1));
-        await harness.Store.WriteAsync(
-            DecisionSessionArtifactPaths.Resolve(harness.Repository, DecisionSessionArtifactPaths.MetricsSnapshotJson()),
-            "{ not valid json");
         var service = new DecisionSessionObservabilityService(
             harness.RepositoryService,
             harness.RepositoryStore,
-            new FixedTimeProvider(now));
+            new FixedTimeProvider(now),
+            new StubMetricsService(null, new System.Text.Json.JsonException("Existing metrics snapshot JSON is invalid.")),
+            new StubEconomicsService(null),
+            new StubCoherenceService(null),
+            new StubLifecyclePolicy(null),
+            new StubTransferEligibilityService(null));
 
         DecisionSessionLifecycleProjection projection = await service.GetProjectionAsync(harness.Repository.Id);
 
@@ -189,13 +179,23 @@ public sealed class DecisionSessionObservabilityTests
         return await harness.Registry.ActivateSessionAsync(harness.Repository.Id, created.Id);
     }
 
-    private static async Task WriteSnapshotsAsync(DecisionSessionTestHarness harness, DecisionSessionFixtures fixtures)
+    // Phase 3: the observability service computes snapshots on read via the analysis providers. The fixture
+    // snapshots are fed through stub providers (the new read seam) instead of pre-warmed files (the old seam),
+    // preserving every downstream invariant the original file-backed tests asserted.
+    private static DecisionSessionObservabilityService CreateService(
+        DecisionSessionTestHarness harness,
+        DecisionSessionFixtures fixtures,
+        DateTimeOffset now)
     {
-        await harness.RepositoryStore.WriteMetricsSnapshotAsync(harness.Repository, fixtures.Metrics);
-        await harness.RepositoryStore.WriteEconomicsSnapshotAsync(harness.Repository, fixtures.Economics);
-        await harness.RepositoryStore.WriteCoherenceSnapshotAsync(harness.Repository, fixtures.Coherence);
-        await harness.RepositoryStore.WriteLifecyclePolicySnapshotAsync(harness.Repository, fixtures.Policy);
-        await harness.RepositoryStore.WriteTransferEligibilitySnapshotAsync(harness.Repository, fixtures.Eligibility);
+        return new DecisionSessionObservabilityService(
+            harness.RepositoryService,
+            harness.RepositoryStore,
+            new FixedTimeProvider(now),
+            new StubMetricsService(fixtures.Metrics),
+            new StubEconomicsService(fixtures.Economics),
+            new StubCoherenceService(fixtures.Coherence),
+            new StubLifecyclePolicy(fixtures.Policy),
+            new StubTransferEligibilityService(fixtures.Eligibility));
     }
 
     private static DecisionSessionFixtures CreateFixtures(Guid repositoryId, DecisionSession active, DateTimeOffset now)

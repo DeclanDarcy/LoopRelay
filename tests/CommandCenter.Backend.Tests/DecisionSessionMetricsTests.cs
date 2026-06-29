@@ -167,8 +167,12 @@ public sealed class DecisionSessionMetricsTests
         Assert.True(populated.Statistics.GrowthRate > empty.Statistics.GrowthRate);
     }
 
+    // Phase 3 retarget (refactor-lazy-sqlite.md): metrics is no longer persisted as a derived FILE, so there is
+    // no "invalid persisted snapshot" to validate-and-rebuild. The preserved invariant is that the served
+    // metrics snapshot is always freshly COMPUTED from authoritative source evidence — a leftover corrupt
+    // analysis file cannot corrupt the result and is simply irrelevant to it.
     [Fact]
-    public async Task InvalidMetricsSnapshotIsRebuiltFromAuthoritativeEvidence()
+    public async Task MetricsIsAlwaysComputedFromAuthoritativeEvidenceRegardlessOfStaleAnalysisFile()
     {
         DecisionSessionTestHarness harness = DecisionSessionTestHarness.Create();
         var decisionRepository = new InMemoryDecisionRepository();
@@ -184,11 +188,9 @@ public sealed class DecisionSessionMetricsTests
             "{ not valid json");
 
         DecisionSessionMetricsSnapshot snapshot = await service.GetMetricsAsync(harness.Repository.Id);
-        string? persisted = await harness.Store.ReadAsync(DecisionSessionArtifactPaths.Resolve(harness.Repository, DecisionSessionArtifactPaths.MetricsSnapshotJson()));
 
         Assert.Equal(1, snapshot.Metrics.DecisionCount);
-        Assert.NotNull(persisted);
-        Assert.Contains(snapshot.Diagnostics.Warnings, warning => warning.Contains("rebuilt", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(harness.Repository.Id, snapshot.RepositoryId);
     }
 
     [Fact]

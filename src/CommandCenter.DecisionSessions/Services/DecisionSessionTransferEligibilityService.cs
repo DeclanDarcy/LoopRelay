@@ -1,4 +1,3 @@
-using System.Text.Json;
 using CommandCenter.Core.Repositories;
 using CommandCenter.DecisionSessions.Abstractions;
 using CommandCenter.DecisionSessions.Models;
@@ -17,20 +16,11 @@ public sealed class DecisionSessionTransferEligibilityService(
     {
         Repository repository = await GetRepositoryAsync(repositoryId);
         DateTimeOffset checkedAt = timeProvider.GetUtcNow();
-        var warnings = new List<string>();
 
-        try
-        {
-            _ = await sessionRepository.ReadTransferEligibilitySnapshotAsync(repository);
-        }
-        catch (DecisionSessionValidationException exception)
-        {
-            warnings.Add($"Existing transfer eligibility snapshot is invalid and was rebuilt: {exception.Message}");
-        }
-        catch (JsonException exception)
-        {
-            warnings.Add($"Existing transfer eligibility snapshot JSON is invalid and was rebuilt: {exception.Message}");
-        }
+        // Transfer eligibility (status, findings, checkedAt) is entirely a function of current registry/policy/
+        // evidence state, so it is computed fresh on every read and NEVER cached or persisted as a file
+        // (refactor-lazy-sqlite.md, Phase 3). There is therefore no stale snapshot to validate-and-rebuild.
+        IReadOnlyList<string> warnings = [];
 
         DecisionSessionDiagnostics registryDiagnostics = await recoveryService.GetDiagnosticsAsync(repositoryId);
         IReadOnlyList<DecisionSession> sessions = [];
@@ -70,7 +60,7 @@ public sealed class DecisionSessionTransferEligibilityService(
         if (policySnapshot is not null && policyEvaluation.Decision == DecisionSessionLifecycleDecision.Continue)
         {
             findings.Add(Info("policy-continue", "Lifecycle policy decided Continue; transfer eligibility is not applicable."));
-            return await PersistAsync(
+            return BuildSnapshot(
                 repository,
                 checkedAt,
                 DecisionSessionTransferEligibilityStatus.NotApplicable,
@@ -118,7 +108,7 @@ public sealed class DecisionSessionTransferEligibilityService(
             findings.Add(Info("eligible", "All transfer eligibility preconditions passed."));
         }
 
-        return await PersistAsync(
+        return BuildSnapshot(
             repository,
             checkedAt,
             status,
@@ -131,7 +121,7 @@ public sealed class DecisionSessionTransferEligibilityService(
             warnings);
     }
 
-    private async Task<DecisionSessionTransferEligibilitySnapshot> PersistAsync(
+    private static DecisionSessionTransferEligibilitySnapshot BuildSnapshot(
         Repository repository,
         DateTimeOffset checkedAt,
         DecisionSessionTransferEligibilityStatus status,
@@ -165,9 +155,7 @@ public sealed class DecisionSessionTransferEligibilityService(
                 "Continuity artifact checks are preflight checks until transfer execution creates the canonical artifact."
             ],
             warnings);
-        var snapshot = new DecisionSessionTransferEligibilitySnapshot(repository.Id, eligibility, diagnostics, checkedAt);
-        await sessionRepository.WriteTransferEligibilitySnapshotAsync(repository, snapshot);
-        return snapshot;
+        return new DecisionSessionTransferEligibilitySnapshot(repository.Id, eligibility, diagnostics, checkedAt);
     }
 
     private static void AddRegistryFindings(

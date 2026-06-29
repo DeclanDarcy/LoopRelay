@@ -1451,10 +1451,18 @@ public sealed class ExecutionSessionServiceTests
     {
         string configurationPath = Path.Combine(CreateTemporaryDirectory(), "configuration.json");
         string storePath = Path.Combine(CreateTemporaryDirectory(), "execution-sessions.json");
+        // Phase 5 (refactor-lazy-sqlite.md): execution orphan recovery now runs from the post-bind StartedAsync
+        // hook guarded by the GLOBAL recovery_ledger. Scope COMMAND_CENTER_DB_PATH to a fresh per-test DB so this
+        // boot's once-per-process execution-recovery claim always succeeds (the prod-default global DB would be
+        // shared across host-boot tests in this process and could already hold a claim — exactly the prod-DB
+        // contention the design forbids tests from defaulting to).
+        string databasePath = Path.Combine(CreateTemporaryDirectory(), "command-center.db");
         string? previousConfigurationPath = Environment.GetEnvironmentVariable("COMMAND_CENTER_CONFIGURATION_PATH");
         string? previousStorePath = Environment.GetEnvironmentVariable("COMMAND_CENTER_EXECUTION_SESSIONS_PATH");
+        string? previousDatabasePath = Environment.GetEnvironmentVariable("COMMAND_CENTER_DB_PATH");
         Environment.SetEnvironmentVariable("COMMAND_CENTER_CONFIGURATION_PATH", configurationPath);
         Environment.SetEnvironmentVariable("COMMAND_CENTER_EXECUTION_SESSIONS_PATH", storePath);
+        Environment.SetEnvironmentVariable("COMMAND_CENTER_DB_PATH", databasePath);
 
         try
         {
@@ -1513,6 +1521,7 @@ public sealed class ExecutionSessionServiceTests
         {
             Environment.SetEnvironmentVariable("COMMAND_CENTER_CONFIGURATION_PATH", previousConfigurationPath);
             Environment.SetEnvironmentVariable("COMMAND_CENTER_EXECUTION_SESSIONS_PATH", previousStorePath);
+            Environment.SetEnvironmentVariable("COMMAND_CENTER_DB_PATH", previousDatabasePath);
         }
     }
 

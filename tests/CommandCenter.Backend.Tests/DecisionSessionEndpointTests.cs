@@ -307,6 +307,75 @@ public sealed class DecisionSessionEndpointTests
     }
 
     [Fact]
+    public async Task PersistedRecoveryIsReflectedInLifecycleProjectionAndHealthFromSqlite()
+    {
+        // Fix B (refactor-lazy-sqlite.md split-brain): after Phase 4 the recovery-result audit row is written to
+        // SQLite (IRecoveryResultStore), NOT the .agents file plane. DecisionSessionObservabilityService used to
+        // read recovery history from the file path, so a real POST /recovery wrote the SQLite row while the
+        // lifecycle projection read the empty file dir — RecentRecoveryResults came back empty and the Recovery
+        // health dimension was falsely "Healthy", even though GET /recovery/history (which reads SQLite) showed the
+        // row. This integration test runs the REAL host where SQLite is wired (a MemoryArtifactStore so the file
+        // plane is genuinely separate), POSTs /recovery, then asserts the projection AND health reflect it. The
+        // existing unit tests use the file-path constructor (no store) so they never caught this.
+        DecisionSessionTestHarness harness = DecisionSessionTestHarness.Create();
+        await using WebApplication app = Program.CreateApp(
+            [],
+            services =>
+            {
+                services.RemoveAll<IArtifactStore>();
+                services.RemoveAll<IRepositoryService>();
+                services.AddSingleton<IArtifactStore>(harness.Store);
+                services.AddSingleton<IRepositoryService>(harness.RepositoryService);
+            });
+        await app.StartAsync();
+        using var client = new HttpClient();
+        string root = app.Urls.Single();
+        DecisionSession created = await harness.Registry.CreateSessionAsync(harness.Repository.Id, "test");
+        await harness.Registry.ActivateSessionAsync(harness.Repository.Id, created.Id);
+
+        // Baseline: before any recovery, the projection has no recovery results and the Recovery dimension is Healthy.
+        DecisionSessionLifecycleProjection? before = await client.GetFromJsonAsync<DecisionSessionLifecycleProjection>(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/lifecycle/projection",
+            DecisionSessionTestHarness.CreateJsonOptions());
+        Assert.NotNull(before);
+        Assert.Empty(before.RecentRecoveryResults);
+
+        // Persist a recovery (POST /recovery, persist:true) — this writes the audit row to SQLite, not the file dir.
+        HttpResponseMessage persistResponse = await client.PostAsync(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/recovery",
+            null);
+        Assert.True(persistResponse.IsSuccessStatusCode);
+        DecisionSessionRecoveryResult? persisted = await persistResponse.Content.ReadFromJsonAsync<DecisionSessionRecoveryResult>(
+            DecisionSessionTestHarness.CreateJsonOptions());
+        Assert.NotNull(persisted);
+
+        // GET /recovery/history (reads SQLite) must show the row — proving the row truly persisted to SQLite.
+        DecisionSessionRecoveryHistory? recoveryHistory = await client.GetFromJsonAsync<DecisionSessionRecoveryHistory>(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/recovery/history",
+            DecisionSessionTestHarness.CreateJsonOptions());
+        Assert.NotNull(recoveryHistory);
+        Assert.Contains(recoveryHistory.Results, result => result.RecoveryId == persisted.RecoveryId);
+
+        // The fix: the lifecycle projection (GetProjectionAsync) must now ALSO read the SQLite recovery rows, so
+        // RecentRecoveryResults is non-empty and includes the persisted recovery.
+        DecisionSessionLifecycleProjection? after = await client.GetFromJsonAsync<DecisionSessionLifecycleProjection>(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/lifecycle/projection",
+            DecisionSessionTestHarness.CreateJsonOptions());
+        Assert.NotNull(after);
+        Assert.NotEmpty(after.RecentRecoveryResults);
+        Assert.Contains(after.RecentRecoveryResults, result => result.RecoveryId == persisted.RecoveryId);
+
+        // And the Recovery health dimension reflects it (evidence cites the recovery-result count, no longer "0").
+        DecisionSessionHealthAssessment? health = await client.GetFromJsonAsync<DecisionSessionHealthAssessment>(
+            $"{root}/api/repositories/{harness.Repository.Id}/decision-sessions/lifecycle/health",
+            DecisionSessionTestHarness.CreateJsonOptions());
+        Assert.NotNull(health);
+        DecisionSessionHealthDimension recoveryDimension =
+            Assert.Single(health.Dimensions, dimension => dimension.Name == "Recovery");
+        Assert.Contains(recoveryDimension.Evidence, evidence => evidence.Contains("1 recovery result", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task MissingRepositoryEndpointReturnsNotFound()
     {
         DecisionSessionTestHarness harness = DecisionSessionTestHarness.Create();

@@ -1,7 +1,7 @@
-using System.Text.Json;
 using CommandCenter.Core.Repositories;
 using CommandCenter.DecisionSessions.Abstractions;
 using CommandCenter.DecisionSessions.Models;
+using CommandCenter.Persistence.Sqlite.Abstractions;
 
 namespace CommandCenter.DecisionSessions.Services;
 
@@ -10,46 +10,38 @@ public sealed class DecisionSessionEconomicsService(
     IDecisionSessionRepository sessionRepository,
     IDecisionSessionMetricsService metricsService,
     DecisionSessionEconomicsOptions options,
-    TimeProvider timeProvider) : IDecisionSessionEconomicsService
+    TimeProvider timeProvider,
+    IDerivedSnapshotReader? derivedReader = null) : IDecisionSessionEconomicsService
 {
     public async Task<DecisionSessionEconomicsSnapshot> GetEconomicsAsync(Guid repositoryId)
     {
         Repository repository = await GetRepositoryAsync(repositoryId);
-        DateTimeOffset generatedAt = timeProvider.GetUtcNow();
-        var rebuildWarnings = new List<string>();
 
-        try
-        {
-            _ = await sessionRepository.ReadEconomicsSnapshotAsync(repository);
-        }
-        catch (DecisionSessionValidationException exception)
-        {
-            rebuildWarnings.Add($"Existing economics snapshot is invalid and was rebuilt: {exception.Message}");
-        }
-        catch (JsonException exception)
-        {
-            rebuildWarnings.Add($"Existing economics snapshot JSON is invalid and was rebuilt: {exception.Message}");
-        }
-
+        // The metrics snapshot is itself active compute-on-read (cached base + fresh now). Its time-dependent
+        // statistics/cache drive the economics projection; the economics BASE (cost/benefit terms) depends only
+        // on the pure metrics counts and is cached behind the (repo, economics-base) gate.
         DecisionSessionMetricsSnapshot metricsSnapshot = await metricsService.GetMetricsAsync(repositoryId);
-        DecisionSessionEconomicsSnapshot economicsSnapshot = BuildSnapshot(repository.Id, generatedAt, metricsSnapshot, rebuildWarnings);
-        await sessionRepository.WriteEconomicsSnapshotAsync(repository, economicsSnapshot);
-        return economicsSnapshot;
+
+        if (derivedReader is not null)
+        {
+            return await derivedReader.ReadDerivedAsync(
+                repository,
+                DecisionSessionAnalysisCache.EconomicsKind,
+                DecisionSessionAnalysisCache.EconomicsFamilies,
+                DecisionSessionAnalysisCache.FormulaVersion,
+                _ => Task.FromResult(BuildBase(metricsSnapshot)),
+                (economicsBase, now) => Project(repository.Id, now, metricsSnapshot, economicsBase),
+                CancellationToken.None);
+        }
+
+        DecisionSessionEconomicsBase fallbackBase = BuildBase(metricsSnapshot);
+        return Project(repository.Id, timeProvider.GetUtcNow(), metricsSnapshot, fallbackBase);
     }
 
-    private DecisionSessionEconomicsSnapshot BuildSnapshot(
-        Guid repositoryId,
-        DateTimeOffset generatedAt,
-        DecisionSessionMetricsSnapshot metricsSnapshot,
-        IReadOnlyList<string> rebuildWarnings)
+    // SOURCE-PURE base: the cost/benefit terms that depend only on the pure metrics counts/bytes,
+    // not on any measuredAt-relative metrics statistics. {contextCost, reasoningCost, continuityBenefit, reusableCorpusScore}.
+    private DecisionSessionEconomicsBase BuildBase(DecisionSessionMetricsSnapshot metricsSnapshot)
     {
-        DecisionSessionEconomicsInputs inputs = new(
-            metricsSnapshot.Metrics,
-            metricsSnapshot.Statistics,
-            metricsSnapshot.Activity,
-            metricsSnapshot.Growth,
-            metricsSnapshot.Cache);
-
         decimal contextCost = Average(
             Normalize(metricsSnapshot.Metrics.EstimatedTokenCount, options.LargeContextTokenThreshold),
             Normalize(metricsSnapshot.Metrics.ContextByteSize, options.LargeContextByteThreshold));
@@ -58,11 +50,35 @@ public sealed class DecisionSessionEconomicsService(
             Normalize(metricsSnapshot.Metrics.ReasoningThreadCount, options.ReasoningThreadThreshold),
             Normalize(metricsSnapshot.Metrics.ReasoningRelationshipCount, options.ReasoningRelationshipThreshold));
         ContinuityBenefitAssessment continuityBenefit = CalculateContinuityBenefit(metricsSnapshot);
+        decimal reusableCorpusScore = Average(
+            Normalize(metricsSnapshot.Metrics.EstimatedTokenCount, options.LargeContextTokenThreshold),
+            Normalize(metricsSnapshot.Metrics.ContextByteSize, options.LargeContextByteThreshold));
+        return new DecisionSessionEconomicsBase(contextCost, reasoningCost, continuityBenefit, reusableCorpusScore);
+    }
+
+    // TIME-DEPENDENT projection: cacheBenefit / transferValue / reuseValue recompute from the metrics
+    // snapshot's measuredAt-relative cache/statistics (idle, growthRate, cacheMissRisk).
+    private DecisionSessionEconomicsSnapshot Project(
+        Guid repositoryId,
+        DateTimeOffset generatedAt,
+        DecisionSessionMetricsSnapshot metricsSnapshot,
+        DecisionSessionEconomicsBase economicsBase)
+    {
+        DecisionSessionEconomicsInputs inputs = new(
+            metricsSnapshot.Metrics,
+            metricsSnapshot.Statistics,
+            metricsSnapshot.Activity,
+            metricsSnapshot.Growth,
+            metricsSnapshot.Cache);
+
+        decimal contextCost = economicsBase.ContextCost;
+        decimal reasoningCost = economicsBase.ReasoningCost;
+        ContinuityBenefitAssessment continuityBenefit = economicsBase.ContinuityBenefit;
         CacheRiskAssessment cacheRisk = new(
             metricsSnapshot.Cache.EstimatedCacheMissRisk,
             metricsSnapshot.Cache.EstimatedCacheTtl,
             metricsSnapshot.Cache.EstimatedCacheExpiresAt);
-        CacheBenefitAssessment cacheBenefit = CalculateCacheBenefit(metricsSnapshot, cacheRisk);
+        CacheBenefitAssessment cacheBenefit = CalculateCacheBenefit(economicsBase.ReusableCorpusScore, cacheRisk);
         TransferValueAssessment transferValue = CalculateTransferValue(metricsSnapshot, contextCost, cacheRisk.Value);
         ReuseValueAssessment reuseValue = CalculateReuseValue(metricsSnapshot, continuityBenefit.Value, cacheBenefit.Value);
 
@@ -90,7 +106,7 @@ public sealed class DecisionSessionEconomicsService(
                 $"Cache benefit assumes cached-token cost factor {options.CachedTokenCostFactor:0.00}.",
                 $"Reuse value uses assumed coherence score {options.AssumedCoherenceScore:0.00} until Stage 2C coherence exists."
             ],
-            metricsSnapshot.Diagnostics.Warnings.Concat(rebuildWarnings).ToArray());
+            metricsSnapshot.Diagnostics.Warnings.ToArray());
 
         return new DecisionSessionEconomicsSnapshot(repositoryId, economics, diagnostics, generatedAt);
     }
@@ -116,11 +132,8 @@ public sealed class DecisionSessionEconomicsService(
             Round(operationalContextContribution));
     }
 
-    private CacheBenefitAssessment CalculateCacheBenefit(DecisionSessionMetricsSnapshot snapshot, CacheRiskAssessment cacheRisk)
+    private CacheBenefitAssessment CalculateCacheBenefit(decimal reusableCorpusScore, CacheRiskAssessment cacheRisk)
     {
-        decimal reusableCorpusScore = Average(
-            Normalize(snapshot.Metrics.EstimatedTokenCount, options.LargeContextTokenThreshold),
-            Normalize(snapshot.Metrics.ContextByteSize, options.LargeContextByteThreshold));
         decimal cacheRiskPenalty = 1m - cacheRisk.Value;
         decimal value = Clamp(Round(reusableCorpusScore * (1m - options.CachedTokenCostFactor) * cacheRiskPenalty));
         return new CacheBenefitAssessment(value, Round(reusableCorpusScore), options.CachedTokenCostFactor, Round(cacheRiskPenalty));

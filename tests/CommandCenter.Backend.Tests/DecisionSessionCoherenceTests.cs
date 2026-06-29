@@ -130,8 +130,12 @@ public sealed class DecisionSessionCoherenceTests
         Assert.True(high.Diagnostics.TransferPressure.FragmentationContribution > low.Diagnostics.TransferPressure.FragmentationContribution);
     }
 
+    // Phase 3 retarget (refactor-lazy-sqlite.md): coherence is no longer persisted as a derived FILE, so there
+    // is no "invalid persisted snapshot" to validate-and-rebuild. The preserved invariant is that the served
+    // coherence snapshot is always freshly COMPUTED from the analysis + reasoning graph — a leftover corrupt
+    // analysis file cannot corrupt the result and is irrelevant to it.
     [Fact]
-    public async Task InvalidCoherenceSnapshotIsRebuiltFromAnalysisAndGraph()
+    public async Task CoherenceIsAlwaysComputedFromAnalysisAndGraphRegardlessOfStaleAnalysisFile()
     {
         DecisionSessionTestHarness harness = DecisionSessionTestHarness.Create();
         DateTimeOffset generatedAt = DateTimeOffset.UtcNow;
@@ -146,11 +150,9 @@ public sealed class DecisionSessionCoherenceTests
             "{ not valid json");
 
         DecisionSessionCoherenceSnapshot snapshot = await service.GetCoherenceAsync(harness.Repository.Id);
-        string? persisted = await harness.Store.ReadAsync(DecisionSessionArtifactPaths.Resolve(harness.Repository, DecisionSessionArtifactPaths.CoherenceSnapshotJson()));
 
         Assert.True(snapshot.Coherence.CoherenceScore > 0m);
-        Assert.NotNull(persisted);
-        Assert.Contains(snapshot.Diagnostics.Warnings, warning => warning.Contains("rebuilt", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(harness.Repository.Id, snapshot.RepositoryId);
     }
 
     [Fact]

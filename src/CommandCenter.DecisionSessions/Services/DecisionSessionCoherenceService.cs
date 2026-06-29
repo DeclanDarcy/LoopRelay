@@ -1,7 +1,7 @@
-using System.Text.Json;
 using CommandCenter.Core.Repositories;
 using CommandCenter.DecisionSessions.Abstractions;
 using CommandCenter.DecisionSessions.Models;
+using CommandCenter.Persistence.Sqlite.Abstractions;
 using CommandCenter.Reasoning.Abstractions;
 using CommandCenter.Reasoning.Models;
 
@@ -14,42 +14,39 @@ public sealed class DecisionSessionCoherenceService(
     IDecisionSessionEconomicsService economicsService,
     IReasoningGraphService graphService,
     DecisionSessionCoherenceOptions options,
-    TimeProvider timeProvider) : IDecisionSessionCoherenceService
+    TimeProvider timeProvider,
+    IDerivedSnapshotReader? derivedReader = null) : IDecisionSessionCoherenceService
 {
     public async Task<DecisionSessionCoherenceSnapshot> GetCoherenceAsync(Guid repositoryId)
     {
         Repository repository = await GetRepositoryAsync(repositoryId);
-        DateTimeOffset generatedAt = timeProvider.GetUtcNow();
-        var rebuildWarnings = new List<string>();
-
-        try
-        {
-            _ = await sessionRepository.ReadCoherenceSnapshotAsync(repository);
-        }
-        catch (DecisionSessionValidationException exception)
-        {
-            rebuildWarnings.Add($"Existing coherence snapshot is invalid and was rebuilt: {exception.Message}");
-        }
-        catch (JsonException exception)
-        {
-            rebuildWarnings.Add($"Existing coherence snapshot JSON is invalid and was rebuilt: {exception.Message}");
-        }
-
         DecisionSessionMetricsSnapshot metricsSnapshot = await metricsService.GetMetricsAsync(repositoryId);
         DecisionSessionEconomicsSnapshot economicsSnapshot = await economicsService.GetEconomicsAsync(repositoryId);
-        ReasoningGraph graph = await graphService.GetGraphAsync(repositoryId);
-        DecisionSessionCoherenceSnapshot snapshot = BuildSnapshot(repository.Id, generatedAt, metricsSnapshot, economicsSnapshot, graph, rebuildWarnings);
-        await sessionRepository.WriteCoherenceSnapshotAsync(repository, snapshot);
-        return snapshot;
+
+        if (derivedReader is not null)
+        {
+            return await derivedReader.ReadDerivedAsync(
+                repository,
+                DecisionSessionAnalysisCache.CoherenceKind,
+                DecisionSessionAnalysisCache.CoherenceFamilies,
+                DecisionSessionAnalysisCache.FormulaVersion,
+                async _ =>
+                {
+                    ReasoningGraph graph = await graphService.GetGraphAsync(repositoryId);
+                    return BuildBase(metricsSnapshot, graph);
+                },
+                (coherenceBase, now) => Project(repository.Id, now, metricsSnapshot, economicsSnapshot, coherenceBase),
+                CancellationToken.None);
+        }
+
+        ReasoningGraph fallbackGraph = await graphService.GetGraphAsync(repositoryId);
+        DecisionSessionCoherenceBase fallbackBase = BuildBase(metricsSnapshot, fallbackGraph);
+        return Project(repository.Id, timeProvider.GetUtcNow(), metricsSnapshot, economicsSnapshot, fallbackBase);
     }
 
-    private DecisionSessionCoherenceSnapshot BuildSnapshot(
-        Guid repositoryId,
-        DateTimeOffset generatedAt,
-        DecisionSessionMetricsSnapshot metricsSnapshot,
-        DecisionSessionEconomicsSnapshot economicsSnapshot,
-        ReasoningGraph graph,
-        IReadOnlyList<string> rebuildWarnings)
+    // SOURCE-PURE base: topology (incl. the connected-components BFS), density, fragmentation,
+    // continuity, and the composite coherenceScore — all deterministic from the graph + pure metrics counts.
+    private DecisionSessionCoherenceBase BuildBase(DecisionSessionMetricsSnapshot metricsSnapshot, ReasoningGraph graph)
     {
         GraphTopology topology = AnalyzeTopology(graph);
         DensityAssessment density = CalculateDensity(topology);
@@ -59,6 +56,33 @@ public sealed class DecisionSessionCoherenceService(
             (density.Score * 0.35m) +
             (continuity.Score * 0.35m) +
             ((1m - fragmentation.Score) * 0.30m)));
+        return new DecisionSessionCoherenceBase(
+            topology.NodeCount,
+            topology.RelationshipCount,
+            topology.IsolatedNodeCount,
+            topology.DisconnectedGroupCount,
+            topology.ResolvedNodeCount,
+            topology.UnresolvedNodeCount,
+            density,
+            fragmentation,
+            continuity,
+            coherenceScore,
+            graph.Diagnostics);
+    }
+
+    // TIME-DEPENDENT projection: transferPressure recomputes from the metrics snapshot's
+    // measuredAt-relative growthRate + cacheMissRisk; everything else comes straight from the pure base.
+    private DecisionSessionCoherenceSnapshot Project(
+        Guid repositoryId,
+        DateTimeOffset generatedAt,
+        DecisionSessionMetricsSnapshot metricsSnapshot,
+        DecisionSessionEconomicsSnapshot economicsSnapshot,
+        DecisionSessionCoherenceBase coherenceBase)
+    {
+        DensityAssessment density = coherenceBase.Density;
+        FragmentationAssessment fragmentation = coherenceBase.Fragmentation;
+        ContinuityQualityAssessment continuity = coherenceBase.Continuity;
+        decimal coherenceScore = coherenceBase.CoherenceScore;
         TransferPressureAssessment transferPressure = CalculateTransferPressure(metricsSnapshot, economicsSnapshot, fragmentation.Score, coherenceScore);
 
         var coherence = new DecisionSessionCoherence(
@@ -72,12 +96,12 @@ public sealed class DecisionSessionCoherenceService(
             metricsSnapshot.Statistics,
             metricsSnapshot.Cache,
             economicsSnapshot.Economics,
-            topology.NodeCount,
-            topology.RelationshipCount,
-            topology.IsolatedNodeCount,
-            topology.DisconnectedGroupCount,
-            topology.ResolvedNodeCount,
-            topology.UnresolvedNodeCount);
+            coherenceBase.NodeCount,
+            coherenceBase.RelationshipCount,
+            coherenceBase.IsolatedNodeCount,
+            coherenceBase.DisconnectedGroupCount,
+            coherenceBase.ResolvedNodeCount,
+            coherenceBase.UnresolvedNodeCount);
         var diagnostics = new DecisionSessionCoherenceDiagnostics(
             repositoryId,
             generatedAt,
@@ -95,8 +119,7 @@ public sealed class DecisionSessionCoherenceService(
             ],
             metricsSnapshot.Diagnostics.Warnings
                 .Concat(economicsSnapshot.Diagnostics.Warnings)
-                .Concat(graph.Diagnostics)
-                .Concat(rebuildWarnings)
+                .Concat(coherenceBase.GraphDiagnostics)
                 .Distinct(StringComparer.Ordinal)
                 .ToArray());
 

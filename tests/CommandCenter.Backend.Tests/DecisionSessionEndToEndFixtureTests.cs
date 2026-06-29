@@ -46,6 +46,7 @@ public sealed class DecisionSessionEndToEndFixtureTests
             harness.RepositoryStore,
             harness.Registry,
             eligibilityService,
+            policy,
             new DecisionSessionContinuityCaptureService(artifactService),
             new DecisionSessionContinuityIntegrationService(),
             artifactService,
@@ -62,7 +63,12 @@ public sealed class DecisionSessionEndToEndFixtureTests
         var observability = new DecisionSessionObservabilityService(
             harness.RepositoryService,
             harness.RepositoryStore,
-            timeProvider);
+            timeProvider,
+            metricsService,
+            economicsService,
+            coherenceService,
+            policy,
+            eligibilityService);
         var workflow = new WorkflowDecisionSessionService(observability);
         var certification = new DecisionSessionCertificationService(
             harness.RepositoryService,

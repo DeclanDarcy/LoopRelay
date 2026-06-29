@@ -147,6 +147,7 @@ public sealed class DecisionSessionTransferTests
             harness.RepositoryStore,
             harness.Registry,
             eligibility,
+            policy,
             capture,
             integrationService ?? new DecisionSessionContinuityIntegrationService(),
             artifactService,

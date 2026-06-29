@@ -24,7 +24,8 @@ public interface IDecisionSessionRepository
         Repository repository,
         DecisionSessionMetricsSnapshot snapshot,
         DateTimeOffset? sourceMaxWriteUtc = null,
-        string? analysisOptionsVersion = null);
+        string? analysisOptionsVersion = null,
+        string? sourceFingerprint = null);
 
     Task<DecisionSessionEconomicsSnapshot?> ReadEconomicsSnapshotAsync(Repository repository);
 

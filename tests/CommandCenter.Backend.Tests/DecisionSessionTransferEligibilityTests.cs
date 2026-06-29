@@ -144,8 +144,13 @@ public sealed class DecisionSessionTransferEligibilityTests
         Assert.Contains(snapshot.Eligibility.Findings, finding => finding.Code == "repository-unavailable");
     }
 
+    // Phase 3 retarget (refactor-lazy-sqlite.md): transfer eligibility is computed fresh on every read and is
+    // NEVER persisted as a file (no cached row at all — it is entirely a function of current registry/policy/
+    // evidence state). The preserved invariant is the substantive one: a transfer policy with complete evidence
+    // resolves to Eligible with the "eligible" finding. The removed assertion was that a snapshot FILE was
+    // written, which no longer happens (and is what makes the byte-identical endpoint listing stay empty).
     [Fact]
-    public async Task EligibleTransferPolicyPersistsEligibilitySnapshot()
+    public async Task EligibleTransferPolicyComputesEligibleSnapshotWithoutPersistingAFile()
     {
         DecisionSessionTestHarness harness = DecisionSessionTestHarness.Create();
         DecisionSession active = await CreateActiveSessionAsync(harness);
@@ -161,7 +166,7 @@ public sealed class DecisionSessionTransferEligibilityTests
             DecisionSessionArtifactPaths.Resolve(harness.Repository, DecisionSessionArtifactPaths.TransferEligibilitySnapshotJson()));
 
         Assert.Equal(DecisionSessionTransferEligibilityStatus.Eligible, snapshot.Eligibility.Status);
-        Assert.NotNull(persisted);
+        Assert.Null(persisted);
         Assert.Contains(snapshot.Eligibility.Findings, finding => finding.Code == "eligible");
     }
 

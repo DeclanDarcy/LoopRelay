@@ -9,13 +9,13 @@ namespace CommandCenter.Workflow.Services;
 public sealed class WorkflowRecoveryService(
     IRepositoryService repositoryService,
     IWorkflowProjectionService projectionService,
-    IWorkflowRepository workflowRepository) : IWorkflowRecoveryService
+    IWorkflowRepository workflowRepository,
+    TimeProvider timeProvider) : IWorkflowRecoveryService
 {
     public async Task<WorkflowTimeline> RebuildTimelineAsync(Guid repositoryId)
     {
         Repository repository = await GetRepositoryAsync(repositoryId);
-        WorkflowInstance projection = await projectionService.ProjectAsync(repositoryId);
-        WorkflowTimeline timeline = CreateTimeline(projection);
+        WorkflowTimeline timeline = await ProjectTimelineAsync(repository);
         await workflowRepository.SaveTimelineAsync(repository, timeline);
         return timeline;
     }
@@ -23,8 +23,7 @@ public sealed class WorkflowRecoveryService(
     public async Task<WorkflowRecoveryResult> RecoverCurrentWorkflowAsync(Guid repositoryId)
     {
         Repository repository = await GetRepositoryAsync(repositoryId);
-        WorkflowInstance projection = await projectionService.ProjectAsync(repositoryId);
-        WorkflowTimeline rebuilt = CreateTimeline(projection);
+        WorkflowTimeline rebuilt = await ProjectTimelineAsync(repository);
         WorkflowTimeline? latest = null;
         var diagnostics = new List<string>();
         var discardedArtifacts = new List<string>();
@@ -47,7 +46,7 @@ public sealed class WorkflowRecoveryService(
                 latest,
                 new WorkflowRecoveryDiagnostics(
                     repository.Id,
-                    DateTimeOffset.UtcNow,
+                    timeProvider.GetUtcNow(),
                     rebuilt.Fingerprint,
                     latest.Fingerprint,
                     false,
@@ -74,7 +73,7 @@ public sealed class WorkflowRecoveryService(
             rebuilt,
             new WorkflowRecoveryDiagnostics(
                 repository.Id,
-                DateTimeOffset.UtcNow,
+                timeProvider.GetUtcNow(),
                 rebuilt.Fingerprint,
                 latest?.Fingerprint,
                 true,
@@ -94,6 +93,17 @@ public sealed class WorkflowRecoveryService(
         return repository ?? throw new KeyNotFoundException($"Repository was not found: {repositoryId}");
     }
 
-    private static WorkflowTimeline CreateTimeline(WorkflowInstance projection)
-        => WorkflowTimelineFactory.Create(projection, DateTimeOffset.UtcNow);
+    /// <summary>
+    /// Produces the current workflow timeline by projecting fresh from domain evidence on every call. The
+    /// timeline is intentionally NOT served from the derived cache: it folds in LIVE git state (branch/commit/
+    /// push read from <c>git status</c>, not from any <c>.agents</c> file), which a source-content fingerprint
+    /// cannot observe — caching it would serve a stale timeline after a commit/push and would defeat the
+    /// persisted-vs-fresh reconciliation in <see cref="RecoverCurrentWorkflowAsync"/>. This runs only on demand
+    /// (Phase 5 removed the startup path), so re-projecting per request is correct and cheap.
+    /// </summary>
+    private async Task<WorkflowTimeline> ProjectTimelineAsync(Repository repository)
+        => CreateTimeline(await projectionService.ProjectAsync(repository.Id));
+
+    private WorkflowTimeline CreateTimeline(WorkflowInstance projection)
+        => WorkflowTimelineFactory.Create(projection, timeProvider.GetUtcNow());
 }

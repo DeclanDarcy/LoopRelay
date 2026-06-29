@@ -78,8 +78,13 @@ public sealed class DecisionSessionEconomicsTests
         Assert.True(large.Diagnostics.CacheBenefit.ReusableCorpusScore > small.Diagnostics.CacheBenefit.ReusableCorpusScore);
     }
 
+    // Phase 3 retarget (refactor-lazy-sqlite.md): economics is no longer persisted as a derived FILE, so there
+    // is no "invalid persisted snapshot" to validate-and-rebuild. The preserved invariant is that the served
+    // economics snapshot is always freshly COMPUTED from the metrics base (a stale/corrupt cache row is a miss,
+    // never a corrupt read) — so even with a leftover corrupt analysis FILE present, the snapshot is valid and
+    // the file is irrelevant to the result.
     [Fact]
-    public async Task InvalidEconomicsSnapshotIsRebuiltFromMetrics()
+    public async Task EconomicsIsAlwaysComputedFromMetricsRegardlessOfStaleAnalysisFile()
     {
         DecisionSessionTestHarness harness = DecisionSessionTestHarness.Create();
         DateTimeOffset generatedAt = DateTimeOffset.UtcNow;
@@ -92,11 +97,9 @@ public sealed class DecisionSessionEconomicsTests
             "{ not valid json");
 
         DecisionSessionEconomicsSnapshot snapshot = await service.GetEconomicsAsync(harness.Repository.Id);
-        string? persisted = await harness.Store.ReadAsync(DecisionSessionArtifactPaths.Resolve(harness.Repository, DecisionSessionArtifactPaths.EconomicsSnapshotJson()));
 
         Assert.True(snapshot.Economics.EstimatedReuseValue > 0m);
-        Assert.NotNull(persisted);
-        Assert.Contains(snapshot.Diagnostics.Warnings, warning => warning.Contains("rebuilt", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(harness.Repository.Id, snapshot.RepositoryId);
     }
 
     [Fact]

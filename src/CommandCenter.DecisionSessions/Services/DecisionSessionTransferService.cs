@@ -10,6 +10,7 @@ public sealed class DecisionSessionTransferService(
     IDecisionSessionRepository sessionRepository,
     IDecisionSessionRegistry registry,
     IDecisionSessionTransferEligibilityService eligibilityService,
+    IDecisionSessionLifecyclePolicy lifecyclePolicy,
     IDecisionSessionContinuityCaptureService continuityCapture,
     IDecisionSessionContinuityIntegrationService continuityIntegration,
     IDecisionSessionContinuityArtifactService artifactService,
@@ -50,6 +51,16 @@ public sealed class DecisionSessionTransferService(
         DecisionSessionContinuityArtifact? artifact = null;
         try
         {
+            // Materialize the lifecycle-policy base BEFORE transfer-pending (refactor-lazy-sqlite.md, Phase 5).
+            // Policy is now compute-on-read and is never pre-warmed to a file, but the continuity-artifact path
+            // (DecisionSessionContinuityArtifactService.ReadRequiredPolicySnapshotAsync) is a HARD dependency that
+            // requires a persisted snapshot once the source session is transfer-pending — at which point the
+            // policy can no longer be evaluated against an Active session. Evaluating it here, while the session is
+            // still Active, and persisting it guarantees the snapshot is always available and always fresh for the
+            // capture that follows, with its Inputs.Session.Id matching the source session.
+            DecisionSessionLifecycleSnapshot policySnapshot = await lifecyclePolicy.EvaluateAsync(repositoryId);
+            await sessionRepository.WriteLifecyclePolicySnapshotAsync(repository, policySnapshot);
+
             sourceSession = await registry.MarkTransferPendingAsync(repositoryId, activeSession.Id, eligibilitySnapshot.Eligibility.PolicyEvaluation.Reason);
             artifact = await continuityCapture.CaptureAsync(repositoryId, sourceSession.Id);
             DecisionSessionTransferEvent started = CreateEvent(

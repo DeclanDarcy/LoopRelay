@@ -14,6 +14,7 @@
     <ProjectReference Include="..\CommandCenter.Agents\CommandCenter.Agents.csproj" />
     <ProjectReference Include="..\CommandCenter.Core\CommandCenter.Core.csproj" />
     <ProjectReference Include="..\CommandCenter.Decisions\CommandCenter.Decisions.csproj" />
+    <ProjectReference Include="..\CommandCenter.Persistence.Sqlite\CommandCenter.Persistence.Sqlite.csproj" />
   </ItemGroup>
 
 </Project>

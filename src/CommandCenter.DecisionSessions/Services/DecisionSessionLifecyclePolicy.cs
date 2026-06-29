@@ -1,4 +1,3 @@
-using System.Text.Json;
 using CommandCenter.Core.Repositories;
 using CommandCenter.DecisionSessions.Abstractions;
 using CommandCenter.DecisionSessions.Models;
@@ -18,21 +17,10 @@ public sealed class DecisionSessionLifecyclePolicy(
     {
         Repository repository = await GetRepositoryAsync(repositoryId);
         DateTimeOffset evaluatedAt = timeProvider.GetUtcNow();
-        var rebuildWarnings = new List<string>();
 
-        try
-        {
-            _ = await sessionRepository.ReadLifecyclePolicySnapshotAsync(repository);
-        }
-        catch (DecisionSessionValidationException exception)
-        {
-            rebuildWarnings.Add($"Existing lifecycle policy snapshot is invalid and was rebuilt: {exception.Message}");
-        }
-        catch (JsonException exception)
-        {
-            rebuildWarnings.Add($"Existing lifecycle policy snapshot JSON is invalid and was rebuilt: {exception.Message}");
-        }
-
+        // The lifecycle Continue-vs-Transfer decision is entirely time-dependent (transferScore(now) vs
+        // reuseScore), so it is NEVER cached — it is computed fresh on every read. No policy snapshot is
+        // persisted to .agents/decision-sessions/lifecycle anymore (refactor-lazy-sqlite.md, Phase 3).
         DecisionSession? activeSession = await sessionRepository.GetActiveAsync(repository);
         if (activeSession is null)
         {
@@ -42,16 +30,14 @@ public sealed class DecisionSessionLifecyclePolicy(
         DecisionSessionMetricsSnapshot metricsSnapshot = await metricsService.GetMetricsAsync(repositoryId);
         DecisionSessionEconomicsSnapshot economicsSnapshot = await economicsService.GetEconomicsAsync(repositoryId);
         DecisionSessionCoherenceSnapshot coherenceSnapshot = await coherenceService.GetCoherenceAsync(repositoryId);
-        DecisionSessionLifecycleSnapshot snapshot = BuildSnapshot(
+        return BuildSnapshot(
             repository.Id,
             activeSession,
             evaluatedAt,
             metricsSnapshot,
             economicsSnapshot,
             coherenceSnapshot,
-            rebuildWarnings);
-        await sessionRepository.WriteLifecyclePolicySnapshotAsync(repository, snapshot);
-        return snapshot;
+            []);
     }
 
     private DecisionSessionLifecycleSnapshot BuildSnapshot(

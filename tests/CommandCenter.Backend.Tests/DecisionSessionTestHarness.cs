@@ -1,10 +1,14 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using CommandCenter.Continuity.Services;
 using CommandCenter.Core.Artifacts;
 using CommandCenter.Core.Repositories;
+using CommandCenter.Decisions.Services;
 using CommandCenter.DecisionSessions.Models;
 using CommandCenter.DecisionSessions.Persistence;
 using CommandCenter.DecisionSessions.Services;
+using CommandCenter.Reasoning.Projections;
+using CommandCenter.Reasoning.Services;
 
 namespace CommandCenter.Backend.Tests;
 
@@ -38,6 +42,40 @@ internal sealed record DecisionSessionTestHarness(
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         options.Converters.Add(new JsonStringEnumConverter());
         return options;
+    }
+
+    // Builds the full decision-session analysis stack over real evidence readers (no derived-snapshot cache:
+    // the services fall back to pure compute-on-read). Phase 3 (refactor-lazy-sqlite.md): DecisionSession
+    // ObservabilityService now ACTIVELY computes its snapshots through these providers instead of reading
+    // pre-warmed files, so the cold-cache observability tests drive this real stack.
+    public DecisionSessionObservabilityService CreateObservabilityService(TimeProvider timeProvider)
+    {
+        var decisionRepository = new InMemoryDecisionRepository();
+        var reasoningRepository = new FileSystemReasoningRepository(Store, new ReasoningArtifactProjectionService());
+        var contextStore = new FileSystemOperationalContextProposalStore(Store);
+        var artifactService = new ArtifactService(Store);
+        var evidenceReader = new DecisionSessionEvidenceReader(decisionRepository, reasoningRepository, contextStore, artifactService);
+        var metricsService = new DecisionSessionMetricsService(
+            RepositoryService, Registry, RepositoryStore, evidenceReader, new DeterministicTokenEstimator(), timeProvider);
+        var economicsService = new DecisionSessionEconomicsService(
+            RepositoryService, RepositoryStore, metricsService, new DecisionSessionEconomicsOptions(), timeProvider);
+        var graphService = new ReasoningGraphService(RepositoryService, reasoningRepository, Store);
+        var coherenceService = new DecisionSessionCoherenceService(
+            RepositoryService, RepositoryStore, metricsService, economicsService, graphService, new DecisionSessionCoherenceOptions(), timeProvider);
+        var lifecyclePolicy = new DecisionSessionLifecyclePolicy(
+            RepositoryService, RepositoryStore, metricsService, economicsService, coherenceService, new DecisionSessionLifecyclePolicyOptions(), timeProvider);
+        var recoveryService = new DecisionSessionRecoveryService(RepositoryService, RepositoryStore, timeProvider);
+        var eligibilityService = new DecisionSessionTransferEligibilityService(
+            RepositoryService, RepositoryStore, recoveryService, lifecyclePolicy, evidenceReader, timeProvider);
+        return new DecisionSessionObservabilityService(
+            RepositoryService,
+            RepositoryStore,
+            timeProvider,
+            metricsService,
+            economicsService,
+            coherenceService,
+            lifecyclePolicy,
+            eligibilityService);
     }
 
     public async Task WriteRegistryAsync(

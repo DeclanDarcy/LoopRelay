@@ -1,5 +1,6 @@
 using CommandCenter.Workflow.Abstractions;
 using CommandCenter.Workflow.Models;
+using CommandCenter.Workflow.Services;
 
 namespace CommandCenter.Backend.Endpoints;
 
@@ -60,12 +61,14 @@ public static class WorkflowEndpoints
         app.MapGet("/api/repositories/{repositoryId:guid}/workflow/history", async (
             Guid repositoryId,
             IWorkflowProjectionService workflowProjectionService,
-            IWorkflowRecoveryService workflowRecoveryService) =>
+            WorkflowRecoveryRunner workflowRecoveryRunner) =>
         {
             try
             {
                 var projection = await workflowProjectionService.ProjectAsync(repositoryId);
-                var recovery = await workflowRecoveryService.RecoverCurrentWorkflowAsync(repositoryId);
+                // Route through the runner so concurrent same-repo recoveries SERIALIZE (the service has no
+                // internal lock); the runner re-runs every call, so this live read stays fresh (Fix C).
+                var recovery = await workflowRecoveryRunner.RecoverCurrentWorkflowAsync(repositoryId);
                 return Results.Ok(new WorkflowHistoryProjection(
                     repositoryId,
                     recovery.Timeline,
@@ -204,11 +207,12 @@ public static class WorkflowEndpoints
     private static void MapPostWorkflowRecover(this IEndpointRouteBuilder app) =>
         app.MapPost("/api/repositories/{repositoryId:guid}/workflow/recover", async (
             Guid repositoryId,
-            IWorkflowRecoveryService workflowRecoveryService) =>
+            WorkflowRecoveryRunner workflowRecoveryRunner) =>
         {
             try
             {
-                return Results.Ok(await workflowRecoveryService.RecoverCurrentWorkflowAsync(repositoryId));
+                // Serialize concurrent same-repo recoveries through the gate, re-running for a fresh result (Fix C).
+                return Results.Ok(await workflowRecoveryRunner.RecoverCurrentWorkflowAsync(repositoryId));
             }
             catch (KeyNotFoundException exception)
             {
@@ -347,11 +351,12 @@ public static class WorkflowEndpoints
     private static void MapPostWorkflowContinuationRun(this IEndpointRouteBuilder app) =>
         app.MapPost("/api/repositories/{repositoryId:guid}/workflow/continuation/run", async (
             Guid repositoryId,
-            IWorkflowContinuationService workflowContinuationService) =>
+            WorkflowContinuationRunner workflowContinuationRunner) =>
         {
             try
             {
-                return Results.Ok(await workflowContinuationService.RunContinuationAsync(repositoryId));
+                // Serialize concurrent same-repo continuations through the gate, re-running for a fresh result (Fix C).
+                return Results.Ok(await workflowContinuationRunner.RunContinuationAsync(repositoryId));
             }
             catch (KeyNotFoundException exception)
             {

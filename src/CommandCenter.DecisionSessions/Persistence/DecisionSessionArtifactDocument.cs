@@ -20,4 +20,13 @@ public sealed record DecisionSessionArtifactDocument<T>(
     /// Nullable so pre-existing documents deserialize cleanly and are treated as stale.
     /// </summary>
     public string? AnalysisOptionsVersion { get; init; }
+
+    /// <summary>
+    /// The deterministic per-family source CONTENT fingerprint captured when this snapshot was rebuilt
+    /// (Phase 2 of the Derivation Cache refactor). It is the staleness KEY: warm-restart recovery skips the
+    /// rebuild only when a freshly computed fingerprint over the same source families equals this value.
+    /// Nullable so documents written before fingerprinting (or non-metrics documents) deserialize cleanly and
+    /// are treated as stale (a null fingerprint never equals a present one, forcing a conservative rebuild).
+    /// </summary>
+    public string? SourceFingerprint { get; init; }
 }

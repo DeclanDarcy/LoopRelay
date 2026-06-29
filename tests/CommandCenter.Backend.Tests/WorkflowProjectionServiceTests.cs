@@ -14,6 +14,8 @@ using CommandCenter.Decisions.Primitives;
 using CommandCenter.Execution.Abstractions;
 using CommandCenter.Execution.Models;
 using CommandCenter.Execution.Primitives;
+using CommandCenter.Persistence.Sqlite;
+using CommandCenter.Persistence.Sqlite.Abstractions;
 using CommandCenter.Workflow.Abstractions;
 using CommandCenter.Workflow.Models;
 using CommandCenter.Workflow.Persistence;
@@ -2661,11 +2663,15 @@ public sealed class WorkflowProjectionServiceTests
         fixture.Session = CompletedAcceptedSession(RepositoryExecutionState.AwaitingAcceptance);
         var store = new MemoryArtifactStore();
         var workflowRepository = new FileSystemWorkflowRepository(store);
-        var hosted = new WorkflowRecoveryHostedService(
+        // Phase 5 retarget (refactor-lazy-sqlite.md): the deleted WorkflowRecoveryHostedService body now lives
+        // verbatim in the on-demand WorkflowRecoveryRunner. Driving RecoverAllAsync preserves the original
+        // invariant — startup recovery restores workflow timeline evidence without mutating domain state.
+        var runner = new WorkflowRecoveryRunner(
             new RepositoryServiceStub(fixture.Repository),
-            fixture.CreateRecoveryService(workflowRepository));
+            fixture.CreateRecoveryService(workflowRepository),
+            new PerRepositoryRecoveryGate());
 
-        await hosted.StartAsync(CancellationToken.None);
+        await runner.RecoverAllAsync(CancellationToken.None);
 
         WorkflowTimeline? latest = await workflowRepository.GetLatestTimelineAsync(fixture.Repository);
         Assert.NotNull(latest);
@@ -2678,17 +2684,21 @@ public sealed class WorkflowProjectionServiceTests
         Repository repository = CreateRepository("repo-1");
         var continuationService = new HostedContinuationServiceStub();
         var preparationService = new HostedPreparationServiceStub();
-        var hosted = new WorkflowContinuationHostedService(
+        // Phase 5 retarget (refactor-lazy-sqlite.md): the deleted WorkflowContinuationHostedService body now lives
+        // verbatim (minus the 60s PeriodicTimer loop) in the on-demand WorkflowContinuationRunner. RunAllAsync
+        // preserves the original invariant — ContinuationEnabled=false runs nothing.
+        var runner = new WorkflowContinuationRunner(
             new RepositoryServiceStub(repository),
             continuationService,
             preparationService,
+            new PerRepositoryRecoveryGate(),
             Options.Create(new WorkflowContinuationOptions
             {
                 ContinuationEnabled = false,
                 ContinuationIntervalSeconds = 3600
             }));
 
-        await hosted.StartAsync(CancellationToken.None);
+        await runner.RunAllAsync(CancellationToken.None);
 
         Assert.Empty(continuationService.CalledRepositoryIds);
         Assert.Empty(preparationService.CalledRepositoryIds);
@@ -2700,18 +2710,21 @@ public sealed class WorkflowProjectionServiceTests
         Repository repository = CreateRepository("repo-1");
         var continuationService = new HostedContinuationServiceStub();
         var preparationService = new HostedPreparationServiceStub();
-        var hosted = new WorkflowContinuationHostedService(
+        // Phase 5 retarget (refactor-lazy-sqlite.md): WorkflowContinuationRunner.RunAllAsync replaces the deleted
+        // hosted StartAsync (which did one run then started the now-removed 60s loop). It preserves the original
+        // invariant — continuation and preparation each run ONCE per repository with the "hosted" trigger.
+        var runner = new WorkflowContinuationRunner(
             new RepositoryServiceStub(repository),
             continuationService,
             preparationService,
+            new PerRepositoryRecoveryGate(),
             Options.Create(new WorkflowContinuationOptions
             {
                 ContinuationEnabled = true,
                 ContinuationIntervalSeconds = 3600
             }));
 
-        await hosted.StartAsync(CancellationToken.None);
-        await hosted.StopAsync(CancellationToken.None);
+        await runner.RunAllAsync(CancellationToken.None);
 
         Assert.Equal([repository.Id], continuationService.CalledRepositoryIds);
         Assert.Equal([repository.Id], preparationService.CalledRepositoryIds);
@@ -2726,7 +2739,10 @@ public sealed class WorkflowProjectionServiceTests
         fixture.ExecutionState = RepositoryExecutionState.AwaitingCommit;
         fixture.Session = CompletedAcceptedSession(RepositoryExecutionState.AwaitingCommit);
         var workflowRepository = new FileSystemWorkflowRepository(new MemoryArtifactStore());
-        var firstHosted = new WorkflowContinuationHostedService(
+        // Phase 5 retarget (refactor-lazy-sqlite.md): two WorkflowContinuationRunner instances stand in for a
+        // process restart. RunAllAsync replaces the deleted hosted RunOnceAsync and preserves the invariant — the
+        // existing fingerprint-dedup keeps a restart from duplicating continuation/preparation evidence.
+        var firstHosted = new WorkflowContinuationRunner(
             new RepositoryServiceStub(fixture.Repository),
             new WorkflowContinuationService(
                 new RepositoryServiceStub(fixture.Repository),
@@ -2740,12 +2756,13 @@ public sealed class WorkflowProjectionServiceTests
                 null,
                 null,
                 new ExecutionSessionServiceStub(fixture)),
+            new PerRepositoryRecoveryGate(),
             Options.Create(new WorkflowContinuationOptions
             {
                 ContinuationEnabled = true,
                 ContinuationIntervalSeconds = 3600
             }));
-        var restartedHosted = new WorkflowContinuationHostedService(
+        var restartedHosted = new WorkflowContinuationRunner(
             new RepositoryServiceStub(fixture.Repository),
             new WorkflowContinuationService(
                 new RepositoryServiceStub(fixture.Repository),
@@ -2759,14 +2776,15 @@ public sealed class WorkflowProjectionServiceTests
                 null,
                 null,
                 new ExecutionSessionServiceStub(fixture)),
+            new PerRepositoryRecoveryGate(),
             Options.Create(new WorkflowContinuationOptions
             {
                 ContinuationEnabled = true,
                 ContinuationIntervalSeconds = 3600
             }));
 
-        await firstHosted.RunOnceAsync(CancellationToken.None);
-        await restartedHosted.RunOnceAsync(CancellationToken.None);
+        await firstHosted.RunAllAsync(CancellationToken.None);
+        await restartedHosted.RunAllAsync(CancellationToken.None);
 
         IReadOnlyList<WorkflowContinuationEvent> continuationHistory =
             await workflowRepository.ListContinuationEventsAsync(fixture.Repository);
@@ -2788,7 +2806,10 @@ public sealed class WorkflowProjectionServiceTests
         TestFixture fixture = TestFixture.Create();
         ArrangeAuthorityGateScenario(fixture, "decision-resolution");
         var workflowRepository = new FileSystemWorkflowRepository(new MemoryArtifactStore());
-        var hosted = new WorkflowContinuationHostedService(
+        // Phase 5 retarget (refactor-lazy-sqlite.md): WorkflowContinuationRunner.RunAllAsync replaces the deleted
+        // hosted RunOnceAsync, preserving the invariant — an open authority gate stops progression and refuses
+        // preparation without mutating the decision.
+        var hosted = new WorkflowContinuationRunner(
             new RepositoryServiceStub(fixture.Repository),
             new WorkflowContinuationService(
                 new RepositoryServiceStub(fixture.Repository),
@@ -2802,13 +2823,14 @@ public sealed class WorkflowProjectionServiceTests
                 new DecisionDiscoveryServiceStub([]),
                 null,
                 new ExecutionSessionServiceStub(fixture)),
+            new PerRepositoryRecoveryGate(),
             Options.Create(new WorkflowContinuationOptions
             {
                 ContinuationEnabled = true,
                 ContinuationIntervalSeconds = 3600
             }));
 
-        await hosted.RunOnceAsync(CancellationToken.None);
+        await hosted.RunAllAsync(CancellationToken.None);
 
         WorkflowContinuationEvent continuationEvent = Assert.Single(
             await workflowRepository.ListContinuationEventsAsync(fixture.Repository));
@@ -2834,17 +2856,21 @@ public sealed class WorkflowProjectionServiceTests
         Repository healthyRepository = CreateRepository("repo-healthy");
         var continuationService = new HostedContinuationServiceStub(failingRepository.Id);
         var preparationService = new HostedPreparationServiceStub();
-        var hosted = new WorkflowContinuationHostedService(
+        // Phase 5 retarget (refactor-lazy-sqlite.md): WorkflowContinuationRunner.RunAllAsync replaces the deleted
+        // hosted RunOnceAsync, preserving the invariant — one repository's continuation failure does not block the
+        // others from being evaluated.
+        var hosted = new WorkflowContinuationRunner(
             new RepositoryServiceStub(failingRepository, healthyRepository),
             continuationService,
             preparationService,
+            new PerRepositoryRecoveryGate(),
             Options.Create(new WorkflowContinuationOptions
             {
                 ContinuationEnabled = true,
                 ContinuationIntervalSeconds = 3600
             }));
 
-        await hosted.RunOnceAsync(CancellationToken.None);
+        await hosted.RunAllAsync(CancellationToken.None);
 
         Assert.Equal([failingRepository.Id, healthyRepository.Id], continuationService.CalledRepositoryIds);
         Assert.Equal([healthyRepository.Id], preparationService.CalledRepositoryIds);
@@ -4364,7 +4390,7 @@ public sealed class WorkflowProjectionServiceTests
                 new FileSystemWorkflowRepository(new MemoryArtifactStore()));
 
         public WorkflowRecoveryService CreateRecoveryService(IWorkflowRepository workflowRepository) =>
-            new(new RepositoryServiceStub(Repository), CreateService(), workflowRepository);
+            new(new RepositoryServiceStub(Repository), CreateService(), workflowRepository, TimeProvider.System);
 
         public WorkflowHealthService CreateHealthService(IWorkflowRepository workflowRepository) =>
             new(new RepositoryServiceStub(Repository), CreateService(), workflowRepository, new WorkflowDecisionSessionServiceStub(Repository.Id));
@@ -4988,5 +5014,56 @@ public sealed class WorkflowProjectionServiceTests
         public Task<CommitStatusSnapshot> GetCommitStatusSnapshotAsync(Repository repository) => throw new NotSupportedException("Commit snapshots are not used by workflow projection.");
         public Task<CommitResult> CommitAsync(Repository repository, string message, IReadOnlyList<string> selectedPaths, string preparationSnapshotId) => throw new NotSupportedException("Mutating git methods are not used by workflow projection.");
         public Task<PushResult> PushAsync(Repository repository, string? commitSha) => throw new NotSupportedException("Mutating git methods are not used by workflow projection.");
+    }
+
+    [Fact]
+    public async Task RecoveryAlwaysProjectsFreshTimelineSoLiveGitAndContextChangesAreReflected()
+    {
+        // The workflow timeline folds in LIVE git state (read from `git status`, not a `.agents` file) and
+        // operational-context, neither of which a source-content fingerprint can track, so the timeline is
+        // intentionally NOT served from the derived cache. This pins that correctness property: every recovery
+        // re-projects (no stale-cache skip), so any change between recoveries is always reflected, and the
+        // timeline content matches the ungated baseline.
+        TestFixture fixture = TestFixture.Create();
+        fixture.ExecutionState = RepositoryExecutionState.AwaitingAcceptance;
+        fixture.Session = CompletedAcceptedSession(RepositoryExecutionState.AwaitingAcceptance);
+        var workflowRepository = new FileSystemWorkflowRepository(new MemoryArtifactStore());
+
+        var counting = new CountingProjectionService(fixture.CreateService());
+        var recovery = new WorkflowRecoveryService(
+            new RepositoryServiceStub(fixture.Repository),
+            counting,
+            workflowRepository,
+            TimeProvider.System);
+
+        WorkflowTimeline baseline = await fixture.CreateRecoveryService(
+            new FileSystemWorkflowRepository(new MemoryArtifactStore())).RebuildTimelineAsync(fixture.Repository.Id);
+
+        WorkflowRecoveryResult first = await recovery.RecoverCurrentWorkflowAsync(fixture.Repository.Id);
+        Assert.Equal(1, counting.CallCount);
+        Assert.Equal(baseline.Fingerprint, first.Timeline.Fingerprint);
+        Assert.Equal(WorkflowStage.Handoff, first.Timeline.CurrentStage);
+
+        // Second recovery re-projects (no cache skip) — the timeline is always freshly derived from live state.
+        WorkflowRecoveryResult second = await recovery.RecoverCurrentWorkflowAsync(fixture.Repository.Id);
+        Assert.Equal(2, counting.CallCount);
+        Assert.Equal(first.Timeline.Fingerprint, second.Timeline.Fingerprint);
+    }
+
+    private sealed class CountingProjectionService(IWorkflowProjectionService inner) : IWorkflowProjectionService
+    {
+        public int CallCount { get; private set; }
+
+        public Task<WorkflowInstance> ProjectAsync(Guid repositoryId)
+        {
+            CallCount++;
+            return inner.ProjectAsync(repositoryId);
+        }
+
+        public Task<WorkflowProjectionDiagnostics> GetDiagnosticsAsync(Guid repositoryId) =>
+            inner.GetDiagnosticsAsync(repositoryId);
+
+        public Task<IReadOnlyList<WorkflowTimelineEntry>> GetTimelineAsync(Guid repositoryId) =>
+            inner.GetTimelineAsync(repositoryId);
     }
 }

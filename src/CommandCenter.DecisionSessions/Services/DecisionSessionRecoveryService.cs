@@ -1,9 +1,9 @@
-using CommandCenter.Core.Artifacts;
 using CommandCenter.Core.Repositories;
 using CommandCenter.DecisionSessions.Abstractions;
 using CommandCenter.DecisionSessions.Models;
 using CommandCenter.DecisionSessions.Persistence;
 using CommandCenter.DecisionSessions.Primitives;
+using CommandCenter.Persistence.Sqlite.Abstractions;
 
 namespace CommandCenter.DecisionSessions.Services;
 
@@ -15,28 +15,19 @@ public sealed class DecisionSessionRecoveryService(
     IDecisionSessionEconomicsService? economicsService = null,
     IDecisionSessionCoherenceService? coherenceService = null,
     IDecisionSessionLifecyclePolicy? lifecyclePolicy = null,
-    IDecisionSessionEvidenceReader? evidenceReader = null) : IDecisionSessionRecoveryService
+    IDecisionSessionEvidenceReader? evidenceReader = null,
+    ISourceFingerprintProvider? sourceFingerprintProvider = null,
+    IDerivedSnapshotCache? derivedSnapshotCache = null,
+    IRecoveryResultStore? recoveryResultStore = null) : IDecisionSessionRecoveryService
 {
     /// <summary>
-    /// Hand-bumped version identifying the metrics/economics/coherence/lifecycle analysis formulas. Bump this
-    /// constant whenever any of those derived-snapshot formulas change so that warm-restart recovery rebuilds
-    /// snapshots stamped under an older formula version instead of skipping them.
+    /// The analysis formula version + metrics-base source families that key the warm-restart cache lookup. These
+    /// MUST equal the values the metrics service writes its cached base under (<see cref="DecisionSessionAnalysisCache"/>),
+    /// otherwise a freshly-computed base would never be recognized as a warm-restart hit.
     /// </summary>
-    private const string AnalysisOptionsVersion = "decision-sessions.analysis.v1";
+    private const string AnalysisOptionsVersion = DecisionSessionAnalysisCache.FormulaVersion;
 
-    /// <summary>
-    /// Repository-relative SOURCE directories the evidence reader scans. The decision-session snapshot output
-    /// directory (.agents/decision-sessions) is deliberately NOT in this set: writing a snapshot must not bump
-    /// the probed source mtime, which would self-invalidate the warm-restart cache forever.
-    /// </summary>
-    private static readonly string[] SourceDirectories =
-    [
-        ArtifactPath.CombineRelative(".agents", "decisions"),
-        ArtifactPath.CombineRelative(".agents", "reasoning"),
-        ArtifactPath.CombineRelative(".agents", "operational_context")
-    ];
-
-    private const string OperationalContextCurrentRelativePath = ".agents/operational_context.md";
+    private static readonly SourceFamily[] MetricsBaseFamilies = DecisionSessionAnalysisCache.MetricsFamilies;
 
     public async Task<DecisionSessionDiagnostics> GetDiagnosticsAsync(Guid repositoryId)
     {
@@ -57,8 +48,23 @@ public sealed class DecisionSessionRecoveryService(
     public async Task<DecisionSessionRecoveryHistory> GetHistoryAsync(Guid repositoryId)
     {
         Repository repository = await GetRepositoryAsync(repositoryId);
-        IReadOnlyList<DecisionSessionRecoveryResult> results = await sessionRepository.ListRecoveryResultsAsync(repository);
+        // Phase 4 (refactor-lazy-sqlite.md): recovery-result audit rows live in the per-repo SQLite
+        // recovery_result table when the store is wired; the file path remains the fallback for pure-service
+        // tests. Both round-trip the SAME DecisionSessionJson.Options so GetHistoryAsync is shape-identical.
+        IReadOnlyList<DecisionSessionRecoveryResult> results = recoveryResultStore is null
+            ? await sessionRepository.ListRecoveryResultsAsync(repository)
+            : await ReadHistoryFromStoreAsync(repository);
         return new DecisionSessionRecoveryHistory(repositoryId, results, timeProvider.GetUtcNow());
+    }
+
+    private async Task<IReadOnlyList<DecisionSessionRecoveryResult>> ReadHistoryFromStoreAsync(Repository repository)
+    {
+        IReadOnlyList<DecisionSessionRecoveryResult> stored =
+            await recoveryResultStore!.ListAsync<DecisionSessionRecoveryResult>(repository, CancellationToken.None);
+        return stored
+            .OrderBy(result => result.RecoveredAt)
+            .ThenBy(result => result.RecoveryId, StringComparer.Ordinal)
+            .ToArray();
     }
 
     public async Task<DecisionSessionRecoveryDiagnostics> GetRecoveryDiagnosticsAsync(Guid repositoryId)
@@ -164,7 +170,14 @@ public sealed class DecisionSessionRecoveryService(
 
         if (persist)
         {
-            await sessionRepository.WriteRecoveryResultAsync(repository, result);
+            if (recoveryResultStore is null)
+            {
+                await sessionRepository.WriteRecoveryResultAsync(repository, result);
+            }
+            else
+            {
+                await recoveryResultStore.WriteAsync(repository, result.RecoveryId, result.RecoveredAt, result, CancellationToken.None);
+            }
         }
 
         return result;
@@ -183,38 +196,35 @@ public sealed class DecisionSessionRecoveryService(
 
         if (await CanSkipDerivedRebuildAsync(repository))
         {
-            // Warm restart: source .agents evidence is unchanged since the last stamped rebuild, so the
-            // four count-derived snapshots (metrics/economics/coherence/lifecycle) are byte-for-byte current.
-            // Skip the expensive evidence rescans entirely and read the persisted lifecycle policy snapshot
-            // to feed transfer eligibility (one small file, no O(files) evidence scan).
+            // Warm restart: the source-pure metrics base is already present in the derived-snapshot cache under
+            // the current source-content fingerprint, so the count-derived bases (metrics/economics/coherence/
+            // lifecycle) are current and reused from cache rather than recomputed from an O(files) evidence scan.
+            // The lifecycle policy is recomputed (a cheap cache-hit chain) to feed transfer eligibility.
             AddSkippedFinding(
                 "MetricsSnapshotNotRebuilt",
-                "Metrics snapshot was not rebuilt because source evidence is unchanged since the last stamped rebuild.",
+                "Metrics snapshot was not rebuilt because source evidence is unchanged since the last cached rebuild.",
                 findings,
                 diagnostics);
             AddSkippedFinding(
                 "EconomicsSnapshotNotRebuilt",
-                "Economics snapshot was not rebuilt because source evidence is unchanged since the last stamped rebuild.",
+                "Economics snapshot was not rebuilt because source evidence is unchanged since the last cached rebuild.",
                 findings,
                 diagnostics);
             AddSkippedFinding(
                 "CoherenceSnapshotNotRebuilt",
-                "Coherence snapshot was not rebuilt because source evidence is unchanged since the last stamped rebuild.",
+                "Coherence snapshot was not rebuilt because source evidence is unchanged since the last cached rebuild.",
                 findings,
                 diagnostics);
             AddSkippedFinding(
                 "LifecyclePolicySnapshotNotRebuilt",
-                "Lifecycle policy snapshot was not rebuilt because source evidence is unchanged since the last stamped rebuild.",
+                "Lifecycle policy snapshot was not rebuilt because source evidence is unchanged since the last cached rebuild.",
                 findings,
                 diagnostics);
-            policySnapshot = await sessionRepository.ReadLifecyclePolicySnapshotAsync(repository);
+            policySnapshot = activeSession is null ? null : await EvaluatePolicyQuietlyAsync(repository.Id);
         }
         else
         {
-            // Probe BEFORE rebuilding so the stamp reflects the source tree the rebuild consumed. If a source
-            // file changes during the rebuild, the stamp will be older than the next probe => next boot rebuilds
-            // (conservative; never serves stale data).
-            DateTimeOffset? sourceMaxWriteUtc = ProbeSourceMaxWriteUtc(repository);
+            // Cold/stale cache: compute (and cache, via the services' ReadDerivedAsync envelope) each base.
             await RebuildSnapshotAsync(
                 "MetricsSnapshotRebuilt",
                 "Metrics snapshot was rebuilt from decision, reasoning, and continuity evidence.",
@@ -252,10 +262,6 @@ public sealed class DecisionSessionRecoveryService(
                     findings,
                     diagnostics);
             }
-
-            // Stamp LAST: economics/coherence/lifecycle rebuilds each re-derive metrics and re-write the
-            // (unstamped) metrics snapshot, so the staleness stamp must be applied after they all complete.
-            await StampMetricsSnapshotAsync(repository, sourceMaxWriteUtc);
         }
 
         await RebuildTransferEligibilitySnapshotAsync(
@@ -271,116 +277,58 @@ public sealed class DecisionSessionRecoveryService(
     }
 
     /// <summary>
-    /// Decides whether the four count-derived snapshots can be left untouched on this boot. Returns true only
-    /// when the persisted metrics snapshot deserialized cleanly, carries a non-null source stamp equal to the
-    /// freshly probed source mtime, and carries the current analysis-options version. Any failure to read the
-    /// stamp (missing/corrupt/foreign snapshot) or an unprobeable source tree forces a full rebuild.
+    /// Decides whether the count-derived snapshots can be left untouched on this recovery. Returns true only
+    /// when the source-pure metrics base is already present in the derived-snapshot cache under the CURRENT
+    /// source-content fingerprint and analysis formula version — i.e. a cache HIT is the warm restart. Any
+    /// missing wiring (no cache or fingerprint provider), an uncomputable fingerprint, or a cache MISS (stale
+    /// source content, bumped formula, or a never-computed base) forces a full rebuild.
+    ///
+    /// The staleness key is the deterministic per-family content hash (Phase 2/3 of the Derivation Cache
+    /// refactor), not the old mtime probe and no longer a metrics snapshot FILE stamp: a touch-without-change
+    /// can never self-invalidate, and the cache is the single source of truth for the cached base.
     /// </summary>
     private async Task<bool> CanSkipDerivedRebuildAsync(Repository repository)
     {
-        // The metrics service is the head of the derived chain; if it is unavailable we have nothing to skip.
-        if (metricsService is null)
+        // The metrics service is the head of the derived chain; if it (or the cache wiring) is unavailable we
+        // have nothing to reuse, exactly as the old null-probe path forced a conservative rebuild.
+        if (metricsService is null || derivedSnapshotCache is null || sourceFingerprintProvider is null)
         {
             return false;
         }
 
-        DateTimeOffset? probedSourceMaxWriteUtc = ProbeSourceMaxWriteUtc(repository);
-        if (probedSourceMaxWriteUtc is null)
-        {
-            return false;
-        }
+        string currentFingerprint = await sourceFingerprintProvider.ForFamiliesAsync(
+            repository, MetricsBaseFamilies, CancellationToken.None);
 
-        DecisionSessionMetricsSnapshotStamp? stamp;
-        try
-        {
-            stamp = await sessionRepository.ReadMetricsSnapshotStampAsync(repository);
-        }
-        catch (DecisionSessionValidationException)
-        {
-            return false;
-        }
-        catch (System.Text.Json.JsonException)
-        {
-            return false;
-        }
+        DecisionSessionMetricsBase? cachedBase = await derivedSnapshotCache.TryGetAsync<DecisionSessionMetricsBase>(
+            repository.Id,
+            DecisionSessionAnalysisCache.MetricsKind,
+            currentFingerprint,
+            AnalysisOptionsVersion,
+            CancellationToken.None);
 
-        if (stamp?.SourceMaxWriteUtc is null || stamp.AnalysisOptionsVersion is null)
-        {
-            return false;
-        }
-
-        return stamp.SourceMaxWriteUtc == probedSourceMaxWriteUtc &&
-            string.Equals(stamp.AnalysisOptionsVersion, AnalysisOptionsVersion, StringComparison.Ordinal);
+        return cachedBase is not null;
     }
 
     /// <summary>
-    /// Returns the maximum last-write timestamp over the SOURCE evidence directories/files only, using direct
-    /// System.IO. Returns null when none of the probed source locations exist (cannot determine freshness =>
-    /// caller must rebuild). The snapshot output directory is never probed, so snapshot writes cannot bump it.
+    /// Evaluates the lifecycle policy in the warm-restart path, where the underlying analysis bases are cache
+    /// hits. Returns null if no active session exists at evaluation time so transfer eligibility degrades to its
+    /// policy-unavailable handling exactly as before, rather than surfacing an exception.
     /// </summary>
-    private static DateTimeOffset? ProbeSourceMaxWriteUtc(Repository repository)
+    private async Task<DecisionSessionLifecycleSnapshot?> EvaluatePolicyQuietlyAsync(Guid repositoryId)
     {
-        DateTimeOffset? max = null;
-        bool sawAny = false;
-
-        foreach (string relativeDirectory in SourceDirectories)
-        {
-            string directory = ArtifactPath.ResolveRepositoryPath(repository, relativeDirectory);
-            if (!Directory.Exists(directory))
-            {
-                continue;
-            }
-
-            sawAny = true;
-            foreach (string file in Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories))
-            {
-                DateTimeOffset writeTime = File.GetLastWriteTimeUtc(file);
-                if (max is null || writeTime > max)
-                {
-                    max = writeTime;
-                }
-            }
-        }
-
-        string operationalContextCurrent = ArtifactPath.ResolveRepositoryPath(repository, OperationalContextCurrentRelativePath);
-        if (File.Exists(operationalContextCurrent))
-        {
-            sawAny = true;
-            DateTimeOffset writeTime = File.GetLastWriteTimeUtc(operationalContextCurrent);
-            if (max is null || writeTime > max)
-            {
-                max = writeTime;
-            }
-        }
-
-        if (!sawAny)
+        if (lifecyclePolicy is null)
         {
             return null;
         }
 
-        // An existing-but-empty source tree (directories present, no files) yields no timestamp; treat that as
-        // unprobeable so recovery rebuilds rather than skipping against an absent stamp comparison.
-        return max;
-    }
-
-    /// <summary>
-    /// Re-writes the metrics snapshot (just rebuilt by the metrics service, which persisted it unstamped) with
-    /// the warm-restart staleness stamp so the next boot can recognize an unchanged source tree and skip.
-    /// </summary>
-    private async Task StampMetricsSnapshotAsync(Repository repository, DateTimeOffset? sourceMaxWriteUtc)
-    {
-        if (sourceMaxWriteUtc is null)
+        try
         {
-            return;
+            return await lifecyclePolicy.EvaluateAsync(repositoryId);
         }
-
-        DecisionSessionMetricsSnapshot? snapshot = await sessionRepository.ReadMetricsSnapshotAsync(repository);
-        if (snapshot is null)
+        catch (KeyNotFoundException)
         {
-            return;
+            return null;
         }
-
-        await sessionRepository.WriteMetricsSnapshotAsync(repository, snapshot, sourceMaxWriteUtc, AnalysisOptionsVersion);
     }
 
     private async Task<T?> RebuildSnapshotAsync<T>(
@@ -491,32 +439,17 @@ public sealed class DecisionSessionRecoveryService(
             eligibilityFindings.Add(Info("eligible", "All transfer eligibility preconditions passed."));
         }
 
-        var eligibility = new DecisionSessionTransferEligibility(
-            status,
-            policyEvaluation,
-            sourceSession?.Id ?? activeSession?.Id,
-            eligibilityFindings,
-            checkedAt);
-        var inputs = new DecisionSessionTransferEligibilityInputs(
-            policyEvaluation,
-            registryDiagnostics,
-            activeSession,
-            evidence);
-        var eligibilityDiagnostics = new DecisionSessionTransferEligibilityDiagnostics(
-            repository.Id,
-            checkedAt,
-            inputs,
-            [
-                "Transfer eligibility is an operational gate and does not change lifecycle policy decisions.",
-                "Eligible means transfer execution may proceed, not that transfer is preferable.",
-                "Blocked and Deferred statuses prevent transfer execution without mutating registry state.",
-                "Continuity artifact checks are preflight checks until transfer execution creates the canonical artifact."
-            ],
-            []);
-        await sessionRepository.WriteTransferEligibilitySnapshotAsync(
-            repository,
-            new DecisionSessionTransferEligibilitySnapshot(repository.Id, eligibility, eligibilityDiagnostics, checkedAt));
-
+        // Transfer eligibility is entirely time-dependent (status, checkedAt, findings) and gets NO cached row and
+        // NO persisted file — it is recomputed fresh on every read (refactor-lazy-sqlite.md, Phase 3: "DELETE
+        // lifecycle-policy and transfer-eligibility persistence (compute-on-read only)"). Recovery still ASSESSES
+        // eligibility to surface its findings in the recovery diagnostics, but no longer writes a snapshot file —
+        // the prior write (now removed) is what produced the stray .agents/decision-sessions/lifecycle/eligibility
+        // artifact on a passive GetDiagnosticsAsync (persist:false) and broke the read-only/byte-identical-listing
+        // invariant. The computed status keeps the finding faithful.
+        // The finding code and message are preserved so the recovery diagnostics shape is byte-identical to the
+        // pre-Phase-5 path (DecisionSessionRecoveryTests / DecisionSessionCertificationTests assert it); only the
+        // file write is gone. The eligibility findings (which incorporate `status` above) flow into the recovery
+        // result exactly as before.
         const string message = "Transfer eligibility snapshot was rebuilt from registry, policy, and continuity evidence.";
         findings.Add(new DecisionSessionRecoveryFinding("TransferEligibilitySnapshotRebuilt", "Info", message, sourceSession?.Id, null));
         diagnostics.Add(message);

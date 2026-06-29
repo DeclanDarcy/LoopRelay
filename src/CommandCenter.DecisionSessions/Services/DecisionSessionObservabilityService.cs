@@ -2,13 +2,20 @@ using System.Text.Json;
 using CommandCenter.Core.Repositories;
 using CommandCenter.DecisionSessions.Abstractions;
 using CommandCenter.DecisionSessions.Models;
+using CommandCenter.Persistence.Sqlite.Abstractions;
 
 namespace CommandCenter.DecisionSessions.Services;
 
 public sealed class DecisionSessionObservabilityService(
     IRepositoryService repositoryService,
     IDecisionSessionRepository sessionRepository,
-    TimeProvider timeProvider) : IDecisionSessionObservabilityService
+    TimeProvider timeProvider,
+    IDecisionSessionMetricsService metricsService,
+    IDecisionSessionEconomicsService economicsService,
+    IDecisionSessionCoherenceService coherenceService,
+    IDecisionSessionLifecyclePolicy lifecyclePolicy,
+    IDecisionSessionTransferEligibilityService transferEligibilityService,
+    IRecoveryResultStore? recoveryResultStore = null) : IDecisionSessionObservabilityService
 {
     public async Task<DecisionSessionLifecycleProjection> GetProjectionAsync(Guid repositoryId)
     {
@@ -30,19 +37,24 @@ public sealed class DecisionSessionObservabilityService(
             "Decision session continuity artifacts",
             warnings);
         IReadOnlyList<DecisionSessionRecoveryResult> recoveryResults = await ReadAsync(
-            () => sessionRepository.ListRecoveryResultsAsync(repository),
+            () => ReadRecoveryResultsAsync(repository),
             "Decision session recovery results",
             warnings);
+        // Active compute-on-read (refactor-lazy-sqlite.md, Phase 3): the snapshots are no longer pre-warmed
+        // files read passively; they are computed on demand via the providers (cached pure base + fresh now).
+        // Null-on-unavailable semantics are preserved — a provider that cannot produce a snapshot (e.g. no
+        // active session for the lifecycle policy) is caught and surfaced as the same warning + a null snapshot
+        // the old passive path produced, so the warning/health arrays never drift.
         DecisionSessionMetricsSnapshot? metrics =
-            await ReadNullableAsync(() => sessionRepository.ReadMetricsSnapshotAsync(repository), "Decision session metrics snapshot", warnings);
+            await ComputeNullableAsync(() => metricsService.GetMetricsAsync(repositoryId), "Decision session metrics snapshot", warnings);
         DecisionSessionEconomicsSnapshot? economics =
-            await ReadNullableAsync(() => sessionRepository.ReadEconomicsSnapshotAsync(repository), "Decision session economics snapshot", warnings);
+            await ComputeNullableAsync(() => economicsService.GetEconomicsAsync(repositoryId), "Decision session economics snapshot", warnings);
         DecisionSessionCoherenceSnapshot? coherence =
-            await ReadNullableAsync(() => sessionRepository.ReadCoherenceSnapshotAsync(repository), "Decision session coherence snapshot", warnings);
+            await ComputeNullableAsync(() => coherenceService.GetCoherenceAsync(repositoryId), "Decision session coherence snapshot", warnings);
         DecisionSessionLifecycleSnapshot? policy =
-            await ReadNullableAsync(() => sessionRepository.ReadLifecyclePolicySnapshotAsync(repository), "Decision session lifecycle policy snapshot", warnings);
+            await ComputeNullableAsync(() => lifecyclePolicy.EvaluateAsync(repositoryId), "Decision session lifecycle policy snapshot", warnings);
         DecisionSessionTransferEligibilitySnapshot? eligibility =
-            await ReadNullableAsync(() => sessionRepository.ReadTransferEligibilitySnapshotAsync(repository), "Decision session transfer eligibility snapshot", warnings);
+            await ComputeNullableAsync(() => transferEligibilityService.CheckAsync(repositoryId), "Decision session transfer eligibility snapshot", warnings);
         var diagnostics = new DecisionSessionDiagnostics(
             repositoryId,
             errors.Count == 0,
@@ -89,11 +101,11 @@ public sealed class DecisionSessionObservabilityService(
         Repository repository = await GetRepositoryAsync(repositoryId);
         List<string> warnings = [];
         IReadOnlyList<DecisionSession> sessions = await ReadSessionsAsync(repository, warnings);
-        DecisionSessionMetricsSnapshot? metrics = await ReadNullableAsync(() => sessionRepository.ReadMetricsSnapshotAsync(repository), "Decision session metrics snapshot", warnings);
-        DecisionSessionEconomicsSnapshot? economics = await ReadNullableAsync(() => sessionRepository.ReadEconomicsSnapshotAsync(repository), "Decision session economics snapshot", warnings);
-        DecisionSessionCoherenceSnapshot? coherence = await ReadNullableAsync(() => sessionRepository.ReadCoherenceSnapshotAsync(repository), "Decision session coherence snapshot", warnings);
-        DecisionSessionLifecycleSnapshot? policy = await ReadNullableAsync(() => sessionRepository.ReadLifecyclePolicySnapshotAsync(repository), "Decision session lifecycle policy snapshot", warnings);
-        DecisionSessionTransferEligibilitySnapshot? eligibility = await ReadNullableAsync(() => sessionRepository.ReadTransferEligibilitySnapshotAsync(repository), "Decision session transfer eligibility snapshot", warnings);
+        DecisionSessionMetricsSnapshot? metrics = await ComputeNullableAsync(() => metricsService.GetMetricsAsync(repositoryId), "Decision session metrics snapshot", warnings);
+        DecisionSessionEconomicsSnapshot? economics = await ComputeNullableAsync(() => economicsService.GetEconomicsAsync(repositoryId), "Decision session economics snapshot", warnings);
+        DecisionSessionCoherenceSnapshot? coherence = await ComputeNullableAsync(() => coherenceService.GetCoherenceAsync(repositoryId), "Decision session coherence snapshot", warnings);
+        DecisionSessionLifecycleSnapshot? policy = await ComputeNullableAsync(() => lifecyclePolicy.EvaluateAsync(repositoryId), "Decision session lifecycle policy snapshot", warnings);
+        DecisionSessionTransferEligibilitySnapshot? eligibility = await ComputeNullableAsync(() => transferEligibilityService.CheckAsync(repositoryId), "Decision session transfer eligibility snapshot", warnings);
         IReadOnlyList<DecisionSessionContinuityArtifact> artifacts = await ReadAsync(
             () => sessionRepository.ListContinuityArtifactsAsync(repository),
             "Decision session continuity artifacts",
@@ -103,7 +115,7 @@ public sealed class DecisionSessionObservabilityService(
             "Decision session transfers",
             warnings);
         IReadOnlyList<DecisionSessionRecoveryResult> recoveryResults = await ReadAsync(
-            () => sessionRepository.ListRecoveryResultsAsync(repository),
+            () => ReadRecoveryResultsAsync(repository),
             "Decision session recovery results",
             warnings);
 
@@ -777,6 +789,31 @@ public sealed class DecisionSessionObservabilityService(
                 .FirstOrDefault();
     }
 
+    /// <summary>
+    /// Reads the recovery-result audit rows from the SAME source <see cref="DecisionSessionRecoveryService.GetHistoryAsync"/>
+    /// chooses (refactor-lazy-sqlite.md, Phase 4): the per-repo SQLite <c>recovery_result</c> table when the store
+    /// is wired (production), with the <c>.agents</c> file path as the fallback for pure-service tests. Without
+    /// this, observability read the now-unused file plane while a real <c>POST /recovery</c> persisted the row to
+    /// SQLite — leaving <c>RecentRecoveryResults</c> falsely empty and the Recovery health dimension falsely
+    /// Healthy (split-brain), even though <c>GET /recovery/history</c> showed the row. Both planes round-trip the
+    /// SAME <c>DecisionSessionJson.Options</c>, so the result shape is identical. The store path orders rows
+    /// <c>occurred_at</c> asc then <c>recovery_id</c> ordinal to match the file path's ordering.
+    /// </summary>
+    private async Task<IReadOnlyList<DecisionSessionRecoveryResult>> ReadRecoveryResultsAsync(Repository repository)
+    {
+        if (recoveryResultStore is null)
+        {
+            return await sessionRepository.ListRecoveryResultsAsync(repository);
+        }
+
+        IReadOnlyList<DecisionSessionRecoveryResult> stored =
+            await recoveryResultStore.ListAsync<DecisionSessionRecoveryResult>(repository, CancellationToken.None);
+        return stored
+            .OrderBy(result => result.RecoveredAt)
+            .ThenBy(result => result.RecoveryId, StringComparer.Ordinal)
+            .ToArray();
+    }
+
     private async Task<IReadOnlyList<DecisionSession>> ReadSessionsAsync(Repository repository, List<string> errors)
     {
         try
@@ -790,16 +827,30 @@ public sealed class DecisionSessionObservabilityService(
         }
     }
 
-    private static async Task<T?> ReadNullableAsync<T>(Func<Task<T?>> read, string evidenceName, List<string> warnings)
+    /// <summary>
+    /// Active compute-on-read with preserved null-on-unavailable semantics (refactor-lazy-sqlite.md, hazard #2).
+    /// A provider that legitimately cannot produce a snapshot because a precondition is absent (no active
+    /// decision session => the lifecycle policy throws <see cref="KeyNotFoundException"/>) yields a SILENT null
+    /// — exactly as the old passive read of a missing snapshot file returned null with no warning. A genuine
+    /// failure (corrupt/locked/invalid evidence) yields null plus the same "could not be read" warning the
+    /// passive path emitted, so the warnings/health arrays do not drift.
+    /// </summary>
+    private static async Task<T?> ComputeNullableAsync<T>(Func<Task<T>> compute, string evidenceName, List<string> warnings)
+        where T : class
     {
         try
         {
-            return await read();
+            return await compute();
         }
-        catch (Exception exception) when (exception is InvalidOperationException or IOException or UnauthorizedAccessException or JsonException)
+        catch (KeyNotFoundException)
+        {
+            // Missing precondition (e.g. no active session): null with no warning, matching the old missing-file path.
+            return null;
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or IOException or UnauthorizedAccessException or JsonException or DecisionSessionValidationException)
         {
             warnings.Add($"{evidenceName} could not be read: {exception.Message}");
-            return default;
+            return null;
         }
     }
 

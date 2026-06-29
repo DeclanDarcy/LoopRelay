@@ -150,8 +150,12 @@ public sealed class DecisionSessionLifecyclePolicyTests
         Assert.True(high.Diagnostics.TransferScore.CacheMissRiskContribution > low.Diagnostics.TransferScore.CacheMissRiskContribution);
     }
 
+    // Phase 3 retarget (refactor-lazy-sqlite.md): the lifecycle policy is entirely time-dependent and is NEVER
+    // cached or persisted as a file — it is computed fresh on every read from the analysis snapshots. So there
+    // is no "invalid persisted snapshot" to validate-and-rebuild; the preserved invariant is that the policy
+    // evaluates cleanly from analysis even when a stale corrupt policy FILE is present, which is now ignored.
     [Fact]
-    public async Task InvalidPolicySnapshotIsRebuiltFromAnalysis()
+    public async Task PolicyIsAlwaysComputedFromAnalysisRegardlessOfStalePolicyFile()
     {
         DecisionSessionTestHarness harness = DecisionSessionTestHarness.Create();
         DecisionSession active = await CreateActiveSessionAsync(harness);
@@ -168,10 +172,10 @@ public sealed class DecisionSessionLifecyclePolicyTests
             "{ not valid json");
 
         DecisionSessionLifecycleSnapshot snapshot = await service.EvaluateAsync(harness.Repository.Id);
-        string? persisted = await harness.Store.ReadAsync(DecisionSessionArtifactPaths.Resolve(harness.Repository, DecisionSessionArtifactPaths.LifecyclePolicySnapshotJson()));
 
-        Assert.NotNull(persisted);
-        Assert.Contains(snapshot.Diagnostics.Warnings, warning => warning.Contains("rebuilt", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(active.Id, snapshot.Diagnostics.Inputs.Session.Id);
+        Assert.True(snapshot.Diagnostics.ReuseScore.Score >= 0m);
+        Assert.True(snapshot.Diagnostics.TransferScore.Score >= 0m);
     }
 
     [Fact]

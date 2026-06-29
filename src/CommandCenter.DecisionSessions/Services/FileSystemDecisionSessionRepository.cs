@@ -126,7 +126,8 @@ public sealed class FileSystemDecisionSessionRepository(IArtifactStore artifactS
         Repository repository,
         DecisionSessionMetricsSnapshot snapshot,
         DateTimeOffset? sourceMaxWriteUtc = null,
-        string? analysisOptionsVersion = null)
+        string? analysisOptionsVersion = null,
+        string? sourceFingerprint = null)
     {
         if (snapshot.RepositoryId != repository.Id || snapshot.Diagnostics.RepositoryId != repository.Id)
         {
@@ -141,7 +142,8 @@ public sealed class FileSystemDecisionSessionRepository(IArtifactStore artifactS
             snapshot)
         {
             SourceMaxWriteUtc = sourceMaxWriteUtc,
-            AnalysisOptionsVersion = analysisOptionsVersion
+            AnalysisOptionsVersion = analysisOptionsVersion,
+            SourceFingerprint = sourceFingerprint
         };
         string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.MetricsSnapshotJson());
         await artifactStore.WriteAsync(path, JsonSerializer.Serialize(document, DecisionSessionJson.Options));
@@ -171,7 +173,10 @@ public sealed class FileSystemDecisionSessionRepository(IArtifactStore artifactS
             throw new DecisionSessionValidationException("Decision session metrics snapshot belongs to a different repository.");
         }
 
-        return new DecisionSessionMetricsSnapshotStamp(document.SourceMaxWriteUtc, document.AnalysisOptionsVersion);
+        return new DecisionSessionMetricsSnapshotStamp(
+            document.SourceMaxWriteUtc,
+            document.AnalysisOptionsVersion,
+            document.SourceFingerprint);
     }
 
     public async Task<DecisionSessionEconomicsSnapshot?> ReadEconomicsSnapshotAsync(Repository repository)

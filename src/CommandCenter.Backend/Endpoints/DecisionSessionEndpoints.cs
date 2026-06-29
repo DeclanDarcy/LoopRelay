@@ -1,6 +1,7 @@
 using CommandCenter.Core.Repositories;
 using CommandCenter.DecisionSessions.Abstractions;
 using CommandCenter.DecisionSessions.Models;
+using CommandCenter.DecisionSessions.Services;
 using CommandCenter.Workflow.Abstractions;
 
 namespace CommandCenter.Backend.Endpoints;
@@ -162,8 +163,10 @@ public static class DecisionSessionEndpoints
 
         group.MapPost("/recovery", async (
             Guid repositoryId,
-            IDecisionSessionRecoveryService recoveryService) =>
-            await HandleAsync(() => recoveryService.RecoverAsync(repositoryId)));
+            DecisionSessionRecoveryRunner recoveryRunner) =>
+            // Route through the runner so concurrent same-repo recoveries SERIALIZE (the service has no internal
+            // lock); the runner re-runs every call, so this live POST stays fresh (Fix C).
+            await HandleAsync(() => recoveryRunner.RecoverAsync(repositoryId)));
 
         group.MapGet("/recovery/history", async (
             Guid repositoryId,
