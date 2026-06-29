@@ -167,6 +167,15 @@ function App() {
       null,
     [repositories, selectedRepositoryId],
   )
+
+  // Repo-select fans out ~23 data fetches because all tabs mount at once. The tab-only hooks below are
+  // gated to their owning tab, so selecting a repo on the default Workspace tab no longer triggers the
+  // reasoning / decisions / governance fetches (notably useDecisionSessions' 29-call batch); each
+  // re-fetches lazily the first time its tab is opened. Every gated hook treats a null id as no-fetch.
+  const activeRepositoryId = selectedRepository?.repository.id ?? null
+  const reasoningRepositoryId = activePrimaryTab === 'reasoning' ? activeRepositoryId : null
+  const decisionsRepositoryId = activePrimaryTab === 'decisions' ? activeRepositoryId : null
+  const governanceRepositoryId = activePrimaryTab === 'governance' ? activeRepositoryId : null
   const {
     data: workspace,
     setData: setWorkspace,
@@ -263,7 +272,7 @@ function App() {
     isLoading: isDecisionContextLoading,
     error: decisionContextError,
     refresh: refreshDecisionContext,
-  } = useDecisionContext(selectedRepository?.repository.id ?? null)
+  } = useDecisionContext(decisionsRepositoryId)
   const {
     data: decisionCandidates,
     isLoading: isDecisionCandidatesLoading,
@@ -275,7 +284,7 @@ function App() {
     dismiss: dismissDecisionCandidate,
     expire: expireDecisionCandidate,
     markDuplicate: markDecisionCandidateDuplicate,
-  } = useDecisionDiscovery(selectedRepository?.repository.id ?? null)
+  } = useDecisionDiscovery(decisionsRepositoryId)
   const {
     data: decisionProposals,
     isLoading: isDecisionProposalsLoading,
@@ -285,13 +294,13 @@ function App() {
     generateProposal: generateDecisionProposal,
     expireProposal: expireDecisionProposal,
     discardProposal: discardDecisionProposal,
-  } = useDecisionProposals(selectedRepository?.repository.id ?? null, selectedDecisionProposalStates)
+  } = useDecisionProposals(decisionsRepositoryId, selectedDecisionProposalStates)
   const {
     data: decisionLifecycleEligibility,
     isLoading: isDecisionLifecycleEligibilityLoading,
     error: decisionLifecycleEligibilityError,
     refresh: refreshDecisionLifecycleEligibility,
-  } = useDecisionLifecycleEligibility(selectedRepository?.repository.id ?? null)
+  } = useDecisionLifecycleEligibility(decisionsRepositoryId)
   const {
     snapshot: governanceSnapshot,
     isLoading: isGovernanceLoading,
@@ -303,35 +312,35 @@ function App() {
     executeTransfer: executeGovernanceTransfer,
     recover: recoverGovernance,
     runCertification: runGovernanceCertification,
-  } = useDecisionSessions(selectedRepository?.repository.id ?? null)
+  } = useDecisionSessions(governanceRepositoryId)
   const {
     data: reasoningEvents,
     isLoading: isReasoningEventsLoading,
     error: reasoningEventsError,
     boundaryViolation: reasoningEventsBoundaryViolation,
     refresh: refreshReasoningEvents,
-  } = useReasoningEvents(selectedRepository?.repository.id ?? null)
+  } = useReasoningEvents(reasoningRepositoryId)
   const {
     data: reasoningManualCaptureTemplates,
     isLoading: isReasoningManualCaptureTemplatesLoading,
     error: reasoningManualCaptureTemplatesError,
     boundaryViolation: reasoningManualCaptureTemplatesBoundaryViolation,
     refresh: refreshReasoningManualCaptureTemplates,
-  } = useReasoningManualCaptureTemplates(selectedRepository?.repository.id ?? null)
+  } = useReasoningManualCaptureTemplates(reasoningRepositoryId)
   const {
     data: reasoningThreads,
     isLoading: isReasoningThreadsLoading,
     error: reasoningThreadsError,
     boundaryViolation: reasoningThreadsBoundaryViolation,
     refresh: refreshReasoningThreads,
-  } = useReasoningThreads(selectedRepository?.repository.id ?? null)
+  } = useReasoningThreads(reasoningRepositoryId)
   const {
     data: reasoningRelationships,
     isLoading: isReasoningRelationshipsLoading,
     error: reasoningRelationshipsError,
     boundaryViolation: reasoningRelationshipsBoundaryViolation,
     refresh: refreshReasoningRelationships,
-  } = useReasoningRelationships(selectedRepository?.repository.id ?? null)
+  } = useReasoningRelationships(reasoningRepositoryId)
   const {
     data: reasoningGraph,
     backwardTrace: reasoningBackwardTrace,
@@ -342,7 +351,7 @@ function App() {
     boundaryViolation: reasoningGraphBoundaryViolation,
     refresh: refreshReasoningGraph,
     trace: traceReasoningGraph,
-  } = useReasoningGraph(selectedRepository?.repository.id ?? null)
+  } = useReasoningGraph(reasoningRepositoryId)
   const {
     data: reasoningQueryResult,
     isRunning: isReasoningQueryRunning,
@@ -365,7 +374,7 @@ function App() {
     boundaryViolation: reasoningMaterializationReviewBoundaryViolation,
     refresh: refreshReasoningMaterializationReview,
     run: runReasoningMaterializationReview,
-  } = useReasoningMaterializationReview(selectedRepository?.repository.id ?? null)
+  } = useReasoningMaterializationReview(reasoningRepositoryId)
   const {
     currentReport: reasoningCertificationReport,
     reports: reasoningCertificationReports,
@@ -375,7 +384,7 @@ function App() {
     boundaryViolation: reasoningCertificationBoundaryViolation,
     refresh: refreshReasoningCertification,
     runCertification: runReasoningCertification,
-  } = useReasoningCertification(selectedRepository?.repository.id ?? null)
+  } = useReasoningCertification(reasoningRepositoryId)
 
   const selectedArtifact = useMemo(() => {
     if (!workspace || !selectedArtifactPath) {

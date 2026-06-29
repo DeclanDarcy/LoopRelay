@@ -2967,7 +2967,14 @@ fn start_backend() -> Result<Child, String> {
 }
 
 fn wait_for_backend(child: &mut Child) -> Result<(), String> {
-    for _ in 0..40 {
+    // Poll readiness on a tight 100ms interval (not a coarse 250ms one) so that a
+    // backend which now binds Kestrel immediately is detected within ~100ms instead
+    // of being held back by up to a full poll period. The first ping happens before
+    // any sleep, so an already-up backend adds zero shell-side latency. The bounded
+    // overall timeout is preserved: 100 attempts * 100ms = the same 10 seconds, and a
+    // real sleep between polls keeps this from busy-spinning. ping_backend() reuses
+    // the shared http_client() connection pool.
+    for _ in 0..100 {
         if let Some(status) = child.try_wait().map_err(|error| error.to_string())? {
             return Err(format!("backend exited before becoming ready: {status}"));
         }
@@ -2976,7 +2983,7 @@ fn wait_for_backend(child: &mut Child) -> Result<(), String> {
             return Ok(());
         }
 
-        thread::sleep(Duration::from_millis(250));
+        thread::sleep(Duration::from_millis(100));
     }
 
     Err("backend did not become ready within 10 seconds".to_string())
