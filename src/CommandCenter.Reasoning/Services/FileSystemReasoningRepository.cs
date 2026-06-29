@@ -313,21 +313,29 @@ public sealed class FileSystemReasoningRepository(
 
     private async Task<T?> ReadPayloadAsync<T>(Repository repository, string path)
     {
-        string? json = await artifactStore.ReadAsync(path);
-        if (json is null)
-        {
-            return default;
-        }
-
-        ReasoningArtifactDocument<T> document;
+        ReasoningArtifactDocument<T>? document;
         try
         {
-            document = JsonSerializer.Deserialize<ReasoningArtifactDocument<T>>(json, ReasoningJson.Options)
-                ?? throw new ReasoningValidationException("Reasoning artifact document is empty.");
+            // ReadAs caches the deserialized document graph keyed by the file signature, so a single request that
+            // lists events/threads/relationships (each a per-id Get re-read) deserializes each unchanged artifact
+            // once. ReasoningArtifactDocument<T> and its record payloads are immutable, so aliasing is safe. The
+            // delegate mirrors the prior inline logic exactly: a malformed-JSON JsonException propagates out of
+            // ReadAs into the catch below, and a JSON literal `null` for an existing file throws the same
+            // "document is empty" validation error (which, throwing, is never cached). A genuinely absent file
+            // makes ReadAs return null with no delegate call, which we map to default(T) just as before.
+            document = await artifactStore.ReadAs(
+                path,
+                json => JsonSerializer.Deserialize<ReasoningArtifactDocument<T>>(json, ReasoningJson.Options)
+                    ?? throw new ReasoningValidationException("Reasoning artifact document is empty."));
         }
         catch (JsonException exception)
         {
             throw new ReasoningValidationException($"Reasoning artifact could not be read: {exception.Message}");
+        }
+
+        if (document is null)
+        {
+            return default;
         }
 
         if (!string.Equals(document.SchemaVersion, ReasoningArtifactPaths.SchemaVersion, StringComparison.Ordinal))

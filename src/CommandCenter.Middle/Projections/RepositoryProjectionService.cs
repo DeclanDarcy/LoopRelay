@@ -29,7 +29,21 @@ public sealed class RepositoryProjectionService(
     IReasoningRepository? reasoningRepository = null,
     IDecisionSessionObservabilityService? decisionSessionObservabilityService = null) : IRepositoryProjectionService
 {
-    private readonly ConcurrentDictionary<Guid, ArtifactInventory> inventoryCache = new();
+    // The repository-relative root every artifact this service inventories lives under; the inventory is a pure
+    // function of which files exist beneath it (ArtifactService.DiscoverAsync only probes Exists/List under here).
+    private const string ArtifactRoot = ".agents";
+
+    // Source-pure inventory cache keyed by repository id, each value guarded by a content signature over the
+    // .agents artifact tree (the sorted set of every file's relative path, length, and last-write-UTC ticks). The
+    // signature is a pure function of the tree's identity on disk and is NEVER keyed by wall-clock, so a cache hit
+    // can only occur when the artifact set is byte-for-byte unchanged since we materialized the inventory. This
+    // self-invalidates the cache when artifacts are written out-of-band (agents, git checkout) rather than through
+    // RefreshWorkspaceAsync, so the dashboard can never show a stale inventory; the cached ArtifactInventory is
+    // immutable so it is safe to alias to many callers. DiscoverAsync is cheap Exists/List probes over the byte
+    // cache, so a signature-driven rebuild costs little. Mirrors FileSystemArtifactStore /
+    // FileSystemExecutionSessionStore: stat-before fast path, consistent-snapshot guard (cache only when the
+    // signature is identical before and after the rebuild), and a write path (RefreshWorkspaceAsync) that primes.
+    private readonly ConcurrentDictionary<Guid, CacheEntry> inventoryCache = new();
 
     public async Task<IReadOnlyList<RepositoryDashboardProjection>> GetDashboardAsync()
     {
@@ -80,8 +94,7 @@ public sealed class RepositoryProjectionService(
     public async Task<RepositoryWorkspaceProjection> RefreshWorkspaceAsync(Guid repositoryId)
     {
         Repository repository = await GetRepositoryAsync(repositoryId);
-        ArtifactInventory inventory = await BuildInventoryAsync(repository);
-        inventoryCache[repository.Id] = inventory;
+        ArtifactInventory inventory = await BuildAndCacheInventoryAsync(repository);
         return await BuildWorkspaceProjectionAsync(repository, inventory);
     }
 
@@ -387,15 +400,94 @@ public sealed class RepositoryProjectionService(
 
     private async Task<ArtifactInventory> GetOrBuildInventoryAsync(Repository repository)
     {
-        if (inventoryCache.TryGetValue(repository.Id, out ArtifactInventory? inventory))
+        // Fast path: if the current artifact-tree signature matches the cached one, the artifact set is unchanged
+        // since we materialized the inventory, so the cached immutable inventory is still correct. This re-stats the
+        // tree on every read so an out-of-band write/delete (an agent, a git checkout) self-invalidates the entry
+        // rather than leaving the dashboard showing a stale inventory.
+        DirectorySignature signature = ReadArtifactSignature(repository);
+        if (inventoryCache.TryGetValue(repository.Id, out CacheEntry cached) &&
+            cached.Signature.Equals(signature))
         {
-            return inventory;
+            return cached.Inventory;
         }
 
-        inventory = await BuildInventoryAsync(repository);
-        inventoryCache[repository.Id] = inventory;
+        return await BuildAndCacheInventoryAsync(repository);
+    }
+
+    private async Task<ArtifactInventory> BuildAndCacheInventoryAsync(Repository repository)
+    {
+        // Capture the signature before the rebuild and re-stat after it; cache the result only when the artifact
+        // tree is identical before and after, so a signature is only ever associated with the artifact set it
+        // actually describes (no torn-snapshot poisoning). BuildInventoryAsync may itself write a recovered decision
+        // index, which changes the tree; in that case before != after and we skip caching this round, exactly as the
+        // store reference does — recovery is idempotent, so the next call re-stats a now-stable tree and caches.
+        DirectorySignature signatureBeforeBuild = ReadArtifactSignature(repository);
+        ArtifactInventory inventory = await BuildInventoryAsync(repository);
+
+        DirectorySignature signatureAfterBuild = ReadArtifactSignature(repository);
+        if (signatureAfterBuild.Equals(signatureBeforeBuild) &&
+            !signatureAfterBuild.Equals(DirectorySignature.Unreadable))
+        {
+            inventoryCache[repository.Id] = new CacheEntry(signatureAfterBuild, inventory);
+        }
+
         return inventory;
     }
+
+    // Source-pure content signature over the .agents artifact tree: a hash of the sorted set of every file's
+    // repository-relative path, byte length, and last-write-UTC ticks. This is a pure function of the tree's
+    // identity on disk (never wall-clock), so it changes on any add, delete, modify, or rename of an artifact and
+    // is stable otherwise. A missing root yields the empty-tree signature, so the cache rebuilds the moment the
+    // first artifact appears. Enumeration failures (a concurrent delete mid-walk, an access denial) fall back to a
+    // never-matching signature so the inventory is rebuilt rather than served stale.
+    private static DirectorySignature ReadArtifactSignature(Repository repository)
+    {
+        string root = ArtifactPath.ResolveRepositoryPath(repository, ArtifactRoot);
+        if (!Directory.Exists(root))
+        {
+            return DirectorySignature.Empty;
+        }
+
+        try
+        {
+            long fileCount = 0;
+            var hash = new HashCode();
+            foreach (string file in Directory
+                .EnumerateFiles(root, "*", SearchOption.AllDirectories)
+                .OrderBy(file => file, StringComparer.Ordinal))
+            {
+                FileInfo info = new(file);
+                if (!info.Exists)
+                {
+                    // Raced with a delete between enumeration and stat; skip it — the next read re-walks the tree.
+                    continue;
+                }
+
+                fileCount++;
+                hash.Add(ArtifactPath.ToRepositoryRelativePath(repository, file), StringComparer.Ordinal);
+                hash.Add(info.Length);
+                hash.Add(info.LastWriteTimeUtc.Ticks);
+            }
+
+            return new DirectorySignature(fileCount, hash.ToHashCode());
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // The tree could not be walked consistently; return a sentinel that never matches a cached entry so the
+            // inventory is rebuilt this round rather than served from a possibly-stale cache.
+            return DirectorySignature.Unreadable;
+        }
+    }
+
+    private readonly record struct DirectorySignature(long FileCount, int ContentHash)
+    {
+        // FileCount == -1 is unreachable from a real directory walk, so this can never collide with a live tree.
+        public static DirectorySignature Empty { get; } = new(0, 0);
+
+        public static DirectorySignature Unreadable { get; } = new(-1, 0);
+    }
+
+    private readonly record struct CacheEntry(DirectorySignature Signature, ArtifactInventory Inventory);
 
     private async Task<ArtifactInventory> BuildInventoryAsync(Repository repository)
     {

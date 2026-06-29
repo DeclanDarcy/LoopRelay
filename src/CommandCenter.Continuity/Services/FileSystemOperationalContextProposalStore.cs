@@ -95,16 +95,19 @@ public sealed class FileSystemOperationalContextProposalStore(IArtifactStore art
         string metadataPath = ArtifactPath.ResolveRepositoryPath(
             repository,
             ArtifactPath.CombineRelative(ProposalsRelativePath, proposalId, MetadataFileName));
-        string? metadata = await artifactStore.ReadAsync(metadataPath);
-        if (metadata is null)
-        {
-            return null;
-        }
 
         OperationalContextProposal? proposal;
         try
         {
-            proposal = JsonSerializer.Deserialize<OperationalContextProposal>(metadata, JsonOptions);
+            // ReadAs caches the deserialized metadata graph keyed by the file signature, so a ListAsync (which
+            // calls GetAsync per proposal) or repeated GetAsync of an unchanged proposal skips re-deserializing.
+            // OperationalContextProposal and its nested types are init-only/IReadOnlyList (effectively immutable;
+            // mutation is always via WithContent which builds a fresh instance), so aliasing the cached graph is
+            // safe. A malformed-JSON JsonException propagates out of ReadAs into the catch and yields null exactly
+            // as before; an absent file yields null with no delegate call.
+            proposal = await artifactStore.ReadAs(
+                metadataPath,
+                metadata => JsonSerializer.Deserialize<OperationalContextProposal>(metadata, JsonOptions));
         }
         catch (JsonException)
         {

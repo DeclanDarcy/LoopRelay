@@ -1,3 +1,5 @@
+import { memo, useMemo } from 'react'
+
 import { renderMarkdown } from '../../lib'
 
 type ArtifactMarkdownPreviewProps = {
@@ -5,16 +7,21 @@ type ArtifactMarkdownPreviewProps = {
   isLoading: boolean
 }
 
-export function ArtifactMarkdownPreview({ content, isLoading }: ArtifactMarkdownPreviewProps) {
+export const ArtifactMarkdownPreview = memo(function ArtifactMarkdownPreview({
+  content,
+  isLoading,
+}: ArtifactMarkdownPreviewProps) {
+  const rendered = useMemo(() => renderMarkdown(content), [content])
+
   return (
     <div className="markdown-preview">
       {isLoading ? (
         <p>Loading artifact...</p>
       ) : content.trim() ? (
-        renderMarkdown(content)
+        rendered
       ) : (
         <p>Empty artifact.</p>
       )}
     </div>
   )
-}
+})

@@ -792,15 +792,13 @@ public sealed class FileSystemDecisionRepository(IArtifactStore artifactStore) :
 
     private async Task<DecisionArtifactDocument<T>?> ReadDocumentAsync<T>(Repository repository, string relativePath)
     {
-        string? json = await artifactStore.ReadAsync(DecisionArtifactPaths.Resolve(repository, relativePath));
-        if (json is null)
-        {
-            return null;
-        }
-
-        return JsonSerializer.Deserialize<DecisionArtifactDocument<T>>(
-            json,
-            DecisionJson.Options);
+        // ReadAs caches the deserialized document graph keyed by the file signature, so the repeated reads of the
+        // same unchanged artifact within a single request (List* fanning out into per-id Get*, plus the
+        // created-at probe before each Save) skip re-deserializing. DecisionArtifactDocument<T> and its record
+        // payloads are immutable, so aliasing the cached instance to multiple callers is safe.
+        return await artifactStore.ReadAs(
+            DecisionArtifactPaths.Resolve(repository, relativePath),
+            json => JsonSerializer.Deserialize<DecisionArtifactDocument<T>>(json, DecisionJson.Options));
     }
 
     private async Task WriteDocumentAsync<T>(

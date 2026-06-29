@@ -17,6 +17,13 @@ public sealed class MemoryArtifactStore : IArtifactStore
         return Task.FromResult(content);
     }
 
+    public Task<T?> ReadAs<T>(string path, Func<string, T?> deserialize)
+    {
+        // No caching layer here (this store holds raw strings only); deserialize on every read so the behaviour
+        // is identical to ReadAsync followed by the caller's deserialize, including propagating a throwing delegate.
+        return Task.FromResult(files.TryGetValue(Normalize(path), out string? content) ? deserialize(content) : default);
+    }
+
     public Task WriteAsync(string path, string content)
     {
         files[Normalize(path)] = content;

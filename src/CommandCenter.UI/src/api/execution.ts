@@ -12,13 +12,22 @@ import { invokeCommand } from './tauri'
 
 const fallbackBackendUrl = 'http://127.0.0.1:5000'
 
-export async function getBackendUrl() {
-  try {
-    const url = await invokeCommand<string>('get_backend_url')
-    return normalizeBackendUrl(url)
-  } catch {
-    return fallbackBackendUrl
+let backendUrlPromise: Promise<string> | null = null
+
+export function getBackendUrl() {
+  if (!backendUrlPromise) {
+    // Cache the in-flight resolution so the three execution hooks share a single
+    // `get_backend_url` IPC per repo-select. Clear the cache on rejection so a
+    // genuine failure still falls back to 127.0.0.1 and a later call can retry.
+    backendUrlPromise = invokeCommand<string>('get_backend_url')
+      .then(normalizeBackendUrl)
+      .catch(() => {
+        backendUrlPromise = null
+        return fallbackBackendUrl
+      })
   }
+
+  return backendUrlPromise
 }
 
 export function normalizeBackendUrl(url: string) {

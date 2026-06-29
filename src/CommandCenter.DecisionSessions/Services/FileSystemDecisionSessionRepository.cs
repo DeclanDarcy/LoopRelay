@@ -60,19 +60,11 @@ public sealed class FileSystemDecisionSessionRepository(IArtifactStore artifactS
     public async Task<IReadOnlyList<DecisionSession>> ListAsync(Repository repository)
     {
         string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.RegistryJson());
-        string? json = await artifactStore.ReadAsync(path);
-        if (json is null)
-        {
-            return [];
-        }
-
         DecisionSessionArtifactDocument<IReadOnlyList<DecisionSessionRecord>>? document =
-            JsonSerializer.Deserialize<DecisionSessionArtifactDocument<IReadOnlyList<DecisionSessionRecord>>>(
-                json,
-                DecisionSessionJson.Options);
+            await ReadRegistryDocumentAsync(path);
         if (document is null)
         {
-            throw new DecisionSessionValidationException("Decision session registry could not be deserialized.");
+            return [];
         }
 
         if (!string.Equals(document.SchemaVersion, DecisionSessionArtifactPaths.SchemaVersion, StringComparison.Ordinal))
@@ -98,19 +90,13 @@ public sealed class FileSystemDecisionSessionRepository(IArtifactStore artifactS
     public async Task<DecisionSessionMetricsSnapshot?> ReadMetricsSnapshotAsync(Repository repository)
     {
         string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.MetricsSnapshotJson());
-        string? json = await artifactStore.ReadAsync(path);
-        if (json is null)
-        {
-            return null;
-        }
-
         DecisionSessionArtifactDocument<DecisionSessionMetricsSnapshot>? document =
-            JsonSerializer.Deserialize<DecisionSessionArtifactDocument<DecisionSessionMetricsSnapshot>>(
-                json,
-                DecisionSessionJson.Options);
+            await ReadDocumentOrThrowAsync<DecisionSessionMetricsSnapshot>(
+                path,
+                "Decision session metrics snapshot could not be deserialized.");
         if (document is null)
         {
-            throw new DecisionSessionValidationException("Decision session metrics snapshot could not be deserialized.");
+            return null;
         }
 
         ValidateDocument(repository, document, "Decision session metrics snapshot");
@@ -152,19 +138,13 @@ public sealed class FileSystemDecisionSessionRepository(IArtifactStore artifactS
     public async Task<DecisionSessionMetricsSnapshotStamp?> ReadMetricsSnapshotStampAsync(Repository repository)
     {
         string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.MetricsSnapshotJson());
-        string? json = await artifactStore.ReadAsync(path);
-        if (json is null)
-        {
-            return null;
-        }
-
         DecisionSessionArtifactDocument<DecisionSessionMetricsSnapshot>? document =
-            JsonSerializer.Deserialize<DecisionSessionArtifactDocument<DecisionSessionMetricsSnapshot>>(
-                json,
-                DecisionSessionJson.Options);
+            await ReadDocumentOrThrowAsync<DecisionSessionMetricsSnapshot>(
+                path,
+                "Decision session metrics snapshot could not be deserialized.");
         if (document is null)
         {
-            throw new DecisionSessionValidationException("Decision session metrics snapshot could not be deserialized.");
+            return null;
         }
 
         ValidateDocument(repository, document, "Decision session metrics snapshot");
@@ -182,19 +162,13 @@ public sealed class FileSystemDecisionSessionRepository(IArtifactStore artifactS
     public async Task<DecisionSessionEconomicsSnapshot?> ReadEconomicsSnapshotAsync(Repository repository)
     {
         string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.EconomicsSnapshotJson());
-        string? json = await artifactStore.ReadAsync(path);
-        if (json is null)
-        {
-            return null;
-        }
-
         DecisionSessionArtifactDocument<DecisionSessionEconomicsSnapshot>? document =
-            JsonSerializer.Deserialize<DecisionSessionArtifactDocument<DecisionSessionEconomicsSnapshot>>(
-                json,
-                DecisionSessionJson.Options);
+            await ReadDocumentOrThrowAsync<DecisionSessionEconomicsSnapshot>(
+                path,
+                "Decision session economics snapshot could not be deserialized.");
         if (document is null)
         {
-            throw new DecisionSessionValidationException("Decision session economics snapshot could not be deserialized.");
+            return null;
         }
 
         ValidateDocument(repository, document, "Decision session economics snapshot");
@@ -226,19 +200,13 @@ public sealed class FileSystemDecisionSessionRepository(IArtifactStore artifactS
     public async Task<DecisionSessionCoherenceSnapshot?> ReadCoherenceSnapshotAsync(Repository repository)
     {
         string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.CoherenceSnapshotJson());
-        string? json = await artifactStore.ReadAsync(path);
-        if (json is null)
-        {
-            return null;
-        }
-
         DecisionSessionArtifactDocument<DecisionSessionCoherenceSnapshot>? document =
-            JsonSerializer.Deserialize<DecisionSessionArtifactDocument<DecisionSessionCoherenceSnapshot>>(
-                json,
-                DecisionSessionJson.Options);
+            await ReadDocumentOrThrowAsync<DecisionSessionCoherenceSnapshot>(
+                path,
+                "Decision session coherence snapshot could not be deserialized.");
         if (document is null)
         {
-            throw new DecisionSessionValidationException("Decision session coherence snapshot could not be deserialized.");
+            return null;
         }
 
         ValidateDocument(repository, document, "Decision session coherence snapshot");
@@ -270,19 +238,13 @@ public sealed class FileSystemDecisionSessionRepository(IArtifactStore artifactS
     public async Task<DecisionSessionLifecycleSnapshot?> ReadLifecyclePolicySnapshotAsync(Repository repository)
     {
         string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.LifecyclePolicySnapshotJson());
-        string? json = await artifactStore.ReadAsync(path);
-        if (json is null)
-        {
-            return null;
-        }
-
         DecisionSessionArtifactDocument<DecisionSessionLifecycleSnapshot>? document =
-            JsonSerializer.Deserialize<DecisionSessionArtifactDocument<DecisionSessionLifecycleSnapshot>>(
-                json,
-                DecisionSessionJson.Options);
+            await ReadDocumentOrThrowAsync<DecisionSessionLifecycleSnapshot>(
+                path,
+                "Decision session lifecycle policy snapshot could not be deserialized.");
         if (document is null)
         {
-            throw new DecisionSessionValidationException("Decision session lifecycle policy snapshot could not be deserialized.");
+            return null;
         }
 
         ValidateDocument(repository, document, "Decision session lifecycle policy snapshot");
@@ -321,19 +283,13 @@ public sealed class FileSystemDecisionSessionRepository(IArtifactStore artifactS
     public async Task<DecisionSessionTransferEligibilitySnapshot?> ReadTransferEligibilitySnapshotAsync(Repository repository)
     {
         string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.TransferEligibilitySnapshotJson());
-        string? json = await artifactStore.ReadAsync(path);
-        if (json is null)
-        {
-            return null;
-        }
-
         DecisionSessionArtifactDocument<DecisionSessionTransferEligibilitySnapshot>? document =
-            JsonSerializer.Deserialize<DecisionSessionArtifactDocument<DecisionSessionTransferEligibilitySnapshot>>(
-                json,
-                DecisionSessionJson.Options);
+            await ReadDocumentOrThrowAsync<DecisionSessionTransferEligibilitySnapshot>(
+                path,
+                "Decision session transfer eligibility snapshot could not be deserialized.");
         if (document is null)
         {
-            throw new DecisionSessionValidationException("Decision session transfer eligibility snapshot could not be deserialized.");
+            return null;
         }
 
         ValidateDocument(repository, document, "Decision session transfer eligibility snapshot");
@@ -384,19 +340,14 @@ public sealed class FileSystemDecisionSessionRepository(IArtifactStore artifactS
         var artifacts = new List<DecisionSessionContinuityArtifact>();
         foreach (string file in files)
         {
-            string? json = await artifactStore.ReadAsync(file);
-            if (json is null)
-            {
-                continue;
-            }
-
             DecisionSessionArtifactDocument<DecisionSessionContinuityArtifact>? document =
-                JsonSerializer.Deserialize<DecisionSessionArtifactDocument<DecisionSessionContinuityArtifact>>(
-                    json,
-                    DecisionSessionJson.Options);
+                await ReadDocumentOrThrowAsync<DecisionSessionContinuityArtifact>(
+                    file,
+                    "Decision session continuity artifact could not be deserialized.");
             if (document is null)
             {
-                throw new DecisionSessionValidationException("Decision session continuity artifact could not be deserialized.");
+                // The file was listed but is now absent (raced with a delete): skip it, as the inline reader did.
+                continue;
             }
 
             ValidateDocument(repository, document, "Decision session continuity artifact");
@@ -414,19 +365,13 @@ public sealed class FileSystemDecisionSessionRepository(IArtifactStore artifactS
     {
         ValidateContinuityArtifactId(artifactId);
         string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.ContinuityArtifactJson(artifactId));
-        string? json = await artifactStore.ReadAsync(path);
-        if (json is null)
-        {
-            return null;
-        }
-
         DecisionSessionArtifactDocument<DecisionSessionContinuityArtifact>? document =
-            JsonSerializer.Deserialize<DecisionSessionArtifactDocument<DecisionSessionContinuityArtifact>>(
-                json,
-                DecisionSessionJson.Options);
+            await ReadDocumentOrThrowAsync<DecisionSessionContinuityArtifact>(
+                path,
+                "Decision session continuity artifact could not be deserialized.");
         if (document is null)
         {
-            throw new DecisionSessionValidationException("Decision session continuity artifact could not be deserialized.");
+            return null;
         }
 
         ValidateDocument(repository, document, "Decision session continuity artifact");
@@ -462,19 +407,14 @@ public sealed class FileSystemDecisionSessionRepository(IArtifactStore artifactS
         var transfers = new List<DecisionSessionTransfer>();
         foreach (string file in files)
         {
-            string? json = await artifactStore.ReadAsync(file);
-            if (json is null)
-            {
-                continue;
-            }
-
             DecisionSessionArtifactDocument<DecisionSessionTransfer>? document =
-                JsonSerializer.Deserialize<DecisionSessionArtifactDocument<DecisionSessionTransfer>>(
-                    json,
-                    DecisionSessionJson.Options);
+                await ReadDocumentOrThrowAsync<DecisionSessionTransfer>(
+                    file,
+                    "Decision session transfer could not be deserialized.");
             if (document is null)
             {
-                throw new DecisionSessionValidationException("Decision session transfer could not be deserialized.");
+                // The file was listed but is now absent (raced with a delete): skip it, as the inline reader did.
+                continue;
             }
 
             ValidateDocument(repository, document, "Decision session transfer");
@@ -516,19 +456,14 @@ public sealed class FileSystemDecisionSessionRepository(IArtifactStore artifactS
         var results = new List<DecisionSessionRecoveryResult>();
         foreach (string file in files)
         {
-            string? json = await artifactStore.ReadAsync(file);
-            if (json is null)
-            {
-                continue;
-            }
-
             DecisionSessionArtifactDocument<DecisionSessionRecoveryResult>? document =
-                JsonSerializer.Deserialize<DecisionSessionArtifactDocument<DecisionSessionRecoveryResult>>(
-                    json,
-                    DecisionSessionJson.Options);
+                await ReadDocumentOrThrowAsync<DecisionSessionRecoveryResult>(
+                    file,
+                    "Decision session recovery result could not be deserialized.");
             if (document is null)
             {
-                throw new DecisionSessionValidationException("Decision session recovery result could not be deserialized.");
+                // The file was listed but is now absent (raced with a delete): skip it, as the inline reader did.
+                continue;
             }
 
             ValidateDocument(repository, document, "Decision session recovery result");
@@ -570,19 +505,14 @@ public sealed class FileSystemDecisionSessionRepository(IArtifactStore artifactS
         var reports = new List<DecisionSessionCertificationReport>();
         foreach (string file in files)
         {
-            string? json = await artifactStore.ReadAsync(file);
-            if (json is null)
-            {
-                continue;
-            }
-
             DecisionSessionArtifactDocument<DecisionSessionCertificationReport>? document =
-                JsonSerializer.Deserialize<DecisionSessionArtifactDocument<DecisionSessionCertificationReport>>(
-                    json,
-                    DecisionSessionJson.Options);
+                await ReadDocumentOrThrowAsync<DecisionSessionCertificationReport>(
+                    file,
+                    "Decision session certification report could not be deserialized.");
             if (document is null)
             {
-                throw new DecisionSessionValidationException("Decision session certification report could not be deserialized.");
+                // The file was listed but is now absent (raced with a delete): skip it, as the inline reader did.
+                continue;
             }
 
             ValidateDocument(repository, document, "Decision session certification report");
@@ -617,18 +547,24 @@ public sealed class FileSystemDecisionSessionRepository(IArtifactStore artifactS
     internal async Task<DecisionSessionValidationResult> ValidateAsync(Repository repository)
     {
         string path = DecisionSessionArtifactPaths.Resolve(repository, DecisionSessionArtifactPaths.RegistryJson());
-        string? json = await artifactStore.ReadAsync(path);
-        if (json is null)
-        {
-            return DecisionSessionValidationResult.Valid;
-        }
-
         try
         {
+            // Plain (non-throwing) deserialize delegate so the existing null-document path returns a validation
+            // result rather than throwing, exactly as before. ReadAs still caches the deserialized graph (shared
+            // with ListAsync's read of the same file under the same signature). A null result here is either an
+            // absent file or a JSON literal `null`; both were previously treated as "valid / could not be
+            // deserialized" respectively — we keep that distinction with an explicit existence probe below.
             DecisionSessionArtifactDocument<IReadOnlyList<DecisionSessionRecord>>? document =
-                JsonSerializer.Deserialize<DecisionSessionArtifactDocument<IReadOnlyList<DecisionSessionRecord>>>(
-                    json,
-                    DecisionSessionJson.Options);
+                await artifactStore.ReadAs(
+                    path,
+                    json => JsonSerializer.Deserialize<DecisionSessionArtifactDocument<IReadOnlyList<DecisionSessionRecord>>>(
+                        json,
+                        DecisionSessionJson.Options));
+            if (document is null && await artifactStore.ReadAsync(path) is null)
+            {
+                return DecisionSessionValidationResult.Valid;
+            }
+
             if (document is null)
             {
                 return new DecisionSessionValidationResult(false, ["Decision session registry could not be deserialized."], []);
@@ -650,6 +586,42 @@ public sealed class FileSystemDecisionSessionRepository(IArtifactStore artifactS
         {
             return new DecisionSessionValidationResult(false, [$"Decision session registry JSON is invalid: {exception.Message}"], []);
         }
+    }
+
+    /// <summary>
+    /// Reads and deserializes the session registry document, returning null when the registry file is absent and
+    /// throwing the same "could not be deserialized" validation error as the prior inline logic when the file
+    /// exists but yields a null document. Routes through ReadAs so the deserialized (immutable record) document is
+    /// cached by file signature: the registry is the hottest decision-session read (Get/GetActive/Create/Update
+    /// and the evidence reader all funnel through ListAsync), so caching the graph avoids re-deserializing the
+    /// unchanged registry repeatedly within a single request. A throwing delegate caches nothing.
+    /// </summary>
+    private async Task<DecisionSessionArtifactDocument<IReadOnlyList<DecisionSessionRecord>>?> ReadRegistryDocumentAsync(
+        string path)
+    {
+        return await ReadDocumentOrThrowAsync<IReadOnlyList<DecisionSessionRecord>>(
+            path,
+            "Decision session registry could not be deserialized.");
+    }
+
+    /// <summary>
+    /// Reads and deserializes a single decision-session document, returning null when the file is absent and
+    /// throwing a <see cref="DecisionSessionValidationException"/> with <paramref name="emptyMessage"/> when the
+    /// file exists but yields a null document — the exact null-handling the inline readers had. Routes through
+    /// ReadAs so the deserialized (immutable record) document graph is cached by file signature and re-reads of an
+    /// unchanged document within a request skip re-deserialization. A throwing delegate caches nothing, and a
+    /// malformed-JSON JsonException propagates unchanged.
+    /// </summary>
+    private async Task<DecisionSessionArtifactDocument<TPayload>?> ReadDocumentOrThrowAsync<TPayload>(
+        string path,
+        string emptyMessage)
+    {
+        return await artifactStore.ReadAs(
+            path,
+            json => JsonSerializer.Deserialize<DecisionSessionArtifactDocument<TPayload>>(
+                    json,
+                    DecisionSessionJson.Options)
+                ?? throw new DecisionSessionValidationException(emptyMessage));
     }
 
     private async Task WriteRegistryAsync(Repository repository, IReadOnlyList<DecisionSession> sessions)

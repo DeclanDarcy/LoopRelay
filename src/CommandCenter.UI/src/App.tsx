@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   acceptExecutionHandoff,
   acceptOperationalContextProposal as acceptOperationalContextProposalCommand,
@@ -94,11 +94,21 @@ import type {
   ManualReasoningCaptureCommand,
   NavigationTarget,
   OperationalContextProposal,
+  ReasoningGraphNode,
   ReasoningQuery,
   Repository,
   RepositoryWorkspaceProjection,
 } from './types'
 import './App.css'
+
+// Memoize the always-mounted tab roots whose entire prop surface is referentially stable
+// (data from hooks + the useCallback handlers below). A draft-content keystroke re-renders
+// App, but these tabs short-circuit because none of their props changed. Tabs that receive
+// inline JSX-element subtrees (workspace/operational-context/execution) are intentionally
+// left unmemoized — their props cannot be stabilized cheaply.
+const MemoizedContinuityTab = memo(ContinuityTab)
+const MemoizedGovernanceWorkspace = memo(GovernanceWorkspace)
+const MemoizedReasoningTrajectoryTab = memo(ReasoningTrajectoryTab)
 
 function App() {
   const {
@@ -469,7 +479,9 @@ function App() {
     latestPushAttemptSession?.sessionId === executionSummary?.sessionId
       ? latestPushAttemptSession
       : executionSummary
-  const executionDisplay = pushedExecutionSummary
+  const executionDisplay = useMemo(
+    () =>
+      pushedExecutionSummary
     ? {
         sessionId: pushedExecutionSummary.sessionId,
         state: selectedExecutionStatus?.state ?? pushedExecutionSummary.state,
@@ -498,7 +510,9 @@ function App() {
         pushBranchName: pushedExecutionSummary.pushBranchName,
         failureReason: selectedExecutionStatus?.failureReason ?? pushedExecutionSummary.failureReason,
       }
-    : null
+        : null,
+    [pushedExecutionSummary, selectedExecutionStatus],
+  )
   const canReviewGeneratedHandoff =
     executionDisplay?.repositoryState === 'AwaitingAcceptance' &&
     Boolean(executionDisplay.handoffPath)
@@ -578,6 +592,32 @@ function App() {
         (target) => target.group === 'Discovery' || target.group === 'Continuity Warnings',
       ),
     [navigationTargets],
+  )
+
+  const reasoningBoundaryViolations = useMemo(
+    () =>
+      [
+        reasoningEventsBoundaryViolation,
+        reasoningManualCaptureTemplatesBoundaryViolation,
+        reasoningThreadsBoundaryViolation,
+        reasoningRelationshipsBoundaryViolation,
+        reasoningGraphBoundaryViolation,
+        reasoningQueryBoundaryViolation,
+        reasoningReconstructionBoundaryViolation,
+        reasoningMaterializationReviewBoundaryViolation,
+        reasoningCertificationBoundaryViolation,
+      ].filter((violation) => violation !== null),
+    [
+      reasoningCertificationBoundaryViolation,
+      reasoningEventsBoundaryViolation,
+      reasoningGraphBoundaryViolation,
+      reasoningManualCaptureTemplatesBoundaryViolation,
+      reasoningMaterializationReviewBoundaryViolation,
+      reasoningQueryBoundaryViolation,
+      reasoningRelationshipsBoundaryViolation,
+      reasoningThreadsBoundaryViolation,
+      reasoningReconstructionBoundaryViolation,
+    ],
   )
 
   const startExecutionBlockedReason = useMemo(() => {
@@ -677,11 +717,13 @@ function App() {
   )
 
   const loadWorkspace = useCallback(async (repositoryId: string) => {
-    const nextWorkspace = await loadWorkspaceProjection()
+    // The workspace projection and workflow projection have no data dependency, so fetch them
+    // concurrently and run workspace post-processing on the resolved projection. Both hook refreshers
+    // swallow their own errors and resolve to null, so Promise.all never rejects here.
+    const [nextWorkspace] = await Promise.all([loadWorkspaceProjection(), refreshWorkflowProjection()])
     if (nextWorkspace && nextWorkspace.repository.id === repositoryId) {
       setExecutionContext(null)
       reconcileSelectedArtifact(repositoryId, nextWorkspace)
-      await refreshWorkflowProjection()
     }
   }, [loadWorkspaceProjection, reconcileSelectedArtifact, refreshWorkflowProjection, setExecutionContext])
 
@@ -776,9 +818,11 @@ function App() {
           ? `Committed ${summary.commitSha}. Push review is ready.`
           : 'Commit completed. Push review is ready.',
       )
-      await loadRepositories()
+      // The repo-list refresh and workspace reload are independent; run them concurrently.
       if (selectedRepository) {
-        await loadWorkspace(selectedRepository.repository.id)
+        await Promise.all([loadRepositories(), loadWorkspace(selectedRepository.repository.id)])
+      } else {
+        await loadRepositories()
       }
     } catch (commitError) {
       setError(formatError(commitError))
@@ -804,10 +848,16 @@ function App() {
       if (!result.succeeded) {
         setError(result.error ?? 'Push failed.')
         if (selectedRepository) {
-          const nextWorkspace = await refreshRepositoryWorkspace(selectedRepository.repository.id)
+          // The workspace/git/workflow reads are independent; fan them out and apply the workspace
+          // result once it resolves. Only refreshRepositoryWorkspace can reject (the git/workflow
+          // refreshers swallow their own errors), so a rejection still surfaces to the outer catch
+          // exactly as the serial await chain did.
+          const [nextWorkspace] = await Promise.all([
+            refreshRepositoryWorkspace(selectedRepository.repository.id),
+            refreshGitStatus(),
+            refreshWorkflowProjection(),
+          ])
           setWorkspace(nextWorkspace)
-          await refreshGitStatus()
-          await refreshWorkflowProjection()
         }
         return
       }
@@ -818,14 +868,18 @@ function App() {
           ? `Pushed ${summary.pushedCommitSha}. Repository is ready.`
           : 'Push completed. Repository is ready.',
       )
-      await loadRepositories()
       if (selectedRepository) {
-        const nextWorkspace = await refreshRepositoryWorkspace(selectedRepository.repository.id)
+        const [nextWorkspace] = await Promise.all([
+          refreshRepositoryWorkspace(selectedRepository.repository.id),
+          loadRepositories(),
+          refreshGitStatus(),
+          refreshWorkflowProjection(),
+        ])
         setWorkspace(nextWorkspace)
         setExecutionContext(null)
         reconcileSelectedArtifact(selectedRepository.repository.id, nextWorkspace)
-        await refreshGitStatus()
-        await refreshWorkflowProjection()
+      } else {
+        await loadRepositories()
       }
     } catch (pushError) {
       setError(formatError(pushError))
@@ -894,8 +948,8 @@ function App() {
         setExecutionContext(null)
         reconcileSelectedArtifact(selectedRepository.repository.id, nextWorkspace)
         setMessage('Workspace refreshed.')
-        await loadRepositories()
-        await refreshWorkflowProjection()
+        // The repo-list and workflow reads are independent of each other; run them concurrently.
+        await Promise.all([loadRepositories(), refreshWorkflowProjection()])
       }
     } catch (refreshError) {
       setError(formatError(refreshError))
@@ -915,13 +969,18 @@ function App() {
         selectedRepository.repository.id,
       )
       await setLoadedOperationalContextProposal(proposal)
-      const nextWorkspace = await refreshRepositoryWorkspace(selectedRepository.repository.id)
+      // The workspace, repo-list, and workflow reads are independent; fan them out and apply the
+      // workspace result once it resolves. Only refreshRepositoryWorkspace can reject, so a failure
+      // still surfaces to the outer catch as it did with the serial awaits.
+      const [nextWorkspace] = await Promise.all([
+        refreshRepositoryWorkspace(selectedRepository.repository.id),
+        loadRepositories(),
+        refreshWorkflowProjection(),
+      ])
       setWorkspace(nextWorkspace)
       setExecutionContext(null)
       reconcileSelectedArtifact(selectedRepository.repository.id, nextWorkspace)
       setMessage('Operational-context proposal generated.')
-      await loadRepositories()
-      await refreshWorkflowProjection()
     } catch (proposalError) {
       setError(formatError(proposalError))
     } finally {
@@ -986,11 +1045,14 @@ function App() {
         operationalContextProposalDraft,
       )
       await setLoadedOperationalContextProposal(proposal)
-      const nextWorkspace = await refreshRepositoryWorkspace(selectedRepository.repository.id)
+      // The workspace, repo-list, and workflow reads are independent; run them concurrently.
+      const [nextWorkspace] = await Promise.all([
+        refreshRepositoryWorkspace(selectedRepository.repository.id),
+        loadRepositories(),
+        refreshWorkflowProjection(),
+      ])
       setWorkspace(nextWorkspace)
       setMessage('Operational-context proposal edits saved.')
-      await loadRepositories()
-      await refreshWorkflowProjection()
     } catch (proposalError) {
       setError(formatError(proposalError))
     } finally {
@@ -1013,11 +1075,14 @@ function App() {
         operationalContextReviewNote || null,
       )
       await setLoadedOperationalContextProposal(proposal)
-      const nextWorkspace = await refreshRepositoryWorkspace(selectedRepository.repository.id)
+      // The workspace, repo-list, and workflow reads are independent; run them concurrently.
+      const [nextWorkspace] = await Promise.all([
+        refreshRepositoryWorkspace(selectedRepository.repository.id),
+        loadRepositories(),
+        refreshWorkflowProjection(),
+      ])
       setWorkspace(nextWorkspace)
       setMessage('Operational-context proposal accepted for later promotion.')
-      await loadRepositories()
-      await refreshWorkflowProjection()
     } catch (proposalError) {
       setError(formatError(proposalError))
     } finally {
@@ -1040,11 +1105,14 @@ function App() {
         operationalContextReviewNote || null,
       )
       await setLoadedOperationalContextProposal(proposal)
-      const nextWorkspace = await refreshRepositoryWorkspace(selectedRepository.repository.id)
+      // The workspace, repo-list, and workflow reads are independent; run them concurrently.
+      const [nextWorkspace] = await Promise.all([
+        refreshRepositoryWorkspace(selectedRepository.repository.id),
+        loadRepositories(),
+        refreshWorkflowProjection(),
+      ])
       setWorkspace(nextWorkspace)
       setMessage('Operational-context proposal rejected.')
-      await loadRepositories()
-      await refreshWorkflowProjection()
     } catch (proposalError) {
       setError(formatError(proposalError))
     } finally {
@@ -1066,7 +1134,14 @@ function App() {
         operationalContextProposal.proposalId,
       )
       await setLoadedOperationalContextProposal(proposal)
-      const nextWorkspace = await refreshRepositoryWorkspace(selectedRepository.repository.id)
+      // The workspace, repo-list, and workflow reads are independent; fan them out. The promoted
+      // operational-context content load below genuinely depends on the resolved workspace, so it
+      // stays sequenced after.
+      const [nextWorkspace] = await Promise.all([
+        refreshRepositoryWorkspace(selectedRepository.repository.id),
+        loadRepositories(),
+        refreshWorkflowProjection(),
+      ])
       setWorkspace(nextWorkspace)
       reconcileSelectedArtifact(selectedRepository.repository.id, nextWorkspace)
       if (nextWorkspace.artifactInventory.operationalContext) {
@@ -1077,8 +1152,6 @@ function App() {
         setOperationalContextCurrentContent(content)
       }
       setMessage('Operational-context proposal promoted.')
-      await loadRepositories()
-      await refreshWorkflowProjection()
     } catch (proposalError) {
       setError(formatError(proposalError))
     } finally {
@@ -1086,7 +1159,7 @@ function App() {
     }
   }
 
-  async function generateContinuityReport() {
+  const generateContinuityReport = useCallback(async () => {
     if (!selectedRepository) {
       return
     }
@@ -1107,7 +1180,7 @@ function App() {
     } finally {
       setIsContinuityReportGenerating(false)
     }
-  }
+  }, [selectedRepository, setContinuityDiagnostics, setContinuityReports])
 
   async function saveArtifact() {
     if (!selectedRepository || !selectedArtifact) {
@@ -1125,8 +1198,8 @@ function App() {
       )
       setArtifactContent(draftContent)
       setMessage('Artifact saved.')
-      await loadWorkspace(selectedRepository.repository.id)
-      await loadRepositories()
+      // The workspace reload and repo-list refresh are independent; run them concurrently.
+      await Promise.all([loadWorkspace(selectedRepository.repository.id), loadRepositories()])
     } catch (saveError) {
       setError(formatError(saveError))
     } finally {
@@ -1158,8 +1231,8 @@ function App() {
       setExecutionContext(null)
       reconcileSelectedArtifact(selectedRepository.repository.id, nextWorkspace)
       setMessage('Artifact rotated.')
-      await loadRepositories()
-      await refreshWorkflowProjection()
+      // The repo-list and workflow reads are independent; run them concurrently.
+      await Promise.all([loadRepositories(), refreshWorkflowProjection()])
     } catch (rotateError) {
       setError(formatError(rotateError))
     } finally {
@@ -1204,8 +1277,8 @@ function App() {
           ? `Execution failed: ${session.sessionId}.`
           : `Execution started: ${session.sessionId}.`,
       )
-      await loadRepositories()
-      await loadWorkspace(selectedRepository.repository.id)
+      // The repo-list refresh and workspace reload are independent; run them concurrently.
+      await Promise.all([loadRepositories(), loadWorkspace(selectedRepository.repository.id)])
     } catch (startError) {
       setError(formatError(startError))
     } finally {
@@ -1233,8 +1306,8 @@ function App() {
           : currentWorkspace,
       )
       setMessage(`Execution cancelled: ${session.sessionId}.`)
-      await loadRepositories()
-      await loadWorkspace(selectedRepository.repository.id)
+      // The repo-list refresh and workspace reload are independent; run them concurrently.
+      await Promise.all([loadRepositories(), loadWorkspace(selectedRepository.repository.id)])
     } catch (cancelError) {
       setError(formatError(cancelError))
     } finally {
@@ -1265,8 +1338,8 @@ function App() {
         : currentStatus,
     )
     setMessage(successMessage)
-    await loadRepositories()
-    await loadWorkspace(selectedRepository.repository.id)
+    // The repo-list refresh and workspace reload are independent; run them concurrently.
+    await Promise.all([loadRepositories(), loadWorkspace(selectedRepository.repository.id)])
   }
 
   async function acceptGeneratedHandoff() {
@@ -1619,15 +1692,21 @@ function App() {
     setSectionTarget(sectionId)
   }
 
-  const openOperationalContextSection = (sectionId: string) => {
-    setActivePrimaryTab('operational-context')
-    setSectionTarget(sectionId)
-  }
+  const openOperationalContextSection = useCallback(
+    (sectionId: string) => {
+      setActivePrimaryTab('operational-context')
+      setSectionTarget(sectionId)
+    },
+    [setActivePrimaryTab, setSectionTarget],
+  )
 
-  const openContinuitySection = (sectionId: string) => {
-    setActivePrimaryTab('continuity')
-    setSectionTarget(sectionId)
-  }
+  const openContinuitySection = useCallback(
+    (sectionId: string) => {
+      setActivePrimaryTab('continuity')
+      setSectionTarget(sectionId)
+    },
+    [setActivePrimaryTab, setSectionTarget],
+  )
 
   const refreshDecisions = async () => {
     await Promise.all([
@@ -1638,7 +1717,7 @@ function App() {
     ])
   }
 
-  const refreshReasoning = async () => {
+  const refreshReasoning = useCallback(async () => {
     await Promise.all([
       refreshReasoningEvents(),
       refreshReasoningManualCaptureTemplates(),
@@ -1648,33 +1727,47 @@ function App() {
       refreshReasoningMaterializationReview(),
       refreshReasoningCertification(),
     ])
-  }
+  }, [
+    refreshReasoningCertification,
+    refreshReasoningEvents,
+    refreshReasoningGraph,
+    refreshReasoningManualCaptureTemplates,
+    refreshReasoningMaterializationReview,
+    refreshReasoningRelationships,
+    refreshReasoningThreads,
+  ])
 
-  const createManualReasoningCapture = async (command: ManualReasoningCaptureCommand) => {
-    if (!selectedRepository) {
-      return
-    }
+  const createManualReasoningCapture = useCallback(
+    async (command: ManualReasoningCaptureCommand) => {
+      if (!selectedRepository) {
+        return
+      }
 
-    setError(null)
-    setMessage(null)
-    try {
-      const event = await captureManualReasoning(selectedRepository.repository.id, command)
-      await refreshReasoning()
-      setMessage(`Recorded reasoning event ${event.id}.`)
-    } catch (captureError) {
-      setError(formatError(captureError))
-      throw captureError
-    }
-  }
+      setError(null)
+      setMessage(null)
+      try {
+        const event = await captureManualReasoning(selectedRepository.repository.id, command)
+        await refreshReasoning()
+        setMessage(`Recorded reasoning event ${event.id}.`)
+      } catch (captureError) {
+        setError(formatError(captureError))
+        throw captureError
+      }
+    },
+    [refreshReasoning, selectedRepository],
+  )
 
-  const queryReasoningTrajectory = async (query: ReasoningQuery) => {
-    await runReasoningQuery(query)
-    await runReasoningReconstruction(query)
-  }
+  const queryReasoningTrajectory = useCallback(
+    async (query: ReasoningQuery) => {
+      await runReasoningQuery(query)
+      await runReasoningReconstruction(query)
+    },
+    [runReasoningQuery, runReasoningReconstruction],
+  )
 
-  const openContinuityWarnings = () => {
+  const openContinuityWarnings = useCallback(() => {
     openContinuitySection('continuity-warnings')
-  }
+  }, [openContinuitySection])
 
   const openWorkspaceGit = () => {
     setActivePrimaryTab('workspace')
@@ -1710,14 +1803,63 @@ function App() {
     setSectionTarget('artifact-workspace')
   }
 
-  const openWorkspaceArtifact = (relativePath: string) => {
-    if (selectedRepository) {
-      selectArtifact(selectedRepository.repository.id, relativePath)
-    }
+  const openWorkspaceArtifact = useCallback(
+    (relativePath: string) => {
+      if (selectedRepository) {
+        selectArtifact(selectedRepository.repository.id, relativePath)
+      }
 
-    setActivePrimaryTab('workspace')
-    setSectionTarget('artifact-workspace')
-  }
+      setActivePrimaryTab('workspace')
+      setSectionTarget('artifact-workspace')
+    },
+    [selectArtifact, selectedRepository, setActivePrimaryTab, setSectionTarget],
+  )
+
+  // Stable promise-dropping wrappers so the memoized tab roots (Continuity / Governance /
+  // Reasoning) keep referentially stable handler props and short-circuit on unrelated
+  // re-renders such as a draft-content keystroke in the workspace tab.
+  const handleRefreshContinuityDiagnostics = useCallback(() => {
+    void refreshContinuityDiagnostics()
+  }, [refreshContinuityDiagnostics])
+
+  const handleGenerateContinuityReport = useCallback(() => {
+    void generateContinuityReport()
+  }, [generateContinuityReport])
+
+  const handleRefreshGovernance = useCallback(() => {
+    void refreshGovernance()
+  }, [refreshGovernance])
+
+  const handleExecuteGovernanceTransfer = useCallback(() => {
+    void executeGovernanceTransfer()
+  }, [executeGovernanceTransfer])
+
+  const handleRecoverGovernance = useCallback(() => {
+    void recoverGovernance()
+  }, [recoverGovernance])
+
+  const handleRunGovernanceCertification = useCallback(() => {
+    void runGovernanceCertification()
+  }, [runGovernanceCertification])
+
+  const handleRefreshReasoning = useCallback(() => {
+    void refreshReasoning()
+  }, [refreshReasoning])
+
+  const handleTraceReasoningGraphNode = useCallback(
+    (node: ReasoningGraphNode) => {
+      void traceReasoningGraph(node.kind, node.referenceId)
+    },
+    [traceReasoningGraph],
+  )
+
+  const handleRunReasoningMaterializationReview = useCallback(() => {
+    void runReasoningMaterializationReview({})
+  }, [runReasoningMaterializationReview])
+
+  const handleRunReasoningCertification = useCallback(() => {
+    void runReasoningCertification()
+  }, [runReasoningCertification])
 
   return (
     <AppShell
@@ -1928,19 +2070,19 @@ function App() {
                 onOpenArtifact={openWorkspaceArtifact}
               />
 
-              <ContinuityTab
+              <MemoizedContinuityTab
                 diagnostics={continuityDiagnostics}
                 reports={continuityReports}
                 hasSelectedRepository={Boolean(selectedRepository)}
                 isDiagnosticsLoading={isContinuityDiagnosticsLoading || isContinuityReportsLoading}
                 isReportGenerating={isContinuityReportGenerating}
-                onRefreshDiagnostics={() => void refreshContinuityDiagnostics()}
-                onGenerateReport={() => void generateContinuityReport()}
+                onRefreshDiagnostics={handleRefreshContinuityDiagnostics}
+                onGenerateReport={handleGenerateContinuityReport}
                 onOpenOperationalContextSection={openOperationalContextSection}
                 onOpenReport={openWorkspaceArtifact}
               />
 
-              <GovernanceWorkspace
+              <MemoizedGovernanceWorkspace
                 repositorySummary={workspace?.decisionSessionSummary ?? selectedRepository.decisionSessionSummary}
                 snapshot={governanceSnapshot}
                 workflow={workflowProjection}
@@ -1949,10 +2091,10 @@ function App() {
                 isTransferring={isGovernanceTransferring}
                 isRecovering={isGovernanceRecovering}
                 isCertifying={isGovernanceCertifying}
-                onRefresh={() => void refreshGovernance()}
-                onExecuteTransfer={() => void executeGovernanceTransfer()}
-                onRecover={() => void recoverGovernance()}
-                onRunCertification={() => void runGovernanceCertification()}
+                onRefresh={handleRefreshGovernance}
+                onExecuteTransfer={handleExecuteGovernanceTransfer}
+                onRecover={handleRecoverGovernance}
+                onRunCertification={handleRunGovernanceCertification}
               />
 
               <DecisionLifecycleTab
@@ -2045,7 +2187,7 @@ function App() {
                 }}
               />
 
-              <ReasoningTrajectoryTab
+              <MemoizedReasoningTrajectoryTab
                 events={reasoningEvents}
                 threads={reasoningThreads}
                 relationships={reasoningRelationships}
@@ -2090,22 +2232,12 @@ function App() {
                 reconstructionError={reasoningReconstructionError}
                 materializationReviewError={reasoningMaterializationReviewError}
                 certificationError={reasoningCertificationError}
-                boundaryViolations={[
-                  reasoningEventsBoundaryViolation,
-                  reasoningManualCaptureTemplatesBoundaryViolation,
-                  reasoningThreadsBoundaryViolation,
-                  reasoningRelationshipsBoundaryViolation,
-                  reasoningGraphBoundaryViolation,
-                  reasoningQueryBoundaryViolation,
-                  reasoningReconstructionBoundaryViolation,
-                  reasoningMaterializationReviewBoundaryViolation,
-                  reasoningCertificationBoundaryViolation,
-                ].filter((violation) => violation !== null)}
-                onRefresh={() => void refreshReasoning()}
-                onTraceGraphNode={(node) => void traceReasoningGraph(node.kind, node.referenceId)}
+                boundaryViolations={reasoningBoundaryViolations}
+                onRefresh={handleRefreshReasoning}
+                onTraceGraphNode={handleTraceReasoningGraphNode}
                 onRunQuery={queryReasoningTrajectory}
-                onRunMaterializationReview={() => void runReasoningMaterializationReview({})}
-                onRunCertification={() => void runReasoningCertification()}
+                onRunMaterializationReview={handleRunReasoningMaterializationReview}
+                onRunCertification={handleRunReasoningCertification}
                 onCaptureManualReasoning={createManualReasoningCapture}
               />
 
