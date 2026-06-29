@@ -31,6 +31,28 @@ fn http_client() -> &'static reqwest::blocking::Client {
     })
 }
 
+/// Runs a blocking backend call on Tauri's dedicated blocking thread pool.
+///
+/// Every command body uses `reqwest::blocking`, which must not execute on an
+/// async-runtime worker thread. `reqwest::blocking::Client::send` routes through
+/// `wait::timeout`, whose debug-only sanity check builds and then drops a throwaway
+/// Tokio runtime; dropping a runtime while a worker thread is *entered* (driving the
+/// scheduler) panics with "Cannot drop a runtime in a context where blocking is not
+/// allowed". Even in release, blocking the request on a worker parks one of the few
+/// scheduler threads for the whole round-trip. `spawn_blocking` moves the work onto a
+/// blocking thread, where the runtime context is not "entered" (so the drop is
+/// permitted) and where parking is exactly what that pool is for — leaving the async
+/// workers free to service the other invokes a repo-select fans out concurrently.
+async fn offload<T, F>(task: F) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, String> + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(task)
+        .await
+        .map_err(|error| error.to_string())?
+}
+
 struct BackendProcess {
     child: Mutex<Option<Child>>,
 }
@@ -376,12 +398,22 @@ impl Drop for BackendProcess {
     }
 }
 
-#[tauri::command(async)]
-fn ping_backend() -> Result<String, String> {
-    http_client().get(format!("{BACKEND_URL}/api/ping")).send()
+/// Synchronous ping used both by the `ping_backend` command (via `offload`) and by
+/// the startup `wait_for_backend` poll. The startup call runs on the main thread
+/// during `setup`, where the runtime context is not "entered", so `reqwest::blocking`
+/// is safe there without `spawn_blocking`.
+fn ping_backend_request() -> Result<String, String> {
+    http_client()
+        .get(format!("{BACKEND_URL}/api/ping"))
+        .send()
         .map_err(|error| error.to_string())?
         .text()
         .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn ping_backend() -> Result<String, String> {
+    offload(ping_backend_request).await
 }
 
 #[tauri::command(async)]
@@ -390,8 +422,9 @@ fn get_backend_url() -> String {
 }
 
 // Native folder picker must stay synchronous: rfd's modal dialog is main-thread-only.
-// Every other command is #[tauri::command(async)] so its blocking HTTP runs off the
-// event-loop thread and never freezes the webview.
+// Every other command is an async `#[tauri::command]` that runs its blocking HTTP on
+// Tauri's blocking pool via `offload`, so it never freezes the webview — and never
+// drops reqwest's debug-only throwaway runtime on an async worker thread.
 #[tauri::command]
 fn select_repository_directory() -> Option<String> {
     rfd::FileDialog::new()
@@ -400,262 +433,325 @@ fn select_repository_directory() -> Option<String> {
         .map(|path| path.display().to_string())
 }
 
-#[tauri::command(async)]
-fn list_repositories() -> Result<Vec<RepositoryDashboardProjection>, String> {
-    http_client().get(format!("{BACKEND_URL}/api/repositories")).send()
-        .map_err(|error| error.to_string())?
-        .error_for_status()
-        .map_err(|error| error.to_string())?
-        .json()
-        .map_err(|error| error.to_string())
+#[tauri::command]
+async fn list_repositories() -> Result<Vec<RepositoryDashboardProjection>, String> {
+    offload(move || {
+        http_client()
+            .get(format!("{BACKEND_URL}/api/repositories"))
+            .send()
+            .map_err(|error| error.to_string())?
+            .error_for_status()
+            .map_err(|error| error.to_string())?
+            .json()
+            .map_err(|error| error.to_string())
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn register_repository(path: String) -> Result<(), String> {
-    let client = http_client();
-    let response = client
-        .post(format!("{BACKEND_URL}/api/repositories"))
-        .json(&RegisterRepositoryRequest { path })
-        .send()
-        .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn register_repository(path: String) -> Result<(), String> {
+    offload(move || {
+        let client = http_client();
+        let response = client
+            .post(format!("{BACKEND_URL}/api/repositories"))
+            .json(&RegisterRepositoryRequest { path })
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return Ok(());
-    }
+        if response.status().is_success() {
+            return Ok(());
+        }
 
-    let status = response.status();
-    let message = response
-        .json::<ErrorResponse>()
-        .map(|response| response.error)
-        .unwrap_or_else(|_| format!("repository registration failed with status {status}"));
+        let status = response.status();
+        let message = response
+            .json::<ErrorResponse>()
+            .map(|response| response.error)
+            .unwrap_or_else(|_| format!("repository registration failed with status {status}"));
 
-    Err(message)
+        Err(message)
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn remove_repository(repository_id: String) -> Result<(), String> {
-    let client = http_client();
-    client
-        .delete(format!("{BACKEND_URL}/api/repositories/{repository_id}"))
-        .send()
-        .map_err(|error| error.to_string())?
-        .error_for_status()
-        .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn remove_repository(repository_id: String) -> Result<(), String> {
+    offload(move || {
+        let client = http_client();
+        client
+            .delete(format!("{BACKEND_URL}/api/repositories/{repository_id}"))
+            .send()
+            .map_err(|error| error.to_string())?
+            .error_for_status()
+            .map_err(|error| error.to_string())?;
 
-    Ok(())
+        Ok(())
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_repository_workspace(
+#[tauri::command]
+async fn get_repository_workspace(
     repository_id: String,
 ) -> Result<RepositoryWorkspaceProjection, String> {
-    http_client().get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/workspace"
-    )).send()
-    .map_err(|error| error.to_string())?
-    .error_for_status()
-    .map_err(|error| error.to_string())?
-    .json()
-    .map_err(|error| error.to_string())
+    offload(move || {
+        http_client()
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/workspace"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?
+            .error_for_status()
+            .map_err(|error| error.to_string())?
+            .json()
+            .map_err(|error| error.to_string())
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn refresh_repository_workspace(
+#[tauri::command]
+async fn refresh_repository_workspace(
     repository_id: String,
 ) -> Result<RepositoryWorkspaceProjection, String> {
-    let client = http_client();
-    client
-        .post(format!(
-            "{BACKEND_URL}/api/repositories/{repository_id}/refresh"
-        ))
-        .send()
-        .map_err(|error| error.to_string())?
-        .error_for_status()
-        .map_err(|error| error.to_string())?
-        .json()
-        .map_err(|error| error.to_string())
+    offload(move || {
+        let client = http_client();
+        client
+            .post(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/refresh"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?
+            .error_for_status()
+            .map_err(|error| error.to_string())?
+            .json()
+            .map_err(|error| error.to_string())
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn load_artifact_content(repository_id: String, relative_path: String) -> Result<String, String> {
-    let client = http_client();
-    client
-        .get(format!(
-            "{BACKEND_URL}/api/repositories/{repository_id}/artifacts/content"
-        ))
-        .query(&[("relativePath", relative_path)])
-        .send()
-        .map_err(|error| error.to_string())?
-        .error_for_status()
-        .map_err(|error| error.to_string())?
-        .text()
-        .map_err(|error| error.to_string())
+#[tauri::command]
+async fn load_artifact_content(
+    repository_id: String,
+    relative_path: String,
+) -> Result<String, String> {
+    offload(move || {
+        let client = http_client();
+        client
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/artifacts/content"
+            ))
+            .query(&[("relativePath", relative_path)])
+            .send()
+            .map_err(|error| error.to_string())?
+            .error_for_status()
+            .map_err(|error| error.to_string())?
+            .text()
+            .map_err(|error| error.to_string())
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn save_artifact_content(
+#[tauri::command]
+async fn save_artifact_content(
     repository_id: String,
     relative_path: String,
     content: String,
 ) -> Result<(), String> {
-    let client = http_client();
-    client
-        .put(format!(
-            "{BACKEND_URL}/api/repositories/{repository_id}/artifacts/content"
-        ))
-        .json(&SaveArtifactContentRequest {
-            relative_path,
-            content,
-        })
-        .send()
-        .map_err(|error| error.to_string())?
-        .error_for_status()
-        .map_err(|error| error.to_string())?;
+    offload(move || {
+        let client = http_client();
+        client
+            .put(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/artifacts/content"
+            ))
+            .json(&SaveArtifactContentRequest {
+                relative_path,
+                content,
+            })
+            .send()
+            .map_err(|error| error.to_string())?
+            .error_for_status()
+            .map_err(|error| error.to_string())?;
 
-    Ok(())
+        Ok(())
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn rotate_current_handoff(repository_id: String) -> Result<RepositoryWorkspaceProjection, String> {
-    rotate_artifact(repository_id, "rotate-current-handoff")
-}
-
-#[tauri::command(async)]
-fn rotate_current_decisions(
+#[tauri::command]
+async fn rotate_current_handoff(
     repository_id: String,
 ) -> Result<RepositoryWorkspaceProjection, String> {
-    rotate_artifact(repository_id, "rotate-current-decisions")
+    offload(move || rotate_artifact(repository_id, "rotate-current-handoff")).await
 }
 
-#[tauri::command(async)]
-fn preview_execution_context(repository_id: String) -> Result<Value, String> {
-    let client = http_client();
-    client
-        .get(format!(
-            "{BACKEND_URL}/api/repositories/{repository_id}/execution/context"
-        ))
-        .send()
-        .map_err(|error| error.to_string())?
-        .error_for_status()
-        .map_err(|error| error.to_string())?
-        .json()
-        .map_err(|error| error.to_string())
+#[tauri::command]
+async fn rotate_current_decisions(
+    repository_id: String,
+) -> Result<RepositoryWorkspaceProjection, String> {
+    offload(move || rotate_artifact(repository_id, "rotate-current-decisions")).await
 }
 
-#[tauri::command(async)]
-fn get_plan_status(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/plan/status"),
-        "plan status lookup failed",
-    )
+#[tauri::command]
+async fn preview_execution_context(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let client = http_client();
+        client
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/execution/context"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?
+            .error_for_status()
+            .map_err(|error| error.to_string())?
+            .json()
+            .map_err(|error| error.to_string())
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn write_plan(
+#[tauri::command]
+async fn get_plan_status(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/plan/status"),
+            "plan status lookup failed",
+        )
+    })
+    .await
+}
+
+#[tauri::command]
+async fn write_plan(
     repository_id: String,
     roadmap: String,
     specs: Vec<String>,
     new_codebase: bool,
 ) -> Result<Value, String> {
-    backend_post_json_value(
-        &format!("/api/repositories/{repository_id}/plan/write"),
-        &json!({
-            "roadmap": roadmap,
-            "specs": specs,
-            "newCodebase": new_codebase,
-        }),
-        "plan write failed",
-    )
+    offload(move || {
+        backend_post_json_value(
+            &format!("/api/repositories/{repository_id}/plan/write"),
+            &json!({
+                "roadmap": roadmap,
+                "specs": specs,
+                "newCodebase": new_codebase,
+            }),
+            "plan write failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn revise_plan(repository_id: String, feedback: String) -> Result<Value, String> {
-    backend_post_json_value(
-        &format!("/api/repositories/{repository_id}/plan/revise"),
-        &json!({ "feedback": feedback }),
-        "plan revision failed",
-    )
+#[tauri::command]
+async fn revise_plan(repository_id: String, feedback: String) -> Result<Value, String> {
+    offload(move || {
+        backend_post_json_value(
+            &format!("/api/repositories/{repository_id}/plan/revise"),
+            &json!({ "feedback": feedback }),
+            "plan revision failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn execute_plan(repository_id: String) -> Result<Value, String> {
-    backend_post_value(
-        &format!("/api/repositories/{repository_id}/plan/execute"),
-        "plan execution failed",
-    )
+#[tauri::command]
+async fn execute_plan(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_post_value(
+            &format!("/api/repositories/{repository_id}/plan/execute"),
+            "plan execution failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn decision_run(repository_id: String) -> Result<Value, String> {
-    backend_post_value(
-        &format!("/api/repositories/{repository_id}/decision/run"),
-        "decision run failed",
-    )
+#[tauri::command]
+async fn decision_run(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_post_value(
+            &format!("/api/repositories/{repository_id}/decision/run"),
+            "decision run failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn decision_submit(repository_id: String, decisions: String) -> Result<Value, String> {
-    backend_post_json_value(
-        &format!("/api/repositories/{repository_id}/decision/submit"),
-        &json!({ "decisions": decisions }),
-        "decision submission failed",
-    )
+#[tauri::command]
+async fn decision_submit(repository_id: String, decisions: String) -> Result<Value, String> {
+    offload(move || {
+        backend_post_json_value(
+            &format!("/api/repositories/{repository_id}/decision/submit"),
+            &json!({ "decisions": decisions }),
+            "decision submission failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn generate_operational_context_proposal(repository_id: String) -> Result<Value, String> {
-    let client = http_client();
-    let response = client
-        .post(format!(
-            "{BACKEND_URL}/api/repositories/{repository_id}/operational-context/generate"
-        ))
-        .send()
-        .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn generate_operational_context_proposal(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let client = http_client();
+        let response = client
+            .post(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/operational-context/generate"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "operational-context proposal generation failed")
+        response_error(response, "operational-context proposal generation failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn list_operational_context_proposals(repository_id: String) -> Result<Value, String> {
-    let response = http_client().get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/operational-context/proposals"
-    )).send()
-    .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn list_operational_context_proposals(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client()
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/operational-context/proposals"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "operational-context proposal listing failed")
+        response_error(response, "operational-context proposal listing failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_operational_context_proposal(
+#[tauri::command]
+async fn get_operational_context_proposal(
     repository_id: String,
     proposal_id: String,
 ) -> Result<Value, String> {
-    let response = http_client().get(format!(
+    offload(move || {
+        let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/operational-context/proposals/{proposal_id}"
     )).send()
     .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "operational-context proposal lookup failed")
+        response_error(response, "operational-context proposal lookup failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn edit_operational_context_proposal(
+#[tauri::command]
+async fn edit_operational_context_proposal(
     repository_id: String,
     proposal_id: String,
     content: String,
 ) -> Result<Value, String> {
+    offload(move || {
     let client = http_client();
     let response = client
         .put(format!(
@@ -670,14 +766,17 @@ fn edit_operational_context_proposal(
     }
 
     response_error(response, "operational-context proposal edit failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn accept_operational_context_proposal(
+#[tauri::command]
+async fn accept_operational_context_proposal(
     repository_id: String,
     proposal_id: String,
     review_note: Option<String>,
 ) -> Result<Value, String> {
+    offload(move || {
     let client = http_client();
     let response = client
         .post(format!(
@@ -692,14 +791,17 @@ fn accept_operational_context_proposal(
     }
 
     response_error(response, "operational-context proposal accept failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn reject_operational_context_proposal(
+#[tauri::command]
+async fn reject_operational_context_proposal(
     repository_id: String,
     proposal_id: String,
     review_note: Option<String>,
 ) -> Result<Value, String> {
+    offload(move || {
     let client = http_client();
     let response = client
         .post(format!(
@@ -714,13 +816,16 @@ fn reject_operational_context_proposal(
     }
 
     response_error(response, "operational-context proposal reject failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn promote_operational_context_proposal(
+#[tauri::command]
+async fn promote_operational_context_proposal(
     repository_id: String,
     proposal_id: String,
 ) -> Result<Value, String> {
+    offload(move || {
     let client = http_client();
     let response = client
         .post(format!(
@@ -734,310 +839,386 @@ fn promote_operational_context_proposal(
     }
 
     response_error(response, "operational-context proposal promote failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_context(repository_id: String) -> Result<Value, String> {
-    let response = http_client().get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/context"
-    )).send()
-    .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn get_decision_context(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client()
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/decisions/context"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "decision context lookup failed")
+        response_error(response, "decision context lookup failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn build_decision_context(repository_id: String) -> Result<Value, String> {
-    let client = http_client();
-    let response = client
-        .post(format!(
-            "{BACKEND_URL}/api/repositories/{repository_id}/decisions/context"
-        ))
-        .send()
-        .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn build_decision_context(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let client = http_client();
+        let response = client
+            .post(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/decisions/context"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "decision context build failed")
+        response_error(response, "decision context build failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn list_decision_candidates(repository_id: String) -> Result<Value, String> {
-    let response = http_client().get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/candidates"
-    )).send()
-    .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn list_decision_candidates(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client()
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/decisions/candidates"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "decision candidate listing failed")
+        response_error(response, "decision candidate listing failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_lifecycle_eligibility(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/decisions/lifecycle/eligibility"),
-        "decision lifecycle eligibility lookup failed",
-    )
+#[tauri::command]
+async fn get_decision_lifecycle_eligibility(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/decisions/lifecycle/eligibility"),
+            "decision lifecycle eligibility lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn discover_decisions(repository_id: String) -> Result<Value, String> {
-    backend_post_value(
-        &format!("/api/repositories/{repository_id}/decisions/discover"),
-        "decision discovery failed",
-    )
+#[tauri::command]
+async fn discover_decisions(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_post_value(
+            &format!("/api/repositories/{repository_id}/decisions/discover"),
+            "decision discovery failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn promote_decision_candidate(
+#[tauri::command]
+async fn promote_decision_candidate(
     repository_id: String,
     candidate_id: String,
     reason: Option<String>,
 ) -> Result<Value, String> {
-    decision_candidate_transition(
-        repository_id,
-        candidate_id,
-        "promote",
-        json!({ "reason": reason }),
-        "decision candidate promotion failed",
-    )
+    offload(move || {
+        decision_candidate_transition(
+            repository_id,
+            candidate_id,
+            "promote",
+            json!({ "reason": reason }),
+            "decision candidate promotion failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn dismiss_decision_candidate(
+#[tauri::command]
+async fn dismiss_decision_candidate(
     repository_id: String,
     candidate_id: String,
     reason: Option<String>,
 ) -> Result<Value, String> {
-    decision_candidate_transition(
-        repository_id,
-        candidate_id,
-        "dismiss",
-        json!({ "reason": reason }),
-        "decision candidate dismissal failed",
-    )
+    offload(move || {
+        decision_candidate_transition(
+            repository_id,
+            candidate_id,
+            "dismiss",
+            json!({ "reason": reason }),
+            "decision candidate dismissal failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn expire_decision_candidate(
+#[tauri::command]
+async fn expire_decision_candidate(
     repository_id: String,
     candidate_id: String,
     reason: Option<String>,
 ) -> Result<Value, String> {
-    decision_candidate_transition(
-        repository_id,
-        candidate_id,
-        "expire",
-        json!({ "reason": reason }),
-        "decision candidate expiration failed",
-    )
+    offload(move || {
+        decision_candidate_transition(
+            repository_id,
+            candidate_id,
+            "expire",
+            json!({ "reason": reason }),
+            "decision candidate expiration failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn mark_decision_candidate_duplicate(
+#[tauri::command]
+async fn mark_decision_candidate_duplicate(
     repository_id: String,
     candidate_id: String,
     duplicate_of_candidate_id: String,
     reason: Option<String>,
 ) -> Result<Value, String> {
-    decision_candidate_transition(
-        repository_id,
-        candidate_id,
-        "duplicate",
-        json!({
-            "reason": reason,
-            "duplicateOfCandidateId": duplicate_of_candidate_id
-        }),
-        "decision candidate duplicate marking failed",
-    )
+    offload(move || {
+        decision_candidate_transition(
+            repository_id,
+            candidate_id,
+            "duplicate",
+            json!({
+                "reason": reason,
+                "duplicateOfCandidateId": duplicate_of_candidate_id
+            }),
+            "decision candidate duplicate marking failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn list_decision_proposals(repository_id: String) -> Result<Value, String> {
-    let response = http_client().get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals"
-    )).send()
-    .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn list_decision_proposals(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client()
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "decision proposal listing failed")
+        response_error(response, "decision proposal listing failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn list_decision_proposal_browser(
+#[tauri::command]
+async fn list_decision_proposal_browser(
     repository_id: String,
     states: Vec<String>,
 ) -> Result<Value, String> {
-    let client = http_client();
-    let mut request = client.get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/browser"
-    ));
+    offload(move || {
+        let client = http_client();
+        let mut request = client.get(format!(
+            "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/browser"
+        ));
 
-    if !states.is_empty() {
-        request = request.query(&[("states", states.join(","))]);
-    }
+        if !states.is_empty() {
+            request = request.query(&[("states", states.join(","))]);
+        }
 
-    let response = request.send().map_err(|error| error.to_string())?;
+        let response = request.send().map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "decision proposal browser listing failed")
+        response_error(response, "decision proposal browser listing failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_proposal(repository_id: String, proposal_id: String) -> Result<Value, String> {
-    let response = http_client().get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/{proposal_id}"
-    )).send()
-    .map_err(|error| error.to_string())?;
-
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
-
-    response_error(response, "decision proposal lookup failed")
-}
-
-#[tauri::command(async)]
-fn generate_decision_proposal(
-    repository_id: String,
-    candidate_id: String,
-) -> Result<Value, String> {
-    backend_post_value(
-        &format!("/api/repositories/{repository_id}/decisions/candidates/{candidate_id}/proposals"),
-        "decision proposal generation failed",
-    )
-}
-
-#[tauri::command(async)]
-fn get_decision_proposal_review(
+#[tauri::command]
+async fn get_decision_proposal(
     repository_id: String,
     proposal_id: String,
 ) -> Result<Value, String> {
-    let response = http_client().get(format!(
+    offload(move || {
+        let response = http_client()
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/{proposal_id}"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
+
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
+
+        response_error(response, "decision proposal lookup failed")
+    })
+    .await
+}
+
+#[tauri::command]
+async fn generate_decision_proposal(
+    repository_id: String,
+    candidate_id: String,
+) -> Result<Value, String> {
+    offload(move || {
+        backend_post_value(
+            &format!(
+                "/api/repositories/{repository_id}/decisions/candidates/{candidate_id}/proposals"
+            ),
+            "decision proposal generation failed",
+        )
+    })
+    .await
+}
+
+#[tauri::command]
+async fn get_decision_proposal_review(
+    repository_id: String,
+    proposal_id: String,
+) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/{proposal_id}/review"
     )).send()
     .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "decision proposal review lookup failed")
+        response_error(response, "decision proposal review lookup failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn expire_decision_proposal(
+#[tauri::command]
+async fn expire_decision_proposal(
     repository_id: String,
     proposal_id: String,
     reason: Option<String>,
 ) -> Result<Value, String> {
-    decision_proposal_transition(
-        repository_id,
-        proposal_id,
-        "expire",
-        json!({ "reason": reason }),
-        "decision proposal expiration failed",
-    )
+    offload(move || {
+        decision_proposal_transition(
+            repository_id,
+            proposal_id,
+            "expire",
+            json!({ "reason": reason }),
+            "decision proposal expiration failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn discard_decision_proposal(
+#[tauri::command]
+async fn discard_decision_proposal(
     repository_id: String,
     proposal_id: String,
     reason: Option<String>,
 ) -> Result<Value, String> {
-    decision_proposal_transition(
-        repository_id,
-        proposal_id,
-        "discard",
-        json!({ "reason": reason }),
-        "decision proposal discard failed",
-    )
+    offload(move || {
+        decision_proposal_transition(
+            repository_id,
+            proposal_id,
+            "discard",
+            json!({ "reason": reason }),
+            "decision proposal discard failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn mark_decision_proposal_viewed(
+#[tauri::command]
+async fn mark_decision_proposal_viewed(
     repository_id: String,
     proposal_id: String,
     reason: Option<String>,
 ) -> Result<Value, String> {
-    decision_proposal_transition(
-        repository_id,
-        proposal_id,
-        "review/viewed",
-        json!({ "reason": reason }),
-        "decision proposal viewed transition failed",
-    )
+    offload(move || {
+        decision_proposal_transition(
+            repository_id,
+            proposal_id,
+            "review/viewed",
+            json!({ "reason": reason }),
+            "decision proposal viewed transition failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn mark_decision_proposal_needs_refinement(
+#[tauri::command]
+async fn mark_decision_proposal_needs_refinement(
     repository_id: String,
     proposal_id: String,
     reason: Option<String>,
 ) -> Result<Value, String> {
-    decision_proposal_transition(
-        repository_id,
-        proposal_id,
-        "review/needs-refinement",
-        json!({ "reason": reason }),
-        "decision proposal needs-refinement transition failed",
-    )
+    offload(move || {
+        decision_proposal_transition(
+            repository_id,
+            proposal_id,
+            "review/needs-refinement",
+            json!({ "reason": reason }),
+            "decision proposal needs-refinement transition failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn mark_decision_proposal_ready_for_resolution(
+#[tauri::command]
+async fn mark_decision_proposal_ready_for_resolution(
     repository_id: String,
     proposal_id: String,
     reason: Option<String>,
 ) -> Result<Value, String> {
-    decision_proposal_transition(
-        repository_id,
-        proposal_id,
-        "review/ready-for-resolution",
-        json!({ "reason": reason }),
-        "decision proposal ready-for-resolution transition failed",
-    )
+    offload(move || {
+        decision_proposal_transition(
+            repository_id,
+            proposal_id,
+            "review/ready-for-resolution",
+            json!({ "reason": reason }),
+            "decision proposal ready-for-resolution transition failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_proposal_lineage(
+#[tauri::command]
+async fn get_decision_proposal_lineage(
     repository_id: String,
     proposal_id: String,
 ) -> Result<Value, String> {
-    let response = http_client().get(format!(
+    offload(move || {
+        let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/{proposal_id}/lineage"
     )).send()
     .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "decision proposal lineage lookup failed")
+        response_error(response, "decision proposal lineage lookup failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn refine_decision_proposal(
+#[tauri::command]
+async fn refine_decision_proposal(
     repository_id: String,
     proposal_id: String,
     request: Value,
 ) -> Result<Value, String> {
+    offload(move || {
     let client = http_client();
     let response = client
         .post(format!(
@@ -1052,14 +1233,17 @@ fn refine_decision_proposal(
     }
 
     response_error(response, "decision proposal refinement failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn analyze_decision_refinement(
+#[tauri::command]
+async fn analyze_decision_refinement(
     repository_id: String,
     proposal_id: String,
     request: Value,
 ) -> Result<Value, String> {
+    offload(move || {
     let client = http_client();
     let response = client
         .post(format!(
@@ -1074,14 +1258,17 @@ fn analyze_decision_refinement(
     }
 
     response_error(response, "decision refinement analysis failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn regenerate_decision_refinement(
+#[tauri::command]
+async fn regenerate_decision_refinement(
     repository_id: String,
     proposal_id: String,
     request: Value,
 ) -> Result<Value, String> {
+    offload(move || {
     let client = http_client();
     let response = client
         .post(format!(
@@ -1096,14 +1283,17 @@ fn regenerate_decision_refinement(
     }
 
     response_error(response, "decision refinement regeneration failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn resolve_decision_proposal(
+#[tauri::command]
+async fn resolve_decision_proposal(
     repository_id: String,
     proposal_id: String,
     request: Value,
 ) -> Result<Value, String> {
+    offload(move || {
     let client = http_client();
     let response = client
         .post(format!(
@@ -1118,60 +1308,72 @@ fn resolve_decision_proposal(
     }
 
     response_error(response, "decision proposal resolution failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn supersede_decision(
+#[tauri::command]
+async fn supersede_decision(
     repository_id: String,
     decision_id: String,
     request: Value,
 ) -> Result<Value, String> {
-    backend_post_json_value(
-        &format!("/api/repositories/{repository_id}/decisions/{decision_id}/supersede"),
-        &request,
-        "decision supersession failed",
-    )
+    offload(move || {
+        backend_post_json_value(
+            &format!("/api/repositories/{repository_id}/decisions/{decision_id}/supersede"),
+            &request,
+            "decision supersession failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn archive_decision(
+#[tauri::command]
+async fn archive_decision(
     repository_id: String,
     decision_id: String,
     request: Value,
 ) -> Result<Value, String> {
-    backend_post_json_value(
-        &format!("/api/repositories/{repository_id}/decisions/{decision_id}/archive"),
-        &request,
-        "decision archival failed",
-    )
+    offload(move || {
+        backend_post_json_value(
+            &format!("/api/repositories/{repository_id}/decisions/{decision_id}/archive"),
+            &request,
+            "decision archival failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_assimilation_recommendation(
+#[tauri::command]
+async fn get_decision_assimilation_recommendation(
     repository_id: String,
     decision_id: String,
 ) -> Result<Value, String> {
-    let response = http_client().get(format!(
+    offload(move || {
+        let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/{decision_id}/assimilation"
     )).send()
     .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(
-        response,
-        "decision assimilation recommendation lookup failed",
-    )
+        response_error(
+            response,
+            "decision assimilation recommendation lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn propose_decision_operational_context_assimilation(
+#[tauri::command]
+async fn propose_decision_operational_context_assimilation(
     repository_id: String,
     decision_id: String,
     request: Value,
 ) -> Result<Value, String> {
+    offload(move || {
     let client = http_client();
     let response = client
         .post(format!(
@@ -1189,199 +1391,251 @@ fn propose_decision_operational_context_assimilation(
         response,
         "decision assimilation recommendation creation failed",
     )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_option_comparison(
+#[tauri::command]
+async fn get_decision_option_comparison(
     repository_id: String,
     proposal_id: String,
 ) -> Result<Value, String> {
-    let response = http_client().get(format!(
+    offload(move || {
+        let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/{proposal_id}/options"
     )).send()
     .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "decision option comparison lookup failed")
+        response_error(response, "decision option comparison lookup failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_evidence_inspection(
+#[tauri::command]
+async fn get_decision_evidence_inspection(
     repository_id: String,
     proposal_id: String,
 ) -> Result<Value, String> {
-    let response = http_client().get(format!(
+    offload(move || {
+        let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/{proposal_id}/evidence"
     )).send()
     .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "decision evidence inspection lookup failed")
+        response_error(response, "decision evidence inspection lookup failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn list_decision_source_attributions(
+#[tauri::command]
+async fn list_decision_source_attributions(
     repository_id: String,
     proposal_id: String,
 ) -> Result<Value, String> {
-    let response = http_client().get(format!(
+    offload(move || {
+        let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/proposals/{proposal_id}/sources"
     )).send()
     .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "decision source attribution listing failed")
+        response_error(response, "decision source attribution listing failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_governance(repository_id: String) -> Result<Value, String> {
-    let response = http_client().get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/governance"
-    )).send()
-    .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn get_decision_governance(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client()
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/decisions/governance"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "decision governance lookup failed")
+        response_error(response, "decision governance lookup failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn generate_decision_governance_report(repository_id: String) -> Result<Value, String> {
-    let client = http_client();
-    let response = client
-        .post(format!(
-            "{BACKEND_URL}/api/repositories/{repository_id}/decisions/governance/reports"
-        ))
-        .send()
-        .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn generate_decision_governance_report(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let client = http_client();
+        let response = client
+            .post(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/decisions/governance/reports"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "decision governance report generation failed")
+        response_error(response, "decision governance report generation failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn list_decision_governance_reports(repository_id: String) -> Result<Value, String> {
-    let response = http_client().get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/governance/reports"
-    )).send()
-    .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn list_decision_governance_reports(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client()
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/decisions/governance/reports"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "decision governance report listing failed")
+        response_error(response, "decision governance report listing failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_certification(repository_id: String) -> Result<Value, String> {
-    let response = http_client().get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/certification"
-    )).send()
-    .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn get_decision_certification(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client()
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/decisions/certification"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "decision certification lookup failed")
+        response_error(response, "decision certification lookup failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn run_decision_certification(repository_id: String) -> Result<Value, String> {
-    let client = http_client();
-    let response = client
-        .post(format!(
-            "{BACKEND_URL}/api/repositories/{repository_id}/decisions/certification"
-        ))
-        .send()
-        .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn run_decision_certification(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let client = http_client();
+        let response = client
+            .post(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/decisions/certification"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "decision certification run failed")
+        response_error(response, "decision certification run failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn list_decision_certification_reports(repository_id: String) -> Result<Value, String> {
-    let response = http_client().get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/certification/reports"
-    )).send()
-    .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn list_decision_certification_reports(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client()
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/decisions/certification/reports"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "decision certification report listing failed")
+        response_error(response, "decision certification report listing failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_generation_certification(repository_id: String) -> Result<Value, String> {
-    let response = http_client().get(format!(
+#[tauri::command]
+async fn get_decision_generation_certification(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/generation-certification/current"
     )).send()
     .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "decision generation certification lookup failed")
+        response_error(response, "decision generation certification lookup failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn run_decision_generation_certification(repository_id: String) -> Result<Value, String> {
-    let client = http_client();
-    let response = client
-        .post(format!(
-            "{BACKEND_URL}/api/repositories/{repository_id}/decisions/generation-certification"
-        ))
-        .send()
-        .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn run_decision_generation_certification(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let client = http_client();
+        let response = client
+            .post(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/decisions/generation-certification"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "decision generation certification run failed")
+        response_error(response, "decision generation certification run failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn list_decision_generation_certification_reports(repository_id: String) -> Result<Value, String> {
-    let response = http_client().get(format!(
+#[tauri::command]
+async fn list_decision_generation_certification_reports(
+    repository_id: String,
+) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/generation-certification/reports"
     )).send()
     .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(
-        response,
-        "decision generation certification report listing failed",
-    )
+        response_error(
+            response,
+            "decision generation certification report listing failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn assess_decision_quality(repository_id: String, proposal_id: String) -> Result<Value, String> {
+#[tauri::command]
+async fn assess_decision_quality(
+    repository_id: String,
+    proposal_id: String,
+) -> Result<Value, String> {
+    offload(move || {
     let client = http_client();
     let response = client
         .post(format!(
@@ -1395,131 +1649,170 @@ fn assess_decision_quality(repository_id: String, proposal_id: String) -> Result
     }
 
     response_error(response, "decision quality assessment failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn list_decision_quality_assessments(repository_id: String) -> Result<Value, String> {
-    let response = http_client().get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/assessments"
-    )).send()
-    .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn list_decision_quality_assessments(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client()
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/assessments"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "decision quality assessment listing failed")
+        response_error(response, "decision quality assessment listing failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_quality_report(repository_id: String) -> Result<Value, String> {
-    let response = http_client().get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/reports/current"
-    )).send()
-    .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn get_decision_quality_report(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client()
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/reports/current"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "decision quality report lookup failed")
+        response_error(response, "decision quality report lookup failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn generate_decision_quality_report(repository_id: String) -> Result<Value, String> {
-    let client = http_client();
-    let response = client
-        .post(format!(
-            "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/reports"
-        ))
-        .send()
-        .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn generate_decision_quality_report(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let client = http_client();
+        let response = client
+            .post(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/reports"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "decision quality report generation failed")
+        response_error(response, "decision quality report generation failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn list_decision_quality_reports(repository_id: String) -> Result<Value, String> {
-    let response = http_client().get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/reports"
-    )).send()
-    .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn list_decision_quality_reports(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client()
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/reports"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "decision quality report listing failed")
+        response_error(response, "decision quality report listing failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_quality_trend(repository_id: String) -> Result<Value, String> {
-    let response = http_client().get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/trends/current"
-    )).send()
-    .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn get_decision_quality_trend(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client()
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/trends/current"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "decision quality trend lookup failed")
+        response_error(response, "decision quality trend lookup failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn generate_decision_quality_trend(repository_id: String) -> Result<Value, String> {
-    let client = http_client();
-    let response = client
-        .post(format!(
-            "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/trends"
-        ))
-        .send()
-        .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn generate_decision_quality_trend(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let client = http_client();
+        let response = client
+            .post(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/trends"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "decision quality trend generation failed")
+        response_error(response, "decision quality trend generation failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn list_decision_quality_trends(repository_id: String) -> Result<Value, String> {
-    let response = http_client().get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/trends"
-    )).send()
-    .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn list_decision_quality_trends(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client()
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/decisions/quality/trends"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "decision quality trend listing failed")
+        response_error(response, "decision quality trend listing failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_execution_decision_projection(repository_id: String) -> Result<Value, String> {
-    let response = http_client().get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/decisions/execution-projection"
-    )).send()
-    .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn get_execution_decision_projection(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client()
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/decisions/execution-projection"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "execution decision projection lookup failed")
+        response_error(response, "execution decision projection lookup failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_execution_decision_influence(
+#[tauri::command]
+async fn get_execution_decision_influence(
     repository_id: String,
     execution_id: String,
 ) -> Result<Value, String> {
+    offload(move || {
     let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/influence/executions/{execution_id}"
     )).send()
@@ -1530,154 +1823,197 @@ fn get_execution_decision_influence(
     }
 
     response_error(response, "execution decision influence lookup failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_influence(repository_id: String, decision_id: String) -> Result<Value, String> {
-    let response = http_client().get(format!(
+#[tauri::command]
+async fn get_decision_influence(
+    repository_id: String,
+    decision_id: String,
+) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client().get(format!(
         "{BACKEND_URL}/api/repositories/{repository_id}/decisions/influence/decisions/{decision_id}"
     )).send()
     .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "decision influence lookup failed")
+        response_error(response, "decision influence lookup failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn list_reasoning_events(repository_id: String) -> Result<Value, String> {
-    let response = http_client().get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/events"
-    )).send()
-    .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn list_reasoning_events(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client()
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/events"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "reasoning event listing failed")
+        response_error(response, "reasoning event listing failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_reasoning_event(repository_id: String, event_id: String) -> Result<Value, String> {
-    let response = http_client().get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/events/{event_id}"
-    )).send()
-    .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn get_reasoning_event(repository_id: String, event_id: String) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client()
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/events/{event_id}"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "reasoning event lookup failed")
+        response_error(response, "reasoning event lookup failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn create_reasoning_event(repository_id: String, command: Value) -> Result<Value, String> {
-    let client = http_client();
-    let response = client
-        .post(format!(
-            "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/events"
-        ))
-        .json(&command)
-        .send()
-        .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn create_reasoning_event(repository_id: String, command: Value) -> Result<Value, String> {
+    offload(move || {
+        let client = http_client();
+        let response = client
+            .post(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/events"
+            ))
+            .json(&command)
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "reasoning event creation failed")
+        response_error(response, "reasoning event creation failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn list_reasoning_manual_capture_templates(repository_id: String) -> Result<Value, String> {
-    let response = http_client().get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/manual-captures/templates"
-    )).send()
-    .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn list_reasoning_manual_capture_templates(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client()
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/manual-captures/templates"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "reasoning manual-capture template listing failed")
+        response_error(response, "reasoning manual-capture template listing failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn capture_manual_reasoning(repository_id: String, command: Value) -> Result<Value, String> {
-    let client = http_client();
-    let response = client
-        .post(format!(
-            "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/manual-captures"
-        ))
-        .json(&command)
-        .send()
-        .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn capture_manual_reasoning(repository_id: String, command: Value) -> Result<Value, String> {
+    offload(move || {
+        let client = http_client();
+        let response = client
+            .post(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/manual-captures"
+            ))
+            .json(&command)
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "reasoning manual capture failed")
+        response_error(response, "reasoning manual capture failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn list_reasoning_threads(repository_id: String) -> Result<Value, String> {
-    let response = http_client().get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/threads"
-    )).send()
-    .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn list_reasoning_threads(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client()
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/threads"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "reasoning thread listing failed")
+        response_error(response, "reasoning thread listing failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_reasoning_thread(repository_id: String, thread_id: String) -> Result<Value, String> {
-    let response = http_client().get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/threads/{thread_id}"
-    )).send()
-    .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn get_reasoning_thread(repository_id: String, thread_id: String) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client()
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/threads/{thread_id}"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "reasoning thread lookup failed")
+        response_error(response, "reasoning thread lookup failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn create_reasoning_thread(repository_id: String, command: Value) -> Result<Value, String> {
-    let client = http_client();
-    let response = client
-        .post(format!(
-            "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/threads"
-        ))
-        .json(&command)
-        .send()
-        .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn create_reasoning_thread(repository_id: String, command: Value) -> Result<Value, String> {
+    offload(move || {
+        let client = http_client();
+        let response = client
+            .post(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/threads"
+            ))
+            .json(&command)
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "reasoning thread creation failed")
+        response_error(response, "reasoning thread creation failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn append_reasoning_thread_event(
+#[tauri::command]
+async fn append_reasoning_thread_event(
     repository_id: String,
     thread_id: String,
     event_id: String,
 ) -> Result<Value, String> {
-    let client = http_client();
-    let response = client
+    offload(move || {
+        let client = http_client();
+        let response = client
         .post(format!(
             "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/threads/{thread_id}/events"
         ))
@@ -1685,966 +2021,1261 @@ fn append_reasoning_thread_event(
         .send()
         .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "reasoning thread event append failed")
+        response_error(response, "reasoning thread event append failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn list_reasoning_relationships(repository_id: String) -> Result<Value, String> {
-    let response = http_client().get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/relationships"
-    )).send()
-    .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn list_reasoning_relationships(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client()
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/relationships"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "reasoning relationship listing failed")
+        response_error(response, "reasoning relationship listing failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn create_reasoning_relationship(repository_id: String, command: Value) -> Result<Value, String> {
-    let client = http_client();
-    let response = client
-        .post(format!(
-            "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/relationships"
-        ))
-        .json(&command)
-        .send()
-        .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn create_reasoning_relationship(
+    repository_id: String,
+    command: Value,
+) -> Result<Value, String> {
+    offload(move || {
+        let client = http_client();
+        let response = client
+            .post(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/relationships"
+            ))
+            .json(&command)
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "reasoning relationship creation failed")
+        response_error(response, "reasoning relationship creation failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_reasoning_graph(repository_id: String) -> Result<Value, String> {
-    let response = http_client().get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/graph"
-    )).send()
-    .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn get_reasoning_graph(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client()
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/graph"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "reasoning graph lookup failed")
+        response_error(response, "reasoning graph lookup failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn trace_reasoning_backward(
+#[tauri::command]
+async fn trace_reasoning_backward(
     repository_id: String,
     kind: String,
     id: String,
 ) -> Result<Value, String> {
-    trace_reasoning(
-        repository_id,
-        kind,
-        id,
-        "backward",
-        "reasoning backward trace failed",
-    )
+    offload(move || {
+        trace_reasoning(
+            repository_id,
+            kind,
+            id,
+            "backward",
+            "reasoning backward trace failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn trace_reasoning_forward(
+#[tauri::command]
+async fn trace_reasoning_forward(
     repository_id: String,
     kind: String,
     id: String,
 ) -> Result<Value, String> {
-    trace_reasoning(
-        repository_id,
-        kind,
-        id,
-        "forward",
-        "reasoning forward trace failed",
-    )
+    offload(move || {
+        trace_reasoning(
+            repository_id,
+            kind,
+            id,
+            "forward",
+            "reasoning forward trace failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn query_reasoning(repository_id: String, query: Value) -> Result<Value, String> {
-    let client = http_client();
-    let response = client
-        .post(format!(
-            "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/queries"
-        ))
-        .json(&query)
-        .send()
-        .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn query_reasoning(repository_id: String, query: Value) -> Result<Value, String> {
+    offload(move || {
+        let client = http_client();
+        let response = client
+            .post(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/queries"
+            ))
+            .json(&query)
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "reasoning query failed")
+        response_error(response, "reasoning query failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn reconstruct_reasoning(repository_id: String, query: Value) -> Result<Value, String> {
-    let client = http_client();
-    let response = client
-        .post(format!(
-            "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/reconstructions"
-        ))
-        .json(&query)
-        .send()
-        .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn reconstruct_reasoning(repository_id: String, query: Value) -> Result<Value, String> {
+    offload(move || {
+        let client = http_client();
+        let response = client
+            .post(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/reconstructions"
+            ))
+            .json(&query)
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "reasoning reconstruction failed")
+        response_error(response, "reasoning reconstruction failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn run_reasoning_reconstruction(repository_id: String, query: Value) -> Result<Value, String> {
-    let client = http_client();
-    let response = client
-        .post(format!(
-            "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/reconstructions/reports"
-        ))
-        .json(&query)
-        .send()
-        .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn run_reasoning_reconstruction(
+    repository_id: String,
+    query: Value,
+) -> Result<Value, String> {
+    offload(move || {
+        let client = http_client();
+        let response = client
+            .post(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/reconstructions/reports"
+            ))
+            .json(&query)
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "reasoning reconstruction run failed")
+        response_error(response, "reasoning reconstruction run failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn list_reasoning_reconstructions(repository_id: String) -> Result<Value, String> {
-    let response = http_client().get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/reconstructions"
-    )).send()
-    .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn list_reasoning_reconstructions(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client()
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/reconstructions"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "reasoning reconstruction report listing failed")
+        response_error(response, "reasoning reconstruction report listing failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_reasoning_materialization_review(repository_id: String) -> Result<Value, String> {
-    let response = http_client().get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/materialization-review"
-    )).send()
-    .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn get_reasoning_materialization_review(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client()
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/materialization-review"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "reasoning materialization review lookup failed")
+        response_error(response, "reasoning materialization review lookup failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn run_reasoning_materialization_review(
+#[tauri::command]
+async fn run_reasoning_materialization_review(
     repository_id: String,
     request: Value,
 ) -> Result<Value, String> {
-    let client = http_client();
-    let response = client
-        .post(format!(
-            "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/materialization-review"
-        ))
-        .json(&request)
-        .send()
-        .map_err(|error| error.to_string())?;
+    offload(move || {
+        let client = http_client();
+        let response = client
+            .post(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/materialization-review"
+            ))
+            .json(&request)
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "reasoning materialization review failed")
+        response_error(response, "reasoning materialization review failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_reasoning_certification(repository_id: String) -> Result<Value, String> {
-    let response = http_client().get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/certification"
-    )).send()
-    .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn get_reasoning_certification(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client()
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/certification"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "reasoning certification lookup failed")
+        response_error(response, "reasoning certification lookup failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn run_reasoning_certification(repository_id: String) -> Result<Value, String> {
-    let client = http_client();
-    let response = client
-        .post(format!(
-            "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/certification"
-        ))
-        .send()
-        .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn run_reasoning_certification(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let client = http_client();
+        let response = client
+            .post(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/certification"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "reasoning certification run failed")
+        response_error(response, "reasoning certification run failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn list_reasoning_certification_reports(repository_id: String) -> Result<Value, String> {
-    let response = http_client().get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/certification/reports"
-    )).send()
-    .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn list_reasoning_certification_reports(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client()
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/reasoning/certification/reports"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "reasoning certification report listing failed")
+        response_error(response, "reasoning certification report listing failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_continuity_diagnostics(repository_id: String) -> Result<Value, String> {
-    let response = http_client().get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/continuity/diagnostics"
-    )).send()
-    .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn get_continuity_diagnostics(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client()
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/continuity/diagnostics"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "continuity diagnostics lookup failed")
+        response_error(response, "continuity diagnostics lookup failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn generate_continuity_report(repository_id: String) -> Result<Value, String> {
-    let client = http_client();
-    let response = client
-        .post(format!(
-            "{BACKEND_URL}/api/repositories/{repository_id}/continuity/reports"
-        ))
-        .send()
-        .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn generate_continuity_report(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let client = http_client();
+        let response = client
+            .post(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/continuity/reports"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "continuity report generation failed")
+        response_error(response, "continuity report generation failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn list_continuity_reports(repository_id: String) -> Result<Value, String> {
-    let response = http_client().get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/continuity/reports"
-    )).send()
-    .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn list_continuity_reports(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client()
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/continuity/reports"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "continuity report listing failed")
+        response_error(response, "continuity report listing failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_workflow_projection(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/workflow"),
-        "workflow projection lookup failed",
-    )
+#[tauri::command]
+async fn get_workflow_projection(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/workflow"),
+            "workflow projection lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_workflow_diagnostics(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/workflow/diagnostics"),
-        "workflow diagnostics lookup failed",
-    )
+#[tauri::command]
+async fn get_workflow_diagnostics(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/workflow/diagnostics"),
+            "workflow diagnostics lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_workflow_timeline(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/workflow/timeline"),
-        "workflow timeline lookup failed",
-    )
+#[tauri::command]
+async fn get_workflow_timeline(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/workflow/timeline"),
+            "workflow timeline lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_workflow_history(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/workflow/history"),
-        "workflow history lookup failed",
-    )
+#[tauri::command]
+async fn get_workflow_history(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/workflow/history"),
+            "workflow history lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_workflow_transitions(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/workflow/transitions"),
-        "workflow transitions lookup failed",
-    )
+#[tauri::command]
+async fn get_workflow_transitions(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/workflow/transitions"),
+            "workflow transitions lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_workflow_gates(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/workflow/gates"),
-        "workflow gates lookup failed",
-    )
+#[tauri::command]
+async fn get_workflow_gates(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/workflow/gates"),
+            "workflow gates lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_workflow_gate_history(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/workflow/gates/history"),
-        "workflow gate history lookup failed",
-    )
+#[tauri::command]
+async fn get_workflow_gate_history(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/workflow/gates/history"),
+            "workflow gate history lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_workflow_recovery(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/workflow/recovery"),
-        "workflow recovery lookup failed",
-    )
+#[tauri::command]
+async fn get_workflow_recovery(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/workflow/recovery"),
+            "workflow recovery lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn recover_workflow(repository_id: String) -> Result<Value, String> {
-    backend_post_value(
-        &format!("/api/repositories/{repository_id}/workflow/recover"),
-        "workflow recovery failed",
-    )
+#[tauri::command]
+async fn recover_workflow(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_post_value(
+            &format!("/api/repositories/{repository_id}/workflow/recover"),
+            "workflow recovery failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_workflow_execution(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/workflow/execution"),
-        "workflow execution lookup failed",
-    )
+#[tauri::command]
+async fn get_workflow_execution(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/workflow/execution"),
+            "workflow execution lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_workflow_handoff(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/workflow/handoff"),
-        "workflow handoff lookup failed",
-    )
+#[tauri::command]
+async fn get_workflow_handoff(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/workflow/handoff"),
+            "workflow handoff lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_workflow_decisions(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/workflow/decisions"),
-        "workflow decisions lookup failed",
-    )
+#[tauri::command]
+async fn get_workflow_decisions(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/workflow/decisions"),
+            "workflow decisions lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_workflow_operational_context(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/workflow/operational-context"),
-        "workflow operational context lookup failed",
-    )
+#[tauri::command]
+async fn get_workflow_operational_context(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/workflow/operational-context"),
+            "workflow operational context lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_workflow_git(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/workflow/git"),
-        "workflow git lookup failed",
-    )
+#[tauri::command]
+async fn get_workflow_git(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/workflow/git"),
+            "workflow git lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_workflow_continuation_evaluation(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/workflow/continuation/evaluation"),
-        "workflow continuation evaluation lookup failed",
-    )
+#[tauri::command]
+async fn get_workflow_continuation_evaluation(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/workflow/continuation/evaluation"),
+            "workflow continuation evaluation lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn run_workflow_continuation(repository_id: String) -> Result<Value, String> {
-    backend_post_value(
-        &format!("/api/repositories/{repository_id}/workflow/continuation/run"),
-        "workflow continuation failed",
-    )
+#[tauri::command]
+async fn run_workflow_continuation(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_post_value(
+            &format!("/api/repositories/{repository_id}/workflow/continuation/run"),
+            "workflow continuation failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_workflow_continuation_history(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/workflow/continuation/history"),
-        "workflow continuation history lookup failed",
-    )
+#[tauri::command]
+async fn get_workflow_continuation_history(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/workflow/continuation/history"),
+            "workflow continuation history lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_workflow_preparation_evaluation(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/workflow/preparation/evaluation"),
-        "workflow preparation evaluation lookup failed",
-    )
+#[tauri::command]
+async fn get_workflow_preparation_evaluation(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/workflow/preparation/evaluation"),
+            "workflow preparation evaluation lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn run_workflow_preparation(repository_id: String) -> Result<Value, String> {
-    backend_post_value(
-        &format!("/api/repositories/{repository_id}/workflow/preparation/run"),
-        "workflow preparation failed",
-    )
+#[tauri::command]
+async fn run_workflow_preparation(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_post_value(
+            &format!("/api/repositories/{repository_id}/workflow/preparation/run"),
+            "workflow preparation failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_workflow_preparation_history(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/workflow/preparation/history"),
-        "workflow preparation history lookup failed",
-    )
+#[tauri::command]
+async fn get_workflow_preparation_history(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/workflow/preparation/history"),
+            "workflow preparation history lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_workflow_health(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/workflow/health"),
-        "workflow health lookup failed",
-    )
+#[tauri::command]
+async fn get_workflow_health(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/workflow/health"),
+            "workflow health lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_repository_workflow_report(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/workflow/reports/repository"),
-        "repository workflow report lookup failed",
-    )
+#[tauri::command]
+async fn get_repository_workflow_report(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/workflow/reports/repository"),
+            "repository workflow report lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_workflow_progression_report(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/workflow/reports/progression"),
-        "workflow progression report lookup failed",
-    )
+#[tauri::command]
+async fn get_workflow_progression_report(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/workflow/reports/progression"),
+            "workflow progression report lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_workflow_human_governance_report(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/workflow/reports/human-governance"),
-        "workflow human governance report lookup failed",
-    )
+#[tauri::command]
+async fn get_workflow_human_governance_report(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/workflow/reports/human-governance"),
+            "workflow human governance report lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_workflow_readiness_report(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/workflow/reports/readiness"),
-        "workflow readiness report lookup failed",
-    )
+#[tauri::command]
+async fn get_workflow_readiness_report(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/workflow/reports/readiness"),
+            "workflow readiness report lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_workflow_certification(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/workflow/certification"),
-        "workflow certification lookup failed",
-    )
+#[tauri::command]
+async fn get_workflow_certification(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/workflow/certification"),
+            "workflow certification lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn run_workflow_certification(repository_id: String) -> Result<Value, String> {
-    backend_post_value(
-        &format!("/api/repositories/{repository_id}/workflow/certification"),
-        "workflow certification failed",
-    )
+#[tauri::command]
+async fn run_workflow_certification(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_post_value(
+            &format!("/api/repositories/{repository_id}/workflow/certification"),
+            "workflow certification failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn list_decision_sessions(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/decision-sessions"),
-        "decision-session list lookup failed",
-    )
+#[tauri::command]
+async fn list_decision_sessions(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/decision-sessions"),
+            "decision-session list lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_active_decision_session(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/decision-sessions/active"),
-        "active decision-session lookup failed",
-    )
+#[tauri::command]
+async fn get_active_decision_session(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/decision-sessions/active"),
+            "active decision-session lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_session_diagnostics(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/decision-sessions/diagnostics"),
-        "decision-session diagnostics lookup failed",
-    )
+#[tauri::command]
+async fn get_decision_session_diagnostics(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/decision-sessions/diagnostics"),
+            "decision-session diagnostics lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_session_metrics(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/decision-sessions/analysis/metrics"),
-        "decision-session metrics lookup failed",
-    )
+#[tauri::command]
+async fn get_decision_session_metrics(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/decision-sessions/analysis/metrics"),
+            "decision-session metrics lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_session_statistics(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/decision-sessions/analysis/statistics"),
-        "decision-session statistics lookup failed",
-    )
+#[tauri::command]
+async fn get_decision_session_statistics(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/decision-sessions/analysis/statistics"),
+            "decision-session statistics lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_session_economics(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/decision-sessions/analysis/economics"),
-        "decision-session economics lookup failed",
-    )
+#[tauri::command]
+async fn get_decision_session_economics(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/decision-sessions/analysis/economics"),
+            "decision-session economics lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_session_coherence(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/decision-sessions/analysis/coherence"),
-        "decision-session coherence lookup failed",
-    )
+#[tauri::command]
+async fn get_decision_session_coherence(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/decision-sessions/analysis/coherence"),
+            "decision-session coherence lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_session_analysis_diagnostics(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/decision-sessions/analysis/diagnostics"),
-        "decision-session analysis diagnostics lookup failed",
-    )
+#[tauri::command]
+async fn get_decision_session_analysis_diagnostics(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/decision-sessions/analysis/diagnostics"),
+            "decision-session analysis diagnostics lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_session_lifecycle_policy(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/decision-sessions/lifecycle/policy"),
-        "decision-session lifecycle policy lookup failed",
-    )
+#[tauri::command]
+async fn get_decision_session_lifecycle_policy(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/decision-sessions/lifecycle/policy"),
+            "decision-session lifecycle policy lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_session_lifecycle_policy_diagnostics(
+#[tauri::command]
+async fn get_decision_session_lifecycle_policy_diagnostics(
     repository_id: String,
 ) -> Result<Value, String> {
-    backend_get_value(
-        &format!(
-            "/api/repositories/{repository_id}/decision-sessions/lifecycle/policy/diagnostics"
-        ),
-        "decision-session lifecycle policy diagnostics lookup failed",
-    )
+    offload(move || {
+        backend_get_value(
+            &format!(
+                "/api/repositories/{repository_id}/decision-sessions/lifecycle/policy/diagnostics"
+            ),
+            "decision-session lifecycle policy diagnostics lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_session_transfer_eligibility(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/decision-sessions/lifecycle/eligibility"),
-        "decision-session transfer eligibility lookup failed",
-    )
+#[tauri::command]
+async fn get_decision_session_transfer_eligibility(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/decision-sessions/lifecycle/eligibility"),
+            "decision-session transfer eligibility lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_session_transfer_eligibility_diagnostics(
+#[tauri::command]
+async fn get_decision_session_transfer_eligibility_diagnostics(
     repository_id: String,
 ) -> Result<Value, String> {
+    offload(move || {
     backend_get_value(
         &format!(
             "/api/repositories/{repository_id}/decision-sessions/lifecycle/eligibility/diagnostics"
         ),
         "decision-session transfer eligibility diagnostics lookup failed",
     )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_session_lifecycle_projection(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/decision-sessions/lifecycle/projection"),
-        "decision-session lifecycle projection lookup failed",
-    )
+#[tauri::command]
+async fn get_decision_session_lifecycle_projection(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/decision-sessions/lifecycle/projection"),
+            "decision-session lifecycle projection lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_session_lifecycle_history(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/decision-sessions/lifecycle/history"),
-        "decision-session lifecycle history lookup failed",
-    )
+#[tauri::command]
+async fn get_decision_session_lifecycle_history(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/decision-sessions/lifecycle/history"),
+            "decision-session lifecycle history lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_session_lifecycle_influence(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/decision-sessions/lifecycle/influence"),
-        "decision-session lifecycle influence lookup failed",
-    )
+#[tauri::command]
+async fn get_decision_session_lifecycle_influence(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/decision-sessions/lifecycle/influence"),
+            "decision-session lifecycle influence lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_session_lifecycle_health(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/decision-sessions/lifecycle/health"),
-        "decision-session lifecycle health lookup failed",
-    )
+#[tauri::command]
+async fn get_decision_session_lifecycle_health(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/decision-sessions/lifecycle/health"),
+            "decision-session lifecycle health lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn list_decision_session_continuity_artifacts(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/decision-sessions/continuity-artifacts"),
-        "decision-session continuity artifact list lookup failed",
-    )
+#[tauri::command]
+async fn list_decision_session_continuity_artifacts(
+    repository_id: String,
+) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/decision-sessions/continuity-artifacts"),
+            "decision-session continuity artifact list lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_session_continuity_artifact(
+#[tauri::command]
+async fn get_decision_session_continuity_artifact(
     repository_id: String,
     artifact_id: String,
 ) -> Result<Value, String> {
+    offload(move || {
     backend_get_value(
         &format!(
             "/api/repositories/{repository_id}/decision-sessions/continuity-artifacts/{artifact_id}"
         ),
         "decision-session continuity artifact lookup failed",
     )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn list_decision_session_transfers(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/decision-sessions/transfers"),
-        "decision-session transfer list lookup failed",
-    )
+#[tauri::command]
+async fn list_decision_session_transfers(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/decision-sessions/transfers"),
+            "decision-session transfer list lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn list_decision_session_transfer_history(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/decision-sessions/transfers/history"),
-        "decision-session transfer history lookup failed",
-    )
+#[tauri::command]
+async fn list_decision_session_transfer_history(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/decision-sessions/transfers/history"),
+            "decision-session transfer history lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_session_transfer_diagnostics(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/decision-sessions/transfers/diagnostics"),
-        "decision-session transfer diagnostics lookup failed",
-    )
+#[tauri::command]
+async fn get_decision_session_transfer_diagnostics(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/decision-sessions/transfers/diagnostics"),
+            "decision-session transfer diagnostics lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn execute_decision_session_transfer(repository_id: String) -> Result<Value, String> {
-    backend_post_value(
-        &format!("/api/repositories/{repository_id}/decision-sessions/transfers"),
-        "decision-session transfer execution failed",
-    )
+#[tauri::command]
+async fn execute_decision_session_transfer(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_post_value(
+            &format!("/api/repositories/{repository_id}/decision-sessions/transfers"),
+            "decision-session transfer execution failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_session_recovery(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/decision-sessions/recovery"),
-        "decision-session recovery lookup failed",
-    )
+#[tauri::command]
+async fn get_decision_session_recovery(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/decision-sessions/recovery"),
+            "decision-session recovery lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn list_decision_session_recovery_history(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/decision-sessions/recovery/history"),
-        "decision-session recovery history lookup failed",
-    )
+#[tauri::command]
+async fn list_decision_session_recovery_history(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/decision-sessions/recovery/history"),
+            "decision-session recovery history lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_session_recovery_diagnostics(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/decision-sessions/recovery/diagnostics"),
-        "decision-session recovery diagnostics lookup failed",
-    )
+#[tauri::command]
+async fn get_decision_session_recovery_diagnostics(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/decision-sessions/recovery/diagnostics"),
+            "decision-session recovery diagnostics lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn recover_decision_session(repository_id: String) -> Result<Value, String> {
-    backend_post_value(
-        &format!("/api/repositories/{repository_id}/decision-sessions/recovery"),
-        "decision-session persisted recovery failed",
-    )
+#[tauri::command]
+async fn recover_decision_session(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_post_value(
+            &format!("/api/repositories/{repository_id}/decision-sessions/recovery"),
+            "decision-session persisted recovery failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_session_workflow(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/decision-sessions/workflow"),
-        "decision-session workflow projection lookup failed",
-    )
+#[tauri::command]
+async fn get_decision_session_workflow(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/decision-sessions/workflow"),
+            "decision-session workflow projection lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_session_workflow_summary(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/decision-sessions/workflow/summary"),
-        "decision-session workflow summary lookup failed",
-    )
+#[tauri::command]
+async fn get_decision_session_workflow_summary(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/decision-sessions/workflow/summary"),
+            "decision-session workflow summary lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_session_workflow_health(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/decision-sessions/workflow/health"),
-        "decision-session workflow health lookup failed",
-    )
+#[tauri::command]
+async fn get_decision_session_workflow_health(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/decision-sessions/workflow/health"),
+            "decision-session workflow health lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_session_workflow_influence(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/decision-sessions/workflow/influence"),
-        "decision-session workflow influence lookup failed",
-    )
+#[tauri::command]
+async fn get_decision_session_workflow_influence(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/decision-sessions/workflow/influence"),
+            "decision-session workflow influence lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_session_certification(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/decision-sessions/certification"),
-        "decision-session certification lookup failed",
-    )
+#[tauri::command]
+async fn get_decision_session_certification(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/decision-sessions/certification"),
+            "decision-session certification lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_decision_session_certification_report(repository_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/repositories/{repository_id}/decision-sessions/certification/report"),
-        "decision-session certification report lookup failed",
-    )
+#[tauri::command]
+async fn get_decision_session_certification_report(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/repositories/{repository_id}/decision-sessions/certification/report"),
+            "decision-session certification report lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn run_decision_session_certification(repository_id: String) -> Result<Value, String> {
-    backend_post_value(
-        &format!("/api/repositories/{repository_id}/decision-sessions/certification"),
-        "decision-session certification failed",
-    )
+#[tauri::command]
+async fn run_decision_session_certification(repository_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_post_value(
+            &format!("/api/repositories/{repository_id}/decision-sessions/certification"),
+            "decision-session certification failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn start_execution(repository_id: String) -> Result<ExecutionSessionSummary, String> {
-    let client = http_client();
-    let response = client
-        .post(format!(
-            "{BACKEND_URL}/api/repositories/{repository_id}/execution/start"
-        ))
-        .json(&serde_json::json!({}))
-        .send()
-        .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn start_execution(repository_id: String) -> Result<ExecutionSessionSummary, String> {
+    offload(move || {
+        let client = http_client();
+        let response = client
+            .post(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/execution/start"
+            ))
+            .json(&serde_json::json!({}))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "execution start failed")
+        response_error(response, "execution start failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn cancel_execution(repository_id: String) -> Result<ExecutionSessionSummary, String> {
-    let client = http_client();
-    let response = client
-        .post(format!(
-            "{BACKEND_URL}/api/repositories/{repository_id}/execution/cancel"
-        ))
-        .json(&serde_json::json!({}))
-        .send()
-        .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn cancel_execution(repository_id: String) -> Result<ExecutionSessionSummary, String> {
+    offload(move || {
+        let client = http_client();
+        let response = client
+            .post(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/execution/cancel"
+            ))
+            .json(&serde_json::json!({}))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "execution cancel failed")
+        response_error(response, "execution cancel failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_active_execution(repository_id: String) -> Result<ExecutionSessionSummary, String> {
-    let response = http_client().get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/execution/active"
-    )).send()
-    .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn get_active_execution(repository_id: String) -> Result<ExecutionSessionSummary, String> {
+    offload(move || {
+        let response = http_client()
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/execution/active"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "active execution lookup failed")
+        response_error(response, "active execution lookup failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_git_status(repository_id: String) -> Result<RepositoryGitStatus, String> {
-    let response = http_client().get(format!(
-        "{BACKEND_URL}/api/repositories/{repository_id}/git/status"
-    )).send()
-    .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn get_git_status(repository_id: String) -> Result<RepositoryGitStatus, String> {
+    offload(move || {
+        let response = http_client()
+            .get(format!(
+                "{BACKEND_URL}/api/repositories/{repository_id}/git/status"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "git status lookup failed")
+        response_error(response, "git status lookup failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn prepare_commit(session_id: String) -> Result<CommitPreparation, String> {
-    let client = http_client();
-    let response = client
-        .post(format!(
-            "{BACKEND_URL}/api/execution-sessions/{session_id}/git/prepare-commit"
-        ))
-        .send()
-        .map_err(|error| error.to_string())?;
+#[tauri::command]
+async fn prepare_commit(session_id: String) -> Result<CommitPreparation, String> {
+    offload(move || {
+        let client = http_client();
+        let response = client
+            .post(format!(
+                "{BACKEND_URL}/api/execution-sessions/{session_id}/git/prepare-commit"
+            ))
+            .send()
+            .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "commit preparation failed")
+        response_error(response, "commit preparation failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_execution_git_eligibility(
+#[tauri::command]
+async fn get_execution_git_eligibility(
     session_id: String,
     commit_message: Option<String>,
     selected_paths: Vec<String>,
 ) -> Result<Value, String> {
-    backend_post_json_value(
-        &format!("/api/execution-sessions/{session_id}/git/eligibility"),
-        &ExecutionGitActionEligibilityRequest {
-            commit_message,
-            selected_paths,
-        },
-        "execution git eligibility lookup failed",
-    )
+    offload(move || {
+        backend_post_json_value(
+            &format!("/api/execution-sessions/{session_id}/git/eligibility"),
+            &ExecutionGitActionEligibilityRequest {
+                commit_message,
+                selected_paths,
+            },
+            "execution git eligibility lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn commit_execution(
+#[tauri::command]
+async fn commit_execution(
     session_id: String,
     message: String,
     selected_paths: Vec<String>,
     status_snapshot_id: String,
 ) -> Result<ExecutionSessionSummary, String> {
-    let client = http_client();
-    let response = client
-        .post(format!(
-            "{BACKEND_URL}/api/execution-sessions/{session_id}/git/commit"
-        ))
-        .json(&CommitRequest {
-            message,
-            selected_paths,
-            status_snapshot_id,
-        })
-        .send()
-        .map_err(|error| error.to_string())?;
-
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
-
-    response_error(response, "commit failed")
-}
-
-#[tauri::command(async)]
-fn push_execution(session_id: String) -> Result<PushAttemptResult, String> {
-    let client = http_client();
-    let response = client
-        .post(format!(
-            "{BACKEND_URL}/api/execution-sessions/{session_id}/git/push"
-        ))
-        .json(&PushRequest {})
-        .send()
-        .map_err(|error| error.to_string())?;
-
-    let status = response.status();
-    let body = response.text().map_err(|error| error.to_string())?;
-    if status.is_success() {
-        return serde_json::from_str(&body).map_err(|error| error.to_string());
-    }
-
-    if status == reqwest::StatusCode::CONFLICT {
-        if let Ok(result) = serde_json::from_str::<PushAttemptResult>(&body) {
-            return Ok(result);
-        }
-    }
-
-    let message = serde_json::from_str::<ErrorResponse>(&body)
-        .map(|response| response.error)
-        .unwrap_or_else(|_| format!("push failed with status {status}"));
-
-    Err(message)
-}
-
-#[tauri::command(async)]
-fn get_execution_session(session_id: String) -> Result<Value, String> {
-    let response =
-        http_client().get(format!("{BACKEND_URL}/api/execution-sessions/{session_id}")).send()
+    offload(move || {
+        let client = http_client();
+        let response = client
+            .post(format!(
+                "{BACKEND_URL}/api/execution-sessions/{session_id}/git/commit"
+            ))
+            .json(&CommitRequest {
+                message,
+                selected_paths,
+                status_snapshot_id,
+            })
+            .send()
             .map_err(|error| error.to_string())?;
 
-    if response.status().is_success() {
-        return response.json().map_err(|error| error.to_string());
-    }
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
 
-    response_error(response, "execution session lookup failed")
+        response_error(response, "commit failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_execution_prompt_manifest(session_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/execution-sessions/{session_id}/prompt"),
-        "execution prompt manifest lookup failed",
-    )
+#[tauri::command]
+async fn push_execution(session_id: String) -> Result<PushAttemptResult, String> {
+    offload(move || {
+        let client = http_client();
+        let response = client
+            .post(format!(
+                "{BACKEND_URL}/api/execution-sessions/{session_id}/git/push"
+            ))
+            .json(&PushRequest {})
+            .send()
+            .map_err(|error| error.to_string())?;
+
+        let status = response.status();
+        let body = response.text().map_err(|error| error.to_string())?;
+        if status.is_success() {
+            return serde_json::from_str(&body).map_err(|error| error.to_string());
+        }
+
+        if status == reqwest::StatusCode::CONFLICT {
+            if let Ok(result) = serde_json::from_str::<PushAttemptResult>(&body) {
+                return Ok(result);
+            }
+        }
+
+        let message = serde_json::from_str::<ErrorResponse>(&body)
+            .map(|response| response.error)
+            .unwrap_or_else(|_| format!("push failed with status {status}"));
+
+        Err(message)
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn get_execution_transparency(session_id: String) -> Result<Value, String> {
-    backend_get_value(
-        &format!("/api/execution-sessions/{session_id}/transparency"),
-        "execution transparency lookup failed",
-    )
+#[tauri::command]
+async fn get_execution_session(session_id: String) -> Result<Value, String> {
+    offload(move || {
+        let response = http_client()
+            .get(format!("{BACKEND_URL}/api/execution-sessions/{session_id}"))
+            .send()
+            .map_err(|error| error.to_string())?;
+
+        if response.status().is_success() {
+            return response.json().map_err(|error| error.to_string());
+        }
+
+        response_error(response, "execution session lookup failed")
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn accept_execution_handoff(session_id: String) -> Result<ExecutionSessionSummary, String> {
-    complete_handoff_decision(session_id, "accept")
+#[tauri::command]
+async fn get_execution_prompt_manifest(session_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/execution-sessions/{session_id}/prompt"),
+            "execution prompt manifest lookup failed",
+        )
+    })
+    .await
 }
 
-#[tauri::command(async)]
-fn reject_execution_handoff(session_id: String) -> Result<ExecutionSessionSummary, String> {
-    complete_handoff_decision(session_id, "reject")
+#[tauri::command]
+async fn get_execution_transparency(session_id: String) -> Result<Value, String> {
+    offload(move || {
+        backend_get_value(
+            &format!("/api/execution-sessions/{session_id}/transparency"),
+            "execution transparency lookup failed",
+        )
+    })
+    .await
+}
+
+#[tauri::command]
+async fn accept_execution_handoff(session_id: String) -> Result<ExecutionSessionSummary, String> {
+    offload(move || complete_handoff_decision(session_id, "accept")).await
+}
+
+#[tauri::command]
+async fn reject_execution_handoff(session_id: String) -> Result<ExecutionSessionSummary, String> {
+    offload(move || complete_handoff_decision(session_id, "reject")).await
 }
 
 fn rotate_artifact(
@@ -2752,8 +3383,10 @@ fn backend_get_value(path: &str, fallback: &str) -> Result<Value, String> {
 }
 
 fn backend_get_value_from(base_url: &str, path: &str, fallback: &str) -> Result<Value, String> {
-    let response =
-        http_client().get(format!("{base_url}{path}")).send().map_err(|error| error.to_string())?;
+    let response = http_client()
+        .get(format!("{base_url}{path}"))
+        .send()
+        .map_err(|error| error.to_string())?;
 
     if response.status().is_success() {
         return response.json().map_err(|error| error.to_string());
@@ -2979,7 +3612,7 @@ fn wait_for_backend(child: &mut Child) -> Result<(), String> {
             return Err(format!("backend exited before becoming ready: {status}"));
         }
 
-        if ping_backend().is_ok() {
+        if ping_backend_request().is_ok() {
             return Ok(());
         }
 
