@@ -5,6 +5,7 @@ internal enum LoopOutcome
     EpicCompleted,
     Cancelled,
     Failed,
+    Stalled,
 }
 
 /// <summary>A verify/agent gate failed; aborts the loop (never retried).</summary>

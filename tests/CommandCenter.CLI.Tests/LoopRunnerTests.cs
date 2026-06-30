@@ -10,7 +10,8 @@ namespace CommandCenter.Cli.Tests;
 public class LoopRunnerTests
 {
     private sealed record Harness(
-        LoopRunner Runner, FakeAgentRuntime Rt, MemoryArtifactStore Store, Repository Repo, RecordingLoopConsole Con);
+        LoopRunner Runner, FakeAgentRuntime Rt, MemoryArtifactStore Store, Repository Repo, RecordingLoopConsole Con,
+        FakeProcessRunner Git);
 
     private static Harness New()
     {
@@ -23,7 +24,11 @@ public class LoopRunnerTests
         var gate = new MilestoneGate(store, repo);
         var exec = new ExecutionStep(rt, art, con, repo);
         var dec = new DecisionSession(rt, router, art, con, repo);
-        return new Harness(new LoopRunner(gate, art, exec, dec, con), rt, store, repo, con);
+        // By default `git status` reports an EMPTY working tree, so the gate skips commit/push and the
+        // existing single-iteration tests reach their asserted outcome before it could ever trip.
+        var git = new FakeProcessRunner { Handler = _ => FakeProcessRunner.Ok() };
+        var commitGate = new CommitGate(git, repo, con);
+        return new Harness(new LoopRunner(gate, art, exec, dec, commitGate, con), rt, store, repo, con, git);
     }
 
     private static string Resolve(Repository r, string rel) => ArtifactPath.ResolveRepositoryPath(r, rel);
@@ -104,6 +109,41 @@ public class LoopRunnerTests
         LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
         Assert.Equal(LoopOutcome.Failed, outcome);
+    }
+
+    [Fact]
+    public async Task Run_WhenOnlyBookkeepingChangesRepeat_ReturnsStalled()
+    {
+        var h = New();
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
+        // The epic never completes: the milestone box stays unchecked for the whole run.
+        await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
+
+        // git status always reports ONLY bookkeeping paths (the every-iteration decisions+handoff churn).
+        h.Git.Handler = args => args[0] == "status"
+            ? FakeProcessRunner.Ok(" M .agents/decisions/decisions.md\n M .agents/handoffs/handoff.md")
+            : FakeProcessRunner.Ok();
+
+        // Each iteration runs Branch A: one execution one-shot (writes a fresh handoff) + one decision
+        // proposal (persists decisions.md). Script generously to cover >3 iterations; the loop stalls first.
+        for (int i = 0; i < 6; i++)
+        {
+            h.Rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+            {
+                s.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff), $"HANDOFF-{i}").Wait();
+                return Turns.Completed($"executed-{i}");
+            }));
+        }
+        // Decision session: one seed (first iteration only), then one proposal per iteration.
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
+        for (int i = 0; i < 6; i++)
+        {
+            h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed($"DECISIONS-{i}")));
+        }
+
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+
+        Assert.Equal(LoopOutcome.Stalled, outcome);
     }
 
     [Fact]

@@ -11,6 +11,7 @@ internal sealed class LoopRunner(
     LoopArtifacts artifacts,
     ExecutionStep execution,
     DecisionSession decision,
+    CommitGate commitGate,
     ILoopConsole console) : IAsyncDisposable
 {
     public async Task<LoopOutcome> RunAsync(CancellationToken cancellationToken)
@@ -53,6 +54,13 @@ internal sealed class LoopRunner(
                     // ---- Branch B: decision only (resume after an interrupted execution) ----
                     await artifacts.RotateLiveHandoffAsync();
                     await decision.RunAsync(cancellationToken);
+                }
+
+                // Both branches verify decisions.md (decision.RunAsync throws if it is missing). Commit and
+                // push the working tree, then apply the stall gate: stop if no substantive change recurs.
+                if (await commitGate.CommitPushAndEvaluateAsync(cancellationToken))
+                {
+                    return LoopOutcome.Stalled;
                 }
             }
         }

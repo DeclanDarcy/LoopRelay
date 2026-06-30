@@ -26,12 +26,14 @@ var console = new ConsoleLoopConsole();
 var store = provider.GetRequiredService<IArtifactStore>();
 var runtime = provider.GetRequiredService<IAgentRuntime>();
 var router = provider.GetRequiredService<IDecisionSessionRouter>();
+var processRunner = provider.GetRequiredService<IProcessRunner>();
 
 var artifacts = new LoopArtifacts(store, repository);
 var gate = new MilestoneGate(store, repository);
 var execution = new ExecutionStep(runtime, artifacts, console, repository);
 var decision = new DecisionSession(runtime, router, artifacts, console, repository);
-var loop = new LoopRunner(gate, artifacts, execution, decision, console);
+var commitGate = new CommitGate(processRunner, repository, console);
+var loop = new LoopRunner(gate, artifacts, execution, decision, commitGate, console);
 
 // --- Ctrl+C: cancel the loop AND let session disposal kill the codex child processes. ---
 using var cts = new CancellationTokenSource();
@@ -69,6 +71,9 @@ switch (outcome)
     case LoopOutcome.Cancelled:
         console.Warn("Run cancelled. Codex sessions terminated.");
         return 130;
+    case LoopOutcome.Stalled:
+        console.Warn("Loop stopped: no substantive changes across consecutive iterations.");
+        return 3;
     default:
         console.Error("Run failed. See the error above.");
         return 1;
