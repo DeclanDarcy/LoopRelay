@@ -8,8 +8,9 @@ namespace CommandCenter.Cli;
 /// <summary>
 /// Commits and pushes the target repository's working tree at the end of each loop iteration, then
 /// applies the no-substantive-change stall gate. An iteration that changed ONLY bookkeeping files
-/// (everything under <c>.agents/decisions/</c> and <c>.agents/handoffs/</c>) makes no real progress, so
-/// it increments <see cref="NoChangesCount"/>; any iteration that touched something else resets it to 0.
+/// (everything under <c>.agents/decisions/</c> and <c>.agents/handoffs/</c>, plus the
+/// <c>.agents/operational_context.md</c> file) makes no real progress, so it increments
+/// <see cref="NoChangesCount"/>; any iteration that touched something else resets it to 0.
 /// Once the count exceeds <see cref="MaxNoChangesCount"/> the loop is asked to stop (the run is stalled).
 ///
 /// Git is driven through <see cref="IProcessRunner"/> with <c>workingDirectory = repository.Path</c> (no
@@ -22,7 +23,8 @@ internal sealed class CommitGate(IProcessRunner processRunner, Repository reposi
 
     private const string CommitMessage = "Orchestration loop: automated execution and decision iteration";
 
-    // Bookkeeping prefixes derived from the canonical artifact-path constants (never hardcoded).
+    // Bookkeeping prefixes derived from the canonical artifact-path constants (never hardcoded). The
+    // operational_context file is a single artifact (not a directory), so it is matched by exact equality.
     private static readonly string DecisionsPrefix = OrchestrationArtifactPaths.DecisionsDirectory + "/";
     private static readonly string HandoffsPrefix = OrchestrationArtifactPaths.HandoffsDirectory + "/";
 
@@ -103,7 +105,8 @@ internal sealed class CommitGate(IProcessRunner processRunner, Repository reposi
 
     private static bool IsBookkeeping(string path) =>
         path.StartsWith(DecisionsPrefix, StringComparison.Ordinal) ||
-        path.StartsWith(HandoffsPrefix, StringComparison.Ordinal);
+        path.StartsWith(HandoffsPrefix, StringComparison.Ordinal) ||
+        string.Equals(path, OrchestrationArtifactPaths.OperationalContext, StringComparison.Ordinal);
 
     private async Task RunGitAsync(string label, IReadOnlyList<string> arguments)
     {

@@ -154,4 +154,20 @@ public class CommitGateTests
         Assert.Single(fake.Calls);
         Assert.Equal("status", fake.Calls[0].Args[0]);
     }
+
+    [Fact]
+    public async Task T8_OperationalContextChange_DoesNotCountAsProgress()
+    {
+        // An iteration that touched only decisions + .agents/operational_context.md is still no-progress:
+        // operational_context is orchestration bookkeeping, not substantive milestone work. So the counter
+        // keeps climbing and trips on the 3rd iteration rather than resetting (which is what a real source
+        // change would do — see T2).
+        var fake = StatusRunner(" M .agents/decisions/decisions.md\n M .agents/operational_context.md");
+        var gate = New(fake);
+
+        Assert.False(await gate.CommitPushAndEvaluateAsync(CancellationToken.None)); // count 1
+        Assert.False(await gate.CommitPushAndEvaluateAsync(CancellationToken.None)); // count 2
+        Assert.True(await gate.CommitPushAndEvaluateAsync(CancellationToken.None));  // count 3 -> trip
+        Assert.Equal(3, gate.NoChangesCount);
+    }
 }
