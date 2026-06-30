@@ -31,7 +31,7 @@ var artifacts = new LoopArtifacts(store, repository);
 var gate = new MilestoneGate(store, repository);
 var execution = new ExecutionStep(runtime, artifacts, console, repository);
 var decision = new DecisionSession(runtime, router, artifacts, console, repository);
-await using var loop = new LoopRunner(gate, artifacts, execution, decision, console);
+var loop = new LoopRunner(gate, artifacts, execution, decision, console);
 
 // --- Ctrl+C: cancel the loop AND let session disposal kill the codex child processes. ---
 using var cts = new CancellationTokenSource();
