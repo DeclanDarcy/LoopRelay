@@ -148,6 +148,7 @@ public class MilestoneGateTests
 
         Assert.False(await gate.IsEpicCompleteAsync());
         int readsAfterFirst = store.Reads;
+        int listsAfterFirst = store.Lists;
 
         // Complete m1 and bump its mtime so the cache misses and re-parses.
         await store.WriteAsync(m1, "- [x] a");
@@ -155,6 +156,7 @@ public class MilestoneGateTests
 
         Assert.True(await gate.IsEpicCompleteAsync());
         Assert.True(store.Reads > readsAfterFirst);  // it re-parsed
+        Assert.True(store.Lists > listsAfterFirst);  // full-parse path called ListAsync (short-circuit would have skipped it)
     }
 
     [Fact]
@@ -186,10 +188,15 @@ public class MilestoneGateTests
 
         Assert.False(await gate.IsEpicCompleteAsync());   // tracks m1 as incomplete
 
-        // Add m2 (incomplete) while m1 is unchanged: short-circuit on m1 is still correct.
+        // Add m2 (incomplete) while m1 is unchanged: short-circuit fires on unchanged m1
+        // and must consult ONLY the mtime provider — no reads or lists touch the new m2.
         await store.WriteAsync(m2, "- [ ] b");
         mtimes[m2] = T0;
+        int readsBeforeShortCircuit = store.Reads;
+        int listsBeforeShortCircuit = store.Lists;
         Assert.False(await gate.IsEpicCompleteAsync());
+        Assert.Equal(readsBeforeShortCircuit, store.Reads);   // short-circuit: no new reads
+        Assert.Equal(listsBeforeShortCircuit, store.Lists);   // short-circuit: no new lists
 
         // Complete m1, bump its mtime: cache misses, full parse finds m2 incomplete.
         await store.WriteAsync(m1, "- [x] a");
@@ -221,6 +228,29 @@ public class MilestoneGateTests
 
         // A vanished tracked file must force a correct re-parse, not a stale false.
         Assert.True(await gate.IsEpicCompleteAsync());
+    }
+
+    [Fact]
+    public async Task T6_DeletedTrackedPlanFile_DoesNotFalselyShortCircuit()
+    {
+        var (gate, store, repo, mtimes) = NewTrackedGate();
+        string planPath = Resolve(repo, ".agents/plan.md");
+        string m1 = Resolve(repo, ".agents/milestones/m1.md");
+
+        // plan.md has one unchecked box (tracked incomplete); m1 is fully checked.
+        await store.WriteAsync(planPath, "- [ ] open plan item");
+        await store.WriteAsync(m1, "- [x] a");
+        mtimes[planPath] = T0;
+        mtimes[m1] = T0;
+
+        Assert.False(await gate.IsEpicCompleteAsync());   // plan.md tracked as incomplete
+
+        // plan.md vanishes: remove from store AND drop its mtime so provider returns null.
+        await store.DeleteAsync(planPath);
+        mtimes.Remove(planPath);
+
+        // The vanished tracked plan.md must force a correct full re-parse, not a stale false.
+        Assert.True(await gate.IsEpicCompleteAsync());    // only fully-checked m1 remains
     }
 }
 

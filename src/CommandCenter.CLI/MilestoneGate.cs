@@ -20,6 +20,12 @@ namespace CommandCenter.Cli;
 /// elsewhere — so it can never wrongly report completion. When no remembered file is both present and
 /// unchanged (first call, any tracked file modified/removed, or no timestamps available at all), the
 /// gate falls back to the full parse, behaving exactly as it did before the optimization.
+///
+/// Known limitation: the short-circuit keys on last-write time, so a file that changes without its
+/// last-write time advancing — due to coarse filesystem timestamp granularity or timestamp-preserving
+/// tooling such as restore-from-backup — could be skipped on a re-parse. This is safe because the
+/// gate ONLY ever short-circuits to false, so it can never wrongly report completion; the worst case
+/// is one extra loop iteration before the updated content is detected.
 /// </summary>
 internal sealed class MilestoneGate
 {
