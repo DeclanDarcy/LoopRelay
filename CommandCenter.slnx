@@ -12,6 +12,7 @@
     <Project Path="src/CommandCenter.Persistence.Sqlite/CommandCenter.Persistence.Sqlite.csproj" />
     <Project Path="src/CommandCenter.Orchestration/CommandCenter.Orchestration.csproj" />
     <Project Path="src/CommandCenter.Backend/CommandCenter.Backend.csproj" />
+    <Project Path="src/CommandCenter.CLI/CommandCenter.CLI.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj" />
