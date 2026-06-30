@@ -68,5 +68,5 @@ internal sealed class LoopRunner(
         }
     }
 
-    public async ValueTask DisposeAsync() => await decision.DisposeAsync();
+    public ValueTask DisposeAsync() => decision.DisposeAsync();
 }

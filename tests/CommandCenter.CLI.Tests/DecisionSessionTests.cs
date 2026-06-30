@@ -50,6 +50,21 @@ public class DecisionSessionTests
     }
 
     [Fact]
+    public async Task Run_WhenOperationalContextEmpty_Warns()
+    {
+        var (session, rt, store, repo, con) = New();
+        // Neither plan.md nor operational_context.md exists: EnsureOperationalContextAsync writes nothing,
+        // so the operational-context read yields empty and the degraded condition must be surfaced via Warn.
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "HANDOFF");
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));   // seed
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D1")));        // propose
+
+        await session.RunAsync(CancellationToken.None);
+
+        Assert.Contains(con.Events, e => e.Kind == "warn");
+    }
+
+    [Fact]
     public async Task Run_SecondRound_ReusesWarmSession_NoReseed()
     {
         var (session, rt, store, repo, _) = New();

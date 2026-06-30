@@ -84,6 +84,11 @@ internal sealed class DecisionSession(
         await artifacts.EnsureOperationalContextAsync();
         string operationalContext = await artifacts.ReadAsync(OrchestrationArtifactPaths.OperationalContext) ?? string.Empty;
 
+        if (string.IsNullOrWhiteSpace(operationalContext))
+        {
+            console.Warn("Operational context is empty — seeding the decision session with no context.");
+        }
+
         AgentTurnResult seed = await session.RunTurnAsync(
             StartDecisionSession.Render(operationalContext), onChunk: null, cancellationToken);
 

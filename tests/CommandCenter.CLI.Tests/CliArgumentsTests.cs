@@ -14,7 +14,7 @@ public class CliArgumentsTests
 
         Assert.True(ok, error);
         Assert.Equal(Path.GetFullPath(dir), repository.Path);
-        Assert.Equal(Path.GetFileName(dir.TrimEnd(Path.DirectorySeparatorChar)), repository.Name);
+        Assert.Equal(Path.GetFileName(dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)), repository.Name);
         Assert.NotEqual(Guid.Empty, repository.Id);
     }
 

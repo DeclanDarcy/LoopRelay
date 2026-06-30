@@ -29,6 +29,7 @@ internal sealed class MilestoneGate(IArtifactStore store, Repository repository)
         IReadOnlyList<string> files = await store.ListAsync(dir, OrchestrationArtifactPaths.MilestoneSearchPattern);
         foreach (string file in files)
         {
+            // ?? string.Empty defensively tolerates a file listed-then-deleted (impossible in the CLI's single-threaded loop).
             string content = await store.ReadAsync(file) ?? string.Empty;
             Accumulate(content, ref total, ref completed);
         }
