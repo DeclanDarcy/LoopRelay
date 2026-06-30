@@ -1,0 +1,88 @@
+using CommandCenter.Cli;
+using CommandCenter.Core.Artifacts;
+using CommandCenter.Core.Repositories;
+using CommandCenter.Orchestration;
+using Xunit;
+
+namespace CommandCenter.Cli.Tests;
+
+public class LoopArtifactsTests
+{
+    private static (LoopArtifacts Art, IArtifactStore Store, Repository Repo) New()
+    {
+        var store = new MemoryArtifactStore();
+        var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
+        return (new LoopArtifacts(store, repo), store, repo);
+    }
+
+    private static string Resolve(Repository r, string rel) => ArtifactPath.ResolveRepositoryPath(r, rel);
+
+    [Fact]
+    public async Task RotateLiveHandoff_ArchivesNumberedAndDeletesLive()
+    {
+        var (art, store, repo) = New();
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
+
+        string? rotated = await art.RotateLiveHandoffAsync();
+
+        Assert.Equal("H1", rotated);
+        Assert.False(await store.ExistsAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff)));
+        Assert.Equal("H1", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalHandoff(1))));
+    }
+
+    [Fact]
+    public async Task RotateLiveHandoff_WhenAbsent_ReturnsNull()
+    {
+        var (art, _, _) = New();
+        Assert.Null(await art.RotateLiveHandoffAsync());
+    }
+
+    [Fact]
+    public async Task RotateLiveHandoff_SequenceIsDiskMaxPlusOne()
+    {
+        var (art, store, repo) = New();
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalHandoff(1)), "old");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalHandoff(2)), "old2");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H3");
+
+        await art.RotateLiveHandoffAsync();
+
+        Assert.Equal("H3", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalHandoff(3))));
+    }
+
+    [Fact]
+    public async Task ReadLatestHandoff_PrefersLiveThenHighestNumbered()
+    {
+        var (art, store, repo) = New();
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalHandoff(1)), "n1");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalHandoff(2)), "n2");
+
+        var numbered = await art.ReadLatestHandoffAsync();
+        Assert.Equal("n2", numbered.Content);
+
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "live");
+        var live = await art.ReadLatestHandoffAsync();
+        Assert.Equal("live", live.Content);
+    }
+
+    [Fact]
+    public async Task PersistDecisions_WritesNumberedAndCanonical()
+    {
+        var (art, store, repo) = New();
+        await art.PersistDecisionsAsync("D1");
+
+        Assert.Equal("D1", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.Decisions)));
+        Assert.Equal("D1", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDecision(1))));
+    }
+
+    [Fact]
+    public async Task EnsureOperationalContext_CopiesPlanWhenMissing()
+    {
+        var (art, store, repo) = New();
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN");
+
+        await art.EnsureOperationalContextAsync();
+
+        Assert.Equal("PLAN", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext)));
+    }
+}
