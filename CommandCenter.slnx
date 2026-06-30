@@ -16,5 +16,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/CommandCenter.Backend.Tests/CommandCenter.Backend.Tests.csproj" />
+    <Project Path="tests/CommandCenter.CLI.Tests/CommandCenter.CLI.Tests.csproj" />
   </Folder>
 </Solution>
