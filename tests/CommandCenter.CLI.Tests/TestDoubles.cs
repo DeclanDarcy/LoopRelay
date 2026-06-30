@@ -51,7 +51,7 @@ internal sealed class FakeAgentRuntime(IArtifactStore store) : IAgentRuntime
     public Task<IAgentSession> OpenSessionAsync(AgentSessionSpec spec, CancellationToken ct = default)
     {
         OpenSessions++;
-        return Task.FromResult<IAgentSession>(new FakeAgentSession(this, spec, store));
+        return Task.FromResult<IAgentSession>(new FakeAgentSession(this, spec));
     }
 
     public ValueTask CloseSessionAsync(IAgentSession session)
@@ -64,7 +64,7 @@ internal sealed class FakeAgentRuntime(IArtifactStore store) : IAgentRuntime
         SessionTurns.Dequeue().Handler(spec, prompt, store);
 }
 
-internal sealed class FakeAgentSession(FakeAgentRuntime runtime, AgentSessionSpec spec, IArtifactStore store) : IAgentSession
+internal sealed class FakeAgentSession(FakeAgentRuntime runtime, AgentSessionSpec spec) : IAgentSession
 {
     public SessionIdentity SessionId => spec.SessionId;
     public string RepositoryId => spec.RepositoryId;

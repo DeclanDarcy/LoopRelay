@@ -37,7 +37,7 @@ public class LoopRunnerTests
         LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
         Assert.Equal(LoopOutcome.EpicCompleted, outcome);
-        Assert.Equal(0, h.Rt.OneShotCalls.Count);   // no codex run at all
+        Assert.Empty(h.Rt.OneShotCalls);   // no codex run at all
     }
 
     [Fact]
@@ -87,7 +87,7 @@ public class LoopRunnerTests
         LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
         Assert.Equal(LoopOutcome.EpicCompleted, outcome);
-        Assert.Equal(0, h.Rt.OneShotCalls.Count);   // Branch B never runs execution
+        Assert.Empty(h.Rt.OneShotCalls);   // Branch B never runs execution
         // handoff rotated away (archived + live deleted) in Branch B.
         Assert.False(await h.Store.ExistsAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff)));
         Assert.Equal("H-RESUME", await h.Store.ReadAsync(Resolve(h.Repo, OrchestrationArtifactPaths.HistoricalHandoff(1))));

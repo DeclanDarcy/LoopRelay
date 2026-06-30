@@ -76,6 +76,21 @@ public class LoopArtifactsTests
     }
 
     [Fact]
+    public async Task PersistDecisions_DoesNotThrow_AndWritesBothPaths_AcrossMultipleCalls()
+    {
+        var (art, store, repo) = New();
+
+        await art.PersistDecisionsAsync("D1");
+        // Delete the live decisions.md so NextSequence re-scans the directory correctly.
+        await store.DeleteAsync(Resolve(repo, OrchestrationArtifactPaths.Decisions));
+        await art.PersistDecisionsAsync("D2");
+
+        Assert.Equal("D1", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDecision(1))));
+        Assert.Equal("D2", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDecision(2))));
+        Assert.Equal("D2", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.Decisions)));
+    }
+
+    [Fact]
     public async Task EnsureOperationalContext_CopiesPlanWhenMissing()
     {
         var (art, store, repo) = New();

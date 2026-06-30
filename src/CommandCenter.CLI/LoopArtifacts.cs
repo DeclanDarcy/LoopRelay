@@ -56,7 +56,12 @@ internal sealed class LoopArtifacts(IArtifactStore store, Repository repository)
             OrchestrationArtifactPaths.DecisionsDirectory,
             OrchestrationArtifactPaths.HistoricalDecisionSearchPattern,
             "decisions");
-        await store.WriteAsync(Resolve(OrchestrationArtifactPaths.HistoricalDecision(sequence)), decisions);
+        string target = Resolve(OrchestrationArtifactPaths.HistoricalDecision(sequence));
+        if (await store.ExistsAsync(target))
+        {
+            throw new IOException($"Historical artifact already exists: {OrchestrationArtifactPaths.HistoricalDecision(sequence)}");
+        }
+        await store.WriteAsync(target, decisions);
         await store.WriteAsync(Resolve(OrchestrationArtifactPaths.Decisions), decisions);
     }
 
