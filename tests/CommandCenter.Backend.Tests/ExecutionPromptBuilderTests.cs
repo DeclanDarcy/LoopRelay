@@ -18,7 +18,6 @@ public sealed class ExecutionPromptBuilderTests
 
         // No prior handoff => the StartExecution catalog template is rendered.
         Assert.Contains("start executing the first milestone", prompt.Text);
-        Assert.Contains("then write .agents/handoffs/handoff.md with:", prompt.Text);
         Assert.DoesNotContain("continue executing the current milestone", prompt.Text);
 
         // The exact .agents/plan.md text fills the catalog {plan} hole — nothing is composed into it.

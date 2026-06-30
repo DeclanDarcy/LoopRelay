@@ -30,7 +30,7 @@ public sealed class CodexAgentArgumentBuilderTests
         Assert.Contains("--cd", args);
         Assert.Contains("/repo", args);
         Assert.Equal("-", args[^1]); // stdin prompt is the trailing positional
-        Assert.Contains("workspace-write", args);
+        Assert.DoesNotContain("--sandbox", args); // exec path intentionally omits the sandbox flag
     }
 
     [Fact]
@@ -50,15 +50,34 @@ public sealed class CodexAgentArgumentBuilderTests
         Assert.DoesNotContain("exec", args);
     }
 
+    // The exec/one-shot path intentionally omits the --sandbox flag (the sandbox posture is left to codex's
+    // own configuration), so no sandbox value is emitted regardless of the spec's write posture.
     [Fact]
-    public void ReadOnlySandboxMapsToReadOnly()
+    public void OneShotDoesNotPassSandboxFlag()
     {
         IReadOnlyList<string> args = CodexAgentArgumentBuilder.Build(
             Spec(canWrite: false, requiresApproval: true, AgentEffortLevel.Low),
             AgentSessionMode.OneShot);
 
-        Assert.Contains("read-only", args);
+        Assert.DoesNotContain("--sandbox", args);
+        Assert.DoesNotContain("read-only", args);
         Assert.DoesNotContain("workspace-write", args);
+    }
+
+    // The persistent/app-server path still maps the sandbox posture onto an explicit --sandbox flag.
+    [Fact]
+    public void PersistentSandboxMapsPosture()
+    {
+        IReadOnlyList<string> readOnly = CodexAgentArgumentBuilder.Build(
+            Spec(canWrite: false, requiresApproval: false, AgentEffortLevel.Low),
+            AgentSessionMode.Persistent);
+        Assert.Contains("--sandbox", readOnly);
+        Assert.Contains("read-only", readOnly);
+
+        IReadOnlyList<string> writable = CodexAgentArgumentBuilder.Build(
+            Spec(canWrite: true, requiresApproval: false, AgentEffortLevel.Low),
+            AgentSessionMode.Persistent);
+        Assert.Contains("workspace-write", writable);
     }
 
     [Fact]
@@ -71,14 +90,16 @@ public sealed class CodexAgentArgumentBuilderTests
         Assert.Contains("approval_policy=\"never\"", args);
     }
 
+    // The exec/one-shot path runs fully unattended: approval_policy="never" is emitted unconditionally
+    // (the prior RequiresApproval gate was removed), so a CLI turn never blocks waiting for approval.
     [Fact]
-    public void ApprovalsRequiredOmitsNeverPolicy()
+    public void OneShotAlwaysEmitsNeverApprovalPolicy()
     {
         IReadOnlyList<string> args = CodexAgentArgumentBuilder.Build(
             Spec(canWrite: false, requiresApproval: true, AgentEffortLevel.Low),
             AgentSessionMode.OneShot);
 
-        Assert.DoesNotContain("approval_policy=\"never\"", args);
+        Assert.Contains("approval_policy=\"never\"", args);
     }
 
     [Fact]

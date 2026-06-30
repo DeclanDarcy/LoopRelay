@@ -408,7 +408,7 @@ public sealed class ExecutionSessionServiceTests
             new ExecutionStartRequest());
 
         Assert.NotNull(provider.LastPrompt);
-        Assert.Contains("then write .agents/handoffs/handoff.md with:", provider.LastPrompt.Text);
+        Assert.Contains("start executing the first milestone", provider.LastPrompt.Text);
     }
 
     [Fact]

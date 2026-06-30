@@ -9,5 +9,5 @@ public sealed class EnvironmentAgentExecutableResolver : IAgentExecutableResolve
     public string Resolve() =>
         Environment.GetEnvironmentVariable(ExecutableEnvironmentVariable) is { Length: > 0 } path
             ? path
-            : "codex";
+            : throw new Exception($"Environment variable {ExecutableEnvironmentVariable} was not found.");
 }

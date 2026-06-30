@@ -188,7 +188,7 @@ public sealed class PromptAuthorityTests
     {
         "start executing the first milestone",
         "continue executing the current milestone",
-        "then write .agents/handoffs/handoff.md with:",
+        "Capture only the essential operational knowledge gained during this slice",
         "Each milestone markdown should be formatted such that progress can be tracked using checkboxes for itemized work",
         "extract every piece of information that should persist beyond the current session",
         "it evolves into the authoritative description of both the remaining work and everything learned while executing it",

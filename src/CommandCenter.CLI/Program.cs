@@ -1,3 +1,4 @@
+using System.Text;
 using CommandCenter.Agents.Abstractions;
 using CommandCenter.Agents.Extensions;
 using CommandCenter.Agents.Services;
@@ -7,6 +8,20 @@ using CommandCenter.Core.Repositories;
 using CommandCenter.Orchestration.Abstractions;
 using CommandCenter.Orchestration.Services;
 using Microsoft.Extensions.DependencyInjection;
+
+// Codex output and our own messages contain non-ASCII text (curly quotes, em dashes). Decode the codex
+// child process' stdout and render our console output as UTF-8 instead of the host's legacy OEM code
+// page, which would otherwise show mojibake (e.g. "I'll" -> "IΓÇÖll"). Console.OutputEncoding is also the
+// code page the redirected child stdout reader inherits, so this fixes the decode at the source too.
+// Guarded for when output is redirected to a file/pipe (no console code page to set).
+try
+{
+    Console.OutputEncoding = Encoding.UTF8;
+}
+catch (IOException)
+{
+    // Output is redirected and has no console to reconfigure — safe to ignore.
+}
 
 if (!CliArguments.TryParse(args, out Repository repository, out string error))
 {
@@ -27,6 +42,7 @@ var store = provider.GetRequiredService<IArtifactStore>();
 var runtime = provider.GetRequiredService<IAgentRuntime>();
 var router = provider.GetRequiredService<IDecisionSessionRouter>();
 var processRunner = provider.GetRequiredService<IProcessRunner>();
+var executableResolver = provider.GetRequiredService<IAgentExecutableResolver>();
 
 var artifacts = new LoopArtifacts(store, repository);
 var gate = new MilestoneGate(store, repository);
@@ -45,6 +61,10 @@ Console.CancelKeyPress += (_, e) =>
 };
 
 console.Info($"CommandCenter.CLI starting for {repository.Path}");
+// Surface which codex binary is actually launched: a batch shim (e.g. codex.cmd) does NOT forward the
+// stdin EOF that `codex exec -` needs to begin, so it hangs. A native codex.exe (set CODEX_EXECUTABLE)
+// works. This line lets you confirm at a glance which one the loop will use.
+console.Info($"Codex executable: {executableResolver.Resolve()}");
 
 LoopOutcome outcome;
 try

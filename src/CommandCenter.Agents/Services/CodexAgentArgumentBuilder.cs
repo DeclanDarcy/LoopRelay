@@ -50,18 +50,11 @@ public static class CodexAgentArgumentBuilder
             "--json",
             "--cd",
             workingDirectory,
-            "--sandbox",
-            sandbox
+            "-c",
+            "approval_policy=\"never\"",
+            "-c",
+            $"model_reasoning_effort=\"{MapEffort(spec.Effort)}\""
         };
-
-        if (!spec.Sandbox.RequiresApproval)
-        {
-            arguments.Add("-c");
-            arguments.Add("approval_policy=\"never\"");
-        }
-
-        arguments.Add("-c");
-        arguments.Add($"model_reasoning_effort=\"{MapEffort(spec.Effort)}\"");
 
         foreach (KeyValuePair<string, string> option in spec.StartupOptions)
         {

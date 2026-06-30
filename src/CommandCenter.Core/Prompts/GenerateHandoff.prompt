@@ -1,0 +1,10 @@
+Write .agents/handoffs/handoff.md.
+Assume the next decision agent already has the complete project plan.
+Capture only the essential operational knowledge gained during this slice.
+Focus on where execution refined, validated, challenged, or otherwise changed the understanding of the planned work.
+Include:
+- meaningful changes to the project's operational understanding
+- active decisions that continue to shape future execution
+- unresolved questions or newly discovered risks
+- the single recommended next objective
+Exclude implementation history, routine progress, and details that do not materially affect future decisions.

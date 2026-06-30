@@ -11,6 +11,7 @@ internal sealed class AgentProcess(Process process) : IAgentProcess
         new(TaskCreationOptions.RunContinuationsAsynchronously);
     private bool disposed;
     private bool inputCompleted;
+    private Task? errorDrain;
 
     public AgentProcessState State { get; private set; } = AgentProcessState.Running;
 
@@ -36,6 +37,33 @@ internal sealed class AgentProcess(Process process) : IAgentProcess
     public void StartCompletionObservation()
     {
         _ = Task.Run(ObserveExitAsync);
+    }
+
+    /// <summary>
+    /// Continuously drains the redirected standard-error stream so its OS pipe buffer can never fill.
+    /// A redirected stream that nobody reads deadlocks the child once it writes past the buffer (a few KB);
+    /// codex's non-JSON <c>exec</c> output is verbose enough to hit this on a real prompt, which wedges the
+    /// whole turn (the turn completes only when stdout ends, and a blocked child can never reach that).
+    /// The content is discarded — stdout carries the turn output; this exists purely to keep the pipe moving.
+    /// </summary>
+    public void StartErrorDrain()
+    {
+        errorDrain ??= Task.Run(DrainStandardErrorAsync);
+    }
+
+    private async Task DrainStandardErrorAsync()
+    {
+        try
+        {
+            char[] buffer = new char[4096];
+            while (await process.StandardError.ReadAsync(buffer.AsMemory()).ConfigureAwait(false) > 0)
+            {
+            }
+        }
+        catch
+        {
+            // The process exited or the stream closed during teardown — nothing left to drain.
+        }
     }
 
     public async Task WritePromptAsync(string text, CancellationToken cancellationToken = default)

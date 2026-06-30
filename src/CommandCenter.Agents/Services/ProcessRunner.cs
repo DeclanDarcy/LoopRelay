@@ -145,6 +145,9 @@ public sealed class ProcessRunner : IProcessRunner
 
         AgentProcess process = StartAgentProcess(startInfo, fileName);
         process.StartCompletionObservation();
+        // Drain stderr so a verbose child (e.g. codex `exec` without --json) cannot deadlock by filling
+        // the unread stderr pipe buffer — nothing else reads this interactive process's standard error.
+        process.StartErrorDrain();
 
         return Task.FromResult<IAgentProcess>(process);
     }
