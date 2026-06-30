@@ -96,9 +96,53 @@ internal sealed class DecisionSession(
         seeded = true;
     }
 
-    // Implemented in Task 9. Throwing keeps the Continue-only build honest until then.
-    private Task TransferAsync(CancellationToken cancellationToken) =>
-        throw new NotImplementedException("Transfer recycle is implemented in Task 9.");
+    /// <summary>
+    /// Transfer recycle, mirroring RepositoryOrchestrator.PrepareTransferAsync: extract an operational delta
+    /// from the warm process, close it, rewrite operational_context.md via a one-shot operational turn, then
+    /// open a FRESH decision process and seed it from the rewritten context.
+    /// </summary>
+    private async Task TransferAsync(CancellationToken cancellationToken)
+    {
+        console.Phase("Decision: Transfer/ProduceOperationalDelta");
+        AgentTurnResult delta = await session!.RunTurnAsync(
+            ProduceOperationalDelta.Text, StreamToConsole, cancellationToken);
+        if (delta.State != AgentTurnState.Completed)
+        {
+            await CloseAsync();
+            throw new LoopStepException($"Operational-delta turn ended in state {delta.State}.");
+        }
+
+        await artifacts.WriteAsync(OrchestrationArtifactPaths.OperationalDelta, delta.Output);
+
+        // Close the old process (resets seeded + token pressure).
+        await CloseAsync();
+
+        console.Phase("Decision: Transfer/UpdateOperationalContext");
+        AgentTurnResult update = await runtime.RunOneShotAsync(
+            AgentSpecs.Operational(repository, AgentEffortLevel.High, identifier: "xhigh"),
+            UpdateOperationalContext.Text,
+            StreamToConsole,
+            cancellationToken);
+        if (update.State != AgentTurnState.Completed)
+        {
+            throw new LoopStepException($"Update-operational-context turn ended in state {update.State}.");
+        }
+
+        // Open a fresh decision process and seed from the rewritten context.
+        session = await runtime.OpenSessionAsync(AgentSpecs.Decision(repository), cancellationToken);
+        string newContext = await artifacts.ReadAsync(OrchestrationArtifactPaths.OperationalContext) ?? string.Empty;
+
+        console.Phase("Decision: Transfer/StartDecisionSessionFromTransfer");
+        AgentTurnResult reseed = await session.RunTurnAsync(
+            StartDecisionSessionFromTransfer.Render(newContext), onChunk: null, cancellationToken);
+        if (reseed.State != AgentTurnState.Completed)
+        {
+            await CloseAsync();
+            throw new LoopStepException($"Transfer reseed turn ended in state {reseed.State}.");
+        }
+
+        seeded = true;
+    }
 
     private async Task CloseAsync()
     {

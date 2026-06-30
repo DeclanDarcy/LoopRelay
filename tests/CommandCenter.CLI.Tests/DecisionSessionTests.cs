@@ -1,3 +1,4 @@
+using CommandCenter.Agents.Models;
 using CommandCenter.Cli;
 using CommandCenter.Core.Artifacts;
 using CommandCenter.Core.Repositories;
@@ -91,5 +92,42 @@ public class DecisionSessionTests
         await session.DisposeAsync();
 
         Assert.Equal(1, rt.ClosedSessions);
+    }
+
+    [Fact]
+    public async Task Run_WhenTokensExceedThreshold_RecyclesViaTransfer()
+    {
+        // Threshold 1 forces Transfer on the SECOND round (round 1 seeds & accrues tokens).
+        var (session, rt, store, repo, con) = New(transferThreshold: 1);
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
+
+        // Round 1: seed + propose (propose accrues tokens so round 2 routes Transfer).
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
+            new AgentTurnResult(0, AgentTurnState.Completed, "D1", new AgentTokenUsage(10, 10))));
+        await session.RunAsync(CancellationToken.None);
+
+        // Round 2: Transfer => produce-delta (warm) + close + update-context (one-shot) + reseed-from-transfer + propose.
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) => Turns.Completed("DELTA-TEXT")));      // ProduceOperationalDelta
+        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                            // UpdateOperationalContext
+        {
+            s.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-1").Wait();
+            return Turns.Completed("updated context");
+        }));
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>                                       // reseed from transfer
+        {
+            Assert.Contains("OPCTX-1", prompt);
+            return Turns.Completed("reseeded");
+        }));
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D2")));                   // propose
+
+        await session.RunAsync(CancellationToken.None);
+
+        Assert.Equal("DELTA-TEXT", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalDelta)));
+        Assert.Equal("D2", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.Decisions)));
+        Assert.Equal(2, rt.OpenSessions);   // original + recycled
+        Assert.Equal(1, rt.ClosedSessions); // original closed during recycle
     }
 }
