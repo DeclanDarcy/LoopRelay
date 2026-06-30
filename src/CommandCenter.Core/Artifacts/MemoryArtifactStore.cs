@@ -85,6 +85,17 @@ public sealed class MemoryArtifactStore : IArtifactStore
             return fileName.EndsWith(searchPattern[1..], StringComparison.OrdinalIgnoreCase);
         }
 
+        // Support a single embedded wildcard, e.g. "m*.md" → prefix "m", suffix ".md".
+        int star = searchPattern.IndexOf('*');
+        if (star > 0)
+        {
+            string prefix = searchPattern[..star];
+            string suffix = searchPattern[(star + 1)..];
+            return fileName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                && fileName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
+                && fileName.Length >= prefix.Length + suffix.Length;
+        }
+
         return string.Equals(fileName, searchPattern, StringComparison.OrdinalIgnoreCase);
     }
 }
