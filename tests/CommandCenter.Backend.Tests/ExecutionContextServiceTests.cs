@@ -89,6 +89,28 @@ public sealed class ExecutionContextServiceTests
         Assert.Empty(context.Diagnostics.ValidationErrors);
         Assert.Contains(".agents/operational_context.md", context.Diagnostics.MissingOptionalArtifacts);
         Assert.Contains(".agents/handoffs/handoff.md", context.Diagnostics.MissingOptionalArtifacts);
+        Assert.Contains(".agents/decisions/decisions.md", context.Diagnostics.MissingOptionalArtifacts);
+    }
+
+    [Fact]
+    public async Task DecisionsArtifactIsIncludedWhenPresent()
+    {
+        Harness harness = await CreateHarnessAsync();
+        await WriteAsync(harness.Repository, ".agents/plan.md", "plan");
+        await WriteAsync(harness.Repository, ".agents/milestones/m1.md", "milestone");
+        await WriteAsync(harness.Repository, ".agents/decisions/decisions.md", "DEC-0001: raw decision text");
+
+        ExecutionContext context = await harness.ContextService.BuildContextAsync(
+            harness.Repository.Id);
+
+        CommandCenter.Core.Artifacts.LoadedArtifact artifact = Assert.Single(
+            context.Artifacts,
+            artifact => artifact.Role == "Decisions");
+        Assert.Equal(".agents/decisions/decisions.md", artifact.RelativePath);
+        Assert.Equal("DEC-0001: raw decision text", artifact.Content);
+        Assert.DoesNotContain(".agents/decisions/decisions.md", context.Diagnostics.MissingOptionalArtifacts);
+        Assert.Empty(context.Diagnostics.ValidationErrors);
+        Assert.False(context.Diagnostics.LaunchBlocked);
     }
 
     [Fact]

@@ -690,7 +690,9 @@ public sealed class ExecutionSessionServiceTests
         Assert.NotNull(manifest);
         Assert.Equal(summary.SessionId, manifest.SessionId);
         Assert.Contains("start executing the first milestone", manifest.PromptText);
-        Assert.Contains("operational context", manifest.PromptText);
+        // Operational context is delivered onto the context and recorded in the manifest (below), but it is
+        // no longer injected into the prompt text — it belongs to the decision/codex session.
+        Assert.DoesNotContain("operational context", manifest.PromptText);
         Assert.Equal("DeliveredAsRequested", manifest.ProviderDeliveryStatus);
         Assert.Empty(manifest.ProviderAdjustments);
         Assert.Null(manifest.DivergenceReason);
@@ -1439,7 +1441,9 @@ public sealed class ExecutionSessionServiceTests
         Assert.Equal("DeliveredAsRequested", manifest.ProviderDeliveryStatus);
         Assert.Empty(manifest.ProviderAdjustments);
         Assert.Contains(ExecutionPromptManifest.NoProviderDivergenceSignalDiagnostic, manifest.Diagnostics);
-        Assert.Contains("launched operational context with updated evidence", manifest.PromptText);
+        // The manifest snapshots the launch-time operational_context — distinct from preview, verified via the
+        // delivered-artifact character counts below — but operational_context is no longer in the prompt text.
+        Assert.DoesNotContain("launched operational context with updated evidence", manifest.PromptText);
         Assert.DoesNotContain("preview operational context", manifest.PromptText);
         Assert.Equal("launched operational context with updated evidence".Length, deliveredOperationalContext.CharacterCount);
         Assert.Equal(deliveredOperationalContext.CharacterCount, requestedOperationalContext.CharacterCount);

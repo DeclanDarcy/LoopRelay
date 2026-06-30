@@ -12,7 +12,7 @@ namespace CommandCenter.Backend.Tests;
 public sealed class ExecutionPromptBuilderTests
 {
     [Fact]
-    public void StartPromptRendersCatalogBodyWithComposedPlanContext()
+    public void StartPromptRendersCatalogBodyWithExactPlanText()
     {
         ExecutionPrompt prompt = new ExecutionPromptBuilder().Build(CreateContext());
 
@@ -21,9 +21,8 @@ public sealed class ExecutionPromptBuilderTests
         Assert.Contains("then write .agents/handoffs/handoff.md with:", prompt.Text);
         Assert.DoesNotContain("continue executing the current milestone", prompt.Text);
 
-        // Plan + Milestone artifact contents compose the catalog {plan} hole.
+        // The exact .agents/plan.md text fills the catalog {plan} hole — nothing is composed into it.
         Assert.Contains("plan content", prompt.Text);
-        Assert.Contains("milestone content", prompt.Text);
 
         // The obsolete literal chrome (headers, instruction block, inline diagnostics) is gone.
         Assert.DoesNotContain("## Repository", prompt.Text);
@@ -46,13 +45,14 @@ public sealed class ExecutionPromptBuilderTests
     }
 
     [Fact]
-    public void ContinuePromptRendersGovernedProjectionIntoDecisionsHole()
+    public void ContinuePromptRendersRawDecisionsArtifactAndExcludesOperationalContext()
     {
         ExecutionPrompt prompt = new ExecutionPromptBuilder().Build(CreateContext(
             optionalArtifacts:
             [
                 Artifact("OperationalContext", ".agents/operational_context.md", "context content"),
-                Artifact("CurrentHandoff", ".agents/handoffs/handoff.md", "handoff content")
+                Artifact("CurrentHandoff", ".agents/handoffs/handoff.md", "handoff content"),
+                Artifact("Decisions", ".agents/decisions/decisions.md", "DEC-0001: keep the raw decisions text verbatim")
             ],
             decisionProjection: ProjectionWithGovernance()));
 
@@ -60,13 +60,17 @@ public sealed class ExecutionPromptBuilderTests
         Assert.Contains("continue executing the current milestone", prompt.Text);
         Assert.DoesNotContain("start executing the first milestone", prompt.Text);
 
-        // Operational context folds into {plan}; handoff fills {handoff}; the structured projection
-        // (NOT a raw decisions.md artifact) is rendered into {decisions}.
-        Assert.Contains("context content", prompt.Text);
+        // {handoff} carries the exact handoff text; {decisions} carries the exact raw decisions.md text.
         Assert.Contains("handoff content", prompt.Text);
-        Assert.Contains("Constraints:", prompt.Text);
-        Assert.Contains("- DEC-0001 (RepositoryConvention, Architectural): Use repository artifacts", prompt.Text);
-        Assert.Contains("Architecture Rules:", prompt.Text);
+        Assert.Contains("DEC-0001: keep the raw decisions text verbatim", prompt.Text);
+
+        // Operational context belongs to the decision/codex session and must NOT be injected into the prompt.
+        Assert.DoesNotContain("context content", prompt.Text);
+
+        // The structured projection feeds launch-blocking gating only — it is never rendered into the prompt.
+        Assert.DoesNotContain("Constraints:", prompt.Text);
+        Assert.DoesNotContain("Architecture Rules:", prompt.Text);
+        Assert.DoesNotContain("RepositoryConvention", prompt.Text);
     }
 
     [Fact]
@@ -76,15 +80,16 @@ public sealed class ExecutionPromptBuilderTests
             optionalArtifacts:
             [
                 Artifact("CurrentHandoff", ".agents/handoffs/handoff.md", "handoff content"),
+                Artifact("Decisions", ".agents/decisions/decisions.md", "decisions content"),
                 Artifact("OperationalContext", ".agents/operational_context.md", "context content")
             ]));
 
         Assert.Equal(
             [
                 ".agents/plan.md",
-                ".agents/milestones/m2.md",
                 ".agents/operational_context.md",
-                ".agents/handoffs/handoff.md"
+                ".agents/handoffs/handoff.md",
+                ".agents/decisions/decisions.md"
             ],
             prompt.Metadata.IncludedArtifactPaths);
     }
@@ -125,7 +130,7 @@ public sealed class ExecutionPromptBuilderTests
         Assert.Equal(PromptSessionRole.OperationalExecution, provenance.SessionRole);
         Assert.Equal("Start", provenance.WorkflowPhase);
         Assert.Equal(
-            [".agents/plan.md", ".agents/milestones/m2.md"],
+            [".agents/plan.md"],
             provenance.InputArtifactIdentities);
         // Both operational turns are directed to write the current handoff.
         Assert.Equal([".agents/handoffs/handoff.md"], provenance.OutputArtifactIdentities);
@@ -189,8 +194,7 @@ public sealed class ExecutionPromptBuilderTests
     {
         var artifacts = new List<LoadedArtifact>
         {
-            Artifact("Plan", ".agents/plan.md", "plan content"),
-            Artifact("Milestone", ".agents/milestones/m2.md", "milestone content")
+            Artifact("Plan", ".agents/plan.md", "plan content")
         };
         if (optionalArtifacts is not null)
         {

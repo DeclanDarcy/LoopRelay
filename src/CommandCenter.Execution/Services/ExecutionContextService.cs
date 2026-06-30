@@ -21,6 +21,10 @@ public sealed class ExecutionContextService(
     private const string OperationalContextPath = ".agents/operational_context.md";
     private const string CurrentHandoffPath = ".agents/handoffs/handoff.md";
 
+    // Canonical live decisions path (mirrors OrchestrationArtifactPaths.Decisions). Hardcoded rather than
+    // referenced because the Execution layer must not depend on Orchestration (ArchitectureLayeringTests).
+    private const string DecisionsPath = ".agents/decisions/decisions.md";
+
     public async Task<ExecutionContext> BuildContextAsync(Guid repositoryId)
     {
         Repository repository = await GetRepositoryAsync(repositoryId);
@@ -47,6 +51,10 @@ public sealed class ExecutionContextService(
 
         await AddOptionalArtifactAsync(repository, artifacts, "OperationalContext", OperationalContextPath, missingOptionalArtifacts);
         await AddOptionalArtifactAsync(repository, artifacts, "CurrentHandoff", CurrentHandoffPath, missingOptionalArtifacts);
+
+        // Raw decisions.md feeds the prompt's {decisions} hole verbatim. The structured projection built
+        // below stays only for launch-blocking conflict gating — it is no longer rendered into the prompt.
+        await AddOptionalArtifactAsync(repository, artifacts, "Decisions", DecisionsPath, missingOptionalArtifacts);
 
         try
         {
