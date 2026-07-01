@@ -30,20 +30,17 @@ public class DecisionSessionTests
     private static string Resolve(Repository r, string rel) => ArtifactPath.ResolveRepositoryPath(r, rel);
 
     [Fact]
-    public async Task Run_SeedsOnce_Proposes_PersistsAndVerifiesDecisions()
+    public async Task Run_FreshProcess_DeliversContextInline_Proposes_PersistsAndVerifiesDecisions()
     {
         var (session, rt, store, repo, con) = New();
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "HANDOFF");
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>   // seed
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>   // single proposal turn on the fresh process
         {
+            // No separate seed turn (StartDecisionSession is gone): the fresh process is primed with the
+            // operational context in THIS turn, and a prior handoff is present, so decisions.md is the NEXT
+            // execution agent's system prompt (context + GenerateSystemPromptForNextExecutionAgent.Render(handoff)).
             Assert.Contains("OPCTX", prompt);
-            return Turns.Completed("seeded");
-        }));
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>   // propose
-        {
-            // A prior handoff is present, so decisions.md is generated as the NEXT execution agent's system
-            // prompt, folding in the handoff (GenerateSystemPromptForNextExecutionAgent.Render(handoff)).
             Assert.Contains("HANDOFF", prompt);
             Assert.Contains("next execution agent", prompt);
             return Turns.Completed("DECISIONS-TEXT");
@@ -62,15 +59,12 @@ public class DecisionSessionTests
     {
         var (session, rt, store, repo, con) = New();
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
-        // No handoff of any kind exists: this is the first pass, so decisions.md is the FIRST execution agent's
-        // system prompt (GenerateSystemPromptForFirstExecutionAgent), generated from scratch — no throw.
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>   // seed
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>   // single proposal turn (fresh, no handoff)
         {
+            // No handoff of any kind exists: this is the first pass, so decisions.md is the FIRST execution agent's
+            // system prompt (GenerateSystemPromptForFirstExecutionAgent), with the operational context delivered
+            // inline (no separate seed turn) — no throw.
             Assert.Contains("OPCTX", prompt);
-            return Turns.Completed("seeded");
-        }));
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>   // propose
-        {
             Assert.Contains("first execution agent", prompt);
             return Turns.Completed("FIRST-SYS-PROMPT");
         }));
@@ -86,11 +80,10 @@ public class DecisionSessionTests
     public async Task Run_WhenOperationalContextEmpty_Warns()
     {
         var (session, rt, store, repo, con) = New();
-        // Neither plan.md nor operational_context.md exists: EnsureOperationalContextAsync writes nothing,
-        // so the operational-context read yields empty and the degraded condition must be surfaced via Warn.
+        // Neither plan.md nor operational_context.md exists: EnsureOperationalContextAsync writes nothing, so the
+        // operational-context read (when priming the fresh process) yields empty and the degraded condition is Warned.
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "HANDOFF");
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));   // seed
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D1")));        // propose
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D1")));   // single proposal turn
 
         await session.RunAsync(CancellationToken.None);
 
@@ -98,14 +91,21 @@ public class DecisionSessionTests
     }
 
     [Fact]
-    public async Task Run_SecondRound_ReusesWarmSession_NoReseed()
+    public async Task Run_SecondRound_ReusesWarmSession_NoContextResend()
     {
         var (session, rt, store, repo, _) = New();
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D1")));
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D2")));  // no second seed
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>   // round 1: fresh process, context primed inline
+        {
+            Assert.Contains("OPCTX", prompt);
+            return Turns.Completed("D1");
+        }));
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>   // round 2: warm reuse — handoff delta only, NO context resend
+        {
+            Assert.DoesNotContain("OPCTX", prompt);
+            return Turns.Completed("D2");
+        }));
 
         await session.RunAsync(CancellationToken.None);
         await session.RunAsync(CancellationToken.None);
@@ -120,7 +120,6 @@ public class DecisionSessionTests
         var (session, rt, store, repo, _) = New();
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));
 
         await Assert.ThrowsAsync<LoopStepException>(() => session.RunAsync(CancellationToken.None));
@@ -133,7 +132,6 @@ public class DecisionSessionTests
         var (session, rt, store, repo, _) = New();
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D1")));
 
         await session.RunAsync(CancellationToken.None);
@@ -152,25 +150,24 @@ public class DecisionSessionTests
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
 
-        // Round 1: seed + propose (propose accrues tokens so round 2 routes Transfer).
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
+        // Round 1: propose on the fresh process (accrues tokens so round 2 routes Transfer).
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
             new AgentTurnResult(0, AgentTurnState.Completed, "D1", new AgentTokenUsage(10, 10))));
         await session.RunAsync(CancellationToken.None);
 
-        // Round 2: Transfer => produce-delta (warm) + close + update-context (one-shot) + reseed-from-transfer + propose.
+        // Round 2: Transfer => produce-delta (warm) + close + update-context (one-shot) + propose. The post-transfer
+        // proposal primes the fresh process with the just-evolved context inline — no reseed turn.
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) => Turns.Completed("DELTA-TEXT")));      // ProduceOperationalDelta
         rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                            // UpdateOperationalContext
         {
             s.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-1").Wait();
             return Turns.Completed("updated context");
         }));
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>                                       // reseed from transfer
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>                                       // propose (context primed inline)
         {
             Assert.Contains("OPCTX-1", prompt);
-            return Turns.Completed("reseeded");
+            return Turns.Completed("D2");
         }));
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D2")));                   // propose
 
         await session.RunAsync(CancellationToken.None);
 
@@ -191,21 +188,19 @@ public class DecisionSessionTests
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
 
-        // Round 1: seed + propose. Occupancy 20 (<< guard 230,400); R=300000, n=1.
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
+        // Round 1: propose. Occupancy 20 (<< guard 230,400); R=300000, n=1.
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
             new AgentTurnResult(0, AgentTurnState.Completed, "D1", new AgentTokenUsage(10, 10))));
         await session.RunAsync(CancellationToken.None);
 
-        // Round 2: eNext 600000 >= (R 300000 + C 250000 seed)/1 = 550000 -> economic Transfer (occupancy 20 << guard).
+        // Round 2: eNext 600000 >= (R 300000 + C 250000 default)/1 = 550000 -> economic Transfer (occupancy 20 << guard).
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));   // ProduceOperationalDelta
         rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                     // UpdateOperationalContext
         {
             s.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-1").Wait();
             return Turns.Completed("updated");
         }));
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("reseeded")));      // reseed from transfer
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D2")));            // propose
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D2")));            // propose (context inline)
         await session.RunAsync(CancellationToken.None);
 
         Assert.Equal("DELTA-TEXT", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDelta(1))));
@@ -224,8 +219,7 @@ public class DecisionSessionTests
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H");
 
-        // Round 1: seed + propose (20 tokens).
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
+        // Round 1: propose (20 tokens).
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
             new AgentTurnResult(0, AgentTurnState.Completed, "D1", new AgentTokenUsage(10, 10))));
         await session.RunAsync(CancellationToken.None);
@@ -236,7 +230,8 @@ public class DecisionSessionTests
         await session.RunAsync(CancellationToken.None);
 
         // Round 3: still Continue (the amortized average is dominated by the 250k seed). The extra turns below would
-        // satisfy a (wrong) Transfer path, so a regression that transferred is caught by the asserts, not a throw.
+        // satisfy a (wrong) Transfer path (delta + update + propose), so a regression that transferred is caught by
+        // the asserts, not a throw.
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>                                     // Continue: proposal | Transfer: delta
             new AgentTurnResult(0, AgentTurnState.Completed, "D3", new AgentTokenUsage(10, 10))));
         rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                     // Transfer-only: UpdateOperationalContext
@@ -244,7 +239,6 @@ public class DecisionSessionTests
             s.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-1").Wait();
             return Turns.Completed("updated");
         }));
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("reseeded")));      // Transfer-only: reseed
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D3T")));           // Transfer-only: proposal
         await session.RunAsync(CancellationToken.None);
 
@@ -271,8 +265,7 @@ public class DecisionSessionTests
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
 
-        // Round 1: seed + propose (occupancy 20 -> round 2 crosses the guard).
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
+        // Round 1: propose (occupancy 20 -> round 2 crosses the guard).
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
             new AgentTurnResult(0, AgentTurnState.Completed, "D1", new AgentTokenUsage(10, 10))));
         await session.RunAsync(CancellationToken.None);
@@ -289,12 +282,11 @@ public class DecisionSessionTests
             s.WriteAsync(sandbox.Resolve(OrchestrationArtifactPaths.OperationalContext), "OPCTX-1").Wait();
             return Turns.Completed("updated");
         }));
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>                                 // reseed from transfer
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>                                 // propose (context primed inline)
         {
             Assert.Contains("OPCTX-1", prompt);
-            return Turns.Completed("reseeded");
+            return Turns.Completed("D2");
         }));
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D2")));             // propose
         await session.RunAsync(CancellationToken.None);
 
         // The evolution one-shot ran against the SANDBOX root, not the repository working directory.
@@ -333,13 +325,13 @@ public class DecisionSessionTests
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
 
-        // Round 1: seed + propose at occupancy 22 (>= guard 20) so every subsequent round routes Transfer.
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
+        // Round 1: propose at occupancy 22 (>= guard 20) so every subsequent round routes Transfer.
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
             new AgentTurnResult(0, AgentTurnState.Completed, "D1", new AgentTokenUsage(11, 11))));
         await session.RunAsync(CancellationToken.None);
 
-        // Three transfers producing 100/200/300-char contexts: baseline (no warn), +1 (no warn), +2 (WARN).
+        // Three transfers producing 100/200/300-char contexts: baseline (no warn), +1 (no warn), +2 (WARN). Each
+        // transfer is delta (warm) + update (one-shot) + propose (fresh, context primed inline) — no reseed turn.
         foreach (string context in new[] { new string('x', 100), new string('x', 200), new string('x', 300) })
         {
             string evolved = context;
@@ -349,7 +341,6 @@ public class DecisionSessionTests
                 s.WriteAsync(sandbox.Resolve(OrchestrationArtifactPaths.OperationalContext), evolved).Wait();
                 return Turns.Completed("updated");
             }));
-            rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("reseeded")));     // reseed
             rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>                                    // propose (occupancy 22)
                 new AgentTurnResult(0, AgentTurnState.Completed, "D", new AgentTokenUsage(11, 11))));
             await session.RunAsync(CancellationToken.None);
@@ -374,20 +365,18 @@ public class DecisionSessionTests
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
 
-        // Round 1: seed + propose (occupancy 20 -> round 2 crosses the guard).
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
+        // Round 1: propose (occupancy 20 -> round 2 crosses the guard).
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
             new AgentTurnResult(0, AgentTurnState.Completed, "D1", new AgentTokenUsage(10, 10))));
         await session.RunAsync(CancellationToken.None);
 
-        // Round 2: Transfer.
+        // Round 2: Transfer (delta + update + propose; no reseed turn).
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));   // ProduceOperationalDelta
         rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                     // UpdateOperationalContext
         {
             s.WriteAsync(sandbox.Resolve(OrchestrationArtifactPaths.OperationalContext), "OPCTX-1").Wait();
             return Turns.Completed("updated");
         }));
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("reseeded")));      // reseed
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D2")));            // propose
         await session.RunAsync(CancellationToken.None);
 
@@ -413,7 +402,6 @@ public class DecisionSessionTests
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
 
-        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
             new AgentTurnResult(0, AgentTurnState.Completed, "D1", new AgentTokenUsage(10, 10))));
         await session.RunAsync(CancellationToken.None);
@@ -424,7 +412,7 @@ public class DecisionSessionTests
             s.WriteAsync(sandbox.Resolve(OrchestrationArtifactPaths.OperationalContext), "OPCTX-1").Wait();
             return Turns.Completed("updated");
         }));
-        // The reseed/propose turns are never reached because the archive throws first.
+        // The propose turn is never reached because the archive throws first.
 
         await Assert.ThrowsAsync<LoopStepException>(() => session.RunAsync(CancellationToken.None));
 

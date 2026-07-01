@@ -12,11 +12,14 @@ namespace CommandCenter.Cli;
 /// <summary>
 /// The decision-making codex session, routed by the SessionRouter. Mirrors RepositoryOrchestrator's
 /// RunDecisionAsync + the auto-submit half of BeginSubmitDecisionsAsync (a fully-automated CLI submits
-/// the agent's proposal verbatim). Owns ONE warm read-only process reused across iterations; seeds once
-/// with StartDecisionSession(operationalContext); proposes the NEXT execution agent's system prompt —
-/// GenerateSystemPromptForFirstExecutionAgent on the first pass (no handoff yet), else
-/// GenerateSystemPromptForNextExecutionAgent(latestHandoff); persists the proposal to decisions.{N:0000}.md
-/// AND canonical decisions.md; verifies decisions.md exists.
+/// the agent's proposal verbatim). Owns ONE warm read-only process reused across iterations. A FRESH process
+/// (first pass, or the recycle after a Transfer) is primed with the operational context inline in its first
+/// proposal turn — there is NO separate seed turn (the legacy StartDecisionSession* overseer seed, which framed
+/// the agent as an executor "waiting for the first session report", is not used in this loop). It proposes the
+/// execution agent's system prompt — GenerateSystemPromptForFirstExecutionAgent on the first pass (no handoff
+/// yet), else GenerateSystemPromptForNextExecutionAgent(latestHandoff) (a post-Transfer process still has a
+/// handoff, so it is a NEXT proposal, not a first) — persists the proposal to decisions.{N:0000}.md AND
+/// canonical decisions.md; verifies decisions.md exists.
 /// </summary>
 internal sealed class DecisionSession(
     IAgentRuntime runtime,
@@ -62,18 +65,13 @@ internal sealed class DecisionSession(
             await TransferAsync(cancellationToken);
         }
 
-        await EnsureSeededAsync(cancellationToken);
+        session ??= await runtime.OpenSessionAsync(AgentSpecs.Decision(repository), cancellationToken);
 
         (string? handoff, _) = await artifacts.ReadLatestHandoffAsync();
-        // decisions.md IS the execution agent's system prompt now. The first pass (no prior handoff) generates
-        // the first agent's system prompt from scratch; every later pass folds the previous execution session's
-        // handoff into the next agent's system prompt.
-        string proposalPrompt = handoff is null
-            ? GenerateSystemPromptForFirstExecutionAgent.Text
-            : GenerateSystemPromptForNextExecutionAgent.Render(handoff);
+        string proposalPrompt = await BuildProposalPromptAsync(handoff);
 
         var proposalRenderer = new ConsoleTurnRenderer(console);
-        AgentTurnResult proposed = await session!.RunTurnAsync(
+        AgentTurnResult proposed = await session.RunTurnAsync(
             proposalPrompt, proposalRenderer.Stream, cancellationToken);
 
         if (proposed.State != AgentTurnState.Completed)
@@ -82,6 +80,9 @@ internal sealed class DecisionSession(
             throw new LoopStepException($"Decision turn ended in state {proposed.State}.");
         }
 
+        // The process now holds the operational context (delivered inline in this turn), so subsequent proposals
+        // on it are cheap handoff-only deltas.
+        seeded = true;
         RecordProposalCost(proposed.Usage);
         proposalRenderer.EchoIfSilent(proposed.Output);
 
@@ -96,12 +97,20 @@ internal sealed class DecisionSession(
         console.Info("New decisions.md verified.");
     }
 
-    private async Task EnsureSeededAsync(CancellationToken cancellationToken)
+    // decisions.md IS the execution agent's system prompt. The first pass (no prior handoff) authors the FIRST
+    // agent's system prompt; any pass with a handoff (including the first proposal on a post-Transfer process)
+    // authors the NEXT agent's, folding in the previous session's handoff. A FRESH process is also primed with
+    // the operational context in this same turn (there is no separate seed) — a WARM process already carries it
+    // from its first proposal, so its later proposals send only the handoff delta.
+    private async Task<string> BuildProposalPromptAsync(string? handoff)
     {
-        session ??= await runtime.OpenSessionAsync(AgentSpecs.Decision(repository), cancellationToken);
+        string baseline = handoff is null
+            ? GenerateSystemPromptForFirstExecutionAgent.Text
+            : GenerateSystemPromptForNextExecutionAgent.Render(handoff);
+
         if (seeded)
         {
-            return;
+            return baseline; // warm process: the operational context is already in this process's history
         }
 
         await artifacts.EnsureOperationalContextAsync();
@@ -109,25 +118,17 @@ internal sealed class DecisionSession(
 
         if (string.IsNullOrWhiteSpace(operationalContext))
         {
-            console.Warn("Operational context is empty — seeding the decision session with no context.");
+            console.Warn("Operational context is empty — the decision agent has no context to work from.");
         }
 
-        AgentTurnResult seed = await session.RunTurnAsync(
-            StartDecisionSession.Render(operationalContext), onChunk: null, cancellationToken);
-
-        if (seed.State != AgentTurnState.Completed)
-        {
-            await CloseAsync();
-            throw new LoopStepException($"Decision seed turn ended in state {seed.State}.");
-        }
-
-        seeded = true;
+        return $"{operationalContext}\n\n{baseline}";
     }
 
     /// <summary>
     /// Transfer recycle, mirroring RepositoryOrchestrator.PrepareTransferAsync: extract an operational delta
-    /// from the warm process, close it, rewrite operational_context.md via a one-shot operational turn, then
-    /// open a FRESH decision process and seed it from the rewritten context.
+    /// from the warm process, close it, and rewrite operational_context.md via a one-shot operational turn. The
+    /// fresh process is NOT reseeded here — RunAsync reopens it and its next proposal primes it with the just-
+    /// rewritten context inline (no legacy StartDecisionSession* turn), so this leaves the process closed.
     /// </summary>
     private async Task TransferAsync(CancellationToken cancellationToken)
     {
@@ -146,7 +147,7 @@ internal sealed class DecisionSession(
         await CloseAsync();
 
         console.Phase("Decision: Transfer/UpdateOperationalContext");
-        (AgentTurnResult update, string newContext) = await EvolveOperationalContextAsync(delta.Output, cancellationToken);
+        AgentTurnResult update = await EvolveOperationalContextAsync(delta.Output, cancellationToken);
 
         // Archive the consumed operational delta now that operational_context.md is successfully updated: rotate
         // .agents/operational_delta.md into a numbered .agents/deltas/ copy and remove the live file. Hard step —
@@ -168,31 +169,21 @@ internal sealed class DecisionSession(
             throw new LoopStepException("Transfer produced no operational_delta.md to archive.");
         }
 
-        // Open a fresh decision process and seed from the rewritten context.
-        session = await runtime.OpenSessionAsync(AgentSpecs.Decision(repository), cancellationToken);
+        // The fresh process is left CLOSED (seeded stays false): RunAsync reopens it and its next proposal primes
+        // it with the just-rewritten operational context inline (see BuildProposalPromptAsync). No reseed turn.
 
-        console.Phase("Decision: Transfer/StartDecisionSessionFromTransfer");
-        AgentTurnResult reseed = await session.RunTurnAsync(
-            StartDecisionSessionFromTransfer.Render(newContext), onChunk: null, cancellationToken);
-        if (reseed.State != AgentTurnState.Completed)
-        {
-            await CloseAsync();
-            throw new LoopStepException($"Transfer reseed turn ended in state {reseed.State}.");
-        }
-
-        seeded = true;
-
-        // Cost-aware accounting: record the MEASURED transfer cost (delta + evolution + reseed, same cost model)
-        // so the router's transfer-cost estimate (C) self-calibrates off reality. CloseAsync above reset the
-        // per-process reuse accounting for the fresh process; transferCost persists.
-        RecordTransferCost(costModel.Measure(delta.Usage) + costModel.Measure(update.Usage) + costModel.Measure(reseed.Usage));
+        // Cost-aware accounting: record the MEASURED transfer cost (delta + evolution) so the router's transfer-cost
+        // estimate (C) self-calibrates off reality. CloseAsync above reset the per-process reuse accounting; the
+        // fresh process's context-priming cost is captured by the next proposal's RecordProposalCost. transferCost
+        // persists across recycles.
+        RecordTransferCost(costModel.Measure(delta.Usage) + costModel.Measure(update.Usage));
     }
 
     // Stage 2 (mirrors RepositoryOrchestrator.EvolveOperationalContextAsync): evolve the operational context in an
     // ISOLATED sandbox workspace seeded with ONLY operational_context.md + operational_delta.md, so codex --cd
     // confines it there and it no longer re-explores the whole repo. The evolved context is copied back into the
-    // repo. Returns the update turn (for transfer-cost accounting) and the evolved context (for the reseed).
-    private async Task<(AgentTurnResult Update, string NewContext)> EvolveOperationalContextAsync(
+    // repo (where the next proposal reads it to prime the fresh process). Returns the update turn for cost accounting.
+    private async Task<AgentTurnResult> EvolveOperationalContextAsync(
         string deltaOutput, CancellationToken cancellationToken)
     {
         await using ISandboxWorkspace sandbox =
@@ -223,7 +214,7 @@ internal sealed class DecisionSession(
         string evolved = await artifacts.ReadAbsoluteAsync(sandboxContextPath) ?? string.Empty;
         await artifacts.WriteAsync(OrchestrationArtifactPaths.OperationalContext, evolved); // copy the evolved context back into the repo
         RecordOperationalContextHealth(evolved.Length);
-        return (update, evolved);
+        return update;
     }
 
     // Size-health guard (Stage 2, mirrors RepositoryOrchestrator.RecordOperationalContextHealth): warn on a

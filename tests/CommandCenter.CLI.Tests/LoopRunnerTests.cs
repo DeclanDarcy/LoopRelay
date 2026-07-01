@@ -62,11 +62,11 @@ public class LoopRunnerTests
         await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
         await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] task");
 
-        // Decision-first: the decision session seeds then proposes decisions.md (the first execution agent's
-        // system prompt, since no handoff exists yet). THEN the execution session runs two turns off the same
+        // Decision-first: the decision session proposes decisions.md (the first execution agent's system prompt,
+        // since no handoff exists yet — the operational context is folded into that one turn). THEN the execution
+        // session runs two turns off the same
         // SessionTurns queue: turn 1 does the work (checks the milestone box, so the epic completes next
         // LoopStart), turn 2 writes handoff.md.
-        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DECISIONS-1")));
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
         {
@@ -106,8 +106,8 @@ public class LoopRunnerTests
         await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
         await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff), "H-RESUME");
 
-        // Decision seeds + proposes over the resumed handoff, THEN execution runs and completes the milestone.
-        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
+        // Decision proposes over the resumed handoff (context + handoff folded into one fresh-process turn), THEN
+        // execution runs and completes the milestone.
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>
         {
             Assert.Contains("H-RESUME", prompt);   // the resumed handoff folds into the next system prompt
@@ -143,7 +143,7 @@ public class LoopRunnerTests
         // A prior slice already produced decisions.md but never consumed+retired it (unrotated/pending).
         await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Decisions), "PENDING-DECISIONS");
 
-        // Only the execution session's two turns are scripted — NO decision seed/propose turns. The work turn
+        // Only the execution session's two turns are scripted — NO decision turns. The work turn
         // runs against the pending decisions.md and completes the milestone so the loop stops after one slice.
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, s) =>
         {
@@ -174,9 +174,8 @@ public class LoopRunnerTests
         await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
         await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
 
-        // No pending decisions.md, so the decision session runs (seed + propose) and persists decisions.md; the
+        // No pending decisions.md, so the decision session runs (one proposal turn) and persists decisions.md; the
         // execution slice then consumes it and the loop retires the live file. Epic completes after one slice.
-        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DECISIONS-1")));
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
         {
@@ -207,8 +206,7 @@ public class LoopRunnerTests
         await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
         await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
 
-        // Decision succeeds (seed + propose -> persists decisions.md); the execution work turn then fails.
-        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
+        // Decision succeeds (one proposal turn -> persists decisions.md); the execution work turn then fails.
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DECISIONS-1")));
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));
 
@@ -230,8 +228,7 @@ public class LoopRunnerTests
         await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
         await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
 
-        // Slice 1: seed + propose (DECISIONS-1), execution work (does NOT complete the milestone) + handoff.
-        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
+        // Slice 1: propose (DECISIONS-1) on the fresh process, execution work (does NOT complete the milestone) + handoff.
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DECISIONS-1")));
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("exec-1")));
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
@@ -303,8 +300,7 @@ public class LoopRunnerTests
         var h = New();
         await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
         await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
-        // Decision runs first: seed completes, but the proposal turn fails -> DecisionSession throws -> Failed.
-        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
+        // Decision runs first: the proposal turn fails -> DecisionSession throws -> Failed.
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));
 
         LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
@@ -318,8 +314,7 @@ public class LoopRunnerTests
         var h = New();
         await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
         await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
-        // Decision succeeds (seed + propose), then the execution work turn fails -> ExecutionStep throws -> Failed.
-        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
+        // Decision succeeds (one proposal turn), then the execution work turn fails -> ExecutionStep throws -> Failed.
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D")));
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));
 
@@ -346,15 +341,11 @@ public class LoopRunnerTests
             _ => FakeProcessRunner.Ok()
         };
 
-        // Each iteration runs decision-first: the decision seed (first iteration only), the decision proposal
-        // (persists decisions.md), then execution's work turn and handoff turn (writes a fresh handoff). Script
-        // generously to cover >3 iterations; the stall gate trips first.
+        // Each iteration runs decision-first: the decision proposal (persists decisions.md), then execution's
+        // work turn and handoff turn (writes a fresh handoff). Script generously to cover >3 iterations; the
+        // stall gate trips first.
         for (int i = 0; i < 6; i++)
         {
-            if (i == 0)
-            {
-                h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
-            }
             h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed($"DECISIONS-{i}")));
             h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed($"executed-{i}")));
             h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
@@ -376,7 +367,7 @@ public class LoopRunnerTests
         await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
         await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
         using var cts = new CancellationTokenSource();
-        // The decision seed turn (first SessionTurns entry, since decision now runs first) cancels mid-flight.
+        // The decision proposal turn (first SessionTurns entry, since decision now runs first) cancels mid-flight.
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
         {
             cts.Cancel();
@@ -419,7 +410,6 @@ public class LoopRunnerTests
             return FakeProcessRunner.Ok();
         };
 
-        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DEC")));
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
         {
@@ -482,7 +472,6 @@ public class LoopRunnerTests
             return FakeProcessRunner.Ok();
         };
 
-        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DEC")));
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
         {
@@ -532,8 +521,7 @@ public class LoopRunnerTests
         await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
         DirtySubmoduleCleanParent(h);
 
-        // Decision succeeds (seed + propose); the execution work turn fails -> ExecutionStep throws -> Failed.
-        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
+        // Decision succeeds (one proposal turn); the execution work turn fails -> ExecutionStep throws -> Failed.
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D")));
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));
 
@@ -552,7 +540,7 @@ public class LoopRunnerTests
         DirtySubmoduleCleanParent(h);
 
         using var cts = new CancellationTokenSource();
-        // The decision seed turn cancels mid-flight (before any pre-codex publish runs).
+        // The decision proposal turn cancels mid-flight (before any pre-codex publish runs).
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
         {
             cts.Cancel();
@@ -587,7 +575,6 @@ public class LoopRunnerTests
             };
         };
 
-        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));
 
         LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
