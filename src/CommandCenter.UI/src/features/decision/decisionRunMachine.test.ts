@@ -6,12 +6,13 @@ function drive(state: DecisionRunState, actions: Parameters<typeof decisionRunRe
   return actions.reduce(decisionRunReducer, state)
 }
 
-// The three transfer phases plus the transferred confirmation, in emission order, as reducer
+// The four transfer phases plus the transferred confirmation, in emission order, as reducer
 // actions — the prelude a Transfer-routed run streams before the normal decision flow resumes.
 function transferPrelude(): Parameters<typeof decisionRunReducer>[1][] {
   return [
     { kind: 'event', event: { type: 'phase', phase: 'ProduceOperationalDelta' } },
     { kind: 'event', event: { type: 'phase', phase: 'UpdateOperationalContext' } },
+    { kind: 'event', event: { type: 'phase', phase: 'ArchiveOperationalDelta' } },
     { kind: 'event', event: { type: 'phase', phase: 'StartDecisionSessionFromTransfer' } },
     {
       kind: 'event',
@@ -311,7 +312,24 @@ describe('decisionRunReducer', () => {
       { kind: 'event', event: { type: 'run-started', phase: 'DecisionRun', route: 'Transfer' } },
       { kind: 'event', event: { type: 'phase', phase: 'ProduceOperationalDelta' } },
       { kind: 'event', event: { type: 'phase', phase: 'UpdateOperationalContext' } },
+      { kind: 'event', event: { type: 'phase', phase: 'ArchiveOperationalDelta' } },
       { kind: 'event', event: { type: 'phase', phase: 'StartDecisionSessionFromTransfer' } },
+    ])
+
+    expect(next.transferring).toBe(true)
+    expect(next.status).toBe('Running')
+    // The proposing-phase label is never overwritten by a transfer phase.
+    expect(next.phase).toBe('DecisionRun')
+  })
+
+  it('flags the transfer indicator on the new ArchiveOperationalDelta phase without labelling it', () => {
+    // ArchiveOperationalDelta is the newest transfer phase (inserted between
+    // UpdateOperationalContext and StartDecisionSessionFromTransfer). Like the other transfer
+    // phases it must only raise the transfer indicator, never become the labelled `phase` — that
+    // is the allowlist leak this test guards against.
+    const next = drive(initialDecisionRunState, [
+      { kind: 'event', event: { type: 'run-started', phase: 'DecisionRun', route: 'Transfer' } },
+      { kind: 'event', event: { type: 'phase', phase: 'ArchiveOperationalDelta' } },
     ])
 
     expect(next.transferring).toBe(true)

@@ -8,7 +8,7 @@
 export type DecisionRunPhase = 'DecisionRun' | 'GetNextDecisions'
 
 // The continuation router either reuses the warm decision session (Continue) or hands it off to a
-// fresh one (Transfer). A Transfer inserts three preparatory phases before the proposal; Continue
+// fresh one (Transfer). A Transfer inserts four preparatory phases before the proposal; Continue
 // is the unchanged warm path. The field is optional so an older server (no route) reads as Continue.
 export type DecisionRunRoute = 'Continue' | 'Transfer'
 
@@ -18,6 +18,7 @@ export type DecisionRunRoute = 'Continue' | 'Transfer'
 export type DecisionRunTransferPhase =
   | 'ProduceOperationalDelta'
   | 'UpdateOperationalContext'
+  | 'ArchiveOperationalDelta'
   | 'StartDecisionSessionFromTransfer'
 
 export type DecisionRunStartedEvent = {
@@ -36,7 +37,7 @@ export type DecisionRunDiagnosticsEvent = {
 
 export type DecisionRunPhaseEvent = {
   type: 'phase'
-  // GetNextDecisions is the proposing phase; the three transfer phases stream only on a
+  // GetNextDecisions is the proposing phase; the four transfer phases stream only on a
   // Transfer-routed run, ahead of the proposal.
   phase: 'GetNextDecisions' | DecisionRunTransferPhase
 }
@@ -138,7 +139,7 @@ export type DecisionRunState = {
   // continuation decision run increments this so the surface can show the iteration.
   iteration: number
   // True while the continuation router is transferring the decision session: set on a
-  // Transfer-routed run-started, any of the three transfer phases, or the `transferred` event, and
+  // Transfer-routed run-started, any of the four transfer phases, or the `transferred` event, and
   // cleared once the proposal arrives (review-ready) or the run fails. The warm Continue path never
   // sets it, so that path stays visually unchanged.
   transferring: boolean

@@ -21,11 +21,12 @@ export const initialDecisionRunState: DecisionRunState = {
   failure: null,
 }
 
-// The three preparatory phases a Transfer-routed run streams before the proposal. They flag the
+// The four preparatory phases a Transfer-routed run streams before the proposal. They flag the
 // transfer indicator but never become the labelled `phase`, so the Continue path is untouched.
 const TRANSFER_PHASES: readonly DecisionRunTransferPhase[] = [
   'ProduceOperationalDelta',
   'UpdateOperationalContext',
+  'ArchiveOperationalDelta',
   'StartDecisionSessionFromTransfer',
 ]
 
@@ -97,7 +98,7 @@ function reduceEvent(state: DecisionRunState, event: DecisionRunEvent): Decision
         },
       }
     case 'phase':
-      // The three transfer phases only flag the transfer indicator; they never become the labelled
+      // The four transfer phases only flag the transfer indicator; they never become the labelled
       // `phase`, so the proposing-phase label and the warm path are unchanged. GetNextDecisions is
       // the normal proposing phase and flows through as before.
       if (isTransferPhase(event.phase)) {

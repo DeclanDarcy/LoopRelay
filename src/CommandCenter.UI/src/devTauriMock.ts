@@ -4866,6 +4866,7 @@ const PROPOSED_DECISIONS = [
 const TRANSFER_PRELUDE: DecisionRunEvent[] = [
   { type: 'phase', phase: 'ProduceOperationalDelta' },
   { type: 'phase', phase: 'UpdateOperationalContext' },
+  { type: 'phase', phase: 'ArchiveOperationalDelta' },
   { type: 'phase', phase: 'StartDecisionSessionFromTransfer' },
   {
     type: 'transferred',
