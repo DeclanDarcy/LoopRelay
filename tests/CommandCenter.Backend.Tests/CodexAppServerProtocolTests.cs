@@ -215,4 +215,40 @@ public sealed class CodexAppServerTurnReaderTests
 
         Assert.Equal(string.Empty, reader.Result().Output);
     }
+
+    // Codex narrates a long turn (e.g. execution) as SEPARATE agent-message items; without a separator their
+    // deltas concatenate into one run-on blob. A new item's first delta after prior output inserts a newline so
+    // each message lands on its own line — in the accumulated Output AND in the live delta surfaced to the console.
+    [Fact]
+    public void ConsecutiveAgentMessages_AreSeparatedByANewline()
+    {
+        var reader = new CodexAppServerTurnReader();
+        reader.Apply(Msg("""{"method":"item/agentMessage/delta","params":{"itemId":"i1","delta":"first message"}}"""));
+        string? second = reader.Apply(Msg("""{"method":"item/agentMessage/delta","params":{"itemId":"i2","delta":"second message"}}"""));
+
+        Assert.Equal("\nsecond message", second); // the live chunk carries the break
+        Assert.Equal("first message\nsecond message", reader.Result().Output);
+    }
+
+    // Deltas of the SAME item are never split — a separator is only inserted at an item boundary.
+    [Fact]
+    public void DeltasWithinOneAgentMessage_AreNotSeparated()
+    {
+        var reader = new CodexAppServerTurnReader();
+        reader.Apply(Msg("""{"method":"item/agentMessage/delta","params":{"itemId":"i1","delta":"Hello "}}"""));
+        reader.Apply(Msg("""{"method":"item/agentMessage/delta","params":{"itemId":"i1","delta":"world"}}"""));
+
+        Assert.Equal("Hello world", reader.Result().Output);
+    }
+
+    // A message whose text already ends in a newline must not gain a doubled blank line when the next item starts.
+    [Fact]
+    public void AgentMessageEndingInNewline_IsNotDoublySeparated()
+    {
+        var reader = new CodexAppServerTurnReader();
+        reader.Apply(Msg("""{"method":"item/agentMessage/delta","params":{"itemId":"i1","delta":"first\n"}}"""));
+        reader.Apply(Msg("""{"method":"item/agentMessage/delta","params":{"itemId":"i2","delta":"second"}}"""));
+
+        Assert.Equal("first\nsecond", reader.Result().Output);
+    }
 }

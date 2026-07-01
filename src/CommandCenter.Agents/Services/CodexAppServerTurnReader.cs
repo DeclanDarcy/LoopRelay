@@ -25,6 +25,7 @@ public sealed class CodexAppServerTurnReader
     private AgentTokenUsage? usage;
     private AgentTurnState? terminalState;
     private string? failureMessage;
+    private string? currentItemId;   // the agent-message item the deltas currently belong to
 
     public bool IsComplete => terminalState is not null;
 
@@ -42,13 +43,7 @@ public sealed class CodexAppServerTurnReader
         switch (message.Method)
         {
             case "item/agentMessage/delta":
-                string? delta = StringProperty(message.Params, "delta");
-                if (!string.IsNullOrEmpty(delta))
-                {
-                    output.Append(delta);
-                }
-
-                return delta;
+                return ApplyAgentMessageDelta(message.Params);
 
             case "item/completed":
                 // The reply streams as deltas; a completed item is only a fallback if none arrived.
@@ -78,6 +73,32 @@ public sealed class CodexAppServerTurnReader
 
     public CodexAppServerTurnOutcome Result() =>
         new(output.ToString(), usage, terminalState ?? AgentTurnState.Failed, failureMessage);
+
+    // A turn's reply can arrive as SEVERAL agent-message items (codex narrates a long turn as separate messages),
+    // and their deltas would otherwise concatenate into one run-on blob — most visible on execution turns. When a
+    // new item's first delta arrives after existing output, insert a newline so each message lands on its own line.
+    // The separator is prepended to the returned delta too, so the live console stream breaks in the same place.
+    private string? ApplyAgentMessageDelta(JsonElement @params)
+    {
+        string? delta = StringProperty(@params, "delta");
+        if (string.IsNullOrEmpty(delta))
+        {
+            return null;
+        }
+
+        string? itemId = StringProperty(@params, "itemId");
+        string separator = string.Empty;
+        if (itemId is not null && currentItemId is not null && itemId != currentItemId
+            && output.Length > 0 && output[^1] != '\n')
+        {
+            separator = "\n";
+            output.Append('\n');
+        }
+
+        currentItemId = itemId ?? currentItemId;
+        output.Append(delta);
+        return separator + delta;
+    }
 
     private void AppendAgentMessage(JsonElement @params)
     {
