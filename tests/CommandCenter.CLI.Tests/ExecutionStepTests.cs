@@ -54,6 +54,33 @@ public class ExecutionStepTests
         Assert.Equal(1, rt.ClosedSessions);
     }
 
+    // The execution session must open with codex's full-access sandbox: the persistent app-server turn reaches
+    // codex's sandbox via the spec, so the spec the session is opened with is the effective lever. This is scoped
+    // to the execution session only — the context-update evolution one-shot stays at its own posture.
+    [Fact]
+    public async Task Run_OpensExecutionSessionWithDangerFullAccessSandbox()
+    {
+        var (step, rt, store, _, repo, _) = New();
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Decisions), "DECISIONS");
+
+        rt.SessionTurns.Enqueue(new ScriptedTurn((spec, _, _) =>
+        {
+            Assert.Equal("danger-full-access", spec.Sandbox.Identifier);
+            Assert.True(spec.Sandbox.CanWriteWorkspace);
+            return Turns.Completed("work done");
+        }));
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        {
+            s.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H").Wait();
+            return Turns.Completed("handoff done");
+        }));
+
+        await step.RunAsync(CancellationToken.None);
+
+        Assert.Equal(1, rt.ClosedSessions);
+    }
+
     // The handoff is consumed by the decision session, NOT rendered into the execution prompt — even when a live
     // handoff exists on disk it must never appear in the ContinueExecution turn ({handoff} was removed from it).
     [Fact]

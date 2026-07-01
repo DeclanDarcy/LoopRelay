@@ -14,7 +14,9 @@ public sealed class CodexAgentArgumentBuilderTests
             SessionIdentity.New(),
             "repo-1",
             SessionRole.OperationalExecution,
-            new SandboxProfile("sandbox", canWrite, CanAccessNetwork: false, requiresApproval),
+            // Identifier is the codex sandbox mode the persistent path now emits verbatim, so it must be a
+            // real mode string that matches the write posture (not a placeholder).
+            new SandboxProfile(canWrite ? "workspace-write" : "read-only", canWrite, CanAccessNetwork: false, requiresApproval),
             new EffortProfile(effort),
             workingDirectory);
 
@@ -78,6 +80,26 @@ public sealed class CodexAgentArgumentBuilderTests
             Spec(canWrite: true, requiresApproval: false, AgentEffortLevel.Low),
             AgentSessionMode.Persistent);
         Assert.Contains("workspace-write", writable);
+    }
+
+    // The persistent path now emits the sandbox Identifier verbatim, so codex's full-access mode
+    // ("danger-full-access") — used by the CLI execution session — reaches the --sandbox flag. The prior
+    // bool-only mapping could only ever produce read-only/workspace-write, making full access unreachable.
+    [Fact]
+    public void PersistentSandboxEmitsDangerFullAccessIdentifierVerbatim()
+    {
+        var spec = new AgentSessionSpec(
+            SessionIdentity.New(),
+            "repo-1",
+            SessionRole.OperationalExecution,
+            new SandboxProfile("danger-full-access", CanWriteWorkspace: true, CanAccessNetwork: true, RequiresApproval: false),
+            new EffortProfile(AgentEffortLevel.Medium),
+            workingDirectory: "/repo");
+
+        IReadOnlyList<string> args = CodexAgentArgumentBuilder.Build(spec, AgentSessionMode.Persistent);
+
+        Assert.Contains("--sandbox", args);
+        Assert.Contains("danger-full-access", args);
     }
 
     [Fact]

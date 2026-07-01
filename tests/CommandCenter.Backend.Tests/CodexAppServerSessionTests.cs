@@ -167,6 +167,30 @@ public sealed class CodexAppServerSessionTests
         Assert.Equal("/repo", threadStart.GetProperty("cwd").GetString());
     }
 
+    // The CLI execution session's spec carries SandboxProfile("danger-full-access"), and the held-open
+    // app-server path is the one that actually reaches codex (thread/start sets the sandbox per thread). This
+    // pins that the full-access posture appears verbatim on the wire — the effective lever, not just a default.
+    private static AgentSessionSpec ExecutionSpec() => new(
+        SessionIdentity.New(),
+        "repo-execution",
+        SessionRole.OperationalExecution,
+        new SandboxProfile("danger-full-access", CanWriteWorkspace: true, CanAccessNetwork: true, RequiresApproval: false),
+        new EffortProfile(AgentEffortLevel.Medium),
+        workingDirectory: "/repo");
+
+    [Fact]
+    public async Task ExecutionSessionThreadStartFrameCarriesDangerFullAccessSandboxOnTheWire()
+    {
+        var process = new ScriptedAppServerProcess();
+        await using var session = new CodexAppServerSession(ExecutionSpec(), process, new DeterministicAgentTokenEstimator());
+
+        await session.RunTurnAsync("continue executing the milestone");
+
+        JsonElement threadStart = ParamsOf(process, "thread/start");
+        Assert.Equal("danger-full-access", threadStart.GetProperty("sandbox").GetString());
+        Assert.Equal("never", threadStart.GetProperty("approvalPolicy").GetString());
+    }
+
     // m10 (A) LIVE-ONLY: real codex-cli 0.139 acceptance of params.effort=="xhigh" and sandbox=="read-only" on a
     // real app-server thread CANNOT run in-session (it needs codex login + a live process), so it is kept OFF the
     // default CI path. The wire-level frame shape it would exercise is fully pinned by the captured-frame tests

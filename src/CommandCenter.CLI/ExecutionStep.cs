@@ -27,8 +27,12 @@ internal sealed class ExecutionStep(
         // StartExecution path, and the handoff is consumed by the decision session, not rendered here.
         string executionPrompt = ContinueExecution.Render(plan, decisions);
 
+        // The execution agent runs codex with full access (no sandbox): it needs to build, run tools, touch
+        // git, and reach outside the workspace to do real work. This is the ONE session granted danger-full-access
+        // — the decision session stays read-only and the context-update evolution keeps its own posture.
         IAgentSession session = await runtime.OpenSessionAsync(
-            AgentSpecs.Operational(repository, AgentEffortLevel.Medium, identifier: null),
+            AgentSpecs.Operational(
+                repository, AgentEffortLevel.Medium, identifier: null, sandboxIdentifier: "danger-full-access"),
             cancellationToken);
         try
         {

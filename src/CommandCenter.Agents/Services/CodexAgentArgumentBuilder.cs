@@ -26,7 +26,9 @@ public static class CodexAgentArgumentBuilder
     public static IReadOnlyList<string> Build(AgentSessionSpec spec, AgentSessionMode mode)
     {
         string workingDirectory = spec.WorkingDirectory ?? ".";
-        string sandbox = spec.Sandbox.CanWriteWorkspace ? "workspace-write" : "read-only";
+        // The Identifier IS the codex sandbox mode (read-only | workspace-write | danger-full-access), emitted
+        // verbatim as the process-level default; the persistent path also sets it per thread/start.
+        string sandbox = spec.Sandbox.Identifier;
 
         if (mode == AgentSessionMode.Persistent)
         {

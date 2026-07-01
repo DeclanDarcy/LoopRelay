@@ -24,6 +24,22 @@ public class AgentSpecsTests
         Assert.Equal(Repo.Path, spec.WorkingDirectory);
     }
 
+    // The CLI execution session opts into codex's full-access sandbox (matching the legacy CodexExecutionProvider's
+    // deliberate danger-full-access policy). The default posture is unchanged — only the explicit override differs,
+    // so the context-update evolution one-shot (the other Operational caller) keeps workspace-write.
+    [Fact]
+    public void Operational_WithDangerFullAccessSandbox_GrantsFullAccessAndNetwork()
+    {
+        AgentSessionSpec spec = AgentSpecs.Operational(
+            Repo, AgentEffortLevel.Medium, identifier: null, sandboxIdentifier: "danger-full-access");
+
+        Assert.Equal(SessionRole.OperationalExecution, spec.Role);
+        Assert.Equal("danger-full-access", spec.Sandbox.Identifier);
+        Assert.True(spec.Sandbox.CanWriteWorkspace);
+        Assert.True(spec.Sandbox.CanAccessNetwork);
+        Assert.False(spec.Sandbox.RequiresApproval);
+    }
+
     [Fact]
     public void Decision_IsReadOnlyHighXhigh()
     {

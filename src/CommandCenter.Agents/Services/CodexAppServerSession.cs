@@ -347,7 +347,9 @@ public sealed class CodexAppServerSession : IAgentSession
 
     private long NextId() => Interlocked.Increment(ref nextId);
 
-    private string Sandbox() => spec.Sandbox.CanWriteWorkspace ? "workspace-write" : "read-only";
+    // The Identifier IS the codex sandbox mode (read-only | workspace-write | danger-full-access). Emit it
+    // verbatim so every mode is reachable — a prior bool mapping could only ever produce the first two.
+    private string Sandbox() => spec.Sandbox.Identifier;
 
     private string? ApprovalPolicy() => spec.Sandbox.RequiresApproval ? null : "never";
 
