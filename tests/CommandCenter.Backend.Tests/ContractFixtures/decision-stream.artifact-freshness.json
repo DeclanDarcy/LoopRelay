@@ -7,7 +7,7 @@
       "artifactId": "typescript-decision-stream-contract",
       "artifactPath": "src/CommandCenter.UI/src/types/decisionRun.ts",
       "artifactKind": "phase0-verified-contract-artifact",
-      "artifactSha256": "1B8EB64CF51AAD7A3FC4342833C642B8A28648E1AE8D318ED53441081CB82F8E"
+      "artifactSha256": "07259F2106E48E6BD1F4955123352BFE2A288C5655D57953889BA0D735FD3DA3"
     }
   ]
 }
