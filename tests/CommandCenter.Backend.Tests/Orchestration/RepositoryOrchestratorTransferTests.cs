@@ -33,13 +33,14 @@ public sealed class RepositoryOrchestratorTransferTests
     {
         var runtime = new FakeAgentRuntime();
         var store = new FakeArtifactStore();
+        var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new FakeDecisionSessionRouter { Route = DecisionRoute.Transfer };
         Repository repository = OrchestrationTestFactory.Repository();
-        RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store, router: router);
+        RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store, router: router, sandbox: sandbox);
 
         await SeedLoopAsync(orchestrator, store, repository);
         await SeedWarmDecisionSessionAsync(orchestrator, runtime, repository); // a prior proposal primes the warm process (transfer eligibility)
-        ScriptTransferTurns(runtime, store, repository, delta: "OPERATIONAL DELTA", rewrittenContext: "REWRITTEN CONTEXT", proposal: "NEXT DECISIONS");
+        ScriptTransferTurns(runtime, store, repository, sandbox, delta: "OPERATIONAL DELTA", rewrittenContext: "REWRITTEN CONTEXT", proposal: "NEXT DECISIONS");
 
         await orchestrator.BeginSubmitDecisionsAsync(repository, "DECISIONS ONE");
         await orchestrator.ExecutionRunTask;
@@ -72,14 +73,15 @@ public sealed class RepositoryOrchestratorTransferTests
         // DecisionSessionRouterTests; the FIRST transfer is capacity-driven because C starts at the 250k seed.)
         var runtime = new FakeAgentRuntime { TurnUsage = new AgentTokenUsage(40, 60) }; // 100 occupancy per proposal
         var store = new FakeArtifactStore();
+        var sandbox = new FakeSandboxWorkspaceFactory();
         // Window 110 -> capacity guard round(110*0.9)=99; the seed proposal's occupancy (100) crosses it.
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 110, CapacityGuardFraction: 0.90));
         Repository repository = OrchestrationTestFactory.Repository();
-        RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store, router: router);
+        RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store, router: router, sandbox: sandbox);
 
         await SeedLoopAsync(orchestrator, store, repository);
         await SeedWarmDecisionSessionAsync(orchestrator, runtime, repository); // one proposal -> occupancy 100 (>= guard 99)
-        ScriptTransferTurns(runtime, store, repository, delta: "DELTA", rewrittenContext: "CTX2", proposal: "NEXT DECISIONS");
+        ScriptTransferTurns(runtime, store, repository, sandbox, delta: "DELTA", rewrittenContext: "CTX2", proposal: "NEXT DECISIONS");
 
         await orchestrator.BeginSubmitDecisionsAsync(repository, "DECISIONS ONE");
         await orchestrator.ExecutionRunTask;
@@ -104,14 +106,15 @@ public sealed class RepositoryOrchestratorTransferTests
         // A wiring bug that dropped eNext (e.g. never calling EstimateNextCycle) would fail THIS test specifically.
         var runtime = new FakeAgentRuntime { TurnUsage = new AgentTokenUsage(50, 50) }; // occupancy 100 << guard 230,400
         var store = new FakeArtifactStore();
+        var sandbox = new FakeSandboxWorkspaceFactory();
         var costModel = new FakeDecisionCostModel { MeasureValue = 300_000d, EstimateValue = 600_000d };
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions()); // default: 256k window, marginal policy
         Repository repository = OrchestrationTestFactory.Repository();
-        RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store, router: router, costModel: costModel);
+        RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store, router: router, costModel: costModel, sandbox: sandbox);
 
         await SeedLoopAsync(orchestrator, store, repository);
         await SeedWarmDecisionSessionAsync(orchestrator, runtime, repository); // one proposal -> R=300000, n=1, occupancy 100
-        ScriptTransferTurns(runtime, store, repository, delta: "DELTA", rewrittenContext: "CTX2", proposal: "NEXT DECISIONS");
+        ScriptTransferTurns(runtime, store, repository, sandbox, delta: "DELTA", rewrittenContext: "CTX2", proposal: "NEXT DECISIONS");
 
         await orchestrator.BeginSubmitDecisionsAsync(repository, "DECISIONS ONE");
         await orchestrator.ExecutionRunTask;
@@ -130,17 +133,18 @@ public sealed class RepositoryOrchestratorTransferTests
         // Measured cost per transfer = 3 turns (delta+rewrite+reseed) * MeasureValue.
         var runtime = new FakeAgentRuntime();
         var store = new FakeArtifactStore();
+        var sandbox = new FakeSandboxWorkspaceFactory();
         var costModel = new FakeDecisionCostModel { MeasureValue = 100d, EstimateValue = 0d };
         var router = new FakeDecisionSessionRouter { Route = DecisionRoute.Transfer }; // force both transfers
         Repository repository = OrchestrationTestFactory.Repository();
-        RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store, router: router, costModel: costModel);
+        RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store, router: router, costModel: costModel, sandbox: sandbox);
 
         await SeedLoopAsync(orchestrator, store, repository);
         await SeedWarmDecisionSessionAsync(orchestrator, runtime, repository); // primes the process (transfer eligible)
 
         // Transfer 1: measured cost = 3 * 100 = 300 -> C = 300 (first measured replaces the 250k seed).
         costModel.MeasureValue = 100d;
-        ScriptTransferTurns(runtime, store, repository, delta: "DELTA1", rewrittenContext: "CTX1", proposal: "P1");
+        ScriptTransferTurns(runtime, store, repository, sandbox, delta: "DELTA1", rewrittenContext: "CTX1", proposal: "P1");
         await orchestrator.BeginSubmitDecisionsAsync(repository, "D1");
         await orchestrator.ExecutionRunTask;
         await orchestrator.DecisionRunTask;
@@ -148,7 +152,7 @@ public sealed class RepositoryOrchestratorTransferTests
 
         // Transfer 2: measured cost = 3 * 200 = 600 -> running average C = 300 + (600 - 300)/2 = 450 (NOT 600).
         costModel.MeasureValue = 200d;
-        ScriptTransferTurns(runtime, store, repository, delta: "DELTA2", rewrittenContext: "CTX2", proposal: "P2");
+        ScriptTransferTurns(runtime, store, repository, sandbox, delta: "DELTA2", rewrittenContext: "CTX2", proposal: "P2");
         await orchestrator.BeginSubmitDecisionsAsync(repository, "D2");
         await orchestrator.ExecutionRunTask;
         await orchestrator.DecisionRunTask;
@@ -226,13 +230,14 @@ public sealed class RepositoryOrchestratorTransferTests
     {
         var runtime = new FakeAgentRuntime();
         var store = new FakeArtifactStore();
+        var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new FakeDecisionSessionRouter { Route = DecisionRoute.Transfer };
         Repository repository = OrchestrationTestFactory.Repository();
-        RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store, router: router);
+        RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store, router: router, sandbox: sandbox);
 
         await SeedLoopAsync(orchestrator, store, repository);
         await SeedWarmDecisionSessionAsync(orchestrator, runtime, repository);
-        ScriptTransferTurns(runtime, store, repository, delta: "DELTA", rewrittenContext: "CTX2", proposal: "NEXT");
+        ScriptTransferTurns(runtime, store, repository, sandbox, delta: "DELTA", rewrittenContext: "CTX2", proposal: "NEXT");
 
         await orchestrator.BeginSubmitDecisionsAsync(repository, "DECISIONS ONE");
         await orchestrator.ExecutionRunTask;
@@ -266,13 +271,14 @@ public sealed class RepositoryOrchestratorTransferTests
     {
         var runtime = new FakeAgentRuntime();
         var store = new FakeArtifactStore();
+        var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new FakeDecisionSessionRouter { Route = DecisionRoute.Transfer };
         Repository repository = OrchestrationTestFactory.Repository();
-        RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store, router: router);
+        RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store, router: router, sandbox: sandbox);
 
         await SeedLoopAsync(orchestrator, store, repository);
         await SeedWarmDecisionSessionAsync(orchestrator, runtime, repository);
-        ScriptTransferTurns(runtime, store, repository, delta: "DELTA", rewrittenContext: "CTX2", proposal: "NEXT DECISIONS");
+        ScriptTransferTurns(runtime, store, repository, sandbox, delta: "DELTA", rewrittenContext: "CTX2", proposal: "NEXT DECISIONS");
 
         await orchestrator.BeginSubmitDecisionsAsync(repository, "DECISIONS ONE");
         await orchestrator.ExecutionRunTask;
@@ -302,19 +308,21 @@ public sealed class RepositoryOrchestratorTransferTests
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var runtime = new FakeAgentRuntime();
         var store = new FakeArtifactStore();
+        var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new FakeDecisionSessionRouter { Route = DecisionRoute.Transfer };
         Repository repository = OrchestrationTestFactory.Repository();
-        RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store, router: router);
+        RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store, router: router, sandbox: sandbox);
 
         await SeedLoopAsync(orchestrator, store, repository);
         await SeedWarmDecisionSessionAsync(orchestrator, runtime, repository);
         runtime.OneShotTurns.Enqueue(WritesLiveHandoff(store, repository, "HANDOFF TWO"));
         // The rewrite one-shot signals it is parked (transfer holds the execution gate), then waits for release.
+        // It writes the evolved context into the SANDBOX workspace (Stage 2), where the orchestrator reads it back.
         runtime.OneShotTurns.Enqueue(new FakeOneShotTurn(Effect: async () =>
         {
             parked.TrySetResult();
             await release.Task;
-            await store.WriteAsync(Resolve(repository, OrchestrationArtifactPaths.OperationalContext), "CTX2");
+            await store.WriteAsync(sandbox.Resolve(OrchestrationArtifactPaths.OperationalContext), "CTX2");
         }));
         runtime.SessionTurns.Enqueue(new FakeOneShotTurn(Output: "DELTA"));
         runtime.SessionTurns.Enqueue(new FakeOneShotTurn());
@@ -691,6 +699,184 @@ public sealed class RepositoryOrchestratorTransferTests
         Assert.Equal("AFTER2", orchestrator.CurrentDecisions);
     }
 
+    // ---- Stage 2: sandboxed operational-context evolution + size health guard ----
+
+    [Fact]
+    public async Task Transfer_evolves_the_operational_context_in_an_isolated_sandbox_then_copies_it_back()
+    {
+        // Stage 2: the dominant transfer cost was the evolution one-shot re-exploring the whole repo. It now runs in
+        // a temp workspace seeded with ONLY the current context + the delta (codex --cd scopes its sandbox there),
+        // and the orchestrator copies the evolved context back into the repo.
+        var runtime = new FakeAgentRuntime();
+        var store = new FakeArtifactStore();
+        var sandbox = new FakeSandboxWorkspaceFactory();
+        var router = new FakeDecisionSessionRouter { Route = DecisionRoute.Transfer };
+        Repository repository = OrchestrationTestFactory.Repository();
+        RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store, router: router, sandbox: sandbox);
+
+        await SeedLoopAsync(orchestrator, store, repository);
+        await SeedWarmDecisionSessionAsync(orchestrator, runtime, repository);
+        ScriptTransferTurns(runtime, store, repository, sandbox, delta: "DELTA", rewrittenContext: "REWRITTEN", proposal: "NEXT");
+
+        await orchestrator.BeginSubmitDecisionsAsync(repository, "DECISIONS ONE");
+        await orchestrator.ExecutionRunTask;
+        await orchestrator.DecisionRunTask;
+
+        // The evolution one-shot ran against the SANDBOX root, not the repository — and still workspace-write.
+        // (The continuation is ALSO an OperationalExecution one-shot, so identify the evolution by its prompt.)
+        Assert.Contains(UpdateOperationalContext.Text, runtime.OneShotPrompts);
+        AgentSessionSpec evolutionSpec = runtime.OneShotSpecs[runtime.OneShotPrompts.IndexOf(UpdateOperationalContext.Text)];
+        Assert.Equal(sandbox.Root, evolutionSpec.WorkingDirectory);
+        Assert.NotEqual(repository.Path, evolutionSpec.WorkingDirectory);
+        Assert.True(evolutionSpec.Sandbox.CanWriteWorkspace);
+
+        // The sandbox was seeded with EXACTLY the two evolution inputs — the current context and the delta — no more.
+        string sandboxContext = sandbox.Resolve(OrchestrationArtifactPaths.OperationalContext);
+        string sandboxDelta = sandbox.Resolve(OrchestrationArtifactPaths.OperationalDelta);
+        List<string> sandboxWrites = store.WriteQueries
+            .Where(p => p.StartsWith(sandbox.Root, StringComparison.OrdinalIgnoreCase))
+            .Distinct()
+            .OrderBy(p => p, StringComparer.Ordinal)
+            .ToList();
+        Assert.Equal(new[] { sandboxContext, sandboxDelta }.OrderBy(p => p, StringComparer.Ordinal).ToList(), sandboxWrites);
+        Assert.Equal("DELTA", await store.ReadAsync(sandboxDelta)); // the delta was copied into the sandbox for the rewrite
+        // The sandbox was SEEDED with the CURRENT repo context (so codex folds the delta into the real base, not a
+        // blank/wrong one). The one-shot later overwrites it, so assert the FIRST write to the sandbox context path.
+        Assert.Equal(OperationalContext, store.Writes.First(w => w.Path == sandboxContext).Content);
+
+        // The evolved context was copied back into the repo, and the fresh process was reseeded from it.
+        Assert.Equal("REWRITTEN", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.OperationalContext)));
+        List<FakeAgentSession> decisionSessions = runtime.Sessions.Where(s => s.Role == SessionRole.Decision).ToList();
+        Assert.Equal(StartDecisionSessionFromTransfer.Render("REWRITTEN"), decisionSessions[^1].Prompts[0]);
+
+        // The workspace was created once and disposed (cleaned up), even on the happy path.
+        Assert.Equal(1, sandbox.CreatedCount);
+        Assert.Single(sandbox.Disposed);
+    }
+
+    [Fact]
+    public async Task Transfer_disposes_the_sandbox_even_when_the_rewrite_fails()
+    {
+        // The temp workspace must be cleaned up on the failure path too — a failed rewrite cannot leak a temp tree.
+        var runtime = new FakeAgentRuntime();
+        var store = new FakeArtifactStore();
+        var sandbox = new FakeSandboxWorkspaceFactory();
+        var router = new FakeDecisionSessionRouter { Route = DecisionRoute.Transfer };
+        Repository repository = OrchestrationTestFactory.Repository();
+        RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store, router: router, sandbox: sandbox);
+
+        await SeedLoopAsync(orchestrator, store, repository);
+        await SeedWarmDecisionSessionAsync(orchestrator, runtime, repository);
+        runtime.OneShotTurns.Enqueue(WritesLiveHandoff(store, repository, "HANDOFF TWO"));
+        runtime.OneShotTurns.Enqueue(new FakeOneShotTurn(AgentTurnState.Failed, Output: "rewrite boom")); // rewrite fails inside the sandbox
+        runtime.SessionTurns.Enqueue(new FakeOneShotTurn(Output: "DELTA"));
+
+        await orchestrator.BeginSubmitDecisionsAsync(repository, "DECISIONS ONE");
+        await orchestrator.ExecutionRunTask;
+        await orchestrator.DecisionRunTask;
+
+        // A sandbox was created for the rewrite and disposed despite the failure; the repo context is untouched.
+        Assert.Equal(1, sandbox.CreatedCount);
+        Assert.Single(sandbox.Disposed);
+        Assert.Equal(OperationalContext, await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.OperationalContext)));
+    }
+
+    [Fact]
+    public async Task Transfer_off_switch_evolves_against_the_repository_working_directory()
+    {
+        // Rollback path: with the sandbox flag OFF the evolution runs against the repository cwd (pre-Stage-2
+        // behavior) — the agent rewrites .agents/operational_context.md in place and no sandbox is created.
+        var runtime = new FakeAgentRuntime();
+        var store = new FakeArtifactStore();
+        var sandbox = new FakeSandboxWorkspaceFactory();
+        var router = new FakeDecisionSessionRouter { Route = DecisionRoute.Transfer };
+        var flags = new OrchestrationFeatureFlags(SandboxOperationalContextEvolutionEnabled: false);
+        Repository repository = OrchestrationTestFactory.Repository();
+        RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store, router: router, flags: flags, sandbox: sandbox);
+
+        await SeedLoopAsync(orchestrator, store, repository);
+        await SeedWarmDecisionSessionAsync(orchestrator, runtime, repository);
+        runtime.OneShotTurns.Enqueue(WritesLiveHandoff(store, repository, "HANDOFF TWO"));
+        runtime.OneShotTurns.Enqueue(WritesOperationalContext(store, repository, "REWRITTEN")); // agent rewrites the REPO file in place
+        runtime.SessionTurns.Enqueue(new FakeOneShotTurn(Output: "DELTA"));
+        runtime.SessionTurns.Enqueue(new FakeOneShotTurn());
+        runtime.SessionTurns.Enqueue(new FakeOneShotTurn(Output: "NEXT"));
+
+        await orchestrator.BeginSubmitDecisionsAsync(repository, "DECISIONS ONE");
+        await orchestrator.ExecutionRunTask;
+        await orchestrator.DecisionRunTask;
+
+        Assert.Contains(UpdateOperationalContext.Text, runtime.OneShotPrompts);
+        AgentSessionSpec evolutionSpec = runtime.OneShotSpecs[runtime.OneShotPrompts.IndexOf(UpdateOperationalContext.Text)];
+        Assert.Equal(repository.Path, evolutionSpec.WorkingDirectory);
+        Assert.Equal(0, sandbox.CreatedCount); // no sandbox on the OFF path
+        Assert.Equal("REWRITTEN", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.OperationalContext)));
+        Assert.Equal("NEXT", orchestrator.CurrentDecisions);
+    }
+
+    [Fact]
+    public async Task Transfer_records_an_operational_context_size_health_baseline()
+    {
+        var runtime = new FakeAgentRuntime();
+        var store = new FakeArtifactStore();
+        var sandbox = new FakeSandboxWorkspaceFactory();
+        var router = new FakeDecisionSessionRouter { Route = DecisionRoute.Transfer };
+        Repository repository = OrchestrationTestFactory.Repository();
+        RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store, router: router, sandbox: sandbox);
+
+        await SeedLoopAsync(orchestrator, store, repository);
+        await SeedWarmDecisionSessionAsync(orchestrator, runtime, repository);
+        ScriptTransferTurns(runtime, store, repository, sandbox, delta: "DELTA", rewrittenContext: new string('x', 42), proposal: "NEXT");
+
+        await orchestrator.BeginSubmitDecisionsAsync(repository, "DECISIONS ONE");
+        await orchestrator.ExecutionRunTask;
+        await orchestrator.DecisionRunTask;
+
+        // The first transfer of a process's lifetime records a health BASELINE: the measured size, no warning.
+        Assert.NotNull(orchestrator.LastOperationalContextHealth);
+        OperationalContextHealth health = orchestrator.LastOperationalContextHealth!.Value;
+        Assert.Equal(42, health.Size);
+        Assert.Null(health.PreviousSize);
+        Assert.Equal(0, health.GrowthStreak);
+        Assert.False(health.Warning);
+    }
+
+    [Fact]
+    public async Task Repeated_transfers_that_grow_the_operational_context_raise_a_ratchet_warning()
+    {
+        // The renewal-reward stability guard: a SUSTAINED upward ratchet across transfers warns. Baseline (no warn),
+        // first growth (streak 1, no warn), second growth (streak 2 => WARN). Asserting after EACH transfer also
+        // pins that the streak state PERSISTS across the recycle — reset it and the third transfer would never
+        // reach the warning threshold.
+        var runtime = new FakeAgentRuntime();
+        var store = new FakeArtifactStore();
+        var sandbox = new FakeSandboxWorkspaceFactory();
+        var router = new FakeDecisionSessionRouter { Route = DecisionRoute.Transfer };
+        Repository repository = OrchestrationTestFactory.Repository();
+        RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store, router: router, sandbox: sandbox);
+
+        await SeedLoopAsync(orchestrator, store, repository);
+        await SeedWarmDecisionSessionAsync(orchestrator, runtime, repository);
+
+        await RunTransferAsync(orchestrator, runtime, store, sandbox, repository, "D1", new string('a', 100));
+        Assert.NotNull(orchestrator.LastOperationalContextHealth);
+        OperationalContextHealth first = orchestrator.LastOperationalContextHealth!.Value;
+        Assert.Equal(100, first.Size);
+        Assert.Equal(0, first.GrowthStreak); // baseline (no previous)
+        Assert.False(first.Warning);
+
+        await RunTransferAsync(orchestrator, runtime, store, sandbox, repository, "D2", new string('a', 200));
+        OperationalContextHealth second = orchestrator.LastOperationalContextHealth!.Value;
+        Assert.Equal(1, second.GrowthStreak); // first growth
+        Assert.False(second.Warning);
+
+        await RunTransferAsync(orchestrator, runtime, store, sandbox, repository, "D3", new string('a', 300));
+        OperationalContextHealth third = orchestrator.LastOperationalContextHealth!.Value;
+        Assert.Equal(300, third.Size);
+        Assert.Equal(2, third.GrowthStreak); // sustained growth crosses the ratchet threshold
+        Assert.True(third.Warning);
+    }
+
     // ---- helpers ----
 
     // The deterministic token estimate the orchestrator uses for the router's fallback signal ((len+3)/4).
@@ -719,20 +905,45 @@ public sealed class RepositoryOrchestratorTransferTests
     }
 
     // Scripts the two one-shots (continuation, then context rewrite) and three decision-session turns (delta,
-    // reseed, proposal) a happy-path transfer consumes after a submit.
+    // reseed, proposal) a happy-path transfer consumes after a submit. The rewrite one-shot writes the evolved
+    // context to the SANDBOX workspace (Stage 2) — the orchestrator reads it back from there and copies it into
+    // the repo — so the effect targets the sandbox path, not the repo path.
     private static void ScriptTransferTurns(
         FakeAgentRuntime runtime,
         FakeArtifactStore store,
         Repository repository,
+        FakeSandboxWorkspaceFactory sandbox,
         string delta,
         string rewrittenContext,
         string proposal)
     {
         runtime.OneShotTurns.Enqueue(WritesLiveHandoff(store, repository, "HANDOFF TWO"));
-        runtime.OneShotTurns.Enqueue(WritesOperationalContext(store, repository, rewrittenContext));
+        runtime.OneShotTurns.Enqueue(WritesSandboxOperationalContext(store, sandbox, rewrittenContext));
         runtime.SessionTurns.Enqueue(new FakeOneShotTurn(Output: delta));
         runtime.SessionTurns.Enqueue(new FakeOneShotTurn());
         runtime.SessionTurns.Enqueue(new FakeOneShotTurn(Output: proposal));
+    }
+
+    // Drives ONE full transfer submit (continuation one-shot + sandbox rewrite one-shot + delta/reseed/proposal),
+    // producing an operational context of the given size, and awaits it. The prior transfer leaves a seeded fresh
+    // process, so successive calls remain transfer-eligible.
+    private static async Task RunTransferAsync(
+        RepositoryOrchestrator orchestrator,
+        FakeAgentRuntime runtime,
+        FakeArtifactStore store,
+        FakeSandboxWorkspaceFactory sandbox,
+        Repository repository,
+        string decisionsInput,
+        string rewrittenContext)
+    {
+        runtime.OneShotTurns.Enqueue(WritesLiveHandoff(store, repository, "HANDOFF-" + decisionsInput));
+        runtime.OneShotTurns.Enqueue(WritesSandboxOperationalContext(store, sandbox, rewrittenContext));
+        runtime.SessionTurns.Enqueue(new FakeOneShotTurn(Output: "DELTA-" + decisionsInput));
+        runtime.SessionTurns.Enqueue(new FakeOneShotTurn());
+        runtime.SessionTurns.Enqueue(new FakeOneShotTurn(Output: "PROPOSAL-" + decisionsInput));
+        await orchestrator.BeginSubmitDecisionsAsync(repository, decisionsInput);
+        await orchestrator.ExecutionRunTask;
+        await orchestrator.DecisionRunTask;
     }
 
     private static FakeOneShotTurn WritesLiveHandoff(FakeArtifactStore store, Repository repository, string handoff) =>
@@ -740,6 +951,11 @@ public sealed class RepositoryOrchestratorTransferTests
 
     private static FakeOneShotTurn WritesOperationalContext(FakeArtifactStore store, Repository repository, string context) =>
         new(Effect: () => store.WriteAsync(Resolve(repository, OrchestrationArtifactPaths.OperationalContext), context));
+
+    // Stage 2: the evolution one-shot writes the rewritten context into the sandbox workspace (where codex --cd
+    // is scoped), at the SAME absolute path the orchestrator reads back from.
+    private static FakeOneShotTurn WritesSandboxOperationalContext(FakeArtifactStore store, FakeSandboxWorkspaceFactory sandbox, string context) =>
+        new(Effect: () => store.WriteAsync(sandbox.Resolve(OrchestrationArtifactPaths.OperationalContext), context));
 
     private static PromptProvenance Single(IReadOnlyList<PromptProvenance> provenance, string promptName) =>
         provenance.Single(p => p.PromptName == promptName);

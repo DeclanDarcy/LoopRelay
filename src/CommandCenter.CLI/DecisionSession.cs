@@ -22,11 +22,17 @@ internal sealed class DecisionSession(
     LoopArtifacts artifacts,
     ILoopConsole console,
     Repository repository,
-    IDecisionCostModel? costModel = null) : IAsyncDisposable
+    IDecisionCostModel? costModel = null,
+    ISandboxWorkspaceFactory? sandboxFactory = null) : IAsyncDisposable
 {
     private readonly IDecisionCostModel costModel = costModel ?? new EffectiveTokenCostModel();
+    private readonly ISandboxWorkspaceFactory sandboxFactory = sandboxFactory ?? new TempSandboxWorkspaceFactory();
     private IAgentSession? session;
     private bool seeded;
+
+    // Operational-context size-health state (Stage 2, mirrors RepositoryOrchestrator). Single-threaded, no lock.
+    private int? previousOperationalContextSize;
+    private int operationalContextGrowthStreak;
 
     // Cost-aware routing accounting (mirrors RepositoryOrchestrator). PER-PROCESS fields reset on recycle;
     // transferCost persists across recycles. Single-threaded — RunAsync is called sequentially — so no lock.
@@ -135,19 +141,10 @@ internal sealed class DecisionSession(
         await CloseAsync();
 
         console.Phase("Decision: Transfer/UpdateOperationalContext");
-        AgentTurnResult update = await runtime.RunOneShotAsync(
-            AgentSpecs.Operational(repository, AgentEffortLevel.High, identifier: "xhigh"),
-            UpdateOperationalContext.Text,
-            StreamToConsole,
-            cancellationToken);
-        if (update.State != AgentTurnState.Completed)
-        {
-            throw new LoopStepException($"Update-operational-context turn ended in state {update.State}.");
-        }
+        (AgentTurnResult update, string newContext) = await EvolveOperationalContextAsync(delta.Output, cancellationToken);
 
         // Open a fresh decision process and seed from the rewritten context.
         session = await runtime.OpenSessionAsync(AgentSpecs.Decision(repository), cancellationToken);
-        string newContext = await artifacts.ReadAsync(OrchestrationArtifactPaths.OperationalContext) ?? string.Empty;
 
         console.Phase("Decision: Transfer/StartDecisionSessionFromTransfer");
         AgentTurnResult reseed = await session.RunTurnAsync(
@@ -164,6 +161,58 @@ internal sealed class DecisionSession(
         // so the router's transfer-cost estimate (C) self-calibrates off reality. CloseAsync above reset the
         // per-process reuse accounting for the fresh process; transferCost persists.
         RecordTransferCost(costModel.Measure(delta.Usage) + costModel.Measure(update.Usage) + costModel.Measure(reseed.Usage));
+    }
+
+    // Stage 2 (mirrors RepositoryOrchestrator.EvolveOperationalContextAsync): evolve the operational context in an
+    // ISOLATED sandbox workspace seeded with ONLY operational_context.md + operational_delta.md, so codex --cd
+    // confines it there and it no longer re-explores the whole repo. The evolved context is copied back into the
+    // repo. Returns the update turn (for transfer-cost accounting) and the evolved context (for the reseed).
+    private async Task<(AgentTurnResult Update, string NewContext)> EvolveOperationalContextAsync(
+        string deltaOutput, CancellationToken cancellationToken)
+    {
+        await using ISandboxWorkspace sandbox =
+            await sandboxFactory.CreateAsync("operational-context-evolution", cancellationToken);
+        string sandboxContextPath = sandbox.Resolve(OrchestrationArtifactPaths.OperationalContext);
+        string sandboxDeltaPath = sandbox.Resolve(OrchestrationArtifactPaths.OperationalDelta);
+
+        // Seed the workspace with EXACTLY the two evolution inputs.
+        string currentContext = await artifacts.ReadAsync(OrchestrationArtifactPaths.OperationalContext) ?? string.Empty;
+        await artifacts.WriteAbsoluteAsync(sandboxContextPath, currentContext);
+        await artifacts.WriteAbsoluteAsync(sandboxDeltaPath, deltaOutput);
+
+        AgentTurnResult update = await runtime.RunOneShotAsync(
+            AgentSpecs.Operational(repository, AgentEffortLevel.High, identifier: "xhigh", workingDirectory: sandbox.RootPath),
+            UpdateOperationalContext.Text,
+            StreamToConsole,
+            cancellationToken);
+        if (update.State != AgentTurnState.Completed)
+        {
+            throw new LoopStepException($"Update-operational-context turn ended in state {update.State}.");
+        }
+
+        if (!await artifacts.ExistsAbsoluteAsync(sandboxContextPath))
+        {
+            throw new LoopStepException("Transfer left no operational_context.md to seed the next decision session from.");
+        }
+
+        string evolved = await artifacts.ReadAbsoluteAsync(sandboxContextPath) ?? string.Empty;
+        await artifacts.WriteAsync(OrchestrationArtifactPaths.OperationalContext, evolved); // copy the evolved context back into the repo
+        RecordOperationalContextHealth(evolved.Length);
+        return (update, evolved);
+    }
+
+    // Size-health guard (Stage 2, mirrors RepositoryOrchestrator.RecordOperationalContextHealth): warn on a
+    // sustained upward ratchet of the operational-context size across consecutive transfers.
+    private void RecordOperationalContextHealth(int newSize)
+    {
+        OperationalContextHealth verdict = OperationalContextHealthMonitor.Classify(
+            previousOperationalContextSize, newSize, operationalContextGrowthStreak);
+        previousOperationalContextSize = verdict.Size;
+        operationalContextGrowthStreak = verdict.GrowthStreak;
+        if (verdict.Warning)
+        {
+            console.Warn($"Operational context has grown for {verdict.GrowthStreak} consecutive transfers (now {verdict.Size} chars) — check for bloat.");
+        }
     }
 
     // The router's unit-blind signals (mirrors RepositoryOrchestrator.SnapshotRouterInputs). Before any cycle is

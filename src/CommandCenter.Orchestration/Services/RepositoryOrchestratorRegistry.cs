@@ -42,6 +42,7 @@ public sealed class RepositoryOrchestratorRegistry : IAsyncDisposable
     private readonly IPlanArtifactPublisher planArtifactPublisher;
     private readonly IDecisionSessionRouter decisionSessionRouter;
     private readonly IDecisionCostModel costModel;
+    private readonly ISandboxWorkspaceFactory sandboxWorkspaceFactory;
     private readonly OrchestrationFeatureFlags flags;
 
     public RepositoryOrchestratorRegistry(
@@ -51,7 +52,8 @@ public sealed class RepositoryOrchestratorRegistry : IAsyncDisposable
         IPlanArtifactPublisher planArtifactPublisher,
         IDecisionSessionRouter decisionSessionRouter,
         OrchestrationFeatureFlags? flags = null,
-        IDecisionCostModel? costModel = null)
+        IDecisionCostModel? costModel = null,
+        ISandboxWorkspaceFactory? sandboxWorkspaceFactory = null)
     {
         this.agentRuntime = agentRuntime;
         this.artifactStore = artifactStore;
@@ -63,6 +65,8 @@ public sealed class RepositoryOrchestratorRegistry : IAsyncDisposable
         // Threads the DI-registered cost model into every orchestrator so a deployment can swap the seam; the
         // null default matches the orchestrator's own default (EffectiveTokenCostModel).
         this.costModel = costModel ?? new EffectiveTokenCostModel();
+        // Same seam-threading for the Stage-2 sandbox workspace factory; null default = real temp directories.
+        this.sandboxWorkspaceFactory = sandboxWorkspaceFactory ?? new TempSandboxWorkspaceFactory();
     }
 
     public int Count => orchestrators.Count;
@@ -75,7 +79,7 @@ public sealed class RepositoryOrchestratorRegistry : IAsyncDisposable
             return orchestrators.GetOrAdd(
                 repositoryId,
                 id => new Lazy<RepositoryOrchestrator>(
-                    () => new RepositoryOrchestrator(id, agentRuntime, artifactStore, memoryCache, planArtifactPublisher, decisionSessionRouter, flags, costModel),
+                    () => new RepositoryOrchestrator(id, agentRuntime, artifactStore, memoryCache, planArtifactPublisher, decisionSessionRouter, flags, costModel, sandboxWorkspaceFactory),
                     LazyThreadSafetyMode.ExecutionAndPublication)).Value;
         }
         finally

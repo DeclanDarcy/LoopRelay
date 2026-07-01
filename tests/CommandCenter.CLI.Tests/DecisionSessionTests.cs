@@ -20,7 +20,11 @@ public class DecisionSessionTests
         var con = new RecordingLoopConsole();
         var rt = new FakeAgentRuntime(store);
         var router = new DecisionSessionRouter(routerOptions ?? new DecisionSessionRouterOptions());
-        return (new DecisionSession(rt, router, art, con, repo, costModel), rt, store, repo, con);
+        // These tests are not about sandbox isolation — root the Stage-2 sandbox at the repo so the in-place rewrite
+        // scripts resolve transparently (see FakeSandboxWorkspaceFactory). The dedicated isolation test uses a
+        // distinct root.
+        var sandbox = new FakeSandboxWorkspaceFactory { Root = repo.Path };
+        return (new DecisionSession(rt, router, art, con, repo, costModel, sandbox), rt, store, repo, con);
     }
 
     private static string Resolve(Repository r, string rel) => ArtifactPath.ResolveRepositoryPath(r, rel);
@@ -220,5 +224,110 @@ public class DecisionSessionTests
         Assert.False(await store.ExistsAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalDelta)));
         Assert.Equal(1, rt.OpenSessions);
         Assert.Equal("D3", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.Decisions)));
+    }
+
+    [Fact]
+    public async Task Run_Transfer_EvolvesInSandbox_ThenCopiesBackAndCleansUp()
+    {
+        // Stage 2 CLI mirror: the UpdateOperationalContext one-shot runs in an ISOLATED sandbox (distinct root, not
+        // the repo), and the evolved context is copied back into the repo. Small window (guard 20) so round 2 transfers.
+        var store = new MemoryArtifactStore();
+        var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
+        var art = new LoopArtifacts(store, repo);
+        var con = new RecordingLoopConsole();
+        var rt = new FakeAgentRuntime(store);
+        var sandbox = new FakeSandboxWorkspaceFactory(); // distinct root (genuinely separate from the repo)
+        var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
+        var session = new DecisionSession(rt, router, art, con, repo, costModel: null, sandboxFactory: sandbox);
+
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
+
+        // Round 1: seed + propose (occupancy 20 -> round 2 crosses the guard).
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
+            new AgentTurnResult(0, AgentTurnState.Completed, "D1", new AgentTokenUsage(10, 10))));
+        await session.RunAsync(CancellationToken.None);
+
+        // Round 2: Transfer. The evolution one-shot writes the evolved context INSIDE the sandbox.
+        string? seededContext = null;
+        string? seededDelta = null;
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));     // ProduceOperationalDelta
+        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                      // UpdateOperationalContext
+        {
+            // The sandbox is seeded with ONLY the two evolution inputs; capture them before overwriting the context.
+            seededContext = s.ReadAsync(sandbox.Resolve(OrchestrationArtifactPaths.OperationalContext)).Result;
+            seededDelta = s.ReadAsync(sandbox.Resolve(OrchestrationArtifactPaths.OperationalDelta)).Result;
+            s.WriteAsync(sandbox.Resolve(OrchestrationArtifactPaths.OperationalContext), "OPCTX-1").Wait();
+            return Turns.Completed("updated");
+        }));
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>                                 // reseed from transfer
+        {
+            Assert.Contains("OPCTX-1", prompt);
+            return Turns.Completed("reseeded");
+        }));
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D2")));             // propose
+        await session.RunAsync(CancellationToken.None);
+
+        // The evolution one-shot ran against the SANDBOX root, not the repository working directory.
+        (AgentSessionSpec updateSpec, _) = Assert.Single(rt.OneShotCalls);
+        Assert.Equal(sandbox.Root, updateSpec.WorkingDirectory);
+        Assert.NotEqual(repo.Path, updateSpec.WorkingDirectory);
+
+        // The sandbox was seeded with ONLY the two evolution inputs — the CURRENT repo context and the delta — so
+        // codex folds the delta into the real base (not blank/wrong), and the delta seeding is not silently dropped.
+        Assert.Equal("OPCTX-0", seededContext);
+        Assert.Equal("DELTA-TEXT", seededDelta);
+
+        // The evolved context was copied back into the repo; the delta was persisted to the repo too.
+        Assert.Equal("OPCTX-1", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext)));
+        Assert.Equal("DELTA-TEXT", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalDelta)));
+
+        // The sandbox was created once and disposed (cleaned up).
+        Assert.Equal(1, sandbox.CreatedCount);
+        Assert.Single(sandbox.Disposed);
+    }
+
+    [Fact]
+    public async Task Run_RepeatedGrowingTransfers_WarnOnTheContextRatchet()
+    {
+        // Stage 2 CLI mirror of the size-health guard: three transfers producing a strictly larger operational
+        // context ratchet the growth streak to the threshold and emit exactly ONE console warning (on the third).
+        var store = new MemoryArtifactStore();
+        var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
+        var art = new LoopArtifacts(store, repo);
+        var con = new RecordingLoopConsole();
+        var rt = new FakeAgentRuntime(store);
+        var sandbox = new FakeSandboxWorkspaceFactory();
+        var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
+        var session = new DecisionSession(rt, router, art, con, repo, costModel: null, sandboxFactory: sandbox);
+
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
+
+        // Round 1: seed + propose at occupancy 22 (>= guard 20) so every subsequent round routes Transfer.
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
+            new AgentTurnResult(0, AgentTurnState.Completed, "D1", new AgentTokenUsage(11, 11))));
+        await session.RunAsync(CancellationToken.None);
+
+        // Three transfers producing 100/200/300-char contexts: baseline (no warn), +1 (no warn), +2 (WARN).
+        foreach (string context in new[] { new string('x', 100), new string('x', 200), new string('x', 300) })
+        {
+            string evolved = context;
+            rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("delta")));       // ProduceOperationalDelta
+            rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                    // UpdateOperationalContext
+            {
+                s.WriteAsync(sandbox.Resolve(OrchestrationArtifactPaths.OperationalContext), evolved).Wait();
+                return Turns.Completed("updated");
+            }));
+            rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("reseeded")));     // reseed
+            rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>                                    // propose (occupancy 22)
+                new AgentTurnResult(0, AgentTurnState.Completed, "D", new AgentTokenUsage(11, 11))));
+            await session.RunAsync(CancellationToken.None);
+        }
+
+        // Exactly one ratchet warning — on the third transfer (streak reaches the threshold of 2), not before.
+        Assert.Equal(1, con.Events.Count(e => e.Kind == "warn" && e.Text.Contains("grown")));
     }
 }

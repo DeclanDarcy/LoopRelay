@@ -31,8 +31,18 @@ namespace CommandCenter.Orchestration.Services;
 /// intentionally NOT added — it would break the 202 fire-and-forget Execute Plan contract — so this flag is the
 /// off-switch instead. Scoped to the Execute Plan run only; the continuation path never commits/pushes today.
 /// </param>
+/// <param name="SandboxOperationalContextEvolutionEnabled">
+/// When true (default, the Stage-2 cost behavior) a Transfer's <c>UpdateOperationalContext</c> evolution one-shot
+/// runs in an isolated temp workspace seeded with ONLY <c>operational_context.md</c> (read/write) and
+/// <c>operational_delta.md</c> (read); codex's <c>--cd</c> confines its <c>workspace-write</c> sandbox to that
+/// directory, so it can no longer re-explore the whole repository each transfer (the dominant ~425k-token
+/// transfer cost the economics investigation measured). The evolved context is copied back into the repo. When
+/// false the evolution runs against the repository working directory (the pre-Stage-2 behavior) — the rollback
+/// off-switch if a runtime ever needs the agent to see the full repo during the rewrite.
+/// </param>
 public sealed record OrchestrationFeatureFlags(
     bool PersistentPlanningProcessEnabled = true,
     bool PersistentDecisionProcessReuseEnabled = true,
     bool TransferOnlyDecisionFallbackEnabled = false,
-    bool AutomaticCommitPushAfterExecuteEnabled = true);
+    bool AutomaticCommitPushAfterExecuteEnabled = true,
+    bool SandboxOperationalContextEvolutionEnabled = true);

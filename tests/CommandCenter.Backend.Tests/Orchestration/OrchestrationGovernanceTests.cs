@@ -12,7 +12,9 @@ namespace CommandCenter.Backend.Tests.Orchestration;
 /// <c>docs/orchestration-loop-governance.md</c> that no earlier milestone test protected. The layering,
 /// prompt-authority, endpoint-disposition, decision-isolation, process-leak, recovery, and per-flag OFF-branch
 /// boundaries are already guarded (see the governance test coverage map); this pins what remains:
-/// (1) the four feature-flag DEFAULTS that make a default-constructed overlay a no-op (rollback paths 2-4),
+/// (1) the five feature-flag DEFAULTS — four make a default-constructed overlay a no-op (rollback paths 2-4);
+///     the fifth (SandboxOperationalContextEvolution) defaults ON to the Stage-2 sandboxed evolution, with OFF
+///     as its rollback lever,
 /// (2) the documented router transfer threshold default, and
 /// (3) the continued existence of the legacy execution-session subsystem (rollback path 5).
 /// A change that silently flips a default or deletes a rollback path now fails here instead of silently
@@ -28,12 +30,14 @@ public sealed class OrchestrationGovernanceTests
     {
         var flags = new OrchestrationFeatureFlags();
 
-        // Defaults reproduce today's production behavior byte-for-byte; each flag is an opt-OUT (or, for the
-        // transfer fallback, opt-IN) a deployment flips. Documented as rollback paths 2-4.
+        // The m10 flags reproduce today's production behavior byte-for-byte; each is an opt-OUT (or, for the
+        // transfer fallback, opt-IN) a deployment flips (rollback paths 2-4). The Stage-2 sandbox flag is the one
+        // exception: it defaults ON to the new sandboxed evolution, and OFF is its rollback lever.
         Assert.True(flags.PersistentPlanningProcessEnabled);          // rollback path 2 off-switch
         Assert.True(flags.PersistentDecisionProcessReuseEnabled);     // rollback path 3 off-switch
         Assert.False(flags.TransferOnlyDecisionFallbackEnabled);      // rollback path 3 forced-transfer opt-in
         Assert.True(flags.AutomaticCommitPushAfterExecuteEnabled);    // rollback path 4 off-switch
+        Assert.True(flags.SandboxOperationalContextEvolutionEnabled); // Stage 2: sandbox on by default; OFF reverts to repo-cwd evolution
     }
 
     [Fact]

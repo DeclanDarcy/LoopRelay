@@ -31,6 +31,7 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
     private readonly IPlanArtifactPublisher planArtifactPublisher;
     private readonly IDecisionSessionRouter decisionSessionRouter;
     private readonly IDecisionCostModel costModel;
+    private readonly ISandboxWorkspaceFactory sandboxWorkspaceFactory;
     private readonly OrchestrationFeatureFlags flags;
 
     // Serializes session open/close and the dispose handoff so an in-flight EnsureSession can never
@@ -99,6 +100,11 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
     private double transferCostEstimate = InitialTransferCostEstimate; // C: seed -> measured -> running average
     private int transferCount;              // measured transfers so far (running-average denominator)
 
+    // Operational-context size-health guard (Stage 2). State lives under accountingLock and persists across
+    // recycles (the streak spans transfers). null previous size = no baseline yet (the first transfer never warns).
+    private int? previousOperationalContextSize;
+    private int operationalContextGrowthStreak;
+
     // The flow-specific conversation projection (m6): an append-only transcript of the loop's turns. Guarded
     // by its own lock because it is appended from background runs (planning/execution/decision) and read by
     // the GET /conversation endpoint concurrently.
@@ -115,7 +121,8 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
         IPlanArtifactPublisher planArtifactPublisher,
         IDecisionSessionRouter decisionSessionRouter,
         OrchestrationFeatureFlags? flags = null,
-        IDecisionCostModel? costModel = null)
+        IDecisionCostModel? costModel = null,
+        ISandboxWorkspaceFactory? sandboxWorkspaceFactory = null)
     {
         RepositoryId = repositoryId;
         this.agentRuntime = agentRuntime;
@@ -127,6 +134,8 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
         this.flags = flags ?? new OrchestrationFeatureFlags();
         // Default cost model = cache-adjusted effective tokens; the seam lets a deployment swap in dollars/latency.
         this.costModel = costModel ?? new EffectiveTokenCostModel();
+        // Default = real temp directories; the seam lets tests substitute an in-memory workspace (Stage 2 sandbox).
+        this.sandboxWorkspaceFactory = sandboxWorkspaceFactory ?? new TempSandboxWorkspaceFactory();
     }
 
     public string RepositoryId { get; }
@@ -136,6 +145,9 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
     public OrchestratorStreamChannel ExecutionStream { get; } = new();
 
     public OrchestratorStreamChannel DecisionStream { get; } = new();
+
+    // The most recent operational-context size-health verdict (Stage 2). Null until the first transfer classifies.
+    public OperationalContextHealth? LastOperationalContextHealth { get; private set; }
 
     // ---- Transient run state (lost on restart; never the system of record) ----
     public string? CachedPlan { get; private set; }
@@ -1615,14 +1627,14 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
         await CloseDecisionSessionAsync().ConfigureAwait(false);
         decisionSeeded = false;
 
-        // 3) Fold the delta into the next operational context revision — Operational, ExtraHigh, one-shot. The
-        // turn reads operational_context.md + operational_delta.md from the workspace and rewrites the context.
+        // 3) Fold the delta into the next operational context revision — Operational, ExtraHigh, one-shot. The turn
+        // reads operational_context.md + operational_delta.md and rewrites the context. Stage 2: by default this
+        // runs in an ISOLATED sandbox workspace (only those two files, codex --cd scoped) so it no longer
+        // re-explores the whole repo, and the evolved context is copied back into the repo below.
         DecisionStream.Publish("phase", Serialize(new { phase = "UpdateOperationalContext" }));
-        AgentTurnResult rewrite = await agentRuntime.RunOneShotAsync(
-            BuildOperationalSpec(repository, AgentEffortLevel.High, "xhigh"),
-            UpdateOperationalContext.Text,
-            onChunk: null,
-            cancellationToken).ConfigureAwait(false);
+        string contextPath = ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.OperationalContext);
+        (AgentTurnResult rewrite, string? evolvedContext) =
+            await EvolveOperationalContextAsync(repository, contextPath, delta.Output, cancellationToken).ConfigureAwait(false);
         decisionProvenance.Add(BuildUpdateOperationalContextProvenance());
         if (rewrite.State != AgentTurnState.Completed)
         {
@@ -1635,8 +1647,7 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
             return false;
         }
 
-        string contextPath = ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.OperationalContext);
-        if (!await artifactStore.ExistsAsync(contextPath).ConfigureAwait(false))
+        if (evolvedContext is null)
         {
             DecisionStream.Publish("failed", Serialize(new
             {
@@ -1646,7 +1657,11 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
             return false;
         }
 
-        string newContext = await artifactStore.ReadAsync(contextPath).ConfigureAwait(false) ?? string.Empty;
+        // Copy the evolved context back into the repo (a same-content re-write on the OFF path, where the agent
+        // already wrote it in place), then check its size-health so a sustained upward ratchet is observable.
+        await artifactStore.WriteAsync(contextPath, evolvedContext).ConfigureAwait(false);
+        RecordOperationalContextHealth(evolvedContext.Length);
+        string newContext = evolvedContext;
 
         // 4) Open a FRESH Decision process and seed it from the rewritten operational context.
         DecisionStream.Publish("phase", Serialize(new { phase = "StartDecisionSessionFromTransfer" }));
@@ -1835,14 +1850,82 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
 
     // Operational one-shot profile: writes the workspace, approvals off, effort by tier (xhigh for
     // milestone extraction, medium for start execution).
-    private AgentSessionSpec BuildOperationalSpec(Repository repository, AgentEffortLevel level, string? identifier) =>
+    private AgentSessionSpec BuildOperationalSpec(
+        Repository repository, AgentEffortLevel level, string? identifier, string? workingDirectory = null) =>
         new(
             SessionIdentity.New(),
             RepositoryId,
             SessionRole.OperationalExecution,
             new SandboxProfile("workspace-write", CanWriteWorkspace: true, CanAccessNetwork: false, RequiresApproval: false),
             new EffortProfile(level, Identifier: identifier),
-            repository.Path);
+            // Stage 2: a Transfer's evolution one-shot passes a sandbox root here so codex --cd scopes it there;
+            // everything else defaults to the repository working directory.
+            workingDirectory ?? repository.Path);
+
+    // Runs the operational-context evolution one-shot and returns its result plus the evolved context text (null if
+    // it failed or produced nothing). Stage 2: by default this runs in an ISOLATED sandbox workspace seeded with
+    // ONLY operational_context.md + operational_delta.md, so codex cannot re-explore the whole repo (the dominant
+    // transfer cost). The flag OFF-switch reverts to running against the repository working directory, where the
+    // agent rewrites operational_context.md in place — the pre-Stage-2 behavior.
+    private async Task<(AgentTurnResult Rewrite, string? EvolvedContext)> EvolveOperationalContextAsync(
+        Repository repository, string repoContextPath, string deltaOutput, CancellationToken cancellationToken)
+    {
+        if (!flags.SandboxOperationalContextEvolutionEnabled)
+        {
+            AgentTurnResult inRepo = await agentRuntime.RunOneShotAsync(
+                BuildOperationalSpec(repository, AgentEffortLevel.High, "xhigh"),
+                UpdateOperationalContext.Text,
+                onChunk: null,
+                cancellationToken).ConfigureAwait(false);
+            if (inRepo.State != AgentTurnState.Completed ||
+                !await artifactStore.ExistsAsync(repoContextPath).ConfigureAwait(false))
+            {
+                return (inRepo, null);
+            }
+
+            return (inRepo, await artifactStore.ReadAsync(repoContextPath).ConfigureAwait(false) ?? string.Empty);
+        }
+
+        await using ISandboxWorkspace sandbox = await sandboxWorkspaceFactory
+            .CreateAsync("operational-context-evolution", cancellationToken).ConfigureAwait(false);
+        string sandboxContextPath = sandbox.Resolve(OrchestrationArtifactPaths.OperationalContext);
+        string sandboxDeltaPath = sandbox.Resolve(OrchestrationArtifactPaths.OperationalDelta);
+
+        // Seed the workspace with EXACTLY the two evolution inputs — the current context (read/write) and the delta.
+        string currentContext = await artifactStore.ReadAsync(repoContextPath).ConfigureAwait(false) ?? string.Empty;
+        await artifactStore.WriteAsync(sandboxContextPath, currentContext).ConfigureAwait(false);
+        await artifactStore.WriteAsync(sandboxDeltaPath, deltaOutput).ConfigureAwait(false);
+
+        AgentTurnResult rewrite = await agentRuntime.RunOneShotAsync(
+            BuildOperationalSpec(repository, AgentEffortLevel.High, "xhigh", sandbox.RootPath),
+            UpdateOperationalContext.Text,
+            onChunk: null,
+            cancellationToken).ConfigureAwait(false);
+        if (rewrite.State != AgentTurnState.Completed ||
+            !await artifactStore.ExistsAsync(sandboxContextPath).ConfigureAwait(false))
+        {
+            return (rewrite, null);
+        }
+
+        return (rewrite, await artifactStore.ReadAsync(sandboxContextPath).ConfigureAwait(false) ?? string.Empty);
+    }
+
+    // Size-health guard (Stage 2): classify the newest operational-context size against the previous revision and
+    // the running growth streak (state under accountingLock, persists across recycles), and surface the verdict on
+    // LastOperationalContextHealth so a sustained upward ratchet is observable.
+    private void RecordOperationalContextHealth(int newSize)
+    {
+        OperationalContextHealth verdict;
+        lock (accountingLock)
+        {
+            verdict = OperationalContextHealthMonitor.Classify(
+                previousOperationalContextSize, newSize, operationalContextGrowthStreak);
+            previousOperationalContextSize = verdict.Size;
+            operationalContextGrowthStreak = verdict.GrowthStreak;
+        }
+
+        LastOperationalContextHealth = verdict;
+    }
 
     private static PromptProvenance BuildExtractMilestonesProvenance() =>
         new()

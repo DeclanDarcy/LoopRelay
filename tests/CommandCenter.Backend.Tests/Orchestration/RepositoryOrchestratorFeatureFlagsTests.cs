@@ -189,8 +189,11 @@ public sealed class RepositoryOrchestratorFeatureFlagsTests
         var store = new FakeArtifactStore();
         var router = new FakeDecisionSessionRouter { Route = DecisionRoute.Continue }; // router would NOT transfer
         Repository repository = OrchestrationTestFactory.Repository();
+        // This test is about the forced-transfer flag, not sandbox isolation — root the sandbox at the repo so the
+        // in-place rewrite script (writing CTX2 to the repo's operational_context) resolves transparently.
+        var sandbox = new FakeSandboxWorkspaceFactory { Root = repository.Path };
         RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(
-            runtime: runtime, store: store, router: router,
+            runtime: runtime, store: store, router: router, sandbox: sandbox,
             flags: new OrchestrationFeatureFlags(TransferOnlyDecisionFallbackEnabled: true));
 
         await SeedLoopAsync(orchestrator, store, repository);

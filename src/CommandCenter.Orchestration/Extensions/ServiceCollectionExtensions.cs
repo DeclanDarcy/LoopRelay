@@ -27,6 +27,9 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IPlanArtifactPublisher, GitPlanArtifactPublisher>();
         services.TryAddSingleton(new DecisionSessionRouterOptions());
         services.TryAddSingleton<IDecisionCostModel, EffectiveTokenCostModel>();
+        // Stage 2: a Transfer's operational-context evolution runs in an isolated temp workspace (codex --cd), so it
+        // no longer re-explores the whole repo. Real temp dirs by default; the seam lets a deployment relocate them.
+        services.TryAddSingleton<ISandboxWorkspaceFactory, TempSandboxWorkspaceFactory>();
         services.TryAddSingleton<IDecisionSessionRouter, DecisionSessionRouter>();
         // m10 hardening/certification flags. A default instance reproduces today's behavior byte-for-byte; a
         // deployment may override it (e.g. bind from configuration in Program.cs) before this default lands.

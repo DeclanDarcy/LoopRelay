@@ -9,14 +9,15 @@ namespace CommandCenter.Cli;
 /// </summary>
 internal static class AgentSpecs
 {
-    public static AgentSessionSpec Operational(Repository repository, AgentEffortLevel level, string? identifier) =>
+    public static AgentSessionSpec Operational(Repository repository, AgentEffortLevel level, string? identifier, string? workingDirectory = null) =>
         new(
             SessionIdentity.New(),
             repository.Id.ToString("N"),
             SessionRole.OperationalExecution,
             new SandboxProfile("workspace-write", CanWriteWorkspace: true, CanAccessNetwork: false, RequiresApproval: false),
             new EffortProfile(level, identifier),
-            repository.Path);
+            // Stage 2: a Transfer's evolution one-shot passes a sandbox root so codex --cd scopes it there.
+            workingDirectory ?? repository.Path);
 
     public static AgentSessionSpec Decision(Repository repository) =>
         new(

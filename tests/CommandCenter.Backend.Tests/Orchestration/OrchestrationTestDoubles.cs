@@ -238,6 +238,10 @@ internal sealed class FakeArtifactStore : IArtifactStore
 
     public List<string> WriteQueries { get; } = new();
 
+    /// <summary>Full write history (path + content), in order — lets a test assert the FIRST write to a path
+    /// (e.g. the sandbox copy-in CONTENT) even after a later write to the same path overwrites it.</summary>
+    public List<(string Path, string Content)> Writes { get; } = new();
+
     public List<string> DeleteQueries { get; } = new();
 
     public List<string> ListQueries { get; } = new();
@@ -261,6 +265,7 @@ internal sealed class FakeArtifactStore : IArtifactStore
         }
 
         WriteQueries.Add(path);
+        Writes.Add((path, content));
         files[path] = content;
         return Task.CompletedTask;
     }
@@ -376,6 +381,52 @@ internal sealed class FakeDecisionCostModel : IDecisionCostModel
     public double EstimateNextCycle(DecisionCostForecast forecast) => EstimateValue;
 }
 
+/// <summary>
+/// In-memory sandbox workspace factory (Stage 2). Records the roots it created and disposed so a test can pin
+/// "the evolution ran in a fresh workspace and it was cleaned up". A single fixed <see cref="Root"/> is reused
+/// across creations: the in-memory <see cref="FakeArtifactStore"/> fully overwrites each transfer's workspace
+/// content, so a shared root is harmless AND lets a test compute the sandbox artifact paths ahead of the run
+/// (to script the evolution one-shot's effect at the SAME absolute path the orchestrator reads back from).
+/// </summary>
+internal sealed class FakeSandboxWorkspaceFactory : ISandboxWorkspaceFactory
+{
+    // A distinct temp root by default (real sandbox isolation). A test that is NOT about isolation can set
+    // Root = repository.Path so the in-place rewrite effect resolves to the repo path — the sandbox becomes
+    // transparent and existing repo-writing transfer scripts keep working unchanged.
+    // WARNING: a transparent root (== repository.Path) makes the orchestrator's copy-back a same-content no-op, so
+    // such a test does NOT exercise copy-back semantics — only the DISTINCT-root tests (e.g. the sandbox isolation
+    // test) kill a copy-back-skipped regression. Reserve the transparent root for OFF-path / routing-only tests.
+    public string Root { get; init; } =
+        System.IO.Path.Combine(System.IO.Path.GetTempPath(), "cc-fake-sandbox", Guid.NewGuid().ToString("N"));
+
+    public List<string> Created { get; } = new();
+
+    public List<string> Disposed { get; } = new();
+
+    public int CreatedCount => Created.Count;
+
+    /// <summary>Mirrors <see cref="ISandboxWorkspace.Resolve"/> so a test can pre-compute a workspace artifact path.</summary>
+    public string Resolve(string relativePath) =>
+        System.IO.Path.GetFullPath(System.IO.Path.Combine(Root, relativePath));
+
+    public Task<ISandboxWorkspace> CreateAsync(string label, CancellationToken cancellationToken = default)
+    {
+        Created.Add(Root);
+        return Task.FromResult<ISandboxWorkspace>(new FakeSandboxWorkspace(this));
+    }
+
+    private sealed class FakeSandboxWorkspace(FakeSandboxWorkspaceFactory owner) : ISandboxWorkspace
+    {
+        public string RootPath => owner.Root;
+
+        public ValueTask DisposeAsync()
+        {
+            owner.Disposed.Add(owner.Root);
+            return ValueTask.CompletedTask;
+        }
+    }
+}
+
 /// <summary>Records each commit+push and returns a configurable result (default: success, pushed).</summary>
 internal sealed class FakePlanArtifactPublisher : IPlanArtifactPublisher
 {
@@ -431,7 +482,8 @@ internal static class OrchestrationTestFactory
         IPlanArtifactPublisher? publisher = null,
         IDecisionSessionRouter? router = null,
         OrchestrationFeatureFlags? flags = null,
-        IDecisionCostModel? costModel = null) =>
+        IDecisionCostModel? costModel = null,
+        ISandboxWorkspaceFactory? sandbox = null) =>
         new(
             repositoryId ?? Guid.NewGuid().ToString("D"),
             runtime ?? new FakeAgentRuntime(),
@@ -440,5 +492,7 @@ internal static class OrchestrationTestFactory
             publisher ?? new FakePlanArtifactPublisher(),
             router ?? new FakeDecisionSessionRouter(),
             flags ?? new OrchestrationFeatureFlags(),
-            costModel);
+            costModel,
+            // Default to an in-memory sandbox so no test hits real temp directories unless it opts in.
+            sandbox ?? new FakeSandboxWorkspaceFactory());
 }

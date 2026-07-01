@@ -134,10 +134,11 @@ public sealed class OrchestrationArtifactProtocolTests
     {
         var runtime = new FakeAgentRuntime();
         var store = new FakeArtifactStore();
+        var sandbox = new FakeSandboxWorkspaceFactory();
         var router = new FakeDecisionSessionRouter { Route = DecisionRoute.Transfer };
         Repository repository = OrchestrationTestFactory.Repository();
         RepositoryOrchestrator orchestrator =
-            OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store, router: router);
+            OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store, router: router, sandbox: sandbox);
 
         orchestrator.RecordPlan(Plan);
         await store.WriteAsync(Resolve(repository, OrchestrationArtifactPaths.OperationalContext), OperationalContext);
@@ -153,7 +154,7 @@ public sealed class OrchestrationArtifactProtocolTests
         runtime.OneShotTurns.Enqueue(new FakeOneShotTurn(Effect: () =>
             store.WriteAsync(Resolve(repository, OrchestrationArtifactPaths.LiveHandoff), "HANDOFF TWO")));
         runtime.OneShotTurns.Enqueue(new FakeOneShotTurn(Effect: () =>
-            store.WriteAsync(Resolve(repository, OrchestrationArtifactPaths.OperationalContext), "REWRITTEN CONTEXT")));
+            store.WriteAsync(sandbox.Resolve(OrchestrationArtifactPaths.OperationalContext), "REWRITTEN CONTEXT"))); // rewritten INSIDE the sandbox (Stage 2)
         runtime.SessionTurns.Enqueue(new FakeOneShotTurn(Output: "OPERATIONAL DELTA"));  // ProduceOperationalDelta
         runtime.SessionTurns.Enqueue(new FakeOneShotTurn());                             // reseed-from-transfer
         runtime.SessionTurns.Enqueue(new FakeOneShotTurn(Output: "NEXT DECISIONS"));     // proposal

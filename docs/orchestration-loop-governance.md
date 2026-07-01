@@ -86,14 +86,27 @@ See the dedicated divergence record below. Owner: `RepositoryOrchestrator` (rota
 ### LOOP-8 — m10 feature flags, leak fixes, and shutdown/teardown reaping
 
 - **Capability**: Hardening / rollback controls.
-- **Invariant**: A default-constructed `OrchestrationFeatureFlags` reproduces production behavior byte-for-byte; each flag is an opt-out (or, for the fallback, opt-in) switch; held-open sessions are deregistered at every teardown site, on app shutdown, and on repository delete.
+- **Invariant**: A default-constructed `OrchestrationFeatureFlags` reproduces production behavior byte-for-byte for the four m10 flags (each an opt-out, or for the fallback opt-in, switch); the fifth flag, `SandboxOperationalContextEvolutionEnabled` (Stage 2), instead defaults ON to the sandboxed evolution — a deliberate cost behavior change — with OFF as its rollback lever (see LOOP-9). Held-open sessions are deregistered at every teardown site, on app shutdown, and on repository delete.
 - **Owner**: `OrchestrationFeatureFlags`, `OrchestratorShutdownHostedService`, `IAgentRuntime.CloseSessionAsync`, `RepositoriesEndpoints` (DELETE teardown).
 - **Slice/milestone**: m10.
-- **Evidence**: `OrchestrationFeatureFlags` (4 bools, lines 34–38, defaults `true/true/false/true`); the four branch points in `RepositoryOrchestrator`; `DELETE /api/repositories/{repositoryId}` calls `registry.RemoveAsync` before config rewrite.
+- **Evidence**: `OrchestrationFeatureFlags` (5 bools, defaults `true/true/false/true/true`; the fifth is the Stage-2 `SandboxOperationalContextEvolutionEnabled` — see LOOP-9); the branch points in `RepositoryOrchestrator`; `DELETE /api/repositories/{repositoryId}` calls `registry.RemoveAsync` before config rewrite.
 - **Consumers affected**: Operators (config `CommandCenter:Orchestration`); the `completed` frame keeps shape with `commitSha = null` when auto-commit is off.
 - **Compatibility impact**: Additive; `NoContent`/`202` contracts unchanged.
 - **Guard**: `RepositoryOrchestratorFeatureFlagsTests` (per-flag OFF-branch), `ProcessLeakDetectionTests`, `OrchestratorShutdownAndRemovalTests`.
 - **Rollback path**: The flags *are* the rollback surface — see Rollback Paths.
+
+### LOOP-9 — Sandboxed operational-context evolution + size health guard
+
+- **Capability**: Transfer cost reduction and renewal-reward stability (Stage 2 of the transfer-cost economics work).
+- **Invariant**: A decision-session Transfer's `UpdateOperationalContext` evolution one-shot runs in an ISOLATED sandbox workspace seeded with ONLY `.agents/operational_context.md` (read/write) and `.agents/operational_delta.md` (read), scoped by codex `--cd` (`AgentSessionSpec.WorkingDirectory` + `workspace-write`); it can no longer re-explore the repository. The evolved context is copied back into the repo. Separately, the operational context's size is tracked across transfers and a SUSTAINED upward ratchet (growth streak ≥ 2) is flagged.
+- **Owner**: `RepositoryOrchestrator.EvolveOperationalContextAsync` / `RecordOperationalContextHealth`; `ISandboxWorkspaceFactory` / `TempSandboxWorkspaceFactory`; `OperationalContextHealthMonitor`; mirrored by `CommandCenter.CLI` `DecisionSession`.
+- **Slice/milestone**: Stage 2 (post-refactor; transfer-cost economics).
+- **Evidence**: the evolution one-shot's `WorkingDirectory` is the sandbox root, not the repository; the transfer copies the evolved `operational_context.md` back into the repo; `LastOperationalContextHealth.Warning` becomes true on a sustained ratchet (the CLI emits a `console.Warn`). Motivated by the measured ~425k-token repo re-exploration that dominated transfer cost.
+- **Consumers affected**: None external — the evolved context and the `transferred` frame are unchanged; the size-health verdict is a read-only property (`LastOperationalContextHealth`), deliberately kept OFF the SSE decision-stream contract to avoid a contract/freshness/UI ripple.
+- **Compatibility impact**: Additive; no SSE contract, prompt, or UI change. The prompt's `.agents/…` relative paths are preserved inside the sandbox layout.
+- **Known limits / assumption**: The evolution agent runs with `--cd` pointed at a bare temp directory (no `.git`); directory-scoping is the mechanism (the coarse codex sandbox cannot express true per-file permissions).
+- **Guard**: `RepositoryOrchestratorTransferTests` (sandbox isolation, copy-back, disposal on success + rewrite-failure, OFF-path repo-cwd, size-health baseline + ratchet), `OperationalContextHealthMonitorTests`, `TempSandboxWorkspaceFactoryTests`, CLI `DecisionSessionTests`.
+- **Rollback path**: In the backend, `SandboxOperationalContextEvolutionEnabled = false` reverts the evolution to the repository working directory (pre-Stage-2 behavior). The CLI `DecisionSession` mirror ALWAYS sandboxes (it has no feature-flag surface); reverting it requires a code change, not configuration. See Rollback Paths.
 
 ## Intentional Divergence: `HandoffService` Behavior and `AwaitingAcceptance`
 
@@ -116,7 +129,7 @@ See the dedicated divergence record below. Owner: `RepositoryOrchestrator` (rota
 
 ## Rollback Paths
 
-The loop exposes five rollback paths. Paths 2–4 are the m10 `OrchestrationFeatureFlags` (set under configuration `CommandCenter:Orchestration`); each default reproduces today's behavior, so a rollback is an explicit opt-out.
+The loop exposes five rollback paths. Paths 2–4 are the m10 `OrchestrationFeatureFlags` (set under configuration `CommandCenter:Orchestration`); each default reproduces today's behavior, so a rollback is an explicit opt-out. A further Stage-2 flag, `SandboxOperationalContextEvolutionEnabled` (default **ON**, unlike the m10 flags), is an additional rollback lever (LOOP-9) for the **backend** `RepositoryOrchestrator` only: set it OFF to revert the sandboxed operational-context evolution to running against the repository working directory. The CLI `DecisionSession` mirror has no flag surface and always sandboxes, so reverting it is a code change rather than configuration.
 
 1. **Disable the Plan Authoring screen.** This is a UI mount gate, not a backend flag: the React `App` keeps the Plan Authoring screen mounted only while an authoring session is active (`isAuthoringSessionActive` latch) or no plan exists. Removing the screen's entry point (or holding the gate closed) prevents the loop from being initiated from the UI; the backend endpoints remain but are undriven. *Restored behavior*: users interact only with the legacy workspace.
 2. **Disable persistent planning** — `PersistentPlanningProcessEnabled = false`. Each planning turn runs as a fresh one-shot via `RunOneShotAsync`; Revise re-runs `RevisePlan` as its own one-shot against the persisted plan. *Restored behavior*: no held-open planning process.
