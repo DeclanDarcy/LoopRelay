@@ -88,10 +88,15 @@ or the next) flushes the stranded commit.
 
 - `Program.cs`: construct `AgentsSubmodulePublisher(processRunner, repository, console)` after
   `processRunner` is resolved, and pass it to `LoopRunner` (`CommitGate` does **not** take it).
-- `LoopRunner.RunAsync` calls the publisher **twice**: once after `RotateLiveHandoffAsync()` and
-  **before** `execution.RunAsync()` (`ContextUpdateMessage`), and once **after** `execution.RunAsync()`
+- `LoopRunner.RunAsync` calls the publisher **twice** per iteration: once after `RotateLiveHandoffAsync()`
+  and **before** `execution.RunAsync()` (`ContextUpdateMessage`), and once **after** `execution.RunAsync()`
   (`ExecutionHandoffMessage`) so codex's writes — including the epic-completing checkbox — are published
   on the iteration that produced them.
+- On an abnormal exit (the `LoopStepException`/`OperationCanceledException` catch blocks →
+  `Failed`/`Cancelled`), `SalvageSubmoduleOnExitAsync` publishes once more (`PartialExitMessage`) so the
+  interrupted iteration's `.agents/` writes are not stranded. It is **best-effort**: it runs under
+  `CancellationToken.None` (a cancelled run still flushes) and swallows any failure (logged as a warning)
+  so it never masks the real outcome.
   This is the literal "before invoking codex" point.
 
 ### Revise — `CommitGate` ignores `.agents/`

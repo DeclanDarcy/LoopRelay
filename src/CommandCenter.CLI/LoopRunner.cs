@@ -76,12 +76,30 @@ internal sealed class LoopRunner(
         catch (OperationCanceledException)
         {
             console.Warn("Cancellation requested — stopping the loop.");
+            await SalvageSubmoduleOnExitAsync();
             return LoopOutcome.Cancelled;
         }
         catch (LoopStepException ex)
         {
             console.Error(ex.Message);
+            await SalvageSubmoduleOnExitAsync();
             return LoopOutcome.Failed;
+        }
+    }
+
+    // The loop is exiting abnormally (a failed step or cancellation), so the current iteration's `.agents/`
+    // writes were never published. Salvage them to the submodule remote rather than stranding them until the
+    // next run's pre-codex publish. Best-effort: uses CancellationToken.None so a cancelled run still flushes,
+    // and swallows any failure so this never masks the real Failed/Cancelled outcome.
+    private async Task SalvageSubmoduleOnExitAsync()
+    {
+        try
+        {
+            await submodulePublisher.PublishAsync(AgentsSubmodulePublisher.PartialExitMessage, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            console.Warn($"Could not publish partial .agents state on exit: {ex.Message}");
         }
     }
 

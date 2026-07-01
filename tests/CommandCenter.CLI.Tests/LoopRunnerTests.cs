@@ -278,4 +278,93 @@ public class LoopRunnerTests
         // completing iteration's state reaches the submodule remote.
         Assert.True(lastSubmodulePush > codexExec, "the .agents submodule must also be pushed AFTER codex runs");
     }
+
+    // Scripts git so the `.agents` submodule always reads dirty (on branch main) and the parent reads clean,
+    // so any publish — including the on-exit salvage — actually commits.
+    private static void DirtySubmoduleCleanParent(Harness h) =>
+        h.Git.Handler = (wd, args) =>
+        {
+            bool submodule = wd.Replace('\\', '/').EndsWith("/.agents", StringComparison.Ordinal);
+            return args[0] switch
+            {
+                "status" => FakeProcessRunner.Ok(submodule ? " M decisions/decisions.md" : string.Empty),
+                "branch" => FakeProcessRunner.Ok("main"),
+                _ => FakeProcessRunner.Ok()
+            };
+        };
+
+    private static bool IsPartialExitCommit((string FileName, IReadOnlyList<string> Args, string WorkingDirectory) call) =>
+        call.Args.Count >= 3 && call.Args[0] == "commit" &&
+        call.Args[2] == AgentsSubmodulePublisher.PartialExitMessage;
+
+    [Fact]
+    public async Task Run_WhenExecutionFails_SalvagesPartialAgentsStateOnExit()
+    {
+        var h = New();
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
+        await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
+        DirtySubmoduleCleanParent(h);
+
+        // Decision succeeds (seed + propose); the execution work turn fails -> ExecutionStep throws -> Failed.
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D")));
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));
+
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+
+        Assert.Equal(LoopOutcome.Failed, outcome);
+        Assert.Contains(h.Git.Calls, IsPartialExitCommit);
+    }
+
+    [Fact]
+    public async Task Run_WhenCancelled_SalvagesPartialAgentsStateOnExit()
+    {
+        var h = New();
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
+        await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
+        DirtySubmoduleCleanParent(h);
+
+        using var cts = new CancellationTokenSource();
+        // The decision seed turn cancels mid-flight (before any pre-codex publish runs).
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
+        {
+            cts.Cancel();
+            throw new OperationCanceledException(cts.Token);
+        }));
+
+        LoopOutcome outcome = await h.Runner.RunAsync(cts.Token);
+
+        Assert.Equal(LoopOutcome.Cancelled, outcome);
+        // The salvage runs under CancellationToken.None, so it still commits despite the cancelled run.
+        Assert.Contains(h.Git.Calls, IsPartialExitCommit);
+    }
+
+    [Fact]
+    public async Task Run_WhenSalvagePushFails_StaysFailed_BestEffort()
+    {
+        var h = New();
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
+        await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
+
+        // Submodule dirty on a branch, but every push fails. The decision proposal turn fails first (-> Failed);
+        // the on-exit salvage then also fails to push and MUST be swallowed rather than masking the outcome.
+        h.Git.Handler = (wd, args) =>
+        {
+            bool submodule = wd.Replace('\\', '/').EndsWith("/.agents", StringComparison.Ordinal);
+            return args[0] switch
+            {
+                "status" => FakeProcessRunner.Ok(submodule ? " M decisions/decisions.md" : string.Empty),
+                "branch" => FakeProcessRunner.Ok("main"),
+                "push" => FakeProcessRunner.Fail("push rejected"),
+                _ => FakeProcessRunner.Ok()
+            };
+        };
+
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));
+
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+
+        Assert.Equal(LoopOutcome.Failed, outcome);
+    }
 }

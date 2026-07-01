@@ -27,6 +27,9 @@ internal sealed class AgentsSubmodulePublisher(IProcessRunner processRunner, Rep
     /// <summary>Commit message for the post-codex publish — codex's handoff and milestone writes.</summary>
     public const string ExecutionHandoffMessage = "Orchestration loop: execution handoff";
 
+    /// <summary>Commit message for the best-effort salvage publish when the loop exits abnormally (Failed/Cancelled).</summary>
+    public const string PartialExitMessage = "Orchestration loop: partial state on interrupted exit";
+
     private string SubmodulePath => Path.Combine(repository.Path, OrchestrationArtifactPaths.AgentsDirectory);
 
     /// <summary>
