@@ -1364,6 +1364,39 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
         return HighestSequence(existing) + 1;
     }
 
+    // Next archived-delta number = (highest existing .agents/deltas/operational_delta.000N.md) + 1, from DISK
+    // (restart-safe), mirroring NextHandoffSequenceAsync/NextDecisionSequenceAsync so the counter is monotonic
+    // per repo across runs.
+    private async Task<int> NextDeltaSequenceAsync(Repository repository)
+    {
+        IReadOnlyList<string> existing = await artifactStore.ListAsync(
+            ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.DeltasDirectory),
+            OrchestrationArtifactPaths.HistoricalDeltaSearchPattern).ConfigureAwait(false);
+        return HighestSequence(existing) + 1;
+    }
+
+    // Archive the consumed operational delta once the context evolution has succeeded (m7): the live
+    // .agents/operational_delta.md has now been folded into operational_context.md, so it is rotated into a
+    // numbered .agents/deltas/ copy and the live file removed — no stale "pending" delta lingers. Move semantics
+    // (write numbered, then delete live), matching the handoff/decision rotation. A missing live delta or a failed
+    // store write/delete throws; PrepareTransferAsync treats that as a hard transfer failure.
+    private async Task ArchiveOperationalDeltaAsync(Repository repository)
+    {
+        string livePath = ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.OperationalDelta);
+        string? content = await artifactStore.ReadAsync(livePath).ConfigureAwait(false);
+        if (content is null)
+        {
+            throw new InvalidOperationException(
+                "Cannot archive the operational delta: .agents/operational_delta.md does not exist after the context update.");
+        }
+
+        int sequence = await NextDeltaSequenceAsync(repository).ConfigureAwait(false);
+        await artifactStore.WriteAsync(
+            ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.HistoricalDelta(sequence)),
+            content).ConfigureAwait(false);
+        await artifactStore.DeleteAsync(livePath).ConfigureAwait(false);
+    }
+
     // Parses the zero-padded 4-digit sequence out of each rotated file name (handoff.0007.md / decisions.0007.md
     // -> 7) and returns the max, or 0 when none exist. The penultimate dot-segment is the number for both schemes.
     private static int HighestSequence(IReadOnlyList<string> rotatedPaths)
@@ -1662,6 +1695,25 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
         await artifactStore.WriteAsync(contextPath, evolvedContext).ConfigureAwait(false);
         RecordOperationalContextHealth(evolvedContext.Length);
         string newContext = evolvedContext;
+
+        // 3.5) Archive the consumed operational delta now that operational_context.md is successfully updated:
+        // rotate .agents/operational_delta.md into a numbered .agents/deltas/ copy and remove the live file. Hard
+        // step — a failed archive fails the transfer (before the fresh process is opened).
+        DecisionStream.Publish("phase", Serialize(new { phase = "ArchiveOperationalDelta" }));
+        try
+        {
+            await ArchiveOperationalDeltaAsync(repository).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            DecisionStream.Publish("failed", Serialize(new
+            {
+                phase = "ArchiveOperationalDelta",
+                reason = "Failed to archive the operational delta after the context update.",
+                detail = ex.Message,
+            }));
+            return false;
+        }
 
         // 4) Open a FRESH Decision process and seed it from the rewritten operational context.
         DecisionStream.Publish("phase", Serialize(new { phase = "StartDecisionSessionFromTransfer" }));

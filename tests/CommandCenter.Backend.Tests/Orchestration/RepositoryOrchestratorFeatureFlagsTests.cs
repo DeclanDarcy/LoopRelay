@@ -206,7 +206,7 @@ public sealed class RepositoryOrchestratorFeatureFlagsTests
 
         // Despite the router returning Continue, the forced fallback transferred: the delta was extracted, the
         // context rewritten, and the old process recycled into a fresh one.
-        Assert.Equal("DELTA", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.OperationalDelta)));
+        Assert.Equal("DELTA", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.HistoricalDelta(1))));
         Assert.Equal("CTX2", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.OperationalContext)));
         Assert.Equal("NEXT", orchestrator.CurrentDecisions);
         Assert.True(router.EvaluateCount >= 1); // the router still ran (its inputs are recorded)

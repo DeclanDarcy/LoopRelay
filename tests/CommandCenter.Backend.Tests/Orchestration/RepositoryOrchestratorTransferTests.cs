@@ -47,7 +47,7 @@ public sealed class RepositoryOrchestratorTransferTests
         await orchestrator.DecisionRunTask;
 
         // The delta the warm process produced was persisted, and the context was rewritten from it.
-        Assert.Equal("OPERATIONAL DELTA", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.OperationalDelta)));
+        Assert.Equal("OPERATIONAL DELTA", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.HistoricalDelta(1))));
         Assert.Equal("REWRITTEN CONTEXT", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.OperationalContext)));
         Assert.Contains(UpdateOperationalContext.Text, runtime.OneShotPrompts);
 
@@ -88,7 +88,7 @@ public sealed class RepositoryOrchestratorTransferTests
         await orchestrator.DecisionRunTask;
 
         // The real router elected Transfer from the capacity guard — the delta was written and context rewritten.
-        Assert.Equal("DELTA", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.OperationalDelta)));
+        Assert.Equal("DELTA", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.HistoricalDelta(1))));
         Assert.Equal("CTX2", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.OperationalContext)));
         Assert.Equal("NEXT DECISIONS", orchestrator.CurrentDecisions);
 
@@ -122,7 +122,7 @@ public sealed class RepositoryOrchestratorTransferTests
 
         // Occupancy (100) is far below the capacity guard (230,400): this Transfer was driven ONLY by the marginal
         // rule — eNext (600,000) >= (R 300,000 + C 250,000 seed) / n 1 = 550,000.
-        Assert.Equal("DELTA", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.OperationalDelta)));
+        Assert.Equal("DELTA", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.HistoricalDelta(1))));
         Assert.Equal("NEXT DECISIONS", orchestrator.CurrentDecisions);
     }
 
@@ -291,7 +291,7 @@ public sealed class RepositoryOrchestratorTransferTests
 
         List<string?> phases = transferEvents.Where(e => e.Type == "phase").Select(e => Field(e, "phase")).ToList();
         Assert.Equal(
-            new[] { "ProduceOperationalDelta", "UpdateOperationalContext", "StartDecisionSessionFromTransfer", "GetNextDecisions" },
+            new[] { "ProduceOperationalDelta", "UpdateOperationalContext", "ArchiveOperationalDelta", "StartDecisionSessionFromTransfer", "GetNextDecisions" },
             phases);
         Assert.Contains(transferEvents, e => e.Type == "transferred");
         Assert.Equal("review-ready", transferEvents[^1].Type);
@@ -529,7 +529,7 @@ public sealed class RepositoryOrchestratorTransferTests
 
         Assert.Equal("HANDOFF TWO", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.HistoricalHandoff(2))));
         Assert.Equal("HANDOFF THREE", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.HistoricalHandoff(3))));
-        Assert.Equal("DELTA TWO", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.OperationalDelta)));
+        Assert.Equal("DELTA TWO", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.HistoricalDelta(1))));
         Assert.Equal("DECISIONS B", orchestrator.CurrentDecisions);
         Assert.Equal(2, orchestrator.IterationCounter);
 
@@ -695,7 +695,7 @@ public sealed class RepositoryOrchestratorTransferTests
         Assert.Equal(2, decisionSessions.Count);
         Assert.True(decisionSessions[0].Disposed);
         Assert.False(decisionSessions[1].Disposed);
-        Assert.Equal("DELTA", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.OperationalDelta)));
+        Assert.Equal("DELTA", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.HistoricalDelta(1))));
         Assert.Equal("AFTER2", orchestrator.CurrentDecisions);
     }
 
@@ -875,6 +875,86 @@ public sealed class RepositoryOrchestratorTransferTests
         Assert.Equal(300, third.Size);
         Assert.Equal(2, third.GrowthStreak); // sustained growth crosses the ratchet threshold
         Assert.True(third.Warning);
+    }
+
+    [Fact]
+    public async Task Transfer_archives_the_operational_delta_after_the_context_update()
+    {
+        var runtime = new FakeAgentRuntime();
+        var store = new FakeArtifactStore();
+        var sandbox = new FakeSandboxWorkspaceFactory();
+        var router = new FakeDecisionSessionRouter { Route = DecisionRoute.Transfer };
+        Repository repository = OrchestrationTestFactory.Repository();
+        RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store, router: router, sandbox: sandbox);
+
+        await SeedLoopAsync(orchestrator, store, repository);
+        await SeedWarmDecisionSessionAsync(orchestrator, runtime, repository);
+        ScriptTransferTurns(runtime, store, repository, sandbox, delta: "OPERATIONAL DELTA", rewrittenContext: "REWRITTEN", proposal: "NEXT");
+
+        await orchestrator.BeginSubmitDecisionsAsync(repository, "DECISIONS ONE");
+        await orchestrator.ExecutionRunTask;
+        await orchestrator.DecisionRunTask;
+
+        // The consumed delta was rotated into the numbered archive and the live file removed.
+        Assert.Equal("OPERATIONAL DELTA", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.HistoricalDelta(1))));
+        Assert.False(await store.ExistsAsync(Resolve(repository, OrchestrationArtifactPaths.OperationalDelta)));
+    }
+
+    [Fact]
+    public async Task Successive_transfers_archive_deltas_with_a_monotonic_sequence()
+    {
+        var runtime = new FakeAgentRuntime();
+        var store = new FakeArtifactStore();
+        var sandbox = new FakeSandboxWorkspaceFactory();
+        var router = new FakeDecisionSessionRouter { Route = DecisionRoute.Transfer };
+        Repository repository = OrchestrationTestFactory.Repository();
+        RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store, router: router, sandbox: sandbox);
+
+        await SeedLoopAsync(orchestrator, store, repository);
+        await SeedWarmDecisionSessionAsync(orchestrator, runtime, repository);
+
+        ScriptTransferTurns(runtime, store, repository, sandbox, delta: "DELTA ONE", rewrittenContext: "CTX1", proposal: "P1");
+        await orchestrator.BeginSubmitDecisionsAsync(repository, "D1");
+        await orchestrator.ExecutionRunTask;
+        await orchestrator.DecisionRunTask;
+
+        ScriptTransferTurns(runtime, store, repository, sandbox, delta: "DELTA TWO", rewrittenContext: "CTX2", proposal: "P2");
+        await orchestrator.BeginSubmitDecisionsAsync(repository, "D2");
+        await orchestrator.ExecutionRunTask;
+        await orchestrator.DecisionRunTask;
+
+        Assert.Equal("DELTA ONE", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.HistoricalDelta(1))));
+        Assert.Equal("DELTA TWO", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.HistoricalDelta(2))));
+        Assert.False(await store.ExistsAsync(Resolve(repository, OrchestrationArtifactPaths.OperationalDelta)));
+    }
+
+    [Fact]
+    public async Task Transfer_failed_delta_archive_fails_the_transfer_and_does_not_propose()
+    {
+        var runtime = new FakeAgentRuntime();
+        var store = new FakeArtifactStore();
+        var sandbox = new FakeSandboxWorkspaceFactory();
+        var router = new FakeDecisionSessionRouter { Route = DecisionRoute.Transfer };
+        Repository repository = OrchestrationTestFactory.Repository();
+        RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store, router: router, sandbox: sandbox);
+
+        await SeedLoopAsync(orchestrator, store, repository);
+        await SeedWarmDecisionSessionAsync(orchestrator, runtime, repository);
+        ScriptTransferTurns(runtime, store, repository, sandbox, delta: "DELTA", rewrittenContext: "CTX2", proposal: "NEXT");
+        // Force the archive write into .agents/deltas to fail.
+        store.FailWriteOn = path => path.Contains("deltas", StringComparison.OrdinalIgnoreCase);
+
+        await orchestrator.BeginSubmitDecisionsAsync(repository, "DECISIONS ONE");
+        await orchestrator.ExecutionRunTask;
+        await orchestrator.DecisionRunTask;
+
+        OrchestratorStreamEvent failed = (await DrainDecisionTerminalsAsync(orchestrator.DecisionStream, 2))[^1];
+        Assert.Equal("failed", failed.Type);
+        Assert.Equal("ArchiveOperationalDelta", Field(failed, "phase"));
+        // The context update already succeeded, but the transfer failed at the archive: no fresh proposal.
+        Assert.Equal("CTX2", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.OperationalContext)));
+        Assert.Equal("DECISIONS ONE", orchestrator.CurrentDecisions);
+        Assert.False(orchestrator.IsDecisionRunActive);
     }
 
     // ---- helpers ----

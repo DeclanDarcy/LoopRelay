@@ -165,7 +165,7 @@ public sealed class OrchestrationArtifactProtocolTests
 
         // operational_delta.md was written and operational_context.md rewritten — both to their canonical paths.
         Assert.Contains(Resolve(repository, OrchestrationArtifactPaths.OperationalDelta), store.WriteQueries);
-        Assert.Equal("OPERATIONAL DELTA", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.OperationalDelta)));
+        Assert.Equal("OPERATIONAL DELTA", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.HistoricalDelta(1))));
         Assert.Equal("REWRITTEN CONTEXT", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.OperationalContext)));
     }
 
