@@ -279,6 +279,65 @@ public class LoopRunnerTests
         Assert.True(lastSubmodulePush > codexExec, "the .agents submodule must also be pushed AFTER codex runs");
     }
 
+    // The parent repo's `.agents` gitlink is committed (staged as `.agents`, message = GitlinkPointerMessage)
+    // BEFORE codex's execution turn, so the tree codex opens on is clean rather than showing a dirty submodule
+    // pointer left by the pre-codex submodule publish.
+    [Fact]
+    public async Task Run_RecordsParentAgentsGitlink_BeforeInvokingCodex()
+    {
+        var h = New();
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
+        await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
+
+        // Submodule reads dirty (so its pointer moves); the parent then reads its `.agents` gitlink modified.
+        var timeline = new List<string>();
+        h.Git.Handler = (wd, args) =>
+        {
+            bool submodule = wd.Replace('\\', '/').EndsWith("/.agents", StringComparison.Ordinal);
+            if (args[0] == "status")
+            {
+                return FakeProcessRunner.Ok(submodule ? " M decisions/decisions.md" : " M .agents");
+            }
+
+            if (args[0] == "branch")
+            {
+                return FakeProcessRunner.Ok("main");
+            }
+
+            // The parent-repo commit carrying the gitlink message marks when the pointer was versioned.
+            if (!submodule && args[0] == "commit" && args.Count >= 3 &&
+                args[2] == AgentsSubmodulePublisher.GitlinkPointerMessage)
+            {
+                timeline.Add("parent-gitlink-commit");
+            }
+
+            return FakeProcessRunner.Ok();
+        };
+
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DEC")));
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        {
+            timeline.Add("codex-exec");   // the execution work turn = "invoking codex"
+            s.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [x] t").Wait();
+            return Turns.Completed("executed");
+        }));
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        {
+            s.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff), "H").Wait();
+            return Turns.Completed("handoff");
+        }));
+
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+
+        Assert.Equal(LoopOutcome.EpicCompleted, outcome);
+        int parentGitlinkCommit = timeline.IndexOf("parent-gitlink-commit");
+        int codexExec = timeline.IndexOf("codex-exec");
+        Assert.True(parentGitlinkCommit >= 0, "the parent .agents gitlink must be committed");
+        Assert.True(codexExec >= 0, "codex must run");
+        Assert.True(parentGitlinkCommit < codexExec, "the parent gitlink must be committed BEFORE codex runs");
+    }
+
     // Scripts git so the `.agents` submodule always reads dirty (on branch main) and the parent reads clean,
     // so any publish — including the on-exit salvage — actually commits.
     private static void DirtySubmoduleCleanParent(Harness h) =>

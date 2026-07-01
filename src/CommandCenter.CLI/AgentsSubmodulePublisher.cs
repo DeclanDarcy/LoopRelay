@@ -7,17 +7,24 @@ using CommandCenter.Orchestration;
 namespace CommandCenter.Cli;
 
 /// <summary>
-/// Commits and pushes the target repository's <c>.agents/</c> git submodule to its own remote. Because
-/// <c>.agents/</c> is a submodule, the parent repository cannot commit the content inside it, so this
-/// publisher owns that commit — it is the ONLY thing in the CLI loop that versions the submodule
-/// (<see cref="CommitGate"/> deliberately ignores <c>.agents/</c>). <see cref="LoopRunner"/> runs it twice
-/// per iteration: once BEFORE invoking codex (persisting the operational context / decisions / rotated
-/// handoff codex is about to consume) and once AFTER (capturing codex's writes — the new handoff and any
+/// Commits and pushes the target repository's <c>.agents/</c> git submodule to its own remote, then records the
+/// moved gitlink in the parent repository. Because <c>.agents/</c> is a submodule, the parent repository cannot
+/// commit the content inside it, so this publisher owns that commit — it is the ONLY thing in the CLI loop that
+/// versions the submodule (<see cref="CommitGate"/> deliberately ignores <c>.agents/</c>). <see cref="LoopRunner"/>
+/// runs it twice per iteration: once BEFORE invoking codex (persisting the operational context / decisions /
+/// rotated handoff codex is about to consume) and once AFTER (capturing codex's writes — the new handoff and any
 /// milestone box-checks — so even the epic-completing/stalling iteration's state reaches the remote).
 ///
-/// Git is driven through <see cref="IProcessRunner"/> with
-/// <c>workingDirectory = {repository.Path}/.agents</c>; any nonzero git exit throws
-/// <see cref="LoopStepException"/> (strict push, mirroring <see cref="CommitGate"/>).
+/// Committing a new submodule revision advances the submodule HEAD, which leaves the PARENT working tree showing
+/// a dirty <c>.agents</c> gitlink entry; right after that commit this class also commits and pushes the moved
+/// pointer in the parent repo (staging only <c>.agents</c>) so the working tree codex opens on is clean and
+/// never distracts it with pending changes. No status probe gates this — a fresh submodule commit is itself the
+/// proof the pointer moved.
+///
+/// Git is driven through <see cref="IProcessRunner"/>: the submodule half runs with
+/// <c>workingDirectory = {repository.Path}/.agents</c>, the gitlink half with
+/// <c>workingDirectory = {repository.Path}</c>. Any nonzero git exit throws <see cref="LoopStepException"/>
+/// (strict push, mirroring <see cref="CommitGate"/>).
 /// </summary>
 internal sealed class AgentsSubmodulePublisher(IProcessRunner processRunner, Repository repository, ILoopConsole console)
 {
@@ -29,6 +36,13 @@ internal sealed class AgentsSubmodulePublisher(IProcessRunner processRunner, Rep
 
     /// <summary>Commit message for the best-effort salvage publish when the loop exits abnormally (Failed/Cancelled).</summary>
     public const string PartialExitMessage = "Orchestration loop: partial state on interrupted exit";
+
+    /// <summary>
+    /// Commit message for the PARENT-repo commit that records the moved <c>.agents</c> gitlink. Advancing the
+    /// submodule HEAD leaves the parent working tree showing a dirty <c>.agents</c> entry; this commit versions
+    /// that pointer so the tree codex opens on is clean (and it never distracts codex with pending changes).
+    /// </summary>
+    public const string GitlinkPointerMessage = "Orchestration loop: record .agents submodule pointer";
 
     private string SubmodulePath => Path.Combine(repository.Path, OrchestrationArtifactPaths.AgentsDirectory);
 
@@ -43,6 +57,7 @@ internal sealed class AgentsSubmodulePublisher(IProcessRunner processRunner, Rep
     {
         cancellationToken.ThrowIfCancellationRequested();
 
+        bool committed = false;
         if (await HasChangesAsync())
         {
             string branch = await RequireBranchAsync();
@@ -50,21 +65,53 @@ internal sealed class AgentsSubmodulePublisher(IProcessRunner processRunner, Rep
             await RunGitAsync("commit", ["commit", "-m", commitMessage]);
             await RunGitAsync("push", ["push"]);
             console.Info($"Committed and pushed the .agents submodule ({branch}).");
-            return true;
+            committed = true;
         }
-
         // Working tree is clean. A failed `git push` does NOT roll back the commit, so a prior strict-push
         // failure can leave a committed-but-unpushed submodule that `git status` can no longer see. Recover
         // it here by pushing when HEAD is ahead of its upstream, so the remote (and any parent gitlink that
         // references it) eventually catches up.
-        if (await HasUnpushedCommitsAsync())
+        else if (await HasUnpushedCommitsAsync())
         {
             string branch = await RequireBranchAsync();
             await RunGitAsync("push", ["push"]);
             console.Info($"Pushed a previously-stranded .agents submodule commit ({branch}).");
         }
 
-        return false;
+        // A fresh submodule commit just advanced the submodule HEAD, so the parent repo's `.agents` gitlink now
+        // lags it and shows dirty in the parent working tree. Record and push that pointer so the tree codex
+        // opens on is clean. No `git status` probe is needed to decide this: a new commit necessarily moves the
+        // pointer (and a submodule push only fails BEFORE this point, so `committed` is exactly the "pointer
+        // moved and was not yet recorded" signal). CommitGate deliberately never touches `.agents`, so this is
+        // the ONLY place the parent gitlink is versioned. A stranded-commit recovery above skips this; its
+        // pointer catches up on the next real commit's reconcile.
+        if (committed)
+        {
+            await RecordParentGitlinkAsync();
+        }
+
+        return committed;
+    }
+
+    // Commits and pushes the parent repo's advanced `.agents` gitlink. Runs git in the PARENT working tree
+    // (repository.Path), staging ONLY `.agents` so the parent's real working-tree changes stay owned by
+    // CommitGate; strict push, matching the submodule's posture.
+    private async Task RecordParentGitlinkAsync()
+    {
+        await RunParentGitAsync("add", ["add", "--", OrchestrationArtifactPaths.AgentsDirectory]);
+        await RunParentGitAsync("commit", ["commit", "-m", GitlinkPointerMessage]);
+        await RunParentGitAsync("push", ["push"]);
+        console.Info("Recorded and pushed the .agents submodule pointer in the parent repo.");
+    }
+
+    private async Task RunParentGitAsync(string label, IReadOnlyList<string> arguments)
+    {
+        ProcessRunResult result = await processRunner.RunAsync("git", arguments, repository.Path);
+        if (result.ExitCode != 0)
+        {
+            throw new LoopStepException(
+                $"git {label} (.agents gitlink, parent repo) failed: {result.StandardError}");
+        }
     }
 
     // A submodule checked out at a detached HEAD cannot be pushed — a commit would land on no branch — so

@@ -73,14 +73,65 @@ public class AgentsSubmodulePublisherTests
 
         Assert.True(committed);
         Assert.All(fake.Calls, c => Assert.Equal("git", c.FileName));
-        // Every git call runs inside the `.agents` submodule working directory.
-        Assert.All(fake.Calls, c => Assert.True(IsSubmodule(c.WorkingDirectory), c.WorkingDirectory));
 
-        Assert.Equal(new[] { "status", "--porcelain" }, fake.Calls[0].Args);
-        Assert.Equal(new[] { "branch", "--show-current" }, fake.Calls[1].Args);
-        Assert.Equal(new[] { "add", "-A" }, fake.Calls[2].Args);
-        Assert.Equal(new[] { "commit", "-m", Message }, fake.Calls[3].Args);
-        Assert.Equal(new[] { "push" }, fake.Calls[4].Args);
+        // The submodule commit+push runs inside the `.agents` working directory, in this exact order. (The
+        // parent repo is probed for its gitlink afterwards — clean here — so those calls are asserted separately.)
+        var submoduleCalls = fake.Calls.Where(c => IsSubmodule(c.WorkingDirectory)).ToList();
+        Assert.Equal(new[] { "status", "--porcelain" }, submoduleCalls[0].Args);
+        Assert.Equal(new[] { "branch", "--show-current" }, submoduleCalls[1].Args);
+        Assert.Equal(new[] { "add", "-A" }, submoduleCalls[2].Args);
+        Assert.Equal(new[] { "commit", "-m", Message }, submoduleCalls[3].Args);
+        Assert.Equal(new[] { "push" }, submoduleCalls[4].Args);
+    }
+
+    [Fact]
+    public async Task DirtyOnBranch_AlsoRecordsAndPushesParentGitlink_StagingOnlyAgents()
+    {
+        // A fresh submodule commit (submodule dirty) advances the pointer, so the publisher records it in the
+        // parent — WITHOUT probing `git status`; the commit itself is proof the pointer moved.
+        var fake = Runner(status: " M decisions/decisions.md");
+
+        await New(fake).PublishAsync(Message, CancellationToken.None);
+
+        // The parent-repo half of the publish runs in the repo root (never the submodule), stages ONLY the
+        // `.agents` gitlink (not `-A` — the parent's real working-tree changes belong to CommitGate), and pushes.
+        // No status call appears: the reconcile is gated on `committed`, not on a probe.
+        var parentCalls = fake.Calls.Where(c => !IsSubmodule(c.WorkingDirectory)).ToList();
+        Assert.All(parentCalls, c => Assert.Equal("/repo", c.WorkingDirectory.Replace('\\', '/')));
+        Assert.DoesNotContain(parentCalls, c => c.Args[0] == "status");
+        Assert.Equal(new[] { "add", "--", ".agents" }, parentCalls[0].Args);
+        Assert.Equal(new[] { "commit", "-m", AgentsSubmodulePublisher.GitlinkPointerMessage }, parentCalls[1].Args);
+        Assert.Equal(new[] { "push" }, parentCalls[2].Args);
+    }
+
+    [Fact]
+    public async Task CleanSubmodule_RecordsNoParentGitlink()
+    {
+        // No submodule commit (clean, up to date) => the pointer never moved => no parent-repo git at all.
+        var fake = Runner(status: string.Empty);
+
+        await New(fake).PublishAsync(Message, CancellationToken.None);
+
+        Assert.DoesNotContain(fake.Calls, c => !IsSubmodule(c.WorkingDirectory));
+    }
+
+    [Fact]
+    public async Task ParentGitlinkPushFailure_Throws()
+    {
+        // Submodule publishes fine, but pushing the parent gitlink fails — strict push, same as the submodule.
+        var fake = new FakeProcessRunner
+        {
+            Handler = (dir, args) => (args[0], IsSubmodule(dir)) switch
+            {
+                ("status", _) => FakeProcessRunner.Ok(" M decisions/decisions.md"),
+                ("branch", _) => FakeProcessRunner.Ok("main"),
+                ("push", false) => FakeProcessRunner.Fail("parent push rejected"),
+                _ => FakeProcessRunner.Ok()
+            }
+        };
+
+        await Assert.ThrowsAsync<LoopStepException>(
+            () => New(fake).PublishAsync(Message, CancellationToken.None));
     }
 
     [Fact]
@@ -90,7 +141,9 @@ public class AgentsSubmodulePublisherTests
 
         await New(fake).PublishAsync(AgentsSubmodulePublisher.ExecutionHandoffMessage, CancellationToken.None);
 
-        var commit = fake.Calls.Single(c => c.Args[0] == "commit");
+        // The submodule commit carries the passed-through message (the parent gitlink commit is asserted
+        // separately and carries GitlinkPointerMessage, so scope to the submodule working directory here).
+        var commit = fake.Calls.Single(c => c.Args[0] == "commit" && IsSubmodule(c.WorkingDirectory));
         Assert.Equal(new[] { "commit", "-m", AgentsSubmodulePublisher.ExecutionHandoffMessage }, commit.Args);
     }
 
