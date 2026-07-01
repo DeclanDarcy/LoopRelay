@@ -147,6 +147,26 @@ internal sealed class DecisionSession(
         console.Phase("Decision: Transfer/UpdateOperationalContext");
         (AgentTurnResult update, string newContext) = await EvolveOperationalContextAsync(delta.Output, cancellationToken);
 
+        // Archive the consumed operational delta now that operational_context.md is successfully updated: rotate
+        // .agents/operational_delta.md into a numbered .agents/deltas/ copy and remove the live file. Hard step —
+        // a missing delta or a failed rotation fails the transfer (the old process is already closed above; no
+        // session is open to tear down here).
+        console.Phase("Decision: Transfer/ArchiveOperationalDelta");
+        string? archived;
+        try
+        {
+            archived = await artifacts.RotateOperationalDeltaAsync();
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            throw new LoopStepException($"Transfer failed to archive operational_delta.md: {exception.Message}");
+        }
+
+        if (archived is null)
+        {
+            throw new LoopStepException("Transfer produced no operational_delta.md to archive.");
+        }
+
         // Open a fresh decision process and seed from the rewritten context.
         session = await runtime.OpenSessionAsync(AgentSpecs.Decision(repository), cancellationToken);
 

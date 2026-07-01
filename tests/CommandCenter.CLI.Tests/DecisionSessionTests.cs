@@ -174,7 +174,7 @@ public class DecisionSessionTests
 
         await session.RunAsync(CancellationToken.None);
 
-        Assert.Equal("DELTA-TEXT", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalDelta)));
+        Assert.Equal("DELTA-TEXT", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDelta(1))));
         Assert.Equal("D2", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.Decisions)));
         Assert.Equal(2, rt.OpenSessions);   // original + recycled
         Assert.Equal(1, rt.ClosedSessions); // original closed during recycle
@@ -208,7 +208,7 @@ public class DecisionSessionTests
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D2")));            // propose
         await session.RunAsync(CancellationToken.None);
 
-        Assert.Equal("DELTA-TEXT", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalDelta)));
+        Assert.Equal("DELTA-TEXT", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDelta(1))));
         Assert.Equal("D2", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.Decisions)));
         Assert.Equal(2, rt.OpenSessions);   // original + recycled (economic transfer)
     }
@@ -309,7 +309,7 @@ public class DecisionSessionTests
 
         // The evolved context was copied back into the repo; the delta was persisted to the repo too.
         Assert.Equal("OPCTX-1", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext)));
-        Assert.Equal("DELTA-TEXT", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalDelta)));
+        Assert.Equal("DELTA-TEXT", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDelta(1))));
 
         // The sandbox was created once and disposed (cleaned up).
         Assert.Equal(1, sandbox.CreatedCount);
@@ -358,4 +358,92 @@ public class DecisionSessionTests
         // Exactly one ratchet warning — on the third transfer (streak reaches the threshold of 2), not before.
         Assert.Equal(1, con.Events.Count(e => e.Kind == "warn" && e.Text.Contains("grown")));
     }
+
+    [Fact]
+    public async Task Run_Transfer_ArchivesTheDelta_AndRemovesTheLiveFile()
+    {
+        var store = new MemoryArtifactStore();
+        var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
+        var art = new LoopArtifacts(store, repo);
+        var con = new RecordingLoopConsole();
+        var rt = new FakeAgentRuntime(store);
+        var sandbox = new FakeSandboxWorkspaceFactory();
+        var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
+        var session = new DecisionSession(rt, router, art, con, repo, costModel: null, sandboxFactory: sandbox);
+
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
+
+        // Round 1: seed + propose (occupancy 20 -> round 2 crosses the guard).
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
+            new AgentTurnResult(0, AgentTurnState.Completed, "D1", new AgentTokenUsage(10, 10))));
+        await session.RunAsync(CancellationToken.None);
+
+        // Round 2: Transfer.
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));   // ProduceOperationalDelta
+        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>                                     // UpdateOperationalContext
+        {
+            s.WriteAsync(sandbox.Resolve(OrchestrationArtifactPaths.OperationalContext), "OPCTX-1").Wait();
+            return Turns.Completed("updated");
+        }));
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("reseeded")));      // reseed
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D2")));            // propose
+        await session.RunAsync(CancellationToken.None);
+
+        // The delta was archived into .agents/deltas and the live file removed.
+        Assert.Equal("DELTA-TEXT", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDelta(1))));
+        Assert.False(await store.ExistsAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalDelta)));
+        Assert.Equal("OPCTX-1", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext)));
+    }
+
+    [Fact]
+    public async Task Run_Transfer_FailedDeltaArchive_FailsTheTransfer()
+    {
+        var inner = new MemoryArtifactStore();
+        var store = new ThrowOnDeltaArchiveStore(inner);
+        var repo = new Repository { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
+        var art = new LoopArtifacts(store, repo);
+        var con = new RecordingLoopConsole();
+        var rt = new FakeAgentRuntime(store);
+        var sandbox = new FakeSandboxWorkspaceFactory();
+        var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 22, CapacityGuardFraction: 0.90));
+        var session = new DecisionSession(rt, router, art, con, repo, costModel: null, sandboxFactory: sandbox);
+
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX-0");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "H1");
+
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
+            new AgentTurnResult(0, AgentTurnState.Completed, "D1", new AgentTokenUsage(10, 10))));
+        await session.RunAsync(CancellationToken.None);
+
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DELTA-TEXT")));
+        rt.OneShotTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        {
+            s.WriteAsync(sandbox.Resolve(OrchestrationArtifactPaths.OperationalContext), "OPCTX-1").Wait();
+            return Turns.Completed("updated");
+        }));
+        // The reseed/propose turns are never reached because the archive throws first.
+
+        await Assert.ThrowsAsync<LoopStepException>(() => session.RunAsync(CancellationToken.None));
+
+        // The context update succeeded before the archive failed.
+        Assert.Equal("OPCTX-1", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext)));
+    }
+}
+
+/// <summary>Forwards to an inner store but throws when a write targets the .agents/deltas archive — models a
+/// failed delta archive so the strict transfer-fail path can be exercised.</summary>
+internal sealed class ThrowOnDeltaArchiveStore(IArtifactStore inner) : IArtifactStore
+{
+    public Task<bool> ExistsAsync(string path) => inner.ExistsAsync(path);
+    public Task<string?> ReadAsync(string path) => inner.ReadAsync(path);
+    public Task WriteAsync(string path, string content) =>
+        path.Replace('\\', '/').Contains("/deltas/", StringComparison.OrdinalIgnoreCase)
+            ? throw new IOException("Configured archive write failure.")
+            : inner.WriteAsync(path, content);
+    public Task DeleteAsync(string path) => inner.DeleteAsync(path);
+    public Task<IReadOnlyList<string>> ListAsync(string path, string searchPattern) => inner.ListAsync(path, searchPattern);
+    public Task<IReadOnlyList<string>> ListDirectoriesAsync(string path) => inner.ListDirectoriesAsync(path);
 }
