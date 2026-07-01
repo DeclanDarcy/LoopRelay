@@ -8,6 +8,7 @@ internal interface ILoopConsole
     void Phase(string phase);
     void Message(string content);
     void Delta(string text);
+    void Tool(string summary);
     void Info(string text);
     void Warn(string text);
     void Error(string text);
@@ -46,6 +47,19 @@ internal sealed class ConsoleLoopConsole(TextWriter? output = null, TextWriter? 
 
         outWriter.Write(text);
         midLine = text[^1] != '\n';
+    }
+
+    // A tool call the agent ran mid-turn (e.g. "$ git status"), on its own indented line so it reads as a
+    // compact aside within the streamed reply. Closes any half-written delta line first.
+    public void Tool(string summary)
+    {
+        if (string.IsNullOrWhiteSpace(summary))
+        {
+            return;
+        }
+
+        EnsureLineStart();
+        outWriter.WriteLine($"  {summary}");
     }
 
     public void Info(string text)

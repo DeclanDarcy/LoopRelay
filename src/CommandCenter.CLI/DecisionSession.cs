@@ -72,8 +72,9 @@ internal sealed class DecisionSession(
             ? GenerateSystemPromptForFirstExecutionAgent.Text
             : GenerateSystemPromptForNextExecutionAgent.Render(handoff);
 
+        var proposalRenderer = new ConsoleTurnRenderer(console);
         AgentTurnResult proposed = await session!.RunTurnAsync(
-            proposalPrompt, StreamToConsole, cancellationToken);
+            proposalPrompt, proposalRenderer.Stream, cancellationToken);
 
         if (proposed.State != AgentTurnState.Completed)
         {
@@ -82,7 +83,7 @@ internal sealed class DecisionSession(
         }
 
         RecordProposalCost(proposed.Usage);
-        console.Message(proposed.Output);
+        proposalRenderer.EchoIfSilent(proposed.Output);
 
         // Auto-submit: the CLI is fully automated, so the agent's proposal is persisted verbatim.
         await artifacts.PersistDecisionsAsync(proposed.Output);
@@ -132,7 +133,7 @@ internal sealed class DecisionSession(
     {
         console.Phase("Decision: Transfer/ProduceOperationalDelta");
         AgentTurnResult delta = await session!.RunTurnAsync(
-            ProduceOperationalDelta.Text, StreamToConsole, cancellationToken);
+            ProduceOperationalDelta.Text, new ConsoleTurnRenderer(console).Stream, cancellationToken);
         if (delta.State != AgentTurnState.Completed)
         {
             await CloseAsync();
@@ -207,7 +208,7 @@ internal sealed class DecisionSession(
         AgentTurnResult update = await runtime.RunOneShotAsync(
             AgentSpecs.Operational(repository, AgentEffortLevel.High, identifier: "xhigh", workingDirectory: sandbox.RootPath),
             UpdateOperationalContext.Text,
-            StreamToConsole,
+            new ConsoleTurnRenderer(console).Stream,
             cancellationToken);
         if (update.State != AgentTurnState.Completed)
         {
@@ -285,16 +286,6 @@ internal sealed class DecisionSession(
             lastCycleCost = 0d;
             prevCycleCost = 0d;
         }
-    }
-
-    private Task StreamToConsole(AgentStreamChunk chunk)
-    {
-        if (chunk.Stream == AgentProcessOutputStream.StandardOutput)
-        {
-            console.Delta(chunk.Content);
-        }
-
-        return Task.CompletedTask;
     }
 
     public async ValueTask DisposeAsync() => await CloseAsync();

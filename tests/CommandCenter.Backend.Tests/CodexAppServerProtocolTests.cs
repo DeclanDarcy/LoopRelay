@@ -146,13 +146,14 @@ public sealed class CodexAppServerTurnReaderTests
         var reader = new CodexAppServerTurnReader();
 
         reader.Apply(Msg("""{"method":"turn/started","params":{"threadId":"T","turn":{"id":"u1","status":"inProgress"}}}"""));
-        string? delta = reader.Apply(Msg("""{"method":"item/agentMessage/delta","params":{"threadId":"T","turnId":"u1","itemId":"i1","delta":"Hel"}}"""));
+        CodexStreamEmission? delta = reader.Apply(Msg("""{"method":"item/agentMessage/delta","params":{"threadId":"T","turnId":"u1","itemId":"i1","delta":"Hel"}}"""));
         reader.Apply(Msg("""{"method":"item/agentMessage/delta","params":{"threadId":"T","turnId":"u1","itemId":"i1","delta":"lo"}}"""));
         reader.Apply(Msg("""{"method":"thread/tokenUsage/updated","params":{"threadId":"T","turnId":"u1","tokenUsage":{"last":{"totalTokens":37,"inputTokens":30,"cachedInputTokens":1,"outputTokens":7,"reasoningOutputTokens":0}}}}"""));
         Assert.False(reader.IsComplete);
         reader.Apply(Msg("""{"method":"turn/completed","params":{"threadId":"T","turn":{"id":"u1","status":"completed"}}}"""));
 
-        Assert.Equal("Hel", delta); // returned for live streaming
+        Assert.Equal("Hel", delta!.Value.Text); // returned for live streaming
+        Assert.Equal(AgentStreamChunkKind.AgentMessage, delta.Value.Kind);
         Assert.True(reader.IsComplete);
 
         CodexAppServerTurnOutcome outcome = reader.Result();
@@ -224,9 +225,9 @@ public sealed class CodexAppServerTurnReaderTests
     {
         var reader = new CodexAppServerTurnReader();
         reader.Apply(Msg("""{"method":"item/agentMessage/delta","params":{"itemId":"i1","delta":"first message"}}"""));
-        string? second = reader.Apply(Msg("""{"method":"item/agentMessage/delta","params":{"itemId":"i2","delta":"second message"}}"""));
+        CodexStreamEmission? second = reader.Apply(Msg("""{"method":"item/agentMessage/delta","params":{"itemId":"i2","delta":"second message"}}"""));
 
-        Assert.Equal("\nsecond message", second); // the live chunk carries the break
+        Assert.Equal("\nsecond message", second!.Value.Text); // the live chunk carries the break
         Assert.Equal("first message\nsecond message", reader.Result().Output);
     }
 
@@ -250,5 +251,77 @@ public sealed class CodexAppServerTurnReaderTests
         reader.Apply(Msg("""{"method":"item/agentMessage/delta","params":{"itemId":"i2","delta":"second"}}"""));
 
         Assert.Equal("first\nsecond", reader.Result().Output);
+    }
+
+    // A command the agent runs mid-turn surfaces as a compact, distinctly-kinded tool line — and is display-only,
+    // so it is NEVER folded into the reply text (which becomes decisions.md / the handoff).
+    [Fact]
+    public void CommandExecutionItem_RendersACompactToolLine()
+    {
+        var reader = new CodexAppServerTurnReader();
+        CodexStreamEmission? emission = reader.Apply(Msg(
+            """{"method":"item/started","params":{"item":{"id":"c1","type":"commandExecution","command":"git status"}}}"""));
+
+        Assert.NotNull(emission);
+        Assert.Equal(AgentStreamChunkKind.ToolCall, emission!.Value.Kind);
+        Assert.Equal("$ git status", emission.Value.Text);
+        Assert.Equal(string.Empty, reader.Result().Output); // display-only, not part of the reply
+    }
+
+    // codex wraps commands in a shell ("bash -lc <script>"); the summary shows the readable inner script.
+    [Fact]
+    public void CommandExecution_WithShellWrapper_ShowsTheInnerScript()
+    {
+        var reader = new CodexAppServerTurnReader();
+        CodexStreamEmission? emission = reader.Apply(Msg(
+            """{"method":"item/started","params":{"item":{"id":"c1","type":"commandExecution","command":["bash","-lc","dotnet build"]}}}"""));
+
+        Assert.Equal("$ dotnet build", emission!.Value.Text);
+    }
+
+    // item/started and item/completed carry the same item id; the tool line renders once, not twice.
+    [Fact]
+    public void CommandExecution_IsRenderedOnceAcrossStartedAndCompleted()
+    {
+        var reader = new CodexAppServerTurnReader();
+        CodexStreamEmission? started = reader.Apply(Msg(
+            """{"method":"item/started","params":{"item":{"id":"c1","type":"commandExecution","command":"ls"}}}"""));
+        CodexStreamEmission? completed = reader.Apply(Msg(
+            """{"method":"item/completed","params":{"item":{"id":"c1","type":"commandExecution","command":"ls","exitCode":0}}}"""));
+
+        Assert.Equal("$ ls", started!.Value.Text);
+        Assert.Null(completed); // same item id — not repeated
+    }
+
+    // A command line interleaved with the reply must not pollute the accumulated Output.
+    [Fact]
+    public void ToolCallsAreNotFoldedIntoTheReplyOutput()
+    {
+        var reader = new CodexAppServerTurnReader();
+        reader.Apply(Msg("""{"method":"item/started","params":{"item":{"id":"c1","type":"commandExecution","command":"ls"}}}"""));
+        reader.Apply(Msg("""{"method":"item/agentMessage/delta","params":{"itemId":"m1","delta":"Done."}}"""));
+
+        Assert.Equal("Done.", reader.Result().Output); // only the agent reply, no "$ ls"
+    }
+
+    // Non-tool items (reasoning, etc.) produce no tool line.
+    [Fact]
+    public void NonToolStartedItems_ProduceNoToolLine()
+    {
+        var reader = new CodexAppServerTurnReader();
+        Assert.Null(reader.Apply(Msg(
+            """{"method":"item/started","params":{"item":{"id":"r1","type":"reasoning","text":"thinking"}}}""")));
+    }
+
+    // A file edit surfaces as a compact edit line naming the touched paths.
+    [Fact]
+    public void FileChangeItem_RendersACompactEditLine()
+    {
+        var reader = new CodexAppServerTurnReader();
+        CodexStreamEmission? emission = reader.Apply(Msg(
+            """{"method":"item/completed","params":{"item":{"id":"f1","type":"fileChange","changes":[{"path":"a.cs"},{"path":"b.cs"}]}}}"""));
+
+        Assert.Equal(AgentStreamChunkKind.ToolCall, emission!.Value.Kind);
+        Assert.Equal("edit a.cs, b.cs", emission.Value.Text);
     }
 }

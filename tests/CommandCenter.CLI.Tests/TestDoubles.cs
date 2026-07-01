@@ -14,6 +14,7 @@ internal sealed class RecordingLoopConsole : ILoopConsole
     public void Phase(string phase) => Events.Enqueue(("phase", phase));
     public void Message(string content) => Events.Enqueue(("message", content));
     public void Delta(string text) => Events.Enqueue(("delta", text));
+    public void Tool(string summary) => Events.Enqueue(("tool", summary));
     public void Info(string text) => Events.Enqueue(("info", text));
     public void Warn(string text) => Events.Enqueue(("warn", text));
     public void Error(string text) => Events.Enqueue(("error", text));

@@ -38,24 +38,26 @@ internal sealed class ExecutionStep(
         {
             // Turn 1 - do the work. The prompt no longer asks for a handoff.
             console.Phase("Execution: ContinueExecution");
-            AgentTurnResult work = await session.RunTurnAsync(executionPrompt, StreamToConsole, cancellationToken);
+            var workRenderer = new ConsoleTurnRenderer(console);
+            AgentTurnResult work = await session.RunTurnAsync(executionPrompt, workRenderer.Stream, cancellationToken);
             if (work.State != AgentTurnState.Completed)
             {
                 throw new LoopStepException($"Execution turn ended in state {work.State}.");
             }
 
-            console.Message(work.Output);
+            workRenderer.EchoIfSilent(work.Output);
 
             // Turn 2 - request the handoff on the same held-open session (delta only).
             console.Phase("Execution: GenerateHandoff");
+            var handoffRenderer = new ConsoleTurnRenderer(console);
             AgentTurnResult handoffTurn = await session.RunTurnAsync(
-                GenerateHandoff.Text, StreamToConsole, cancellationToken);
+                GenerateHandoff.Text, handoffRenderer.Stream, cancellationToken);
             if (handoffTurn.State != AgentTurnState.Completed)
             {
                 throw new LoopStepException($"Handoff turn ended in state {handoffTurn.State}.");
             }
 
-            console.Message(handoffTurn.Output);
+            handoffRenderer.EchoIfSilent(handoffTurn.Output);
 
             if (!await artifacts.ExistsAsync(OrchestrationArtifactPaths.LiveHandoff))
             {
@@ -69,15 +71,5 @@ internal sealed class ExecutionStep(
         {
             await runtime.CloseSessionAsync(session);
         }
-    }
-
-    private Task StreamToConsole(AgentStreamChunk chunk)
-    {
-        if (chunk.Stream == AgentProcessOutputStream.StandardOutput)
-        {
-            console.Delta(chunk.Content);
-        }
-
-        return Task.CompletedTask;
     }
 }

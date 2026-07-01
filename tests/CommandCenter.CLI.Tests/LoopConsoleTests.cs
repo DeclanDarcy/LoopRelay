@@ -88,4 +88,27 @@ public class LoopConsoleTests
 
         Assert.Equal("[ok] a\n[warn] b\nc\n", outw.ToString());
     }
+
+    // A tool call renders as a compact, indented line of its own.
+    [Fact]
+    public void Tool_RendersACompactIndentedLine()
+    {
+        var (console, outw, _) = New();
+
+        console.Tool("$ git status");
+
+        Assert.Equal("  $ git status\n", outw.ToString());
+    }
+
+    // A tool call that lands while a delta line is still open closes that line first.
+    [Fact]
+    public void Tool_AfterUnterminatedDelta_StartsOnItsOwnLine()
+    {
+        var (console, outw, _) = New();
+
+        console.Delta("partial reply");
+        console.Tool("$ dotnet build");
+
+        Assert.Equal("partial reply\n  $ dotnet build\n", outw.ToString());
+    }
 }

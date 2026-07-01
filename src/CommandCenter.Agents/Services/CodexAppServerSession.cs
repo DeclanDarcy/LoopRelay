@@ -301,11 +301,10 @@ public sealed class CodexAppServerSession : IAgentSession
                     break;
                 }
 
-                string? delta = turn.Reader.Apply(message);
-                if (!string.IsNullOrEmpty(delta))
+                if (turn.Reader.Apply(message) is { } emission && !string.IsNullOrEmpty(emission.Text))
                 {
                     turn.Chunks.Writer.TryWrite(new AgentStreamChunk(
-                        turn.TurnIndex, AgentProcessOutputStream.StandardOutput, delta));
+                        turn.TurnIndex, AgentProcessOutputStream.StandardOutput, emission.Text, emission.Kind));
                 }
 
                 if (turn.Reader.IsComplete)
