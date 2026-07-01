@@ -11,7 +11,7 @@ public class LoopRunnerTests
 {
     private sealed record Harness(
         LoopRunner Runner, FakeAgentRuntime Rt, MemoryArtifactStore Store, Repository Repo, RecordingLoopConsole Con,
-        FakeProcessRunner Git, FakeCodexUsageProbe Usage, FakeUsageDelay Delay);
+        FakeProcessRunner Git);
 
     private static Harness New()
     {
@@ -22,66 +22,19 @@ public class LoopRunnerTests
         var rt = new FakeAgentRuntime(store);
         var router = new DecisionSessionRouter(new DecisionSessionRouterOptions());
         var gate = new MilestoneGate(store, repo);
+        // These tests exercise loop orchestration only; the Codex usage gate is unit-tested separately
+        // (UsageGateTests) and its per-turn placement in GatedAgentRuntimeTests, so the loop runs ungated.
         var exec = new ExecutionStep(rt, art, con, repo);
         var dec = new DecisionSession(rt, router, art, con, repo);
         // By default `git status` reports an EMPTY working tree, so the gate skips commit/push and the
         // existing single-iteration tests reach their asserted outcome before it could ever trip.
         var git = new FakeProcessRunner { Handler = _ => FakeProcessRunner.Ok() };
         var commitGate = new CommitGate(git, repo, con);
-        // Usage gate: full capacity by default so it never delays and the existing loop tests are unaffected.
-        var usage = new FakeCodexUsageProbe { Default = new CodexUsageStatus(100, TimeSpan.Zero, 100, TimeSpan.Zero) };
-        var delay = new FakeUsageDelay();
-        var usageGate = new UsageGate(usage, delay, con);
         return new Harness(
-            new LoopRunner(usageGate, gate, art, exec, dec, commitGate, con), rt, store, repo, con, git, usage, delay);
+            new LoopRunner(gate, art, exec, dec, commitGate, con), rt, store, repo, con, git);
     }
 
     private static string Resolve(Repository r, string rel) => ArtifactPath.ResolveRepositoryPath(r, rel);
-
-    [Fact]
-    public async Task Run_WhenEpicAlreadyComplete_DoesNotWaitForUsageEvenIfExhausted()
-    {
-        var h = New();
-        // A finished epic must return immediately — it needs no Codex work, so it must NOT block on quota.
-        await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [x] done");
-        h.Usage.Default = new CodexUsageStatus(0, TimeSpan.FromMinutes(30), 0, TimeSpan.FromDays(5));
-
-        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
-
-        Assert.Equal(LoopOutcome.EpicCompleted, outcome);
-        Assert.Empty(h.Delay.Delays);
-    }
-
-    [Fact]
-    public async Task Run_WhenWorkRemainsAndUsageExhausted_WaitsOnceBeforeRunningCodex()
-    {
-        var h = New();
-        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
-        await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] task");
-        h.Usage.Default = new CodexUsageStatus(0, TimeSpan.FromMinutes(30), 50, TimeSpan.FromHours(1));
-
-        // Branch A: execution work turn checks the box (epic completes next iteration), handoff turn, then
-        // the decision seed + proposal.
-        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
-        {
-            s.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [x] task").Wait();
-            return Turns.Completed("executed");
-        }));
-        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
-        {
-            s.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff), "HANDOFF").Wait();
-            return Turns.Completed("handoff");
-        }));
-        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
-        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DECISIONS")));
-
-        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
-
-        Assert.Equal(LoopOutcome.EpicCompleted, outcome);
-        // Waited exactly once — on the work iteration, before codex ran; the completing iteration returns
-        // via the epic-complete check without reaching the usage gate.
-        Assert.Equal(new[] { TimeSpan.FromMinutes(30) }, h.Delay.Delays);
-    }
 
     [Fact]
     public async Task Run_WhenEpicAlreadyComplete_ReturnsEpicCompletedImmediately()

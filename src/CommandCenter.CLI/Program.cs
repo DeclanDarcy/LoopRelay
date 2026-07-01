@@ -45,13 +45,17 @@ var processRunner = provider.GetRequiredService<IProcessRunner>();
 var executableResolver = provider.GetRequiredService<IAgentExecutableResolver>();
 
 var artifacts = new LoopArtifacts(store, repository);
+// The Codex usage gate runs before EVERY codex turn/one-shot (a single iteration invokes codex many times
+// and the warm decision session is reused across iterations), so it wraps the runtime rather than gating
+// once at the top of the loop.
 var usageProbe = new CodexUsageProbe(processRunner, executableResolver, repository);
 var usageGate = new UsageGate(usageProbe, new TaskDelayScheduler(), console);
+var gatedRuntime = new GatedAgentRuntime(runtime, usageGate);
 var gate = new MilestoneGate(store, repository);
-var execution = new ExecutionStep(runtime, artifacts, console, repository);
-var decision = new DecisionSession(runtime, router, artifacts, console, repository);
+var execution = new ExecutionStep(gatedRuntime, artifacts, console, repository);
+var decision = new DecisionSession(gatedRuntime, router, artifacts, console, repository);
 var commitGate = new CommitGate(processRunner, repository, console);
-var loop = new LoopRunner(usageGate, gate, artifacts, execution, decision, commitGate, console);
+var loop = new LoopRunner(gate, artifacts, execution, decision, commitGate, console);
 
 // --- Ctrl+C: cancel the loop AND let session disposal kill the codex child processes. ---
 using var cts = new CancellationTokenSource();

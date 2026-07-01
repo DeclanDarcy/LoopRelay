@@ -7,7 +7,6 @@ namespace CommandCenter.Cli;
 /// is requested. Owns the warm DecisionSession and disposes it on exit.
 /// </summary>
 internal sealed class LoopRunner(
-    UsageGate usageGate,
     MilestoneGate gate,
     LoopArtifacts artifacts,
     ExecutionStep execution,
@@ -24,15 +23,13 @@ internal sealed class LoopRunner(
                 cancellationToken.ThrowIfCancellationRequested();
 
                 // ---- LoopStart ----
-                // A finished epic needs no Codex work, so check completion BEFORE the usage gate — otherwise a
-                // completed epic could block for up to the (potentially multi-day) quota reset before returning.
+                // A finished epic needs no Codex work, so return immediately. The Codex usage gate now runs
+                // per-turn inside GatedAgentRuntime, so a completed epic never opens a session and thus never
+                // blocks on a (potentially multi-day) quota reset.
                 if (await gate.IsEpicCompleteAsync())
                 {
                     return LoopOutcome.EpicCompleted;
                 }
-
-                // ---- Usage gate: block before any Codex work while quota is exhausted. ----
-                await usageGate.WaitForCapacityAsync(cancellationToken);
 
                 await artifacts.EnsureOperationalContextAsync();
 

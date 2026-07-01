@@ -17,14 +17,28 @@ internal sealed class TaskDelayScheduler : IUsageDelay
         duration <= TimeSpan.Zero ? Task.CompletedTask : Task.Delay(duration, cancellationToken);
 }
 
-/// <summary>
-/// The first gate of every loop iteration. Reads Codex quota via <see cref="ICodexUsageProbe"/>; if a limit
-/// window is exhausted (0% remaining) it prints a message and blocks until that window resets, then lets the
-/// iteration proceed. When BOTH windows are exhausted it waits for the later reset (work needs both to have
-/// budget). Fails OPEN — an unreadable/unparseable probe result warns and proceeds rather than wedging the loop.
-/// </summary>
-internal sealed class UsageGate(ICodexUsageProbe probe, IUsageDelay delay, ILoopConsole console)
+/// <summary>Blocks until Codex has capacity to run a turn (or fails open). See <see cref="UsageGate"/>.</summary>
+internal interface IUsageGate
 {
+    Task WaitForCapacityAsync(CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// Runs before every Codex turn (via <see cref="GatedAgentRuntime"/>). Reads Codex quota via
+/// <see cref="ICodexUsageProbe"/>; if a limit window is at or below the exhaustion WATERMARK it prints a
+/// message and blocks until that window resets, then lets the turn proceed. When BOTH windows are exhausted
+/// it waits for the later reset (work needs both to have budget). Fails OPEN — an unreadable/unparseable
+/// probe result warns and proceeds rather than wedging the loop.
+/// <para>
+/// The watermark is a small buffer above zero (not 0%) because a single turn is a whole Codex run of many
+/// internal model calls that can burn a chunk of a window mid-flight, and we cannot interrupt it — starting
+/// a turn on the last sliver risks crossing zero and crashing. Stopping at the watermark leaves headroom.
+/// </para>
+/// </summary>
+internal sealed class UsageGate(ICodexUsageProbe probe, IUsageDelay delay, ILoopConsole console) : IUsageGate
+{
+    private const int ExhaustionWatermarkPercent = 1;
+
     public async Task WaitForCapacityAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -38,15 +52,15 @@ internal sealed class UsageGate(ICodexUsageProbe probe, IUsageDelay delay, ILoop
 
         TimeSpan wait = TimeSpan.Zero;
 
-        if (status.FiveHourRemainingPercent == 0)
+        if (status.FiveHourRemainingPercent <= ExhaustionWatermarkPercent)
         {
-            console.Warn($"Codex 5h limit exhausted — resets in {Format(status.FiveHourTimeUntilReset)}.");
+            console.Warn($"Codex 5h limit spent ({status.FiveHourRemainingPercent}% left, <= {ExhaustionWatermarkPercent}% watermark) — resets in {Format(status.FiveHourTimeUntilReset)}.");
             wait = Longer(wait, status.FiveHourTimeUntilReset);
         }
 
-        if (status.WeeklyRemainingPercent == 0)
+        if (status.WeeklyRemainingPercent <= ExhaustionWatermarkPercent)
         {
-            console.Warn($"Codex weekly limit exhausted — resets in {Format(status.WeeklyTimeUntilReset)}.");
+            console.Warn($"Codex weekly limit spent ({status.WeeklyRemainingPercent}% left, <= {ExhaustionWatermarkPercent}% watermark) — resets in {Format(status.WeeklyTimeUntilReset)}.");
             wait = Longer(wait, status.WeeklyTimeUntilReset);
         }
 

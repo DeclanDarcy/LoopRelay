@@ -76,6 +76,31 @@ public class UsageGateTests
     }
 
     [Fact]
+    public async Task WaitForCapacity_WhenFiveHourAtTheOnePercentWatermark_TreatsItAsExhaustedAndDelays()
+    {
+        var t = New();
+        // 1% left is not enough to safely start a turn (a turn can burn more than that mid-flight and crash
+        // past zero), so the watermark treats <=1% as exhausted and waits for the reset.
+        t.Probe.Default = new CodexUsageStatus(1, TimeSpan.FromMinutes(30), 60, TimeSpan.FromHours(2));
+
+        await t.Gate.WaitForCapacityAsync(CancellationToken.None);
+
+        Assert.Equal(new[] { TimeSpan.FromMinutes(30) }, t.Delay.Delays);
+    }
+
+    [Fact]
+    public async Task WaitForCapacity_WhenJustAboveTheWatermark_DoesNotDelay()
+    {
+        var t = New();
+        // 2% is above the 1% watermark — enough headroom to start a turn, so proceed without waiting.
+        t.Probe.Default = new CodexUsageStatus(2, TimeSpan.FromMinutes(30), 2, TimeSpan.FromHours(2));
+
+        await t.Gate.WaitForCapacityAsync(CancellationToken.None);
+
+        Assert.Empty(t.Delay.Delays);
+    }
+
+    [Fact]
     public async Task WaitForCapacity_WhenExhaustedButResetAlreadyElapsed_DoesNotDelay()
     {
         var t = New();
