@@ -15,14 +15,18 @@ public class GatedAgentRuntimeTests
     private static Repository Repo() => new() { Id = Guid.NewGuid(), Name = "r", Path = "/repo" };
     private static AgentSessionSpec Spec() => AgentSpecs.Decision(Repo());
 
-    private sealed record Fixture(GatedAgentRuntime Runtime, RecordingRuntime Inner, RecordingGate Gate, List<string> Log);
+    private sealed record Fixture(
+        GatedAgentRuntime Runtime, RecordingRuntime Inner, RecordingGate Gate,
+        RecordingSessionTelemetryRecorder Recorder, List<string> Log);
 
     private static Fixture New()
     {
         var log = new List<string>();
         var inner = new RecordingRuntime(log);
         var gate = new RecordingGate(log);
-        return new Fixture(new GatedAgentRuntime(inner, gate), inner, gate, log);
+        var recorder = new RecordingSessionTelemetryRecorder();
+        var runtime = new GatedAgentRuntime(inner, gate, recorder, new FakeClock(), "myrepo");
+        return new Fixture(runtime, inner, gate, recorder, log);
     }
 
     [Fact]
@@ -121,6 +125,60 @@ public class GatedAgentRuntimeTests
         Assert.True(f.Inner.LastSession!.Disposed);
     }
 
+    [Fact]
+    public async Task RunTurn_EmitsOneRecordPerTurnWithTheGatesPreStatus()
+    {
+        var f = New();
+        f.Gate.Status = new CodexUsageStatus(70, TimeSpan.FromHours(1), 90, TimeSpan.FromHours(5));
+        IAgentSession session = await f.Runtime.OpenSessionAsync(Spec());
+        f.Inner.LastSession!.TurnResult = new AgentTurnResult(1, AgentTurnState.Completed, "o", new AgentTokenUsage(1, 1));
+
+        await session.RunTurnAsync("p1");
+
+        var call = Assert.Single(f.Recorder.Calls);
+        Assert.Equal(SessionRole.Decision, call.Role);
+        Assert.Equal(1, call.TurnIndex);
+        Assert.Null(call.CachedLogPath);                 // first turn: nothing cached yet
+        Assert.Equal(70, call.Pre!.FiveHourRemainingPercent);
+    }
+
+    [Fact]
+    public async Task RunTurn_SecondTurnReusesTheCachedLogPathFromTheFirst()
+    {
+        var f = New();
+        f.Recorder.PathToReturn = "/rollout.jsonl";
+        IAgentSession session = await f.Runtime.OpenSessionAsync(Spec());
+
+        await session.RunTurnAsync("p1");
+        await session.RunTurnAsync("p2");
+
+        Assert.Equal(2, f.Recorder.Calls.Count);
+        Assert.Null(f.Recorder.Calls[0].CachedLogPath);
+        Assert.Equal("/rollout.jsonl", f.Recorder.Calls[1].CachedLogPath);
+    }
+
+    [Fact]
+    public async Task RunOneShot_EmitsOneRecord()
+    {
+        var f = New();
+
+        await f.Runtime.RunOneShotAsync(Spec(), "prompt");
+
+        Assert.Single(f.Recorder.Calls);
+    }
+
+    [Fact]
+    public async Task RunTurn_WhenGateThrows_EmitsNoRecord()
+    {
+        var f = New();
+        IAgentSession session = await f.Runtime.OpenSessionAsync(Spec());
+        f.Gate.Throw = new OperationCanceledException();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => session.RunTurnAsync("p"));
+
+        Assert.Empty(f.Recorder.Calls);
+    }
+
     // --- local recording fakes ---
 
     private sealed class RecordingGate(List<string> log) : IUsageGate
@@ -134,6 +192,21 @@ public class GatedAgentRuntimeTests
             Calls++;
             log.Add("gate");
             return Throw is not null ? throw Throw : Task.FromResult(Status);
+        }
+    }
+
+    private sealed class RecordingSessionTelemetryRecorder : ISessionTelemetryRecorder
+    {
+        public List<(SessionRole Role, int TurnIndex, string? CachedLogPath, CommandCenter.Cli.CodexUsageStatus? Pre)> Calls { get; } = new();
+        public string? PathToReturn { get; set; } = "/log";
+
+        public Task<string?> RecordTurnAsync(
+            string repoName, string workingDirectory, SessionIdentity sessionId, SessionRole role,
+            DateTimeOffset openedAtUtc, string? cachedLogPath, AgentTurnResult result,
+            CodexUsageStatus? preStatus, CancellationToken cancellationToken)
+        {
+            Calls.Add((role, result.TurnIndex, cachedLogPath, preStatus));
+            return Task.FromResult(PathToReturn);
         }
     }
 
