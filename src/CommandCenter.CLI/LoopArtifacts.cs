@@ -44,6 +44,13 @@ internal sealed class LoopArtifacts(IArtifactStore store, Repository repository)
         "decisions",
         OrchestrationArtifactPaths.HistoricalDecision);
 
+    public Task<string?> RotateOperationalDeltaAsync() => RotateAsync(
+        OrchestrationArtifactPaths.OperationalDelta,
+        OrchestrationArtifactPaths.DeltasDirectory,
+        OrchestrationArtifactPaths.HistoricalDeltaSearchPattern,
+        "operational_delta",
+        OrchestrationArtifactPaths.HistoricalDelta);
+
     public Task<(string? Content, string? RelativePath)> ReadLatestHandoffAsync() => ReadLatestAsync(
         OrchestrationArtifactPaths.LiveHandoff,
         OrchestrationArtifactPaths.HandoffsDirectory,

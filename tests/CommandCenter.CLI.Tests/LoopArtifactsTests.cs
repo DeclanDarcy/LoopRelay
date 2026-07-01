@@ -94,6 +94,39 @@ public class LoopArtifactsTests
     }
 
     [Fact]
+    public async Task RotateOperationalDelta_ArchivesNumberedAndDeletesLive()
+    {
+        var (art, store, repo) = New();
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalDelta), "DELTA-A");
+
+        string? rotated = await art.RotateOperationalDeltaAsync();
+
+        Assert.Equal("DELTA-A", rotated);
+        Assert.False(await store.ExistsAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalDelta)));
+        Assert.Equal("DELTA-A", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDelta(1))));
+    }
+
+    [Fact]
+    public async Task RotateOperationalDelta_WhenAbsent_ReturnsNull()
+    {
+        var (art, _, _) = New();
+        Assert.Null(await art.RotateOperationalDeltaAsync());
+    }
+
+    [Fact]
+    public async Task RotateOperationalDelta_SequenceIsDiskMaxPlusOne()
+    {
+        var (art, store, repo) = New();
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDelta(1)), "old");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDelta(2)), "old2");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalDelta), "DELTA-3");
+
+        await art.RotateOperationalDeltaAsync();
+
+        Assert.Equal("DELTA-3", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDelta(3))));
+    }
+
+    [Fact]
     public async Task EnsureOperationalContext_WhenAlreadyExists_DoesNotOverwrite()
     {
         var (art, store, repo) = New();
