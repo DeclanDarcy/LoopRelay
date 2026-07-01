@@ -1,0 +1,10 @@
+# Execution Session Report
+{handoff}
+
+---
+
+Produce the optimal system prompt for the next execution agent.
+Preserve accumulated intent, decisions, constraints, and architectural direction while integrating the outcomes of this session.
+Encode every supported decision, constraint, priority, invariant, assumption, and execution insight that improves future behavior.
+Resolve ambiguities whenever justified by the evidence.
+Exclude information that does not improve execution.

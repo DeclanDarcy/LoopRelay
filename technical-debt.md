@@ -9,6 +9,65 @@ impact of leaving it, and the path to resolve it. Newest section first.
 
 ---
 
+## 2026-06-30 — decisions.md is the execution agent's system prompt (CLI decision-first)
+
+Background: `CommandCenter.CLI` was re-sequenced so the **decision session runs before
+execution** and `decisions.md` is now *the execution agent's system prompt*, not a set of
+directions. The decision proposal turn no longer renders `GetNextDecisions`; it renders
+`GenerateSystemPromptForFirstExecutionAgent` on the first pass (no handoff yet) and
+`GenerateSystemPromptForNextExecutionAgent.Render(handoff)` afterwards, still persisting the
+output to `decisions.md`. `ExecutionStep` always renders `ContinueExecution` (the
+`StartExecution` first-milestone branch is gone) and the shared `ContinueExecution.prompt`
+had its `{handoff}` hole **removed** (its `Render` is now `(plan, decisions)`), because the
+handoff now reaches the next agent through the generated system prompt, not the execution
+prompt. Scope was CLI-only; the backend/legacy paths were adapted just enough to stay green.
+
+### TD-6 — `GetNextDecisions` and `StartExecution` prompts are now CLI-dead but retained
+
+**Deferred (obsolete, not deleted).** After the decision-first change the CLI no longer
+renders `GetNextDecisions.prompt` or `StartExecution.prompt`. They are **kept** solely
+because the two legacy backend paths still consume them:
+
+- `CommandCenter.Orchestration` → `RepositoryOrchestrator` renders `GetNextDecisions.Render(handoff)`
+  (decision proposal) and `StartExecution.Render(plan)` (Execute-Plan first turn).
+- `CommandCenter.Execution` → `ExecutionPromptBuilder` renders `StartExecution.Render(plan)`
+  for a first-milestone start.
+
+**Why deferred:** deleting them would break those paths, and the maintainer chose to leave
+the backend flow unchanged (see TD-1). Marking them obsolete here rather than deleting keeps
+the record without forcing the larger backend migration.
+
+**Impact:** two prompt templates in `CommandCenter.Core/Prompts` that the *active* (CLI) loop
+never renders. Provenance/tests still reference their `SourceHash`, so they cannot be removed
+piecemeal.
+
+**Resolution:** delete `GetNextDecisions.prompt` + `StartExecution.prompt` (and their
+`ExecutionPromptBuilder`/`RepositoryOrchestrator` consumers + provenance) if/when the backend
+execution paths are retired (this is the same decision as TD-1's option (b)).
+
+### TD-7 — Shared `ContinueExecution.prompt` lost `{handoff}`; docs and backend prompt-text drift
+
+**Deferred.** Removing `{handoff}` from the shared `ContinueExecution.prompt` changed its
+generated `Render` signature to `(plan, decisions)` for **all** consumers, so:
+
+- The backend `RepositoryOrchestrator` continuation turn no longer injects the prior handoff
+  text into the prompt (it still *reads* the handoff — the null-check gate and the provenance
+  `InputArtifactIdentities` list are unchanged — it just isn't rendered). Same class of silent
+  backend behavior change as TD-1; a backend test assertion for the handoff substring was
+  de-asserted (`ExecutionPromptBuilderTests`), not fixed.
+- Documentation still describes the old 3-arg form: `plan.md` (the `Render(plan, handoff,
+  decisions)` signature line + the m6 flow step), `docs/final-acceptance.md` (FA-8), and
+  `docs/prompt-architecture.md`. These were left unchanged (CLI-only scope) and now misstate
+  the generated signature.
+
+**Impact:** backend continuation prompts omit the handoff body; governance docs overstate the
+`ContinueExecution` inputs.
+
+**Resolution:** when the backend is migrated (TD-1/TD-6) update the docs to the `(plan,
+decisions)` signature, or correct the docs sooner as a standalone doc fix.
+
+---
+
 ## 2026-06-30 — Two-turn execution session
 
 Background: `CommandCenter.CLI`'s `ExecutionStep` was changed so an execution

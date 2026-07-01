@@ -13,8 +13,10 @@ namespace CommandCenter.Cli;
 /// The decision-making codex session, routed by the SessionRouter. Mirrors RepositoryOrchestrator's
 /// RunDecisionAsync + the auto-submit half of BeginSubmitDecisionsAsync (a fully-automated CLI submits
 /// the agent's proposal verbatim). Owns ONE warm read-only process reused across iterations; seeds once
-/// with StartDecisionSession(operationalContext); proposes with GetNextDecisions(latestHandoff); persists
-/// the proposal to decisions.{N:0000}.md AND canonical decisions.md; verifies decisions.md exists.
+/// with StartDecisionSession(operationalContext); proposes the NEXT execution agent's system prompt —
+/// GenerateSystemPromptForFirstExecutionAgent on the first pass (no handoff yet), else
+/// GenerateSystemPromptForNextExecutionAgent(latestHandoff); persists the proposal to decisions.{N:0000}.md
+/// AND canonical decisions.md; verifies decisions.md exists.
 /// </summary>
 internal sealed class DecisionSession(
     IAgentRuntime runtime,
@@ -63,13 +65,15 @@ internal sealed class DecisionSession(
         await EnsureSeededAsync(cancellationToken);
 
         (string? handoff, _) = await artifacts.ReadLatestHandoffAsync();
-        if (handoff is null)
-        {
-            throw new LoopStepException("No handoff available for the decision session.");
-        }
+        // decisions.md IS the execution agent's system prompt now. The first pass (no prior handoff) generates
+        // the first agent's system prompt from scratch; every later pass folds the previous execution session's
+        // handoff into the next agent's system prompt.
+        string proposalPrompt = handoff is null
+            ? GenerateSystemPromptForFirstExecutionAgent.Text
+            : GenerateSystemPromptForNextExecutionAgent.Render(handoff);
 
         AgentTurnResult proposed = await session!.RunTurnAsync(
-            GetNextDecisions.Render(handoff), StreamToConsole, cancellationToken);
+            proposalPrompt, StreamToConsole, cancellationToken);
 
         if (proposed.State != AgentTurnState.Completed)
         {

@@ -54,7 +54,7 @@ public sealed class ExecutionPromptBuilder : IExecutionPromptBuilder
         // first-milestone start (StartExecution has no handoff/decisions holes).
         bool continuing = handoff is not null;
         string text = continuing
-            ? ContinueExecution.Render(plan, handoff, decisions)
+            ? ContinueExecution.Render(plan, decisions)
             : StartExecution.Render(plan);
 
         return new ExecutionPrompt

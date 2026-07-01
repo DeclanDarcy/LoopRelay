@@ -59,8 +59,9 @@ public sealed class ExecutionPromptBuilderTests
         Assert.Contains("continue executing the current milestone", prompt.Text);
         Assert.DoesNotContain("start executing the first milestone", prompt.Text);
 
-        // {handoff} carries the exact handoff text; {decisions} carries the exact raw decisions.md text.
-        Assert.Contains("handoff content", prompt.Text);
+        // {decisions} carries the exact raw decisions.md text. The handoff is no longer a ContinueExecution
+        // hole ({handoff} was removed); it reaches the agent via the decision session's system prompt instead.
+        Assert.DoesNotContain("handoff content", prompt.Text);
         Assert.Contains("DEC-0001: keep the raw decisions text verbatim", prompt.Text);
 
         // Operational context belongs to the decision/codex session and must NOT be injected into the prompt.

@@ -1,0 +1,2 @@
+Produce the optimal system prompt for the first execution agent.
+Exclude information that does not improve execution.

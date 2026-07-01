@@ -36,6 +36,9 @@ public class LoopRunnerTests
 
     private static string Resolve(Repository r, string rel) => ArtifactPath.ResolveRepositoryPath(r, rel);
 
+    private static List<string> Phases(RecordingLoopConsole con) =>
+        con.Events.Where(e => e.Kind == "phase").Select(e => e.Text).ToList();
+
     [Fact]
     public async Task Run_WhenEpicAlreadyComplete_ReturnsEpicCompletedImmediately()
     {
@@ -49,16 +52,19 @@ public class LoopRunnerTests
     }
 
     [Fact]
-    public async Task Run_FirstIterationBranchA_RunsExecutionThenDecision_ThenCompletes()
+    public async Task Run_FirstIteration_DecisionThenExecution_ThenCompletes()
     {
         var h = New();
         // milestone incomplete at first, becomes complete after the execution agent "checks the box".
         await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
         await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] task");
 
-        // Execution is now a held-open session of TWO turns (the same SessionTurns queue the decision
-        // session draws from, consumed first): turn 1 does the work (checks the milestone box, so the epic
-        // completes next LoopStart), turn 2 writes handoff.md.
+        // Decision-first: the decision session seeds then proposes decisions.md (the first execution agent's
+        // system prompt, since no handoff exists yet). THEN the execution session runs two turns off the same
+        // SessionTurns queue: turn 1 does the work (checks the milestone box, so the epic completes next
+        // LoopStart), turn 2 writes handoff.md.
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DECISIONS-1")));
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
         {
             s.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [x] task").Wait();
@@ -69,20 +75,24 @@ public class LoopRunnerTests
             s.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff), "HANDOFF-1").Wait();
             return Turns.Completed("handoff");
         }));
-        // Decision session: seed then propose.
-        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
-        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DECISIONS-1")));
 
         LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
         Assert.Equal(LoopOutcome.EpicCompleted, outcome);
         Assert.Equal("DECISIONS-1", await h.Store.ReadAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Decisions)));
-        // After one Branch-A iteration: live handoff present (written by execution, rotated next loop only).
+        // After one iteration: live handoff present (written by execution, rotated next loop only).
         Assert.True(await h.Store.ExistsAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff)));
+
+        // The decision phase ran BEFORE the execution phase (the sequencing was swapped to decision-first).
+        List<string> phases = Phases(h.Con);
+        int decisionIndex = phases.FindIndex(p => p.StartsWith("Decision"));
+        int executionIndex = phases.FindIndex(p => p.StartsWith("Execution"));
+        Assert.True(decisionIndex >= 0 && executionIndex >= 0, "both phases must run");
+        Assert.True(decisionIndex < executionIndex, "decision must precede execution");
     }
 
     [Fact]
-    public async Task Run_BranchB_DecisionsAbsentHandoffPresent_RunsDecisionOnly()
+    public async Task Run_ResumeWithExistingHandoff_DecisionConsumesItThenExecutionRuns()
     {
         var h = New();
         await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
@@ -90,30 +100,56 @@ public class LoopRunnerTests
         await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
         await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff), "H-RESUME");
 
-        // Decision-only: seed + propose. After it, mark milestone done so the loop stops.
+        // Decision seeds + proposes over the resumed handoff, THEN execution runs and completes the milestone.
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>
+        {
+            Assert.Contains("H-RESUME", prompt);   // the resumed handoff folds into the next system prompt
+            return Turns.Completed("DEC-RESUME");
+        }));
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
         {
             s.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [x] t").Wait();
-            return Turns.Completed("DEC-B");
+            return Turns.Completed("executed");
+        }));
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        {
+            s.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff), "H-NEXT").Wait();
+            return Turns.Completed("handoff");
         }));
 
         LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
         Assert.Equal(LoopOutcome.EpicCompleted, outcome);
-        Assert.Empty(h.Rt.OneShotCalls);   // Branch B never runs execution
-        // handoff rotated away (archived + live deleted) in Branch B.
-        Assert.False(await h.Store.ExistsAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff)));
+        Assert.Equal("DEC-RESUME", await h.Store.ReadAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Decisions)));
+        // The consumed handoff was rotated to handoff.0001.md before execution wrote the next live handoff.
         Assert.Equal("H-RESUME", await h.Store.ReadAsync(Resolve(h.Repo, OrchestrationArtifactPaths.HistoricalHandoff(1))));
     }
 
     [Fact]
-    public async Task Run_WhenStepFails_ReturnsFailed()
+    public async Task Run_WhenDecisionStepFails_ReturnsFailed()
     {
         var h = New();
         await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
         await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
-        // The execution work turn fails, so ExecutionStep throws a LoopStepException -> the loop returns Failed.
+        // Decision runs first: seed completes, but the proposal turn fails -> DecisionSession throws -> Failed.
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));
+
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+
+        Assert.Equal(LoopOutcome.Failed, outcome);
+    }
+
+    [Fact]
+    public async Task Run_WhenExecutionStepFails_ReturnsFailed()
+    {
+        var h = New();
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
+        await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
+        // Decision succeeds (seed + propose), then the execution work turn fails -> ExecutionStep throws -> Failed.
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("D")));
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));
 
         LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
@@ -134,23 +170,22 @@ public class LoopRunnerTests
             ? FakeProcessRunner.Ok(" M .agents/decisions/decisions.md\n M .agents/handoffs/handoff.md")
             : FakeProcessRunner.Ok();
 
-        // Each iteration runs Branch A. Execution and the decision session now share the SessionTurns queue,
-        // consumed in order per iteration: execution work turn, execution handoff turn (writes a fresh
-        // handoff), the decision seed (first iteration only), then the decision proposal (persists
-        // decisions.md). Script generously to cover >3 iterations; the stall gate trips first.
+        // Each iteration runs decision-first: the decision seed (first iteration only), the decision proposal
+        // (persists decisions.md), then execution's work turn and handoff turn (writes a fresh handoff). Script
+        // generously to cover >3 iterations; the stall gate trips first.
         for (int i = 0; i < 6; i++)
         {
+            if (i == 0)
+            {
+                h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
+            }
+            h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed($"DECISIONS-{i}")));
             h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed($"executed-{i}")));
             h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
             {
                 s.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff), $"HANDOFF-{i}").Wait();
                 return Turns.Completed($"handoff-{i}");
             }));
-            if (i == 0)
-            {
-                h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
-            }
-            h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed($"DECISIONS-{i}")));
         }
 
         LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
@@ -165,7 +200,7 @@ public class LoopRunnerTests
         await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
         await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
         using var cts = new CancellationTokenSource();
-        // The execution work turn (first SessionTurns entry) cancels mid-flight.
+        // The decision seed turn (first SessionTurns entry, since decision now runs first) cancels mid-flight.
         h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) =>
         {
             cts.Cancel();

@@ -139,7 +139,7 @@ public sealed class RepositoryOrchestratorExecutionTests
         // The continuation one-shot (the first/only one-shot here) opened at medium with no identifier.
         Assert.Equal(AgentEffortLevel.Medium, runtime.OneShotSpecs[0].Effort.Level);
         Assert.Null(runtime.OneShotSpecs[0].Effort.Identifier);
-        Assert.Equal(ContinueExecution.Render(PlanBody, "HANDOFF ONE", "DECISIONS ONE"), runtime.OneShotPrompts[0]);
+        Assert.Equal(ContinueExecution.Render(PlanBody, "DECISIONS ONE"), runtime.OneShotPrompts[0]);
     }
 
     [Fact]

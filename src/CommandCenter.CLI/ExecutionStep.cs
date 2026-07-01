@@ -9,7 +9,8 @@ namespace CommandCenter.Cli;
 /// <summary>
 /// One execution slice over a HELD-OPEN operational codex session (app-server JSON-RPC over stdio, so the
 /// second turn sends only its delta instead of re-sending the whole transcript). Two user-input turns:
-/// (1) StartExecution/ContinueExecution does the work and is NOT asked for a handoff; then
+/// (1) ContinueExecution renders plan + decisions.md (the execution agent's system prompt) and does the work,
+/// and is NOT asked for a handoff; then
 /// (2) GenerateHandoff writes .agents/handoffs/handoff.md from the in-session context of turn 1.
 /// The session is opened per slice and closed in a finally; the new handoff is verified after turn 2.
 /// </summary>
@@ -19,14 +20,12 @@ internal sealed class ExecutionStep(
     public async Task RunAsync(CancellationToken cancellationToken)
     {
         string? plan = await artifacts.ReadPlanAsync();
-        (string? handoff, _) = await artifacts.ReadLatestHandoffAsync();
         (string? decisions, _) = await artifacts.ReadLatestDecisionsAsync();
 
-        bool continuing = handoff is not null;
-        string phase = continuing ? "ContinueExecution" : "StartExecution";
-        string executionPrompt = continuing
-            ? ContinueExecution.Render(plan, handoff, decisions)
-            : StartExecution.Render(plan);
+        // The decision session produces decisions.md (the execution agent's system prompt) before every
+        // execution slice, so execution always continues from it — there is no separate first-milestone
+        // StartExecution path, and the handoff is consumed by the decision session, not rendered here.
+        string executionPrompt = ContinueExecution.Render(plan, decisions);
 
         IAgentSession session = await runtime.OpenSessionAsync(
             AgentSpecs.Operational(repository, AgentEffortLevel.Medium, identifier: null),
@@ -34,7 +33,7 @@ internal sealed class ExecutionStep(
         try
         {
             // Turn 1 - do the work. The prompt no longer asks for a handoff.
-            console.Phase($"Execution: {phase}");
+            console.Phase("Execution: ContinueExecution");
             AgentTurnResult work = await session.RunTurnAsync(executionPrompt, StreamToConsole, cancellationToken);
             if (work.State != AgentTurnState.Completed)
             {

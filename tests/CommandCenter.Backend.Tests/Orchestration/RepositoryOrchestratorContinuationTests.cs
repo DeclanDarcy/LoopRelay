@@ -44,9 +44,9 @@ public sealed class RepositoryOrchestratorContinuationTests
         await orchestrator.ExecutionRunTask;
         await orchestrator.DecisionRunTask; // drain the auto-started next decision run too
 
-        // The continuation rendered the cached plan, the latest handoff (the rotated handoff.0001), and the
-        // submitted decisions — exactly the three inputs the loop is specified to feed ContinueExecution.
-        Assert.Equal(ContinueExecution.Render(Plan, FirstHandoff, "DECISIONS ONE"), runtime.OneShotPrompts[0]);
+        // The continuation rendered the cached plan and the submitted decisions — the two inputs ContinueExecution
+        // now renders ({handoff} was removed from the template; the handoff is still read as continuation context).
+        Assert.Equal(ContinueExecution.Render(Plan, "DECISIONS ONE"), runtime.OneShotPrompts[0]);
     }
 
     [Fact]

@@ -1126,7 +1126,7 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
             ExecutionStream.Publish("phase", Serialize(new { phase = "ContinueExecution" }));
             AgentTurnResult continuation = await agentRuntime.RunOneShotAsync(
                 BuildOperationalSpec(repository, AgentEffortLevel.Medium, identifier: null),
-                ContinueExecution.Render(plan, handoff, decisions),
+                ContinueExecution.Render(plan, decisions),
                 chunk => PublishExecutionDelta("ContinueExecution", chunk),
                 cancellationToken).ConfigureAwait(false);
             executionProvenance.Add(BuildContinueExecutionProvenance(handoffPath!));

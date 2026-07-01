@@ -21,18 +21,21 @@ public class ExecutionStepTests
 
     private static string Resolve(Repository r, string rel) => ArtifactPath.ResolveRepositoryPath(r, rel);
 
-    // First iteration: no prior handoff => StartExecution work turn, then a SECOND GenerateHandoff turn
-    // (on the same held-open session) writes handoff.md, which is verified afterwards.
+    // Execution always continues from decisions.md (the execution agent's system prompt the decision session
+    // produced before this slice): ContinueExecution renders plan + decisions, then a SECOND GenerateHandoff turn
+    // (on the same held-open session) writes handoff.md, which is verified afterwards. There is no StartExecution.
     [Fact]
-    public async Task Run_FirstIteration_StartExecutionThenGenerateHandoff_WritesHandoff_Verifies()
+    public async Task Run_ContinueExecutionWithPlanAndDecisions_ThenGenerateHandoff_WritesHandoff_Verifies()
     {
         var (step, rt, store, _, repo, con) = New();
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Decisions), "DECISIONS-SYS-PROMPT");
 
         rt.SessionTurns.Enqueue(new ScriptedTurn((spec, prompt, s) =>
         {
-            Assert.Contains("PLAN", prompt);                                   // StartExecution.Render(plan)
-            Assert.Contains("start executing the first milestone", prompt);
+            Assert.Contains("PLAN", prompt);                                   // ContinueExecution.Render(plan, decisions)
+            Assert.Contains("DECISIONS-SYS-PROMPT", prompt);
+            Assert.Contains("continue executing the current milestone", prompt);
             return Turns.Completed("work done");
         }));
         rt.SessionTurns.Enqueue(new ScriptedTurn((spec, prompt, s) =>
@@ -51,20 +54,21 @@ public class ExecutionStepTests
         Assert.Equal(1, rt.ClosedSessions);
     }
 
-    // A prior live handoff (+ decisions) present => ContinueExecution renders plan + handoff + decisions.
+    // The handoff is consumed by the decision session, NOT rendered into the execution prompt — even when a live
+    // handoff exists on disk it must never appear in the ContinueExecution turn ({handoff} was removed from it).
     [Fact]
-    public async Task Run_Continuing_UsesContinueExecution_RendersHandoffAndDecisions()
+    public async Task Run_DoesNotRenderHandoffIntoTheExecutionPrompt_EvenWhenOneExists()
     {
         var (step, rt, store, _, repo, _) = New();
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN");
-        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "PRIOR-HANDOFF");
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Decisions), "DECISIONS");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.LiveHandoff), "PRIOR-HANDOFF-XYZ");
 
         rt.SessionTurns.Enqueue(new ScriptedTurn((spec, prompt, s) =>
         {
             Assert.Contains("continue executing the current milestone", prompt);
-            Assert.Contains("PRIOR-HANDOFF", prompt);
             Assert.Contains("DECISIONS", prompt);
+            Assert.DoesNotContain("PRIOR-HANDOFF-XYZ", prompt);   // handoff is no longer an execution-prompt input
             return Turns.Completed("continued");
         }));
         rt.SessionTurns.Enqueue(new ScriptedTurn((spec, prompt, s) =>
@@ -85,6 +89,7 @@ public class ExecutionStepTests
     {
         var (step, rt, store, _, repo, _) = New();
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Decisions), "DECISIONS");
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("work done")));
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("forgot the handoff")));
 
@@ -98,6 +103,7 @@ public class ExecutionStepTests
     {
         var (step, rt, store, _, repo, _) = New();
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Decisions), "DECISIONS");
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));
 
         await Assert.ThrowsAsync<LoopStepException>(() => step.RunAsync(CancellationToken.None));
@@ -110,6 +116,7 @@ public class ExecutionStepTests
     {
         var (step, rt, store, _, repo, _) = New();
         await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Plan), "PLAN");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Decisions), "DECISIONS");
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("work done")));
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));
 

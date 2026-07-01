@@ -42,7 +42,10 @@ public class DecisionSessionTests
         }));
         rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>   // propose
         {
+            // A prior handoff is present, so decisions.md is generated as the NEXT execution agent's system
+            // prompt, folding in the handoff (GenerateSystemPromptForNextExecutionAgent.Render(handoff)).
             Assert.Contains("HANDOFF", prompt);
+            Assert.Contains("next execution agent", prompt);
             return Turns.Completed("DECISIONS-TEXT");
         }));
 
@@ -52,6 +55,31 @@ public class DecisionSessionTests
         Assert.Equal("DECISIONS-TEXT", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDecision(1))));
         Assert.Contains("DECISIONS-TEXT", con.Messages);
         Assert.Equal(1, rt.OpenSessions);
+    }
+
+    [Fact]
+    public async Task Run_FirstPass_NoHandoff_GeneratesFirstExecutionAgentSystemPrompt_PersistsDecisions()
+    {
+        var (session, rt, store, repo, con) = New();
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.OperationalContext), "OPCTX");
+        // No handoff of any kind exists: this is the first pass, so decisions.md is the FIRST execution agent's
+        // system prompt (GenerateSystemPromptForFirstExecutionAgent), generated from scratch — no throw.
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>   // seed
+        {
+            Assert.Contains("OPCTX", prompt);
+            return Turns.Completed("seeded");
+        }));
+        rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, _) =>   // propose
+        {
+            Assert.Contains("first execution agent", prompt);
+            return Turns.Completed("FIRST-SYS-PROMPT");
+        }));
+
+        await session.RunAsync(CancellationToken.None);
+
+        Assert.Equal("FIRST-SYS-PROMPT", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.Decisions)));
+        Assert.Equal("FIRST-SYS-PROMPT", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDecision(1))));
+        Assert.Contains("FIRST-SYS-PROMPT", con.Messages);
     }
 
     [Fact]
