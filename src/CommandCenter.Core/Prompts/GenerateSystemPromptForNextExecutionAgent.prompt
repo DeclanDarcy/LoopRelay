@@ -21,3 +21,4 @@ You must decide what the current milestone should be.
 Encode every decision, constraint, priority, invariant, assumption, and execution insight that enables the execution agent to achieve an optimal outcome.
 Resolve ambiguities whenever justified by the evidence.
 Exclude information that does not improve execution.
+Assume the execution agent already possesses the project plan. Do not restate planned work except where necessary to redefine, reprioritize, or constrain its execution.
