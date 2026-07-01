@@ -5,6 +5,7 @@ using CommandCenter.Core.Repositories;
 using CommandCenter.Orchestration;
 using CommandCenter.Orchestration.Abstractions;
 using CommandCenter.Orchestration.Models;
+using CommandCenter.Orchestration.Services;
 
 namespace CommandCenter.Cli;
 
@@ -20,15 +21,26 @@ internal sealed class DecisionSession(
     IDecisionSessionRouter router,
     LoopArtifacts artifacts,
     ILoopConsole console,
-    Repository repository) : IAsyncDisposable
+    Repository repository,
+    IDecisionCostModel? costModel = null) : IAsyncDisposable
 {
+    private readonly IDecisionCostModel costModel = costModel ?? new EffectiveTokenCostModel();
     private IAgentSession? session;
     private bool seeded;
-    private int decisionTokens;
+
+    // Cost-aware routing accounting (mirrors RepositoryOrchestrator). PER-PROCESS fields reset on recycle;
+    // transferCost persists across recycles. Single-threaded — RunAsync is called sequentially — so no lock.
+    private int occupancyTokens;            // O
+    private double reuseCost;               // R
+    private int reuseCycles;                // n
+    private double lastCycleCost;           // e_last
+    private double prevCycleCost;           // e_prev
+    private double transferCost = 250_000d; // C: seed -> measured -> running average
+    private int transferCount;
 
     public async Task RunAsync(CancellationToken cancellationToken)
     {
-        DecisionRoute route = router.Evaluate(new RouterInputs(decisionTokens, 0));
+        DecisionRoute route = router.Evaluate(BuildRouterInputs());
         // Eligibility downgrade: a Transfer needs a primed warm process to extract a delta from.
         if (route == DecisionRoute.Transfer && !seeded)
         {
@@ -59,7 +71,7 @@ internal sealed class DecisionSession(
             throw new LoopStepException($"Decision turn ended in state {proposed.State}.");
         }
 
-        decisionTokens += proposed.Usage.PromptTokens + proposed.Usage.OutputTokens;
+        RecordProposalCost(proposed.Usage);
         console.Message(proposed.Output);
 
         // Auto-submit: the CLI is fully automated, so the agent's proposal is persisted verbatim.
@@ -147,6 +159,43 @@ internal sealed class DecisionSession(
         }
 
         seeded = true;
+
+        // Cost-aware accounting: record the MEASURED transfer cost (delta + evolution + reseed, same cost model)
+        // so the router's transfer-cost estimate (C) self-calibrates off reality. CloseAsync above reset the
+        // per-process reuse accounting for the fresh process; transferCost persists.
+        RecordTransferCost(costModel.Measure(delta.Usage) + costModel.Measure(update.Usage) + costModel.Measure(reseed.Usage));
+    }
+
+    // The router's unit-blind signals (mirrors RepositoryOrchestrator.SnapshotRouterInputs). Before any cycle is
+    // observed (n == 0), occupancy is 0 so only the capacity guard could fire (it won't on a fresh process).
+    private RouterInputs BuildRouterInputs()
+    {
+        if (reuseCycles == 0)
+        {
+            return new RouterInputs(0, 0d, 0, 0d, transferCost);
+        }
+
+        double predictedNext = costModel.EstimateNextCycle(
+            new DecisionCostForecast(lastCycleCost, prevCycleCost, occupancyTokens, 0));
+        return new RouterInputs(occupancyTokens, reuseCost, reuseCycles, predictedNext, transferCost);
+    }
+
+    private void RecordProposalCost(AgentTokenUsage usage)
+    {
+        double cost = costModel.Measure(usage);
+        occupancyTokens = usage.PromptTokens + usage.OutputTokens;
+        reuseCost += cost;
+        reuseCycles += 1;
+        prevCycleCost = lastCycleCost;
+        lastCycleCost = cost;
+    }
+
+    private void RecordTransferCost(double measuredCost)
+    {
+        transferCount += 1;
+        transferCost = transferCount == 1
+            ? measuredCost
+            : transferCost + ((measuredCost - transferCost) / transferCount);
     }
 
     private async Task CloseAsync()
@@ -156,7 +205,12 @@ internal sealed class DecisionSession(
             await runtime.CloseSessionAsync(session);
             session = null;
             seeded = false;
-            decisionTokens = 0;
+            // Per-process accounting resets for the fresh process; transferCost/transferCount persist.
+            occupancyTokens = 0;
+            reuseCost = 0d;
+            reuseCycles = 0;
+            lastCycleCost = 0d;
+            prevCycleCost = 0d;
         }
     }
 

@@ -86,17 +86,13 @@ public sealed class RepositoryOrchestratorStressTests
                 recycleCount++; // a fresh process opened this cycle == a recycle happened
             }
 
-            // INVARIANT: the live decision-session pressure is BOUNDED (never grows unbounded across N cycles). A
-            // recycle resets it to 0; only the proposals since the last recycle accumulate. With strict alternation
-            // a recycle happens every other cycle, so at most two proposals (post-recycle + one reuse) accumulate
-            // before the next reset — i.e. pressure stays within 2 proposals (200). A transfer cycle RESETS first
-            // and ends at exactly one proposal (100), proving the reset fired (a non-reset would keep climbing).
-            Assert.True(orchestrator.RouterInputs.DecisionSessionTokens <= 200,
-                $"cycle {cycle}: live decision pressure must stay bounded, saw {orchestrator.RouterInputs.DecisionSessionTokens}");
-            if (transferring)
-            {
-                Assert.Equal(100, orchestrator.RouterInputs.DecisionSessionTokens); // recycle reset to 0, then +100
-            }
+            // INVARIANT: the live decision-session signal is the latest proposal's OCCUPANCY (the current context
+            // size), NOT a cumulative sum — so with a constant per-proposal usage of 100 it reads exactly 100 every
+            // cycle no matter how many cycles have run. It can never grow unbounded (the over-count bug summing
+            // per-turn billing is gone). A transfer cycle also ends at 100: the recycle resets to 0, then the fresh
+            // process's proposal overwrites it to 100. (Reset-on-recycle is independently proven by the disposal
+            // invariant above and recycleCount below.)
+            Assert.Equal(100, orchestrator.RouterInputs.OccupancyTokens);
 
             Assert.Equal($"DECISIONS {cycle}", orchestrator.CurrentDecisions);
         }
@@ -116,7 +112,9 @@ public sealed class RepositoryOrchestratorStressTests
         const int cycles = 6;
         var runtime = new FakeAgentRuntime { TurnUsage = AgentTokenUsage.Zero }; // no observed tokens, ever
         var store = new FakeArtifactStore();
-        var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(DecisionTokenTransferThreshold: 100000));
+        // Default router: with zero observed usage every cycle, reuse cost stays 0, so neither the marginal rule
+        // nor the capacity guard ever fires — routing stays Continue across all N.
+        var router = new DecisionSessionRouter(new DecisionSessionRouterOptions());
         Repository repository = OrchestrationTestFactory.Repository();
         RepositoryOrchestrator orchestrator =
             OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store, router: router);
@@ -137,7 +135,7 @@ public sealed class RepositoryOrchestratorStressTests
             Assert.False(await store.ExistsAsync(Resolve(repository, OrchestrationArtifactPaths.OperationalDelta)),
                 $"cycle {cycle}: routing must stay Continue (no transfer) on a zero-observed estimate below threshold");
             // The router was fed a positive, content-derived estimate (never zero), and it stayed below threshold.
-            Assert.True(orchestrator.RouterInputs.DecisionSessionTokens >= 0);
+            Assert.True(orchestrator.RouterInputs.OccupancyTokens >= 0);
         }
 
         // One decision process, never recycled across all six cycles.

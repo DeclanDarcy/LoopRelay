@@ -41,6 +41,7 @@ public sealed class RepositoryOrchestratorRegistry : IAsyncDisposable
     private readonly IMemoryCache memoryCache;
     private readonly IPlanArtifactPublisher planArtifactPublisher;
     private readonly IDecisionSessionRouter decisionSessionRouter;
+    private readonly IDecisionCostModel costModel;
     private readonly OrchestrationFeatureFlags flags;
 
     public RepositoryOrchestratorRegistry(
@@ -49,7 +50,8 @@ public sealed class RepositoryOrchestratorRegistry : IAsyncDisposable
         IMemoryCache memoryCache,
         IPlanArtifactPublisher planArtifactPublisher,
         IDecisionSessionRouter decisionSessionRouter,
-        OrchestrationFeatureFlags? flags = null)
+        OrchestrationFeatureFlags? flags = null,
+        IDecisionCostModel? costModel = null)
     {
         this.agentRuntime = agentRuntime;
         this.artifactStore = artifactStore;
@@ -58,6 +60,9 @@ public sealed class RepositoryOrchestratorRegistry : IAsyncDisposable
         this.decisionSessionRouter = decisionSessionRouter;
         // A null/default-constructed flags object reproduces today's behavior byte-for-byte (m10, additive only).
         this.flags = flags ?? new OrchestrationFeatureFlags();
+        // Threads the DI-registered cost model into every orchestrator so a deployment can swap the seam; the
+        // null default matches the orchestrator's own default (EffectiveTokenCostModel).
+        this.costModel = costModel ?? new EffectiveTokenCostModel();
     }
 
     public int Count => orchestrators.Count;
@@ -70,7 +75,7 @@ public sealed class RepositoryOrchestratorRegistry : IAsyncDisposable
             return orchestrators.GetOrAdd(
                 repositoryId,
                 id => new Lazy<RepositoryOrchestrator>(
-                    () => new RepositoryOrchestrator(id, agentRuntime, artifactStore, memoryCache, planArtifactPublisher, decisionSessionRouter, flags),
+                    () => new RepositoryOrchestrator(id, agentRuntime, artifactStore, memoryCache, planArtifactPublisher, decisionSessionRouter, flags, costModel),
                     LazyThreadSafetyMode.ExecutionAndPublication)).Value;
         }
         finally

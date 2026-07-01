@@ -122,9 +122,10 @@ public sealed class CodexEventTurnBoundaryDetector : IAgentTurnBoundaryDetector
         {
             int? input = IntProperty(scope, "input_tokens", "inputTokens", "prompt_tokens", "promptTokens");
             int? output = IntProperty(scope, "output_tokens", "outputTokens", "completion_tokens", "completionTokens");
+            int? cachedInput = IntProperty(scope, "cached_input_tokens", "cachedInputTokens");
             if (input is not null || output is not null)
             {
-                return new AgentTokenUsage(input ?? 0, output ?? 0);
+                return new AgentTokenUsage(input ?? 0, output ?? 0, cachedInput ?? 0);
             }
         }
 

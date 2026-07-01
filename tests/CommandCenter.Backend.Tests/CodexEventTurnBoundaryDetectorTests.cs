@@ -20,6 +20,18 @@ public sealed class CodexEventTurnBoundaryDetectorTests
     }
 
     [Fact]
+    public void ExecTurnCompletedCapturesCachedInputTokens()
+    {
+        // The cached subset of the input is surfaced so the cost model can compute cache-adjusted reuse cost.
+        AgentLineInspection inspection = detector.Inspect(
+            """{"type":"turn.completed","usage":{"input_tokens":120,"cached_input_tokens":90,"output_tokens":45}}""");
+
+        Assert.Equal(120, inspection.Usage!.PromptTokens);
+        Assert.Equal(90, inspection.Usage.CachedInputTokens);
+        Assert.Equal(45, inspection.Usage.OutputTokens);
+    }
+
+    [Fact]
     public void AppServerTurnCompletedMethodWithUsageUnderParamsEndsTheTurn()
     {
         AgentLineInspection inspection = detector.Inspect(

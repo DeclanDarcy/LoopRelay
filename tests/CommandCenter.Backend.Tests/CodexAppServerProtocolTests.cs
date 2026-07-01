@@ -160,6 +160,7 @@ public sealed class CodexAppServerTurnReaderTests
         Assert.Equal(AgentTurnState.Completed, outcome.State);
         Assert.Equal(30, outcome.Usage!.PromptTokens);
         Assert.Equal(7, outcome.Usage.OutputTokens);
+        Assert.Equal(1, outcome.Usage.CachedInputTokens); // the cached subset of the 30 input tokens (cost-aware routing signal)
     }
 
     [Fact]

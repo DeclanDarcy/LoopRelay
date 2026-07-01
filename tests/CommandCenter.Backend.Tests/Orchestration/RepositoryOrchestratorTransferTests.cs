@@ -64,31 +64,95 @@ public sealed class RepositoryOrchestratorTransferTests
     }
 
     [Fact]
-    public async Task The_real_router_transfers_when_decision_pressure_crosses_the_threshold()
+    public async Task The_real_router_transfers_when_occupancy_crosses_the_capacity_guard()
     {
-        // The CRITICAL end-to-end check: with the REAL registry-free router (no fake), a decision session whose
-        // observed token pressure crosses a low threshold actually routes Transfer. This is the path the
-        // production DI composes; it must be reachable, which a fake-router test can never prove.
-        var runtime = new FakeAgentRuntime { TurnUsage = new AgentTokenUsage(40, 60) }; // 100 observed tokens per proposal
+        // The CRITICAL end-to-end check: with the REAL registry-free router (no fake), a decision process whose
+        // occupancy crosses the capacity guard actually routes Transfer. This is the path production DI composes; it
+        // must be reachable, which a fake-router test can never prove. (The economic marginal rule is unit-tested in
+        // DecisionSessionRouterTests; the FIRST transfer is capacity-driven because C starts at the 250k seed.)
+        var runtime = new FakeAgentRuntime { TurnUsage = new AgentTokenUsage(40, 60) }; // 100 occupancy per proposal
         var store = new FakeArtifactStore();
-        // Threshold above the deterministic estimate (~7 from the handoff + decisions text) but below the observed
-        // pressure (100), so the Transfer verdict is driven SPECIFICALLY by observed accounting, not the fallback.
-        var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(DecisionTokenTransferThreshold: 50));
+        // Window 110 -> capacity guard round(110*0.9)=99; the seed proposal's occupancy (100) crosses it.
+        var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 110, CapacityGuardFraction: 0.90));
         Repository repository = OrchestrationTestFactory.Repository();
         RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store, router: router);
 
         await SeedLoopAsync(orchestrator, store, repository);
-        await SeedWarmDecisionSessionAsync(orchestrator, runtime, repository); // accumulates ~100 observed decision-session tokens
+        await SeedWarmDecisionSessionAsync(orchestrator, runtime, repository); // one proposal -> occupancy 100 (>= guard 99)
         ScriptTransferTurns(runtime, store, repository, delta: "DELTA", rewrittenContext: "CTX2", proposal: "NEXT DECISIONS");
 
         await orchestrator.BeginSubmitDecisionsAsync(repository, "DECISIONS ONE");
         await orchestrator.ExecutionRunTask;
         await orchestrator.DecisionRunTask;
 
-        // The real router elected Transfer purely from observed decision-session pressure — the delta was written.
+        // The real router elected Transfer from the capacity guard — the delta was written and context rewritten.
         Assert.Equal("DELTA", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.OperationalDelta)));
         Assert.Equal("CTX2", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.OperationalContext)));
         Assert.Equal("NEXT DECISIONS", orchestrator.CurrentDecisions);
+
+        // The transfer's MEASURED cost recalibrated the estimate off the 250k seed (cost-aware self-calibration).
+        Assert.NotEqual(250_000d, orchestrator.RouterInputs.TransferCostEstimate);
+        Assert.True(orchestrator.RouterInputs.TransferCostEstimate > 0d);
+    }
+
+    [Fact]
+    public async Task The_real_router_transfers_economically_below_the_capacity_guard()
+    {
+        // Proves the ECONOMIC marginal path end-to-end: occupancy stays FAR below the capacity guard, yet the cost
+        // model drives eNext >= (R + C)/n so the REAL router elects Transfer purely on economics. A controllable cost
+        // model isolates this (with the real model the first transfer is capacity-driven while C is at the 250k seed).
+        // A wiring bug that dropped eNext (e.g. never calling EstimateNextCycle) would fail THIS test specifically.
+        var runtime = new FakeAgentRuntime { TurnUsage = new AgentTokenUsage(50, 50) }; // occupancy 100 << guard 230,400
+        var store = new FakeArtifactStore();
+        var costModel = new FakeDecisionCostModel { MeasureValue = 300_000d, EstimateValue = 600_000d };
+        var router = new DecisionSessionRouter(new DecisionSessionRouterOptions()); // default: 256k window, marginal policy
+        Repository repository = OrchestrationTestFactory.Repository();
+        RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store, router: router, costModel: costModel);
+
+        await SeedLoopAsync(orchestrator, store, repository);
+        await SeedWarmDecisionSessionAsync(orchestrator, runtime, repository); // one proposal -> R=300000, n=1, occupancy 100
+        ScriptTransferTurns(runtime, store, repository, delta: "DELTA", rewrittenContext: "CTX2", proposal: "NEXT DECISIONS");
+
+        await orchestrator.BeginSubmitDecisionsAsync(repository, "DECISIONS ONE");
+        await orchestrator.ExecutionRunTask;
+        await orchestrator.DecisionRunTask;
+
+        // Occupancy (100) is far below the capacity guard (230,400): this Transfer was driven ONLY by the marginal
+        // rule — eNext (600,000) >= (R 300,000 + C 250,000 seed) / n 1 = 550,000.
+        Assert.Equal("DELTA", await store.ReadAsync(Resolve(repository, OrchestrationArtifactPaths.OperationalDelta)));
+        Assert.Equal("NEXT DECISIONS", orchestrator.CurrentDecisions);
+    }
+
+    [Fact]
+    public async Task Transfer_cost_estimate_is_a_running_average_of_measured_transfers()
+    {
+        // Two forced transfers with DIFFERENT measured costs: C must be the running average, not last-value-wins.
+        // Measured cost per transfer = 3 turns (delta+rewrite+reseed) * MeasureValue.
+        var runtime = new FakeAgentRuntime();
+        var store = new FakeArtifactStore();
+        var costModel = new FakeDecisionCostModel { MeasureValue = 100d, EstimateValue = 0d };
+        var router = new FakeDecisionSessionRouter { Route = DecisionRoute.Transfer }; // force both transfers
+        Repository repository = OrchestrationTestFactory.Repository();
+        RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store, router: router, costModel: costModel);
+
+        await SeedLoopAsync(orchestrator, store, repository);
+        await SeedWarmDecisionSessionAsync(orchestrator, runtime, repository); // primes the process (transfer eligible)
+
+        // Transfer 1: measured cost = 3 * 100 = 300 -> C = 300 (first measured replaces the 250k seed).
+        costModel.MeasureValue = 100d;
+        ScriptTransferTurns(runtime, store, repository, delta: "DELTA1", rewrittenContext: "CTX1", proposal: "P1");
+        await orchestrator.BeginSubmitDecisionsAsync(repository, "D1");
+        await orchestrator.ExecutionRunTask;
+        await orchestrator.DecisionRunTask;
+        Assert.Equal(300d, orchestrator.RouterInputs.TransferCostEstimate, 4);
+
+        // Transfer 2: measured cost = 3 * 200 = 600 -> running average C = 300 + (600 - 300)/2 = 450 (NOT 600).
+        costModel.MeasureValue = 200d;
+        ScriptTransferTurns(runtime, store, repository, delta: "DELTA2", rewrittenContext: "CTX2", proposal: "P2");
+        await orchestrator.BeginSubmitDecisionsAsync(repository, "D2");
+        await orchestrator.ExecutionRunTask;
+        await orchestrator.DecisionRunTask;
+        Assert.Equal(450d, orchestrator.RouterInputs.TransferCostEstimate, 4);
     }
 
     [Fact]
@@ -109,10 +173,52 @@ public sealed class RepositoryOrchestratorTransferTests
         await orchestrator.ExecutionRunTask;
         await orchestrator.DecisionRunTask;
 
-        // The router was fed a non-empty observed signal (the seed proposal's tokens flowed into RouterInputs).
-        Assert.True(orchestrator.RouterInputs.DecisionSessionTokens > 0);
+        // The cost-aware signals flow to the router: after the seed proposal + one reuse proposal (cost 100 each via
+        // the default model), occupancy is the LATEST (100), R is CUMULATIVE (200), and n counts both cycles (2).
+        Assert.Equal(100, orchestrator.RouterInputs.OccupancyTokens);
+        Assert.Equal(200d, orchestrator.RouterInputs.AccumulatedReuseCost);
+        Assert.Equal(2, orchestrator.RouterInputs.ReuseCycleCount);
+        // The router's FIRST evaluation already saw the seed proposal's cost-aware fields (n=1, R=100).
         Assert.True(router.EvaluatedInputs.Count > 0);
-        Assert.True(router.EvaluatedInputs[0].DecisionSessionTokens > 0);
+        Assert.Equal(1, router.EvaluatedInputs[0].ReuseCycleCount);
+        Assert.Equal(100d, router.EvaluatedInputs[0].AccumulatedReuseCost);
+    }
+
+    [Fact]
+    public async Task Decision_pressure_reflects_the_latest_proposal_occupancy_not_the_cumulative_sum()
+    {
+        // The router's signal is the live decision process's CURRENT context occupancy (the latest turn's
+        // prompt+output = last_token_usage.input_tokens), NOT the sum of every proposal's billing. A warm
+        // process re-sends its whole conversation each turn, so summing per-turn billing over-counts the real
+        // context ~quadratically; the occupancy is what actually decides whether the window is near full.
+        var runtime = new FakeAgentRuntime();
+        var store = new FakeArtifactStore();
+        var router = new FakeDecisionSessionRouter(); // Continue (reuse the warm process across both proposals)
+        Repository repository = OrchestrationTestFactory.Repository();
+        RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store, router: router);
+
+        await SeedLoopAsync(orchestrator, store, repository);
+
+        // First decision run: seed + a HIGH-occupancy proposal (100 tokens).
+        runtime.SessionTurns.Enqueue(new FakeOneShotTurn());                                                  // seed
+        runtime.SessionTurns.Enqueue(new FakeOneShotTurn(Output: "P1", Usage: new AgentTokenUsage(60, 40)));  // 100 occupancy
+        await orchestrator.BeginDecisionRunAsync(repository, DecisionRoute.Continue);
+        await orchestrator.DecisionRunTask;
+        Assert.Equal(100, orchestrator.RouterInputs.OccupancyTokens); // occupancy after the first proposal
+
+        // Second proposal on the SAME warm process: LOWER occupancy (10 tokens) — the context shrank.
+        runtime.OneShotTurns.Enqueue(WritesLiveHandoff(store, repository, "HANDOFF TWO"));
+        runtime.SessionTurns.Enqueue(new FakeOneShotTurn(Output: "P2", Usage: new AgentTokenUsage(5, 5)));    // 10 occupancy
+        await orchestrator.BeginSubmitDecisionsAsync(repository, "DECISIONS ONE");
+        await orchestrator.ExecutionRunTask;
+        await orchestrator.DecisionRunTask;
+
+        // OCCUPANCY is the LATEST proposal's size (10), NOT a running sum — that's the capacity signal. The
+        // ACCUMULATED REUSE COST (R) is the separate, cumulative signal the marginal rule amortizes: cost(P1)=100
+        // (60 fresh + 40 out) + cost(P2)=10 (5 fresh + 5 out) = 110, over n=2 cycles.
+        Assert.Equal(10, orchestrator.RouterInputs.OccupancyTokens);
+        Assert.Equal(110d, orchestrator.RouterInputs.AccumulatedReuseCost);
+        Assert.Equal(2, orchestrator.RouterInputs.ReuseCycleCount);
     }
 
     [Fact]
@@ -508,8 +614,8 @@ public sealed class RepositoryOrchestratorTransferTests
     [Fact]
     public async Task The_router_signal_falls_back_to_a_deterministic_estimate_before_any_decision_turn()
     {
-        // Before any decision proposal has been observed (decisionSessionTokens == 0), the router is fed a
-        // DETERMINISTIC estimate from the content the session reasons over (latest handoff + decisions), not zero.
+        // Before any reuse cycle has completed (n == 0), the router's occupancy signal is a DETERMINISTIC estimate
+        // from the content the session reasons over (latest handoff + decisions), not zero.
         var runtime = new FakeAgentRuntime();
         var store = new FakeArtifactStore();
         var router = new FakeDecisionSessionRouter(); // Continue; records the inputs it was fed
@@ -529,47 +635,54 @@ public sealed class RepositoryOrchestratorTransferTests
         // deterministic estimate of the rotated handoff + submitted decisions — a positive, content-derived signal.
         int estimate = Estimate("HANDOFF TWO") + Estimate("DECISIONS ONE");
         Assert.True(estimate > 0);
-        Assert.Equal(estimate, router.EvaluatedInputs[0].DecisionSessionTokens);
+        Assert.Equal(estimate, router.EvaluatedInputs[0].OccupancyTokens);
     }
 
     [Fact]
-    public async Task The_token_pressure_resets_on_recycle_so_the_next_iteration_reuses_the_fresh_process()
+    public async Task Recycle_resets_the_per_process_cost_accounting_so_the_fresh_process_reuses()
     {
-        // Recycling a process MUST reset its observed pressure to 0; otherwise the fresh process inherits the old
-        // pressure and immediately re-transfers. Drive a real-router transfer, then a LOW-pressure follow-up that
-        // must route Continue (reuse) — which only holds if the reset fired.
+        // A recycle MUST reset the per-process cost accounting (R, n, occupancy); otherwise the fresh process
+        // inherits the old run's cost and could immediately re-transfer. Drive a capacity-guard transfer, verify the
+        // fresh process's accounting reflects ONLY its own post-transfer cycle, and confirm the next iteration reuses.
         var runtime = new FakeAgentRuntime();
         var store = new FakeArtifactStore();
-        var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(DecisionTokenTransferThreshold: 50));
+        // Window 110 -> guard round(110*0.9)=99; the seed proposal (occupancy 100) crosses it so iteration 1 transfers.
+        var router = new DecisionSessionRouter(new DecisionSessionRouterOptions(ModelContextWindowTokens: 110, CapacityGuardFraction: 0.90));
         Repository repository = OrchestrationTestFactory.Repository();
         RepositoryOrchestrator orchestrator = OrchestrationTestFactory.Orchestrator(runtime: runtime, store: store, router: router);
 
         await SeedLoopAsync(orchestrator, store, repository);
-        // Seed with a HIGH-pressure proposal (100 tokens) so iteration 1 crosses the threshold and transfers.
+        // Seed with a HIGH-occupancy proposal (100) so iteration 1 crosses the guard and transfers.
         runtime.SessionTurns.Enqueue(new FakeOneShotTurn());                                                   // seed
-        runtime.SessionTurns.Enqueue(new FakeOneShotTurn(Output: "SEED", Usage: new AgentTokenUsage(50, 50))); // 100 tokens
+        runtime.SessionTurns.Enqueue(new FakeOneShotTurn(Output: "SEED", Usage: new AgentTokenUsage(50, 50))); // occupancy 100
         await orchestrator.BeginDecisionRunAsync(repository, DecisionRoute.Continue);
         await orchestrator.DecisionRunTask;
 
-        // Iteration 1: transfers (observed 100 >= 50). Its post-transfer proposal is LOW pressure (10 tokens).
+        // Iteration 1: transfers (occupancy 100 >= guard 99). Its post-transfer proposal is LOW occupancy (10).
         runtime.OneShotTurns.Enqueue(WritesLiveHandoff(store, repository, "HANDOFF TWO"));
         runtime.OneShotTurns.Enqueue(WritesOperationalContext(store, repository, "CTX2"));
         runtime.SessionTurns.Enqueue(new FakeOneShotTurn(Output: "DELTA"));                                    // delta
         runtime.SessionTurns.Enqueue(new FakeOneShotTurn());                                                   // reseed
-        runtime.SessionTurns.Enqueue(new FakeOneShotTurn(Output: "AFTER1", Usage: new AgentTokenUsage(5, 5))); // 10 tokens
+        runtime.SessionTurns.Enqueue(new FakeOneShotTurn(Output: "AFTER1", Usage: new AgentTokenUsage(5, 5))); // occupancy 10
         await orchestrator.BeginSubmitDecisionsAsync(repository, "D1");
         await orchestrator.ExecutionRunTask;
         await orchestrator.DecisionRunTask;
 
-        // Iteration 2: with the reset, observed pressure is now 10 (< 50) -> Continue (reuse the fresh process).
+        // RESET PROOF: the fresh process's accounting reflects ONLY its single post-transfer proposal — n == 1 and
+        // R == cost(AFTER1) == 10. Without the recycle reset the pre-transfer seed cycle would still count (n == 2,
+        // R == 110), so this assertion is what actually pins ResetDecisionProcessAccounting.
+        Assert.Equal(1, orchestrator.RouterInputs.ReuseCycleCount);
+        Assert.Equal(10d, orchestrator.RouterInputs.AccumulatedReuseCost);
+        Assert.Equal(10, orchestrator.RouterInputs.OccupancyTokens);
+
+        // Iteration 2: occupancy 10 < guard, and the marginal rule keeps the cheap fresh process -> Continue (reuse).
         runtime.OneShotTurns.Enqueue(WritesLiveHandoff(store, repository, "HANDOFF THREE"));
         runtime.SessionTurns.Enqueue(new FakeOneShotTurn(Output: "AFTER2"));                                   // reuse proposal
         await orchestrator.BeginSubmitDecisionsAsync(repository, "D2");
         await orchestrator.ExecutionRunTask;
         await orchestrator.DecisionRunTask;
 
-        // Exactly ONE recycle happened (iteration 1). Iteration 2 REUSED the fresh process — not recycled again —
-        // which is only true because the recycle reset the pressure below the threshold (a non-reset would re-transfer).
+        // Exactly ONE recycle happened (iteration 1). Iteration 2 REUSED the fresh process — not recycled again.
         List<FakeAgentSession> decisionSessions = runtime.Sessions.Where(s => s.Role == SessionRole.Decision).ToList();
         Assert.Equal(2, decisionSessions.Count);
         Assert.True(decisionSessions[0].Disposed);

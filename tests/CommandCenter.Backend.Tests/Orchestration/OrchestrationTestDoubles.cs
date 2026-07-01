@@ -356,6 +356,26 @@ internal sealed class FakeDecisionSessionRouter : IDecisionSessionRouter
     }
 }
 
+/// <summary>
+/// Cost model with directly-controlled scalars so a test can drive the ECONOMIC marginal rule (eNext vs (R+C)/n)
+/// independently of occupancy — the real EffectiveTokenCostModel couples cost to occupancy, so the first economic
+/// transfer (before C is measured down from the 250k seed) can't be isolated below the capacity guard with it.
+/// </summary>
+internal sealed class FakeDecisionCostModel : IDecisionCostModel
+{
+    public double MeasureValue { get; set; }
+    public double EstimateValue { get; set; }
+    public List<AgentTokenUsage> Measured { get; } = new();
+
+    public double Measure(AgentTokenUsage turn)
+    {
+        Measured.Add(turn);
+        return MeasureValue;
+    }
+
+    public double EstimateNextCycle(DecisionCostForecast forecast) => EstimateValue;
+}
+
 /// <summary>Records each commit+push and returns a configurable result (default: success, pushed).</summary>
 internal sealed class FakePlanArtifactPublisher : IPlanArtifactPublisher
 {
@@ -410,7 +430,8 @@ internal static class OrchestrationTestFactory
         MemoryCache? cache = null,
         IPlanArtifactPublisher? publisher = null,
         IDecisionSessionRouter? router = null,
-        OrchestrationFeatureFlags? flags = null) =>
+        OrchestrationFeatureFlags? flags = null,
+        IDecisionCostModel? costModel = null) =>
         new(
             repositoryId ?? Guid.NewGuid().ToString("D"),
             runtime ?? new FakeAgentRuntime(),
@@ -418,5 +439,6 @@ internal static class OrchestrationTestFactory
             cache ?? Cache(),
             publisher ?? new FakePlanArtifactPublisher(),
             router ?? new FakeDecisionSessionRouter(),
-            flags ?? new OrchestrationFeatureFlags());
+            flags ?? new OrchestrationFeatureFlags(),
+            costModel);
 }

@@ -2045,7 +2045,7 @@ switch (outcome)
 }
 ```
 
-> Verification sub-step: confirm `AgentSessionRegistry` is registered by `AddAgents()` as a concrete singleton (it is — `TryAddSingleton<AgentSessionRegistry>()`) so `provider.GetService<AgentSessionRegistry>()` resolves. Confirm `DecisionSessionRouterOptions` has a parameterless-friendly registration (it has a default ctor `DecisionSessionRouterOptions(int DecisionTokenTransferThreshold = 200_000)`; `AddSingleton<DecisionSessionRouterOptions>()` activates it with the default). If activation fails, register `new DecisionSessionRouterOptions()` instead.
+> Verification sub-step: confirm `AgentSessionRegistry` is registered by `AddAgents()` as a concrete singleton (it is — `TryAddSingleton<AgentSessionRegistry>()`) so `provider.GetService<AgentSessionRegistry>()` resolves. Confirm `DecisionSessionRouterOptions` has a parameterless-friendly registration (it has a default ctor `DecisionSessionRouterOptions(int ModelContextWindowTokens = 256_000, double TransferOccupancyFraction = 0.80)`; `AddSingleton<DecisionSessionRouterOptions>()` activates it with the default). If activation fails, register `new DecisionSessionRouterOptions()` instead.
 
 - [ ] **Step 2: Build the whole solution**
 

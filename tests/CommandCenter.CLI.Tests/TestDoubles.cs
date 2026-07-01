@@ -3,6 +3,8 @@ using CommandCenter.Agents.Abstractions;
 using CommandCenter.Agents.Models;
 using CommandCenter.Cli;
 using CommandCenter.Core.Artifacts;
+using CommandCenter.Orchestration.Abstractions;
+using CommandCenter.Orchestration.Models;
 
 namespace CommandCenter.Cli.Tests;
 
@@ -22,6 +24,15 @@ internal sealed class RecordingLoopConsole : ILoopConsole
 
 /// <summary>A scripted codex turn: inspect (spec, prompt), optionally mutate the store, return a result.</summary>
 internal sealed record ScriptedTurn(Func<AgentSessionSpec, string, IArtifactStore, AgentTurnResult> Handler);
+
+/// <summary>Cost model with directly-controlled scalars so a CLI test can drive the economic marginal rule.</summary>
+internal sealed class StubCostModel : IDecisionCostModel
+{
+    public double MeasureValue { get; set; }
+    public double EstimateValue { get; set; }
+    public double Measure(AgentTokenUsage turn) => MeasureValue;
+    public double EstimateNextCycle(DecisionCostForecast forecast) => EstimateValue;
+}
 
 internal static class Turns
 {

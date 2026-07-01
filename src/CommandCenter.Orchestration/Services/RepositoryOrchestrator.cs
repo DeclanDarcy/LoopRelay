@@ -30,6 +30,7 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
     private readonly IMemoryCache memoryCache;
     private readonly IPlanArtifactPublisher planArtifactPublisher;
     private readonly IDecisionSessionRouter decisionSessionRouter;
+    private readonly IDecisionCostModel costModel;
     private readonly OrchestrationFeatureFlags flags;
 
     // Serializes session open/close and the dispose handoff so an in-flight EnsureSession can never
@@ -83,13 +84,20 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
     // by the single active decision run (serialized by decisionState), so a volatile read/write is enough.
     private volatile bool decisionSeeded;
 
-    // Observed token accounting (m7), the router's routing signal: tokens seen on the LIVE decision process
-    // (reset to 0 when it is recycled/closed, so it reflects pressure on the current process, not lifetime)
-    // and cumulative operational continuation tokens. ComputeRouterInputs surfaces these through RouterInputs
-    // and feeds them to the router; a deterministic content estimate is the fallback before any turn is
-    // observed. Interlocked because the continuation run and the decision run accumulate on different threads.
-    private int decisionSessionTokens;
-    private int operationalSessionTokens;
+    // Cost-aware routing accounting (m7), guarded by accountingLock (written by the decision run's proposal and
+    // transfer steps, read by the routing step on the continuation thread). The PER-PROCESS fields reset to 0 when
+    // the decision process recycles/closes; transferCostEstimate/transferCount persist across recycles (they
+    // describe transfers, not a single process). The decision rule itself lives in DecisionSessionRouter; here the
+    // orchestrator only measures cost via the (pluggable) IDecisionCostModel and feeds the unit-blind signals in.
+    private const double InitialTransferCostEstimate = 250_000d;
+    private readonly object accountingLock = new();
+    private int decisionOccupancyTokens;   // O: latest proposal's prompt+output (current context size)
+    private double decisionReuseCost;       // R: Σ cost(proposal) since this process (re)started
+    private int decisionReuseCycles;        // n
+    private double decisionLastCycleCost;   // e_last (for the next-cycle prediction)
+    private double decisionPrevCycleCost;   // e_prev
+    private double transferCostEstimate = InitialTransferCostEstimate; // C: seed -> measured -> running average
+    private int transferCount;              // measured transfers so far (running-average denominator)
 
     // The flow-specific conversation projection (m6): an append-only transcript of the loop's turns. Guarded
     // by its own lock because it is appended from background runs (planning/execution/decision) and read by
@@ -106,7 +114,8 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
         IMemoryCache memoryCache,
         IPlanArtifactPublisher planArtifactPublisher,
         IDecisionSessionRouter decisionSessionRouter,
-        OrchestrationFeatureFlags? flags = null)
+        OrchestrationFeatureFlags? flags = null,
+        IDecisionCostModel? costModel = null)
     {
         RepositoryId = repositoryId;
         this.agentRuntime = agentRuntime;
@@ -116,6 +125,8 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
         this.decisionSessionRouter = decisionSessionRouter;
         // A null/default-constructed flags object reproduces today's behavior byte-for-byte (m10, additive only).
         this.flags = flags ?? new OrchestrationFeatureFlags();
+        // Default cost model = cache-adjusted effective tokens; the seam lets a deployment swap in dollars/latency.
+        this.costModel = costModel ?? new EffectiveTokenCostModel();
     }
 
     public string RepositoryId { get; }
@@ -635,8 +646,9 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
             gate.Release();
         }
 
-        // The next process is fresh, so its observed pressure starts from zero (m7).
-        Interlocked.Exchange(ref decisionSessionTokens, 0);
+        // The next process is fresh, so its per-process cost accounting starts from zero (m7). The transfer-cost
+        // estimate (C) persists across recycles — it describes transfers, not this process.
+        ResetDecisionProcessAccounting();
 
         if (decision is not null)
         {
@@ -1148,9 +1160,6 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
                 outputTokens = continuation.Usage.OutputTokens,
             }));
 
-            // Observed accounting (m7): fold this continuation's tokens into cumulative operational pressure,
-            // the second half of the router's target signal.
-            Interlocked.Add(ref operationalSessionTokens, continuation.Usage.PromptTokens + continuation.Usage.OutputTokens);
             continued = true;
         }
         catch (OperationCanceledException)
@@ -1227,19 +1236,75 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
         }
     }
 
-    // The router's signal (m7): the live Decision process's OBSERVED token pressure where available, else a
-    // DETERMINISTIC estimate from the content it reasons over (latest handoff + decisions) — the accepted
-    // fallback until observed accounting is certified. Recorded into RouterInputs (the surfaced routing
-    // signal) and returned for the route decision.
+    // The router's unit-blind signals (m7), computed via the cost model: occupancy (O), accumulated reuse cost
+    // (R), cycle count (n), the predicted next-cycle cost (eNext), and the transfer-cost estimate (C). Before any
+    // cycle is observed (n == 0), occupancy falls back to a DETERMINISTIC content estimate (handoff + decisions)
+    // so the capacity guard still has a signal; the marginal policy never transfers at n == 0. Recorded into
+    // RouterInputs (the surfaced routing signal) and returned for the route decision.
     private RouterInputs ComputeRouterInputs()
     {
-        int observedDecision = Volatile.Read(ref decisionSessionTokens);
-        int decisionSignal = observedDecision > 0
-            ? observedDecision
-            : EstimateTokens(CurrentHandoff) + EstimateTokens(CurrentDecisions);
-        var inputs = new RouterInputs(decisionSignal, Volatile.Read(ref operationalSessionTokens));
+        RouterInputs inputs = SnapshotRouterInputs();
         RecordRouterInputs(inputs);
         return inputs;
+    }
+
+    private RouterInputs SnapshotRouterInputs()
+    {
+        lock (accountingLock)
+        {
+            if (decisionReuseCycles == 0)
+            {
+                int estimate = EstimateTokens(CurrentHandoff) + EstimateTokens(CurrentDecisions);
+                return new RouterInputs(estimate, 0d, 0, 0d, transferCostEstimate);
+            }
+
+            double predictedNext = costModel.EstimateNextCycle(new DecisionCostForecast(
+                decisionLastCycleCost, decisionPrevCycleCost, decisionOccupancyTokens, 0));
+            return new RouterInputs(
+                decisionOccupancyTokens, decisionReuseCost, decisionReuseCycles, predictedNext, transferCostEstimate);
+        }
+    }
+
+    // Folds one decision proposal into the cost-aware accounting and surfaces the refreshed router signal.
+    private void RecordDecisionProposalCost(AgentTokenUsage usage)
+    {
+        double cost = costModel.Measure(usage);
+        lock (accountingLock)
+        {
+            decisionOccupancyTokens = usage.PromptTokens + usage.OutputTokens;
+            decisionReuseCost += cost;
+            decisionReuseCycles += 1;
+            decisionPrevCycleCost = decisionLastCycleCost;
+            decisionLastCycleCost = cost;
+        }
+
+        RecordRouterInputs(SnapshotRouterInputs());
+    }
+
+    // Updates the transfer-cost estimate (C) from a completed transfer's MEASURED cost: the first measured value
+    // replaces the 250k seed, then a running average. Persists across recycles (describes transfers, not a process).
+    private void RecordTransferCost(double measuredCost)
+    {
+        lock (accountingLock)
+        {
+            transferCount += 1;
+            transferCostEstimate = transferCount == 1
+                ? measuredCost
+                : transferCostEstimate + ((measuredCost - transferCostEstimate) / transferCount);
+        }
+    }
+
+    // Resets the PER-PROCESS cost accounting when the decision process recycles/closes (transfer cost persists).
+    private void ResetDecisionProcessAccounting()
+    {
+        lock (accountingLock)
+        {
+            decisionOccupancyTokens = 0;
+            decisionReuseCost = 0d;
+            decisionReuseCycles = 0;
+            decisionLastCycleCost = 0d;
+            decisionPrevCycleCost = 0d;
+        }
     }
 
     // Deterministic token estimate (~1 token per 4 characters), matching the runtime's deterministic estimator.
@@ -1474,12 +1539,9 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
             string decisions = proposed.Output;
             RecordDecisions(decisions);
 
-            // Observed accounting (m7): fold this proposal's tokens into the live decision process's pressure
-            // and surface the router's target signal. (decisionSessionTokens resets when the process recycles.)
-            Interlocked.Add(ref decisionSessionTokens, proposed.Usage.PromptTokens + proposed.Usage.OutputTokens);
-            RecordRouterInputs(new RouterInputs(
-                Volatile.Read(ref decisionSessionTokens),
-                Volatile.Read(ref operationalSessionTokens)));
+            // Cost-aware accounting (m7): fold this proposal into the live process's reuse cost (R), cycle count
+            // (n), occupancy (O), and the cost-velocity history, then surface the refreshed router signal.
+            RecordDecisionProposalCost(proposed.Usage);
 
             DecisionStream.Publish("completed", Serialize(new
             {
@@ -1549,7 +1611,7 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
             ArtifactPath.ResolveRepositoryPath(repository, OrchestrationArtifactPaths.OperationalDelta),
             delta.Output).ConfigureAwait(false);
 
-        // 2) Close the old Decision process — the transfer recycles it. (Resets observed pressure to zero.)
+        // 2) Close the old Decision process — the transfer recycles it. (Resets the per-process cost accounting to zero.)
         await CloseDecisionSessionAsync().ConfigureAwait(false);
         decisionSeeded = false;
 
@@ -1607,6 +1669,13 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
         }
 
         decisionSeeded = true;
+
+        // Cost-aware accounting (m7): record the MEASURED cost of this transfer — delta extraction + operational
+        // context evolution + cold reseed, all through the SAME cost model — so the router's transfer-cost estimate
+        // (C) self-calibrates off reality instead of the 250k seed. (CloseDecisionSessionAsync above already reset
+        // the per-process reuse accounting for the fresh process.)
+        RecordTransferCost(costModel.Measure(delta.Usage) + costModel.Measure(rewrite.Usage) + costModel.Measure(seed.Usage));
+
         DecisionStream.Publish("transferred", Serialize(new
         {
             operationalDelta = OrchestrationArtifactPaths.OperationalDelta,

@@ -26,6 +26,7 @@ public static class ServiceCollectionExtensions
         services.AddMemoryCache();
         services.TryAddSingleton<IPlanArtifactPublisher, GitPlanArtifactPublisher>();
         services.TryAddSingleton(new DecisionSessionRouterOptions());
+        services.TryAddSingleton<IDecisionCostModel, EffectiveTokenCostModel>();
         services.TryAddSingleton<IDecisionSessionRouter, DecisionSessionRouter>();
         // m10 hardening/certification flags. A default instance reproduces today's behavior byte-for-byte; a
         // deployment may override it (e.g. bind from configuration in Program.cs) before this default lands.

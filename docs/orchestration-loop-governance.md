@@ -66,11 +66,11 @@ See the dedicated divergence record below. Owner: `RepositoryOrchestrator` (rota
 - **Invariant**: The next decision turn's reuse-vs-transfer verdict is produced by a pure synchronous threshold over `RouterInputs.DecisionSessionTokens`; the router does no I/O and consults no `DecisionSessions` registry policy or eligibility service.
 - **Owner**: `DecisionSessionRouter` (`IDecisionSessionRouter.Evaluate`), `DecisionSessionRouterOptions`.
 - **Slice/milestone**: m7 (after a course-correction away from a registry-based router that was structurally unreachable in the registry-free loop — recorded in the m7 milestone evidence).
-- **Evidence**: `DecisionSessionRouter.Evaluate(RouterInputs)` thresholds `DecisionTokenTransferThreshold` (default `200_000`); the loop-owned eligibility downgrade (`route == Transfer && !decisionSeeded ⇒ Continue`) lives in the orchestrator, not the router.
+- **Evidence**: `DecisionSessionRouter.Evaluate(RouterInputs)` transfers once the live process's context **occupancy** (`DecisionSessionTokens` — the latest proposal's prompt+output, not a cumulative sum) reaches `TransferOccupancyThresholdTokens` (default `ModelContextWindowTokens` `256_000` × `TransferOccupancyFraction` `0.80` = `204_800`); the loop-owned eligibility downgrade (`route == Transfer && !decisionSeeded ⇒ Continue`) lives in the orchestrator, not the router.
 - **Consumers affected**: The continuation → next-decision routing only; UI shows the effective route + a `transferred` event.
 - **Compatibility impact**: Supersedes the unreachable registry-policy design; `CommandCenter.DecisionSessions` registry services remain for the legacy/deterministic path.
 - **Guard**: deterministic-fallback router tests (estimate-when-observed-zero, token-reset-on-recycle, deferred-transfer fall-through), `DecisionRuntime ⊥ Execution` layering cert.
-- **Rollback path**: Force transfer-only (rollback path 3) or disable decision reuse (path 2). Setting `DecisionTokenTransferThreshold` high makes the router always Continue.
+- **Rollback path**: Force transfer-only (rollback path 3) or disable decision reuse (path 2). Raising `ModelContextWindowTokens` or `TransferOccupancyFraction` makes the router Continue (reuse) longer.
 
 ### LOOP-7 — Milestone-pinning removed
 

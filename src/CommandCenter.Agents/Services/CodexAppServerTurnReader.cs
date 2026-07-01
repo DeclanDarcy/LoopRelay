@@ -137,7 +137,8 @@ public sealed class CodexAppServerTurnReader
 
         int input = IntProperty(last, "inputTokens") ?? 0;
         int outputTokens = IntProperty(last, "outputTokens") ?? 0;
-        return new AgentTokenUsage(input, outputTokens);
+        int cachedInput = IntProperty(last, "cachedInputTokens") ?? 0;
+        return new AgentTokenUsage(input, outputTokens, cachedInput);
     }
 
     private static string? ReadErrorMessage(JsonElement @params) =>

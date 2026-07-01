@@ -1,6 +1,7 @@
 using System.Reflection;
 using CommandCenter.Backend.Endpoints;
 using CommandCenter.Execution.Services;
+using CommandCenter.Orchestration.Abstractions;
 using CommandCenter.Orchestration.Services;
 using Xunit;
 
@@ -36,11 +37,16 @@ public sealed class OrchestrationGovernanceTests
     }
 
     [Fact]
-    public void Router_transfer_threshold_default_is_pinned()
+    public void Router_transfer_policy_default_is_pinned()
     {
-        // The documented registry-free router default. Raising it makes the router always Continue (a rollback
-        // lever); pinning it keeps docs/orchestration-loop-governance.md (LOOP-6) faithful.
-        Assert.Equal(200_000, new DecisionSessionRouterOptions().DecisionTokenTransferThreshold);
+        // The documented registry-free router default: the online average-cost optimum (MarginalAverageCost) with a
+        // hard capacity guard at 90% of a 256k window (230,400 tokens of OCCUPANCY). Changing the policy, window, or
+        // guard fraction is a rollback lever; pinning them keeps docs/orchestration-loop-governance.md (LOOP-6) faithful.
+        var options = new DecisionSessionRouterOptions();
+        Assert.Equal(DecisionTransferPolicy.MarginalAverageCost, options.Policy);
+        Assert.Equal(256_000, options.ModelContextWindowTokens);
+        Assert.Equal(0.90, options.CapacityGuardFraction);
+        Assert.Equal(230_400, options.CapacityGuardTokens);
     }
 
     [Fact]
