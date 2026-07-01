@@ -25,6 +25,18 @@ public static class OrchestrationArtifactPaths
     /// </summary>
     public const string OperationalDelta = ".agents/operational_delta.md";
 
+    /// <summary>Directory holding the archived operational deltas rotated out of the live <see cref="OperationalDelta"/>
+    /// once a Transfer has folded each into the next <see cref="OperationalContext"/> revision (numbered history).</summary>
+    public const string DeltasDirectory = ".agents/deltas";
+
+    /// <summary>Glob matching the archived operational deltas (<c>operational_delta.0001.md</c>, ...) under
+    /// <see cref="DeltasDirectory"/> but NOT the live single-dot <see cref="OperationalDelta"/>.</summary>
+    public const string HistoricalDeltaSearchPattern = "operational_delta.*.md";
+
+    /// <summary>Archived operational-delta path: <c>.agents/deltas/operational_delta.0001.md</c>, ... Each successful
+    /// Transfer rotates the consumed live delta here (run-scoped 4-digit counter) after the context update succeeds.</summary>
+    public static string HistoricalDelta(int sequence) => $".agents/deltas/operational_delta.{sequence:0000}.md";
+
     /// <summary>
     /// The current governance decisions the human review gate persists (m5). This is the canonical path
     /// every independent decisions consumer reads (<c>ArtifactService.GetCurrentDecisionsAsync</c>,

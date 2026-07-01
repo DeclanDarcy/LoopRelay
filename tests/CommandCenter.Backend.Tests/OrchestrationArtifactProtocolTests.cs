@@ -181,6 +181,9 @@ public sealed class OrchestrationArtifactProtocolTests
         Assert.Equal(".agents/handoffs/handoff.0001.md", OrchestrationArtifactPaths.HistoricalHandoff(1));
         Assert.Equal(".agents/decisions/decisions.0001.md", OrchestrationArtifactPaths.HistoricalDecision(1));
         Assert.Equal(".agents/operational_delta.md", OrchestrationArtifactPaths.OperationalDelta);
+        Assert.Equal(".agents/deltas", OrchestrationArtifactPaths.DeltasDirectory);
+        Assert.Equal(".agents/deltas/operational_delta.0001.md", OrchestrationArtifactPaths.HistoricalDelta(1));
+        Assert.Equal(".agents/deltas/operational_delta.0042.md", OrchestrationArtifactPaths.HistoricalDelta(42));
     }
 
     // ---------------------------------------------------------------------------------------------------------
