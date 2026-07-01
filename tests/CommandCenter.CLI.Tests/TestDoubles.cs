@@ -289,3 +289,27 @@ internal sealed class FakeClock : IClock
 {
     public DateTimeOffset UtcNow { get; set; } = new DateTimeOffset(2026, 7, 1, 0, 0, 0, TimeSpan.Zero);
 }
+
+internal sealed class FakeSessionTelemetrySink : ISessionTelemetrySink
+{
+    public List<SessionTelemetryRecord> Records { get; } = new();
+    public bool Throw { get; set; }
+
+    public void Append(SessionTelemetryRecord record)
+    {
+        if (Throw) throw new IOException("disk full");
+        Records.Add(record);
+    }
+}
+
+internal sealed class FakeCodexRolloutLocator : ICodexRolloutLocator
+{
+    public string? Path { get; set; }
+    public int Calls { get; private set; }
+
+    public string? Resolve(string workingDirectory, DateTimeOffset openedAtUtc)
+    {
+        Calls++;
+        return Path;
+    }
+}
