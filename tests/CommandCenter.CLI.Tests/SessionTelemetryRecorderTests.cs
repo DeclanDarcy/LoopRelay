@@ -114,4 +114,32 @@ public class SessionTelemetryRecorderTests
         Assert.Equal("/cached", path);
         Assert.Empty(sink.Records);
     }
+
+    [Fact]
+    public async Task RecordTurn_WhenCallerCancelsDuringPostProbe_PropagatesCancellationAndWritesNothing()
+    {
+        var sink = new FakeSessionTelemetrySink();
+        var recorder = new SessionTelemetryRecorder(
+            new CancelingProbe(), new FakeCodexRolloutLocator(), sink,
+            new StubCostModel(), new FakeClock(), new RecordingLoopConsole());
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        // A caller cancellation is intent, not a telemetry fault — it must surface, not be swallowed.
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => recorder.RecordTurnAsync(
+            "r", "/work", new SessionIdentity(Guid.NewGuid()), SessionRole.Decision,
+            DateTimeOffset.UnixEpoch, cachedLogPath: null, Turn(), null, cts.Token));
+
+        Assert.Empty(sink.Records);
+    }
+
+    /// <summary>A post-probe that honours the cancellation token (like the real CodexUsageProbe).</summary>
+    private sealed class CancelingProbe : ICodexUsageProbe
+    {
+        public Task<CodexUsageStatus?> QueryAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult<CodexUsageStatus?>(null);
+        }
+    }
 }

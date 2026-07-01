@@ -25,7 +25,8 @@ internal interface ISessionTelemetryRecorder
 /// <summary>
 /// Adds one post-turn capacity probe, resolves the codex rollout file once per session, computes effective
 /// tokens with the router's cost model, and appends a <see cref="SessionTelemetryRecord"/>. Every step is
-/// best-effort: a failure warns and is swallowed so the turn result always flows through.
+/// best-effort: a failure warns and is swallowed so a telemetry fault never breaks a turn. The one exception
+/// is a genuine caller cancellation, which is intent (not a telemetry fault) and is propagated.
 /// </summary>
 internal sealed class SessionTelemetryRecorder(
     ICodexUsageProbe probe,
@@ -71,6 +72,10 @@ internal sealed class SessionTelemetryRecorder(
 
             sink.Append(record);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw; // a genuine caller cancellation is intent, not a telemetry fault — propagate it
+        }
         catch (Exception ex)
         {
             console.Warn($"Session telemetry not recorded: {ex.Message}");
@@ -79,12 +84,17 @@ internal sealed class SessionTelemetryRecorder(
         return path;
     }
 
-    // The post probe is best-effort: the token row is worth keeping even when capacity is unknown.
+    // The post probe is best-effort: the token row is worth keeping even when capacity is unknown. Only a
+    // genuine caller cancellation escapes (re-thrown so the outer handler propagates it).
     private async Task<CodexUsageStatus?> ProbePostAsync(CancellationToken cancellationToken)
     {
         try
         {
             return await probe.QueryAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch
         {

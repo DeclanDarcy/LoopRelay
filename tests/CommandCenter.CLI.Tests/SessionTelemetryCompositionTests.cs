@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using CommandCenter.Agents.Models;
@@ -35,7 +36,17 @@ public class SessionTelemetryCompositionTests : IDisposable
 
         string dir = Path.Combine(repoPath, ".commandcenter", "telemetry");
         Assert.True(Directory.Exists(dir));
-        Assert.NotEmpty(Directory.EnumerateFiles(dir, "sessions.*.jsonl"));
+        string file = Assert.Single(Directory.EnumerateFiles(dir, "sessions.*.jsonl").ToList());
+
+        // End-to-end through the REAL cost model + real sink: verify the row content, not just the file's
+        // existence. Usage (prompt 10, output 2, cached 0) => effective = 10 + 0*0.10 + 2 = 12.0.
+        string line = Assert.Single(File.ReadAllLines(file));
+        using JsonDocument doc = JsonDocument.Parse(line);
+        JsonElement r = doc.RootElement;
+        Assert.Equal("AxiomRepo", r.GetProperty("repoName").GetString());
+        Assert.Equal("Decision", r.GetProperty("sessionType").GetString());
+        Assert.Equal(10, r.GetProperty("promptTokens").GetInt32());
+        Assert.Equal(12.0, r.GetProperty("effectiveTokens").GetDouble());
     }
 
     [Fact]
