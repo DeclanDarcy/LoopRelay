@@ -158,4 +158,30 @@ public class UsageGateTests
 
         Assert.Equal(1, t.Probe.Calls);
     }
+
+    [Fact]
+    public async Task WaitForCapacity_WhenItHadToWait_ReturnsAFreshlyReprobedSnapshot()
+    {
+        var t = New();
+        // First probe: 5h exhausted (forces a wait). Second probe (after the reset delay): full again.
+        t.Probe.Results.Enqueue(new CodexUsageStatus(0, TimeSpan.FromMinutes(30), 60, TimeSpan.FromHours(2)));
+        t.Probe.Results.Enqueue(new CodexUsageStatus(100, TimeSpan.FromHours(5), 100, TimeSpan.FromHours(9)));
+
+        CodexUsageStatus? returned = await t.Gate.WaitForCapacityAsync(CancellationToken.None);
+
+        Assert.Equal(2, t.Probe.Calls);                         // re-probed after the wait
+        Assert.Equal(100, returned!.FiveHourRemainingPercent);  // returned the post-reset snapshot
+    }
+
+    [Fact]
+    public async Task WaitForCapacity_WhenNoWait_ReturnsTheProbedSnapshotWithoutReprobing()
+    {
+        var t = New();
+        t.Probe.Default = new CodexUsageStatus(50, TimeSpan.FromHours(1), 60, TimeSpan.FromHours(2));
+
+        CodexUsageStatus? returned = await t.Gate.WaitForCapacityAsync(CancellationToken.None);
+
+        Assert.Equal(1, t.Probe.Calls);
+        Assert.Equal(50, returned!.FiveHourRemainingPercent);
+    }
 }

@@ -127,12 +127,13 @@ public class GatedAgentRuntimeTests
     {
         public int Calls { get; private set; }
         public Exception? Throw { get; set; }
+        public CodexUsageStatus? Status { get; set; }
 
-        public Task WaitForCapacityAsync(CancellationToken cancellationToken)
+        public Task<CodexUsageStatus?> WaitForCapacityAsync(CancellationToken cancellationToken)
         {
             Calls++;
             log.Add("gate");
-            return Throw is not null ? throw Throw : Task.CompletedTask;
+            return Throw is not null ? throw Throw : Task.FromResult(Status);
         }
     }
 

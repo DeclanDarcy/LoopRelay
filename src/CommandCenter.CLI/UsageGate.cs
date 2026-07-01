@@ -17,10 +17,11 @@ internal sealed class TaskDelayScheduler : IUsageDelay
         duration <= TimeSpan.Zero ? Task.CompletedTask : Task.Delay(duration, cancellationToken);
 }
 
-/// <summary>Blocks until Codex has capacity to run a turn (or fails open). See <see cref="UsageGate"/>.</summary>
+/// <summary>Blocks until Codex has capacity to run a turn (or fails open), returning the capacity snapshot the
+/// turn will start with (null when unreadable). See <see cref="UsageGate"/>.</summary>
 internal interface IUsageGate
 {
-    Task WaitForCapacityAsync(CancellationToken cancellationToken);
+    Task<CodexUsageStatus?> WaitForCapacityAsync(CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -39,7 +40,7 @@ internal sealed class UsageGate(ICodexUsageProbe probe, IUsageDelay delay, ILoop
 {
     private const int ExhaustionWatermarkPercent = 1;
 
-    public async Task WaitForCapacityAsync(CancellationToken cancellationToken)
+    public async Task<CodexUsageStatus?> WaitForCapacityAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -47,7 +48,7 @@ internal sealed class UsageGate(ICodexUsageProbe probe, IUsageDelay delay, ILoop
         if (status is null)
         {
             console.Warn("Codex usage could not be read — proceeding without the usage gate.");
-            return;
+            return null;
         }
 
         TimeSpan wait = TimeSpan.Zero;
@@ -68,7 +69,13 @@ internal sealed class UsageGate(ICodexUsageProbe probe, IUsageDelay delay, ILoop
         {
             console.Warn($"Waiting {Format(wait)} for Codex usage to reset before continuing.");
             await delay.DelayAsync(wait, cancellationToken);
+
+            // After the reset the pre-wait reading is stale; re-probe so the returned snapshot reflects the
+            // capacity the turn actually starts with. Keep the pre-wait value if the re-probe is unreadable.
+            status = await probe.QueryAsync(cancellationToken) ?? status;
         }
+
+        return status;
     }
 
     private static TimeSpan Longer(TimeSpan a, TimeSpan b) => b > a ? b : a;

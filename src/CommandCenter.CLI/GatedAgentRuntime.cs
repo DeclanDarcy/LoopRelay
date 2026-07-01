@@ -26,7 +26,7 @@ internal sealed class GatedAgentRuntime(IAgentRuntime inner, IUsageGate usageGat
         Func<AgentStreamChunk, Task>? onChunk = null,
         CancellationToken cancellationToken = default)
     {
-        await usageGate.WaitForCapacityAsync(cancellationToken);
+        _ = await usageGate.WaitForCapacityAsync(cancellationToken);
         return await inner.RunOneShotAsync(spec, prompt, onChunk, cancellationToken);
     }
 
@@ -56,7 +56,7 @@ internal sealed class GatedAgentSession(IAgentSession inner, IUsageGate usageGat
         Func<AgentStreamChunk, Task>? onChunk = null,
         CancellationToken cancellationToken = default)
     {
-        await usageGate.WaitForCapacityAsync(cancellationToken);
+        _ = await usageGate.WaitForCapacityAsync(cancellationToken);
         return await inner.RunTurnAsync(prompt, onChunk, cancellationToken);
     }
 
