@@ -153,6 +153,117 @@ internal sealed class FakeProcessRunner : IProcessRunner
         new() { ExitCode = 1, StandardOutput = string.Empty, StandardError = stderr, Duration = TimeSpan.Zero };
 }
 
+/// <summary>Returns scripted <see cref="CodexUsageStatus"/> snapshots for the usage gate (no real codex).</summary>
+internal sealed class FakeCodexUsageProbe : ICodexUsageProbe
+{
+    public Queue<CodexUsageStatus?> Results { get; } = new();
+
+    /// <summary>Returned when <see cref="Results"/> is empty (the steady-state answer).</summary>
+    public CodexUsageStatus? Default { get; set; }
+
+    public int Calls { get; private set; }
+
+    public Task<CodexUsageStatus?> QueryAsync(CancellationToken cancellationToken)
+    {
+        Calls++;
+        return Task.FromResult(Results.Count > 0 ? Results.Dequeue() : Default);
+    }
+}
+
+/// <summary>Records requested delay durations instead of actually sleeping.</summary>
+internal sealed class FakeUsageDelay : IUsageDelay
+{
+    public List<TimeSpan> Delays { get; } = new();
+
+    public Task DelayAsync(TimeSpan duration, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        Delays.Add(duration);
+        return Task.CompletedTask;
+    }
+}
+
+internal sealed class FakeExecutableResolver : IAgentExecutableResolver
+{
+    public string Executable { get; init; } = "codex.exe";
+
+    public string Resolve() => Executable;
+}
+
+/// <summary>Serves a single scripted interactive process (the codex /usage session) via StartInteractiveAsync.</summary>
+internal sealed class FakeInteractiveProcessRunner(FakeAgentProcess process) : IProcessRunner
+{
+    public List<(string FileName, IReadOnlyList<string> Args, string WorkingDirectory)> InteractiveCalls { get; } = new();
+
+    public Task<IAgentProcess> StartInteractiveAsync(
+        string fileName, IReadOnlyList<string> arguments, string workingDirectory, CancellationToken cancellationToken = default)
+    {
+        InteractiveCalls.Add((fileName, arguments, workingDirectory));
+        return Task.FromResult<IAgentProcess>(process);
+    }
+
+    public Task<ProcessRunResult> RunAsync(string fileName, IReadOnlyList<string> arguments, string workingDirectory) =>
+        throw new NotSupportedException();
+
+    public Task<ProcessStartResult> StartAsync(
+        string fileName, IReadOnlyList<string> arguments, string workingDirectory,
+        string? standardInput = null, Func<string, Task>? onStandardOutput = null,
+        Func<string, Task>? onStandardError = null, Func<int?, Task>? onExit = null) =>
+        throw new NotSupportedException();
+}
+
+/// <summary>
+/// A scripted interactive codex process: streams <c>lines</c> from ReadOutputLinesAsync (optionally hanging
+/// afterwards to exercise the scrape timeout), records prompts written, and tracks disposal.
+/// </summary>
+internal sealed class FakeAgentProcess(IEnumerable<string> lines, bool hangAfterLines = false) : IAgentProcess
+{
+    private readonly IReadOnlyList<string> lines = lines.ToList();
+
+    public List<string> PromptsWritten { get; } = new();
+    public int LinesEmitted { get; private set; }
+    public bool Disposed { get; private set; }
+
+    public int ProcessId => 1;
+    public AgentProcessState State => AgentProcessState.Running;
+    public int? ExitCode => null;
+    public bool HasExited => false;
+    public Task Completion => Task.CompletedTask;
+
+    public Task WriteStandardInputAsync(string standardInput, CancellationToken cancellationToken = default) =>
+        WritePromptAsync(standardInput, cancellationToken);
+
+    public Task WritePromptAsync(string text, CancellationToken cancellationToken = default)
+    {
+        PromptsWritten.Add(text);
+        return Task.CompletedTask;
+    }
+
+    public Task CompleteInputAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    public async IAsyncEnumerable<string> ReadOutputLinesAsync(
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        foreach (string line in lines)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            LinesEmitted++;
+            yield return line;
+        }
+
+        if (hangAfterLines)
+        {
+            await Task.Delay(System.Threading.Timeout.Infinite, cancellationToken);
+        }
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        Disposed = true;
+        return ValueTask.CompletedTask;
+    }
+}
+
 internal sealed class FakeAgentSession(FakeAgentRuntime runtime, AgentSessionSpec spec) : IAgentSession
 {
     public SessionIdentity SessionId => spec.SessionId;

@@ -45,11 +45,13 @@ var processRunner = provider.GetRequiredService<IProcessRunner>();
 var executableResolver = provider.GetRequiredService<IAgentExecutableResolver>();
 
 var artifacts = new LoopArtifacts(store, repository);
+var usageProbe = new CodexUsageProbe(processRunner, executableResolver, repository);
+var usageGate = new UsageGate(usageProbe, new TaskDelayScheduler(), console);
 var gate = new MilestoneGate(store, repository);
 var execution = new ExecutionStep(runtime, artifacts, console, repository);
 var decision = new DecisionSession(runtime, router, artifacts, console, repository);
 var commitGate = new CommitGate(processRunner, repository, console);
-var loop = new LoopRunner(gate, artifacts, execution, decision, commitGate, console);
+var loop = new LoopRunner(usageGate, gate, artifacts, execution, decision, commitGate, console);
 
 // --- Ctrl+C: cancel the loop AND let session disposal kill the codex child processes. ---
 using var cts = new CancellationTokenSource();
