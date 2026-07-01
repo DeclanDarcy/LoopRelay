@@ -386,3 +386,6 @@ healthchecksdb
 .vscode/
 
 .orchestrix/
+
+# CLI per-turn session telemetry log (local only; a visualizer manages pruning)
+.commandcenter/

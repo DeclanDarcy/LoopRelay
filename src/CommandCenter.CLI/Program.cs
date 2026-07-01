@@ -50,7 +50,12 @@ var artifacts = new LoopArtifacts(store, repository);
 // once at the top of the loop.
 var usageProbe = new CodexUsageProbe(processRunner, executableResolver, repository);
 var usageGate = new UsageGate(usageProbe, new TaskDelayScheduler(), console);
-var gatedRuntime = new GatedAgentRuntime(runtime, usageGate);
+var telemetryClock = new SystemClock();
+var telemetryRecorder = SessionTelemetryComposition.CreateRecorder(
+    repository, SessionTelemetryComposition.IsEnabled(),
+    usageProbe, new EffectiveTokenCostModel(), telemetryClock, console);
+var gatedRuntime = new GatedAgentRuntime(
+    runtime, usageGate, telemetryRecorder, telemetryClock, SessionTelemetryComposition.RepoName(repository));
 var gate = new MilestoneGate(store, repository);
 var execution = new ExecutionStep(gatedRuntime, artifacts, console, repository);
 var decision = new DecisionSession(gatedRuntime, router, artifacts, console, repository);
