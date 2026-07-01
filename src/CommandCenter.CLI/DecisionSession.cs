@@ -159,7 +159,7 @@ internal sealed class DecisionSession(
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            throw new LoopStepException($"Transfer failed to archive operational_delta.md: {exception.Message}");
+            throw new LoopStepException("Transfer failed to archive operational_delta.md.", exception);
         }
 
         if (archived is null)

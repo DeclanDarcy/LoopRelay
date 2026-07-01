@@ -1710,7 +1710,9 @@ public sealed class RepositoryOrchestrator : IAsyncDisposable
             {
                 phase = "ArchiveOperationalDelta",
                 reason = "Failed to archive the operational delta after the context update.",
-                detail = ex.Message,
+                // The exception TYPE, not its message: a real store failure's message can embed a local
+                // filesystem path, which should not surface in the decision stream.
+                detail = ex.GetType().Name,
             }));
             return false;
         }
