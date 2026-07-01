@@ -82,7 +82,10 @@ public class LoopRunnerTests
         LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
         Assert.Equal(LoopOutcome.EpicCompleted, outcome);
-        Assert.Equal("DECISIONS-1", await h.Store.ReadAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Decisions)));
+        // The decision proposal was persisted; execution then consumed and RETIRED the live decisions.md, so the
+        // numbered snapshot is where it survives (live is gone after the slice).
+        Assert.Equal("DECISIONS-1", await h.Store.ReadAsync(Resolve(h.Repo, OrchestrationArtifactPaths.HistoricalDecision(1))));
+        Assert.False(await h.Store.ExistsAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Decisions)));
         // After one iteration: live handoff present (written by execution, rotated next loop only).
         Assert.True(await h.Store.ExistsAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff)));
 
@@ -124,9 +127,174 @@ public class LoopRunnerTests
         LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
 
         Assert.Equal(LoopOutcome.EpicCompleted, outcome);
-        Assert.Equal("DEC-RESUME", await h.Store.ReadAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Decisions)));
+        // Decision proposal persisted then retired after execution consumed it — assert on the numbered snapshot.
+        Assert.Equal("DEC-RESUME", await h.Store.ReadAsync(Resolve(h.Repo, OrchestrationArtifactPaths.HistoricalDecision(1))));
+        Assert.False(await h.Store.ExistsAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Decisions)));
         // The consumed handoff was rotated to handoff.0001.md before execution wrote the next live handoff.
         Assert.Equal("H-RESUME", await h.Store.ReadAsync(Resolve(h.Repo, OrchestrationArtifactPaths.HistoricalHandoff(1))));
+    }
+
+    [Fact]
+    public async Task Run_WhenUnrotatedDecisionsExist_SkipsDecisionSession_AndExecutesDirectly()
+    {
+        var h = New();
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
+        await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
+        // A prior slice already produced decisions.md but never consumed+retired it (unrotated/pending).
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Decisions), "PENDING-DECISIONS");
+
+        // Only the execution session's two turns are scripted — NO decision seed/propose turns. The work turn
+        // runs against the pending decisions.md and completes the milestone so the loop stops after one slice.
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, prompt, s) =>
+        {
+            Assert.Contains("PENDING-DECISIONS", prompt);   // execution consumes the pending decisions.md directly
+            s.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [x] t").Wait();
+            return Turns.Completed("executed");
+        }));
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        {
+            s.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff), "H").Wait();
+            return Turns.Completed("handoff");
+        }));
+
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+
+        Assert.Equal(LoopOutcome.EpicCompleted, outcome);
+        // The decision session never ran (no "Decision" phase) — the loop skipped straight to execution.
+        Assert.DoesNotContain(Phases(h.Con), p => p.StartsWith("Decision"));
+        Assert.Contains(Phases(h.Con), p => p.StartsWith("Execution"));
+        // The pending decisions.md was retired once execution consumed it.
+        Assert.False(await h.Store.ExistsAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Decisions)));
+    }
+
+    [Fact]
+    public async Task Run_AfterExecutionConsumesDecisions_RetiresLiveDecisions()
+    {
+        var h = New();
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
+        await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
+
+        // No pending decisions.md, so the decision session runs (seed + propose) and persists decisions.md; the
+        // execution slice then consumes it and the loop retires the live file. Epic completes after one slice.
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DECISIONS-1")));
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        {
+            s.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [x] t").Wait();
+            return Turns.Completed("executed");
+        }));
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        {
+            s.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff), "H").Wait();
+            return Turns.Completed("handoff");
+        }));
+
+        await h.Runner.RunAsync(CancellationToken.None);
+
+        // Live decisions.md retired (consumed); the numbered snapshot from persist is the retained history.
+        Assert.False(await h.Store.ExistsAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Decisions)));
+        Assert.Equal("DECISIONS-1", await h.Store.ReadAsync(Resolve(h.Repo, OrchestrationArtifactPaths.HistoricalDecision(1))));
+    }
+
+    // Core resume invariant: the retire sits AFTER execution, so an execution-turn failure (which throws) never
+    // reaches it — the pending decisions.md MUST survive so a restart takes the skip path and re-executes rather
+    // than paying for a fresh decision. A refactor that retired decisions before/around execution would silently
+    // defeat the whole optimization; this pins it.
+    [Fact]
+    public async Task Run_WhenExecutionFails_LeavesDecisionsPendingForRestart()
+    {
+        var h = New();
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
+        await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
+
+        // Decision succeeds (seed + propose -> persists decisions.md); the execution work turn then fails.
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DECISIONS-1")));
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Failed()));
+
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+
+        Assert.Equal(LoopOutcome.Failed, outcome);
+        // Retire (after execution) never ran because execution threw — decisions.md stays pending for the restart-skip.
+        Assert.True(await h.Store.ExistsAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Decisions)));
+    }
+
+    // Two producing slices run a FRESH decision each: slice 1 persists+retires decisions.md, and because retire
+    // dropped the live file, slice 2 does NOT take the skip path — it runs its own decision and persists
+    // decisions.0002.md. Guards against a broken retire that would strand a live decisions.md and make every later
+    // slice wrongly skip the decision session.
+    [Fact]
+    public async Task Run_TwoProducingSlices_RunFreshDecisionEach_RetiringBetween()
+    {
+        var h = New();
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
+        await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
+
+        // Slice 1: seed + propose (DECISIONS-1), execution work (does NOT complete the milestone) + handoff.
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("seeded")));
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DECISIONS-1")));
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("exec-1")));
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        {
+            s.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff), "H-1").Wait();
+            return Turns.Completed("handoff-1");
+        }));
+        // Slice 2: propose again (already seeded), execution work COMPLETES the milestone + handoff.
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, _) => Turns.Completed("DECISIONS-2")));
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        {
+            s.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [x] t").Wait();
+            return Turns.Completed("exec-2");
+        }));
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        {
+            s.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff), "H-2").Wait();
+            return Turns.Completed("handoff-2");
+        }));
+
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+
+        Assert.Equal(LoopOutcome.EpicCompleted, outcome);
+        // Both slices ran their OWN decision (skip never fired): two numbered snapshots, two Decision phases.
+        Assert.Equal("DECISIONS-1", await h.Store.ReadAsync(Resolve(h.Repo, OrchestrationArtifactPaths.HistoricalDecision(1))));
+        Assert.Equal("DECISIONS-2", await h.Store.ReadAsync(Resolve(h.Repo, OrchestrationArtifactPaths.HistoricalDecision(2))));
+        Assert.Equal(2, Phases(h.Con).Count(p => p.StartsWith("Decision")));
+        // Final decisions.md retired after the last slice's execution.
+        Assert.False(await h.Store.ExistsAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Decisions)));
+    }
+
+    // On the skip path a lingering live handoff (left by a crash before its rotation) is NOT archived by the loop:
+    // the skip bypasses RotateLiveHandoffAsync and execution's turn-2 write overwrites it. Pins the documented
+    // skip-of-rotation behaviour so an accidental UNCONDITIONAL rotation (which would spuriously archive it) is caught.
+    [Fact]
+    public async Task Run_SkipPath_DoesNotRotateALingeringLiveHandoff()
+    {
+        var h = New();
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Plan), "PLAN");
+        await h.Store.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [ ] t");
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.Decisions), "PENDING-DECISIONS");
+        // A live handoff lingers alongside the pending decisions (the mid-slice crash state that triggers a skip).
+        await h.Store.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff), "H-LINGER");
+
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        {
+            s.WriteAsync(Resolve(h.Repo, ".agents/milestones/m1.md"), "- [x] t").Wait();
+            return Turns.Completed("executed");
+        }));
+        h.Rt.SessionTurns.Enqueue(new ScriptedTurn((_, _, s) =>
+        {
+            s.WriteAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff), "H-NEW").Wait();
+            return Turns.Completed("handoff");
+        }));
+
+        LoopOutcome outcome = await h.Runner.RunAsync(CancellationToken.None);
+
+        Assert.Equal(LoopOutcome.EpicCompleted, outcome);
+        // The skip path never ran the decision session, so it never rotated the lingering handoff to numbered history...
+        Assert.DoesNotContain(Phases(h.Con), p => p.StartsWith("Decision"));
+        Assert.False(await h.Store.ExistsAsync(Resolve(h.Repo, OrchestrationArtifactPaths.HistoricalHandoff(1))));
+        // ...execution simply overwrote the live handoff with its own.
+        Assert.Equal("H-NEW", await h.Store.ReadAsync(Resolve(h.Repo, OrchestrationArtifactPaths.LiveHandoff)));
     }
 
     [Fact]

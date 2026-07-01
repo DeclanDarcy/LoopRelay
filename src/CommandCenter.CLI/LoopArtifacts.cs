@@ -65,6 +65,25 @@ internal sealed class LoopArtifacts(IArtifactStore store, Repository repository)
         "decisions",
         OrchestrationArtifactPaths.HistoricalDecision);
 
+    /// <summary>
+    /// Retires the live decisions.md once an execution slice has consumed it: deletes ONLY the live file so the
+    /// next slice runs a fresh decision (and a mid-slice restart re-executes the pending decisions rather than
+    /// skipping the decision session forever). No re-archival is needed — <see cref="PersistDecisionsAsync"/>
+    /// already wrote the numbered snapshot that is the retained history, so rotating here would only duplicate it.
+    /// Returns true if a live decisions.md was present; idempotent (a no-op when already absent).
+    /// </summary>
+    public async Task<bool> RetireLiveDecisionsAsync()
+    {
+        string live = Resolve(OrchestrationArtifactPaths.Decisions);
+        if (!await store.ExistsAsync(live))
+        {
+            return false;
+        }
+
+        await store.DeleteAsync(live);
+        return true;
+    }
+
     public async Task PersistDecisionsAsync(string decisions)
     {
         int sequence = await NextSequenceAsync(

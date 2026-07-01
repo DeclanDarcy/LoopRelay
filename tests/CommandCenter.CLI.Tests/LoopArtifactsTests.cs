@@ -79,6 +79,29 @@ public class LoopArtifactsTests
     }
 
     [Fact]
+    public async Task RetireLiveDecisions_DeletesLive_LeavingNumberedHistory()
+    {
+        var (art, store, repo) = New();
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDecision(1)), "D1");
+        await store.WriteAsync(Resolve(repo, OrchestrationArtifactPaths.Decisions), "D1");
+
+        bool retired = await art.RetireLiveDecisionsAsync();
+
+        Assert.True(retired);
+        // The live pointer is dropped (so the next slice runs a fresh decision) but the numbered snapshot,
+        // written at persist time, remains as the retained history — no re-archival, no duplicate.
+        Assert.False(await store.ExistsAsync(Resolve(repo, OrchestrationArtifactPaths.Decisions)));
+        Assert.Equal("D1", await store.ReadAsync(Resolve(repo, OrchestrationArtifactPaths.HistoricalDecision(1))));
+    }
+
+    [Fact]
+    public async Task RetireLiveDecisions_WhenAbsent_ReturnsFalse()
+    {
+        var (art, _, _) = New();
+        Assert.False(await art.RetireLiveDecisionsAsync());
+    }
+
+    [Fact]
     public async Task ReadLatestDecisions_PrefersLiveThenHighestNumbered()
     {
         var (art, store, repo) = New();
